@@ -1,0 +1,19 @@
+[package]
+name = "vectrex_lang"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Daniel Ferrer <you@example.com>"]
+description = "Prototype pseudo-Python to 6809 assembler compiler for Vectrex"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+strum = { version = "0.26", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+strip = true

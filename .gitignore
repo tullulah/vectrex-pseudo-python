@@ -1,0 +1,35 @@
+# Rust / Cargo build artifacts
+/target/
+**/*.rs.bk
+
+# Generated assembly outputs (use redirection to keep if needed)
+example.asm
+vectrex.asm
+pitrex.asm
+arm.asm
+cortexm.asm
+vextreme.asm
+
+# If you want to ignore all top-level generated .asm add (commented):
+#/*.asm
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+
+# OS / Misc
+.DS_Store
+Thumbs.db
+
+# Swap / backup / temp
+*.swp
+*.swo
+*~
+*.tmp
+
+# Logs
+*.log
+
+# Optional: uncomment to ignore Cargo.lock for libraries (keep for bins)
+# Cargo.lock
