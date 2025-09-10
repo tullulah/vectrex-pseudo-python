@@ -156,6 +156,9 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
         Expr::Number(n) => {
             out.push_str(&format!("    LDD #{}\n    STD RESULT\n", *n & 0xFFFF));
         }
+        Expr::StringLit(_s) => {
+            out.push_str("    ; TODO string literal unsupported yet\n    LDD #0\n    STD RESULT\n");
+        }
         Expr::Ident(name) => {
             if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); }
             else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.to_uppercase())); }
@@ -380,7 +383,8 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
             collect_expr_syms(right, set);
         }
     Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
-        Expr::Number(_) => {}
+    Expr::Number(_) => {}
+    Expr::StringLit(_) => {}
     }
 }
 

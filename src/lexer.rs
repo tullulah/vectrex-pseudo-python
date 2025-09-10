@@ -11,6 +11,7 @@ pub enum TokenKind {
     ShiftLeft, ShiftRight,
     Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let,
     And, Or, Not,
+    StringLit(String),
     True, False,
     EqEq, NotEq, Lt, Le, Gt, Ge,
     EOF,
@@ -181,6 +182,16 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     let num: i32 = line[start..idx].parse().unwrap();
                     out.push(tok(TokenKind::Number(num), line_no, start));
                 }
+            }
+            '"' => {
+                let start_col = idx;
+                idx += 1; // skip opening quote
+                let lit_start = idx;
+                while idx < chars.len() && chars[idx] != '"' { idx += 1; }
+                if idx >= chars.len() { bail!("Unterminated string literal line {} col {}", line_no, start_col + 1); }
+                let s: String = chars[lit_start..idx].iter().collect();
+                out.push(tok(TokenKind::StringLit(s), line_no, start_col));
+                idx += 1; // skip closing quote
             }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let start = idx;

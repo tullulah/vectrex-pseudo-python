@@ -187,6 +187,7 @@ fn opt_expr(e: &Expr) -> Expr {
     Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(opt_expr).collect() },
     Expr::Ident(i) => Expr::Ident(i.clone()),
     Expr::Number(n) => Expr::Number(trunc16(*n)),
+    Expr::StringLit(s) => Expr::StringLit(s.clone()),
     }
 }
 
@@ -366,6 +367,7 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
         }
     Expr::Not(inner) | Expr::BitNot(inner) => collect_reads_expr(inner, used),
         Expr::Number(_) => {}
+    Expr::StringLit(_) => {}
     }
 }
 
@@ -479,5 +481,6 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
     Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
         Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(|a| cp_expr(a, env)).collect() },
         Expr::Number(n) => Expr::Number(*n),
+    Expr::StringLit(s) => Expr::StringLit(s.clone()),
     }
 }

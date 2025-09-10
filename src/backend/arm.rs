@@ -176,6 +176,9 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx) 
 fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
     match expr {
         Expr::Number(n) => out.push_str(&format!("    MOV r0, #{}\n", *n)),
+        Expr::StringLit(_s) => {
+            out.push_str("    ; TODO: string literals not yet supported at codegen time\n    MOV r0,#0\n");
+        }
         Expr::Ident(name) => {
             if let Some(off) = fctx.offset_of(name) {
                 out.push_str(&format!("    LDRH r0, [sp, #{}]\n", off));
@@ -363,7 +366,8 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
 // collect_expr_syms: scan an expression for identifiers.
 fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) {
     match expr {
-        Expr::Ident(n) => { set.insert(n.clone()); }
+    Expr::Ident(n) => { set.insert(n.clone()); }
+    Expr::StringLit(_) => {}
         Expr::Call { args, .. } => { for a in args { collect_expr_syms(a, set); } }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }

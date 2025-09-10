@@ -326,6 +326,9 @@ impl<'a> Parser<'a> {
         if let Some(n) = self.match_number() {
             return Ok(Expr::Number(n));
         }
+        if let Some(s) = self.match_string() {
+            return Ok(Expr::StringLit(s));
+        }
         if self.match_kind(&TokenKind::True) {
             return Ok(Expr::Number(1));
         }
@@ -397,6 +400,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         }
+    }
+    fn match_string(&mut self) -> Option<String> {
+        if let TokenKind::StringLit(s) = &self.peek().kind {
+            let v = s.clone();
+            self.pos += 1;
+            Some(v)
+        } else { None }
     }
     fn try_identifier(&mut self) -> Option<String> { self.match_identifier() }
     fn unread_identifier(&mut self, name: String) {

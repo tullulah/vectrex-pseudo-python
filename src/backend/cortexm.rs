@@ -136,7 +136,9 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx) 
 // emit_expr: generates expression into r0 with masking.
 fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
     match expr {
-        Expr::Number(n) => out.push_str(&format!("    MOV r0,#{}\n", *n)),
+    Expr::Number(n) => out.push_str(&format!("    MOV r0,#{}\n", *n)),
+    Expr::StringLit(_s) => { out.push_str("    ; TODO string literal -> address not implemented\n    MOV r0,#0\n"); }
+    Expr::StringLit(_s) => { out.push_str("    ; TODO string literal -> address not implemented\n    MOV r0,#0\n"); }
         Expr::Ident(name) => {
             if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDR r0, [sp, #{}]\n", off)); }
             else { out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0,[r0]\n", name.to_uppercase())); }
@@ -327,7 +329,8 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
             collect_expr_syms(right, set);
         }
     Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
-        Expr::Number(_) => {}
+    Expr::Number(_) => {}
+    Expr::StringLit(_) => {}
     }
 }
 
