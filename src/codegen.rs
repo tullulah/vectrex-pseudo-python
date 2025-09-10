@@ -103,6 +103,9 @@ fn opt_expr(e: &Expr) -> Expr {
                     BinOp::Sub => a.wrapping_sub(*b),
                     BinOp::Mul => a.wrapping_mul(*b),
                     BinOp::Div => if *b != 0 { a / b } else { *a },
+                    BinOp::Mod => if *b != 0 { a % b } else { *a },
+                    BinOp::Shl => a.wrapping_shl((*b & 0xF) as u32),
+                    BinOp::Shr => ((*a as u32) >> (*b & 0xF)) as i32,
                     BinOp::BitAnd => a & b,
                     BinOp::BitOr => a | b,
                     BinOp::BitXor => a ^ b,
@@ -124,10 +127,22 @@ fn opt_expr(e: &Expr) -> Expr {
                         if matches!(r, Expr::Number(0)) { return l; }
                         if matches!(l, Expr::Number(0)) { return r; }
                     }
+                    BinOp::Mod => {
+                        if matches!(r, Expr::Number(1)) { return Expr::Number(0); }
+                        if matches!(l, Expr::Number(0)) { return Expr::Number(0); }
+                    }
+                    BinOp::Shl | BinOp::Shr => {
+                        if matches!(r, Expr::Number(0)) { return l; }
+                        if matches!(l, Expr::Number(0)) { return Expr::Number(0); }
+                    }
                     _ => {}
                 }
                 Expr::Binary { op: *op, left: Box::new(l), right: Box::new(r) }
             }
+        }
+        Expr::BitNot(inner) => {
+            let i2 = opt_expr(inner);
+            if let Expr::Number(n) = i2 { Expr::Number(trunc16(!n)) } else { Expr::BitNot(Box::new(i2)) }
         }
         Expr::Compare { op, left, right } => {
             let l = opt_expr(left);
@@ -168,9 +183,9 @@ fn opt_expr(e: &Expr) -> Expr {
                 Expr::Not(Box::new(ni))
             }
         }
-        Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(opt_expr).collect() },
-        Expr::Ident(i) => Expr::Ident(i.clone()),
-        Expr::Number(n) => Expr::Number(trunc16(*n)),
+    Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(opt_expr).collect() },
+    Expr::Ident(i) => Expr::Ident(i.clone()),
+    Expr::Number(n) => Expr::Number(trunc16(*n)),
     }
 }
 
@@ -296,8 +311,8 @@ fn dse_function(f: &Function) -> Function {
 fn expr_has_call(e: &Expr) -> bool {
     match e {
         Expr::Call { .. } => true,
-        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
-        Expr::Not(inner) => expr_has_call(inner),
+    Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
+    Expr::Not(inner) | Expr::BitNot(inner) => expr_has_call(inner),
         _ => false,
     }
 }
@@ -338,7 +353,7 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(left, used);
             collect_reads_expr(right, used);
         }
-        Expr::Not(inner) => collect_reads_expr(inner, used),
+    Expr::Not(inner) | Expr::BitNot(inner) => collect_reads_expr(inner, used),
         Expr::Number(_) => {}
     }
 }
@@ -439,7 +454,8 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
         Expr::Binary { op, left, right } => Expr::Binary { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
         Expr::Compare { op, left, right } => Expr::Compare { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
         Expr::Logic { op, left, right } => Expr::Logic { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
-        Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
+    Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
+    Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
         Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(|a| cp_expr(a, env)).collect() },
         Expr::Number(n) => Expr::Number(*n),
     }

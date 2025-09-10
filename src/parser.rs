@@ -212,10 +212,20 @@ impl<'a> Parser<'a> {
 
     // bit_and: handle '&'
     fn bit_and(&mut self) -> Result<Expr> {
-        let mut node = self.comparison()?;
+        let mut node = self.shift()?;
         while self.match_kind(&TokenKind::Amp) {
-            let rhs = self.comparison()?;
+            let rhs = self.shift()?;
             node = Expr::Binary { op: crate::ast::BinOp::BitAnd, left: Box::new(node), right: Box::new(rhs) };
+        }
+        Ok(node)
+    }
+
+    // shift: handle << >> after comparison tier
+    fn shift(&mut self) -> Result<Expr> {
+        let mut node = self.comparison()?;
+        while let Some(op) = if self.match_kind(&TokenKind::ShiftLeft) { Some(BinOp::Shl) } else if self.match_kind(&TokenKind::ShiftRight) { Some(BinOp::Shr) } else { None } {
+            let rhs = self.comparison()?;
+            node = Expr::Binary { op, left: Box::new(node), right: Box::new(rhs) };
         }
         Ok(node)
     }
@@ -279,13 +289,10 @@ impl<'a> Parser<'a> {
     // factor: parse multiplication/division.
     fn factor(&mut self) -> Result<Expr> {
         let mut node = self.unary()?;
-        while let Some(op) = if self.match_kind(&TokenKind::Star) {
-            Some(crate::ast::BinOp::Mul)
-        } else if self.match_kind(&TokenKind::Slash) {
-            Some(crate::ast::BinOp::Div)
-        } else {
-            None
-        } {
+        while let Some(op) = if self.match_kind(&TokenKind::Star) { Some(BinOp::Mul) }
+            else if self.match_kind(&TokenKind::Slash) { Some(BinOp::Div) }
+            else if self.match_kind(&TokenKind::Percent) { Some(BinOp::Mod) }
+            else { None } {
             let right = self.unary()?;
             node = Expr::Binary { op, left: Box::new(node), right: Box::new(right) };
         }
@@ -305,6 +312,10 @@ impl<'a> Parser<'a> {
         }
         if self.match_kind(&TokenKind::Plus) {
             return self.unary();
+        }
+        if self.match_kind(&TokenKind::Tilde) {
+            let inner = self.unary()?;
+            return Ok(Expr::BitNot(Box::new(inner)));
         }
         self.primary()
     }

@@ -1,25 +1,16 @@
 def add(a, b):
     return a + b
 
-def neg(a):
-    return -a
-
-def accumulate(a, b, c, d):
-    total = a
-    total = total + b
-    total = total + c
-    total = total + d
-    return total
-
 def main():
-    s = add(3, 5)
-    n = neg(7)
-    t = accumulate(1, 2, 3, 4)
-    chain_ok = 1 < 2 < 3
-    chain_fail = 3 < 2 < 1
-    bw = (s & 255) | (t ^ n)
-    for i in range(0, 10, 2):
-        line(0, 0, i)
-    if s and not n:
-        line(0,0,0)
-    return s + t + n + bw
+    x = 0x10
+    y = 0b1010
+    s = add(x, y)
+    inv = ~s              # bitwise not
+    sh = (s << 3) >> 1    # net *4
+    r = (sh % 16) ^ (inv & 0xFF)
+    acc = 0
+    for i in range(0, 16, 2):
+        acc = acc + (i & 3)
+    if 1 < 2 < 3:
+        acc = acc + r
+    return acc + s + r

@@ -20,10 +20,10 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Expr { Number(i32), Ident(String), Call { name: String, args: Vec<Expr> }, Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> }, Compare { op: CmpOp, left: Box<Expr>, right: Box<Expr> }, Logic { op: LogicOp, left: Box<Expr>, right: Box<Expr> }, Not(Box<Expr>) }
+pub enum Expr { Number(i32), Ident(String), Call { name: String, args: Vec<Expr> }, Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> }, Compare { op: CmpOp, left: Box<Expr>, right: Box<Expr> }, Logic { op: LogicOp, left: Box<Expr>, right: Box<Expr> }, Not(Box<Expr>), BitNot(Box<Expr>) }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BinOp { Add, Sub, Mul, Div, BitAnd, BitOr, BitXor }
+pub enum BinOp { Add, Sub, Mul, Div, Mod, Shl, Shr, BitAnd, BitOr, BitXor }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpOp { Eq, Ne, Lt, Le, Gt, Ge }

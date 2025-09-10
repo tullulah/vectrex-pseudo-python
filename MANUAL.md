@@ -16,10 +16,14 @@ This manual describes the current prototype language supported by the multi-targ
 ## 3. Lexical Elements
 Tokens currently supported:
 - Keywords: `def`, `return`, `for`, `in`, `range`, `if`, `elif`, `else`, `while`, `break`, `continue`, `and`, `or`, `not`
-- Operators / punctuation: `+ - * / & | ^ == != < <= > >= = ( ) , :`
-- Literals: decimal integers (no sign inside literal; unary `-` handled syntactically)
+- Operators / punctuation: `+ - * / % << >> & | ^ ~ == != < <= > >= = ( ) , :`
+- Literals: 
+    - Decimal integers (no sign inside literal; unary `-` handled syntactically)
+    - Hexadecimal: `0x` followed by hex digits
+    - Binary: `0b` followed by binary digits
 - Identifiers: `[a-zA-Z_][a-zA-Z0-9_]*`
-- Boolean literals: (not separate; any non-zero is truthy, zero is false). `True/False` tokens may be mapped later.
+- Comments: `#` to end of line (ignored by lexer)
+- Boolean literals: (not separate; any non-zero is truthy, zero is false). `True/False` may be added later.
 - End of line creates statement boundaries (like Python). Blank lines are ignored.
 
 ## 4. Types & Values
@@ -71,26 +75,28 @@ else:
 8. Expression statement: just an expression on a line (mainly function calls).
 
 ## 6. Expressions
-- Literals: `123`
+- Literals: decimal / hex / binary (`123`, `0x1F`, `0b1010`)
 - Identifiers: `foo`
-- Binary arithmetic: `+ - * /` (unsigned 16-bit; division by zero yields left operand unchanged for now — undefined behavior placeholder)
-- Bitwise: `& | ^`
+- Binary arithmetic: `+ - * / %` (unsigned 16-bit; division or modulo by zero currently leaves left operand — placeholder UB)
+- Bitwise: `& | ^ << >> ~` (shift amounts masked to low 4 bits during folding / codegen to keep 0..15 range)
 - Comparisons: `== != < <= > >=`
 - Chained comparisons: `a < b < c` expands to `(a < b) and (b < c)` with short-circuiting
 - Logical: `and`, `or` (short-circuit) and unary `not`
 - Unary plus and minus: `-x` lowers to `0 - x`; `+x` is identity.
+- Bitwise not: `~x` -> mask applied yielding 16-bit result.
 - Function call: `name(arg0, arg1, ...)` evaluating up to 4 arguments.
 
 Operator precedence (high to low):
-1. Unary: `- + not`
-2. Multiplicative: `* /`
+1. Unary: `- + not ~`
+2. Multiplicative: `* / %`
 3. Additive: `+ -`
-4. Bitwise AND: `&`
-5. Bitwise XOR: `^`
-6. Bitwise OR: `|`
-7. Comparison (including chained)
-8. Logical AND: `and`
-9. Logical OR: `or`
+4. Shifts: `<< >>`
+5. Bitwise AND: `&`
+6. Bitwise XOR: `^`
+7. Bitwise OR: `|`
+8. Comparison (including chained)
+9. Logical AND: `and`
+10. Logical OR: `or`
 
 Short-circuit rules preserve left-to-right evaluation for logical ops and chained comparisons.
 
@@ -118,9 +124,12 @@ All arithmetic coerced via mask to 16 bits after operations where necessary.
 ### ARM (PiTrex)
 - Simple linear code, preserves no callee-saved registers (prototype). r4, r5 used as temporaries during binary ops.
 - Masks results with `AND r0,r0,#0xFFFF` post arithmetic.
+- Modulo synthesized via division helper + multiply-subtract sequence.
+- Shifts emitted with `MOV r0,r4,LSL r5` / `MOV r0,r4,LSR r5` (prototype; assumes shift amount already in low bits).
 
 ### Cortex-M (VecFever / Vextreme)
 - Similar to ARM backend; vector table stub plus infinite loop after `main` returns.
+- Same modulo / shift strategy as ARM (uses MVN for bitwise not).
 
 ## 10. Example
 ```
@@ -133,8 +142,10 @@ def main():
     t = 0
     if 1 < 2 < 3:
         t = s & 255
-    bw = (s & 255) | (t ^ n)
-    return s + t + n + bw
+    bw = (s & 0x00FF) | (t ^ ~n)
+    m = (bw << 3) % 16
+    z = 0b1010 ^ m
+    return s + t + n + bw + z
 ```
 
 ## 11. Current Limitations / Undefined Behavior

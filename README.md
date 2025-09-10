@@ -12,11 +12,13 @@ Targets:
 - Functions (definitions, returns)
 - Up to 4 positional parameters (simple prototype ABI)
 - Statements: assignment, for (range), while, if/elif/else, break, continue
-- Expressions: literals, identifiers, calls, arithmetic (+ - * /), bitwise (& | ^), comparisons (== != < <= > >=), chained comparisons (a < b < c), logical (and/or/not), unary +/-
-- Optimizations: constant folding, algebraic identities, constant propagation, dead code elimination, dead store elimination, backend peepholes (power-of-two mul/div, simple patterns)
+- Expressions: literals, identifiers, calls, arithmetic (+ - * / %), bitwise (& | ^ << >> ~), comparisons (== != < <= > >=), chained comparisons (a < b < c), logical (and/or/not), unary +/-
+- Literals: decimal, hexadecimal (0x...), binary (0b...)
+- Comments: `#` to end of line
+- Optimizations: constant folding (arithmetic, bitwise, shifts, modulo, bitnot), algebraic identities, constant propagation, dead code elimination, dead store elimination, backend peepholes (power-of-two mul/div, simple patterns)
 - Uniform 16-bit unsigned arithmetic semantics across all backends
 - Basic power-of-two multiply/divide lowering to shifts
-- Bitwise identity simplifications (x&0, x|0, x^0, x&0xFFFF)
+- Bitwise / arithmetic identity simplifications (x&0, x|0, x^0, x&0xFFFF, x*1, x+0, etc.)
 
 ## Status Notes
 - All arithmetic ops implemented for all backends (Add/Sub/Mul/Div with helper routines or shifts)
@@ -61,9 +63,10 @@ cargo run -- build example.vpy --target vecfever  > vecfever.asm
 See `MANUAL.md` for the evolving language and ABI specification.
 
 ## Roadmap (Short-Term)
-- Local vs global variable distinction
+- Local vs global variable distinction / stack frame model
 - Register allocation & temp reuse
-- Array / data constructs
+- Arrays / structured data
+- Strength reduce: modulo by power-of-two -> bitmask, combined shift+mask peepholes
 - Engine / BIOS intrinsic hooks
 - Test harness (golden assembly diffs)
 - Improved diagnostics with spans

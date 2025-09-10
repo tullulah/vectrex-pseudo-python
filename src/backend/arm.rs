@@ -168,7 +168,7 @@ fn emit_expr(expr: &Expr, out: &mut String) {
             }
             out.push_str(&format!("    BL {}\n", name));
         },
-        Expr::Binary { op, left, right } => {
+    Expr::Binary { op, left, right } => {
             if let BinOp::Mul = op {
                 if let Expr::Number(n) = &**right {
                     if *n > 0 && (*n & (*n - 1)) == 0 {
@@ -208,10 +208,17 @@ fn emit_expr(expr: &Expr, out: &mut String) {
                 BinOp::Sub => out.push_str("    SUB r0, r4, r5\n    AND r0, r0, #0xFFFF\n"),
                 BinOp::Mul => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __mul32\n    AND r0, r0, #0xFFFF\n"),
                 BinOp::Div => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __div32\n    AND r0, r0, #0xFFFF\n"),
+                BinOp::Mod => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __div32\n    ; quotient now in r0 -> compute remainder r4 - r0*r5\n    MOV r2,r0\n    MUL r2,r2,r5\n    RSBS r0,r2,r4\n    AND r0,r0,#0xFFFF\n"),
+                BinOp::Shl => out.push_str("    MOV r0,r4,LSL r5\n    AND r0,r0,#0xFFFF\n"),
+                BinOp::Shr => out.push_str("    MOV r0,r4,LSR r5\n    AND r0,r0,#0xFFFF\n"),
                 BinOp::BitAnd => out.push_str("    AND r0, r4, r5\n"),
                 BinOp::BitOr  => out.push_str("    ORR r0, r4, r5\n"),
                 BinOp::BitXor => out.push_str("    EOR r0, r4, r5\n"),
             }
+        }
+        Expr::BitNot(inner) => {
+            emit_expr(inner, out);
+            out.push_str("    MVN r0,r0\n    AND r0,r0,#0xFFFF\n");
         }
         Expr::Compare { op, left, right } => {
             emit_expr(left, out);
@@ -330,21 +337,15 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
 // collect_expr_syms: scan an expression for identifiers.
 fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) {
     match expr {
-        Expr::Ident(n) => {
-            set.insert(n.clone());
-        }
-        Expr::Call { args, .. } => {
-            for a in args {
-                collect_expr_syms(a, set);
-            }
-        }
+        Expr::Ident(n) => { set.insert(n.clone()); }
+        Expr::Call { args, .. } => { for a in args { collect_expr_syms(a, set); } }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {
             collect_expr_syms(left, set);
             collect_expr_syms(right, set);
         }
-        Expr::Not(inner) => collect_expr_syms(inner, set),
+        Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
         Expr::Number(_) => {}
     }
 }

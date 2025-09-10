@@ -6,8 +6,9 @@ use anyhow::{bail, Result};
 pub enum TokenKind {
     Def, Identifier(String), Number(i32), Newline, Indent, Dedent,
     LParen, RParen, Colon, Comma,
-    Plus, Minus, Star, Slash,
-    Amp, Pipe, Caret,
+    Plus, Minus, Star, Slash, Percent,
+    Amp, Pipe, Caret, Tilde,
+    ShiftLeft, ShiftRight,
     Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue,
     And, Or, Not,
     True, False,
@@ -92,10 +93,12 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 out.push(tok(TokenKind::Minus, line_no, idx));
                 idx += 1;
             }
+            '#' => { break; }
             '*' => {
                 out.push(tok(TokenKind::Star, line_no, idx));
                 idx += 1;
             }
+            '%' => { out.push(tok(TokenKind::Percent, line_no, idx)); idx += 1; }
             '/' => {
                 out.push(tok(TokenKind::Slash, line_no, idx));
                 idx += 1;
@@ -130,7 +133,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 }
             }
             '<' => {
-                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                if idx + 1 < chars.len() && chars[idx + 1] == '<' {
+                    out.push(tok(TokenKind::ShiftLeft, line_no, idx));
+                    idx += 2;
+                } else if idx + 1 < chars.len() && chars[idx + 1] == '=' {
                     out.push(tok(TokenKind::Le, line_no, idx));
                     idx += 2;
                 } else {
@@ -139,7 +145,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 }
             }
             '>' => {
-                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                if idx + 1 < chars.len() && chars[idx + 1] == '>' {
+                    out.push(tok(TokenKind::ShiftRight, line_no, idx));
+                    idx += 2;
+                } else if idx + 1 < chars.len() && chars[idx + 1] == '=' {
                     out.push(tok(TokenKind::Ge, line_no, idx));
                     idx += 2;
                 } else {
@@ -147,16 +156,25 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     idx += 1;
                 }
             }
-            '#' => {
-                break;
-            }
             '0'..='9' => {
                 let start = idx;
-                while idx < chars.len() && chars[idx].is_ascii_digit() {
-                    idx += 1;
+                if chars[idx] == '0' && idx + 1 < chars.len() && (chars[idx+1] == 'x' || chars[idx+1] == 'X') {
+                    idx += 2;
+                    let hs = idx;
+                    while idx < chars.len() && chars[idx].is_ascii_hexdigit() { idx += 1; }
+                    let num = i32::from_str_radix(&line[hs..idx], 16).unwrap_or(0);
+                    out.push(tok(TokenKind::Number(num), line_no, start));
+                } else if chars[idx] == '0' && idx + 1 < chars.len() && (chars[idx+1] == 'b' || chars[idx+1] == 'B') {
+                    idx += 2;
+                    let bs = idx;
+                    while idx < chars.len() && (chars[idx] == '0' || chars[idx] == '1') { idx += 1; }
+                    let num = i32::from_str_radix(&line[bs..idx], 2).unwrap_or(0);
+                    out.push(tok(TokenKind::Number(num), line_no, start));
+                } else {
+                    while idx < chars.len() && chars[idx].is_ascii_digit() { idx += 1; }
+                    let num: i32 = line[start..idx].parse().unwrap();
+                    out.push(tok(TokenKind::Number(num), line_no, start));
                 }
-                let num: i32 = line[start..idx].parse().unwrap();
-                out.push(tok(TokenKind::Number(num), line_no, start));
             }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let start = idx;
