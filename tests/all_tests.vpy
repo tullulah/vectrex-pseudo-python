@@ -112,6 +112,7 @@ def main():
     esc_res = test_string_escapes()
     dense_res = test_switch_dense()
     const_fold_res = test_switch_const_fold()
+    trig_res = test_trig()
     # Base: 15+3+6+9+6 = 39
     # + string_res (1) = 40
     # + string_addr_res (1) = 41
@@ -120,5 +121,13 @@ def main():
     # + esc_res (1) = 69
     # + dense_res (40) = 109
     # + const_fold_res (200) = 309
-    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res + switch_res + const_res + esc_res + dense_res + const_fold_res
+    # + trig_res (sin(0)=0 so add 0) = 309
+    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res + switch_res + const_res + esc_res + dense_res + const_fold_res + trig_res
     return total
+
+# Basic trig test: sin(0)=0, cos(0)=~127 scaled, tan(0)=0 (we just ensure call doesn't crash)
+def test_trig():
+    s = sin(0)
+    c = cos(0)
+    t = tan(0)
+    return s  # 0 expected

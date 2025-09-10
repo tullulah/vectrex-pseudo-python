@@ -45,6 +45,20 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
     for (lit,label) in &string_map { out.push_str(&format!("{}: FCC \"{}\"\n    FCB 0\n", label, escape_ascii(lit))); }
     out.push_str("; Call argument scratch space\nVAR_ARG0: FDB 0\nVAR_ARG1: FDB 0\nVAR_ARG2: FDB 0\nVAR_ARG3: FDB 0\n");
+    // Precomputed trig tables (Q7 fixed-point: value *128 ~ amplitude)
+    out.push_str("; Trig tables (128 entries, 16-bit signed, scale = 127)\n");
+    let mut sin_vals: Vec<i16> = Vec::new();
+    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let v = (ang.sin()*127.0).round() as i16; sin_vals.push(v); }
+    let mut cos_vals: Vec<i16> = Vec::new();
+    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let v = (ang.cos()*127.0).round() as i16; cos_vals.push(v); }
+    let mut tan_vals: Vec<i16> = Vec::new();
+    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let t = ang.tan(); let v = if t.is_finite() { (t.max(-6.0).min(6.0)*20.0).round() as i16 } else { 0 }; tan_vals.push(v); }
+    out.push_str("SIN_TABLE:\n");
+    for chunk in sin_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
+    out.push_str("COS_TABLE:\n");
+    for chunk in cos_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
+    out.push_str("TAN_TABLE:\n");
+    for chunk in tan_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
     out
 }
 
@@ -85,13 +99,28 @@ fn emit_builtin_helpers(out: &mut String) {
     out.push_str("SET_ORIGIN:\n    JSR WAIT_RECAL\n    RTS\n");
     // SET_INTENSITY: call fixed intensity BIOS routine INTENSITY_5F (ignores arg for now)
     out.push_str("SET_INTENSITY:\n    JSR INTENSITY_5F\n    RTS\n");
+    // Trig tables (128 entries, full circle) and access helpers are emitted in data section below.
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) -> bool {
     let up = name.to_ascii_uppercase();
-    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN"|"SET_INTENSITY");
+    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN"|"SET_INTENSITY"|"SIN"|"COS"|"TAN");
     if !is { return false; }
+    if matches!(up.as_str(), "SIN"|"COS"|"TAN") {
+        // Expect 1 arg
+        if let Some(arg) = args.get(0) {
+            emit_expr(arg, out, fctx, string_map);
+            out.push_str("    LDD RESULT\n    ANDB #$7F\n    CLRA\n    ASLB\n    ROLA\n    LDX #SIN_TABLE\n");
+            if up == "COS" { out.push_str("    LDX #COS_TABLE\n"); }
+            if up == "TAN" { out.push_str("    LDX #TAN_TABLE\n"); }
+            out.push_str("    ABX\n    LDD ,X\n    STD RESULT\n");
+            return true;
+        }
+        // No arg: return 0
+        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
     for (i, a) in args.iter().enumerate() {
         if i >= 5 { break; }
         emit_expr(a, out, fctx, string_map);
