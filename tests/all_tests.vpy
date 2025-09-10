@@ -32,12 +32,20 @@ def test_simple_local():  # 5 -> 6
     x = x + 1
     return x
 
+# String literal smoke test: ensure parser accepts it. Placeholder codegen returns 0 currently.
+def test_string():
+    let dummy = 1  # keep local usage
+    msg = "hello"  # string literal (currently evaluates to 0 placeholder)
+    return dummy    # return 1 so we can include in checksum later when implemented
+
 def main():
     shadow_res = test_shadow()
     basic_res = test_for_basic()
     step_res = test_for_step()
     nested_res = test_for_nested()
     simple_res = test_simple_local()
+    string_res = test_string()
     # Aggregate simple checksum (expected 15+3+6+9+6 = 39)
-    total = shadow_res + basic_res + step_res + nested_res + simple_res
+    # Adding string_res (1) temporarily increases expected checksum to 40 until string value semantics defined.
+    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res
     return total
