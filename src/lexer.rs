@@ -9,7 +9,7 @@ pub enum TokenKind {
     Plus, Minus, Star, Slash, Percent,
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
-    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue,
+    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let,
     And, Or, Not,
     True, False,
     EqEq, NotEq, Lt, Le, Gt, Ge,
@@ -115,6 +115,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 out.push(tok(TokenKind::Caret, line_no, idx));
                 idx += 1;
             }
+            '~' => {
+                out.push(tok(TokenKind::Tilde, line_no, idx));
+                idx += 1;
+            }
             '=' => {
                 if idx + 1 < chars.len() && chars[idx + 1] == '=' {
                     out.push(tok(TokenKind::EqEq, line_no, idx));
@@ -188,6 +192,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "elif" => TokenKind::Elif,
                     "else" => TokenKind::Else,
                     "for" => TokenKind::For,
+                    "let" => TokenKind::Let,
                     "while" => TokenKind::While,
                     "break" => TokenKind::Break,
                     "continue" => TokenKind::Continue,

@@ -52,7 +52,7 @@ struct LoopCtx {
 // emit_stmt: lower statements to 6809 instructions.
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
     match stmt {
-        Stmt::Assign { target, value } => {
+    Stmt::Assign { target, value } | Stmt::Let { name: target, value } => {
             emit_expr(value, out);
             out.push_str(&format!(
                 "    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n",
@@ -296,10 +296,11 @@ fn collect_symbols(module: &Module) -> Vec<String> {
 // collect_stmt_syms: process statement symbols.
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
-        Stmt::Assign { target, value } => {
+    Stmt::Assign { target, value } => {
             set.insert(target.clone());
             collect_expr_syms(value, set);
         }
+    Stmt::Let { name, value } => { set.insert(name.clone()); collect_expr_syms(value, set); }
         Stmt::Expr(e) => collect_expr_syms(e, set),
         Stmt::For { var, start, end, step, body } => {
             set.insert(var.clone());

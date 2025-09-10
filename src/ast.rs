@@ -10,6 +10,7 @@ pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<Stri
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
 	Assign { target: String, value: Expr },
+	Let { name: String, value: Expr },
 	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
 	While { cond: Expr, body: Vec<Stmt> },
 	Break,

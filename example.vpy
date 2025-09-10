@@ -2,13 +2,13 @@ def add(a, b):
     return a + b
 
 def main():
-    x = 0x10
-    y = 0b1010
-    s = add(x, y)
-    inv = ~s              # bitwise not
-    sh = (s << 3) >> 1    # net *4
-    r = (sh % 16) ^ (inv & 0xFF)
-    acc = 0
+    let x = 0x10
+    let y = 0b1010
+    let s = add(x, y)
+    let inv = ~s              # bitwise not
+    let sh = (s << 3) >> 1    # net *4
+    let r = (sh % 16) ^ (inv & 0xFF)
+    acc = 0  # still implicit global to show mix allowed
     for i in range(0, 16, 2):
         acc = acc + (i & 3)
     if 1 < 2 < 3:

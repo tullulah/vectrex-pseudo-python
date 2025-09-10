@@ -57,7 +57,8 @@ fn opt_function(f: &Function) -> Function {
 
 fn opt_stmt(s: &Stmt) -> Stmt {
     match s {
-        Stmt::Assign { target, value } => Stmt::Assign { target: target.clone(), value: opt_expr(value) },
+    Stmt::Assign { target, value } => Stmt::Assign { target: target.clone(), value: opt_expr(value) },
+    Stmt::Let { name, value } => Stmt::Let { name: name.clone(), value: opt_expr(value) },
         Stmt::For { var, start, end, step, body } => Stmt::For {
             var: var.clone(),
             start: opt_expr(start),
@@ -258,7 +259,8 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
             out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb });
         }
         Stmt::Return(e) => { out.push(Stmt::Return(e.clone())); *terminated = true; }
-        Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
+    Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
+    Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
         Stmt::Expr(e) => out.push(Stmt::Expr(e.clone())),
         Stmt::Break | Stmt::Continue => out.push(stmt.clone()),
     }
@@ -280,6 +282,14 @@ fn dse_function(f: &Function) -> Function {
                 } else {
                     collect_reads_expr(value, &mut used);
                     used.insert(target.clone());
+                    new_body.push(stmt.clone());
+                }
+            }
+            Stmt::Let { name, value } => {
+                if !used.contains(name) && !expr_has_call(value) {
+                } else {
+                    collect_reads_expr(value, &mut used);
+                    used.insert(name.clone());
                     new_body.push(stmt.clone());
                 }
             }
@@ -319,7 +329,8 @@ fn expr_has_call(e: &Expr) -> bool {
 
 fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
     match s {
-        Stmt::Assign { value, .. } => collect_reads_expr(value, used),
+    Stmt::Assign { value, .. } => collect_reads_expr(value, used),
+    Stmt::Let { value, .. } => collect_reads_expr(value, used),
         Stmt::Expr(e) => collect_reads_expr(e, used),
         Stmt::Return(o) => { if let Some(e) = o { collect_reads_expr(e, used); } }
         Stmt::If { cond, body, elifs, else_body } => {
@@ -382,6 +393,16 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
             } else {
                 env.remove(target);
                 Stmt::Assign { target: target.clone(), value: v2 }
+            }
+        }
+        Stmt::Let { name, value } => {
+            let v2 = cp_expr(value, env);
+            if let Expr::Number(n) = v2 {
+                env.insert(name.clone(), n);
+                Stmt::Let { name: name.clone(), value: Expr::Number(n) }
+            } else {
+                env.remove(name);
+                Stmt::Let { name: name.clone(), value: v2 }
             }
         }
         Stmt::Expr(e) => Stmt::Expr(cp_expr(e, env)),

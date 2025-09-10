@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Demo' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
         ORG $0000
 ; Basic Vectrex header (placeholder)
     FCB $67,$20,$56,$45,$43,$54,$52,$45,$58,$20,$47,$41,$4D,$45,$20
@@ -28,94 +28,14 @@ add:
     STD RESULT
     RTS
 
-NEG: ; function
-; --- function neg ---
-neg:
-    LDD VAR_ARG0
-    STD VAR_A
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD VAR_A
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    RTS
-
-ACCUMULATE: ; function
-; --- function accumulate ---
-accumulate:
-    LDD VAR_ARG0
-    STD VAR_A
-    LDD VAR_ARG1
-    STD VAR_B
-    LDD VAR_ARG2
-    STD VAR_C
-    LDD VAR_ARG3
-    STD VAR_D
-    LDD VAR_A
-    STD RESULT
-    LDU #VAR_TOTAL
-    STU TMPPTR
-    STX ,U
-    LDD VAR_TOTAL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD VAR_B
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDU #VAR_TOTAL
-    STU TMPPTR
-    STX ,U
-    LDD VAR_TOTAL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD VAR_C
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDU #VAR_TOTAL
-    STU TMPPTR
-    STX ,U
-    LDD VAR_TOTAL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD VAR_D
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDU #VAR_TOTAL
-    STU TMPPTR
-    STX ,U
-    LDD VAR_TOTAL
-    STD RESULT
-    RTS
-
 MAIN: ; function
 ; --- function main ---
 main:
-    LDD #3
+    LDD #16
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    LDD #5
+    LDD #10
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
@@ -123,32 +43,99 @@ main:
     LDU #VAR_S
     STU TMPPTR
     STX ,U
-    LDD #7
+    LDD VAR_S
     STD RESULT
     LDD RESULT
-    STD VAR_ARG0
-    JSR NEG
-    LDU #VAR_N
+    COMA
+    COMB
+    STD RESULT
+    LDU #VAR_INV
     STU TMPPTR
     STX ,U
-    LDD #1
+    LDD VAR_S
     STD RESULT
     LDD RESULT
-    STD VAR_ARG0
-    LDD #2
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
+    STD TMPLEFT
     LDD #3
     STD RESULT
     LDD RESULT
-    STD VAR_ARG2
-    LDD #4
+    STD TMPRIGHT
+    LDD TMPLEFT
+SHL_LOOP: LDA TMPRIGHT+1
+    BEQ SHL_DONE
+    ASLB
+    ROLA
+    DEC TMPRIGHT+1
+    BRA SHL_LOOP
+SHL_DONE: STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
     STD RESULT
     LDD RESULT
-    STD VAR_ARG3
-    JSR ACCUMULATE
-    LDU #VAR_T
+    STD TMPRIGHT
+    LDD TMPLEFT
+SHR_LOOP: LDA TMPRIGHT+1
+    BEQ SHR_DONE
+    LSRA
+    RORB
+    DEC TMPRIGHT+1
+    BRA SHR_LOOP
+SHR_DONE: STD RESULT
+    LDU #VAR_SH
+    STU TMPPTR
+    STX ,U
+    LDD VAR_SH
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #16
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    STD DIV_A
+    LDD TMPRIGHT
+    STD DIV_B
+    JSR DIV16
+    ; quotient in RESULT, need remainder: A - Q*B
+    LDD DIV_A
+    STD TMPLEFT
+    LDD RESULT
+    STD MUL_A
+    LDD DIV_B
+    STD MUL_B
+    JSR MUL16
+    ; product in RESULT, subtract from original A (TMPLEFT)
+    LDD TMPLEFT
+    SUBD RESULT
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_INV
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #255
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ANDA TMPRIGHT+1
+    ANDB TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    EORA TMPRIGHT+1
+    EORB TMPRIGHT
+    STD RESULT
+    LDU #VAR_R
+    STU TMPPTR
+    STX ,U
+    LDD #0
+    STD RESULT
+    LDU #VAR_ACC
     STU TMPPTR
     STX ,U
     LDD #0
@@ -157,7 +144,7 @@ main:
     STD VAR_I
 FOR_0: ; for loop
     LDD VAR_I
-    LDD #10
+    LDD #16
     STD RESULT
     LDX RESULT
     CPD RESULT
@@ -165,16 +152,27 @@ FOR_0: ; for loop
     LDD #0
     STD RESULT
     LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
+    STD TMPLEFT
     LDD VAR_I
     STD RESULT
     LDD RESULT
-    STD VAR_ARG2
-    JSR LINE
+    STD TMPLEFT
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ANDA TMPRIGHT+1
+    ANDB TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDU #VAR_ACC
+    STU TMPPTR
+    STX ,U
     LDD #2
     STD RESULT
     LDX RESULT
@@ -183,52 +181,25 @@ FOR_0: ; for loop
     STD VAR_I
     BRA FOR_0
 FOR_END_1: ; for end
-    LDD VAR_S
-    STD RESULT
-    LDD RESULT
-    BEQ AND_FALSE_4
-    LDD VAR_N
-    STD RESULT
-    LDD RESULT
-    BEQ NOT_TRUE
     LDD #0
-    STD RESULT
-    BRA NOT_END
-NOT_TRUE:
-    LDD #1
-    STD RESULT
-NOT_END:
-    LDD RESULT
-    BEQ AND_FALSE_4
-    LDD #1
-    STD RESULT
-    BRA AND_END_5
-AND_FALSE_4:
-    LDD #0
-    STD RESULT
-AND_END_5:
-    LDD RESULT
-    BEQ IF_NEXT_3
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    JSR LINE
-    BRA IF_END_2
-IF_END_2:
-    LDD VAR_S
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD VAR_T
+    LDD VAR_R
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDU #VAR_ACC
+    STU TMPPTR
+    STX ,U
+    LDD VAR_ACC
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_S
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -237,7 +208,7 @@ IF_END_2:
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD VAR_N
+    LDD VAR_R
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -301,14 +272,13 @@ DIV16_DONE:
 
 ; Variables
 VAR_A: FDB 0
+VAR_ACC: FDB 0
 VAR_B: FDB 0
-VAR_C: FDB 0
-VAR_D: FDB 0
 VAR_I: FDB 0
-VAR_N: FDB 0
+VAR_INV: FDB 0
+VAR_R: FDB 0
 VAR_S: FDB 0
-VAR_T: FDB 0
-VAR_TOTAL: FDB 0
+VAR_SH: FDB 0
 ; Call argument scratch space
 VAR_ARG0: FDB 0
 VAR_ARG1: FDB 0

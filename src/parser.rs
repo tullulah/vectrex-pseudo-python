@@ -6,9 +6,7 @@ use crate::lexer::{Token, TokenKind};
 pub fn parse(tokens: &[Token]) -> Result<Module> {
     let mut p = Parser { tokens, pos: 0 };
     let mut items = Vec::new();
-    while !p.check(TokenKind::EOF) {
-        items.push(p.function()?);
-    }
+    while !p.check(TokenKind::EOF) { items.push(p.function()?); }
     Ok(Module { items })
 }
 
@@ -38,15 +36,20 @@ impl<'a> Parser<'a> {
         self.consume(TokenKind::Colon)?;
         self.consume(TokenKind::Newline)?;
         self.consume(TokenKind::Indent)?;
-        let mut body = Vec::new();
-        while !self.match_kind(&TokenKind::Dedent) {
-            body.push(self.statement()?);
-        }
+    let mut body = Vec::new();
+    while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
         Ok(Item::Function(Function { name, params, body }))
     }
 
     // statement: dispatch to specific statement forms.
     fn statement(&mut self) -> Result<Stmt> {
+        if self.match_kind(&TokenKind::Let) {
+            let name = self.identifier()?;
+            self.consume(TokenKind::Equal)?;
+            let value = self.expression()?;
+            self.consume(TokenKind::Newline)?;
+            return Ok(Stmt::Let { name, value });
+        }
         if self.match_kind(&TokenKind::For) {
             return self.for_stmt();
         }
@@ -72,9 +75,7 @@ impl<'a> Parser<'a> {
                 let expr = self.expression()?;
                 self.consume(TokenKind::Newline)?;
                 return Ok(Stmt::Assign { target: name, value: expr });
-            } else {
-                self.unread_identifier(name);
-            }
+            } else { self.unread_identifier(name); }
         }
         let expr = self.expression()?;
         self.consume(TokenKind::Newline)?;
