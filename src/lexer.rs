@@ -9,7 +9,7 @@ pub enum TokenKind {
     Plus, Minus, Star, Slash, Percent,
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
-    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let,
+    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let, Const,
     Switch, Case, Default,
     And, Or, Not,
     StringLit(String),
@@ -187,12 +187,44 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
             '"' => {
                 let start_col = idx;
                 idx += 1; // skip opening quote
-                let lit_start = idx;
-                while idx < chars.len() && chars[idx] != '"' { idx += 1; }
-                if idx >= chars.len() { bail!("Unterminated string literal line {} col {}", line_no, start_col + 1); }
-                let s: String = chars[lit_start..idx].iter().collect();
+                let mut buf: Vec<u8> = Vec::new();
+                while idx < chars.len() {
+                    let c2 = chars[idx];
+                    if c2 == '"' { break; }
+                    if c2 == '\\' {
+                        idx += 1;
+                        if idx >= chars.len() { bail!("Unterminated escape in string line {} col {}", line_no, start_col + 1); }
+                        let esc = chars[idx];
+                        match esc {
+                            'n' => buf.push(0x0A),
+                            'r' => buf.push(0x0D),
+                            't' => buf.push(0x09),
+                            '"' => buf.push(b'"'),
+                            '\\' => buf.push(b'\\'),
+                            'x' => {
+                                // two hex digits
+                                if idx + 2 >= chars.len() { bail!("Incomplete hex escape line {} col {}", line_no, start_col + 1); }
+                                let h1 = chars.get(idx+1).copied().unwrap_or(' ');
+                                let h2 = chars.get(idx+2).copied().unwrap_or(' ');
+                                if !(h1.is_ascii_hexdigit() && h2.is_ascii_hexdigit()) { bail!("Invalid hex escape line {} col {}", line_no, start_col + 1); }
+                                let hs = format!("{}{}", h1, h2);
+                                let val = u8::from_str_radix(&hs, 16).unwrap();
+                                buf.push(val);
+                                idx += 2;
+                            }
+                            other => {
+                                bail!("Unknown escape \\{} line {} col {}", other, line_no, start_col + 1);
+                            }
+                        }
+                    } else {
+                        buf.push(c2 as u8);
+                    }
+                    idx += 1;
+                }
+                if idx >= chars.len() || chars[idx] != '"' { bail!("Unterminated string literal line {} col {}", line_no, start_col + 1); }
+                let s = String::from_utf8_lossy(&buf).to_string();
                 out.push(tok(TokenKind::StringLit(s), line_no, start_col));
-                idx += 1; // skip closing quote
+                idx += 1; // skip closing
             }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let start = idx;
@@ -210,6 +242,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "while" => TokenKind::While,
                     "break" => TokenKind::Break,
                     "continue" => TokenKind::Continue,
+                    "const" => TokenKind::Const,
                     "switch" => TokenKind::Switch,
                     "case" => TokenKind::Case,
                     "default" => TokenKind::Default,

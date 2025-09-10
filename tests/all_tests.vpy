@@ -60,6 +60,32 @@ def test_switch_basic():
             acc = 99
     return acc
 
+const MAGIC = 5
+const BONUS = 2
+
+def test_const_basic():
+    x = MAGIC + BONUS  # should constant fold to 7
+    return x
+
+def test_string_escapes():
+    s = "Line1\nLine2\tX\\Y\x21"  # contains newline, tab, backslash, hex !
+    if s != 0:
+        return 1
+    return 0
+
+def test_switch_dense():
+    v = 4
+    switch v:
+        case 3:
+            return 30
+        case 4:
+            return 40
+        case 5:
+            return 50
+        default:
+            return 99
+    return 0
+
 def main():
     shadow_res = test_shadow()
     basic_res = test_for_basic()
@@ -69,9 +95,15 @@ def main():
     string_res = test_string()
     string_addr_res = test_string_address()
     switch_res = test_switch_basic()
+    const_res = test_const_basic()
+    esc_res = test_string_escapes()
+    dense_res = test_switch_dense()
     # Base: 15+3+6+9+6 = 39
     # + string_res (1) = 40
     # + string_addr_res (1) = 41
     # + switch_res (20) = 61
-    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res + switch_res
+    # + const_res (7) = 68
+    # + esc_res (1) = 69
+    # + dense_res (40) = 109
+    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res + switch_res + const_res + esc_res + dense_res
     return total

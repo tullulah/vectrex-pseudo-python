@@ -5,7 +5,10 @@ use crate::ast::{Expr, Item, Module, Stmt};
 pub fn collect_string_literals(module: &Module) -> std::collections::BTreeMap<String,String> {
     use std::collections::{BTreeSet, BTreeMap};
     let mut set = BTreeSet::new();
-    for Item::Function(f) in &module.items { for s in &f.body { gather_stmt_strings(s, &mut set); } }
+    for item in &module.items {
+        if let Item::Function(f) = item { for s in &f.body { gather_stmt_strings(s, &mut set); } }
+        else if let Item::Const { value, .. } = item { gather_expr_strings(value, &mut set); }
+    }
     let mut map = BTreeMap::new();
     for (i, lit) in set.iter().enumerate() { map.insert(lit.clone(), format!("STR_{}", i)); }
     map

@@ -2,7 +2,7 @@
 pub struct Module { pub items: Vec<Item> }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Item { Function(Function) }
+pub enum Item { Function(Function), Const { name: String, value: Expr } }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<String>, pub body: Vec<Stmt> }

@@ -47,7 +47,7 @@ fn optimize_module(m: &Module) -> Module {
     current
 }
 
-fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)) } }
+fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) } } }
 
 fn opt_function(f: &Function) -> Function {
     Function {
@@ -196,7 +196,7 @@ fn opt_expr(e: &Expr) -> Expr {
 
 // dead_code_elim: prune unreachable branches / empty loops.
 fn dead_code_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dce_function(f)) }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dce_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
 }
 
 fn dce_function(f: &Function) -> Function {
@@ -287,7 +287,7 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
 
 // dead_store_elim: remove assignments whose values are never subsequently used.
 fn dead_store_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dse_function(f)) }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dse_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
 }
 
 fn dse_function(f: &Function) -> Function {
@@ -415,13 +415,23 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
 
 // propagate_constants: simple forward constant propagation with branch merging.
 fn propagate_constants(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function(f)) }).collect() }
+    use std::collections::HashMap;
+    let mut globals: HashMap<String, i32> = HashMap::new();
+    // Collect global const numeric values (only if literal number after folding)
+    for it in &m.items {
+        if let Item::Const { name, value } = it {
+            if let Expr::Number(n) = value { globals.insert(name.clone(), *n); }
+        }
+    }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
 }
 
 use std::collections::HashMap;
 
-fn cp_function(f: &Function) -> Function {
+fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<String, i32>) -> Function {
     let mut env = HashMap::<String, i32>::new();
+    // preload globals (function-locals can shadow by inserting new value later)
+    for (k,v) in globals { env.insert(k.clone(), *v); }
     let mut new_body = Vec::new();
     for stmt in &f.body { new_body.push(cp_stmt(stmt, &mut env)); }
     Function { name: f.name.clone(), params: f.params.clone(), body: new_body }

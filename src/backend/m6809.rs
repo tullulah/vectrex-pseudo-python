@@ -19,8 +19,15 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(
         "; Basic Vectrex header (placeholder)\n    FCB $67,$20,$56,$45,$43,$54,$52,$45,$58,$20,$47,$41,$4D,$45,$20\n    FCB $00,$00,$00,$00\n\n",
     );
-    out.push_str(&format!("JSR {}\nJSR MAIN\nEND_LOOP: BRA END_LOOP\n\n", ti.init_label));
-    for Item::Function(f) in &module.items { emit_function(f, &mut out, &string_map); }
+    out.push_str(&format!("JSR {}\n", ti.init_label));
+    // Emit all functions before calling MAIN so code exists.
+    for item in &module.items {
+        match item {
+            Item::Function(f) => emit_function(f, &mut out, &string_map),
+            Item::Const { name, value } => { if let Expr::Number(n) = value { out.push_str(&format!("; const {} = {}\n", name, n & 0xFFFF)); } }
+        }
+    }
+    out.push_str("JSR MAIN\nEND_LOOP: BRA END_LOOP\n\n");
     out.push_str("; Runtime helpers\n");
     emit_mul_helper(&mut out);
     emit_div_helper(&mut out);
@@ -334,9 +341,11 @@ fn collect_symbols(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
     let mut globals = BTreeSet::new();
     let mut locals = BTreeSet::new();
-    for Item::Function(f) in &module.items {
-        for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
-        for l in collect_locals(&f.body) { locals.insert(l); }
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
+            for l in collect_locals(&f.body) { locals.insert(l); }
+        }
     }
     for l in &locals { globals.remove(l); }
     globals.into_iter().collect()

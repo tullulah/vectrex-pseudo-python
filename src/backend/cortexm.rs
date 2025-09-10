@@ -15,7 +15,12 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(
         "; Vector table (prototype)\n    .section .isr_vector\n    .word _estack\n    .word Reset_Handler\n\nReset_Handler:\n    BL engine_init\n    BL main\n1:  B 1b\n\n",
     );
-    for Item::Function(f) in &module.items { emit_function(f, &mut out, &string_map); }
+    for item in &module.items {
+        if let Item::Function(f) = item { emit_function(f, &mut out, &string_map); }
+        else if let Item::Const { name, value } = item {
+            if let Expr::Number(n) = value { out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF)); }
+        }
+    }
     out.push_str("; Runtime helpers\n");
     out.push_str(
         "__mul32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __mul32_done\n__mul32_loop:\n    AND r3,r1,#1\n    CMP r3,#0\n    BEQ __mul32_skip\n    ADD r2,r2,r0\n__mul32_skip:\n    LSR r1,r1,#1\n    LSL r0,r0,#1\n    CMP r1,#0\n    BNE __mul32_loop\n__mul32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
@@ -132,9 +137,49 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             emit_expr(expr, out, fctx, string_map);
             out.push_str("    MOV r4,r0\n");
             let end = fresh_label("SW_END");
+            let def_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
+            let mut numeric_cases: Vec<(i32,&Vec<Stmt>)> = Vec::new();
+            let mut all_numeric = true;
+            for (ce, body) in cases {
+                if let Expr::Number(n) = ce { numeric_cases.push((*n, body)); } else { all_numeric = false; break; }
+            }
+            if all_numeric && numeric_cases.len() >= 3 {
+                numeric_cases.sort_by_key(|(v,_)| *v);
+                let min = numeric_cases.first().unwrap().0 & 0xFFFF;
+                let max = numeric_cases.last().unwrap().0 & 0xFFFF;
+                let span = (max - min) as usize + 1;
+                if span <= numeric_cases.len()*2 { // density heuristic
+                    let table_label = fresh_label("SW_JT");
+                    let mut label_map: std::collections::BTreeMap<i32,String> = std::collections::BTreeMap::new();
+                    for (val, _) in &numeric_cases { label_map.insert(*val, fresh_label("SW_CASE")); }
+                    out.push_str(&format!("    MOV r5,#{}\n    CMP r4,r5\n    BLT {}\n", min, def_label.as_ref().unwrap_or(&end)));
+                    out.push_str(&format!("    MOV r5,#{}\n    CMP r4,r5\n    BGT {}\n", max, def_label.as_ref().unwrap_or(&end)));
+                    if min != 0 { out.push_str(&format!("    SUB r4,r4,#{}\n", min)); }
+                    out.push_str(&format!("    LDR r5, ={}\n    LSL r4,r4,#2\n    ADD r5,r5,r4\n    LDR r5, [r5]\n    BX r5\n", table_label));
+                    for (val, body) in &numeric_cases {
+                        let lbl = label_map.get(val).unwrap();
+                        out.push_str(&format!("{}:\n", lbl));
+                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                        out.push_str(&format!("    B {}\n", end));
+                    }
+                    if let Some(dl) = &def_label {
+                        out.push_str(&format!("{}:\n", dl));
+                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                    }
+                    out.push_str(&format!("{}:\n", end));
+                    out.push_str(&format!("{}:\n", table_label));
+                    for offset in 0..span as i32 {
+                        let actual = ((min as i32) + offset) & 0xFFFF;
+                        if let Some(lbl) = label_map.get(&actual) { out.push_str(&format!("    .word {}\n", lbl)); }
+                        else if let Some(dl) = &def_label { out.push_str(&format!("    .word {}\n", dl)); }
+                        else { out.push_str(&format!("    .word {}\n", end)); }
+                    }
+                    return;
+                }
+            }
+            // fallback linear chain
             let mut labels = Vec::new();
             for _ in cases { labels.push(fresh_label("SW_CASE")); }
-            let def_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
             for ((cv,_), lbl) in cases.iter().zip(labels.iter()) {
                 emit_expr(cv, out, fctx, string_map);
                 out.push_str(&format!("    CMP r4,r0\n    BEQ {}\n", lbl));
@@ -278,9 +323,11 @@ fn collect_symbols(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
     let mut globals = BTreeSet::new();
     let mut locals = BTreeSet::new();
-    for Item::Function(f) in &module.items {
-        for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
-        for l in collect_locals(&f.body) { locals.insert(l); }
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
+            for l in collect_locals(&f.body) { locals.insert(l); }
+        }
     }
     for l in &locals { globals.remove(l); }
     globals.into_iter().collect()

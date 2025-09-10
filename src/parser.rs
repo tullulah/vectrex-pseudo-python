@@ -6,7 +6,17 @@ use crate::lexer::{Token, TokenKind};
 pub fn parse(tokens: &[Token]) -> Result<Module> {
     let mut p = Parser { tokens, pos: 0 };
     let mut items = Vec::new();
-    while !p.check(TokenKind::EOF) { items.push(p.function()?); }
+    while !p.check(TokenKind::EOF) {
+        if p.match_kind(&TokenKind::Const) {
+            let name = p.identifier()?;
+            p.consume(TokenKind::Equal)?;
+            let value = p.expression()?;
+            p.consume(TokenKind::Newline)?;
+            items.push(Item::Const { name, value });
+        } else {
+            items.push(p.function()?);
+        }
+    }
     Ok(Module { items })
 }
 
