@@ -40,9 +40,10 @@ def test_string():
 
 def test_string_address():
     s = "abc"
-    # After backend implementation, string literal expression yields its address (non-zero expected)
-    # We just return 1 unconditionally (could check s != 0 if runtime guarantees) to keep deterministic checksum.
-    return 1
+    # Comprobamos realmente que la dirección es no‑cero; devolvemos 1 si ok, 0 si falla
+    if s != 0:
+        return 1
+    return 0
 
 def main():
     shadow_res = test_shadow()
@@ -54,6 +55,6 @@ def main():
     string_addr_res = test_string_address()
     # Base: 15+3+6+9+6 = 39
     # + string_res (1) = 40
-    # + string_addr_res (1) = 41
+    # + string_addr_res (1 si la dirección es no-cero) = 41
     total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res
     return total
