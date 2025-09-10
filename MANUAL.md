@@ -15,7 +15,7 @@ This manual describes the current prototype language supported by the multi-targ
 
 ## 3. Lexical Elements
 Tokens currently supported:
-- Keywords: `def`, `return`, `for`, `in`, `range`, `if`, `elif`, `else`, `while`, `break`, `continue`, `and`, `or`, `not`
+- Keywords: `def`, `return`, `for`, `in`, `range`, `if`, `elif`, `else`, `while`, `break`, `continue`, `and`, `or`, `not`, `let`
 - Operators / punctuation: `+ - * / % << >> & | ^ ~ == != < <= > >= = ( ) , :`
 - Literals: 
     - Decimal integers (no sign inside literal; unary `-` handled syntactically)
@@ -38,18 +38,38 @@ def name(param0, param1, ...):
 ```
 Up to 4 parameters participate in the current simple ABI (more will be ignored / future error).
 
-2. Assignment:
+2. Local declaration (`let`):
+```
+let x = expression
+```
+Creates a local variable stored in the function's stack frame (one 16-bit slot currently rounded to 2 bytes on 6809, 4 bytes on ARM/Cortex-M for simplicity – may compact later). Lifetime = function invocation.
+
+3. Assignment:
 ```
 name = expression
 ```
-Creates or updates a global variable (function locals are treated as globals for now; later lexical scopes may be added).
+Writes to an existing local if a `let name` appeared earlier in the same function; otherwise writes / creates a global variable.
 
 3. For loop (range based):
 ```
 for i in range(start, end, step):
     body
 ```
-`step` is optional; default assumed 1 if omitted (currently explicit step often required in codegen). Loop variable and bounds evaluated once per iteration check (simple semantics). Loop runs while `i < end`.
+`step` is optional; default = 1 when omitted. Loop variable and bounds are reloaded each iteration for the comparison; loop runs while `i < end`.
+
+For-loop induction variable locality:
+
+- The loop variable (e.g. `i`) is always treated as an implicit local even without a preceding `let`. It is allocated a 2‑byte slot in the function's stack frame on all backends.
+- It does not create or touch a `VAR_I` style global symbol, allowing shadowing and preventing global namespace pollution.
+- Nested loops allocate additional slots (`i` at offset 0, `j` at offset 2, etc.).
+- A specified `step` expression is evaluated after the body each iteration; if omitted, a constant 1 is synthesized.
+
+Example with step:
+```
+for i in range(0, 6, 2):
+    acc = acc + i
+```
+Generates a local slot for `i` and increments it by 2 each pass; no global `VAR_I` is emitted.
 
 4. While loop:
 ```
@@ -118,17 +138,20 @@ All arithmetic coerced via mask to 16 bits after operations where necessary.
 
 ## 9. Backend Notes
 ### 6809 (Vectrex)
-- Uses zero-page-like globals: `VAR_<NAME>` for variables, `VAR_ARGi` for call arguments, temporaries (`TMPLEFT`, `TMPRIGHT`, etc.).
+- Uses zero-page-like globals: `VAR_<NAME>` for globals, `VAR_ARGi` for call arguments, temporaries (`TMPLEFT`, `TMPRIGHT`, etc.).
+- Locals (`let` and for-loop counters) allocated on stack via `LEAS -N,S` at function entry; each consumes 2 bytes; freed with `LEAS +N,S` before return.
 - Multiplication / division call helper subroutines `MUL16`, `DIV16` (prototype) or inline shift peepholes for powers of two.
 
 ### ARM (PiTrex)
 - Simple linear code, preserves no callee-saved registers (prototype). r4, r5 used as temporaries during binary ops.
+- Locals allocated with `SUB sp, sp, #size` (2 bytes per local) and accessed by halfword ops `STRH/LDRH [sp,#off]`. Freed with corresponding `ADD sp, sp, #size` in epilogue.
 - Masks results with `AND r0,r0,#0xFFFF` post arithmetic.
 - Modulo synthesized via division helper + multiply-subtract sequence.
 - Shifts emitted with `MOV r0,r4,LSL r5` / `MOV r0,r4,LSR r5` (prototype; assumes shift amount already in low bits).
 
 ### Cortex-M (VecFever / Vextreme)
 - Similar to ARM backend; vector table stub plus infinite loop after `main` returns.
+- Locals follow same stack frame scheme as ARM (2 bytes per local, STRH/LDRH).
 - Same modulo / shift strategy as ARM (uses MVN for bitwise not).
 
 ## 10. Example
@@ -151,7 +174,7 @@ def main():
 ## 11. Current Limitations / Undefined Behavior
 - Division by zero: leaves left operand (subject to change).
 - More than 4 function parameters: ignored / presently unsafe.
-- No scoping: all variables effectively module globals.
+- Shadowing across functions only (no nested scopes yet). Locals must be declared with `let` before first assignment to be local; otherwise assignment creates a global.
 - No recursion guard or stack depth check.
 - No negative integer literals (unary minus rewrite only).
 - No string / data sections beyond variables.

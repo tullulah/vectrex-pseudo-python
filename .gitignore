@@ -3,12 +3,8 @@
 **/*.rs.bk
 
 # Generated assembly outputs (use redirection to keep if needed)
-example.asm
-vectrex.asm
-pitrex.asm
-arm.asm
-cortexm.asm
-vextreme.asm
+/*.asm
+tests/*.asm
 
 # If you want to ignore all top-level generated .asm add (commented):
 #/*.asm

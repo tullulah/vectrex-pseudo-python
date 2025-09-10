@@ -31,7 +31,9 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
 
     while let Some((i, raw_line)) = lines.next() {
         let line_no = i + 1;
-        if raw_line.trim().is_empty() {
+        let trimmed = raw_line.trim();
+        // Skip blank or comment-only lines (treat as whitespace, no indentation changes)
+        if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
         let indent = raw_line.chars().take_while(|c| *c == ' ').count();

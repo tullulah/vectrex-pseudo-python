@@ -11,7 +11,7 @@ Targets:
 ## Current Feature Set
 - Functions (definitions, returns)
 - Up to 4 positional parameters (simple prototype ABI)
-- Statements: assignment, for (range), while, if/elif/else, break, continue
+- Statements: assignment, let (local declaration), for (range), while, if/elif/else, break, continue
 - Expressions: literals, identifiers, calls, arithmetic (+ - * / %), bitwise (& | ^ << >> ~), comparisons (== != < <= > >=), chained comparisons (a < b < c), logical (and/or/not), unary +/-
 - Literals: decimal, hexadecimal (0x...), binary (0b...)
 - Comments: `#` to end of line
@@ -24,11 +24,12 @@ Targets:
 - All arithmetic ops implemented for all backends (Add/Sub/Mul/Div with helper routines or shifts)
 - Bitwise ops implemented and optimized
 - Chained comparisons lowered to logical conjunction with short-circuiting
-- No register allocation yet (globals used for temps/params)
+- Locals: `let name = expr` allocates a stack slot (ARM / Cortex-M now 2 bytes per 16-bit local via STRH/LDRH; 6809 uses 2 bytes). Non-`let` assignment to a new name creates/uses a global. Re-assigning a `let` variable stays local.
+- No register allocation yet (globals + stack slots used for temps/params)
 
-## Example (`example.vpy`)
+## Example (`tests/example.vpy`)
 
-## Example Source (`example.vpy`)
+## Example Source (`tests/example.vpy`)
 ```
 def main():
     x = 0
@@ -40,23 +41,23 @@ def main():
 
 Build (default target = vectrex):
 ```
-cargo run -- build example.vpy
+cargo run -- build tests/example.vpy
 ```
 
 Select explicit target:
 ```
-cargo run -- build example.vpy --target pitrex
-cargo run -- build example.vpy --target vecfever
-cargo run -- build example.vpy --target vextreme
-cargo run -- build example.vpy --target all    # produce los 4 ensamblados
+cargo run -- build tests/example.vpy --target pitrex
+cargo run -- build tests/example.vpy --target vecfever
+cargo run -- build tests/example.vpy --target vextreme
+cargo run -- build tests/example.vpy --target all    # produce los 4 ensamblados
 ```
 Output file: `example.asm` (overwritten per target invocation unless you redirect).
 
 Redirect to keep each:
 ```
-cargo run -- build example.vpy --target vectrex   > vectrex.asm
-cargo run -- build example.vpy --target pitrex    > pitrex.asm
-cargo run -- build example.vpy --target vecfever  > vecfever.asm
+cargo run -- build tests/example.vpy --target vectrex   > vectrex.asm
+cargo run -- build tests/example.vpy --target pitrex    > pitrex.asm
+cargo run -- build tests/example.vpy --target vecfever  > vecfever.asm
 ```
 
 ## Programming Manual

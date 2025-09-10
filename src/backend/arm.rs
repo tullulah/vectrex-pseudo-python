@@ -32,7 +32,7 @@ fn emit_function(f: &Function, out: &mut String) {
     out.push_str(&format!(".global {0}\n{0}:\n", f.name));
     // Collect local variables declared via 'let'
     let locals = collect_locals(&f.body);
-    let frame_size = (locals.len() as i32) * 4; // 4 bytes per local
+    let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
     if frame_size > 0 { out.push_str(&format!("    SUB sp, sp, #{}\n", frame_size)); }
     // Parameter prologue (still stored in globals for now)
     for (i, p) in f.params.iter().enumerate().take(4) {
@@ -52,7 +52,7 @@ struct LoopCtx { start: Option<String>, end: Option<String>, }
 
 struct FuncCtx { locals: Vec<String>, frame_size: i32 }
 impl FuncCtx {
-    fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*4) }
+    fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2) }
 }
 
 // emit_stmt: lowers high-level statements into ARM instructions with structured labels.
@@ -61,14 +61,14 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx) 
         Stmt::Assign { target, value } => {
             emit_expr(value, out, fctx);
             if let Some(off) = fctx.offset_of(target) {
-                out.push_str(&format!("    STR r0, [sp, #{}]\n", off));
+                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
             } else {
                 out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", target.to_uppercase()));
             }
         }
         Stmt::Let { name, value } => {
             emit_expr(value, out, fctx);
-            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    STR r0, [sp, #{}]\n", off)); }
+            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    STRH r0, [sp, #{}]\n", off)); }
         }
         Stmt::Expr(e) => emit_expr(e, out, fctx),
         Stmt::Return(expr_opt) => {
@@ -107,31 +107,34 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx) 
             }
             out.push_str(&format!("    B {}\n{}:\n", lbl_start, lbl_end));
         }
-        Stmt::For { var, start, end, step, body } => {
+    Stmt::For { var, start, end, step, body } => {
             let loop_label = fresh_label("FOR");
             let end_label = fresh_label("FOR_END");
             emit_expr(start, out, fctx);
-            out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", var.to_uppercase()));
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", var.to_uppercase()));
+            }
             out.push_str(&format!("{}:\n", loop_label));
-            out.push_str(&format!("    LDR r1, =VAR_{}\n    LDR r1, [r1]\n", var.to_uppercase()));
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    LDRH r1, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{}\n    LDR r1, [r1]\n", var.to_uppercase()));
+            }
             emit_expr(end, out, fctx);
             out.push_str(&format!("    CMP r1, r0\n    BGE {}\n", end_label));
-            let inner = LoopCtx {
-                start: Some(loop_label.clone()),
-                end: Some(end_label.clone()),
-            };
-            for s in body {
-                emit_stmt(s, out, &inner, fctx);
-            }
-            if let Some(se) = step {
-                emit_expr(se, out, fctx);
+            let inner = LoopCtx { start: Some(loop_label.clone()), end: Some(end_label.clone()) };
+            for s in body { emit_stmt(s, out, &inner, fctx); }
+            if let Some(se) = step { emit_expr(se, out, fctx); } else { out.push_str("    MOV r0, #1\n"); }
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    LDRH r3, [sp, #{}]\n    ADD r3, r3, r0\n    AND r3, r3, #0xFFFF\n    STRH r3, [sp, #{}]\n", off, off));
             } else {
-                out.push_str("    MOV r0, #1\n");
+                out.push_str(&format!(
+                    "    LDR r2, =VAR_{}\n    LDR r3, [r2]\n    ADD r3, r3, r0\n    STR r3, [r2]\n",
+                    var.to_uppercase()
+                ));
             }
-            out.push_str(&format!(
-                "    LDR r2, =VAR_{}\n    LDR r3, [r2]\n    ADD r3, r3, r0\n    STR r3, [r2]\n",
-                var.to_uppercase()
-            ));
             out.push_str(&format!("    B {}\n{}:\n", loop_label, end_label));
         }
         Stmt::If { cond, body, elifs, else_body } => {
@@ -175,7 +178,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
         Expr::Number(n) => out.push_str(&format!("    MOV r0, #{}\n", *n)),
         Expr::Ident(name) => {
             if let Some(off) = fctx.offset_of(name) {
-                out.push_str(&format!("    LDR r0, [sp, #{}]\n", off));
+                out.push_str(&format!("    LDRH r0, [sp, #{}]\n", off));
             } else {
                 out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0, [r0]\n", name.to_uppercase()));
             }
@@ -294,34 +297,36 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
 // collect_symbols: gather all variable identifiers across module for data section.
 fn collect_symbols(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
-    let mut set = BTreeSet::new();
+    let mut globals = BTreeSet::new();
+    let mut locals = BTreeSet::new();
     for Item::Function(f) in &module.items {
-        for stmt in &f.body {
-            collect_stmt_syms(stmt, &mut set);
-        }
+        // gather potential globals
+        for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
+        // gather locals (let + for induction vars)
+        for l in collect_locals(&f.body) { locals.insert(l); }
     }
-    set.into_iter().collect()
+    // remove locals from globals
+    for l in &locals { globals.remove(l); }
+    globals.into_iter().collect()
 }
 
 // collect_stmt_syms: scan a statement for variable references.
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
-    Stmt::Assign { target, value } => {
+        Stmt::Assign { target, value } => {
+            // Only treat as global if not previously declared as local in a let
+            // (We cannot easily know here; later we filter locals out globally by rescanning.)
             set.insert(target.clone());
             collect_expr_syms(value, set);
         }
-    Stmt::Let { .. } => { /* locals not added to global segment */ }
+        Stmt::Let { .. } => { /* locals excluded */ }
         Stmt::Expr(e) => collect_expr_syms(e, set),
-        Stmt::For { var, start, end, step, body } => {
-            set.insert(var.clone());
+    Stmt::For { var: _var, start, end, step, body } => {
+            // Do not insert loop var here; it may be a local 'let' elsewhere. We'll rely on absence of Let to keep it global.
             collect_expr_syms(start, set);
             collect_expr_syms(end, set);
-            if let Some(se) = step {
-                collect_expr_syms(se, set);
-            }
-            for s in body {
-                collect_stmt_syms(s, set);
-            }
+            if let Some(se) = step { collect_expr_syms(se, set); }
+            for s in body { collect_stmt_syms(s, set); }
         }
         Stmt::While { cond, body } => {
             collect_expr_syms(cond, set);
@@ -382,7 +387,11 @@ fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
                 for (_, eb) in elifs { for b in eb { walk(b, set); } }
                 if let Some(eb) = else_body { for b in eb { walk(b, set); } }
             }
-            Stmt::While { body, .. } | Stmt::For { body, .. } => { for b in body { walk(b, set); } }
+            Stmt::While { body, .. } => { for b in body { walk(b, set); } }
+            Stmt::For { var, body, .. } => {
+                set.insert(var.clone());
+                for b in body { walk(b, set); }
+            }
             _ => {}
         }
     }
