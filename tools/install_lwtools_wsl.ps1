@@ -12,15 +12,28 @@ Optional wrapper: use ./tools/lwasm.ps1 to call from Windows PATH.
 #>
 
 param(
-  [string]$Distro = "Ubuntu"
+  [string]$Distro = "Ubuntu",
+  [switch]$AutoInstall
 )
 
 Write-Host "[lwtools] Using WSL distro: $Distro"
 
 # Quick WSL presence check
 $wslList = wsl -l -q 2>$null
-if (-not $?) { Write-Error "WSL not available. Enable WSL and install Ubuntu first."; exit 1 }
-if (-not ($wslList -match $Distro)) { Write-Error "Distro '$Distro' not found. Existing: $wslList"; exit 1 }
+if (-not $?) { Write-Error "WSL not available. Enable WSL (wsl --install) then rerun."; exit 1 }
+if (-not ($wslList -match $Distro)) {
+  if ($AutoInstall -and $Distro -eq 'Ubuntu') {
+    Write-Host "[lwtools] Distro '$Distro' not found. Attempting automatic install... (requires admin)" -ForegroundColor Yellow
+    try {
+      wsl --install -d Ubuntu
+      Write-Host "[lwtools] Ubuntu install initiated. You must REBOOT or open Ubuntu once to finish setup, then rerun this script." -ForegroundColor Yellow
+    } catch {
+      Write-Error "Automatic install failed: $_"; exit 1
+    }
+    exit 0
+  }
+  Write-Error "Distro '$Distro' not found. Existing: $wslList (run: wsl -l -o to list available). Install it or pass -Distro <name>."; exit 1
+}
 
 $bashCmd = @'
 set -e
