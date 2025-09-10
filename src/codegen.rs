@@ -32,17 +32,19 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
 // 2. dead_code_elim: prune unreachable code and empty loops
 // 3. propagate_constants: forward constant propagation with branch merging
 // 4. dead_store_elim: eliminate unused assignments without side-effects
+// 5. fold_const_switches: replace switch whose expression & cases are all constant numbers with selected body (or default)
 fn optimize_module(m: &Module) -> Module {
     let mut current = m.clone();
     for _ in 0..5 {
         let folded: Module = Module { items: current.items.iter().map(opt_item).collect() };
-        let dce = dead_code_elim(&folded);
-        let cp = propagate_constants(&dce);
-        let ds = dead_store_elim(&cp);
-        if ds == current {
+    let dce = dead_code_elim(&folded);
+    let cp = propagate_constants(&dce);
+    let ds = dead_store_elim(&cp);
+    let sw = fold_const_switches(&ds);
+    if sw == current {
             break;
         }
-        current = ds;
+    current = sw;
     }
     current
 }
@@ -554,5 +556,64 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
         Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(|a| cp_expr(a, env)).collect() },
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
+    }
+}
+
+// fold_const_switches: if a switch expression is a constant number and all case values are constant numbers,
+// select the matching case (or default) and inline its body, removing the switch. Conservatively keeps semantics.
+fn fold_const_switches(m: &Module) -> Module {
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(fold_const_switches_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
+}
+
+fn fold_const_switches_function(f: &Function) -> Function {
+    let mut out = Vec::new();
+    for s in &f.body { fold_const_switch_stmt(s, &mut out); }
+    Function { name: f.name.clone(), params: f.params.clone(), body: out }
+}
+
+fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
+    match s {
+        Stmt::Switch { expr, cases, default } => {
+            if let Expr::Number(v) = expr {
+                let mut all_numeric = true;
+                for (ce, _) in cases { if !matches!(ce, Expr::Number(_)) { all_numeric = false; break; } }
+                if all_numeric {
+                    let mut matched: Option<&Vec<Stmt>> = None;
+                    for (ce, body) in cases {
+                        if let Expr::Number(cv) = ce { if (cv & 0xFFFF) == (v & 0xFFFF) { matched = Some(body); break; } }
+                    }
+                    let chosen: &Vec<Stmt> = if let Some(b) = matched { b } else if let Some(db) = default { db } else { &Vec::new() };
+                    for cs in chosen { fold_const_switch_stmt(cs, out); }
+                    return;
+                }
+            }
+            // Recurse normally if not folded
+            let mut new_cases = Vec::new();
+            for (ce, cb) in cases {
+                let mut nb = Vec::new();
+                for cs in cb { fold_const_switch_stmt(cs, &mut nb); }
+                new_cases.push((ce.clone(), nb));
+            }
+            let new_default = if let Some(db) = default {
+                let mut nb = Vec::new();
+                for cs in db { fold_const_switch_stmt(cs, &mut nb); }
+                Some(nb)
+            } else { None };
+            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default });
+        }
+        Stmt::If { cond, body, elifs, else_body } => {
+            let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); }
+            let mut nelifs = Vec::new(); for (ec, eb) in elifs { let mut nb2 = Vec::new(); for cs in eb { fold_const_switch_stmt(cs, &mut nb2); } nelifs.push((ec.clone(), nb2)); }
+            let nelse = if let Some(eb) = else_body { let mut nb3 = Vec::new(); for cs in eb { fold_const_switch_stmt(cs, &mut nb3); } Some(nb3) } else { None };
+            out.push(Stmt::If { cond: cond.clone(), body: nb, elifs: nelifs, else_body: nelse });
+        }
+        Stmt::While { cond, body } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb }); }
+        Stmt::For { var, start, end, step, body } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb }); }
+        Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
+        Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
+        Stmt::Expr(e) => out.push(Stmt::Expr(e.clone())),
+        Stmt::Return(o) => out.push(Stmt::Return(o.clone())),
+        Stmt::Break => out.push(Stmt::Break),
+        Stmt::Continue => out.push(Stmt::Continue),
     }
 }

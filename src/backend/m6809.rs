@@ -24,7 +24,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     for item in &module.items {
         match item {
             Item::Function(f) => emit_function(f, &mut out, &string_map),
-            Item::Const { name, value } => { if let Expr::Number(n) = value { out.push_str(&format!("; const {} = {}\n", name, n & 0xFFFF)); } }
+            Item::Const { name, value } => { if let Expr::Number(n) = value { out.push_str(&format!("{} EQU {}\n", name.to_uppercase(), n & 0xFFFF)); } }
         }
     }
     out.push_str("JSR MAIN\nEND_LOOP: BRA END_LOOP\n\n");
@@ -159,9 +159,58 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             emit_expr(expr, out, fctx, string_map);
             out.push_str("    LDD RESULT\n    STD TMPLEFT ; switch value\n");
             let end = fresh_label("SW_END");
+            let def_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
+            // Attempt jump table optimization (numeric, dense, >=3 cases, span*2 <= 254)
+            let mut numeric_cases: Vec<(i32,&Vec<Stmt>)> = Vec::new();
+            let mut all_numeric = true;
+            for (ce, body) in cases {
+                if let Expr::Number(n) = ce { numeric_cases.push((*n, body)); } else { all_numeric = false; break; }
+            }
+            let mut used_jump_table = false;
+            if all_numeric && numeric_cases.len() >= 3 {
+                numeric_cases.sort_by_key(|(v,_)| *v & 0xFFFF);
+                let min = numeric_cases.first().unwrap().0 & 0xFFFF;
+                let max = numeric_cases.last().unwrap().0 & 0xFFFF;
+                let span = (max - min) as usize + 1;
+                if span <= numeric_cases.len()*2 && span*2 <= 254 { // density + offset fit
+                    let table_label = fresh_label("SW_JT");
+                    use std::collections::BTreeMap;
+                    let mut label_map: BTreeMap<i32,String> = BTreeMap::new();
+                    for (val, _) in &numeric_cases { label_map.insert(*val & 0xFFFF, fresh_label("SW_CASE")); }
+                    // Bounds check & index compute
+                    out.push_str(&format!("    LDD TMPLEFT\n    SUBD #{}\n    BLT {}\n", min, def_label.as_ref().unwrap_or(&end)));
+                    out.push_str(&format!("    CPD #{}\n    BHI {}\n", span as i32 - 1, def_label.as_ref().unwrap_or(&end)));
+                    // D holds index (0..span-1); multiply by 2
+                    out.push_str("    ASLB\n    ROLA\n");
+                    out.push_str(&format!("    LDX #{}\n    ABX\n", table_label));
+                    out.push_str("    LDD ,X\n    TFR D,X\n    JMP ,X\n");
+                    // Bodies
+                    for (val, body) in &numeric_cases {
+                        let lbl = label_map.get(&(*val & 0xFFFF)).unwrap();
+                        out.push_str(&format!("{}:\n", lbl));
+                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                        out.push_str(&format!("    BRA {}\n", end));
+                    }
+                    if let Some(dl) = &def_label {
+                        out.push_str(&format!("{}:\n", dl));
+                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                    }
+                    out.push_str(&format!("{}:\n", end));
+                    // Jump table data (word entries)
+                    out.push_str(&format!("{}:\n", table_label));
+            for offset in 0..span as i32 {
+                        let actual = (min as i32 + offset) & 0xFFFF;
+                        if let Some(lbl) = label_map.get(&actual) { out.push_str(&format!("    FDB {}\n", lbl)); }
+                        else if let Some(dl) = &def_label { out.push_str(&format!("    FDB {}\n", dl)); }
+                        else { out.push_str(&format!("    FDB {}\n", end)); }
+                    }
+            used_jump_table = true;
+                }
+            }
+        if used_jump_table { return; }
+        // Fallback linear chain
             let mut labels = Vec::new();
             for _ in cases { labels.push(fresh_label("SW_CASE")); }
-            let def_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
             for ((cv,_), lbl) in cases.iter().zip(labels.iter()) {
                 emit_expr(cv, out, fctx, string_map);
                 out.push_str("    LDD RESULT\n    SUBD TMPLEFT\n    BEQ ");
