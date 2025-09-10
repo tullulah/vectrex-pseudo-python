@@ -31,6 +31,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str("; Runtime helpers\n");
     emit_mul_helper(&mut out);
     emit_div_helper(&mut out);
+    emit_builtin_helpers(&mut out); // Built-in Vectrex wrappers
     out.push_str("; Variables\n");
     for v in syms { out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
@@ -56,6 +57,35 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
         out.push_str("    RTS\n");
     }
     out.push_str("\n");
+}
+
+// emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
+fn emit_builtin_helpers(out: &mut String) {
+    out.push_str("; --- Vectrex built-in wrappers ---\n");
+    // Each wrapper expects arguments already stored in VAR_ARG*.
+    // For now they just RTS; later we can map to real BIOS/vector routines.
+    out.push_str("PRINT_TEXT:\n    ; args: x=VAR_ARG0 y=VAR_ARG1 ptr=VAR_ARG2\n    RTS\n");
+    out.push_str("MOVE_TO:\n    ; args: x=VAR_ARG0 y=VAR_ARG1\n    RTS\n");
+    out.push_str("DRAW_TO:\n    ; args: x=VAR_ARG0 y=VAR_ARG1 intensity=VAR_ARG2\n    RTS\n");
+    out.push_str("DRAW_LINE:\n    ; args: x1=VAR_ARG0 y1=VAR_ARG1 x2=VAR_ARG2 y2=VAR_ARG3 inten=VAR_ARG4\n    RTS\n");
+    out.push_str("SET_ORIGIN:\n    ; no args\n    RTS\n");
+}
+
+// emit_builtin_call: inline lowering for intrinsic names; returns true if handled
+fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) -> bool {
+    let up = name.to_ascii_uppercase();
+    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN");
+    if !is { return false; }
+    for (i, a) in args.iter().enumerate() {
+        if i >= 5 { break; }
+        emit_expr(a, out, fctx, string_map);
+        out.push_str("    LDD RESULT\n");
+        out.push_str(&format!("    STD VAR_ARG{}\n", i));
+    }
+    out.push_str(&format!("    JSR {}\n", up));
+    // Return 0
+    out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+    true
 }
 
 #[derive(Default, Clone)]
@@ -251,8 +281,9 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.to_uppercase())); }
         }
         Expr::Call { name, args } => {
+            if emit_builtin_call(name, args, out, fctx, string_map) { return; }
             for (i, arg) in args.iter().enumerate() {
-                if i >= 4 { break; }
+                if i >= 5 { break; }
                 emit_expr(arg, out, fctx, string_map);
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i));
