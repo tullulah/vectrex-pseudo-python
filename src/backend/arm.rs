@@ -30,36 +30,52 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
 // emit_function: outputs assembly for a single function including label and tail return.
 fn emit_function(f: &Function, out: &mut String) {
     out.push_str(&format!(".global {0}\n{0}:\n", f.name));
-    // Parameter prologue: copy up to 4 incoming registers r0-r3 into globals.
+    // Collect local variables declared via 'let'
+    let locals = collect_locals(&f.body);
+    let frame_size = (locals.len() as i32) * 4; // 4 bytes per local
+    if frame_size > 0 { out.push_str(&format!("    SUB sp, sp, #{}\n", frame_size)); }
+    // Parameter prologue (still stored in globals for now)
     for (i, p) in f.params.iter().enumerate().take(4) {
         out.push_str(&format!("    LDR r4, =VAR_{}\n    STR r{} , [r4]\n", p.to_uppercase(), i));
     }
-    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default()); }
-    // Suppress epilogue if last stmt is an explicit return.
+    let fctx = FuncCtx { locals: locals.clone(), frame_size };
+    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx); }
     if !matches!(f.body.last(), Some(Stmt::Return(_))) {
+        if frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", frame_size)); }
         out.push_str("    BX LR\n");
     }
     out.push_str("\n");
 }
 
 #[derive(Default, Clone)]
-struct LoopCtx {
-    start: Option<String>,
-    end: Option<String>,
+struct LoopCtx { start: Option<String>, end: Option<String>, }
+
+struct FuncCtx { locals: Vec<String>, frame_size: i32 }
+impl FuncCtx {
+    fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*4) }
 }
 
 // emit_stmt: lowers high-level statements into ARM instructions with structured labels.
-fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
+fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx) {
     match stmt {
-    Stmt::Assign { target, value } | Stmt::Let { name: target, value } => {
-            emit_expr(value, out);
-            out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", target.to_uppercase()));
+        Stmt::Assign { target, value } => {
+            emit_expr(value, out, fctx);
+            if let Some(off) = fctx.offset_of(target) {
+                out.push_str(&format!("    STR r0, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", target.to_uppercase()));
+            }
         }
-        Stmt::Expr(e) => emit_expr(e, out),
+        Stmt::Let { name, value } => {
+            emit_expr(value, out, fctx);
+            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    STR r0, [sp, #{}]\n", off)); }
+        }
+        Stmt::Expr(e) => emit_expr(e, out, fctx),
         Stmt::Return(expr_opt) => {
             if let Some(e) = expr_opt {
-                emit_expr(e, out);
+                emit_expr(e, out, fctx);
             }
+            if fctx.frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", fctx.frame_size)); }
             out.push_str("    BX LR\n");
         }
         Stmt::Break => {
@@ -80,35 +96,35 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
             let lbl_start = fresh_label("WH");
             let lbl_end = fresh_label("WH_END");
             out.push_str(&format!("{}:\n", lbl_start));
-            emit_expr(cond, out); // r0 = cond
+            emit_expr(cond, out, fctx); // r0 = cond
             out.push_str(&format!("    CMP r0, #0\n    BEQ {}\n", lbl_end));
             let inner = LoopCtx {
                 start: Some(lbl_start.clone()),
                 end: Some(lbl_end.clone()),
             };
             for s in body {
-                emit_stmt(s, out, &inner);
+                emit_stmt(s, out, &inner, fctx);
             }
             out.push_str(&format!("    B {}\n{}:\n", lbl_start, lbl_end));
         }
         Stmt::For { var, start, end, step, body } => {
             let loop_label = fresh_label("FOR");
             let end_label = fresh_label("FOR_END");
-            emit_expr(start, out);
+            emit_expr(start, out, fctx);
             out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", var.to_uppercase()));
             out.push_str(&format!("{}:\n", loop_label));
             out.push_str(&format!("    LDR r1, =VAR_{}\n    LDR r1, [r1]\n", var.to_uppercase()));
-            emit_expr(end, out);
+            emit_expr(end, out, fctx);
             out.push_str(&format!("    CMP r1, r0\n    BGE {}\n", end_label));
             let inner = LoopCtx {
                 start: Some(loop_label.clone()),
                 end: Some(end_label.clone()),
             };
             for s in body {
-                emit_stmt(s, out, &inner);
+                emit_stmt(s, out, &inner, fctx);
             }
             if let Some(se) = step {
-                emit_expr(se, out);
+                emit_expr(se, out, fctx);
             } else {
                 out.push_str("    MOV r0, #1\n");
             }
@@ -121,10 +137,10 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
         Stmt::If { cond, body, elifs, else_body } => {
             let end_label = fresh_label("IF_END");
             let mut next_label = fresh_label("IF_NEXT");
-            emit_expr(cond, out);
+            emit_expr(cond, out, fctx);
             out.push_str(&format!("    CMP r0, #0\n    BEQ {}\n", next_label));
             for s in body {
-                emit_stmt(s, out, loop_ctx);
+                emit_stmt(s, out, loop_ctx, fctx);
             }
             out.push_str(&format!("    B {}\n", end_label));
             for (i, (econd, ebody)) in elifs.iter().enumerate() {
@@ -134,19 +150,17 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
                 } else {
                     fresh_label("IF_NEXT")
                 };
-                emit_expr(econd, out);
+                emit_expr(econd, out, fctx);
                 out.push_str(&format!("    CMP r0, #0\n    BEQ {}\n", new_next));
                 for s in ebody {
-                    emit_stmt(s, out, loop_ctx);
+                    emit_stmt(s, out, loop_ctx, fctx);
                 }
                 out.push_str(&format!("    B {}\n", end_label));
                 next_label = new_next;
             }
             if let Some(eb) = else_body {
                 out.push_str(&format!("{}:\n", next_label));
-                for s in eb {
-                    emit_stmt(s, out, loop_ctx);
-                }
+                for s in eb { emit_stmt(s, out, loop_ctx, fctx); }
             } else if !elifs.is_empty() {
                 out.push_str(&format!("{}:\n", next_label));
             }
@@ -156,24 +170,30 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx) {
 }
 
 // emit_expr: produces expression value in r0 with 16-bit masking semantics.
-fn emit_expr(expr: &Expr, out: &mut String) {
+fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx) {
     match expr {
         Expr::Number(n) => out.push_str(&format!("    MOV r0, #{}\n", *n)),
-        Expr::Ident(name) => out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0, [r0]\n", name.to_uppercase())),
+        Expr::Ident(name) => {
+            if let Some(off) = fctx.offset_of(name) {
+                out.push_str(&format!("    LDR r0, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0, [r0]\n", name.to_uppercase()));
+            }
+        }
         Expr::Call { name, args } => {
             let limit = args.len().min(4);
             for idx in (0..limit).rev() { // evaluate right-to-left
-                emit_expr(&args[idx], out);
+                emit_expr(&args[idx], out, fctx);
                 if idx != 0 { out.push_str(&format!("    MOV r{} , r0\n", idx)); }
             }
             out.push_str(&format!("    BL {}\n", name));
         },
-    Expr::Binary { op, left, right } => {
+        Expr::Binary { op, left, right } => {
             if let BinOp::Mul = op {
                 if let Expr::Number(n) = &**right {
                     if *n > 0 && (*n & (*n - 1)) == 0 {
                         if let Some(shift) = (0..=16).find(|s| (1 << s) == *n) {
-                            emit_expr(left, out);
+                            emit_expr(left, out, fctx);
                             out.push_str(&format!("    LSL r0, r0, #{}\n    AND r0, r0, #0xFFFF\n", shift));
                             return;
                         }
@@ -182,7 +202,7 @@ fn emit_expr(expr: &Expr, out: &mut String) {
                 if let Expr::Number(n) = &**left {
                     if *n > 0 && (*n & (*n - 1)) == 0 {
                         if let Some(shift) = (0..=16).find(|s| (1 << s) == *n) {
-                            emit_expr(right, out);
+                            emit_expr(right, out, fctx);
                             out.push_str(&format!("    LSL r0, r0, #{}\n    AND r0, r0, #0xFFFF\n", shift));
                             return;
                         }
@@ -192,16 +212,16 @@ fn emit_expr(expr: &Expr, out: &mut String) {
                 if let Expr::Number(n) = &**right {
                     if *n > 0 && (*n & (*n - 1)) == 0 {
                         if let Some(shift) = (0..=16).find(|s| (1 << s) == *n) {
-                            emit_expr(left, out);
+                            emit_expr(left, out, fctx);
                             out.push_str(&format!("    LSR r0, r0, #{}\n    AND r0, r0, #0xFFFF\n", shift));
                             return;
                         }
                     }
                 }
             }
-            emit_expr(left, out);
+            emit_expr(left, out, fctx);
             out.push_str("    MOV r4, r0\n");
-            emit_expr(right, out);
+            emit_expr(right, out, fctx);
             out.push_str("    MOV r5, r0\n");
             match op {
                 BinOp::Add => out.push_str("    ADD r0, r4, r5\n    AND r0, r0, #0xFFFF\n"),
@@ -217,13 +237,13 @@ fn emit_expr(expr: &Expr, out: &mut String) {
             }
         }
         Expr::BitNot(inner) => {
-            emit_expr(inner, out);
+            emit_expr(inner, out, fctx);
             out.push_str("    MVN r0,r0\n    AND r0,r0,#0xFFFF\n");
         }
         Expr::Compare { op, left, right } => {
-            emit_expr(left, out);
+            emit_expr(left, out, fctx);
             out.push_str("    MOV r4, r0\n");
-            emit_expr(right, out);
+            emit_expr(right, out, fctx);
             out.push_str("    MOV r5, r0\n    CMP r4, r5\n    MOV r0, #0\n");
             let lbl_true = fresh_label("CMP_T");
             let lbl_end = fresh_label("CMP_E");
@@ -242,11 +262,11 @@ fn emit_expr(expr: &Expr, out: &mut String) {
         }
         Expr::Logic { op, left, right } => match op {
             crate::ast::LogicOp::And => {
-                emit_expr(left, out);
+                emit_expr(left, out, fctx);
                 let false_lbl = fresh_label("AND_FALSE");
                 let end_lbl = fresh_label("AND_END");
                 out.push_str(&format!("    CMP r0,#0\n    BEQ {}\n", false_lbl));
-                emit_expr(right, out);
+                emit_expr(right, out, fctx);
                 out.push_str(&format!(
                     "    CMP r0,#0\n    BEQ {}\n    MOV r0,#1\n    B {}\n{}:\n    MOV r0,#0\n{}:\n",
                     false_lbl, end_lbl, false_lbl, end_lbl
@@ -255,9 +275,9 @@ fn emit_expr(expr: &Expr, out: &mut String) {
             crate::ast::LogicOp::Or => {
                 let true_lbl = fresh_label("OR_TRUE");
                 let end_lbl = fresh_label("OR_END");
-                emit_expr(left, out);
+                emit_expr(left, out, fctx);
                 out.push_str(&format!("    CMP r0,#0\n    BNE {}\n", true_lbl));
-                emit_expr(right, out);
+                emit_expr(right, out, fctx);
                 out.push_str(&format!(
                     "    CMP r0,#0\n    BNE {}\n    MOV r0,#0\n    B {}\n{}:\n    MOV r0,#1\n{}:\n",
                     true_lbl, end_lbl, true_lbl, end_lbl
@@ -265,7 +285,7 @@ fn emit_expr(expr: &Expr, out: &mut String) {
             }
         },
         Expr::Not(inner) => {
-            emit_expr(inner, out);
+            emit_expr(inner, out, fctx);
             out.push_str("    CMP r0,#0\n    MOVEQ r0,#1\n    MOVNE r0,#0\n");
         }
     }
@@ -290,7 +310,7 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             set.insert(target.clone());
             collect_expr_syms(value, set);
         }
-    Stmt::Let { name, value } => { set.insert(name.clone()); collect_expr_syms(value, set); }
+    Stmt::Let { .. } => { /* locals not added to global segment */ }
         Stmt::Expr(e) => collect_expr_syms(e, set),
         Stmt::For { var, start, end, step, body } => {
             set.insert(var.clone());
@@ -349,6 +369,25 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
         Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
         Expr::Number(_) => {}
     }
+}
+
+fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut set = BTreeSet::new();
+    fn walk(s: &Stmt, set: &mut std::collections::BTreeSet<String>) {
+        match s {
+            Stmt::Let { name, .. } => { set.insert(name.clone()); }
+            Stmt::If { body, elifs, else_body, .. } => {
+                for b in body { walk(b, set); }
+                for (_, eb) in elifs { for b in eb { walk(b, set); } }
+                if let Some(eb) = else_body { for b in eb { walk(b, set); } }
+            }
+            Stmt::While { body, .. } | Stmt::For { body, .. } => { for b in body { walk(b, set); } }
+            _ => {}
+        }
+    }
+    for s in stmts { walk(s, &mut set); }
+    set.into_iter().collect()
 }
 
 // fresh_label: produce unique assembler labels with a given prefix.
