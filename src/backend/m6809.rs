@@ -12,22 +12,20 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let string_map = collect_string_literals(module);
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
     out.push_str(&format!("        ORG {}\n", ti.origin));
+    out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // BIOS / vector ROM equates (subset)
     out.push_str("WAIT_RECAL    EQU $F192\nINTENSITY_5F EQU $F2A5\nPRINT_STR_D  EQU $F37A\nMUSIC1       EQU $FD0D\n\n");
+    out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Standard Vectrex cartridge header
-    // Copyright string (g=0x67) + space + GCE year; we use 2025
     out.push_str("    DB \"g GCE 2025\", $80\n");
     out.push_str("    DW MUSIC1\n");
-    // Height, width, rel y, rel x (borrow sample constants)
     out.push_str("    DB $F8, $50, $20, -$56\n");
-    // Game info / title (terminate with $80) then trailing 0
     let mut title = opts.title.to_uppercase();
     if title.len() > 24 { title.truncate(24); }
-    // Filter to allowed chars (A-Z0-9 space)
     title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
     out.push_str(&format!("    DB \"{}\", $80\n", title));
     out.push_str("    DB 0\n\n");
-    // Jump to init (user provided) then proceed
+    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     out.push_str(&format!("JSR {}\n", ti.init_label));
     // Emit all functions before calling MAIN so code exists.
     for item in &module.items {
@@ -37,10 +35,11 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         }
     }
     out.push_str("JSR MAIN\nEND_LOOP: BRA END_LOOP\n\n");
-    out.push_str("; Runtime helpers\n");
+    out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n");
     emit_mul_helper(&mut out);
     emit_div_helper(&mut out);
     emit_builtin_helpers(&mut out); // Built-in Vectrex wrappers
+    out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     out.push_str("; Variables\n");
     for v in syms { out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
