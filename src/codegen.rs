@@ -15,6 +15,8 @@ pub struct CodegenOptions {
 
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
+    // Run optimization pipeline; we've adjusted dead_store_elim to keep string literal
+    // assignments so literals still get collected for backend emission.
     let optimized = optimize_module(module);
     let ti = info(target);
     match ti.arch {
@@ -279,7 +281,7 @@ fn dse_function(f: &Function) -> Function {
     for stmt in f.body.iter().rev() {
         match stmt {
             Stmt::Assign { target, value } => {
-                if !used.contains(target) && !expr_has_call(value) {
+                if !used.contains(target) && !expr_has_call(value) && !expr_contains_string_lit(value) {
                 } else {
                     collect_reads_expr(value, &mut used);
                     used.insert(target.clone());
@@ -287,7 +289,7 @@ fn dse_function(f: &Function) -> Function {
                 }
             }
             Stmt::Let { name, value } => {
-                if !used.contains(name) && !expr_has_call(value) {
+                if !used.contains(name) && !expr_has_call(value) && !expr_contains_string_lit(value) {
                 } else {
                     collect_reads_expr(value, &mut used);
                     used.insert(name.clone());
@@ -324,6 +326,19 @@ fn expr_has_call(e: &Expr) -> bool {
         Expr::Call { .. } => true,
     Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
     Expr::Not(inner) | Expr::BitNot(inner) => expr_has_call(inner),
+        _ => false,
+    }
+}
+
+// expr_contains_string_lit: returns true if expression tree contains any string literal
+fn expr_contains_string_lit(e: &Expr) -> bool {
+    match e {
+        Expr::StringLit(_) => true,
+        Expr::Binary { left, right, .. }
+        | Expr::Compare { left, right, .. }
+        | Expr::Logic { left, right, .. } => expr_contains_string_lit(left) || expr_contains_string_lit(right),
+        Expr::Call { args, .. } => args.iter().any(expr_contains_string_lit),
+        Expr::Not(inner) | Expr::BitNot(inner) => expr_contains_string_lit(inner),
         _ => false,
     }
 }
