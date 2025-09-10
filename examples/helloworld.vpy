@@ -5,6 +5,7 @@
 
 def main():
     set_origin()
+    set_intensity(0x5F)
     print_text(0, 0, "HELLO VECTREX")
     # Triangle points (0,0)->(50,0)->(25,40)
     move_to(0, 0)

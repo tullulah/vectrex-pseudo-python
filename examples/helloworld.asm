@@ -1,14 +1,29 @@
-; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Hello Demo' origin=$0000 ---
         ORG $0000
-; Basic Vectrex header (placeholder)
-    FCB $67,$20,$56,$45,$43,$54,$52,$45,$58,$20,$47,$41,$4D,$45,$20
-    FCB $00,$00,$00,$00
+WAIT_RECAL    EQU $F192
+INTENSITY_5F EQU $F2A5
+PRINT_STR_D  EQU $F37A
+MUSIC1       EQU $FD0D
+
+    DB "g GCE 2025", $80
+    DW MUSIC1
+    DB $F8, $50, $20, -$56
+    DB "HELLO DEMO", $80
+    DB 0
 
 JSR INIT_ENGINE
 MAIN: ; function
 ; --- function main ---
 main:
     JSR SET_ORIGIN
+    CLRA
+    CLRB
+    STD RESULT
+    LDD #95
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    JSR SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
@@ -150,19 +165,22 @@ DIV16_DONE:
 
 ; --- Vectrex built-in wrappers ---
 PRINT_TEXT:
-    ; args: x=VAR_ARG0 y=VAR_ARG1 ptr=VAR_ARG2
+    LDU VAR_ARG2
+    LDA VAR_ARG1+1
+    LDB VAR_ARG0+1
+    JSR PRINT_STR_D
     RTS
 MOVE_TO:
-    ; args: x=VAR_ARG0 y=VAR_ARG1
     RTS
 DRAW_TO:
-    ; args: x=VAR_ARG0 y=VAR_ARG1 intensity=VAR_ARG2
     RTS
 DRAW_LINE:
-    ; args: x1=VAR_ARG0 y1=VAR_ARG1 x2=VAR_ARG2 y2=VAR_ARG3 inten=VAR_ARG4
     RTS
 SET_ORIGIN:
-    ; no args
+    JSR WAIT_RECAL
+    RTS
+SET_INTENSITY:
+    JSR INTENSITY_5F
     RTS
 ; Variables
 ; String literals (null-terminated)

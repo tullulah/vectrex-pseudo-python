@@ -10,15 +10,24 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let mut out = String::new();
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module);
-    out.push_str(&format!(
-        "; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n",
-        ti.name, opts.title, ti.origin
-    ));
-    // Origin may already be a properly formatted string (e.g. "$8000").
+    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
     out.push_str(&format!("        ORG {}\n", ti.origin));
-    out.push_str(
-        "; Basic Vectrex header (placeholder)\n    FCB $67,$20,$56,$45,$43,$54,$52,$45,$58,$20,$47,$41,$4D,$45,$20\n    FCB $00,$00,$00,$00\n\n",
-    );
+    // BIOS / vector ROM equates (subset)
+    out.push_str("WAIT_RECAL    EQU $F192\nINTENSITY_5F EQU $F2A5\nPRINT_STR_D  EQU $F37A\nMUSIC1       EQU $FD0D\n\n");
+    // Standard Vectrex cartridge header
+    // Copyright string (g=0x67) + space + GCE year; we use 2025
+    out.push_str("    DB \"g GCE 2025\", $80\n");
+    out.push_str("    DW MUSIC1\n");
+    // Height, width, rel y, rel x (borrow sample constants)
+    out.push_str("    DB $F8, $50, $20, -$56\n");
+    // Game info / title (terminate with $80) then trailing 0
+    let mut title = opts.title.to_uppercase();
+    if title.len() > 24 { title.truncate(24); }
+    // Filter to allowed chars (A-Z0-9 space)
+    title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
+    out.push_str(&format!("    DB \"{}\", $80\n", title));
+    out.push_str("    DB 0\n\n");
+    // Jump to init (user provided) then proceed
     out.push_str(&format!("JSR {}\n", ti.init_label));
     // Emit all functions before calling MAIN so code exists.
     for item in &module.items {
@@ -62,19 +71,27 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
 fn emit_builtin_helpers(out: &mut String) {
     out.push_str("; --- Vectrex built-in wrappers ---\n");
-    // Each wrapper expects arguments already stored in VAR_ARG*.
-    // For now they just RTS; later we can map to real BIOS/vector routines.
-    out.push_str("PRINT_TEXT:\n    ; args: x=VAR_ARG0 y=VAR_ARG1 ptr=VAR_ARG2\n    RTS\n");
-    out.push_str("MOVE_TO:\n    ; args: x=VAR_ARG0 y=VAR_ARG1\n    RTS\n");
-    out.push_str("DRAW_TO:\n    ; args: x=VAR_ARG0 y=VAR_ARG1 intensity=VAR_ARG2\n    RTS\n");
-    out.push_str("DRAW_LINE:\n    ; args: x1=VAR_ARG0 y1=VAR_ARG1 x2=VAR_ARG2 y2=VAR_ARG3 inten=VAR_ARG4\n    RTS\n");
-    out.push_str("SET_ORIGIN:\n    ; no args\n    RTS\n");
+    // NOTE: coordinate/intensity mapping minimal; real implementation would scale & call vector BIOS.
+    // PRINT_TEXT: expects (x,y,ptr). Uses low bytes for position like BIOS expects (A=Y, B=X) then U=ptr
+    out.push_str(
+        "PRINT_TEXT:\n    LDU VAR_ARG2\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR PRINT_STR_D\n    RTS\n"
+    );
+    // MOVE_TO: placeholder (would position beam) -> currently no-op
+    out.push_str("MOVE_TO:\n    RTS\n");
+    // DRAW_TO: placeholder for line draw from current to (x,y) with intensity
+    out.push_str("DRAW_TO:\n    RTS\n");
+    // DRAW_LINE: placeholder using 5 args
+    out.push_str("DRAW_LINE:\n    RTS\n");
+    // SET_ORIGIN: call WAIT_RECAL (recalibrate) and leave
+    out.push_str("SET_ORIGIN:\n    JSR WAIT_RECAL\n    RTS\n");
+    // SET_INTENSITY: call fixed intensity BIOS routine INTENSITY_5F (ignores arg for now)
+    out.push_str("SET_INTENSITY:\n    JSR INTENSITY_5F\n    RTS\n");
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) -> bool {
     let up = name.to_ascii_uppercase();
-    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN");
+    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN"|"SET_INTENSITY");
     if !is { return false; }
     for (i, a) in args.iter().enumerate() {
         if i >= 5 { break; }
