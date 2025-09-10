@@ -175,6 +175,31 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("{}:\n", end_label));
         }
+        Stmt::Switch { expr, cases, default } => {
+            // Evaluate controlling expression once in r0
+            emit_expr(expr, out, fctx, string_map);
+            out.push_str("    MOV r4, r0\n");
+            let end_label = fresh_label("SW_END");
+            let mut case_labels = Vec::new();
+            for _ in cases { case_labels.push(fresh_label("SW_CASE")); }
+            let default_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
+            for ((case_expr, _), lbl) in cases.iter().zip(case_labels.iter()) {
+                emit_expr(case_expr, out, fctx, string_map);
+                out.push_str("    MOV r5, r0\n    CMP r4, r5\n");
+                out.push_str(&format!("    BEQ {}\n", lbl));
+            }
+            if let Some(dl) = &default_label { out.push_str(&format!("    B {}\n", dl)); } else { out.push_str(&format!("    B {}\n", end_label)); }
+            for ((_, body), lbl) in cases.iter().zip(case_labels.iter()) {
+                out.push_str(&format!("{}:\n", lbl));
+                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                out.push_str(&format!("    B {}\n", end_label));
+            }
+            if let Some(dl) = default_label {
+                out.push_str(&format!("{}:\n", dl));
+                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+            }
+            out.push_str(&format!("{}:\n", end_label));
+        }
     }
 }
 
@@ -370,6 +395,11 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             if let Some(e) = o {
                 collect_expr_syms(e, set);
             }
+        }
+        Stmt::Switch { expr, cases, default } => {
+            collect_expr_syms(expr, set);
+            for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
+            if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
         Stmt::Break | Stmt::Continue => {}
     }

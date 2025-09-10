@@ -45,6 +45,21 @@ def test_string_address():
         return 1
     return 0
 
+# Switch test: value 2 selects case 2 -> returns 20
+def test_switch_basic():
+    let acc = 0
+    v = 2
+    switch v:
+        case 1:
+            acc = 10
+        case 2:
+            acc = 20
+        case 3:
+            acc = 30
+        default:
+            acc = 99
+    return acc
+
 def main():
     shadow_res = test_shadow()
     basic_res = test_for_basic()
@@ -53,8 +68,10 @@ def main():
     simple_res = test_simple_local()
     string_res = test_string()
     string_addr_res = test_string_address()
+    switch_res = test_switch_basic()
     # Base: 15+3+6+9+6 = 39
     # + string_res (1) = 40
-    # + string_addr_res (1 si la dirección es no-cero) = 41
-    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res
+    # + string_addr_res (1) = 41
+    # + switch_res (20) = 61
+    total = shadow_res + basic_res + step_res + nested_res + simple_res + string_res + string_addr_res + switch_res
     return total

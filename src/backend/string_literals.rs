@@ -18,6 +18,7 @@ fn gather_stmt_strings(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>
         Stmt::For { start, end, step, body, .. } => { gather_expr_strings(start,set); gather_expr_strings(end,set); if let Some(se)=step { gather_expr_strings(se,set); } for s in body { gather_stmt_strings(s,set); } }
         Stmt::If { cond, body, elifs, else_body } => { gather_expr_strings(cond,set); for s in body { gather_stmt_strings(s,set); } for (c,b) in elifs { gather_expr_strings(c,set); for s in b { gather_stmt_strings(s,set); } } if let Some(eb)=else_body { for s in eb { gather_stmt_strings(s,set); } } }
         Stmt::Return(o) => { if let Some(e)=o { gather_expr_strings(e,set); } }
+        Stmt::Switch { expr, cases, default } => { gather_expr_strings(expr,set); for (ce,cb) in cases { gather_expr_strings(ce,set); for s in cb { gather_stmt_strings(s,set); } } if let Some(db)=default { for s in db { gather_stmt_strings(s,set); } } }
         Stmt::Break | Stmt::Continue => {}
     }
 }

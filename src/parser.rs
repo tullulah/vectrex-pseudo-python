@@ -59,6 +59,9 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::If) {
             return self.if_stmt();
         }
+        if self.match_kind(&TokenKind::Switch) {
+            return self.switch_stmt();
+        }
         if self.match_kind(&TokenKind::Return) {
             return self.return_stmt();
         }
@@ -80,6 +83,37 @@ impl<'a> Parser<'a> {
         let expr = self.expression()?;
         self.consume(TokenKind::Newline)?;
         Ok(Stmt::Expr(expr))
+    }
+
+    // switch_stmt: parse switch expression with case arms and optional default
+    fn switch_stmt(&mut self) -> Result<Stmt> {
+        let expr = self.expression()?;
+        self.consume(TokenKind::Colon)?;
+        self.consume(TokenKind::Newline)?;
+        self.consume(TokenKind::Indent)?;
+        let mut cases: Vec<(Expr, Vec<Stmt>)> = Vec::new();
+        let mut default_block: Option<Vec<Stmt>> = None;
+        while !self.match_kind(&TokenKind::Dedent) {
+            if self.match_kind(&TokenKind::Case) {
+                let cv = self.expression()?;
+                self.consume(TokenKind::Colon)?;
+                self.consume(TokenKind::Newline)?;
+                self.consume(TokenKind::Indent)?;
+                let mut body = Vec::new();
+                while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
+                cases.push((cv, body));
+            } else if self.match_kind(&TokenKind::Default) {
+                self.consume(TokenKind::Colon)?;
+                self.consume(TokenKind::Newline)?;
+                self.consume(TokenKind::Indent)?;
+                let mut body = Vec::new();
+                while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
+                default_block = Some(body);
+            } else {
+                bail!("Expected 'case' or 'default' in switch block");
+            }
+        }
+        Ok(Stmt::Switch { expr, cases, default: default_block })
     }
 
     // while_stmt: parse a while loop.

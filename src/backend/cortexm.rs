@@ -128,6 +128,29 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("{}:\n", end));
         }
+        Stmt::Switch { expr, cases, default } => {
+            emit_expr(expr, out, fctx, string_map);
+            out.push_str("    MOV r4,r0\n");
+            let end = fresh_label("SW_END");
+            let mut labels = Vec::new();
+            for _ in cases { labels.push(fresh_label("SW_CASE")); }
+            let def_label = if default.is_some() { Some(fresh_label("SW_DEF")) } else { None };
+            for ((cv,_), lbl) in cases.iter().zip(labels.iter()) {
+                emit_expr(cv, out, fctx, string_map);
+                out.push_str(&format!("    CMP r4,r0\n    BEQ {}\n", lbl));
+            }
+            if let Some(dl) = &def_label { out.push_str(&format!("    B {}\n", dl)); } else { out.push_str(&format!("    B {}\n", end)); }
+            for ((_, body), lbl) in cases.iter().zip(labels.iter()) {
+                out.push_str(&format!("{}:\n", lbl));
+                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+                out.push_str(&format!("    B {}\n", end));
+            }
+            if let Some(dl) = def_label {
+                out.push_str(&format!("{}:\n", dl));
+                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map); }
+            }
+            out.push_str(&format!("{}:\n", end));
+        }
     }
 }
 
@@ -305,6 +328,11 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             if let Some(e) = o {
                 collect_expr_syms(e, set);
             }
+        }
+        Stmt::Switch { expr, cases, default } => {
+            collect_expr_syms(expr, set);
+            for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
+            if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
         Stmt::Break | Stmt::Continue => {}
     }

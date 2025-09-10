@@ -77,8 +77,9 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             else_body: else_body.as_ref().map(|v| v.iter().map(opt_stmt).collect()),
         },
         Stmt::Return(o) => Stmt::Return(o.as_ref().map(opt_expr)),
-        Stmt::Break => Stmt::Break,
-        Stmt::Continue => Stmt::Continue,
+    Stmt::Break => Stmt::Break,
+    Stmt::Continue => Stmt::Continue,
+    Stmt::Switch { expr, cases, default } => Stmt::Switch { expr: opt_expr(expr), cases: cases.iter().map(|(e,b)| (opt_expr(e), b.iter().map(opt_stmt).collect())).collect(), default: default.as_ref().map(|v| v.iter().map(opt_stmt).collect()) },
     }
 }
 
@@ -261,6 +262,21 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
             for s in body { dce_stmt(s, &mut nb, terminated); }
             out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb });
         }
+        Stmt::Switch { expr, cases, default } => {
+            // Keep all arms; could prune unreachable constant-match arms later
+            let mut new_cases = Vec::new();
+            for (ce, cb) in cases {
+                let mut nb = Vec::new();
+                for s in cb { dce_stmt(s, &mut nb, terminated); }
+                new_cases.push((ce.clone(), nb));
+            }
+            let new_default = if let Some(db) = default {
+                let mut nb = Vec::new();
+                for s in db { dce_stmt(s, &mut nb, terminated); }
+                Some(nb)
+            } else { None };
+            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default });
+        }
         Stmt::Return(e) => { out.push(Stmt::Return(e.clone())); *terminated = true; }
     Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
     Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
@@ -314,6 +330,12 @@ fn dse_function(f: &Function) -> Function {
                 used.insert(var.clone());
                 new_body.push(stmt.clone());
             }
+            Stmt::Switch { expr, cases, default } => {
+                collect_reads_expr(expr, &mut used);
+                for (ce, cb) in cases { collect_reads_expr(ce, &mut used); for s in cb { collect_reads_stmt(s, &mut used); } }
+                if let Some(db) = default { for s in db { collect_reads_stmt(s, &mut used); } }
+                new_body.push(stmt.clone());
+            }
             Stmt::Break | Stmt::Continue => new_body.push(stmt.clone()),
         }
     }
@@ -361,6 +383,11 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(end, used);
             if let Some(se) = step { collect_reads_expr(se, used); }
             for st in body { collect_reads_stmt(st, used); }
+        }
+        Stmt::Switch { expr, cases, default } => {
+            collect_reads_expr(expr, used);
+            for (ce, cb) in cases { collect_reads_expr(ce, used); for st in cb { collect_reads_stmt(st, used); } }
+            if let Some(db) = default { for st in db { collect_reads_stmt(st, used); } }
         }
         Stmt::Break | Stmt::Continue => {}
     }
@@ -482,6 +509,26 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
                 *env = merged;
             }
             Stmt::If { cond: c, body: nb, elifs: new_elifs, else_body: new_else }
+        }
+        Stmt::Switch { expr, cases, default } => {
+            let se = cp_expr(expr, env);
+            let mut new_cases = Vec::new();
+            for (ce, cb) in cases {
+                let ce2 = cp_expr(ce, env);
+                let saved = env.clone();
+                let mut nb = Vec::new();
+                for s in cb { nb.push(cp_stmt(s, env)); }
+                *env = saved; // conservative merge
+                new_cases.push((ce2, nb));
+            }
+            let new_default = if let Some(db) = default {
+                let saved = env.clone();
+                let mut nb = Vec::new();
+                for s in db { nb.push(cp_stmt(s, env)); }
+                *env = saved;
+                Some(nb)
+            } else { None };
+            Stmt::Switch { expr: se, cases: new_cases, default: new_default }
         }
     }
 }

@@ -17,6 +17,7 @@ pub enum Stmt {
 	Continue,
 	Expr(Expr),
 	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>> },
+	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>> },
 	Return(Option<Expr>)
 }
 
