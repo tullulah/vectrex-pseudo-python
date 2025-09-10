@@ -95,5 +95,23 @@ Vectrex (6809 backend currently implemented / partial):
 
 Example drawing demo: `examples/vectrex_draw_demo.vpy`
 
+### Tooling: Assembling to a Vectrex ROM
+
+Recommended assembler: LWTOOLS (lwasm).
+
+WSL install helper:
+```
+pwsh ./tools/install_lwtools_wsl.ps1
+```
+After install, assemble a generated Vectrex .asm (example):
+```
+./tools/lwasm.ps1 --6809 --format=raw --output=game.bin tests/all_tests.asm
+```
+Pad to 32K if desired (PowerShell):
+```
+$b = [IO.File]::ReadAllBytes('game.bin'); $pad = 32768 - $b.Length; if($pad -gt 0){[IO.File]::WriteAllBytes('game32k.bin', $b + (,[byte]0x00 * $pad))}
+```
+Load `game32k.bin` in a Vectrex emulator (VecX / ParaJVE / MAME).
+
 ## License
 MIT
