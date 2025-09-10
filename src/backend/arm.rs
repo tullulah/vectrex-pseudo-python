@@ -8,27 +8,25 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let mut out = String::new();
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module); // literal text -> label
-    out.push_str(&format!(
-        "; --- ARM backend (PiTrex) --- title='{}' origin={} ---\n",
-        opts.title, ti.origin
-    ));
-    out.push_str(
-        "; Entry point\n.global _start\n_start:\n    BL pitrex_init ; engine init placeholder\n    BL main\n1:  B 1b ; loop\n\n",
-    );
+    out.push_str(&format!("; --- ARM backend (PiTrex) --- title='{}' origin={} ---\n", opts.title, ti.origin));
+    out.push_str(";***************************************************************************\n; DEFINE SECTION (ARM)\n;***************************************************************************\n");
+    out.push_str("; (No BIOS header required for PiTrex)\n\n");
+    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
+    out.push_str("; Entry point\n.global _start\n_start:\n    BL pitrex_init ; engine init placeholder\n    BL main\n1:  B 1b ; loop\n\n");
     for item in &module.items {
         match item {
             Item::Function(f) => emit_function(f, &mut out, &string_map),
             Item::Const { name, value } => if let Expr::Number(n) = value { out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF)); },
         }
     }
-    out.push_str("; Runtime helpers\n");
+    out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
     out.push_str(
     "__mul32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __mul32_done\n__mul32_loop:\n    AND r3,r1,#1\n    CMP r3,#0\n    BEQ __mul32_skip\n    ADD r2,r2,r0\n__mul32_skip:\n    LSR r1,r1,#1\n    LSL r0,r0,#1\n    CMP r1,#0\n    BNE __mul32_loop\n__mul32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
     );
     out.push_str(
         "__div32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __div32_done\n    MOV r3,r0\n__div32_loop:\n    CMP r3,r1\n    BLT __div32_done\n    SUB r3,r3,r1\n    ADD r2,r2,#1\n    B __div32_loop\n__div32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
     );
-    out.push_str("; Data segment (prototype)\n.data\n");
+    out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n; Data segment (prototype)\n.data\n");
     for v in syms { out.push_str(&format!("VAR_{}: .word 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
     for (lit, label) in &string_map {

@@ -8,27 +8,24 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let mut out = String::new();
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module);
-    out.push_str(&format!(
-        "; --- Cortex-M backend ({}) title='{}' origin={} ---\n",
-        ti.name, opts.title, ti.origin
-    ));
-    out.push_str(
-        "; Vector table (prototype)\n    .section .isr_vector\n    .word _estack\n    .word Reset_Handler\n\nReset_Handler:\n    BL engine_init\n    BL main\n1:  B 1b\n\n",
-    );
+    out.push_str(&format!("; --- Cortex-M backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
+    out.push_str(";***************************************************************************\n; DEFINE SECTION (Cortex-M)\n;***************************************************************************\n; (No Vectrex header needed)\n\n");
+    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
+    out.push_str("; Vector table (prototype)\n    .section .isr_vector\n    .word _estack\n    .word Reset_Handler\n\nReset_Handler:\n    BL engine_init\n    BL main\n1:  B 1b\n\n");
     for item in &module.items {
         if let Item::Function(f) = item { emit_function(f, &mut out, &string_map); }
         else if let Item::Const { name, value } = item {
             if let Expr::Number(n) = value { out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF)); }
         }
     }
-    out.push_str("; Runtime helpers\n");
+    out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
     out.push_str(
         "__mul32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __mul32_done\n__mul32_loop:\n    AND r3,r1,#1\n    CMP r3,#0\n    BEQ __mul32_skip\n    ADD r2,r2,r0\n__mul32_skip:\n    LSR r1,r1,#1\n    LSL r0,r0,#1\n    CMP r1,#0\n    BNE __mul32_loop\n__mul32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
     );
     out.push_str(
         "__div32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __div32_done\n    MOV r3,r0\n__div32_loop:\n    CMP r3,r1\n    BLT __div32_done\n    SUB r3,r3,r1\n    ADD r2,r2,#1\n    B __div32_loop\n__div32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
     );
-    out.push_str("; Data\n    .section .data\n");
+    out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n; Data\n    .section .data\n");
     for v in syms { out.push_str(&format!("VAR_{}: .word 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
     for (lit,label) in &string_map { out.push_str(&format!("{}: .ascii \"{}\"\n    .byte 0\n", label, escape_ascii(lit))); }
