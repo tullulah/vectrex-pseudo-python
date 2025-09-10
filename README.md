@@ -97,20 +97,29 @@ Example drawing demo: `examples/vectrex_draw_demo.vpy`
 
 ### Tooling: Assembling to a Vectrex ROM
 
-Recommended assembler: LWTOOLS (lwasm).
+Assembler: LWTOOLS (`lwasm`). Two install paths on WSL:
 
-WSL install helper:
+1. Homebrew (fast, no source build):
 ```
-pwsh ./tools/install_lwtools_wsl.ps1
+pwsh ./tools/install_lwtools_wsl.ps1 -UseBrew
 ```
-After install, assemble a generated Vectrex .asm (example):
+2. (Fallback – currently disabled until a public mirror is confirmed) Source clone & make.
+
+Verify:
+```
+wsl lwasm --version
+```
+
+Assemble generated Vectrex assembly:
 ```
 ./tools/lwasm.ps1 --6809 --format=raw --output=game.bin tests/all_tests.asm
 ```
-Pad to 32K if desired (PowerShell):
+
+Pad to 32K (PowerShell):
 ```
 $b = [IO.File]::ReadAllBytes('game.bin'); $pad = 32768 - $b.Length; if($pad -gt 0){[IO.File]::WriteAllBytes('game32k.bin', $b + (,[byte]0x00 * $pad))}
 ```
+
 Load `game32k.bin` in a Vectrex emulator (VecX / ParaJVE / MAME).
 
 ## License

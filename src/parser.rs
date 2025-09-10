@@ -379,22 +379,27 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::False) {
             return Ok(Expr::Number(0));
         }
-        if let Some(name) = self.match_identifier() {
+        if let Some(first) = self.match_identifier() {
+            let mut full = first;
+            while self.match_kind(&TokenKind::Dot) {
+                if let Some(seg) = self.match_identifier() {
+                    full.push('_');
+                    full.push_str(&seg);
+                } else { bail!("Expected identifier after '.' in qualified name"); }
+            }
             if self.match_kind(&TokenKind::LParen) {
                 let mut args = Vec::new();
                 if !self.check(TokenKind::RParen) {
                     loop {
                         args.push(self.expression()?);
-                        if self.match_kind(&TokenKind::Comma) {
-                            continue;
-                        }
+                        if self.match_kind(&TokenKind::Comma) { continue; }
                         break;
                     }
                 }
                 self.consume(TokenKind::RParen)?;
-                return Ok(Expr::Call { name, args });
+                return Ok(Expr::Call { name: full, args });
             }
-            return Ok(Expr::Ident(name));
+            return Ok(Expr::Ident(full));
         }
         if self.match_kind(&TokenKind::LParen) {
             let e = self.expression()?;

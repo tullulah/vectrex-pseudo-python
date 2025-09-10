@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Def, Identifier(String), Number(i32), Newline, Indent, Dedent,
-    LParen, RParen, Colon, Comma,
+    LParen, RParen, Colon, Comma, Dot,
     Plus, Minus, Star, Slash, Percent,
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
@@ -87,6 +87,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
             }
             ',' => {
                 out.push(tok(TokenKind::Comma, line_no, idx));
+                idx += 1;
+            }
+            '.' => {
+                out.push(tok(TokenKind::Dot, line_no, idx));
                 idx += 1;
             }
             '+' => {
