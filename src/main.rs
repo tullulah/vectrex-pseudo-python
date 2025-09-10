@@ -3,7 +3,7 @@ mod ast;      // AST definitions
 mod parser;   // Parsing logic
 mod codegen;  // Optimization + backend dispatch
 mod target;   // Target info & selection
-mod backend { pub mod string_literals; pub mod m6809; pub mod arm; pub mod cortexm; } // Backend modules (shared string literal utils)
+mod backend; // Backend modules declared in src/backend/mod.rs
 
 use std::fs;
 use std::path::PathBuf;

@@ -2,6 +2,7 @@
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::{collect_string_literals, escape_ascii};
 use crate::codegen::CodegenOptions;
+use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
 
 // emit: entry point for Motorola 6809 backend assembly generation.
@@ -14,7 +15,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(&format!("        ORG {}\n", ti.origin));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // BIOS / vector ROM equates (subset)
-    out.push_str("WAIT_RECAL    EQU $F192\nINTENSITY_5F EQU $F2A5\nPRINT_STR_D  EQU $F37A\nMUSIC1       EQU $FD0D\n\n");
+    out.push_str("WAIT_RECAL    EQU $F192\nINTENSITY_5F EQU $F2A5\nINTENSITY_A  EQU $F2A7 ; set intensity from A\nPRINT_STR_D  EQU $F37A\nMOVETO_D     EQU $F312 ; move to absolute coordinate in D (A=Y,B=X)\nRESET0REF    EQU $F354 ; reset zero reference\nMUSIC1       EQU $FD0D\n\n");
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Standard Vectrex cartridge header
     out.push_str("    DB \"g GCE 2025\", $80\n");
@@ -44,21 +45,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     for v in syms { out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
     for (lit,label) in &string_map { out.push_str(&format!("{}: FCC \"{}\"\n    FCB 0\n", label, escape_ascii(lit))); }
-    out.push_str("; Call argument scratch space\nVAR_ARG0: FDB 0\nVAR_ARG1: FDB 0\nVAR_ARG2: FDB 0\nVAR_ARG3: FDB 0\n");
-    // Precomputed trig tables (Q7 fixed-point: value *128 ~ amplitude)
-    out.push_str("; Trig tables (128 entries, 16-bit signed, scale = 127)\n");
-    let mut sin_vals: Vec<i16> = Vec::new();
-    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let v = (ang.sin()*127.0).round() as i16; sin_vals.push(v); }
-    let mut cos_vals: Vec<i16> = Vec::new();
-    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let v = (ang.cos()*127.0).round() as i16; cos_vals.push(v); }
-    let mut tan_vals: Vec<i16> = Vec::new();
-    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let t = ang.tan(); let v = if t.is_finite() { (t.max(-6.0).min(6.0)*20.0).round() as i16 } else { 0 }; tan_vals.push(v); }
-    out.push_str("SIN_TABLE:\n");
-    for chunk in sin_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
-    out.push_str("COS_TABLE:\n");
-    for chunk in cos_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
-    out.push_str("TAN_TABLE:\n");
-    for chunk in tan_vals.chunks(8) { out.push_str("    FDB "); for (ci, val) in chunk.iter().enumerate() { if ci>0 { out.push_str(", "); } out.push_str(&format!("{}", *val as i32 & 0xFFFF)); } out.push_str("\n"); }
+    out.push_str("; Call argument scratch space\nVAR_ARG0: FDB 0\nVAR_ARG1: FDB 0\nVAR_ARG2: FDB 0\nVAR_ARG3: FDB 0\n; Current beam position (low byte storage)\nVCUR_X: FCB 0\nVCUR_Y: FCB 0\n; Line drawing temps\nVLINE_DX: FCB 0\nVLINE_DY: FCB 0\nVLINE_STEPS: FCB 0\n");
+    // Shared trig tables
+    out.push_str("; Trig tables (shared)\n");
+    emit_trig_tables(&mut out, "FDB");
     out
 }
 
@@ -84,36 +74,122 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
 fn emit_builtin_helpers(out: &mut String) {
     out.push_str("; --- Vectrex built-in wrappers ---\n");
-    // NOTE: coordinate/intensity mapping minimal; real implementation would scale & call vector BIOS.
-    // PRINT_TEXT: expects (x,y,ptr). Uses low bytes for position like BIOS expects (A=Y, B=X) then U=ptr
+    // PRINT_TEXT(x, y, ptr): A=Y (low byte), B=X (low byte), U=ptr -> BIOS Print_Str_d
     out.push_str(
-        "PRINT_TEXT:\n    LDU VAR_ARG2\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR PRINT_STR_D\n    RTS\n"
+        "VECTREX_PRINT_TEXT:\n    LDU VAR_ARG2\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR PRINT_STR_D\n    RTS\n"
     );
-    // MOVE_TO: placeholder (would position beam) -> currently no-op
-    out.push_str("MOVE_TO:\n    RTS\n");
-    // DRAW_TO: placeholder for line draw from current to (x,y) with intensity
-    out.push_str("DRAW_TO:\n    RTS\n");
-    // DRAW_LINE: placeholder using 5 args
-    out.push_str("DRAW_LINE:\n    RTS\n");
-    // SET_ORIGIN: call WAIT_RECAL (recalibrate) and leave
-    out.push_str("SET_ORIGIN:\n    JSR WAIT_RECAL\n    RTS\n");
-    // SET_INTENSITY: call fixed intensity BIOS routine INTENSITY_5F (ignores arg for now)
-    out.push_str("SET_INTENSITY:\n    JSR INTENSITY_5F\n    RTS\n");
-    // Trig tables (128 entries, full circle) and access helpers are emitted in data section below.
+    // MOVE_TO(x, y): position beam using MOVETO_D (A=Y,B=X)
+    out.push_str(
+        "VECTREX_MOVE_TO:\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR MOVETO_D\n    ; store new current position\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
+    );
+    // DRAW_TO(x, y): TODO implement simple vector from current beam to (x,y). Placeholder for now.
+    out.push_str(
+        "; TODO: implement DRAW_TO using vector list (Draw_VL) or incremental delta steps.\nVECTREX_DRAW_TO:\n    ; update current position (no actual drawing yet)\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
+    );
+    // DRAW_LINE(x0,y0,x1,y1,intensity): naive partial implementation -> set intensity, move to start, (placeholder for line)
+    out.push_str(
+        "; Simple incremental line (prototype, low precision).\\nVECTREX_DRAW_LINE:\n    ; intensity in arg4 low byte\n    LDA VAR_ARG4+1\n    JSR INTENSITY_A\n    ; load start (x0,y0) into A/B and move
+    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR MOVETO_D\n    ; dx = x1 - x0 (low bytes) -> store in TMPLEFT low
+    LDA VAR_ARG2+1\n    SUBA VAR_ARG0+1\n    STA VLINE_DX\n    ; dy = y1 - y0
+    LDA VAR_ARG3+1\n    SUBA VAR_ARG1+1\n    STA VLINE_DY\n    ; steps = 16 (fixed small line segmentation)
+    LDA #16\n    STA VLINE_STEPS\nVLINE_LOOP:\n    LDA VLINE_STEPS\n    BEQ VLINE_DONE\n    ; x += dx/16 (arithmetic shift) -> naive: use dx >> 4 accumulate in VCUR_X
+    LDA VLINE_DX\n    ; sign extend not handled (prototype)
+    LSRA\n    LSRA\n    LSRA\n    LSRA\n    ADDA VCUR_X\n    STA VCUR_X\n    LDA VLINE_DY\n    LSRA\n    LSRA\n    LSRA\n    LSRA\n    ADDA VCUR_Y\n    STA VCUR_Y\n    ; Move to new point
+    LDA VCUR_Y\n    LDB VCUR_X\n    JSR MOVETO_D\n    DEC VLINE_STEPS\n    BRA VLINE_LOOP\nVLINE_DONE:\n    RTS\n"
+    );
+    // SET_ORIGIN(): Wait_Recal + Reset0Ref
+    out.push_str("VECTREX_SET_ORIGIN:\n    JSR WAIT_RECAL\n    JSR RESET0REF\n    RTS\n");
+    // SET_INTENSITY(i): variable intensity via INTENSITY_A (low byte of arg0)
+    out.push_str("VECTREX_SET_INTENSITY:\n    LDA VAR_ARG0+1\n    JSR INTENSITY_A\n    RTS\n");
+    // Trig tables are emitted later in data section.
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) -> bool {
     let up = name.to_ascii_uppercase();
-    let is = matches!(up.as_str(), "PRINT_TEXT"|"MOVE_TO"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN"|"SET_INTENSITY"|"SIN"|"COS"|"TAN");
-    if !is { return false; }
-    if matches!(up.as_str(), "SIN"|"COS"|"TAN") {
+    let is = matches!(up.as_str(),
+        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|
+        "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
+        "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"
+    );
+    if !is {
+        // Backward compatibility: map legacy short names to vectrex-prefixed versions
+        let translated = match up.as_str() {
+            "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
+            "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+            "DRAW_TO" => Some("VECTREX_DRAW_TO"),
+            "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
+            "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),
+            "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY"),
+            _ => None
+        };
+        if let Some(new_up) = translated {
+            // Re-dispatch using new name recursively (avoid infinite loop by guarding is set)
+            return emit_builtin_call(new_up, args, out, fctx, string_map);
+        }
+        return false;
+    }
+    // ABS
+    if matches!(up.as_str(), "ABS"|"MATH_ABS") {
+        if let Some(arg) = args.get(0) { emit_expr(arg, out, fctx, string_map); } else { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
+        let done = fresh_label("ABS_DONE");
+        out.push_str(&format!("    LDD RESULT\n    TSTA\n    BPL {}\n    COMA\n    COMB\n    ADDD #1\n{}: STD RESULT\n", done, done));
+        return true;
+    }
+    // MIN(a,b)
+    if matches!(up.as_str(), "MIN"|"MATH_MIN") {
+        if args.len() < 2 { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
+        emit_expr(&args[0], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
+        emit_expr(&args[1], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPRIGHT\n");
+        let use_right = fresh_label("MIN_USE_R");
+        let done = fresh_label("MIN_DONE");
+        out.push_str(&format!("    LDD TMPLEFT\n    SUBD TMPRIGHT\n    BGT {}\n    LDD TMPLEFT\n    BRA {}\n{}: LDD TMPRIGHT\n{}: STD RESULT\n", use_right, done, use_right, done));
+        return true;
+    }
+    // MAX(a,b)
+    if matches!(up.as_str(), "MAX"|"MATH_MAX") {
+        if args.len() < 2 { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
+        emit_expr(&args[0], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
+        emit_expr(&args[1], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPRIGHT\n");
+        let use_right = fresh_label("MAX_USE_R");
+        let done = fresh_label("MAX_DONE");
+        out.push_str(&format!("    LDD TMPLEFT\n    SUBD TMPRIGHT\n    BLT {}\n    LDD TMPLEFT\n    BRA {}\n{}: LDD TMPRIGHT\n{}: STD RESULT\n", use_right, done, use_right, done));
+        return true;
+    }
+    // CLAMP(v, lo, hi)
+    if matches!(up.as_str(), "CLAMP"|"MATH_CLAMP") {
+        if args.len() < 3 { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
+        // v
+        emit_expr(&args[0], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
+        // lo
+        emit_expr(&args[1], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD TMPRIGHT\n");
+        // hi -> reuse DIV_A
+        emit_expr(&args[2], out, fctx, string_map);
+        out.push_str("    LDD RESULT\n    STD DIV_A\n");
+        let use_lo = fresh_label("CLAMP_USE_LO");
+        let check_hi = fresh_label("CLAMP_CHECK_HI");
+        let use_hi = fresh_label("CLAMP_USE_HI");
+        let done = fresh_label("CLAMP_DONE");
+        out.push_str(&format!(
+            "    LDD TMPLEFT\n    SUBD TMPRIGHT\n    BLT {}\n    BRA {}\n{}: LDD TMPRIGHT\n    BRA {}\n{}: LDD TMPLEFT\n    SUBD DIV_A\n    BGT {}\n    LDD TMPLEFT\n    BRA {}\n{}: LDD DIV_A\n{}: STD RESULT\n",
+            use_lo, check_hi, use_lo, done, check_hi, use_hi, done, use_hi, done
+        ));
+        return true;
+    }
+    // Trig functions
+    if matches!(up.as_str(), "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN") {
         // Expect 1 arg
         if let Some(arg) = args.get(0) {
             emit_expr(arg, out, fctx, string_map);
             out.push_str("    LDD RESULT\n    ANDB #$7F\n    CLRA\n    ASLB\n    ROLA\n    LDX #SIN_TABLE\n");
-            if up == "COS" { out.push_str("    LDX #COS_TABLE\n"); }
-            if up == "TAN" { out.push_str("    LDX #TAN_TABLE\n"); }
+            if up.ends_with("COS") { out.push_str("    LDX #COS_TABLE\n"); }
+            if up.ends_with("TAN") { out.push_str("    LDX #TAN_TABLE\n"); }
             out.push_str("    ABX\n    LDD ,X\n    STD RESULT\n");
             return true;
         }

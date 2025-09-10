@@ -19,6 +19,8 @@ Targets:
 - Uniform 16-bit unsigned arithmetic semantics across all backends
 - Basic power-of-two multiply/divide lowering to shifts
 - Bitwise / arithmetic identity simplifications (x&0, x|0, x^0, x&0xFFFF, x*1, x+0, etc.)
+- Math & trig built-ins: sin, cos, tan (also via math.sin etc.), abs/min/max/clamp
+- Vectrex built-ins (prototype): vectrex.set_origin, vectrex.set_intensity, vectrex.move_to, vectrex.print_text, vectrex.draw_line (skeleton), vectrex.draw_to (TODO)
 
 ## Status Notes
 - All arithmetic ops implemented for all backends (Add/Sub/Mul/Div with helper routines or shifts)
@@ -69,11 +71,29 @@ See `MANUAL.md` for the evolving language and ABI specification.
 - Arrays / structured data
 - Strength reduce: modulo by power-of-two -> bitmask, combined shift+mask peepholes
 - Engine / BIOS intrinsic hooks
+- Flesh out Vectrex drawing: implement draw_to and draw_line actual vector rendering
 - Test harness (golden assembly diffs)
 - Improved diagnostics with spans
 
 ### Arithmetic / Helpers
 6809 uses `MUL16` / `DIV16` helper routines (prototype) or shift peepholes for powers of two. ARM / Cortex-M use inline software loops for 32-bit widen-narrow mult/div then mask to 16 bits.
+
+### Built-ins Reference (Evolving)
+
+General math:
+- abs(x), min(a,b), max(a,b), clamp(v, lo, hi)
+Trig (argument 0..127 covers full circle, 7-bit index):
+- sin(a), cos(a), tan(a) (values scaled to -127..127). Namespace forms math.sin etc. are aliases.
+
+Vectrex (6809 backend currently implemented / partial):
+- vectrex.set_origin() : WAIT_RECAL + RESET0REF (stabilize + zero reference)
+- vectrex.set_intensity(i) : sets beam intensity using low byte of i
+- vectrex.move_to(x, y) : positions beam (absolute) using BIOS MOVETO_D (low bytes)
+- vectrex.print_text(x, y, ptr) : prints null-terminated string at position
+- vectrex.draw_line(x0,y0,x1,y1,intensity) : sets intensity, moves to start (line drawing TODO)
+- vectrex.draw_to(x,y) : planned (draw from current to x,y)
+
+Example drawing demo: `examples/vectrex_draw_demo.vpy`
 
 ## License
 MIT

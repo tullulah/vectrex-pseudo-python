@@ -1,6 +1,7 @@
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, Module, Stmt};
 use super::string_literals::{collect_string_literals, escape_ascii};
 use crate::codegen::CodegenOptions;
+use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
 
 // emit: entry point for ARM backend assembly generation.
@@ -27,6 +28,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         "__div32:\n    PUSH {r2,r3,lr}\n    MOV r2,#0\n    CMP r1,#0\n    BEQ __div32_done\n    MOV r3,r0\n__div32_loop:\n    CMP r3,r1\n    BLT __div32_done\n    SUB r3,r3,r1\n    ADD r2,r2,#1\n    B __div32_loop\n__div32_done:\n    MOV r0,r2\n    POP {r2,r3,lr}\n    BX lr\n\n",
     );
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n; Data segment (prototype)\n.data\n");
+    // Shared trig tables
+    out.push_str("; Trig tables (shared)\n");
+    emit_trig_tables(&mut out, ".hword");
     for v in syms { out.push_str(&format!("VAR_{}: .word 0\n", v.to_uppercase())); }
     if !string_map.is_empty() { out.push_str("; String literals (null-terminated)\n"); }
     for (lit, label) in &string_map {
@@ -272,11 +276,9 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             }
         }
         Expr::Call { name, args } => {
+            if emit_builtin_call_arm(name, args, out, fctx, string_map) { return; }
             let limit = args.len().min(4);
-            for idx in (0..limit).rev() { // evaluate right-to-left
-                emit_expr(&args[idx], out, fctx, string_map);
-                if idx != 0 { out.push_str(&format!("    MOV r{} , r0\n", idx)); }
-            }
+            for idx in (0..limit).rev() { emit_expr(&args[idx], out, fctx, string_map); if idx!=0 { out.push_str(&format!("    MOV r{} , r0\n", idx)); } }
             out.push_str(&format!("    BL {}\n", name));
         },
         Expr::Binary { op, left, right } => {
@@ -380,6 +382,80 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             out.push_str("    CMP r0,#0\n    MOVEQ r0,#1\n    MOVNE r0,#0\n");
         }
     }
+}
+
+// emit_builtin_call_arm: inline lowering for math intrinsics on ARM
+fn emit_builtin_call_arm(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) -> bool {
+    let up = name.to_ascii_uppercase();
+    let is = matches!(up.as_str(),
+        "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
+        "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
+        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"
+    );
+    if !is {
+        // Backward or namespace translation
+        let translated = match up.as_str() {
+            "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
+            "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+            "DRAW_TO" => Some("VECTREX_DRAW_TO"),
+            "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
+            "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),
+            "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY"),
+            _ => None
+        };
+        if let Some(new_up) = translated { return emit_builtin_call_arm(new_up, args, out, fctx, string_map); }
+        return false;
+    }
+    // For non-6809 targets we stub Vectrex-specific functions to no-ops (return 0) for portability
+    if matches!(up.as_str(),"VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY") {
+        // Evaluate arguments for side-effects
+        for a in args { emit_expr(a, out, fctx, string_map); }
+        out.push_str("    MOV r0,#0\n");
+        return true;
+    }
+    // ABS
+    if matches!(up.as_str(), "ABS"|"MATH_ABS") {
+        if let Some(arg)=args.get(0) { emit_expr(arg,out,fctx,string_map); } else { out.push_str("    MOV r0,#0\n"); return true; }
+        let done = fresh_label("ABS_DONE");
+        out.push_str(&format!("    CMP r0,#0\n    BGE {}\n    RSBS r0,r0,#0\n{}:\n", done, done));
+        return true;
+    }
+    // MIN(a,b)
+    if matches!(up.as_str(), "MIN"|"MATH_MIN") {
+        if args.len()<2 { out.push_str("    MOV r0,#0\n"); return true; }
+        emit_expr(&args[0], out, fctx, string_map); out.push_str("    MOV r4,r0\n");
+        emit_expr(&args[1], out, fctx, string_map); out.push_str("    MOV r5,r0\n");
+        out.push_str("    CMP r4,r5\n    BLE 1f\n    MOV r0,r5\n    B 2f\n1:  MOV r0,r4\n2:\n");
+        return true;
+    }
+    // MAX(a,b)
+    if matches!(up.as_str(), "MAX"|"MATH_MAX") {
+        if args.len()<2 { out.push_str("    MOV r0,#0\n"); return true; }
+        emit_expr(&args[0], out, fctx, string_map); out.push_str("    MOV r4,r0\n");
+        emit_expr(&args[1], out, fctx, string_map); out.push_str("    MOV r5,r0\n");
+        out.push_str("    CMP r4,r5\n    BGE 1f\n    MOV r0,r5\n    B 2f\n1:  MOV r0,r4\n2:\n");
+        return true;
+    }
+    // CLAMP(v,lo,hi)
+    if matches!(up.as_str(), "CLAMP"|"MATH_CLAMP") {
+        if args.len()<3 { out.push_str("    MOV r0,#0\n"); return true; }
+        emit_expr(&args[0], out, fctx, string_map); out.push_str("    MOV r4,r0\n"); // v
+        emit_expr(&args[1], out, fctx, string_map); out.push_str("    MOV r5,r0\n"); // lo
+        emit_expr(&args[2], out, fctx, string_map); out.push_str("    MOV r6,r0\n"); // hi
+        out.push_str("    CMP r4,r5\n    BLT 1f\n    CMP r4,r6\n    BGT 2f\n    MOV r0,r4\n    B 3f\n1:  MOV r0,r5\n    B 3f\n2:  MOV r0,r6\n3:\n");
+        return true;
+    }
+    // Trig via tables (index masked 7 bits, table of .hword)
+    if matches!(up.as_str(), "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN") {
+        if let Some(arg)=args.get(0) { emit_expr(arg,out,fctx,string_map); } else { out.push_str("    MOV r0,#0\n"); return true; }
+        out.push_str("    AND r0,r0,#0x7F\n    LSL r0,r0,#1\n");
+        out.push_str("    LDR r1, =SIN_TABLE\n");
+        if up.ends_with("COS") { out.push_str("    LDR r1, =COS_TABLE\n"); }
+        if up.ends_with("TAN") { out.push_str("    LDR r1, =TAN_TABLE\n"); }
+        out.push_str("    ADD r1,r1,r0\n    LDRH r0,[r1]\n");
+        return true;
+    }
+    false
 }
 
 // (string literal collection & escaping now delegated to backend::string_literals)
