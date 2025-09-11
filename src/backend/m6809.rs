@@ -12,174 +12,138 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module);
         let rt_usage = analyze_runtime_usage(module);
+    // Locate user 'main' function (lowercase) for potential inlining in classic_minimal mode
+    let mut user_main: Option<&Function> = None;
+    for item in &module.items { if let Item::Function(f) = item { if f.name.eq_ignore_ascii_case("main") { user_main = Some(f); break; } } }
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
     out.push_str(&format!("        ORG {}\n", ti.origin));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
-    // Always include official equates from ../include (assembler invoked from project root, asm in examples/)
-    out.push_str("    INCLUDE \"../include/VECTREX.I\"\n\n");
+        // In classic_minimal we rely on the include; no manual EQU needed.
+        out.push_str("    INCLUDE \"../include/VECTREX.I\"\n\n");
+    // (Include already added above)
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Header (emulator-compatible variant):
-    //  - 'g GCE 1982' + $80
+    //  - 'g GCE 1998' + $80 (year per reference example)
     //  - music pointer (word) (set 0 if no custom music)
     //  - height, width, rel y, rel x
     //  - title bytes (plain ASCII, sanitized, length<=24)
     //  - $80 terminator for title
     //  - reserved 0 byte
     //  - pad with zeros to $0030
-    out.push_str("    FCC \"g GCE 1982\"\n");
-    out.push_str("    FCB $80\n");
-    out.push_str("    FDB $0000 ; music pointer (0 = none)\n");
-    out.push_str("    FCB $F8 ; height\n    FCB $50 ; width\n    FCB $20 ; rel y\n    FCB $D0 ; rel x (-$30)\n");
-    let mut title = opts.title.to_uppercase();
-    if title.len() > 24 { title.truncate(24); }
-    title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
-    if title.is_empty() { title.push(' '); }
-    out.push_str(&format!("    FCC \"{}\"\n", title));
-    out.push_str("    FCB $80 ; title terminator\n");
-    out.push_str("    FCB 0 ; reserved\n");
-    // Pad to 0x30 bytes (Vectrex BIOS begins executing at $0030)
-    out.push_str("    RMB $0030-* ; pad header to $30\n");
-    // Start code at $0030 (Vectrex expects execution here after BIOS header scan)
-    out.push_str("    ORG $0030\n\n");
+    // Legacy header year to match classic examples
+    // Resolve meta overrides
+    let copyright = module.meta.copyright_override.as_deref().unwrap_or("g GCE 1998");
+    let music_raw = module.meta.music_override.as_deref().unwrap_or("music1");
+    let music_fdb = if music_raw == "0" { String::from("$0000") } else { music_raw.to_string() };
+    if opts.classic_minimal {
+    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,$AA\n", copyright, music_fdb));
+        let mut title = opts.title.to_uppercase();
+        if title.len() > 24 { title.truncate(24); }
+        title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
+        if title.is_empty() { title.push(' '); }
+        out.push_str(&format!("    FCC \"{}\"\n", title));
+    out.push_str("    FCB $80\n    FCB 0\n");
+    // Pad header to $0030 like legacy format so PC starts at $0030 in emulators
+    out.push_str("    RMB $0030-* ; pad header to $30\n    ORG $0030\n\n");
+    } else {
+        out.push_str("    FCC \"g GCE 1998\"\n");
+        out.push_str("    FCB $80\n");
+        out.push_str("    FDB music1 ; default BIOS tune\n");
+        out.push_str("    FCB $F8 ; height\n    FCB $50 ; width\n    FCB $20 ; rel y\n    FCB $AA ; rel x (-$56)\n");
+        let mut title = opts.title.to_uppercase();
+        if title.len() > 24 { title.truncate(24); }
+        title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
+        if title.is_empty() { title.push(' '); }
+        out.push_str(&format!("    FCC \"{}\"\n", title));
+        out.push_str("    FCB $80 ; title terminator\n");
+        out.push_str("    FCB 0 ; reserved\n");
+        out.push_str("    RMB $0030-* ; pad header to $30\n");
+        out.push_str("    ORG $0030\n\n");
+    }
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
     // Entry stub: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
     // Precompute flags
     let do_blink = opts.blink_intensity;
-    let do_per_frame_silence = opts.per_frame_silence;
+    let _do_per_frame_silence = opts.per_frame_silence;
     let jsr_ext = if opts.force_extended_jsr { ">" } else { "" };
+    let _wait_recal_call = if opts.fast_wait { "JSR VECTREX_WAIT_RECAL" } else { &format!("JSR {}Wait_Recal", jsr_ext) };
 
     if opts.auto_loop {
-        // TODO: Refactor init/loop below to remove DP_TO_C8 usage; header + wrappers now assume DP stays $D0 until VECTOR_PHASE_BEGIN.
-        out.push_str("; Init then implicit frame loop (auto_loop enabled)\n");
-    // Detect if user code uses FRAME_BEGIN so we can emit a lean wrapper and avoid double Wait_Recal / intensity.
-    let frame_begin_used = rt_usage.wrappers_used.contains("VECTREX_FRAME_BEGIN");
-        if opts.minimal_init {
-            if frame_begin_used {
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-                let debug_line = if opts.debug_init_draw { "JSR VECTREX_DEBUG_DRAW\n    ".to_string() } else { String::new() };
-                out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    JSR VECTREX_SILENCE\n    ; minimal_init + frame_begin_used: FRAME_BEGIN will Reset0Ref.\n    {}BRA ENTRY_LOOP\n",
-                    jsr_ext,
-                    intensity_line,
-                    debug_line
-                ));
-                out.push_str("ENTRY_LOOP: ");
-                if opts.diag_freeze { out.push_str("INC DIAG_COUNTER\n    "); }
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n    ".to_string() } else { format!("JSR {}INTENSITY_5F\n    ", jsr_ext) };
-                out.push_str(&format!("JSR {}Wait_Recal\n    {}{}    ; FRAME_BEGIN may still adjust intensity/reset\n    JSR MAIN\n    BRA ENTRY_LOOP\n\n",
-                    jsr_ext,
-                    silence_line,
-                    intensity_line
-                ));
-            } else {
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let debug_line = if opts.debug_init_draw { "JSR VECTREX_DEBUG_DRAW\n    " } else { "" };
-                out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    {}; minimal_init: skip Reset0Ref here\n    {}BRA ENTRY_LOOP\n",
-                    jsr_ext,
-                    intensity_line,
-                    silence_line,
-                    debug_line
-                ));
-                out.push_str("ENTRY_LOOP: ");
-                if opts.diag_freeze { out.push_str("INC DIAG_COUNTER\n    "); }
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n    ".to_string() } else { format!("JSR {}INTENSITY_5F\n    ", jsr_ext) };
-                out.push_str(&format!("JSR {}Wait_Recal\n    {}{}    JSR MAIN\n    BRA ENTRY_LOOP\n\n",
-                    jsr_ext,
-                    silence_line,
-                    intensity_line
-                ));
+        if opts.classic_minimal {
+            out.push_str("main: JSR Wait_Recal\n    JSR Intensity_5F\n");
+            // Inline body of user main if trivial (single PRINT_TEXT call)
+            if let Some(f) = user_main {
+                if f.body.len()==1 { if let Stmt::Expr(Expr::Call{name, args}) = &f.body[0] {
+                    let up = name.to_ascii_uppercase();
+                    if up == "PRINT_TEXT" || up == "VECTREX_PRINT_TEXT" {
+                        // Expect (x,y,string)
+                        if args.len()==3 {
+                            // Extract constants
+                            if let (Expr::Number(xv), Expr::Number(yv), s) = (&args[0], &args[1], &args[2]) {
+                                    if let Expr::StringLit(sl) = s {
+                                        let _unused = sl; // we use canonical label
+                                        out.push_str(&format!("    LDU #STR_0\n    LDA #${:02X}\n    LDB #${:02X}\n    JSR Print_Str_d\n", (*yv as i32 & 0xFF), (*xv as i32 & 0xFF)));
+                                }
+                            }
+                        }
+                    }
+                }}
             }
+            out.push_str("    BRA main\n\n");
         } else {
-            if frame_begin_used {
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-                let debug_line = if opts.debug_init_draw { "JSR VECTREX_DEBUG_DRAW\n    " } else { "" };
-                out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    JSR {}Reset0Ref\n    {}BRA ENTRY_LOOP\n",
-                    jsr_ext,
-                    intensity_line,
-                    jsr_ext,
-                    debug_line
-                ));
-                out.push_str("ENTRY_LOOP: ");
-                if opts.diag_freeze { out.push_str("INC DIAG_COUNTER\n    "); }
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n    ".to_string() } else { format!("JSR {}INTENSITY_5F\n    ", jsr_ext) };
-                out.push_str(&format!("JSR {}Wait_Recal\n    {}{}    ; FRAME_BEGIN wrapper (called by user) may set different intensity / Reset0Ref.\n    JSR MAIN\n    BRA ENTRY_LOOP\n\n",
-                    jsr_ext,
-                    silence_line,
-                    intensity_line
-                ));
-            } else {
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let debug_line = if opts.debug_init_draw { "JSR VECTREX_DEBUG_DRAW\n    " } else { "" };
-                out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    JSR {}Reset0Ref\n    {}{}BRA ENTRY_LOOP\n",
-                    jsr_ext,
-                    intensity_line,
-                    jsr_ext,
-                    silence_line,
-                    debug_line
-                ));
-                out.push_str("ENTRY_LOOP: ");
-                if opts.diag_freeze { out.push_str("INC DIAG_COUNTER\n    "); }
-                let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-                let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n    ".to_string() } else { format!("JSR {}INTENSITY_5F\n    ", jsr_ext) };
-                out.push_str(&format!("JSR {}Wait_Recal\n    {}{}    ; DP & origin assumed stable from Reset0Ref\n    JSR MAIN\n    BRA ENTRY_LOOP\n\n",
-                    jsr_ext,
-                    silence_line,
-                    intensity_line
-                ));
-            }
+            out.push_str("; Simple implicit frame loop\n");
+            out.push_str("ENTRY_LOOP: ");
+            if opts.fast_wait { out.push_str("JSR VECTREX_WAIT_RECAL\n    "); } else { out.push_str(&format!("JSR {}Wait_Recal\n    ", jsr_ext)); }
+            out.push_str(&format!("JSR {}Intensity_5F\n    JSR MAIN\n    BRA ENTRY_LOOP\n\n", jsr_ext));
         }
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
-        if opts.minimal_init {
-            let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-            let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-            out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    {}; minimal_init: skipping Reset0Ref, user must call if needed\n    JSR MAIN ; user must implement its own frame loop\nHANG: BRA HANG ; prevent fallthrough\n\n",
-                jsr_ext,
-                intensity_line,
-                silence_line
-            ));
-        } else {
-            let intensity_line = if do_blink { "JSR VECTREX_BLINK_INT\n".to_string() } else { format!("JSR {}INTENSITY_5F\n", jsr_ext) };
-            let silence_line = if do_per_frame_silence { "JSR VECTREX_SILENCE\n    " } else { "" };
-            out.push_str(&format!("INIT_START: JSR {}Wait_Recal\n    {}    JSR {}Reset0Ref\n    {}JSR MAIN ; user must implement its own frame loop\nHANG: BRA HANG ; prevent fallthrough\n\n",
-                jsr_ext,
-                intensity_line,
-                jsr_ext,
-                silence_line
-            ));
-        }
+    let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
+    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user loop required\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
     for item in &module.items {
         match item {
-            Item::Function(f) => emit_function(f, &mut out, &string_map, opts),
+            Item::Function(f) => {
+                if opts.classic_minimal && opts.auto_loop && f.name.eq_ignore_ascii_case("main") { /* inlined above */ } else { emit_function(f, &mut out, &string_map, opts); }
+            }
             Item::Const { name, value } => { if let Expr::Number(n) = value { out.push_str(&format!("{} EQU {}\n", name.to_uppercase(), n & 0xFFFF)); } }
         }
     }
+    // In classic minimal, ensure first string literal gets label STR_0 for inlined reference
+    // classic_minimal: don't duplicate string literals; rely on collected emission below
     // (Legacy tail loop removed; entry stub already loops.)
-    out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n");
-    if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
-    if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-    emit_builtin_helpers(&mut out, &rt_usage); // Built-in Vectrex wrappers (conditional)
-    out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
+    if !opts.classic_minimal {
+        out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n");
+        if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
+        if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
+        emit_builtin_helpers(&mut out, &rt_usage, opts); // Built-in Vectrex wrappers
+        if opts.bank_size > 0 {
+            out.push_str(&format!("    IF * < ${:04X}\n", opts.bank_size));
+            out.push_str("PADSIZE SET ");
+            out.push_str(&format!("${:04X}-*\n", opts.bank_size));
+            out.push_str("    FILL $FF,PADSIZE\n");
+            out.push_str("    ENDC\n");
+        }
+        out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
+    } else {
+        out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
+    }
     // Align ROM size to next 4K boundary: compute remainder via assembler can't do complex IF here, approximate with macro-style logic.
     // Fallback: emit a padding block sized by repeating labels (simple approach): not portable across all assemblers, so disabled for now.
     // NOTE: External packer should align to desired bank size (4K/8K). No internal alignment performed.
     // Optional bank alignment (4K/8K). Use ALIGN macro if bank_size is power-of-two.
     // Bank padding handled at end of file now.
     // RAM variables: either emit ORG or symbolic EQU addresses.
-    if !opts.exclude_ram_org {
+    if opts.classic_minimal { /* skip RAM ORG and temp vars entirely */ }
+    else if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
     }
-    out.push_str("; Variables (in RAM)\n");
+    if !opts.classic_minimal { out.push_str("; Variables (in RAM)\n"); }
     // Runtime temporaries used by expression lowering and helpers
-    if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); }
+    if !opts.classic_minimal { if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); } }
     if rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
     if rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
     if rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
@@ -202,27 +166,34 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
         }
     }
-    if !string_map.is_empty() { out.push_str("; String literals (high-bit terminated for Vectrex PRINT_STR_D)\n"); }
-    for (lit,label) in &string_map {
-        // Build FCB list with last char high bit set
-        let mut bytes: Vec<u8> = lit.bytes().collect();
-        if let Some(last) = bytes.last_mut() { *last |= 0x80; } else { bytes.push(0x80); }
-        // Emit as FCB sequence (avoid FCC so we can set high bit explicitly)
-    out.push_str(&format!("{}:", label));
-    for b in bytes { out.push_str(&format!("\n    FCB ${:02X}", b)); }
-    out.push_str("\n");
+    if !opts.classic_minimal && !string_map.is_empty() { out.push_str("; String literals (high-bit terminated for Vectrex PRINT_STR_D)\n"); }
+    if opts.classic_minimal {
+        // Emit classic FCC + terminator form; if only one string rename to hello_world_string
+    if string_map.len()==1 { let (_lit,_label) = string_map.iter().next().unwrap(); out.push_str("hello_world_string:\n"); let lit = _lit; out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase())); } else {
+            for (lit,label) in &string_map { out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase())); }
+        }
+    } else {
+        for (lit,label) in &string_map {
+            let mut bytes: Vec<u8> = lit.bytes().collect();
+            if let Some(last) = bytes.last_mut() { *last |= 0x80; } else { bytes.push(0x80); }
+            out.push_str(&format!("{}:", label));
+            for b in bytes { out.push_str(&format!("\n    FCB ${:02X}", b)); }
+            out.push_str("\n");
+        }
     }
     // Determine max args used (0..5)
     let max_args = compute_max_args_used(module);
-    out.push_str("; Call argument scratch space\n");
-    if opts.exclude_ram_org {
-        for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, var_offset)); var_offset += 2; }
-    } else {
-        if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
-        if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
-        if max_args >=3 { out.push_str("VAR_ARG2: FDB 0\n"); }
-        if max_args >=4 { out.push_str("VAR_ARG3: FDB 0\n"); }
-        if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
+    if !opts.classic_minimal {
+        out.push_str("; Call argument scratch space\n");
+        if opts.exclude_ram_org {
+            for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, var_offset)); var_offset += 2; }
+        } else {
+            if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
+            if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
+            if max_args >=3 { out.push_str("VAR_ARG2: FDB 0\n"); }
+            if max_args >=4 { out.push_str("VAR_ARG3: FDB 0\n"); }
+            if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
+        }
     }
     if opts.diag_freeze { if opts.exclude_ram_org { out.push_str(&format!("DIAG_COUNTER EQU RESULT+{}\n", var_offset)); var_offset += 1; } else { out.push_str("DIAG_COUNTER: FCB 0\n"); } }
     if rt_usage.needs_vcur_vars {
@@ -247,43 +218,23 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str("BLINK_STATE: FCB 0\n");
         }
     }
+    if opts.fast_wait {
+        if opts.exclude_ram_org {
+            out.push_str(&format!("FAST_WAIT_HIT EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        } else {
+            out.push_str("FAST_WAIT_HIT: FCB 0\n");
+        }
+    }
     // Shared trig tables (emit only if used)
     if module_uses_trig(module) {
         out.push_str("; Trig tables (shared)\n");
         emit_trig_tables(&mut out, "FDB");
-    }
-    // Emit blink helper & debug draw last (code section earlier referenced them)
-    if do_blink {
-    out.push_str("; Blink intensity helper (toggles two intensity levels each call)\nVECTREX_BLINK_INT:\n    LDA BLINK_STATE\n    EORA #1\n    STA BLINK_STATE\n    BEQ BLINK_LOW\n    LDA #$5F\n    BRA BLINK_SET\nBLINK_LOW:\n    LDA #$20\nBLINK_SET:\n    JSR Intensity_a\n    RTS\n");
-    }
-    if opts.debug_init_draw {
-    out.push_str("; Debug initial draw: tiny horizontal line to prove we left title screen\nVECTREX_DEBUG_DRAW:\n    JSR DP_to_C8\n    LDU #DBG_INIT_LINE\n    LDA #$4F\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDBG_INIT_LINE: FCB $80,$10\n");
-    }
-    // Bank padding: ensure final size reaches opts.bank_size by filling with $FF.
-    if opts.bank_size > 0 {
-        out.push_str(&format!("; Bank padding to {} bytes (fill with $FF)\n", opts.bank_size));
-        out.push_str(&format!("    IF * < ${:04X}\n", opts.bank_size));
-        out.push_str("PADSIZE SET ");
-        out.push_str(&format!("${:04X}-*\n", opts.bank_size));
-        out.push_str("    FILL $FF,PADSIZE\n");
-        out.push_str("    ENDC\n");
     }
     // Touch var_offset so compiler sees it used when EQU mode enabled
     #[allow(unused_variables)]
     { let _vo = var_offset; }
     out
 }
-
-// Detect usage of sin/cos/tan (any alias) in the module to decide if tables are needed
-fn module_uses_trig(module: &Module) -> bool {
-    for item in &module.items {
-        if let Item::Function(f) = item {
-            for s in &f.body { if stmt_has_trig(s) { return true; } }
-        }
-    }
-    false
-}
-
 fn expr_has_trig(e: &Expr) -> bool {
     match e {
         Expr::Call { name, .. } => {
@@ -294,6 +245,15 @@ fn expr_has_trig(e: &Expr) -> bool {
         Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig(inner),
         _ => false,
     }
+}
+
+fn module_uses_trig(module: &Module) -> bool {
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for s in &f.body { if stmt_has_trig(s) { return true; } }
+        }
+    }
+    false
 }
 
 fn stmt_has_trig(s: &Stmt) -> bool {
@@ -485,21 +445,28 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
 }
 
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
-fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage) {
-    out.push_str("; --- Vectrex built-in wrappers ---\n");
+fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions) {
     let w = &usage.wrappers_used;
-    // Emit vector phase begin unconditionally to avoid undefined symbol if optimizer misses usage
-    out.push_str(
-    "VECTREX_VECTOR_PHASE_BEGIN:\n    ; Cambia a DP=$C8 para rutinas de lista de vectores y recentra.\n    JSR DP_to_C8\n    JSR Reset0Ref\n    RTS\n"
-    );
-    // Emit debug static vector list drawer unconditionally (used for diagnostics)
-    out.push_str(
-    "VECTREX_DBG_STATIC_VL:\n    ; Draw static debug vector list (one horizontal line).\n    JSR DP_to_C8\n    LDU #DBG_STATIC_LIST\n    LDA #$5F\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDBG_STATIC_LIST:\n    FCB $80,$20 ; end bit set, dy=0, dx=32\n"
-    );
-    // Always emit silence helper; cheap.
-    out.push_str(
-    "VECTREX_SILENCE:\n    ; Comprehensive AY silence: zero tone periods (0-5), noise (6), mixer (7=0x3F), vols (8-10).\n    LDA #0\n    STA $D001 ; reg 0 select\n    CLR $D000 ; tone A coarse/low (write twice for 0 & 1)\n    LDA #1\n    STA $D001\n    CLR $D000\n    LDA #2\n    STA $D001\n    CLR $D000 ; tone B low\n    LDA #3\n    STA $D001\n    CLR $D000 ; tone B high\n    LDA #4\n    STA $D001\n    CLR $D000 ; tone C low\n    LDA #5\n    STA $D001\n    CLR $D000 ; tone C high\n    LDA #6\n    STA $D001\n    CLR $D000 ; noise period\n    LDA #7\n    STA $D001\n    LDA #$3F ; disable tone+noise all channels\n    STA $D000\n    LDA #8\n    STA $D001\n    CLR $D000 ; vol A\n    LDA #9\n    STA $D001\n    CLR $D000 ; vol B\n    LDA #10\n    STA $D001\n    CLR $D000 ; vol C\n    RTS\n"
-    );
+    // Only emit vector phase helper if referenced
+    if w.contains("VECTREX_VECTOR_PHASE_BEGIN") {
+        if opts.fast_wait {
+            out.push_str("VECTREX_VECTOR_PHASE_BEGIN:\n    JSR DP_to_C8\n    JSR VECTREX_RESET0_FAST\n    RTS\n");
+        } else {
+            out.push_str("VECTREX_VECTOR_PHASE_BEGIN:\n    JSR DP_to_C8\n    JSR Reset0Ref\n    RTS\n");
+        }
+    }
+    if w.contains("VECTREX_DBG_STATIC_VL") {
+        out.push_str("VECTREX_DBG_STATIC_VL:\n    JSR DP_to_C8\n    LDU #DBG_STATIC_LIST\n    LDA #$5F\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDBG_STATIC_LIST:\n    FCB $80,$20\n");
+    }
+    if opts.blink_intensity {
+        out.push_str("VECTREX_BLINK_INT:\n    LDA BLINK_STATE\n    EORA #$01\n    STA BLINK_STATE\n    BEQ BLINK_LOW\nBLINK_HIGH: LDA #$5F\n    BRA BLINK_SET\nBLINK_LOW:  LDA #$10\nBLINK_SET:  JSR Intensity_a\n    RTS\n");
+    }
+    if opts.debug_init_draw {
+        out.push_str("VECTREX_DEBUG_DRAW:\n    JSR DP_to_C8\n    LDU #DEBUG_DRAW_LIST\n    LDA #$40\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDEBUG_DRAW_LIST:\n    FCB $80,$40\n");
+    }
+    if opts.per_frame_silence {
+        out.push_str("VECTREX_SILENCE:\n    LDA #0\n    STA $D001\n    CLR $D000\n    LDA #1\n    STA $D001\n    CLR $D000\n    LDA #2\n    STA $D001\n    CLR $D000\n    LDA #3\n    STA $D001\n    CLR $D000\n    LDA #4\n    STA $D001\n    CLR $D000\n    LDA #5\n    STA $D001\n    CLR $D000\n    LDA #6\n    STA $D001\n    CLR $D000\n    LDA #7\n    STA $D001\n    LDA #$3F\n    STA $D000\n    LDA #8\n    STA $D001\n    CLR $D000\n    LDA #9\n    STA $D001\n    CLR $D000\n    LDA #10\n    STA $D001\n    CLR $D000\n    RTS\n");
+    }
     if w.contains("VECTREX_PRINT_TEXT") {
         out.push_str(
             "VECTREX_PRINT_TEXT:\n    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS\n    LDU VAR_ARG2   ; string pointer (high-bit terminated)\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Print_Str_d\n    RTS\n"
@@ -521,9 +488,15 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage) {
         );
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
-        out.push_str(
-            "VECTREX_FRAME_BEGIN:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    JSR Reset0Ref\n    RTS\n"
-        );
+        if opts.fast_wait {
+            out.push_str(
+                "VECTREX_FRAME_BEGIN:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    JSR VECTREX_RESET0_FAST\n    RTS\n"
+            );
+        } else {
+            out.push_str(
+                "VECTREX_FRAME_BEGIN:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    JSR Reset0Ref\n    RTS\n"
+            );
+        }
     }
     if w.contains("VECTREX_DRAW_VL") {
         out.push_str(
@@ -531,13 +504,18 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage) {
         );
     }
     if w.contains("VECTREX_SET_ORIGIN") {
-    out.push_str("VECTREX_SET_ORIGIN:\n    JSR Reset0Ref\n    RTS\n");
+        if opts.fast_wait {
+            out.push_str("VECTREX_SET_ORIGIN:\n    JSR VECTREX_RESET0_FAST\n    RTS\n");
+        } else {
+            out.push_str("VECTREX_SET_ORIGIN:\n    JSR Reset0Ref\n    RTS\n");
+        }
     }
     if w.contains("VECTREX_SET_INTENSITY") {
     out.push_str("VECTREX_SET_INTENSITY:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    RTS\n");
     }
-    if w.contains("VECTREX_WAIT_RECAL") {
-        out.push_str("VECTREX_WAIT_RECAL:\n    JSR WAIT_RECAL\n    RTS\n");
+    if w.contains("VECTREX_WAIT_RECAL") || opts.fast_wait {
+        if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    RTS\n");
+            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR WAIT_RECAL\n    RTS\n"); }
     }
     if w.contains("VECTREX_PLAY_MUSIC1") {
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
