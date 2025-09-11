@@ -98,6 +98,7 @@ Trig (argument 0..127 covers full circle, 7-bit index):
      Form B: DRAW_POLYGON(N, INTENS, x0,y0, ..., xN-1,yN-1)
      Implementación optimizada: un solo Reset0Ref + Intensity al inicio, Moveto_d al primer vértice y luego N líneas (cierre automático). Menos flicker.
      Futuro: versión runtime con vértices dinámicos.
+     draw_circle(xc,yc,diam[,intensity]) : macro constante que genera un 16-gon aproximando el círculo (formas A/B como polygon; B añade intensidad). Un solo Reset0Ref + intensidad.
  vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
  vectrex.draw_to(x,y) : placeholder (updates current position only)
 

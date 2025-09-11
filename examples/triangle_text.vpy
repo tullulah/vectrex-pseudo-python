@@ -15,3 +15,5 @@ def main():
     DRAW_POLYGON(4, 0x5F, -84, -44, -36, -44, -36, 4, -84, 4)
     # Hexágono (forma B)
     DRAW_POLYGON(6, 0x5F, 90, 0, 75, 26, 45, 26, 30, 0, 45, -26, 75, -26)
+    # Círculo aproximado (16 lados) centrado en (0,-80) diámetro 40
+    DRAW_CIRCLE(0, -80, 40)
