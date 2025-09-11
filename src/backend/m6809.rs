@@ -172,10 +172,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Fallback: emit a padding block sized by repeating labels (simple approach): not portable across all assemblers, so disabled for now.
     // NOTE: External packer should align to desired bank size (4K/8K). No internal alignment performed.
     // Optional bank alignment (4K/8K). Use ALIGN macro if bank_size is power-of-two.
-    if opts.bank_size >= 1024 && opts.bank_size.is_power_of_two() {
-        // lwasm does not support arithmetic expressions in IF the same way; skip automatic padding here.
-        out.push_str(&format!("; NOTE: bank alignment ({} bytes) skipped in-source; pad externally if needed.\n", opts.bank_size));
-    }
+    // Bank padding handled at end of file now.
     // RAM variables: either emit ORG or symbolic EQU addresses.
     if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
@@ -242,6 +239,14 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str(&format!("VLINE_LIST EQU RESULT+{}\n", var_offset)); var_offset += 2; // 2 bytes
         } else { out.push_str("; Line drawing temps\nVLINE_DX: FCB 0\nVLINE_DY: FCB 0\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
     }
+    // Blink state variable (1 byte) must live in RAM, not ROM.
+    if opts.blink_intensity {
+        if opts.exclude_ram_org {
+            out.push_str(&format!("BLINK_STATE EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        } else {
+            out.push_str("BLINK_STATE: FCB 0\n");
+        }
+    }
     // Shared trig tables (emit only if used)
     if module_uses_trig(module) {
         out.push_str("; Trig tables (shared)\n");
@@ -249,7 +254,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     }
     // Emit blink helper & debug draw last (code section earlier referenced them)
     if do_blink {
-    out.push_str("; Blink intensity helper (toggles two intensity levels each call)\nVECTREX_BLINK_INT:\n    LDA BLINK_STATE\n    EORA #1\n    STA BLINK_STATE\n    BEQ BLINK_LOW\n    LDA #$5F\n    BRA BLINK_SET\nBLINK_LOW:\n    LDA #$20\nBLINK_SET:\n    JSR Intensity_a\n    RTS\nBLINK_STATE FCB 0\n");
+    out.push_str("; Blink intensity helper (toggles two intensity levels each call)\nVECTREX_BLINK_INT:\n    LDA BLINK_STATE\n    EORA #1\n    STA BLINK_STATE\n    BEQ BLINK_LOW\n    LDA #$5F\n    BRA BLINK_SET\nBLINK_LOW:\n    LDA #$20\nBLINK_SET:\n    JSR Intensity_a\n    RTS\n");
     }
     if opts.debug_init_draw {
     out.push_str("; Debug initial draw: tiny horizontal line to prove we left title screen\nVECTREX_DEBUG_DRAW:\n    JSR DP_to_C8\n    LDU #DBG_INIT_LINE\n    LDA #$4F\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDBG_INIT_LINE: FCB $80,$10\n");
@@ -517,7 +522,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage) {
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
         out.push_str(
-            "VECTREX_FRAME_BEGIN:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    JSR Reset0Ref\n    ; Clear VIA sound control to avoid random audio (simple mute)\n    LDA #0\n    STA $C808 ; VIA ACR (example mute related)\n    STA $C80E ; PSG control latch (if mapped)\n    RTS\n"
+            "VECTREX_FRAME_BEGIN:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    JSR Reset0Ref\n    RTS\n"
         );
     }
     if w.contains("VECTREX_DRAW_VL") {

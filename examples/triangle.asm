@@ -364,15 +364,10 @@ VECTREX_FRAME_BEGIN:
     LDA VAR_ARG0+1
     JSR Intensity_a
     JSR Reset0Ref
-    ; Clear VIA sound control to avoid random audio (simple mute)
-    LDA #0
-    STA $C808 ; VIA ACR (example mute related)
-    STA $C80E ; PSG control latch (if mapped)
     RTS
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-; NOTE: bank alignment (8192 bytes) skipped in-source; pad externally if needed.
 ; Variables (in RAM)
 RESULT    EQU $C880
 TMPLEFT   EQU RESULT+2
@@ -400,6 +395,7 @@ VLINE_DX EQU RESULT+40
 VLINE_DY EQU RESULT+41
 VLINE_STEPS EQU RESULT+42
 VLINE_LIST EQU RESULT+43
+BLINK_STATE EQU RESULT+45
 ; Blink intensity helper (toggles two intensity levels each call)
 VECTREX_BLINK_INT:
     LDA BLINK_STATE
@@ -413,7 +409,6 @@ BLINK_LOW:
 BLINK_SET:
     JSR Intensity_a
     RTS
-BLINK_STATE FCB 0
 ; Bank padding to 8192 bytes (fill with $FF)
     IF * < $2000
 PADSIZE SET $2000-*
