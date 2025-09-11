@@ -134,26 +134,50 @@ $b = [IO.File]::ReadAllBytes('game.bin'); $pad = 8192 - $b.Length; if($pad -gt 0
 
 Load the resulting `.bin` in a Vectrex emulator (VecX / ParaJVE / MAME).
 
-### CLI Flags (Vectrex backend)
+## CLI (Simplificado)
+Actualmente la herramienta expone un subcomando principal:
 ```
---blink                   Toggle blink intensity helper (two levels each frame)
---no-per-frame-silence    Disable per-frame AY silence writes (default: enabled)
---no-debug-draw           Disable the tiny debug line drawn at init
---bank-size <bytes>       Pad final ROM to exact size with $FF (e.g. 4096, 8192)
---keep-ram-org            Emit RAM variables with ORG labels (instead of EQU offsets)
---minimal-init            Skip early Reset0Ref on init (user frame_begin controls)
---no-auto-loop            Do not generate implicit frame loop (user code must loop)
---diag-freeze             Adds a diag counter increment (for debugging)
---force-extended-jsr      Use extended 6809 JSR >addr form for BIOS calls
+cargo run -- build <fuente.vpy> [--out <archivo>] [--target <vectrex|pitrex|vecfever|vextreme>] [--title T] [--bin]
+```
+En modo Vectrex minimal clásico la mayoría de flags antiguos fueron eliminados. Se generan:
+- `<archivo>.asm`
+- `<archivo>.bin` si se pasa `--bin` (usa lwasm local o script fallback `tools/lwasm.ps1`).
+
+El `--title` del CLI puede ser sobrescrito desde el propio código fuente con directivas META (ver abajo).
+
+## Directivas META (Vectrex)
+Al inicio del `.vpy` puedes definir metadatos que sustituyen partes de la cabecera ROM:
+```
+META TITLE = "MI JUEGO"        # Máx 24 chars, se fuerza a MAYÚSCULAS y se limpian caracteres no alfanum/espacio
+META COPYRIGHT = "g GCE 2025"  # Cadena mostrada en la primera línea (por defecto: g GCE 1998)
+META MUSIC = "music1"          # Símbolo BIOS de música (por defecto music1)
+META MUSIC = "0"               # Desactiva música (FDB $0000)
+```
+Sólo estos META afectan la cabecera actualmente. Altura/anchura/coords ($F8,$50,$20,$AA) están fijos.
+
+Ejemplo mínimo hello:
+```
+META TITLE = "HELLO WORLD"
+META COPYRIGHT = "g GCE 2025"
+META MUSIC = "0"
+
+def main():
+    PRINT_TEXT(-0x50, 0x10, "HELLO WORLD")
 ```
 
-Typical build producing an 8K padded ROM:
+Salida de cabecera generada (simplificada):
 ```
-cargo run -- build examples/triangle.vpy --bank-size 8192 --blink
-pwsh ./tools/lwasm.ps1 examples/triangle.asm build/triangle.bin
+FCC "g GCE 2025"
+FCB $80
+FDB $0000
+FCB $F8,$50,$20,$AA
+FCC "HELLO WORLD"
+FCB $80
+FCB 0
 ```
 
-Result: `build/triangle.bin` length = 8192 bytes, tail filled with $FF.
+## Estado de funcionalidades Vectrex recortadas
+Se eliminó runtime extra, wrappers y padding automático para el modo clásico minimal; sólo se emiten llamadas BIOS directas y la cadena usada en PRINT_TEXT.
 
 ## License
 MIT

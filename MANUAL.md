@@ -199,3 +199,56 @@ MIT (see `README.md`).
 
 ---
 (End of Draft Section: This manual is a living document; update with each feature.)
+
+## 15. Vectrex Minimal Mode & META Directives (Actual)
+
+El backend Vectrex actualmente fuerza un modo "minimal clásico" para generar la cabecera estándar sin runtime adicional. Sólo se emite el código estrictamente necesario y las cadenas realmente usadas (sin duplicados manuales).
+
+### 15.1 CLI Simplificado
+Subcomando principal:
+```
+cargo run -- build fuente.vpy [--out salida] [--target vectrex] [--title T] [--bin]
+```
+- `--target` por defecto = `vectrex`.
+- `--title` puede ser sobrescrito en el propio archivo con `META TITLE`.
+- `--bin` genera además del `.asm` un `.bin` usando lwasm (o script fallback `tools/lwasm.ps1`).
+
+Se han eliminado flags anteriores (blink, bank-size, debug, etc.) en este modo.
+
+### 15.2 Directivas META Soportadas
+Se colocan al inicio del archivo `.vpy` (antes de funciones):
+```
+META TITLE = "MI JUEGO"        # <=24 chars, se fuerza MAYÚSCULAS y se limpian caracteres no válidos
+META COPYRIGHT = "g GCE 2025"  # Reemplaza línea de copyright (default: g GCE 1998)
+META MUSIC = "music1"          # Símbolo BIOS (por defecto music1)
+META MUSIC = "0"               # Desactiva música (puntero $0000)
+```
+Sólo estas claves afectan la cabecera por ahora. Los bytes de parámetros ($F8,$50,$20,$AA) están fijos.
+
+### 15.3 Cabecera Generada (Estructura)
+```
+FCC "<COPYRIGHT>"
+FCB $80
+FDB <music_pointer | $0000>
+FCB $F8,$50,$20,$AA
+FCC "<TITLE>"   ; título normalizado
+FCB $80          ; terminador título
+FCB 0            ; terminador lista vectores en este modo minimal
+```
+
+### 15.4 Ejemplo
+Fuente:
+```
+META TITLE = "HELLO WORLD"
+META COPYRIGHT = "g GCE 2025"
+META MUSIC = "0"
+
+def main():
+    PRINT_TEXT(-0x50, 0x10, "HELLO WORLD")
+```
+Genera cabecera con música desactivada (FDB $0000) y título/copyright.
+
+### 15.5 Notas Futuras
+- Posibles META adicionales (coordenadas/escala) aún no implementados.
+- Limpieza de opciones legacy en estructuras internas pendiente (campos no usados en CodegenOptions).
+
