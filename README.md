@@ -99,6 +99,9 @@ Trig (argument 0..127 covers full circle, 7-bit index):
      Implementación optimizada: un solo Reset0Ref + Intensity al inicio, Moveto_d al primer vértice y luego N líneas (cierre automático). Menos flicker.
      Futuro: versión runtime con vértices dinámicos.
      draw_circle(xc,yc,diam[,intensity]) : macro constante que genera un 16-gon aproximando el círculo (formas A/B como polygon; B añade intensidad). Un solo Reset0Ref + intensidad.
+     draw_circle_seg(nseg, xc,yc,diam[,intensity]) : variante con número de segmentos (3..64)
+     draw_arc(nseg, xc,yc,radius,start_deg,sweep_deg[,intensity]) : arco abierto subdividido (1..128 segmentos)
+     draw_spiral(nseg, xc,yc,r_start,r_end,turns[,intensity]) : espiral abierta interpolando radio y ángulo (1..160 segmentos)
  vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
  vectrex.draw_to(x,y) : placeholder (updates current position only)
 

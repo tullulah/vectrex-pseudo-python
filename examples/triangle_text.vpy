@@ -17,3 +17,9 @@ def main():
     DRAW_POLYGON(6, 0x5F, 90, 0, 75, 26, 45, 26, 30, 0, 45, -26, 75, -26)
     # Círculo aproximado (16 lados) centrado en (0,-80) diámetro 40
     DRAW_CIRCLE(0, -80, 40)
+    # Círculo con segmentos variables (32) y menor intensidad
+    DRAW_CIRCLE_SEG(32, 0, 60, 50, 0x4A)
+    # Arco: 24 segmentos, centro (0,0), radio 70, inicio 0°, barrido 180°
+    DRAW_ARC(24, 0, 0, 70, 0, 180, 0x5F)
+    # Espiral: 80 segmentos, radio inicial 10 final 60, 2.5 vueltas
+    DRAW_SPIRAL(80, -90, 0, 10, 60, 2, 0x5F)
