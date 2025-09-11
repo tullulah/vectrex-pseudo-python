@@ -556,28 +556,41 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         if !args.is_empty() {
             if let Expr::Number(nv) = &args[0] {
                 let n = *nv as usize;
-                if n >= 2 && args.len() == 1 + 2*n && args[1..].iter().all(|a| matches!(a, Expr::Number(_))) {
-                    // Extract vertices
-                    let mut verts: Vec<(i32,i32)> = Vec::new();
-                    for i in 0..n {
-                        if let (Expr::Number(xv), Expr::Number(yv)) = (&args[1+2*i], &args[1+2*i+1]) {
-                            verts.push((*xv as i32, *yv as i32));
+                // Two accepted forms:
+                //  Form A: DRAW_POLYGON(N, x0,y0, x1,y1, ..., xN-1,yN-1)
+                //  Form B: DRAW_POLYGON(N, INTENS, x0,y0, ...)
+                // All numeric constants. Optimized (single Reset0Ref + intensity) to reduce flicker.
+                let form_a_len = 1 + 2*n;
+                let form_b_len = 2 + 2*n;
+                let mut intensity: i32 = 0x5F; // default
+                let (start_index, total_len_ok) = if args.len() == form_a_len { (1usize, true) } else if args.len() == form_b_len { (2usize, true) } else { (0,false) };
+                if total_len_ok {
+                    if start_index == 2 { // intensity provided
+                        if let Expr::Number(iv) = &args[1] { intensity = *iv as i32; }
+                    }
+                    if args[start_index..].iter().all(|a| matches!(a, Expr::Number(_))) {
+                        let mut verts: Vec<(i32,i32)> = Vec::new();
+                        for i in 0..n { if let (Expr::Number(xv), Expr::Number(yv)) = (&args[start_index+2*i], &args[start_index+2*i+1]) { verts.push((*xv as i32, *yv as i32)); } }
+                        if verts.len()==n {
+                            // Preamble once
+                            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                            if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
+                            // Move to first vertex
+                            let (sx,sy)=verts[0];
+                            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF), (sx & 0xFF)));
+                            // Draw edges
+                            for i in 0..n {
+                                let (x0,y0)=verts[i];
+                                let (x1,y1)=verts[(i+1)%n];
+                                let dx = (x1 - x0) & 0xFF;
+                                let dy = (y1 - y0) & 0xFF;
+                                out.push_str("    CLR Vec_Misc_Count\n");
+                                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx));
+                            }
+                            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+                            return true;
                         }
                     }
-                    // Emit each edge with origin reset (stable absolute positioning)
-                    for i in 0..n {
-                        let (x0,y0) = verts[i];
-                        let (x1,y1) = verts[(i+1)%n];
-                        let dx = (x1 - x0) & 0xFF;
-                        let dy = (y1 - y0) & 0xFF;
-                        out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
-                        out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (y0 & 0xFF), (x0 & 0xFF)));
-                        // Always set intensity 0x5F for now (could extend macro to accept custom)
-                        out.push_str("    JSR Intensity_5F\n    CLR Vec_Misc_Count\n");
-                        out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx));
-                    }
-                    out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
-                    return true;
                 }
             }
         }

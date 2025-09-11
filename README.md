@@ -93,11 +93,11 @@ Trig (argument 0..127 covers full circle, 7-bit index):
  vectrex.move_to(x, y) : absolute move (low bytes) via Moveto_d
  vectrex.print_text(x, y, ptr) : high-bit terminated string (last char bit7=1) via Print_Str_d
  vectrex.draw_line(x0,y0,x1,y1,intensity) : single segment using BIOS Draw_Line_d (delta 8‑bit)
- draw_polygon(N, x0,y0, x1,y1, ..., x{N-1},y{N-1}) : macro de compilación (todos argumentos constantes) que genera N líneas cerrando la figura. Versión actual:
-     - Reinicia origen y fija intensidad $5F por cada lado (robustez > rendimiento)
-     - Usa Moveto_d + Draw_Line_d por segmento
-     - Cierra automáticamente el polígono (último a primero)
-     - Próximos pasos: un solo Reset0Ref por polígono, permitir intensidad personalizada y vértices dinámicos via wrapper.
+ draw_polygon forms (compilation macro, argumentos constantes):
+     Form A: DRAW_POLYGON(N, x0,y0, ..., xN-1,yN-1) usa intensidad $5F
+     Form B: DRAW_POLYGON(N, INTENS, x0,y0, ..., xN-1,yN-1)
+     Implementación optimizada: un solo Reset0Ref + Intensity al inicio, Moveto_d al primer vértice y luego N líneas (cierre automático). Menos flicker.
+     Futuro: versión runtime con vértices dinámicos.
  vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
  vectrex.draw_to(x,y) : placeholder (updates current position only)
 
