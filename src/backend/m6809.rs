@@ -24,7 +24,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let mut user_main: Option<&Function> = None;
     for item in &module.items { if let Item::Function(f) = item { if f.name.eq_ignore_ascii_case("main") { user_main = Some(f); break; } } }
     // Track whether we ended up inlining 'main'
-    let mut main_inlined = false;
+    let main_inlined = false; // not currently toggled (kept for future inlining logic)
+    // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
+    // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
+    // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
     out.push_str(&format!("        ORG {}\n", ti.origin));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
@@ -42,11 +45,20 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     //  - pad with zeros to $0030
     // Legacy header year to match classic examples
     // Resolve meta overrides
-    let copyright = module.meta.copyright_override.as_deref().unwrap_or("g GCE 1998");
+    // Canonical Vectrex cart signature must start with 'g GCE 1982' so BIOS detects cartridge.
+    // Allow override, but warn (implicitly) that changing it may break detection.
+    let copyright = module.meta.copyright_override.as_deref().unwrap_or("g GCE 1982");
     let music_raw = module.meta.music_override.as_deref().unwrap_or("music1");
+    // Force exact lowercase 'g' prefix required by BIOS heuristic.
+    let canonical_prefix = "g GCE 1982";
+    let mut effective_copy = copyright.to_string();
+    if !effective_copy.starts_with(canonical_prefix) {
+        // Replace only the starting segment, keep rest if any.
+        effective_copy = canonical_prefix.to_string();
+    }
     let music_fdb = if music_raw == "0" { String::from("$0000") } else { music_raw.to_string() };
     // Single classic header only
-    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,-$45\n", copyright, music_fdb));
+    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,-$45\n", effective_copy, music_fdb));
     let mut title = opts.title.to_uppercase();
     if title.len() > 24 { title.truncate(24); }
     title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
@@ -54,8 +66,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(&format!("    FCC \"{}\"\n", title));
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
-    // One-time vector scale init
-    out.push_str("INIT_ONCE:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
+    // Jump over code to START like smartlist_demo pattern
+    out.push_str("    JMP START\n\n");
+    out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
     // Entry stub: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
@@ -66,33 +79,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let _wait_recal_call = if opts.fast_wait { "JSR VECTREX_WAIT_RECAL" } else { &format!("JSR {}Wait_Recal", jsr_ext) };
 
     if opts.auto_loop {
-        // Classic infinite frame loop
-            // Decide if we should inline: only if exactly one call and it's PRINT_TEXT
-            let mut inline_print: Option<(i32,i32)> = None;
-            if let Some(f)=user_main {
-                if f.body.len()==1 { if let Stmt::Expr(Expr::Call{name,args})=&f.body[0] {
-                    let up=name.to_ascii_uppercase();
-                    if (up=="PRINT_TEXT"||up=="VECTREX_PRINT_TEXT") && args.len()==3 {
-                        if let (Expr::Number(xv),Expr::Number(yv),Expr::StringLit(_))=(&args[0],&args[1],&args[2]) { inline_print=Some((*xv as i32,*yv as i32)); }
-                    }
-                }}
-            }
-            out.push_str("main: JSR Wait_Recal\n");
-            // Per-frame init: intensity + origin only
-            out.push_str("    JSR Intensity_5F ; set default intensity\n");
-            out.push_str("    JSR Reset0Ref ; center beam\n");
-            // Auto-increment ANGLE (low byte) if global exists
-            if syms.iter().any(|s| s.eq_ignore_ascii_case("angle")) {
-                out.push_str("    LDA VAR_ANGLE+1\n    ADDA #1\n    STA VAR_ANGLE+1\n");
-            }
-            if let Some((xv,yv))=inline_print {
-                main_inlined = true;
-                out.push_str(&format!("    LDU #STR_0\n    LDA #${:02X}\n    LDB #${:02X}\n    JSR Print_Str_d\n", (yv & 0xFF), (xv & 0xFF)));
-            } else {
-                // Call full emitted MAIN if provided (user code not inlined)
-                if user_main.is_some() { out.push_str("    JSR MAIN\n"); }
-            }
-            out.push_str("    BRA main\n\n");
+        // smartlist_demo style MAIN_LOOP calling vector list (if main body calls vectrex_draw_vectorlist it will be inlined later anyway).
+        out.push_str("MAIN_LOOP:\n    JSR Wait_Recal\n    LDA #$D0\n    TFR A,DP\n    JSR Intensity_5F\n    JSR Reset0Ref\n");
+        if let Some(_f)=user_main { out.push_str("    JSR MAIN\n"); }
+        out.push_str("    BRA MAIN_LOOP\n\n");
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
@@ -107,6 +97,144 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             Item::Function(f) => {
                     if opts.auto_loop && f.name.eq_ignore_ascii_case("main") && main_inlined { /* inlined above */ } else { emit_function(f, &mut out, &string_map, opts); }
             }
+                Item::VectorList { name, entries } => {
+                    // Emit compact data-only vector list consumed by Run_VectorList.
+                    // Format: count, then 'count' triples (y,x,cmd). For CMD_INT an extra intensity byte follows. Terminator triple CMD_END added automatically.
+                    // Map: Move -> START, Rect -> START + 4 LINE, Polygon -> START + n LINE, Origin -> ZERO (Reset0Ref), Intensity -> INT (with mapped byte).
+                    let label = format!("VL_{}", name.to_ascii_uppercase());
+                    struct Cmd { y:i32, x:i32, cmd:u8, extra:Option<u8> }
+                    let mut cmds: Vec<Cmd> = Vec::new();
+                    for e in entries {
+                        match e {
+                            crate::ast::VlEntry::Intensity(v) => {
+                                // Same friendly mapping as before
+                                let mut val = (*v & 0xFF) as u8;
+                                if *v >=0 && *v <=7 {
+                                    val = match *v { 0|1 => 0x1F, 2 => 0x3F, 3 => 0x5F, 4|5|6|7 => 0x7F, _ => 0x5F };
+                                }
+                                cmds.push(Cmd{ y:0, x:0, cmd:3, extra:Some(val) });
+                            }
+                            crate::ast::VlEntry::Origin => { cmds.push(Cmd{ y:0,x:0,cmd:4,extra:None}); }
+                            crate::ast::VlEntry::Move(x,y) => { cmds.push(Cmd{ y:*y,x:*x,cmd:0,extra:None}); }
+                            crate::ast::VlEntry::Rect(x1,y1,x2,y2) => {
+                                cmds.push(Cmd{ y:*y1,x:*x1,cmd:0,extra:None});
+                                let pts = [(*x1,*y1),(*x2,*y1),(*x2,*y2),(*x1,*y2)];
+                                for w in 0..4 { let (sx,sy)=pts[w]; let (ex,ey)=pts[(w+1)%4]; cmds.push(Cmd{ y: (ey - sy), x:(ex - sx), cmd:1, extra:None}); }
+                            }
+                            crate::ast::VlEntry::Polygon(verts) => {
+                                if verts.len()>1 {
+                                    let (first_x, first_y) = verts[0];
+                                    cmds.push(Cmd{ y:first_y, x:first_x, cmd:0, extra:None});
+                                    for w in 0..verts.len() { let (sx,sy)=verts[w]; let (ex,ey)=verts[(w+1)%verts.len()]; cmds.push(Cmd{ y:(ey - sy), x:(ex - sx), cmd:1, extra:None}); }
+                                }
+                            }
+                            crate::ast::VlEntry::Circle { cx, cy, r, segs } => {
+                                use std::f64::consts::PI;
+                                let n = (*segs).max(3) as usize;
+                                let radius = *r as f64;
+                                let mut verts: Vec<(i32,i32)> = Vec::new();
+                                for k in 0..n { let ang = 2.0*PI*(k as f64)/(n as f64); let x = *cx as f64 + radius*ang.cos(); let y = *cy as f64 + radius*ang.sin(); verts.push((x.round() as i32, y.round() as i32)); }
+                                if let Some((fx,fy))=verts.first().copied() { cmds.push(Cmd{ y:fy,x:fx,cmd:0,extra:None}); }
+                                for i in 0..n { let (sx,sy)=verts[i]; let (ex,ey)=verts[(i+1)%n]; cmds.push(Cmd{ y:(ey-sy), x:(ex-sx), cmd:1, extra:None}); }
+                            }
+                            crate::ast::VlEntry::Arc { cx, cy, r, start_deg, sweep_deg, segs } => {
+                                use std::f64::consts::PI;
+                                let n = (*segs).max(2) as usize;
+                                let radius = *r as f64;
+                                let start = (*start_deg as f64) * PI / 180.0;
+                                let sweep = (*sweep_deg as f64) * PI / 180.0;
+                                let mut last: Option<(i32,i32)>=None;
+                                for k in 0..n {
+                                    let ang = start + sweep*(k as f64)/(n as f64 - 1.0);
+                                    let x = *cx as f64 + radius*ang.cos();
+                                    let y = *cy as f64 + radius*ang.sin();
+                                    let xi = x.round() as i32; let yi = y.round() as i32;
+                                    if k==0 { cmds.push(Cmd{ y:yi,x:xi,cmd:0,extra:None}); }
+                                    if let Some((lx,ly))=last { cmds.push(Cmd{ y: yi-ly, x: xi-lx, cmd:1, extra:None}); }
+                                    last=Some((xi,yi));
+                                }
+                            }
+                            crate::ast::VlEntry::Spiral { cx, cy, r_start, r_end, turns, segs } => {
+                                use std::f64::consts::PI;
+                                let n = (*segs).max(4) as usize;
+                                let rs = *r_start as f64; let re = *r_end as f64;
+                                let total_ang = 2.0*PI*(*turns as f64);
+                                let mut last: Option<(i32,i32)>=None;
+                                for k in 0..n {
+                                    let t = k as f64 / (n-1) as f64;
+                                    let r = rs + (re - rs)*t;
+                                    let ang = total_ang * t;
+                                    let x = *cx as f64 + r*ang.cos();
+                                    let y = *cy as f64 + r*ang.sin();
+                                    let xi = x.round() as i32; let yi = y.round() as i32;
+                                    if k==0 { cmds.push(Cmd{ y:yi,x:xi,cmd:0,extra:None}); }
+                                    if let Some((lx,ly))=last { cmds.push(Cmd{ y: yi-ly, x: xi-lx, cmd:1, extra:None}); }
+                                    last=Some((xi,yi));
+                                }
+                            }
+                        }
+                    }
+                    // --- Post-processing cleanup (steps 1,2,3) ---
+                    // 1. Remove duplicate consecutive START at same coords (MOVE followed by RECT/POLYGON emitting same START)
+                    // 2. Drop leading ZERO (Origin) if immediately followed by a START (frame Reset0Ref already done each loop)
+                    // 3. Collapse consecutive ZERO entries into one.
+                    let mut cleaned: Vec<Cmd> = Vec::with_capacity(cmds.len());
+                    for c in cmds.into_iter() {
+                        if let Some(last) = cleaned.last() {
+                            // Duplicate START at same absolute position
+                            if c.cmd==0 && last.cmd==0 && c.x==last.x && c.y==last.y { continue; }
+                            // Consecutive ZERO -> skip
+                            if c.cmd==4 && last.cmd==4 { continue; }
+                        }
+                        cleaned.push(c);
+                    }
+                    // Drop initial ZERO if followed by START
+                    if cleaned.len()>=2 && cleaned[0].cmd==4 && cleaned[1].cmd==0 { cleaned.remove(0); }
+                    // Ensure an initial explicit center START like smartlist_demo (0,0) if first cmd is not START at (0,0)
+                    if cleaned.first().map(|c| !(c.cmd==0 && c.x==0 && c.y==0)).unwrap_or(true) {
+                        cleaned.insert(0, Cmd{ y:0,x:0,cmd:0,extra:None});
+                    }
+                    // Append END terminator
+                    cleaned.push(Cmd{ y:0,x:0,cmd:2,extra:None});
+                    // Move first INT (if any) immediately after the initial center START
+                    let first_start_pos = cleaned.iter().position(|c| c.cmd==0).unwrap_or(0);
+                    if let Some(int_pos) = cleaned.iter().position(|c| c.cmd==3) {
+                        if int_pos > first_start_pos + 1 {
+                            let int_cmd = cleaned.remove(int_pos);
+                            cleaned.insert(first_start_pos+1, int_cmd);
+                        }
+                    }
+                    let count = cleaned.len() as u8; // count excludes extra INT bytes
+                    out.push_str(&format!("{}:\n    FCB {}\n", label, count));
+                    let mut abs_x: i32 = 0; let mut abs_y: i32 = 0; // track absolute for comments
+                    for c in cleaned {
+                        let cmd_name = match c.cmd {0=>"CMD_START",1=>"CMD_LINE",2=>"CMD_END",3=>"CMD_INT",4=>"CMD_ZERO", _=>"?"};
+                        // Compute signed 8-bit representations
+                        let sy = ((c.y & 0xFF) as u8) as i8 as i32;
+                        let sx = ((c.x & 0xFF) as u8) as i8 as i32;
+                        let comment = match c.cmd {
+                            0 => { // START absolute
+                                abs_x = sx; abs_y = sy;
+                                format!("; START to ({:+}, {:+})", abs_x, abs_y)
+                            }
+                            1 => { // LINE delta
+                                abs_y = (abs_y + sy) as i32; abs_x = (abs_x + sx) as i32;
+                                format!("; LINE dy={:+} dx={:+} -> ({:+}, {:+})", sy, sx, abs_x, abs_y)
+                            }
+                            3 => {
+                                format!("; INTENSITY (next byte) at current ({:+}, {:+})", abs_x, abs_y)
+                            }
+                            4 => { // ZERO resets origin
+                                abs_x = 0; abs_y = 0; 
+                                "; ZERO (Reset0Ref) => origin (0,0)".to_string()
+                            }
+                            2 => "; END".to_string(),
+                            _ => String::from("; ?")
+                        };
+                        out.push_str(&format!("    FCB ${:02X},${:02X},{} {}\n", (c.y & 0xFF), (c.x & 0xFF), cmd_name, comment));
+                        if let Some(e) = c.extra { out.push_str(&format!("    FCB ${:02X} ; intensity value\n", e)); }
+                    }
+                }
             Item::Const { name, value } => {
                 let up = name.to_uppercase();
                 if !emitted_consts.contains(&up) {
@@ -123,23 +251,15 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Classic mode: don't duplicate string literals; rely on collected emission below
     // (Legacy tail loop removed; entry stub already loops.)
     // Suppress runtime/helpers only if trivial main was inlined
-    let suppress_runtime = main_inlined;
+    let suppress_runtime = main_inlined; // unchanged logic for helper emission
+    // Move runtime include AFTER vector lists like smartlist_demo
+    out.push_str("    INCLUDE \"../runtime/vectorlist_runtime.asm\"\n");
     if !suppress_runtime {
-        out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n");
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-        emit_builtin_helpers(&mut out, &rt_usage, opts); // Built-in Vectrex wrappers
-        if opts.bank_size > 0 {
-            out.push_str(&format!("    IF * < ${:04X}\n", opts.bank_size));
-            out.push_str("PADSIZE SET ");
-            out.push_str(&format!("${:04X}-*\n", opts.bank_size));
-            out.push_str("    FILL $FF,PADSIZE\n");
-            out.push_str("    ENDC\n");
-        }
-        out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
-    } else {
-        out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
+        emit_builtin_helpers(&mut out, &rt_usage, opts);
     }
+    out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     // Align ROM size to next 4K boundary: compute remainder via assembler can't do complex IF here, approximate with macro-style logic.
     // Fallback: emit a padding block sized by repeating labels (simple approach): not portable across all assemblers, so disabled for now.
     // NOTE: External packer should align to desired bank size (4K/8K). No internal alignment performed.
@@ -183,9 +303,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str("STR_0:\n");
             out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase()));
         } else {
-            let mut first=true;
+            // Each entry already has a unique label (STR_n) from string_literals.rs; emit them directly
+            // Avoid emitting an unlabeled duplicated STR_0 header.
             for (lit,label) in &string_map {
-                if first { out.push_str("STR_0:\n"); first=false; }
                 out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase()));
             }
         }
@@ -242,6 +362,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Touch var_offset so compiler sees it used when EQU mode enabled
     #[allow(unused_variables)]
     { let _vo = var_offset; }
+    // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     out
 }
 fn expr_has_trig(e: &Expr) -> bool {
@@ -550,8 +671,29 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
-    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"
+    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
     );
+    if up == "VECTREX_DRAW_VECTORLIST" { // alias to compact list runtime
+        if args.len()==1 {
+            if let Expr::StringLit(s) = &args[0] {
+                out.push_str(&format!("    LDX #VL_{}\n    JSR Run_VectorList\n", s.to_ascii_uppercase()));
+                return true;
+            } else if let Expr::Ident(id) = &args[0] {
+                out.push_str(&format!("    LDX #VL_{}\n    JSR Run_VectorList\n", id.to_ascii_uppercase()));
+                return true;
+            }
+        }
+    }
+    if up == "DRAW_VECTORLIST" {
+        if args.is_empty() { return true; }
+        if let Expr::Ident(v) = &args[0] {
+            out.push_str(&format!("    JSR VL_{}\n", v.to_ascii_uppercase()));
+            return true;
+        } else if let Expr::StringLit(s) = &args[0] {
+            out.push_str(&format!("    JSR VL_{}\n", s.to_ascii_uppercase()));
+            return true;
+        }
+    }
     // Custom macro: DRAW_POLYGON(N, x0,y0,x1,y1,...,x_{N-1},y_{N-1}) all numeric constants -> inline lines with origin resets
     if up == "DRAW_POLYGON" {
         if !args.is_empty() {
@@ -573,20 +715,27 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                         let mut verts: Vec<(i32,i32)> = Vec::new();
                         for i in 0..n { if let (Expr::Number(xv), Expr::Number(yv)) = (&args[start_index+2*i], &args[start_index+2*i+1]) { verts.push((*xv as i32, *yv as i32)); } }
                         if verts.len()==n {
-                            // Preamble once
-                            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                            // DEBUG / SAFE MODE: draw each edge independently with a Reset0Ref + Moveto to start vertex.
+                            // This is less efficient and may flicker more, but isolates any integrator drift issues.
                             if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
-                            // Move to first vertex
-                            let (sx,sy)=verts[0];
-                            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF), (sx & 0xFF)));
-                            // Draw edges
                             for i in 0..n {
                                 let (x0,y0)=verts[i];
                                 let (x1,y1)=verts[(i+1)%n];
-                                let dx = (x1 - x0) & 0xFF;
-                                let dy = (y1 - y0) & 0xFF;
+                                let dx_total = x1 - x0;
+                                let dy_total = y1 - y0;
+                                // Split only once if out of range (>127) into two halves.
+                                let need_split = dx_total.abs().max(dy_total.abs()) > 127;
+                                let (first_dx, first_dy, second_dx, second_dy, second) = if need_split {
+                                    (dx_total/2, dy_total/2, dx_total - dx_total/2, dy_total - dy_total/2, true)
+                                } else { (dx_total, dy_total, 0, 0, false) };
+                                out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (y0 & 0xFF), (x0 & 0xFF)));
                                 out.push_str("    CLR Vec_Misc_Count\n");
-                                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx));
+                                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", (first_dy & 0xFF), (first_dx & 0xFF)));
+                                if second {
+                                    out.push_str("    CLR Vec_Misc_Count\n");
+                                    out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", (second_dy & 0xFF), (second_dx & 0xFF)));
+                                }
                             }
                             out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
                             return true;
@@ -657,12 +806,13 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         if (6..=7).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
             if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(rad),Expr::Number(startd),Expr::Number(sweepd)) = (&args[0],&args[1],&args[2],&args[3],&args[4],&args[5]) {
                 let mut intensity: i32 = 0x5F; if args.len()==7 { if let Expr::Number(i)=&args[6]{ intensity=*i as i32; }}
-                let mut segs = *nseg as i32; if segs < 1 { segs = 1; } if segs > 128 { segs = 128; }
+                let mut segs = *nseg as i32; if segs < 1 { segs = 1; } if segs > 96 { segs = 96; }
                 let start = *startd as f64 * std::f64::consts::PI / 180.0; let sweep = *sweepd as f64 * std::f64::consts::PI / 180.0;
-                let r = *rad as f64;
+                // Clamp radius to keep inside safe display range (~ +-120)
+                let r = (*rad as f64).clamp(4.0, 110.0);
                 let steps = segs;
                 let mut verts: Vec<(i32,i32)> = Vec::new();
-                for k in 0..=steps { let t = k as f64 / steps as f64; let ang = start + sweep * t; let x= (*xc as f64)+ r*ang.cos(); let y= (*yc as f64)+ r*ang.sin(); verts.push((x.round() as i32,y.round() as i32)); }
+                for k in 0..=steps { let t = k as f64 / steps as f64; let ang = start + sweep * t; let mut x= (*xc as f64)+ r*ang.cos(); let mut y= (*yc as f64)+ r*ang.sin(); x = x.clamp(-120.0,120.0); y = y.clamp(-120.0,120.0); verts.push((x.round() as i32,y.round() as i32)); }
                 out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
                 if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
                 let (sx,sy)=verts[0]; out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF),(sx & 0xFF)));
@@ -673,15 +823,20 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     }
     // DRAW_SPIRAL(nseg, xc,yc,r_start,r_end,turns[,intensity]) open spiral
     if up == "DRAW_SPIRAL" {
-        if (7..=8).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if (6..=8).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+            // Accept forms with optional explicit intensity; if more than 6 args, last is intensity.
+            let last_idx = args.len()-1;
+            let (has_intensity, inten_expr_idx) = if args.len() > 6 { (true, last_idx) } else { (false, 0) };
             if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(r0),Expr::Number(r1),Expr::Number(turns)) = (&args[0],&args[1],&args[2],&args[3],&args[4],&args[5]) {
-                let mut intensity: i32 = 0x5F; if args.len()==8 { if let Expr::Number(i)=&args[6]{ intensity=*i as i32; }} else if args.len()==8 {}
-                let mut segs = *nseg as i32; if segs < 1 { segs = 1; } if segs > 160 { segs = 160; }
-                let total_ang = (*turns as f64) * 2.0 * std::f64::consts::PI;
-                let start_r = *r0 as f64; let end_r = *r1 as f64;
+                let mut intensity: i32 = 0x5F; if has_intensity { if let Expr::Number(iv)=&args[inten_expr_idx] { intensity=*iv as i32; } }
+                let mut segs = *nseg as i32; if segs < 4 { segs = 4; } if segs > 120 { segs = 120; }
+                // Clamp turns to avoid huge angle wrap distortions
+                let turns_f = (*turns as f64).clamp(0.1, 4.0);
+                let total_ang = turns_f * 2.0 * std::f64::consts::PI;
+                let start_r = (*r0 as f64).clamp(1.0, 110.0); let end_r = (*r1 as f64).clamp(1.0, 110.0);
                 let steps = segs;
                 let mut verts: Vec<(i32,i32)> = Vec::new();
-                for k in 0..=steps { let t = k as f64 / steps as f64; let ang = total_ang * t; let r = start_r + (end_r - start_r)*t; let x= (*xc as f64)+ r*ang.cos(); let y= (*yc as f64)+ r*ang.sin(); verts.push((x.round() as i32,y.round() as i32)); }
+                for k in 0..=steps { let t = k as f64 / steps as f64; let ang = total_ang * t; let r = start_r + (end_r - start_r)*t; let mut x= (*xc as f64)+ r*ang.cos(); let mut y= (*yc as f64)+ r*ang.sin(); x = x.clamp(-120.0,120.0); y = y.clamp(-120.0,120.0); verts.push((x.round() as i32,y.round() as i32)); }
                 out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
                 if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
                 let (sx,sy)=verts[0]; out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF),(sx & 0xFF)));

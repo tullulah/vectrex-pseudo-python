@@ -21,7 +21,8 @@ Targets:
 - Bitwise / arithmetic identity simplifications (x&0, x|0, x^0, x&0xFFFF, x*1, x+0, etc.)
 - Math & trig built-ins: sin, cos, tan (also via math.sin etc.), abs/min/max/clamp
 - Vectrex built-ins (prototype): vectrex.set_origin, vectrex.set_intensity, vectrex.move_to, vectrex.print_text, vectrex.draw_line (skeleton), vectrex.draw_to (TODO), draw_polygon macro (constante)
- - Vectrex runtime extras: automatic frame loop (unless --no-auto-loop), optional per‑frame audio silence, blink intensity toggle, debug initial vector draw, configurable bank padding
+- Vectorlist DSL: embebido en `.vpy` mediante bloques `vectorlist nombre:` con comandos declarativos (MOVE, RECT, POLYGON, CIRCLE, ARC, SPIRAL, ORIGIN, INTENSITY) que se expanden a una lista compacta (count + triples y,x,cmd) interpretada por `Run_VectorList`.
+- Runtime minimal: bucle de frame automático, Reset0Ref + intensidad fija ($5F) salvo que la lista incluya comandos INTENSITY propios.
 
 ## Status Notes
 - All arithmetic ops implemented for all backends (Add/Sub/Mul/Div with helper routines or shifts)
@@ -79,7 +80,7 @@ See `MANUAL.md` for the evolving language and ABI specification.
 ### Arithmetic / Helpers
 6809 uses `MUL16` / `DIV16` helper routines (prototype) or shift peepholes for powers of two. ARM / Cortex-M use inline software loops for 32-bit widen-narrow mult/div then mask to 16 bits.
 
-### Built-ins Reference (Evolving)
+### Built-ins & Vectorlist Reference (Evolving)
 
 General math:
 - abs(x), min(a,b), max(a,b), clamp(v, lo, hi)
@@ -105,11 +106,42 @@ Trig (argument 0..127 covers full circle, 7-bit index):
  vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
  vectrex.draw_to(x,y) : placeholder (updates current position only)
 
- Runtime injected helpers (no explicit Python call yet):
- - Blink intensity (enabled with --blink) toggles between $5F / $20 every frame.
- - Per-frame silence (default ON, disable with --no-per-frame-silence) writes zeros to AY registers to prevent random buzz on some emulators/hardware.
- - Debug init draw (small horizontal line) default ON; disable with --no-debug-draw.
- - Bank padding ( --bank-size N ) emits FILL/RMB so final ROM size == N (filled with $FF). Typical values: 4096, 8192.
+Vectorlist embedded DSL (simple, orden agnóstico entre comandos de forma):
+```
+vectorlist shapes:
+    ORIGIN              # Reset0Ref (CMD_ZERO)
+    INTENSITY 0x5F      # Inserta CMD_INT (traduce 0..7 a presets, o valor directo)
+    MOVE -16 -16        # Inicio rectángulo (emite CMD_START absoluto)
+    RECT -16 -16 16 16  # Cuadrado -> 4 segmentos (CMD_LINE)
+    POLYGON 4 0 -16 16 0 0 16 -16 0  # Diamante cerrado
+    CIRCLE 0 0 12 24    # Centro (cx,cy) radio=12, 24 segmentos
+    ARC 0 -16 16 0 180 24   # Arco desde 0° a 180°
+    SPIRAL 0 0 10 40 2 64   # r_start, r_end, turns, segs
+```
+Reglas:
+- MOVE genera un START absoluto; RECT genera START + 4 líneas; POLYGON N genera START + N líneas cerrando; CIRCLE/ARC/SPIRAL generan aproximaciones poligonales.
+- ORIGIN -> CMD_ZERO (Reset0Ref) que recentra el haz (se colapsan duplicados y se elimina un ZERO inicial redundante si tras él viene un START).
+- El backend reordena para asegurar un START (0,0) inicial y mueve la primera INTENSITY justo después.
+- Comentarios automáticos en el `.asm` indican coordenadas absolutas y deltas para depurar.
+
+Ejemplo Pac-Man mini (fragmento):
+```
+vectorlist maze:
+    INTENSITY 0x7F
+    ORIGIN
+    MOVE -68 -68
+    RECT -68 -68 68 -67   # borde superior
+    ...
+```
+Luego en `main()`:
+```
+def main():
+    vectrex_draw_vectorlist("maze")
+    vectrex_draw_vectorlist("pellets")
+    vectrex_draw_vectorlist("actors")
+```
+
+ Runtime helpers actuales en modo minimal se reducen: bucle de frame + Wait_Recal + Reset0Ref + Intensity_5F (salvo override vía INTENSITY dentro de listas). Antiguas opciones (blink, bank-size, debug draw) han sido retiradas o aparcadas.
 
 Example drawing demo: `examples/vectrex_draw_demo.vpy`
 Polygon macro demo: `examples/triangle_text.vpy` (triángulo, cuadrado, hexágono con DRAW_POLYGON)

@@ -9,8 +9,20 @@ mod backends_ref {
 }
 
 // CodegenOptions: options affecting generation (title, etc.).
+#[derive(Clone)]
 pub struct CodegenOptions {
     pub title: String,
+    pub auto_loop: bool, // if false, backend must not emit implicit frame loop
+    pub diag_freeze: bool,  // instrument init steps with DIAG_COUNTER
+    pub force_extended_jsr: bool, // avoid direct-page JSR generation for safety
+    // --- New options (Vectrex specific) ---
+    pub _bank_size: u32,              // (unused) if >0, ALIGN to this power-of-two (e.g. 4096 or 8192)
+    pub per_frame_silence: bool,     // insert JSR VECTREX_SILENCE in frame loop
+    pub debug_init_draw: bool,       // draw a small debug vector in INIT to confirm execution
+    pub blink_intensity: bool,       // replace fixed INTENSITY_5F with blinking pattern
+    pub exclude_ram_org: bool,       // emit RAM variables as EQU instead of ORG-ing into RAM (keeps ROM size small)
+    pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
+    // future: fast_wait_counter could toggle increment of a frame counter
 }
 
 // emit_asm: optimize module then dispatch to selected backend.
@@ -19,8 +31,13 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
     // assignments so literals still get collected for backend emission.
     let optimized = optimize_module(module);
     let ti = info(target);
+    // If source defines CONST TITLE = "..." let it override CLI title.
+    let mut effective = CodegenOptions { ..opts.clone() };
+    if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
+    // Pass music/copyright through metas hashmap for backend (reuse existing fields via metas)
+    if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }
     match ti.arch {
-        CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, opts),
+        CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, &effective),
         CpuArch::ARM => backends_ref::emit_arm(&optimized, target, &ti, opts),
         CpuArch::CortexM => backends_ref::emit_cortexm(&optimized, target, &ti, opts),
     }
@@ -36,7 +53,7 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
 fn optimize_module(m: &Module) -> Module {
     let mut current = m.clone();
     for _ in 0..5 {
-        let folded: Module = Module { items: current.items.iter().map(opt_item).collect() };
+        let folded: Module = Module { items: current.items.iter().map(opt_item).collect(), meta: current.meta.clone() };
     let dce = dead_code_elim(&folded);
     let cp = propagate_constants(&dce);
     let ds = dead_store_elim(&cp);
@@ -49,7 +66,7 @@ fn optimize_module(m: &Module) -> Module {
     current
 }
 
-fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) } } }
+fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } } }
 
 fn opt_function(f: &Function) -> Function {
     Function {
@@ -198,7 +215,7 @@ fn opt_expr(e: &Expr) -> Expr {
 
 // dead_code_elim: prune unreachable branches / empty loops.
 fn dead_code_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dce_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dce_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
 }
 
 fn dce_function(f: &Function) -> Function {
@@ -289,7 +306,7 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
 
 // dead_store_elim: remove assignments whose values are never subsequently used.
 fn dead_store_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dse_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dse_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
 }
 
 fn dse_function(f: &Function) -> Function {
@@ -425,7 +442,7 @@ fn propagate_constants(m: &Module) -> Module {
             if let Expr::Number(n) = value { globals.insert(name.clone(), *n); }
         }
     }
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
 }
 
 use std::collections::HashMap;
@@ -562,7 +579,7 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
 // fold_const_switches: if a switch expression is a constant number and all case values are constant numbers,
 // select the matching case (or default) and inline its body, removing the switch. Conservatively keeps semantics.
 fn fold_const_switches(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(fold_const_switches_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() } }).collect() }
+    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(fold_const_switches_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
 }
 
 fn fold_const_switches_function(f: &Function) -> Function {

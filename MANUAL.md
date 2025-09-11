@@ -252,3 +252,60 @@ Genera cabecera con música desactivada (FDB $0000) y título/copyright.
 - Posibles META adicionales (coordenadas/escala) aún no implementados.
 - Limpieza de opciones legacy en estructuras internas pendiente (campos no usados en CodegenOptions).
 
+## 16. DSL de Vector Lists (Nuevo)
+
+Bloques `vectorlist nombre:` permiten definir listas de vectores compactas interpretadas por el runtime `Run_VectorList`.
+
+Comandos soportados (insensibles a mayúsculas):
+- `MOVE x y` : punto inicial absoluto (CMD_START)
+- `RECT x1 y1 x2 y2` : rectángulo (4 segmentos)
+- `POLYGON N x0 y0 ... xN-1 yN-1` : polígono cerrado (N≥2) usando líneas sucesivas (START + N segmentos)
+- `CIRCLE cx cy r segs` : aproximación poligonal (segs≥3)
+- `ARC cx cy r start_deg sweep_deg segs` : arco abierto subdividido (segs≥2)
+- `SPIRAL cx cy r_start r_end turns segs` : espiral abierta (segs≥4)
+- `ORIGIN` : Reset0Ref (CMD_ZERO) recarga integradores a (0,0)
+- `INTENSITY val` : inserta comando de intensidad; si val ∈ [0..7] se mapea a presets ($1F,$3F,$5F,$7F); otro valor se toma directo (8 bits)
+
+Normalización backend:
+1. Se elimina ZERO inicial redundante si inmediatamente va un START.
+2. Se inserta un START (0,0) inicial si no existe.
+3. La primera INTENSITY se mueve tras ese START.
+4. START duplicados consecutivos en mismas coords se colapsan.
+5. ZERO consecutivos se colapsan.
+
+Salida:
+```
+VL_MAZE:
+    FCB <count>
+    FCB $yy,$xx,CMD_START ; START to (...)
+    ...
+    FCB $00,$00,CMD_END ; END
+```
+Los comentarios muestran deltas y coordenadas absolutas para depuración.
+
+Ejemplo mínimo:
+```
+vectorlist demo:
+    INTENSITY 0x5F
+    MOVE -16 -16
+    RECT -16 -16 16 16
+    ORIGIN
+    POLYGON 4 0 -16 16 0 0 16 -16 0
+```
+
+Uso en `main`:
+```
+def main():
+    vectrex_draw_vectorlist("demo")
+```
+
+Limitaciones actuales:
+- Sin clipping automático ni escalado.
+- Coordenadas se truncan a 8 bits (signed) durante emisión (rango efectivo -128..127).
+- Las figuras complejas (círculo/espiral) pueden generar muchos segmentos -> parpadeo; ajustar `segs`.
+
+Buenas prácticas:
+- Insertar `ORIGIN` entre grupos largos de segmentos para repartir brillo.
+- Usar intensidades más bajas para listas densas.
+- Dividir escenas grandes en varias `vectorlist` y dibujarlas en frames alternos si hay flicker.
+
