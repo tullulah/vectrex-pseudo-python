@@ -20,7 +20,7 @@ Targets:
 - Basic power-of-two multiply/divide lowering to shifts
 - Bitwise / arithmetic identity simplifications (x&0, x|0, x^0, x&0xFFFF, x*1, x+0, etc.)
 - Math & trig built-ins: sin, cos, tan (also via math.sin etc.), abs/min/max/clamp
-- Vectrex built-ins (prototype): vectrex.set_origin, vectrex.set_intensity, vectrex.move_to, vectrex.print_text, vectrex.draw_line (skeleton), vectrex.draw_to (TODO)
+- Vectrex built-ins (prototype): vectrex.set_origin, vectrex.set_intensity, vectrex.move_to, vectrex.print_text, vectrex.draw_line (skeleton), vectrex.draw_to (TODO), draw_polygon macro (constante)
  - Vectrex runtime extras: automatic frame loop (unless --no-auto-loop), optional per‑frame audio silence, blink intensity toggle, debug initial vector draw, configurable bank padding
 
 ## Status Notes
@@ -92,7 +92,12 @@ Trig (argument 0..127 covers full circle, 7-bit index):
  vectrex.set_intensity(i) : variable intensity (Intensity_a)
  vectrex.move_to(x, y) : absolute move (low bytes) via Moveto_d
  vectrex.print_text(x, y, ptr) : high-bit terminated string (last char bit7=1) via Print_Str_d
- vectrex.draw_line(x0,y0,x1,y1,intensity) : single segment using BIOS Draw_VL (delta saturated to -64..63)
+ vectrex.draw_line(x0,y0,x1,y1,intensity) : single segment using BIOS Draw_Line_d (delta 8‑bit)
+ draw_polygon(N, x0,y0, x1,y1, ..., x{N-1},y{N-1}) : macro de compilación (todos argumentos constantes) que genera N líneas cerrando la figura. Versión actual:
+     - Reinicia origen y fija intensidad $5F por cada lado (robustez > rendimiento)
+     - Usa Moveto_d + Draw_Line_d por segmento
+     - Cierra automáticamente el polígono (último a primero)
+     - Próximos pasos: un solo Reset0Ref por polígono, permitir intensidad personalizada y vértices dinámicos via wrapper.
  vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
  vectrex.draw_to(x,y) : placeholder (updates current position only)
 
@@ -103,6 +108,7 @@ Trig (argument 0..127 covers full circle, 7-bit index):
  - Bank padding ( --bank-size N ) emits FILL/RMB so final ROM size == N (filled with $FF). Typical values: 4096, 8192.
 
 Example drawing demo: `examples/vectrex_draw_demo.vpy`
+Polygon macro demo: `examples/triangle_text.vpy` (triángulo, cuadrado, hexágono con DRAW_POLYGON)
 
 ### Tooling: Assembling to a Vectrex ROM
 

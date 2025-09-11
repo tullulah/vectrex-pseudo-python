@@ -4,6 +4,14 @@ use super::string_literals::collect_string_literals;
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+static FIRST_CONST_LINE: AtomicBool = AtomicBool::new(false);
+static LAST_END_SET: AtomicBool = AtomicBool::new(false);
+static LAST_END_X: AtomicUsize = AtomicUsize::new(0);
+static LAST_END_Y: AtomicUsize = AtomicUsize::new(0);
+// Track last intensity used by constant line inliner (0x100 = none)
+static LAST_INTENSITY: AtomicUsize = AtomicUsize::new(0x100);
 
 // emit: entry point for Motorola 6809 backend assembly generation.
 // Produces a simple Vectrex-style header, calls platform init + MAIN, then infinite loop.
@@ -12,13 +20,15 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module);
         let rt_usage = analyze_runtime_usage(module);
-    // Locate user 'main' function (lowercase) for potential inlining in classic_minimal mode
+    // Locate user 'main' function (lowercase) for potential inlining (classic style)
     let mut user_main: Option<&Function> = None;
     for item in &module.items { if let Item::Function(f) = item { if f.name.eq_ignore_ascii_case("main") { user_main = Some(f); break; } } }
+    // Track whether we ended up inlining 'main'
+    let mut main_inlined = false;
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
     out.push_str(&format!("        ORG {}\n", ti.origin));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
-        // In classic_minimal we rely on the include; no manual EQU needed.
+    // Classic include; no manual EQU needed.
         out.push_str("    INCLUDE \"../include/VECTREX.I\"\n\n");
     // (Include already added above)
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
@@ -35,32 +45,17 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let copyright = module.meta.copyright_override.as_deref().unwrap_or("g GCE 1998");
     let music_raw = module.meta.music_override.as_deref().unwrap_or("music1");
     let music_fdb = if music_raw == "0" { String::from("$0000") } else { music_raw.to_string() };
-    if opts.classic_minimal {
-    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,$AA\n", copyright, music_fdb));
-        let mut title = opts.title.to_uppercase();
-        if title.len() > 24 { title.truncate(24); }
-        title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
-        if title.is_empty() { title.push(' '); }
-        out.push_str(&format!("    FCC \"{}\"\n", title));
-    out.push_str("    FCB $80\n    FCB 0\n");
-    // Pad header to $0030 like legacy format so PC starts at $0030 in emulators
-    out.push_str("    RMB $0030-* ; pad header to $30\n    ORG $0030\n\n");
-    } else {
-        out.push_str("    FCC \"g GCE 1998\"\n");
-        out.push_str("    FCB $80\n");
-        out.push_str("    FDB music1 ; default BIOS tune\n");
-        out.push_str("    FCB $F8 ; height\n    FCB $50 ; width\n    FCB $20 ; rel y\n    FCB $AA ; rel x (-$56)\n");
-        let mut title = opts.title.to_uppercase();
-        if title.len() > 24 { title.truncate(24); }
-        title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
-        if title.is_empty() { title.push(' '); }
-        out.push_str(&format!("    FCC \"{}\"\n", title));
-        out.push_str("    FCB $80 ; title terminator\n");
-        out.push_str("    FCB 0 ; reserved\n");
-        out.push_str("    RMB $0030-* ; pad header to $30\n");
-        out.push_str("    ORG $0030\n\n");
-    }
+    // Single classic header only
+    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,-$45\n", copyright, music_fdb));
+    let mut title = opts.title.to_uppercase();
+    if title.len() > 24 { title.truncate(24); }
+    title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
+    if title.is_empty() { title.push(' '); }
+    out.push_str(&format!("    FCC \"{}\"\n", title));
+    out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
+    // One-time vector scale init
+    out.push_str("INIT_ONCE:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
     // Entry stub: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
@@ -71,51 +66,65 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let _wait_recal_call = if opts.fast_wait { "JSR VECTREX_WAIT_RECAL" } else { &format!("JSR {}Wait_Recal", jsr_ext) };
 
     if opts.auto_loop {
-        if opts.classic_minimal {
-            out.push_str("main: JSR Wait_Recal\n    JSR Intensity_5F\n");
-            // Inline body of user main if trivial (single PRINT_TEXT call)
-            if let Some(f) = user_main {
-                if f.body.len()==1 { if let Stmt::Expr(Expr::Call{name, args}) = &f.body[0] {
-                    let up = name.to_ascii_uppercase();
-                    if up == "PRINT_TEXT" || up == "VECTREX_PRINT_TEXT" {
-                        // Expect (x,y,string)
-                        if args.len()==3 {
-                            // Extract constants
-                            if let (Expr::Number(xv), Expr::Number(yv), s) = (&args[0], &args[1], &args[2]) {
-                                    if let Expr::StringLit(sl) = s {
-                                        let _unused = sl; // we use canonical label
-                                        out.push_str(&format!("    LDU #STR_0\n    LDA #${:02X}\n    LDB #${:02X}\n    JSR Print_Str_d\n", (*yv as i32 & 0xFF), (*xv as i32 & 0xFF)));
-                                }
-                            }
-                        }
+        // Classic infinite frame loop
+            // Decide if we should inline: only if exactly one call and it's PRINT_TEXT
+            let mut inline_print: Option<(i32,i32)> = None;
+            if let Some(f)=user_main {
+                if f.body.len()==1 { if let Stmt::Expr(Expr::Call{name,args})=&f.body[0] {
+                    let up=name.to_ascii_uppercase();
+                    if (up=="PRINT_TEXT"||up=="VECTREX_PRINT_TEXT") && args.len()==3 {
+                        if let (Expr::Number(xv),Expr::Number(yv),Expr::StringLit(_))=(&args[0],&args[1],&args[2]) { inline_print=Some((*xv as i32,*yv as i32)); }
                     }
                 }}
             }
+            out.push_str("main: JSR Wait_Recal\n");
+            // Per-frame init: intensity + origin only
+            out.push_str("    JSR Intensity_5F ; set default intensity\n");
+            out.push_str("    JSR Reset0Ref ; center beam\n");
+            // Auto-increment ANGLE (low byte) if global exists
+            if syms.iter().any(|s| s.eq_ignore_ascii_case("angle")) {
+                out.push_str("    LDA VAR_ANGLE+1\n    ADDA #1\n    STA VAR_ANGLE+1\n");
+            }
+            if let Some((xv,yv))=inline_print {
+                main_inlined = true;
+                out.push_str(&format!("    LDU #STR_0\n    LDA #${:02X}\n    LDB #${:02X}\n    JSR Print_Str_d\n", (yv & 0xFF), (xv & 0xFF)));
+            } else {
+                // Call full emitted MAIN if provided (user code not inlined)
+                if user_main.is_some() { out.push_str("    JSR MAIN\n"); }
+            }
             out.push_str("    BRA main\n\n");
-        } else {
-            out.push_str("; Simple implicit frame loop\n");
-            out.push_str("ENTRY_LOOP: ");
-            if opts.fast_wait { out.push_str("JSR VECTREX_WAIT_RECAL\n    "); } else { out.push_str(&format!("JSR {}Wait_Recal\n    ", jsr_ext)); }
-            out.push_str(&format!("JSR {}Intensity_5F\n    JSR MAIN\n    BRA ENTRY_LOOP\n\n", jsr_ext));
-        }
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
     out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user loop required\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
+    let mut global_mutables: Vec<(String,i32)> = Vec::new();
+    use std::collections::BTreeSet;
+    let mut emitted_consts: BTreeSet<String> = BTreeSet::new();
     for item in &module.items {
         match item {
             Item::Function(f) => {
-                if opts.classic_minimal && opts.auto_loop && f.name.eq_ignore_ascii_case("main") { /* inlined above */ } else { emit_function(f, &mut out, &string_map, opts); }
+                    if opts.auto_loop && f.name.eq_ignore_ascii_case("main") && main_inlined { /* inlined above */ } else { emit_function(f, &mut out, &string_map, opts); }
             }
-            Item::Const { name, value } => { if let Expr::Number(n) = value { out.push_str(&format!("{} EQU {}\n", name.to_uppercase(), n & 0xFFFF)); } }
+            Item::Const { name, value } => {
+                let up = name.to_uppercase();
+                if !emitted_consts.contains(&up) {
+                    if let Expr::Number(n) = value { out.push_str(&format!("{} EQU {}\n", up, n & 0xFFFF)); }
+                    emitted_consts.insert(up);
+                }
+            }
+            Item::GlobalLet { name, value } => {
+                if let Expr::Number(n) = value { global_mutables.push((name.clone(), *n)); } else { global_mutables.push((name.clone(), 0)); }
+            }
         }
     }
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference
-    // classic_minimal: don't duplicate string literals; rely on collected emission below
+    // Classic mode: don't duplicate string literals; rely on collected emission below
     // (Legacy tail loop removed; entry stub already loops.)
-    if !opts.classic_minimal {
+    // Suppress runtime/helpers only if trivial main was inlined
+    let suppress_runtime = main_inlined;
+    if !suppress_runtime {
         out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n");
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
@@ -137,16 +146,16 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Optional bank alignment (4K/8K). Use ALIGN macro if bank_size is power-of-two.
     // Bank padding handled at end of file now.
     // RAM variables: either emit ORG or symbolic EQU addresses.
-    if opts.classic_minimal { /* skip RAM ORG and temp vars entirely */ }
+    if suppress_runtime { /* skip RAM ORG and temp vars entirely */ }
     else if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
     }
-    if !opts.classic_minimal { out.push_str("; Variables (in RAM)\n"); }
+    if !suppress_runtime { out.push_str("; Variables (in RAM)\n"); }
     // Runtime temporaries used by expression lowering and helpers
-    if !opts.classic_minimal { if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); } }
-    if rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
-    if rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
-    if rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
+    if !suppress_runtime { if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); } }
+    if !suppress_runtime && rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
+    if !suppress_runtime && rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
+    if !suppress_runtime && rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
     if rt_usage.needs_mul_helper || rt_usage.needs_div_helper { // MUL vars shared with MOD too
         if rt_usage.needs_mul_helper {
             if opts.exclude_ram_org { out.push_str("MUL_A    EQU RESULT+8\nMUL_B    EQU RESULT+10\nMUL_RES  EQU RESULT+12\nMUL_TMP  EQU RESULT+14\nMUL_CNT  EQU RESULT+16\n"); }
@@ -166,24 +175,24 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
         }
     }
-    if !opts.classic_minimal && !string_map.is_empty() { out.push_str("; String literals (high-bit terminated for Vectrex PRINT_STR_D)\n"); }
-    if opts.classic_minimal {
-        // Emit classic FCC + terminator form; if only one string rename to hello_world_string
-    if string_map.len()==1 { let (_lit,_label) = string_map.iter().next().unwrap(); out.push_str("hello_world_string:\n"); let lit = _lit; out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase())); } else {
-            for (lit,label) in &string_map { out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase())); }
-        }
-    } else {
-        for (lit,label) in &string_map {
-            let mut bytes: Vec<u8> = lit.bytes().collect();
-            if let Some(last) = bytes.last_mut() { *last |= 0x80; } else { bytes.push(0x80); }
-            out.push_str(&format!("{}:", label));
-            for b in bytes { out.push_str(&format!("\n    FCB ${:02X}", b)); }
-            out.push_str("\n");
+    // Global mutables already allocated via symbol list; (future) could emit non-zero inits via startup stub.
+    if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
+    if !string_map.is_empty() {
+        if string_map.len()==1 {
+            let (lit,_label) = string_map.iter().next().unwrap();
+            out.push_str("STR_0:\n");
+            out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase()));
+        } else {
+            let mut first=true;
+            for (lit,label) in &string_map {
+                if first { out.push_str("STR_0:\n"); first=false; }
+                out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase()));
+            }
         }
     }
     // Determine max args used (0..5)
     let max_args = compute_max_args_used(module);
-    if !opts.classic_minimal {
+    if !suppress_runtime {
         out.push_str("; Call argument scratch space\n");
         if opts.exclude_ram_org {
             for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, var_offset)); var_offset += 2; }
@@ -412,7 +421,13 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                 _ if up.starts_with("VECTREX_") => Some(up.as_str()),
                 _ => None
             };
-            if let Some(r) = resolved { usage.wrappers_used.insert(r.to_string()); }
+            if let Some(r) = resolved {
+                if r == "VECTREX_DRAW_LINE" && args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+                    // Will inline classic pattern; do not mark runtime wrapper.
+                } else {
+                    usage.wrappers_used.insert(r.to_string());
+                }
+            }
             for a in args { scan_expr_runtime(a, usage); }
         }
         Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
@@ -427,18 +442,21 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
 
 // emit_function: outputs code for a function.
 fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
+    // Mark start of function for constant line inlining state
+    FIRST_CONST_LINE.store(true, Ordering::Relaxed);
+    LAST_END_SET.store(false, Ordering::Relaxed);
     out.push_str(&format!("{}: ; function\n", f.name.to_uppercase()));
     out.push_str(&format!("; --- function {} ---\n", f.name));
     let locals = collect_locals(&f.body);
     let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
-    if frame_size > 0 { out.push_str(&format!("    LEAS -{} ,S ; allocate locals\n", frame_size)); }
+    if frame_size > 0 { out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size)); }
     for (i, p) in f.params.iter().enumerate().take(4) {
         out.push_str(&format!("    LDD VAR_ARG{}\n    STD VAR_{}\n", i, p.to_uppercase()));
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts); }
     if !matches!(f.body.last(), Some(Stmt::Return(_))) {
-        if frame_size > 0 { out.push_str(&format!("    LEAS {} ,S ; free locals\n", frame_size)); }
+    if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }
         out.push_str("    RTS\n");
     }
     out.push_str("\n");
@@ -484,7 +502,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("VECTREX_DRAW_LINE") {
         out.push_str(
-            "; Draw single line using vector list. Args: (x0,y0,x1,y1,intensity) low bytes.\n; Assumes WAIT_RECAL already left DP at $D0. Only switches to $C8 for Draw_VL.\nVECTREX_DRAW_LINE:\n    ; Set intensity\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR Moveto_d\n    ; Compute deltas (end - start) using low bytes\n    LDA VAR_ARG2+1\n    SUBA VAR_ARG0+1\n    STA VLINE_DX\n    LDA VAR_ARG3+1\n    SUBA VAR_ARG1+1\n    STA VLINE_DY\n    ; Clamp to +/-63\n    LDA VLINE_DX\n    CMPA #63\n    BLE VLX_OK_HI\n    LDA #63\nVLX_OK_HI: CMPA #-64\n    BGE VLX_OK_LO\n    LDA #-64\nVLX_OK_LO: STA VLINE_DX\n    LDA VLINE_DY\n    CMPA #63\n    BLE VLY_OK_HI\n    LDA #63\nVLY_OK_HI: CMPA #-64\n    BGE VLY_OK_LO\n    LDA #-64\nVLY_OK_LO: STA VLINE_DY\n    ; Build 2-byte vector list (Y|endbit, X)\n    LDA VLINE_DY\n    ORA #$80\n    STA VLINE_LIST\n    LDA VLINE_DX\n    STA VLINE_LIST+1\n    ; Switch to vector DP and draw, no restore (next WAIT_RECAL resets)\n    JSR DP_to_C8\n    LDU #VLINE_LIST\n    JSR Draw_VL\n    RTS\n"
+            "; Draw single dynamic line. Args: (x0,y0,x1,y1,intensity) low bytes.\n; Uses BIOS Draw_Line_d directly (A=dy, B=dx).\n; Preconditions: DP is $D0 after Wait_Recal.\nVECTREX_DRAW_LINE:\n    ; Intensity\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; Move to start (y in A, x in B)\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR Moveto_d\n    ; Compute deltas (end-start)\n    LDA VAR_ARG2+1\n    SUBA VAR_ARG0+1\n    STA VLINE_DX\n    LDA VAR_ARG3+1\n    SUBA VAR_ARG1+1\n    STA VLINE_DY\n    ; Clamp dx to +/-63\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLX_OK_HI\n    LDA #63\nDLX_OK_HI: CMPA #-64\n    BGE DLX_OK_LO\n    LDA #-64\nDLX_OK_LO: STA VLINE_DX\n    ; Clamp dy to +/-63\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLY_OK_HI\n    LDA #63\nDLY_OK_HI: CMPA #-64\n    BGE DLY_OK_LO\n    LDA #-64\nDLY_OK_LO: STA VLINE_DY\n    ; Draw line (Vec_Misc_Count left to BIOS)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
         );
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
@@ -533,6 +551,70 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
         "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"
     );
+    // Custom macro: DRAW_POLYGON(N, x0,y0,x1,y1,...,x_{N-1},y_{N-1}) all numeric constants -> inline lines with origin resets
+    if up == "DRAW_POLYGON" {
+        if !args.is_empty() {
+            if let Expr::Number(nv) = &args[0] {
+                let n = *nv as usize;
+                if n >= 2 && args.len() == 1 + 2*n && args[1..].iter().all(|a| matches!(a, Expr::Number(_))) {
+                    // Extract vertices
+                    let mut verts: Vec<(i32,i32)> = Vec::new();
+                    for i in 0..n {
+                        if let (Expr::Number(xv), Expr::Number(yv)) = (&args[1+2*i], &args[1+2*i+1]) {
+                            verts.push((*xv as i32, *yv as i32));
+                        }
+                    }
+                    // Emit each edge with origin reset (stable absolute positioning)
+                    for i in 0..n {
+                        let (x0,y0) = verts[i];
+                        let (x1,y1) = verts[(i+1)%n];
+                        let dx = (x1 - x0) & 0xFF;
+                        let dy = (y1 - y0) & 0xFF;
+                        out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                        out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (y0 & 0xFF), (x0 & 0xFF)));
+                        // Always set intensity 0x5F for now (could extend macro to accept custom)
+                        out.push_str("    JSR Intensity_5F\n    CLR Vec_Misc_Count\n");
+                        out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx));
+                    }
+                    out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+                    return true;
+                }
+            }
+        }
+    }
+    // Inline classic single line when all numeric constants
+    if up=="VECTREX_DRAW_LINE" {
+        if args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+            if let (Expr::Number(x0),Expr::Number(y0),Expr::Number(x1),Expr::Number(y1),Expr::Number(inten)) = (&args[0],&args[1],&args[2],&args[3],&args[4]) {
+                // Always move explicitly to start for robustness (avoid chaining state mismatch)
+                let start_x = (*x0 as i32) & 0xFF; let start_y = (*y0 as i32) & 0xFF;
+                // Ensure DP points to $D0 hardware registers (BIOS routines like Print_Str_d may have changed it)
+                out.push_str("    LDA #$D0\n    TFR A,DP\n");
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d ; move to ({}, {})\n", start_y, start_x, start_x as i32, start_y as i32));
+                // Intensity: only emit on first line or change
+                let first = FIRST_CONST_LINE.swap(false, Ordering::Relaxed);
+                let inten_low = (*inten as i32) & 0xFF;
+                let prev_int = LAST_INTENSITY.load(Ordering::Relaxed) as i32;
+                if first || prev_int != inten_low {
+                    if inten_low == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", inten_low)); }
+                    LAST_INTENSITY.store(inten_low as usize, Ordering::Relaxed);
+                }
+                // Compute raw 8-bit signed deltas (allow full -128..127 range). BIOS handles larger |values| by hardware scaling.
+                let dx_i = (*x1 as i32) - (*x0 as i32);
+                let dy_i = (*y1 as i32) - (*y0 as i32);
+                let dx = (dx_i & 0xFF) as i32;
+                let dy = (dy_i & 0xFF) as i32;
+                // Clear Vec_Misc_Count like original stable version to ensure proper line timing
+                out.push_str("    CLR Vec_Misc_Count\n");
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d ; dy={}, dx={}\n", dy, dx, dy_i, dx_i));
+                out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+                LAST_END_X.store((*x1 as usize) & 0xFF, Ordering::Relaxed); // kept for potential future chaining use
+                LAST_END_Y.store((*y1 as usize) & 0xFF, Ordering::Relaxed);
+                LAST_END_SET.store(true, Ordering::Relaxed);
+                return true;
+            }
+        }
+    }
     if !is {
         // Backward compatibility: map legacy short names to vectrex-prefixed versions
         let translated = match up.as_str() {
@@ -540,6 +622,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             "MOVE_TO" => Some("VECTREX_MOVE_TO"),
             "DRAW_TO" => Some("VECTREX_DRAW_TO"),
             "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
+            "DRAW_POLYGON" => Some("DRAW_POLYGON"), // already handled if constants; allow pass-through if dynamic (future)
             "DRAW_VL" => Some("VECTREX_DRAW_VL"),
             "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN"),
             "VECTOR_PHASE_BEGIN" => Some("VECTREX_VECTOR_PHASE_BEGIN"),
@@ -971,6 +1054,7 @@ fn collect_symbols(module: &Module) -> Vec<String> {
             for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
             for l in collect_locals(&f.body) { locals.insert(l); }
         }
+    if let Item::GlobalLet { name, .. } = item { globals.insert(name.clone()); }
     }
     for l in &locals { globals.remove(l); }
     globals.into_iter().collect()
