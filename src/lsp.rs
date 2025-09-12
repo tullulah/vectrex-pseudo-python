@@ -9,13 +9,14 @@ use std::sync::{Arc, Mutex};
 
 pub async fn run_stdio_server() {
     let (stdin, stdout) = (tokio::io::stdin(), tokio::io::stdout());
-    let (service, socket) = LspService::build(|client| Backend { client, docs: Arc::new(Mutex::new(HashMap::new())) }).finish();
+    let (service, socket) = LspService::build(|client| Backend { client, docs: Arc::new(Mutex::new(HashMap::new())), locale: Arc::new(Mutex::new("en".to_string())) }).finish();
     Server::new(stdin, stdout, socket).serve(service).await;
 }
 
 struct Backend {
     client: Client,
     docs: Arc<Mutex<HashMap<Url, String>>>,
+    locale: Arc<Mutex<String>>, // current locale ("en" default)
 }
 
 #[derive(Clone, Debug)]
@@ -32,8 +33,59 @@ struct SymbolDef {
 // For performance later we could incrementalize.
 type SymbolIndex = Arc<Mutex<Vec<SymbolDef>>>;
 
+// Translation helper (static table). Extend later with external resource loading.
+fn tr(locale: &str, key: &str) -> String {
+    let l = if locale.starts_with("es") { "es" } else { "en" };
+    let val = match (l, key) {
+        ("en", "init.ready") => "VPy LSP initialized",
+        ("es", "init.ready") => "VPy LSP inicializado",
+        ("en", "diagnostic.polygon.degenerate") => "POLYGON count 2 produces a degenerate list (use >=3 or a thin RECT).",
+        ("es", "diagnostic.polygon.degenerate") => "POLYGON count 2 genera lista degenerada (usa >=3 o un RECT delgado).",
+        ("en", "symbol.user_function.detail") => "user-defined function",
+        ("es", "symbol.user_function.detail") => "función definida por el usuario",
+        ("en", "hover.user_function.line") => "Function `{}` defined at line {}",
+        ("es", "hover.user_function.line") => "Función `{}` definida en línea {}",
+        ("en", "doc.MOVE") => "MOVE x,y  - moves the beam to position (x,y) without drawing.",
+        ("es", "doc.MOVE") => "MOVE x,y  - mueve el haz a la posición (x,y) sin dibujar.",
+        ("en", "doc.RECT") => "RECT x,y,w,h  - draws a rectangle.",
+        ("es", "doc.RECT") => "RECT x,y,w,h  - dibuja un rectángulo.",
+        ("en", "doc.POLYGON") => "POLYGON n x1,y1 ...  - draws a polygon with n vertices.",
+        ("es", "doc.POLYGON") => "POLYGON n x1,y1 ...  - dibuja un polígono de n vértices.",
+        ("en", "doc.CIRCLE") => "CIRCLE r  - draws a circle of radius r.",
+        ("es", "doc.CIRCLE") => "CIRCLE r  - dibuja un círculo de radio r.",
+        ("en", "doc.ARC") => "ARC r startAngle endAngle  - draws an arc.",
+        ("es", "doc.ARC") => "ARC r angIni angFin  - dibuja un arco.",
+        ("en", "doc.SPIRAL") => "SPIRAL r turns  - draws a spiral.",
+        ("es", "doc.SPIRAL") => "SPIRAL r vueltas  - dibuja una espiral.",
+        ("en", "doc.ORIGIN") => "ORIGIN  - resets the origin (0,0).",
+        ("es", "doc.ORIGIN") => "ORIGIN  - restablece el origen (0,0).",
+        ("en", "doc.INTENSITY") => "INTENSITY val  - sets beam intensity.",
+        ("es", "doc.INTENSITY") => "INTENSITY val  - fija la intensidad del haz.",
+        ("en", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"text\"  - shows vector text.",
+        ("es", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial.",
+        _ => key,
+    };
+    val.to_string()
+}
 
-fn compute_diagnostics(uri: &Url, text: &str) -> Vec<Diagnostic> {
+fn builtin_doc(locale: &str, upper: &str) -> Option<String> {
+    let key = match upper {
+        "MOVE" => Some("doc.MOVE"),
+        "RECT" => Some("doc.RECT"),
+        "POLYGON" => Some("doc.POLYGON"),
+        "CIRCLE" => Some("doc.CIRCLE"),
+        "ARC" => Some("doc.ARC"),
+        "SPIRAL" => Some("doc.SPIRAL"),
+        "ORIGIN" => Some("doc.ORIGIN"),
+        "INTENSITY" => Some("doc.INTENSITY"),
+        "PRINT_TEXT" => Some("doc.PRINT_TEXT"),
+        _ => None,
+    }?;
+    Some(tr(locale, key))
+}
+
+
+fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     match lex(text) {
         Ok(tokens) => {
@@ -71,7 +123,7 @@ fn compute_diagnostics(uri: &Url, text: &str) -> Vec<Diagnostic> {
                             code: None,
                             code_description: None,
                             source: Some("vpy".into()),
-                            message: "POLYGON count 2 genera lista degenerada (usa >=3 o un RECT delgado).".into(),
+                            message: tr(locale, "diagnostic.polygon.degenerate"),
                             related_information: None,
                             tags: None,
                             data: None,
@@ -101,7 +153,8 @@ fn compute_diagnostics(uri: &Url, text: &str) -> Vec<Diagnostic> {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        if let Some(loc) = params.locale.clone() { *self.locale.lock().unwrap() = loc; }
         // Order here defines the numeric indexes we later emit in semantic_tokens_full
         // Keep synchronized with the classifier constants below.
         let legend = SemanticTokensLegend {
@@ -140,7 +193,10 @@ impl LanguageServer for Backend {
         })
     }
 
-    async fn initialized(&self, _: InitializedParams) { let _ = self.client.log_message(MessageType::INFO, "VPy LSP inicializado").await; }
+    async fn initialized(&self, _: InitializedParams) {
+    let loc = self.locale.lock().unwrap().clone();
+    let _ = self.client.log_message(MessageType::INFO, tr(&loc, "init.ready")).await;
+    }
 
     async fn shutdown(&self) -> LspResult<()> { Ok(()) }
 
@@ -148,7 +204,8 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = params.text_document.text;
         self.docs.lock().unwrap().insert(uri.clone(), text.clone());
-        let diags = compute_diagnostics(&uri, &text);
+        let loc = self.locale.lock().unwrap().clone();
+    let diags = compute_diagnostics(&uri, &text, &loc);
         let _ = self.client.publish_diagnostics(uri, diags, None).await;
     }
 
@@ -156,7 +213,8 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         if let Some(change) = params.content_changes.into_iter().last() {
             self.docs.lock().unwrap().insert(uri.clone(), change.text.clone());
-            let diags = compute_diagnostics(&uri, &change.text);
+            let loc = self.locale.lock().unwrap().clone();
+            let diags = compute_diagnostics(&uri, &change.text, &loc);
             let _ = self.client.publish_diagnostics(uri, diags, None).await;
         }
     }
@@ -266,7 +324,8 @@ impl LanguageServer for Backend {
                                 uri: uri.clone(),
                                 range: Range { start: Position { line: line0, character: base_col }, end: Position { line: line0, character: base_col + name.len() as u32 } },
                                 kind: SymbolKind::FUNCTION,
-                                detail: Some("función definida por el usuario".into()),
+                                // Store detail in default English; hover will localize dynamic message.
+                                detail: Some(tr("en", "symbol.user_function.detail")),
                             });
                         } else if is_builtin_draw_fn {
                             raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DEFAULT_LIB));
@@ -339,22 +398,15 @@ impl LanguageServer for Backend {
         let word = &line[start as usize .. end];
         let upper = word.to_ascii_uppercase();
         // Builtin docs
-        let builtin_doc = match upper.as_str() {
-            "MOVE" => Some("MOVE x,y  - mueve el haz a la posición (x,y) sin dibujar."),
-            "RECT" => Some("RECT x,y,w,h  - dibuja un rectángulo."),
-            "POLYGON" => Some("POLYGON n x1,y1 ...  - dibuja un polígono de n vértices."),
-            "CIRCLE" => Some("CIRCLE r  - dibuja un círculo de radio r."),
-            "ARC" => Some("ARC r angIni angFin  - dibuja un arco."),
-            "SPIRAL" => Some("SPIRAL r vueltas  - dibuja una espiral."),
-            "ORIGIN" => Some("ORIGIN  - restablece el origen (0,0)."),
-            "INTENSITY" => Some("INTENSITY val  - fija la intensidad del haz."),
-            "PRINT_TEXT" => Some("PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial."),
-            _ => None,
-        };
-        if let Some(doc) = builtin_doc { return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: doc.into() }), range: None })); }
+        let loc = self.locale.lock().unwrap().clone();
+    if let Some(doc) = builtin_doc(&loc, &upper) { return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: doc }), range: None })); }
         // Look for user function definition
         if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) {
-            let value = format!("Funcion `{}` definida en línea {}", def.name, def.range.start.line + 1);
+            let template = tr(&loc, "hover.user_function.line");
+            // simple sequential replacement for two placeholders
+            let value = template
+                .replacen("{}", &def.name, 1)
+                .replacen("{}", &(def.range.start.line + 1).to_string(), 1);
             return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value }), range: Some(def.range.clone()) }));
         }
         Ok(None)

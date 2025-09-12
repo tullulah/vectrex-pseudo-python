@@ -1,0 +1,21 @@
+{
+  "app.title": "VPy IDE",
+  "menu.file": "File",
+  "menu.edit": "Edit",
+  "menu.view": "View",
+  "menu.run": "Run",
+  "menu.help": "Help",
+  "action.open": "Open",
+  "action.save": "Save",
+  "action.close": "Close",
+  "panel.emulator": "Emulator",
+  "panel.debug": "Debug",
+  "panel.registers": "Registers",
+  "panel.variables": "Variables",
+  "panel.constants": "Constants",
+  "panel.logs": "Logs",
+  "status.running": "Running",
+  "status.stopped": "Stopped",
+  "lang.english": "English",
+  "lang.spanish": "Spanish"
+}
