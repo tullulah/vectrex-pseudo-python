@@ -29,3 +29,7 @@ Thumbs.db
 
 # Optional: uncomment to ignore Cargo.lock for libraries (keep for bins)
 # Cargo.lock
+
+# Node / VS Code extension
+node_modules/
+vscode-extension/node_modules/
