@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './i18n';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from './state/editorStore';
-import { MonacoEditorWrapper } from './components/MonacoEditorWrapper';
+import { DockWorkspace } from './components/DockWorkspace';
 
 function App() {
   const { t, i18n } = useTranslation(['common']);
@@ -36,17 +36,9 @@ function App() {
           </select>
         </div>
       </header>
-      <div style={{flex:1, display:'flex'}}>
-        <aside style={{width:240, borderRight:'1px solid #444', padding:8}}>{t('menu.file')} / tree (placeholder)</aside>
-        <main style={{flex:1, display:'flex', flexDirection:'column'}}>
-          <div style={{borderBottom:'1px solid #444', padding:'4px 8px'}}>Tabs (placeholder)</div>
-          <div style={{flex:1, position:'relative'}}>
-            <MonacoEditorWrapper />
-          </div>
-        </main>
-        <section style={{width:280, borderLeft:'1px solid #444', padding:8}}>{t('panel.emulator')} placeholder</section>
+      <div style={{flex:1, position:'relative'}}>
+        <DockWorkspace />
       </div>
-      <footer style={{height:160, borderTop:'1px solid #444', padding:8}}>{t('panel.debug')} panel placeholder</footer>
     </div>
   );
 }
