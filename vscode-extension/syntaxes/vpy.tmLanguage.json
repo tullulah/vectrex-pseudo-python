@@ -6,11 +6,16 @@
     { "include": "#numbers" },
     { "include": "#meta" },
     { "include": "#vectorlist" },
-    { "include": "#strings" }
+    { "include": "#strings" },
+    { "include": "#function" },
+    { "include": "#operators" }
   ],
   "repository": {
     "comment": { "patterns": [{"name":"comment.line.number-sign.vpy","match":"#.*$"}] },
-    "keyword": { "patterns": [{"name":"keyword.control.vpy","match":"\b(def|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\b"}] },
+    "keyword": { "patterns": [
+      {"name":"keyword.control.vpy","match":"\b(def|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\b"},
+      {"name":"storage.modifier.const.vpy","match":"\\bconst\\b"}
+    ] },
     "numbers": { "patterns": [
       {"name":"constant.numeric.hex.vpy","match":"0x[0-9A-Fa-f]+"},
       {"name":"constant.numeric.bin.vpy","match":"0b[01]+"},
@@ -21,7 +26,13 @@
   {"name":"entity.name.section.vectorlist.vpy","match":"^\\s*vectorlist\\s+[A-Za-z_][A-Za-z0-9_]*:\\s*$"},
       {"name":"support.function.vectorcmd.vpy","match":"\b(MOVE|RECT|POLYGON|CIRCLE|ARC|SPIRAL|ORIGIN|INTENSITY)\b"}
     ] },
-    "strings": { "patterns": [{"name":"string.quoted.double.vpy","begin":"\"","end":"\"","patterns":[{"match":"\\\\.|[^\\\"]"}]}] }
+    "strings": { "patterns": [{"name":"string.quoted.double.vpy","begin":"\"","end":"\"","patterns":[{"match":"\\\\.|[^\\\"]"}]}] },
+    "function": { "patterns": [
+  {"name":"entity.name.function.vpy","match":"^\\s*def\\s+([A-Za-z_][A-Za-z0-9_]*)"}
+    ] },
+    "operators": { "patterns": [
+  {"name":"keyword.operator.vpy","match":"[+\\-*/%=<>!]+"}
+    ] }
   },
   "fileTypes": ["vpy"],
   "name": "VPy",
