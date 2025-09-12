@@ -33,3 +33,5 @@ Thumbs.db
 # Node / VS Code extension
 node_modules/
 vscode-extension/node_modules/
+vscode-extension/dist/
+dist/
