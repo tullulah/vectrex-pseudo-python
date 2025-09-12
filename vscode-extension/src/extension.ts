@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
@@ -36,13 +37,19 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => recomputeDiagnostics(e.document)));
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => recomputeDiagnostics(doc)));
 
-  // Placeholder LSP startup (external server to be implemented in Rust later)
-  const serverModule = context.asAbsolutePath('server-placeholder.js');
-  const serverOptions: ServerOptions = { run: { module: serverModule, transport: TransportKind.ipc }, debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ['--nolazy','--inspect=6009'] } } };
-  const clientOptions: LanguageClientOptions = { documentSelector: [{ language: 'vpy' }], synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.vpy') } };
-  client = new LanguageClient('vpyLanguageServer','VPy Language Server (Placeholder)', serverOptions, clientOptions);
-  // Do not start yet until real server exists – comment out next line when implementing.
-  // client.start();
+  // Real LSP server: spawn compiled Rust binary (expects cargo build executed previously)
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (root) {
+    const exeName = process.platform === 'win32' ? 'vpy_lsp.exe' : 'vpy_lsp';
+    const exePath = vscode.Uri.joinPath(vscode.Uri.file(root), 'target', 'debug', exeName).fsPath;
+    const serverOptions: ServerOptions = {
+      run: { command: exePath, transport: TransportKind.stdio },
+      debug: { command: exePath, transport: TransportKind.stdio, options: { execArgv: [] } }
+    };
+    const clientOptions: LanguageClientOptions = { documentSelector: [{ language: 'vpy' }], synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.vpy') } };
+    client = new LanguageClient('vpyLanguageServer','VPy Language Server', serverOptions, clientOptions);
+    client.start();
+  }
 }
 
 export function deactivate(): Thenable<void> | undefined {

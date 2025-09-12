@@ -9,8 +9,9 @@ pub enum TokenKind {
     Plus, Minus, Star, Slash, Percent,
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
-    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let, Const,
+    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let, Const, Var, VectorList,
     Switch, Case, Default,
+    Meta,
     And, Or, Not,
     StringLit(String),
     True, False,
@@ -34,8 +35,8 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
     while let Some((i, raw_line)) = lines.next() {
         let line_no = i + 1;
         let trimmed = raw_line.trim();
-        // Skip blank or comment-only lines (treat as whitespace, no indentation changes)
-        if trimmed.is_empty() || trimmed.starts_with('#') {
+    // Skip blank or comment-only lines (support '#' and ';' as comment starters)
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
             continue;
         }
         let indent = raw_line.chars().take_while(|c| *c == ' ').count();
@@ -102,6 +103,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 idx += 1;
             }
             '#' => { break; }
+            ';' => { break; }
             '*' => {
                 out.push(tok(TokenKind::Star, line_no, idx));
                 idx += 1;
@@ -247,9 +249,12 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "break" => TokenKind::Break,
                     "continue" => TokenKind::Continue,
                     "const" => TokenKind::Const,
+                    "var" => TokenKind::Var,
+                    "vectorlist" => TokenKind::VectorList,
                     "switch" => TokenKind::Switch,
                     "case" => TokenKind::Case,
                     "default" => TokenKind::Default,
+                    "meta" => TokenKind::Meta,
                     "in" => TokenKind::In,
                     "range" => TokenKind::Range,
                     "return" => TokenKind::Return,

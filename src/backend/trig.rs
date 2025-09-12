@@ -21,16 +21,8 @@ pub fn emit_trig_tables<T: std::fmt::Write>(out: &mut T, word_directive: &str) {
     let tbl = generate_trig_tables();
     let write_table = |out: &mut T, label: &str, data: &Vec<i16>| {
         let _ = writeln!(out, "{}:", label);
-        for chunk in data.chunks(8) {
-            let mut line = String::new();
-            line.push_str("    ");
-            line.push_str(word_directive);
-            line.push(' ');
-            for (i, v) in chunk.iter().enumerate() {
-                if i > 0 { line.push_str(", "); }
-                line.push_str(&format!("{}", *v as i32 & 0xFFFF));
-            }
-            let _ = writeln!(out, "{}", line);
+        for v in data {
+            let _ = writeln!(out, "    {} {}", word_directive, *v);
         }
     };
     write_table(out, "SIN_TABLE", &tbl.sin);

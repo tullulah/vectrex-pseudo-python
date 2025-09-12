@@ -9,7 +9,7 @@ impl Display for Target { fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Resu
 
 pub enum CpuArch { M6809, ARM, CortexM }
 
-pub struct TargetInfo { pub name: &'static str, pub origin: &'static str, pub init_label: &'static str, #[allow(dead_code)] pub line_routine: &'static str, pub arch: CpuArch }
+pub struct TargetInfo { pub name: &'static str, pub origin: &'static str, #[allow(dead_code)] pub init_label: &'static str, #[allow(dead_code)] pub line_routine: &'static str, pub arch: CpuArch }
 
 pub fn info(t: Target) -> TargetInfo {
     match t {

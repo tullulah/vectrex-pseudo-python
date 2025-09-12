@@ -1,8 +1,31 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Module { pub items: Vec<Item> }
+pub struct Module {
+	pub items: Vec<Item>,
+	pub meta: ModuleMeta,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ModuleMeta {
+	pub title_override: Option<String>,
+	pub metas: std::collections::HashMap<String,String>,
+	pub music_override: Option<String>,
+	pub copyright_override: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Item { Function(Function), Const { name: String, value: Expr } }
+pub enum Item { Function(Function), Const { name: String, value: Expr }, GlobalLet { name: String, value: Expr }, VectorList { name: String, entries: Vec<VlEntry> } }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VlEntry {
+	Intensity(i32),
+	Origin,
+	Move(i32,i32),
+	Rect(i32,i32,i32,i32),
+	Polygon(Vec<(i32,i32)>),
+	Circle { cx:i32, cy:i32, r:i32, segs:i32 },
+	Arc { cx:i32, cy:i32, r:i32, start_deg:i32, sweep_deg:i32, segs:i32 },
+	Spiral { cx:i32, cy:i32, r_start:i32, r_end:i32, turns:i32, segs:i32 },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<String>, pub body: Vec<Stmt> }
