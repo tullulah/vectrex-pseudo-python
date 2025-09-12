@@ -1,30 +1,47 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import './i18n';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from './state/editorStore';
+import { initLsp, lspClient } from './lspClient';
 import { DockWorkspace } from './components/DockWorkspace';
 import { toggleComponent, resetLayout } from './state/dockBus';
 
 function App() {
   const { t, i18n } = useTranslation(['common']);
-  const { documents, openDocument } = useEditorStore(s => ({
+  const { documents, openDocument, updateContent } = useEditorStore(s => ({
     documents: s.documents,
-    openDocument: s.openDocument
+    openDocument: s.openDocument,
+    updateContent: s.updateContent
   }));
+
+  const initializedRef = useRef(false);
 
   // Open a demo document once
   useEffect(() => {
     if (documents.length === 0) {
+      const content = '# demo vpy file\nPLOT 10,10\nLINE 0,0, 100,100\n';
       openDocument({
         uri: 'inmemory://demo.vpy',
         language: 'vpy',
-        content: '# demo vpy file\nPLOT 10,10\nLINE 0,0, 100,100\n',
+        content,
         dirty: false,
         diagnostics: []
       });
+      // Start LSP after opening demo
+      (async () => {
+        try {
+          await initLsp(i18n.language || 'en', 'inmemory://demo.vpy', content);
+          initializedRef.current = true;
+        } catch (e) {
+          console.error('Failed init LSP', e);
+        }
+      })();
     }
-  }, [documents.length, openDocument]);
+  }, [documents.length, openDocument, i18n.language]);
+
+  // (Future) Hook to send didChange; currently Monaco wrapper should call updateContent, so we can observe changes here if needed.
+  // Placeholder for future optimization.
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100vh', fontFamily:'sans-serif'}}>

@@ -1,27 +1,3 @@
-[package]
-name = "vectrex_lang"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
-authors = ["Daniel Ferrer <you@example.com>"]
-description = "Prototype pseudo-Python to 6809 assembler compiler for Vectrex"
-
-[dependencies]
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1.0"
-thiserror = "1.0"
-strum = { version = "0.26", features = ["derive"] }
-tower-lsp = "0.20"
-tokio = { version = "1.47", features = ["rt-multi-thread","macros","io-std"] }
-lazy_static = "1.4"
-serde_json = "1.0"
-
-[[bin]]
-name = "vpy_lsp"
-path = "src/bin/vpy_lsp.rs"
-
-[profile.release]
-opt-level = 3
-codegen-units = 1
-lto = true
-strip = true
+[workspace]
+members = [ "core", "ide/ide-app/src-tauri" ]
+resolver = "2"

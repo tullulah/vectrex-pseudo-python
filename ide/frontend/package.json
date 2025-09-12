@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "4.6.0",
+    "@tauri-apps/api": "^2.8.0",
     "flexlayout-react": "^0.8.17",
     "i18next": "23.11.5",
     "monaco-editor": "0.49.0",
@@ -19,6 +20,7 @@
     "zustand": "4.5.2"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4",
     "@types/react": "18.2.21",
     "@types/react-dom": "18.2.7",
     "@vitejs/plugin-react": "4.3.0",

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v1/schema.json",
+  "build": {
+    "beforeDevCommand": "npm run dev --prefix ../frontend",
+    "beforeBuildCommand": "npm run build --prefix ../frontend",
+    "devPath": "http://localhost:5173",
+    "distDir": "../frontend/dist"
+  },
+  "package": {
+    "productName": "VPy IDE",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "windows": [
+      { "title": "VPy IDE", "width": 1280, "height": 800 }
+    ],
+    "allowlist": {
+      "shell": { "all": true },
+      "process": { "all": true }
+    },
+    "security": { "csp": null },
+    "bundle": {
+      "active": false,
+      "targets": "all",
+      "identifier": "com.vpy.ide"
+    },
+  "updater": { "active": false }
+  }
+}

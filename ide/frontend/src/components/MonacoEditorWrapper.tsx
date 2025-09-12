@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../state/editorStore';
 import Editor, { OnChange, Monaco } from '@monaco-editor/react';
 import { dockBus } from '../state/dockBus';
+import { lspClient } from '../lspClient';
 // TODO(i18n): Adapt Monaco UI strings (context menu, messages) when supporting dynamic locale changes.
 
 // Simple language placeholder registration for 'vpy'
@@ -44,9 +45,11 @@ export const MonacoEditorWrapper: React.FC = () => {
   const lastModelRef = useRef<string | undefined>();
 
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<Monaco | null>(null);
   const handleMount = useCallback((editor: any, monaco: Monaco) => {
     ensureLanguage(monaco);
     editorRef.current = editor;
+    monacoRef.current = monaco;
   }, []);
 
   const handleChange: OnChange = useCallback((value) => {
@@ -72,6 +75,28 @@ export const MonacoEditorWrapper: React.FC = () => {
     return () => { unsub(); };
   }, []);
 
+  // Subscribe to publishDiagnostics once
+  useEffect(() => {
+    const handler = (method: string, params: any) => {
+      if (method === 'textDocument/publishDiagnostics' && monacoRef.current) {
+        const { uri, diagnostics } = params;
+        const model = monacoRef.current.editor.getModels().find(m => m.uri.toString() === uri);
+        if (!model) return;
+        const markers = (diagnostics || []).map((d: any) => ({
+          severity: severityToMonaco(d.severity, monacoRef.current!),
+            message: d.message,
+            startLineNumber: d.range.start.line + 1,
+            startColumn: d.range.start.character + 1,
+            endLineNumber: d.range.end.line + 1,
+            endColumn: d.range.end.character + 1,
+            source: d.source || 'vpy'
+        }));
+        monacoRef.current.editor.setModelMarkers(model, 'vpy', markers);
+      }
+    };
+    lspClient.onNotification(handler);
+  }, []);
+
   if (!doc) {
     return <div style={{padding:16, color:'#666'}}>No document open</div>;
   }
@@ -95,3 +120,14 @@ export const MonacoEditorWrapper: React.FC = () => {
     />
   );
 };
+
+function severityToMonaco(lspSeverity: number | undefined, monaco: Monaco) {
+  const S = monaco.MarkerSeverity;
+  switch (lspSeverity) {
+    case 1: return S.Error;
+    case 2: return S.Warning;
+    case 3: return S.Info;
+    case 4: return S.Hint;
+    default: return S.Info;
+  }
+}
