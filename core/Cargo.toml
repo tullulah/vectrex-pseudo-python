@@ -19,9 +19,3 @@ serde_json = "1.0"
 [[bin]]
 name = "vpy_lsp"
 path = "src/bin/vpy_lsp.rs"
-
-[profile.release]
-opt-level = 3
-codegen-units = 1
-lto = true
-strip = true

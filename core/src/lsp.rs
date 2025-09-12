@@ -221,8 +221,13 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, _: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         let items = [
-            "VECTORLIST","INTENSITY","ORIGIN","MOVE","RECT","POLYGON","CIRCLE","ARC","SPIRAL","CONST","VAR","META","TITLE","MUSIC","COPYRIGHT","def","for","while","if","switch"
-        ].iter().map(|s| CompletionItem { label: s.to_string(), kind: Some(CompletionItemKind::KEYWORD), ..Default::default() }).collect();
+            // Drawing / macros
+            "DRAW_POLYGON","DRAW_CIRCLE","DRAW_CIRCLE_SEG","DRAW_ARC","DRAW_SPIRAL","PRINT_TEXT",
+            // Legacy/basic tokens
+            "VECTORLIST","INTENSITY","ORIGIN","MOVE","RECT","POLYGON","CIRCLE","ARC","SPIRAL",
+            // Language / meta
+            "CONST","VAR","META","TITLE","MUSIC","COPYRIGHT","def","for","while","if","switch"
+        ].iter().map(|s| CompletionItem { label: s.to_string(), kind: Some(CompletionItemKind::KEYWORD), insert_text: None, ..Default::default() }).collect();
         Ok(Some(CompletionResponse::Array(items)))
     }
 

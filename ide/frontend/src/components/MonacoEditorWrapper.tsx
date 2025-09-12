@@ -7,30 +7,63 @@ import { lspClient } from '../lspClient';
 
 // Simple language placeholder registration for 'vpy'
 function ensureLanguage(monaco: Monaco) {
-  if ((monaco.languages.getLanguages() || []).some(l => l.id === 'vpy')) return;
-  monaco.languages.register({ id: 'vpy' });
-  monaco.languages.setMonarchTokensProvider('vpy', {
-    // Extremely minimal placeholder tokenizer; refine later
-    tokenizer: {
-      root: [
-        [/\b(DEF|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
-        [/\b(PLOT|LINE|CIRCLE|POLYGON|TEXT)\b/i, 'type.identifier'],
-        [/#[^$]*/, 'comment'],
-        [/".*?"|'.*?'/, 'string'],
-        [/[0-9]+/, 'number'],
-        [/[-+/*=<>!]+/, 'operator']
-      ]
-    }
-  });
-  monaco.languages.setLanguageConfiguration('vpy', {
-    comments: { lineComment: '#' },
-    autoClosingPairs: [
-      { open: '"', close: '"' },
-      { open: "'", close: "'" },
-      { open: '(', close: ')' },
-      { open: '[', close: ']' }
+  const already = (monaco.languages.getLanguages() || []).some(l => l.id === 'vpy');
+  if (!already) {
+    monaco.languages.register({ id: 'vpy' });
+    monaco.languages.setMonarchTokensProvider('vpy', {
+      // Extremely minimal placeholder tokenizer; refine later
+      tokenizer: {
+        root: [
+          [/#[^$]*/, 'comment'],
+          [/\b(META|CONST|DEF|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
+          [/\b(DRAW_(POLYGON|CIRCLE_SEG|CIRCLE|ARC|SPIRAL)|PRINT_TEXT)\b/, 'function'],
+          [/\bI_[A-Z0-9_]+\b/, 'constant'],
+          [/\b[A-Z_]{2,}\b/, 'constant'],
+          [/".*?"|'.*?'/, 'string'],
+          [/[0-9]+/, 'number'],
+          [/[-+/*=<>!]+/, 'operator'],
+          [/\b[A-Za-z_][A-Za-z0-9_]*\b/, 'identifier']
+        ]
+      }
+    });
+    monaco.languages.setLanguageConfiguration('vpy', {
+      comments: { lineComment: '#' },
+      autoClosingPairs: [
+        { open: '"', close: '"' },
+        { open: "'", close: "'" },
+        { open: '(', close: ')' },
+        { open: '[', close: ']' }
+      ],
+      brackets: [ ['{','}'], ['[',']'], ['(',')'] ]
+    });
+  }
+  // Always (re)define theme so we can tweak later without reload
+  monaco.editor.defineTheme('vpy-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    // NOTE: rules cover both classic Monarch tokens and semantic token types.
+    // When semantic highlighting is enabled, semantic token ranges override lexical ones,
+    // so we explicitly style enumMember + modifiers to color I_* constants.
+    rules: [
+      // Lexical/Monarch tokens
+      { token: 'comment', foreground: '6A9955' },
+      { token: 'keyword', foreground: 'C586C0' },
+      { token: 'function', foreground: 'DCDCAA' },
+      { token: 'constant', foreground: '4FC1FF' },
+      { token: 'number', foreground: 'B5CEA8' },
+      { token: 'string', foreground: 'CE9178' },
+      { token: 'operator', foreground: 'D4D4D4' },
+      { token: 'identifier', foreground: 'D4D4D4' },
+      // Semantic token specific (enumMember is what server emits for I_* constants)
+      { token: 'enumMember', foreground: '4FC1FF' },
+      { token: 'enumMember.readonly', foreground: '4FC1FF' },
+      // Optional semantic refinements (keep same base color for now)
+      { token: 'function.declaration', foreground: 'DCDCAA' },
+      { token: 'function.defaultLibrary', foreground: 'DCDCAA' }
     ],
-    brackets: [ ['{','}'], ['[',']'], ['(',')'] ]
+    colors: {
+      'editor.background': '#1E1E1E'
+    }
   });
 }
 
@@ -50,7 +83,100 @@ export const MonacoEditorWrapper: React.FC = () => {
     ensureLanguage(monaco);
     editorRef.current = editor;
     monacoRef.current = monaco;
-  }, []);
+  monaco.editor.setTheme('vpy-dark');
+    // Semantic tokens provider bridging LSP tokens (on-demand full refresh)
+    monaco.languages.registerDocumentSemanticTokensProvider('vpy', {
+      getLegend: () => ({ tokenTypes: ['keyword','function','variable','parameter','number','string','operator','enumMember'], tokenModifiers: ['readonly','declaration','defaultLibrary'] }),
+      provideDocumentSemanticTokens: async (model) => {
+        try {
+          const uri = model.uri.toString();
+          const params = { textDocument: { uri } };
+          const res = await (lspClient as any).request('textDocument/semanticTokens/full', params);
+          if (!res || !res.data) return { data: new Uint32Array() } as any;
+          return { data: new Uint32Array(res.data) } as any;
+        } catch (e) { console.warn('[LSP] semantic tokens error', e); return { data: new Uint32Array() } as any; }
+      },
+      releaseDocumentSemanticTokens: () => {}
+    });
+    // LSP-backed completion provider
+    monaco.languages.registerCompletionItemProvider('vpy', {
+      triggerCharacters: ['_', '(', ',', ' '],
+      provideCompletionItems: async (model, position) => {
+        try {
+          const uri = model.uri.toString();
+          const text = model.getValue();
+          // Send didChange before requesting completion to keep server in sync
+          lspClient.didChange(uri, text);
+          const params = {
+            textDocument: { uri },
+            position: { line: position.lineNumber - 1, character: position.column - 1 },
+            context: { triggerKind: 1 }
+          };
+          const res = await (lspClient as any).request('textDocument/completion', params);
+          if (!res) return { suggestions: [] };
+          const items = Array.isArray(res.items) ? res.items : (Array.isArray(res) ? res : []);
+          const suggestions = items.map((it: any) => ({
+            label: it.label,
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: it.insertText || it.label,
+            range: undefined
+          }));
+          return { suggestions };
+        } catch (e) {
+          console.warn('[LSP] completion error', e);
+          return { suggestions: [] };
+        }
+      }
+    });
+    // Hover provider
+    monaco.languages.registerHoverProvider('vpy', {
+      provideHover: async (model, position) => {
+        try {
+          const uri = model.uri.toString();
+          const params = { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 } };
+          const res = await (lspClient as any).request('textDocument/hover', params);
+          if (res && res.contents) {
+            const contents = typeof res.contents === 'string' ? res.contents : (res.contents.value || '');
+            return { contents: [{ value: contents }], range: undefined } as any;
+          }
+        } catch (e) { console.warn('[LSP] hover error', e); }
+        return null as any;
+      }
+    });
+    // Definition provider
+    monaco.languages.registerDefinitionProvider('vpy', {
+      provideDefinition: async (model, position) => {
+        try {
+          const uri = model.uri.toString();
+          const params = { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 } };
+          const res = await (lspClient as any).request('textDocument/definition', params);
+          if (!res) return [];
+          const locs = Array.isArray(res) ? res : (res ? [res] : []);
+          return locs.map((loc: any) => ({
+            uri: monaco.Uri.parse(loc.uri || (loc.targetUri && loc.targetUri.uri) || uri),
+            range: new monaco.Range(
+              loc.range.start.line + 1,
+              loc.range.start.character + 1,
+              loc.range.end.line + 1,
+              loc.range.end.character + 1
+            )
+          }));
+        } catch (e) { console.warn('[LSP] definition error', e); }
+        return [];
+      }
+    });
+    if (doc) {
+      const uri = monaco.Uri.parse(doc.uri);
+      let model = monaco.editor.getModel(uri);
+      if (!model) {
+        model = monaco.editor.createModel(doc.content, 'vpy', uri);
+      }
+      editor.setModel(model);
+      lastModelRef.current = doc.uri;
+      // Trigger an initial didChange to encourage semanticTokens/full soon after mount
+      lspClient.didChange(doc.uri, model.getValue());
+    }
+  }, [doc]);
 
   const handleChange: OnChange = useCallback((value) => {
     if (doc && typeof value === 'string') {
@@ -58,10 +184,23 @@ export const MonacoEditorWrapper: React.FC = () => {
     }
   }, [doc, updateContent]);
 
-  // When switching documents, ensure Monaco updates the model value
+  // When switching documents, ensure model with correct URI is bound
   useEffect(() => {
-    // Nothing special here yet; Editor component will re-render with new value prop
-  }, [doc?.uri]);
+    if (monacoRef.current && editorRef.current && doc) {
+      const monaco = monacoRef.current;
+      const uri = monaco.Uri.parse(doc.uri);
+      let model = monaco.editor.getModel(uri);
+      if (!model) {
+        model = monaco.editor.createModel(doc.content, 'vpy', uri);
+      } else if (model.getValue() !== doc.content) {
+        model.setValue(doc.content);
+      }
+      if (lastModelRef.current !== doc.uri) {
+        editorRef.current.setModel(model);
+        lastModelRef.current = doc.uri;
+      }
+    }
+  }, [doc?.uri, doc?.content]);
 
   useEffect(() => {
     const unsub = dockBus.on(ev => {
@@ -79,6 +218,7 @@ export const MonacoEditorWrapper: React.FC = () => {
   useEffect(() => {
     const handler = (method: string, params: any) => {
       if (method === 'textDocument/publishDiagnostics' && monacoRef.current) {
+        console.debug('[LSP] diagnostics received', params);
         const { uri, diagnostics } = params;
         const model = monacoRef.current.editor.getModels().find(m => m.uri.toString() === uri);
         if (!model) return;
@@ -106,8 +246,9 @@ export const MonacoEditorWrapper: React.FC = () => {
       height="100%"
       defaultLanguage="vpy"
       language="vpy"
-      theme="vs-dark"
-      value={doc.content}
+  theme="vpy-dark"
+  // Model is managed manually; prevent internal re-create by not binding value each render
+  value={undefined}
       onChange={handleChange}
       onMount={handleMount}
       options={{
@@ -115,7 +256,10 @@ export const MonacoEditorWrapper: React.FC = () => {
         minimap: { enabled: false },
         fontSize: 14,
         scrollBeyondLastLine: false,
-        wordWrap: 'on'
+        wordWrap: 'on',
+  wordBasedSuggestions: 'off',
+        'semanticHighlighting.enabled': true,
+        quickSuggestions: { other: true, strings: false, comments: false }
       }}
     />
   );

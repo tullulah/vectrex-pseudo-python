@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DocumentModel, DiagnosticModel } from '../types/models';
+import { lspClient } from '../lspClient';
 
 interface EditorState {
   documents: DocumentModel[];
@@ -16,9 +17,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   active: undefined,
   openDocument: (doc) => set((s) => ({ documents: [...s.documents, doc], active: doc.uri })),
   setActive: (uri) => set({ active: uri }),
-  updateContent: (uri, content) => set((s) => ({
-    documents: s.documents.map(d => d.uri === uri ? { ...d, content, dirty: true } : d)
-  })),
+  updateContent: (uri, content) => {
+    set((s) => ({
+      documents: s.documents.map(d => d.uri === uri ? { ...d, content, dirty: true } : d)
+    }));
+    // Fire didChange (best effort; if not started yet, no-op inside client)
+    try { lspClient.didChange(uri, content); } catch (_) {}
+  },
   setDiagnostics: (uri, diags) => set((s) => ({
     documents: s.documents.map(d => d.uri === uri ? { ...d, diagnostics: diags } : d)
   })),

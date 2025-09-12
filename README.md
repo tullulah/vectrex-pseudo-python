@@ -223,3 +223,79 @@ Se eliminó runtime extra, wrappers y padding automático para el modo clásico 
 
 ## License
 MIT
+
+---
+
+## IDE & Tooling (Desktop Prototype)
+
+Además del compilador CLI y la extensión de VS Code, el repo incluye un prototipo de IDE de escritorio (Tauri + React + Monaco + LSP Rust) ubicado en `ide/`:
+
+### Estructura
+- `ide/ide-app`: Shell Tauri (ventana, IPC para lanzar LSP).
+- `ide/frontend`: UI React (Monaco Editor, layout docking, cliente LSP).
+- `core/src/lsp.rs`: Servidor LSP (tower-lsp) compartiendo lexer/parser con el compilador.
+
+### Script de desarrollo
+`./run-ide.ps1` (PowerShell 5.1+) admite flags:
+```
+./run-ide.ps1            # Construye y lanza Tauri + frontend + LSP
+./run-ide.ps1 -NoBuild   # Reusa binarios/artefactos previos
+./run-ide.ps1 -NoLsp     # Deja que Tauri arranque sólo el frontend (sin servidor LSP manual)
+./run-ide.ps1 -LspOnly   # Lanza solo el servidor LSP por consola
+```
+
+### Capacidades LSP actuales
+- Initialize tolerante a respuestas espurias (-32600 inicial en algunas ejecuciones).
+- Diagnostics (errores de parseo y heurísticas como POLYGON 2 -> warning).
+- Completion: keywords, macros DRAW_*, comandos vectoriales, constantes básicas.
+- Hover: documentación localizada (en/es) de comandos built-in y ubicación de funciones definidas por el usuario.
+- Go to Definition: salto a definición de funciones creadas por el usuario.
+- Semantic Tokens (full): keywords, funciones (usuario y built-in diferenciadas por modificador), variables, parámetros (reservado), números, strings, operadores, constantes I_*.
+
+### Resaltado de sintaxis / tema
+- Monaco Monarch para tokens léxicos básicos (keywords, macros, constantes).
+- Semantic highlighting activado para refinar (enumMember para I_*). Tema custom `vpy-dark` definido en cada montaje para permitir hot reload.
+
+### Docking / Layout
+Se usa `flexlayout-react` para un workspace con pestañas: Files | Editor | Emulator | Debug.
+
+En Web: drag & drop nativo HTML5 permite reordenar/redistribuir pestañas.
+
+En Tauri (WebView2 Windows) se detectó restricción que mostraba cursor de prohibido pese a `preventDefault`. Se añadió un fallback de drag personalizado con:
+- Marker vertical azul indicando índice.
+- Overlay dashed indicando tabset destino.
+- Acción `FlexLayout_MoveNode` disparada al soltar.
+
+LIMITACIONES (prototipo):
+- El fallback no genera todavía un "ghost" visual ni crea nuevos tabsets dinámicamente arrastrando al borde.
+- La heurística de identificación de tabset se basa en hash de los títulos visibles (suficiente mientras los nombres difieran).
+
+### Próximas mejoras posibles (IDE)
+- Crear tabsets nuevos al soltar en bordes (split vertical/horizontal).
+- Persistencia inmediata tras cada move (forzar `onModelChange`).
+- Mejora de accesibilidad del drag (teclado / alta precisión).
+- Formateador y rename symbol en LSP.
+
+### Problemas conocidos
+| Área | Descripción | Estado |
+|------|-------------|--------|
+| WebView2 DnD | Cursor prohibido con HTML5 drag nativo | Mitigado con fallback custom |
+| Semantic tokens | Requiere sincronizar legend y tema para nuevos tipos | Documentado |
+| Reordenar cross-tabset (estético) | Falta ghost y drop zones más ricas | Pendiente |
+
+### Cómo arrancar el IDE rápidamente
+1. `cargo build --bin vpy_lsp` (opcional; el script lo hará si no existe).
+2. `pwsh ./run-ide.ps1`
+3. Esperar a que Vite sirva `http://localhost:5173` y Tauri abra ventana.
+
+Si sólo deseas la experiencia web (sin wrapper desktop), entra a `ide/frontend` y ejecuta `npm run dev`.
+
+---
+
+## Changelog (Extracto Reciente)
+- Añadido servidor LSP con semantic tokens y hover localizado.
+- Integrado Monaco Editor con completado, hover, definición y resaltado semántico.
+- Tema oscuro `vpy-dark` + reglas para enumMember (constantes I_*).
+- Script PowerShell robusto para lanzar IDE (`run-ide.ps1`).
+- Fallback de drag de pestañas en Tauri (marcador + overlay) ante limitación WebView2.
+

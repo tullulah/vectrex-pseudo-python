@@ -1,3 +1,9 @@
 [workspace]
 members = [ "core", "ide/ide-app/src-tauri" ]
 resolver = "2"
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+strip = true

@@ -1,0 +1,16 @@
+/* Global overrides for Tauri desktop to allow internal drag-drop of flexlayout tabs */
+html, body, #root { height:100%; margin:0; padding:0; }
+/* Ensure the main layout region is explicitly non-draggable for the OS window */
+.flexlayout__layout { -webkit-app-region: no-drag; }
+/* Make only the app header draggable if desired (optional; can comment out if not using frameless window) */
+/* Remove window drag region for now to avoid interfering with internal DnD; can re-enable later */
+header { -webkit-app-region: no-drag; }
+header button, header select { -webkit-app-region: no-drag; }
+
+/* Cursor only on tab buttons (real class in rendered DOM) */
+.flexlayout__tab { cursor: default; }
+.flexlayout__tab_button { cursor: grab; }
+.flexlayout__tab_button:active { cursor: grabbing; }
+
+/* Ensure sidebars/panels keep normal cursor */
+.flexlayout__tabset, .flexlayout__border, .flexlayout__layout { cursor: default; }
