@@ -4,21 +4,45 @@
   "description": "Prototype language support (syntax + LSP client) for pseudo-python Vectrex files (.vpy).",
   "version": "0.0.1",
   "publisher": "localdev",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Programming Languages"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tullulah/vectrex-pseudo-python"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
   "activationEvents": [
     "onCommand:vpy.compileCurrent"
   ],
   "main": "dist/extension.js",
   "contributes": {
     "languages": [
-      { "id": "vpy", "aliases": ["VPy"], "extensions": [".vpy"], "configuration": "./language-configuration.json" }
+      {
+        "id": "vpy",
+        "aliases": [
+          "VPy"
+        ],
+        "extensions": [
+          ".vpy"
+        ],
+        "configuration": "./language-configuration.json"
+      }
     ],
     "grammars": [
-      { "language": "vpy", "scopeName": "source.vpy", "path": "./syntaxes/vpy.tmLanguage.json" }
+      {
+        "language": "vpy",
+        "scopeName": "source.vpy",
+        "path": "./syntaxes/vpy.tmLanguage.json"
+      }
     ],
     "commands": [
-      { "command": "vpy.compileCurrent", "title": "VPy: Compile Current File" }
+      {
+        "command": "vpy.compileCurrent",
+        "title": "VPy: Compile Current File"
+      }
     ]
   },
   "scripts": {
@@ -27,10 +51,11 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --watch"
   },
   "devDependencies": {
-    "esbuild": "^0.21.5",
+    "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
-  "typescript": "^5.4.0",
-  "@types/node": "^20.0.0"
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.0"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

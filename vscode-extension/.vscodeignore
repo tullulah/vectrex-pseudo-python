@@ -1,0 +1,14 @@
+node_modules/@types/
+node_modules/typescript/
+node_modules/esbuild/
+*.map
+.vscode/
+.git/
+.gitignore
+src/
+**/*.ts
+
+# Excluir binarios y directorios del repo raíz ajenos a la extensión
+target/
+examples/
+build/
