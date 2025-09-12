@@ -2,7 +2,7 @@
   "name": "vpy-vectrex-tools",
   "displayName": "VPy Vectrex Tools",
   "description": "Prototype language support (syntax + LSP client) for pseudo-python Vectrex files (.vpy).",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "localdev",
   "repository": {
     "type": "git",
@@ -47,8 +47,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs",
-    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --watch"
+  "build": "esbuild src/extension.ts --bundle --minify --outfile=dist/extension.js --platform=node --external:vscode --format=cjs",
+  "watch": "esbuild src/extension.ts --bundle --minify --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --watch"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
