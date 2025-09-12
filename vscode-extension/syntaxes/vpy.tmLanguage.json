@@ -1,0 +1,29 @@
+{
+  "scopeName": "source.vpy",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#keyword" },
+    { "include": "#numbers" },
+    { "include": "#meta" },
+    { "include": "#vectorlist" },
+    { "include": "#strings" }
+  ],
+  "repository": {
+    "comment": { "patterns": [{"name":"comment.line.number-sign.vpy","match":"#.*$"}] },
+    "keyword": { "patterns": [{"name":"keyword.control.vpy","match":"\b(def|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\b"}] },
+    "numbers": { "patterns": [
+      {"name":"constant.numeric.hex.vpy","match":"0x[0-9A-Fa-f]+"},
+      {"name":"constant.numeric.bin.vpy","match":"0b[01]+"},
+  {"name":"constant.numeric.dec.vpy","match":"\\b\\d+\\b"}
+    ] },
+  "meta": { "patterns": [{"name":"meta.directive.vpy","match":"^\\s*META\\s+(TITLE|COPYRIGHT|MUSIC)\\b.*$"}] },
+    "vectorlist": { "patterns": [
+  {"name":"entity.name.section.vectorlist.vpy","match":"^\\s*vectorlist\\s+[A-Za-z_][A-Za-z0-9_]*:\\s*$"},
+      {"name":"support.function.vectorcmd.vpy","match":"\b(MOVE|RECT|POLYGON|CIRCLE|ARC|SPIRAL|ORIGIN|INTENSITY)\b"}
+    ] },
+    "strings": { "patterns": [{"name":"string.quoted.double.vpy","begin":"\"","end":"\"","patterns":[{"match":"\\\\.|[^\\\"]"}]}] }
+  },
+  "fileTypes": ["vpy"],
+  "name": "VPy",
+  "uuid": "b9b0c820-9c6c-4d9f-92c4-0b4c7ac0vpylang"
+}

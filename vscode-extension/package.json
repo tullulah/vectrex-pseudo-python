@@ -1,0 +1,37 @@
+{
+  "name": "vpy-vectrex-tools",
+  "displayName": "VPy Vectrex Tools",
+  "description": "Prototype language support (syntax + LSP client) for pseudo-python Vectrex files (.vpy).",
+  "version": "0.0.1",
+  "publisher": "localdev",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onCommand:vpy.compileCurrent"
+  ],
+  "main": "dist/extension.js",
+  "contributes": {
+    "languages": [
+      { "id": "vpy", "aliases": ["VPy"], "extensions": [".vpy"], "configuration": "./language-configuration.json" }
+    ],
+    "grammars": [
+      { "language": "vpy", "scopeName": "source.vpy", "path": "./syntaxes/vpy.tmLanguage.json" }
+    ],
+    "commands": [
+      { "command": "vpy.compileCurrent", "title": "VPy: Compile Current File" }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
