@@ -18,6 +18,20 @@ struct Backend {
     docs: Arc<Mutex<HashMap<Url, String>>>,
 }
 
+#[derive(Clone, Debug)]
+struct SymbolDef {
+    name: String,
+    uri: Url,
+    range: Range,
+    kind: SymbolKind,
+    detail: Option<String>,
+}
+
+// Very lightweight symbol index (only function definitions for now)
+// Rebuilt on each semantic token pass / text change for simplicity (FULL sync).
+// For performance later we could incrementalize.
+type SymbolIndex = Arc<Mutex<Vec<SymbolDef>>>;
+
 
 fn compute_diagnostics(uri: &Url, text: &str) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
@@ -88,17 +102,24 @@ fn compute_diagnostics(uri: &Url, text: &str) -> Vec<Diagnostic> {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
+        // Order here defines the numeric indexes we later emit in semantic_tokens_full
+        // Keep synchronized with the classifier constants below.
         let legend = SemanticTokensLegend {
             token_types: vec![
                 SemanticTokenType::KEYWORD,        // 0
                 SemanticTokenType::FUNCTION,       // 1
                 SemanticTokenType::VARIABLE,       // 2
-                SemanticTokenType::PARAMETER,      // 3 (future)
+                SemanticTokenType::PARAMETER,      // 3 (reserved for future use: parameters)
                 SemanticTokenType::NUMBER,         // 4
                 SemanticTokenType::STRING,         // 5
                 SemanticTokenType::OPERATOR,       // 6
+                SemanticTokenType::ENUM_MEMBER,    // 7 (used for immutable CONSTANT like I_*)
             ],
-            token_modifiers: vec![],
+            token_modifiers: vec![
+                SemanticTokenModifier::READONLY,        // bit 0
+                SemanticTokenModifier::DECLARATION,     // bit 1
+                SemanticTokenModifier::DEFAULT_LIBRARY, // bit 2
+            ],
         };
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -110,6 +131,8 @@ impl LanguageServer for Backend {
                     range: None,
                     full: Some(SemanticTokensFullOptions::Bool(true)),
                 })),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 // semantic tokens announced later
                 ..Default::default()
             },
@@ -152,42 +175,217 @@ impl LanguageServer for Backend {
         drop(docs);
         let lines: Vec<&str> = text.lines().collect();
         let mut data: Vec<SemanticToken> = Vec::new();
+        // We'll collect function definitions ("def name") while scanning tokens for semantics to power hover/definition.
+        let mut defs: Vec<SymbolDef> = Vec::new();
         if let Ok(tokens) = lex(&text) {
+            // Constants for legend indices (keep synchronized with legend order above)
+            const KEYWORD: u32 = 0;
+            const FUNCTION: u32 = 1;
+            const VARIABLE: u32 = 2;
+            const _PARAMETER: u32 = 3; // reserved
+            const NUMBER: u32 = 4;
+            const STRING: u32 = 5;
+            const OPERATOR: u32 = 6;
+            const ENUM_MEMBER: u32 = 7; // used for constants (I_*)
+            // modifier bit positions must match legend order: READONLY=0, DECLARATION=1, DEFAULT_LIBRARY=2
+            const MOD_READONLY: u32 = 1 << 0;
+            const MOD_DECL: u32 = 1 << 1;
+            const MOD_DEFAULT_LIB: u32 = 1 << 2;
+
+            // Helper: keyword lexeme length mapping
+            fn keyword_len(kind: &TokenKind) -> Option<usize> {
+                Some(match kind {
+                    TokenKind::Def => "def".len(),
+                    TokenKind::If => "if".len(),
+                    TokenKind::Elif => "elif".len(),
+                    TokenKind::Else => "else".len(),
+                    TokenKind::For => "for".len(),
+                    TokenKind::In => "in".len(),
+                    TokenKind::Range => "range".len(),
+                    TokenKind::Return => "return".len(),
+                    TokenKind::While => "while".len(),
+                    TokenKind::Break => "break".len(),
+                    TokenKind::Continue => "continue".len(),
+                    TokenKind::Let => "let".len(),
+                    TokenKind::Const => "const".len(),
+                    TokenKind::Var => "var".len(),
+                    TokenKind::VectorList => "vectorlist".len(),
+                    TokenKind::Switch => "switch".len(),
+                    TokenKind::Case => "case".len(),
+                    TokenKind::Default => "default".len(),
+                    TokenKind::Meta => "meta".len(),
+                    TokenKind::And => "and".len(),
+                    TokenKind::Or => "or".len(),
+                    TokenKind::Not => "not".len(),
+                    TokenKind::True => "True".len(),
+                    TokenKind::False => "False".len(),
+                    _ => return None,
+                })
+            }
+
             // collect raw tokens with absolute positions
-            let mut raw: Vec<(u32,u32,u32,u32)> = Vec::new(); // line, col, length, type
-            for tk in tokens.iter() {
+            let mut raw: Vec<(u32,u32,u32,u32,u32)> = Vec::new(); // line, col, length, type, modifiers
+            for (idx, tk) in tokens.iter().enumerate() {
                 let line1 = tk.line; if line1 == 0 { continue; }
                 let line0 = (line1 - 1) as u32;
                 let line_str = lines.get(line0 as usize).copied().unwrap_or("");
-                let base_col = tk.col as u32; // note: indentation lost in lexer; best-effort
-                let (ttype, length) = match &tk.kind {
-                    TokenKind::Def | TokenKind::If | TokenKind::Elif | TokenKind::Else | TokenKind::For | TokenKind::In | TokenKind::Range | TokenKind::Return | TokenKind::While | TokenKind::Break | TokenKind::Continue | TokenKind::Let | TokenKind::Const | TokenKind::Var | TokenKind::VectorList | TokenKind::Switch | TokenKind::Case | TokenKind::Default | TokenKind::Meta | TokenKind::And | TokenKind::Or | TokenKind::Not | TokenKind::True | TokenKind::False => {
-                        // derive keyword length from line text starting at col
-                        let rest = &line_str.get(base_col as usize..).unwrap_or("");
-                        let kw_len = rest.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").len() as u32;
-                        (0, kw_len.max(2))
+                // compute indentation (spaces only supported) then real column = indent + tk.col
+                let indent = line_str.chars().take_while(|c| *c==' ').count() as u32;
+                let base_col = indent + tk.col as u32;
+
+                // classify
+                match &tk.kind {
+                    k if keyword_len(k).is_some() => {
+                        let length = keyword_len(k).unwrap() as u32;
+                        raw.push((line0, base_col, length as u32, KEYWORD, 0));
                     }
-                    TokenKind::Identifier(s) => (2, s.len() as u32),
-                    TokenKind::Number(n) => (4, n.to_string().len() as u32),
-                    TokenKind::StringLit(s) => (5, (s.len() + 2) as u32),
-                    TokenKind::Plus | TokenKind::Minus | TokenKind::Star | TokenKind::Slash | TokenKind::Percent | TokenKind::Amp | TokenKind::Pipe | TokenKind::Caret | TokenKind::Tilde | TokenKind::ShiftLeft | TokenKind::ShiftRight | TokenKind::Equal | TokenKind::EqEq | TokenKind::NotEq | TokenKind::Lt | TokenKind::Le | TokenKind::Gt | TokenKind::Ge | TokenKind::Dot | TokenKind::Colon | TokenKind::Comma => (6, 1),
-                    _ => continue,
-                };
-                raw.push((line0, base_col, length, ttype));
+                    TokenKind::Identifier(name) => {
+                        // function def name? (previous *significant* token is Def)
+                        let mut is_after_def = false;
+                        if idx > 0 {
+                            // look backwards skipping Newline / Indent / Dedent
+                            let mut j = idx as isize - 1;
+                            while j >= 0 {
+                                match tokens[j as usize].kind {
+                                    TokenKind::Newline | TokenKind::Indent | TokenKind::Dedent => { j -= 1; continue; }
+                                    TokenKind::Def => { is_after_def = true; }
+                                    _ => {}
+                                }
+                                break;
+                            }
+                        }
+                        let upper = name.to_ascii_uppercase();
+                        let is_builtin_draw_fn = upper.starts_with("DRAW_") || matches!(upper.as_str(),
+                            "MOVE"|"RECT"|"POLYGON"|"CIRCLE"|"ARC"|"SPIRAL"|"ORIGIN"|"INTENSITY"|"PRINT_TEXT");
+                        let is_constant = upper.starts_with("I_");
+                        if is_after_def {
+                            raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DECL));
+                            // record definition range (line0, base_col .. base_col+len)
+                            defs.push(SymbolDef {
+                                name: name.clone(),
+                                uri: uri.clone(),
+                                range: Range { start: Position { line: line0, character: base_col }, end: Position { line: line0, character: base_col + name.len() as u32 } },
+                                kind: SymbolKind::FUNCTION,
+                                detail: Some("función definida por el usuario".into()),
+                            });
+                        } else if is_builtin_draw_fn {
+                            raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DEFAULT_LIB));
+                        } else if is_constant {
+                            raw.push((line0, base_col, name.len() as u32, ENUM_MEMBER, MOD_READONLY));
+                        } else {
+                            raw.push((line0, base_col, name.len() as u32, VARIABLE, 0));
+                        }
+                    }
+                    TokenKind::Number(_n) => {
+                        // Attempt to measure full numeric literal length from source line starting at base_col
+                        let slice = &line_str[(base_col as usize)..];
+                        let mut len = 0usize;
+                        for ch in slice.chars() {
+                            if ch.is_ascii_hexdigit() || ch=='x' || ch=='X' || ch=='b' || ch=='B' { len += 1; } else { break; }
+                        }
+                        if len==0 { len = 1; }
+                        raw.push((line0, base_col, len as u32, NUMBER, 0));
+                    }
+                    TokenKind::StringLit(s) => {
+                        // include the surrounding quotes (we know tokens were produced from valid lexeme)
+                        let length = (s.len() + 2) as u32;
+                        raw.push((line0, base_col, length, STRING, 0));
+                    }
+                    TokenKind::Plus | TokenKind::Minus | TokenKind::Star | TokenKind::Slash | TokenKind::Percent | TokenKind::Amp | TokenKind::Pipe | TokenKind::Caret | TokenKind::Tilde | TokenKind::Dot | TokenKind::Colon | TokenKind::Comma | TokenKind::Equal | TokenKind::Lt | TokenKind::Gt => {
+                        raw.push((line0, base_col, 1, OPERATOR, 0));
+                    }
+                    TokenKind::ShiftLeft | TokenKind::ShiftRight | TokenKind::EqEq | TokenKind::NotEq | TokenKind::Le | TokenKind::Ge => {
+                        raw.push((line0, base_col, 2, OPERATOR, 0));
+                    }
+                    _ => { /* ignore others */ }
+                }
             }
             raw.sort_by(|a,b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
             // delta encode into SemanticToken structs
             let mut last_line = 0u32; let mut last_col = 0u32; let mut first = true;
-            for (line, col, length, ttype) in raw {
+            for (line, col, length, ttype, mods) in raw {
                 let delta_line = if first { line } else { line - last_line };
                 let delta_start = if first { col } else if delta_line == 0 { col - last_col } else { col };
-                data.push(SemanticToken { delta_line, delta_start, length, token_type: ttype, token_modifiers_bitset: 0 });
+                data.push(SemanticToken { delta_line, delta_start, length, token_type: ttype, token_modifiers_bitset: mods });
                 last_line = line; last_col = col; first = false;
             }
         }
+        // Publish (store) symbol index for this document (replace previous defs for same URI)
+        if !defs.is_empty() {
+            SYMBOLS.lock().unwrap().retain(|d| d.uri != uri);
+            SYMBOLS.lock().unwrap().extend(defs);
+        } else {
+            // If no defs now, remove any stale ones for the file
+            SYMBOLS.lock().unwrap().retain(|d| d.uri != uri);
+        }
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens { result_id: None, data })))
+    }
+
+    async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+        let pos = params.text_document_position_params.position;
+        let uri = params.text_document_position_params.text_document.uri;
+        let docs = self.docs.lock().unwrap();
+        let text = match docs.get(&uri) { Some(t) => t.clone(), None => return Ok(None) };
+        drop(docs);
+        let line = text.lines().nth(pos.line as usize).unwrap_or("");
+        // Extract word under cursor
+        let chars: Vec<char> = line.chars().collect();
+        if (pos.character as usize) > chars.len() { return Ok(None); }
+        let mut start = pos.character as isize;
+        let mut end = pos.character as usize;
+        while start > 0 && chars[(start-1) as usize].is_alphanumeric() || (start>0 && chars[(start-1) as usize]=='_') { start -= 1; }
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; }
+        if start as usize >= end { return Ok(None); }
+        let word = &line[start as usize .. end];
+        let upper = word.to_ascii_uppercase();
+        // Builtin docs
+        let builtin_doc = match upper.as_str() {
+            "MOVE" => Some("MOVE x,y  - mueve el haz a la posición (x,y) sin dibujar."),
+            "RECT" => Some("RECT x,y,w,h  - dibuja un rectángulo."),
+            "POLYGON" => Some("POLYGON n x1,y1 ...  - dibuja un polígono de n vértices."),
+            "CIRCLE" => Some("CIRCLE r  - dibuja un círculo de radio r."),
+            "ARC" => Some("ARC r angIni angFin  - dibuja un arco."),
+            "SPIRAL" => Some("SPIRAL r vueltas  - dibuja una espiral."),
+            "ORIGIN" => Some("ORIGIN  - restablece el origen (0,0)."),
+            "INTENSITY" => Some("INTENSITY val  - fija la intensidad del haz."),
+            "PRINT_TEXT" => Some("PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial."),
+            _ => None,
+        };
+        if let Some(doc) = builtin_doc { return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: doc.into() }), range: None })); }
+        // Look for user function definition
+        if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) {
+            let value = format!("Funcion `{}` definida en línea {}", def.name, def.range.start.line + 1);
+            return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value }), range: Some(def.range.clone()) }));
+        }
+        Ok(None)
+    }
+
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> LspResult<Option<GotoDefinitionResponse>> {
+        let pos = params.text_document_position_params.position;
+        let uri = params.text_document_position_params.text_document.uri;
+        let docs = self.docs.lock().unwrap();
+        let text = match docs.get(&uri) { Some(t) => t.clone(), None => return Ok(None) };
+        drop(docs);
+        let line = text.lines().nth(pos.line as usize).unwrap_or("");
+        let chars: Vec<char> = line.chars().collect();
+        if (pos.character as usize) > chars.len() { return Ok(None); }
+        let mut start = pos.character as isize;
+        let mut end = pos.character as usize;
+        while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; }
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; }
+        if start as usize >= end { return Ok(None); }
+        let word = &line[start as usize .. end];
+        if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) {
+            return Ok(Some(GotoDefinitionResponse::Scalar(Location { uri: def.uri.clone(), range: def.range.clone() })));
+        }
+        Ok(None)
     }
 }
 
 // Binary entry (used by cargo run --bin vpy_lsp)
 pub async fn run() -> anyhow::Result<()> { run_stdio_server().await; Ok(()) }
+
+// Global symbol store (simple). In production you'd scope per workspace and handle concurrency.
+lazy_static::lazy_static! {
+    static ref SYMBOLS: Mutex<Vec<SymbolDef>> = Mutex::new(Vec::new());
+}
