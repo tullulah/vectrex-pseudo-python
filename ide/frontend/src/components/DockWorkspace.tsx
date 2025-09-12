@@ -8,7 +8,8 @@ import { EmulatorPanel } from './panels/EmulatorPanel';
 import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
 
-const STORAGE_KEY = 'vpy_dock_model_v1';
+// Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
+const STORAGE_KEY = 'vpy_dock_model_v2';
 
 const defaultJson = {
   global: { 
@@ -125,6 +126,39 @@ export const DockWorkspace: React.FC = () => {
     });
     return () => { unsub(); };
   }, [addComponent, hasComponent, model, removeComponent]);
+
+  // Migration: if layout persisted antes de existir 'Errors', añadir la pestaña automáticamente
+  useEffect(() => {
+    // slight defer until model stable
+    setTimeout(() => {
+      if (!hasComponent('errors')) {
+        let debugTabset: string | undefined;
+        model.visitNodes((n) => {
+          // @ts-ignore inspect children for debug component
+          if (n.getType && n.getType() === 'tabset') {
+            const children: any[] = (n as any).getChildren?.() || [];
+            if (children.some(c => c?._attributes?.component === 'debug')) {
+              debugTabset = (n as any).getId?.();
+            }
+          }
+        });
+        if (debugTabset) {
+          try {
+            model.doAction({
+              type: 'FlexLayout_AddNode',
+              json: { type: 'tab', component: 'errors', name: 'Errors' },
+              to: debugTabset,
+              index: -1
+            } as any);
+            notifyDockChanged();
+            console.info('[Dock] Migrated layout: added missing Errors tab');
+          } catch (e) {
+            console.warn('[Dock] Failed to auto-add Errors tab', e);
+          }
+        }
+      }
+    }, 50);
+  }, [hasComponent, model]);
 
   useEffect(() => {
     // Example: add future dynamic tabs via layoutRef.current?.addTabWithDragAndDrop
