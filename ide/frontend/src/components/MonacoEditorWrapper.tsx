@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../state/editorStore';
 import Editor, { OnChange, Monaco } from '@monaco-editor/react';
+import { dockBus } from '../state/dockBus';
 // TODO(i18n): Adapt Monaco UI strings (context menu, messages) when supporting dynamic locale changes.
 
 // Simple language placeholder registration for 'vpy'
@@ -42,8 +43,10 @@ export const MonacoEditorWrapper: React.FC = () => {
   const doc = documents.find(d => d.uri === active);
   const lastModelRef = useRef<string | undefined>();
 
+  const editorRef = useRef<any>(null);
   const handleMount = useCallback((editor: any, monaco: Monaco) => {
     ensureLanguage(monaco);
+    editorRef.current = editor;
   }, []);
 
   const handleChange: OnChange = useCallback((value) => {
@@ -56,6 +59,18 @@ export const MonacoEditorWrapper: React.FC = () => {
   useEffect(() => {
     // Nothing special here yet; Editor component will re-render with new value prop
   }, [doc?.uri]);
+
+  useEffect(() => {
+    const unsub = dockBus.on(ev => {
+      if (ev.type === 'changed') {
+        if (editorRef.current) {
+          // slight delay to allow layout container to settle
+          requestAnimationFrame(() => editorRef.current.layout());
+        }
+      }
+    });
+    return () => { unsub(); };
+  }, []);
 
   if (!doc) {
     return <div style={{padding:16, color:'#666'}}>No document open</div>;
