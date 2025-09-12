@@ -2,7 +2,7 @@
   "name": "vpy-vectrex-tools",
   "displayName": "VPy Vectrex Tools",
   "description": "Prototype language support (syntax + LSP client) for pseudo-python Vectrex files (.vpy).",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "localdev",
   "repository": {
     "type": "git",
