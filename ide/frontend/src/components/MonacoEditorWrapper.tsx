@@ -68,10 +68,11 @@ function ensureLanguage(monaco: Monaco) {
 }
 
 export const MonacoEditorWrapper: React.FC = () => {
-  const { documents, active, updateContent } = useEditorStore(s => ({
+  const { documents, active, updateContent, setDiagnostics } = useEditorStore(s => ({
     documents: s.documents,
     active: s.active,
-    updateContent: s.updateContent
+    updateContent: s.updateContent,
+    setDiagnostics: s.setDiagnostics
   }));
 
   const doc = documents.find(d => d.uri === active);
@@ -221,7 +222,15 @@ export const MonacoEditorWrapper: React.FC = () => {
         console.debug('[LSP] diagnostics received', params);
         const { uri, diagnostics } = params;
         const model = monacoRef.current.editor.getModels().find(m => m.uri.toString() === uri);
-        if (!model) return;
+        // Always update store even if model not currently open (will aggregate in Errors panel)
+        const diagsForStore = (diagnostics || []).map((d: any) => ({
+          message: d.message,
+          severity: lspSeverityToText(d.severity),
+          line: d.range.start.line,
+          column: d.range.start.character
+        }));
+        try { setDiagnostics(uri, diagsForStore as any); } catch (_) {}
+        if (!model) return; // markers only for open model
         const markers = (diagnostics || []).map((d: any) => ({
           severity: severityToMonaco(d.severity, monacoRef.current!),
             message: d.message,
@@ -235,6 +244,27 @@ export const MonacoEditorWrapper: React.FC = () => {
       }
     };
     lspClient.onNotification(handler);
+  }, []);
+
+  // Listen for goto events to move cursor
+  useEffect(() => {
+    const listener = (e: any) => {
+      if (!editorRef.current || !monacoRef.current) return;
+      const { uri, line, column } = e.detail || {};
+      if (!uri || line===undefined || column===undefined) return;
+      const monaco = monacoRef.current;
+      const model = monaco.editor.getModel(monaco.Uri.parse(uri));
+      if (model) {
+        editorRef.current.setModel(model);
+        lastModelRef.current = uri;
+        const position = { lineNumber: line + 1, column: column + 1 };
+        editorRef.current.revealLineInCenter(position.lineNumber);
+        editorRef.current.setPosition(position);
+        editorRef.current.focus();
+      }
+    };
+    window.addEventListener('vpy.goto', listener as any);
+    return () => window.removeEventListener('vpy.goto', listener as any);
   }, []);
 
   if (!doc) {
@@ -273,5 +303,13 @@ function severityToMonaco(lspSeverity: number | undefined, monaco: Monaco) {
     case 3: return S.Info;
     case 4: return S.Hint;
     default: return S.Info;
+  }
+}
+
+function lspSeverityToText(sev: number | undefined): 'error' | 'warning' | 'info' {
+  switch (sev) {
+    case 1: return 'error';
+    case 2: return 'warning';
+    default: return 'info';
   }
 }

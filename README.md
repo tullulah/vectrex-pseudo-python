@@ -257,7 +257,7 @@ Además del compilador CLI y la extensión de VS Code, el repo incluye un protot
 - Semantic highlighting activado para refinar (enumMember para I_*). Tema custom `vpy-dark` definido en cada montaje para permitir hot reload.
 
 ### Docking / Layout
-Se usa `flexlayout-react` para un workspace con pestañas: Files | Editor | Emulator | Debug.
+Se usa `flexlayout-react` para un workspace con pestañas: Files | Editor | Emulator | Debug | Errors.
 
 En Web: drag & drop nativo HTML5 permite reordenar/redistribuir pestañas.
 
@@ -293,6 +293,7 @@ Si sólo deseas la experiencia web (sin wrapper desktop), entra a `ide/frontend`
 ---
 
 ## Changelog (Extracto Reciente)
+- Panel "Errors" agregado: listado global de diagnostics (error/warning/info) con doble click de navegación.
 - Añadido servidor LSP con semantic tokens y hover localizado.
 - Integrado Monaco Editor con completado, hover, definición y resaltado semántico.
 - Tema oscuro `vpy-dark` + reglas para enumMember (constantes I_*).

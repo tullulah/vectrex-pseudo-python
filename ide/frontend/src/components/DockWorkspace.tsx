@@ -6,6 +6,7 @@ import { FileTreePanel } from './panels/FileTreePanel';
 import { EditorPanel } from './panels/EditorPanel';
 import { EmulatorPanel } from './panels/EmulatorPanel';
 import { DebugPanel } from './panels/DebugPanel';
+import { ErrorsPanel } from './panels/ErrorsPanel';
 
 const STORAGE_KEY = 'vpy_dock_model_v1';
 
@@ -21,8 +22,8 @@ const defaultJson = {
     children: [
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
       { type: 'tabset', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor', enableClose: false } ] },
-      { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
-      { type: 'tabset', weight: 25, children: [ { type: 'tab', name: 'Debug', component: 'debug' } ], location: 'bottom' }
+  { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
+  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' } ], location: 'bottom' }
     ]
   }
 };
@@ -42,7 +43,8 @@ export const DockWorkspace: React.FC = () => {
       case 'files': return <FileTreePanel />;
       case 'editor': return <EditorPanel />;
       case 'emulator': return <EmulatorPanel />;
-      case 'debug': return <DebugPanel />;
+  case 'debug': return <DebugPanel />;
+  case 'errors': return <ErrorsPanel />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);
@@ -81,7 +83,7 @@ export const DockWorkspace: React.FC = () => {
       }
     });
     const nameMap: Record<DockComponent,string> = {
-      files: 'Files', editor: 'Editor', emulator: 'Emulator', debug: 'Debug'
+      files: 'Files', editor: 'Editor', emulator: 'Emulator', debug: 'Debug', errors: 'Errors'
     };
     if (target) {
       model.doAction({

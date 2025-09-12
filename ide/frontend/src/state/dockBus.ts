@@ -1,8 +1,8 @@
 // Simple event bus for docking actions
 // Events: toggle:<component>, resetLayout, dockChanged
-// Components: files | editor | emulator | debug
+// Components: files | editor | emulator | debug | errors
 
-export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug';
+export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors';
 export type DockEvent =
   | { type: 'toggle'; component: DockComponent }
   | { type: 'reset' }
