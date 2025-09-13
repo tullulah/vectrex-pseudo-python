@@ -304,6 +304,29 @@ export const MonacoEditorWrapper: React.FC = () => {
     return () => window.removeEventListener('vpy.goto', listener as any);
   }, []);
 
+  useEffect(() => {
+    const w: any = window as any;
+    if (!w.electronAPI || !editorRef.current || !monacoRef.current) return;
+    const handler = (cmd: string, payload?: any) => {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current!;
+      switch (cmd) {
+        case 'indent': editor.trigger('menu','editor.action.indentLines',null); break;
+        case 'outdent': editor.trigger('menu','editor.action.outdentLines',null); break;
+        case 'toggle-line-comment': editor.trigger('menu','editor.action.commentLine',null); break;
+        case 'toggle-block-comment': editor.trigger('menu','editor.action.blockComment',null); break;
+        case 'new-file': {
+          // Basic new unsaved buffer
+          const uri = monaco.Uri.parse(`inmemory://untitled-${Date.now()}.vpy`);
+          const model = monaco.editor.createModel('# New File\n', 'vpy', uri);
+          editor.setModel(model); break;
+        }
+        default: break;
+      }
+    };
+    w.electronAPI.onCommand(handler);
+  }, []);
+
   if (!doc) {
     return <div style={{padding:16, color:'#666'}}>No document open</div>;
   }

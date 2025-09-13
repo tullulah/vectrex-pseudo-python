@@ -138,6 +138,7 @@ ipcMain.handle('lsp_send', async (_e, payload: string) => {
   lsp.stdin.write(bytes);
 });
 
+// After window creation call buildMenus
 app.whenReady().then(() => {
   // Seguridad adicional: anular menú global
   try { Menu.setApplicationMenu(null); } catch {}
