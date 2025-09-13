@@ -4,7 +4,9 @@
 
 export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors';
 export type DockEvent =
-  | { type: 'toggle'; component: DockComponent }
+  | { type: 'toggle'; component: DockComponent } // legacy toggle (may remove later)
+  | { type: 'ensure'; component: DockComponent } // ensure exists (create if missing)
+  | { type: 'focus'; component: DockComponent }  // focus existing (no creation)
   | { type: 'reset' }
   | { type: 'changed' };
 
@@ -25,6 +27,14 @@ export const dockBus = new DockBus();
 
 export function toggleComponent(component: DockComponent) {
   dockBus.emit({ type: 'toggle', component });
+}
+
+export function ensureComponent(component: DockComponent) {
+  dockBus.emit({ type: 'ensure', component });
+}
+
+export function focusComponent(component: DockComponent) {
+  dockBus.emit({ type: 'focus', component });
 }
 
 export function resetLayout() {

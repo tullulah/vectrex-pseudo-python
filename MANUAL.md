@@ -179,6 +179,7 @@ def main():
 - No negative integer literals (unary minus rewrite only).
 - No string / data sections beyond variables.
 - No constant folding across function boundaries.
+ - Parser sólo reporta el primer error por archivo (multi-error recovery pendiente) aunque warnings heurísticos (como `POLYGON 2`) se agregan siempre.
 
 ## 12. Roadmap (Potential)
 - Local variable allocation vs globals.
@@ -303,6 +304,7 @@ Limitaciones actuales:
 - Sin clipping automático ni escalado.
 - Coordenadas se truncan a 8 bits (signed) durante emisión (rango efectivo -128..127).
 - Las figuras complejas (círculo/espiral) pueden generar muchos segmentos -> parpadeo; ajustar `segs`.
+ - Diagnostics: line/col mostrados en el panel son 1-based (internamente 0-based). Ruta Windows con `C:` ya soportada por extractor robusto.
 
 Buenas prácticas:
 - Insertar `ORIGIN` entre grupos largos de segmentos para repartir brillo.

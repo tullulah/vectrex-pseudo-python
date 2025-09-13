@@ -18,6 +18,12 @@ export interface DocumentModel {
   content: string;
   dirty: boolean;
   diagnostics: DiagnosticModel[];
+  // Absolute path on disk if backed by a real file. Undefined for in-memory docs.
+  diskPath?: string;
+  // Last known modification time (ms epoch) from filesystem when loaded/saved.
+  mtime?: number;
+  // (Optional) snapshot of content at last save/load for advanced dirty detection.
+  lastSavedContent?: string;
 }
 
 export interface DiagnosticModel {

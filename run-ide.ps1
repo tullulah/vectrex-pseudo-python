@@ -1,6 +1,10 @@
 param(
   [switch]$DevTools,
-  [switch]$RelaxCSP
+  [switch]$RelaxCSP,
+  [switch]$NoRustBuild,
+  [switch]$Fast,        # omite npm install si ya existe node_modules
+  [switch]$NoClear,     # evita limpiar pantalla (preserva logs)
+  [switch]$VerboseLsp   # más logging sobre ruta/estado LSP
 )
 <#
 Script simplificado (con dependencias automáticas):
@@ -26,38 +30,47 @@ if(-not (Get-Command npm -ErrorAction SilentlyContinue)){
 
 if($DevTools){ $env:VPY_IDE_DEVTOOLS = '1' } else { Remove-Item Env:VPY_IDE_DEVTOOLS -ErrorAction SilentlyContinue | Out-Null }
 if($RelaxCSP){ $env:VPY_IDE_RELAX_CSP = '1' } else { Remove-Item Env:VPY_IDE_RELAX_CSP -ErrorAction SilentlyContinue | Out-Null }
+if($NoClear){ $env:VPY_IDE_NO_CLEAR = '1' } else { Remove-Item Env:VPY_IDE_NO_CLEAR -ErrorAction SilentlyContinue | Out-Null }
+if($VerboseLsp){ $env:VPY_IDE_VERBOSE_LSP = '1' } else { Remove-Item Env:VPY_IDE_VERBOSE_LSP -ErrorAction SilentlyContinue | Out-Null }
 
-# Instalación condicional
+# Instalación condicional (opcionalmente saltada con -Fast)
 function Install-NodeModulesIfMissing($dir){
   if(-not (Test-Path (Join-Path $dir 'package.json'))){ return }
   $nm = Join-Path $dir 'node_modules'
+  if($Fast -and (Test-Path $nm)){ return }
   if(-not (Test-Path $nm)){
     Write-Host "[INFO] npm install -> $dir" -ForegroundColor Cyan
-  Push-Location $dir
-    npm install | Out-Null
-  Pop-Location
+    Push-Location $dir
+    npm install
+    if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] npm install falló' -ForegroundColor Red; exit 1 }
+    Pop-Location
   }
 }
 
 Install-NodeModulesIfMissing (Join-Path $root 'ide/frontend')
 Install-NodeModulesIfMissing (Join-Path $root 'ide/electron')
 
-Write-Host '[INFO] Lanzando entorno Electron (npm run dev)' -ForegroundColor Cyan
-& powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; npm run dev"
-exit $LASTEXITCODE
-
-try {
-  while($true){
-    Start-Sleep -Seconds 2
-    if(-not $Persist){
-      if($electron.HasExited){
-        Write-Info "Electron terminó (ExitCode=$($electron.ExitCode)). Cerrando entorno..."
-        break
-      }
-    }
-    # Señal mínima si Vite muere antes que Electron
-    if($vite.HasExited){ Write-Warn "Vite terminó (ExitCode=$($vite.ExitCode))" }
+# Build Rust (LSP + core) salvo -NoRustBuild
+if(-not $NoRustBuild){
+  if(-not (Get-Command cargo -ErrorAction SilentlyContinue)){
+    Write-Host '[WARN] cargo no encontrado; se omite build Rust' -ForegroundColor Yellow
+  } else {
+    Write-Host '[INFO] cargo build (workspace)' -ForegroundColor Cyan
+    cargo build --workspace
+    if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] cargo build falló' -ForegroundColor Red; exit 1 }
   }
-} finally {
-  & $cleanup
 }
+
+# Comprobar binario LSP esperado (heursítica) y avisar si falta
+$lspExe = Join-Path $root 'target/debug/vpy_lsp.exe'
+if(-not (Test-Path $lspExe)){
+  Write-Host "[WARN] Binario LSP no encontrado en $lspExe (spawn podría fallar)" -ForegroundColor Yellow
+}
+
+Write-Host '[INFO] Lanzando entorno Electron (npm run dev)' -ForegroundColor Cyan
+if($NoClear){
+  # Vite normalmente limpia consola; forzamos variable para detectar en plugin (si se implementa) o al menos preservamos scroll buffer
+  $env:FORCE_COLOR = '1'
+}
+& powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; if($NoClear){ Write-Host '[INFO] (NoClear) Ejecutando npm run dev'; }; npm run dev"
+exit $LASTEXITCODE

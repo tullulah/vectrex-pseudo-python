@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, Menu, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, session, dialog } from 'electron';
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { existsSync } from 'fs';
+import * as fs from 'fs/promises';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -13,6 +14,8 @@ interface LspChild {
 let lsp: LspChild | null = null;
 
 async function createWindow() {
+  const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
+  if (verbose) console.log('[IDE] createWindow() start');
   // Asegurar que no exista menú antes de crear la ventana
   try { Menu.setApplicationMenu(null); } catch {}
   mainWindow = new BrowserWindow({
@@ -34,12 +37,15 @@ async function createWindow() {
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
+    if (verbose) console.log('[IDE] loading dev URL', devUrl);
     await mainWindow.loadURL(devUrl);
   } else {
+    if (verbose) console.log('[IDE] loading file index.html');
     await mainWindow.loadFile(join(__dirname, '../../frontend/dist/index.html'));
   }
   // Bloquear apertura automática salvo flag explícita
   if (process.env.VPY_IDE_DEVTOOLS === '1') {
+    if (verbose) console.log('[IDE] opening devtools (flag set)');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     // Cerrar si ya se abrió por alguna razón
@@ -50,9 +56,11 @@ async function createWindow() {
     mainWindow.webContents.on('devtools-opened', () => {
       if (process.env.VPY_IDE_DEVTOOLS !== '1') {
         try { mainWindow?.webContents.closeDevTools(); } catch {}
+        if (verbose) console.log('[IDE] devtools closed (not allowed)');
       }
     });
   }
+  if (verbose) console.log('[IDE] createWindow() end');
 }
 
 let lspPathWarned = false;
@@ -87,9 +95,12 @@ function resolveLspPath(): string | null {
 }
 
 ipcMain.handle('lsp_start', async () => {
+  const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
   if (lsp) return;
+  if (verbose) console.log('[LSP] start request');
   const path = resolveLspPath();
   if (!path) return; // mensaje detallado ya emitido en resolveLspPath (una sola vez)
+  if (verbose) console.log('[LSP] spawning', path);
   const child = spawn(path, [], { stdio: ['pipe', 'pipe', 'pipe'] });
   lsp = { proc: child, stdin: child.stdin! };
 
@@ -116,6 +127,7 @@ ipcMain.handle('lsp_start', async () => {
         expected = null;
         mainWindow?.webContents.send('lsp://message', body);
         mainWindow?.webContents.send('lsp://stdout', body);
+        if (verbose) console.log('[LSP<-] message len', body.length);
         continue;
       }
       break;
@@ -126,6 +138,7 @@ ipcMain.handle('lsp_start', async () => {
   rlErr.on('line', line => mainWindow?.webContents.send('lsp://stderr', line));
   child.on('exit', code => {
     mainWindow?.webContents.send('lsp://stderr', `[LSP exited ${code}]`);
+    if (verbose) console.log('[LSP] exited', code);
     lsp = null;
   });
 });
@@ -138,8 +151,132 @@ ipcMain.handle('lsp_send', async (_e, payload: string) => {
   lsp.stdin.write(bytes);
 });
 
+let recentsCache: Array<{ path: string; lastOpened: number; kind: 'file' | 'folder' }> | null = null;
+function getRecentsPath() { return join(app.getPath('userData'), 'recent.json'); }
+async function loadRecents(): Promise<typeof recentsCache> {
+  if (recentsCache) return recentsCache;
+  try {
+    const txt = await fs.readFile(getRecentsPath(), 'utf8');
+    recentsCache = JSON.parse(txt);
+  } catch { recentsCache = []; }
+  return recentsCache!;
+}
+async function persistRecents() {
+  try { await fs.writeFile(getRecentsPath(), JSON.stringify(recentsCache||[], null, 2), 'utf8'); } catch {}
+}
+function touchRecent(path: string, kind: 'file'|'folder') {
+  const now = Date.now();
+  if (!recentsCache) recentsCache = [];
+  recentsCache = recentsCache.filter(r => r.path !== path);
+  recentsCache.unshift({ path, lastOpened: now, kind });
+  if (recentsCache.length > 30) recentsCache.length = 30;
+  persistRecents();
+}
+
+ipcMain.handle('file:open', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Source', extensions: ['vpy','pseudo','asm','txt'] }] });
+  if (canceled || filePaths.length === 0) return null;
+  const p = filePaths[0];
+  try {
+    const content = await fs.readFile(p, 'utf8');
+    const stat = await fs.stat(p);
+    await loadRecents();
+    touchRecent(p, 'file');
+    return { path: p, content, mtime: stat.mtimeMs, size: stat.size, name: basename(p) };
+  } catch (e: any) {
+    return { error: e?.message || 'read_failed' };
+  }
+});
+
+ipcMain.handle('file:openPath', async (_e, p: string) => {
+  if (!p) return { error: 'no_path' };
+  try {
+    const content = await fs.readFile(p, 'utf8');
+    const stat = await fs.stat(p);
+    await loadRecents();
+    touchRecent(p, 'file');
+    return { path: p, content, mtime: stat.mtimeMs, size: stat.size, name: basename(p) };
+  } catch (e:any) {
+    return { error: e?.message || 'read_failed' };
+  }
+});
+
+ipcMain.handle('file:read', async (_e, path: string) => {
+  if (!path) return { error: 'no_path' };
+  try {
+    const content = await fs.readFile(path, 'utf8');
+    const stat = await fs.stat(path);
+    return { path, content, mtime: stat.mtimeMs, size: stat.size, name: basename(path) };
+  } catch (e:any) {
+    return { error: e?.message || 'read_failed' };
+  }
+});
+
+ipcMain.handle('file:save', async (_e, args: { path: string; content: string; expectedMTime?: number }) => {
+  const { path, content, expectedMTime } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  try {
+    const statBefore = await fs.stat(path).catch(()=>null);
+    if (expectedMTime && statBefore && statBefore.mtimeMs !== expectedMTime) {
+      return { conflict: true, currentMTime: statBefore.mtimeMs };
+    }
+    await fs.writeFile(path, content, 'utf8');
+    const statAfter = await fs.stat(path);
+    await loadRecents();
+    touchRecent(path, 'file');
+    return { path, mtime: statAfter.mtimeMs, size: statAfter.size };
+  } catch (e: any) {
+    return { error: e?.message || 'save_failed' };
+  }
+});
+
+ipcMain.handle('file:saveAs', async (_e, args: { suggestedName?: string; content: string }) => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return { error: 'no_window' };
+  const { suggestedName, content } = args || {} as any;
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    defaultPath: suggestedName || 'untitled.vpy',
+    filters: [{ name: 'Source', extensions: ['vpy','pseudo','asm','txt'] }]
+  });
+  if (canceled || !filePath) return { canceled: true };
+  try {
+    await fs.writeFile(filePath, content, 'utf8');
+    const stat = await fs.stat(filePath);
+    await loadRecents();
+    touchRecent(filePath, 'file');
+    return { path: filePath, mtime: stat.mtimeMs, size: stat.size, name: basename(filePath) };
+  } catch (e: any) {
+    return { error: e?.message || 'save_failed' };
+  }
+});
+
+ipcMain.handle('file:openFolder', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  if (canceled || filePaths.length === 0) return null;
+  const p = filePaths[0];
+  await loadRecents();
+  touchRecent(p, 'folder');
+  return { path: p };
+});
+
+ipcMain.handle('recents:load', async () => {
+  const list = await loadRecents();
+  return list;
+});
+ipcMain.handle('recents:write', async (_e, list: any[]) => {
+  recentsCache = Array.isArray(list) ? list : [];
+  await persistRecents();
+  return { ok: true };
+});
+
 // After window creation call buildMenus
 app.whenReady().then(() => {
+  const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
+  if (verbose) console.log('[IDE] app.whenReady');
   // Seguridad adicional: anular menú global
   try { Menu.setApplicationMenu(null); } catch {}
   // Inyectar Content-Security-Policy por cabecera (más fuerte que meta) en dev y prod
@@ -182,7 +319,17 @@ app.whenReady().then(() => {
     headers['Content-Security-Policy'] = [csp];
     callback({ cancel: false, responseHeaders: headers });
   });
+  if (verbose) console.log('[IDE] CSP applied');
   createWindow();
+});
+app.on('render-process-gone', (_e, details) => {
+  console.error('[IDE] render process gone', details);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[IDE] uncaughtException', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[IDE] unhandledRejection', reason);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

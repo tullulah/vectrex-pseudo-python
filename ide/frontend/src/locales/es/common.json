@@ -8,6 +8,12 @@
   "action.open": "Abrir",
   "action.save": "Guardar",
   "action.close": "Cerrar",
+  "action.pinPanels": "Fijar paneles",
+  "action.unpinPanels": "Desfijar paneles (auto-ocultar)",
+  "action.showPanel": "Mostrar panel",
+  "panel.files": "Archivos",
+  "panel.editor": "Editor",
+  "panel.errors": "Errores",
   "panel.emulator": "Emulador",
   "panel.debug": "Depuración",
   "panel.registers": "Registros",
@@ -18,4 +24,35 @@
   "status.stopped": "Detenido",
   "lang.english": "Inglés",
   "lang.spanish": "Español"
+  ,"file.new": "Nuevo"
+  ,"file.open": "Abrir..."
+  ,"file.save": "Guardar"
+  ,"file.saveAs": "Guardar como..."
+  ,"file.close": "Cerrar archivo"
+  ,"file.recent.placeholder": "Archivos recientes (próximamente)"
+  ,"layout.reset": "Restablecer diseño"
+  ,"app.exit": "Salir"
+  ,"edit.undo": "Deshacer"
+  ,"edit.redo": "Rehacer"
+  ,"edit.cut": "Cortar"
+  ,"edit.copy": "Copiar"
+  ,"edit.paste": "Pegar"
+  ,"edit.selectAll": "Seleccionar todo"
+  ,"edit.toggleComment": "Alternar comentario"
+  ,"edit.format": "Formatear documento"
+  ,"menu.build": "Compilar"
+  ,"menu.debug": "Depuración"
+  ,"build.build": "Compilar"
+  ,"build.buildAndRun": "Compilar y ejecutar"
+  ,"build.clean": "Limpiar"
+  ,"build.targetBinary": "Binario destino"
+  ,"debug.start": "Iniciar depuración"
+  ,"debug.stop": "Detener depuración"
+  ,"debug.stepOver": "Siguiente"
+  ,"debug.stepInto": "Entrar"
+  ,"debug.stepOut": "Salir"
+  ,"debug.toggleBreakpoint": "Alternar breakpoint"
+  ,"panel.hideActive": "Ocultar panel activo"
+  ,"panel.togglePinActive": "Fijar/Desfijar panel activo"
+  ,"menu.languageToggle": "Idioma: EN/ES"
 }

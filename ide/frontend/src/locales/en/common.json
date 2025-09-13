@@ -8,6 +8,12 @@
   "action.open": "Open",
   "action.save": "Save",
   "action.close": "Close",
+  "action.pinPanels": "Pin panels",
+  "action.unpinPanels": "Unpin panels (auto-hide)",
+  "action.showPanel": "Show panel",
+  "panel.files": "Files",
+  "panel.editor": "Editor",
+  "panel.errors": "Errors",
   "panel.emulator": "Emulator",
   "panel.debug": "Debug",
   "panel.registers": "Registers",
@@ -18,4 +24,35 @@
   "status.stopped": "Stopped",
   "lang.english": "English",
   "lang.spanish": "Spanish"
+  ,"file.new": "New"
+  ,"file.open": "Open..."
+  ,"file.save": "Save"
+  ,"file.saveAs": "Save As..."
+  ,"file.close": "Close File"
+  ,"file.recent.placeholder": "Recent Files (coming soon)"
+  ,"layout.reset": "Reset Layout"
+  ,"app.exit": "Exit"
+  ,"edit.undo": "Undo"
+  ,"edit.redo": "Redo"
+  ,"edit.cut": "Cut"
+  ,"edit.copy": "Copy"
+  ,"edit.paste": "Paste"
+  ,"edit.selectAll": "Select All"
+  ,"edit.toggleComment": "Toggle Comment"
+  ,"edit.format": "Format Document"
+  ,"menu.build": "Build"
+  ,"menu.debug": "Debug"
+  ,"build.build": "Build"
+  ,"build.buildAndRun": "Build && Run"
+  ,"build.clean": "Clean"
+  ,"build.targetBinary": "Target Binary"
+  ,"debug.start": "Start Debugging"
+  ,"debug.stop": "Stop Debugging"
+  ,"debug.stepOver": "Step Over"
+  ,"debug.stepInto": "Step Into"
+  ,"debug.stepOut": "Step Out"
+  ,"debug.toggleBreakpoint": "Toggle Breakpoint"
+  ,"panel.hideActive": "Hide Active Panel"
+  ,"panel.togglePinActive": "Pin/Unpin Active Panel"
+  ,"menu.languageToggle": "Language: EN/ES"
 }

@@ -260,6 +260,8 @@ Además del compilador CLI y la extensión de VS Code, el repo incluye un protot
 - Hover: documentación localizada (en/es) de comandos built-in y ubicación de funciones definidas por el usuario.
 - Go to Definition: salto a definición de funciones creadas por el usuario.
 - Semantic Tokens (full): keywords, funciones (usuario y built-in diferenciadas por modificador), variables, parámetros (reservado), números, strings, operadores, constantes I_*.
+ - Rename symbol (funciones definidas por el usuario) – soporte básico si se selecciona el identificador de la definición o uso.
+ - Signature Help para llamados (MOVE, RECT, POLYGON, etc.).
 
 ### Resaltado de sintaxis / tema
 - Monaco Monarch para tokens léxicos básicos (keywords, macros, constantes).
@@ -301,6 +303,8 @@ LIMITACIONES (prototipo):
 | WebView2 DnD | Cursor prohibido con HTML5 drag nativo | Mitigado con fallback custom |
 | Semantic tokens | Requiere sincronizar legend y tema para nuevos tipos | Documentado |
 | Reordenar cross-tabset (estético) | Falta ghost y drop zones más ricas | Pendiente |
+| Multi-error parse | Actualmente sólo primer error: parser hace bail temprano | En diseño |
+| Live i18n en tabs | Cambiar idioma no refresca títulos existentes | Pendiente |
 
 ### Cómo arrancar el IDE rápidamente
 1. `cargo build --bin vpy_lsp` (opcional; el script lo hará si no existe).
@@ -318,4 +322,22 @@ Si sólo deseas la experiencia web (sin wrapper desktop), entra a `ide/frontend`
 - Tema oscuro `vpy-dark` + reglas para enumMember (constantes I_*).
 - Script PowerShell robusto para lanzar IDE (`run-ide.ps1`).
  (El fallback de drag específico de Tauri fue eliminado al migrar definitivamente a Electron.)
+ - Fix: hover -32601 (se reemplazó binario minimal por wrapper del servidor completo).
+ - Fix: duplicación de tooltips hover (gestión de disposable al registrar proveedor).
+ - Fix: normalización URIs Windows (file:///C:/...) para alinear markers y panel de errores.
+ - Mejora: parser error line/col parsing robusto ante rutas con colon (Windows drive); evita inversión de coordenadas.
+ - Tests: añadidos `diagnostics_positions` (warning línea 20, error línea 30) y `diagnostics_windows_path` (línea 187) para blindar mapping.
+ - Hover docs: añadidas entradas para `DRAW_VECTORLIST` y alias `VECTREX_DRAW_VECTORLIST`.
+ - Signature Help: parámetros activos por conteo de comas.
+ - Logging: instrumentación selectiva `[vpy_lsp][hover]` para depurar ubicaciones en hovers.
+
+## Diagnostics & Line/Col Mapping
+El servidor produce:
+1. Errores de parseo (ERROR) con rango mínimo (start..start+1) usando line/column 0-based.
+2. Warning heurístico cuando se detecta `POLYGON 2` (lista degenerada); se marca al inicio de la línea.
+
+Pipeline:
+Parser -> Mensaje `filename:line:col: error: detalle` -> extractor robusto (retrocede desde `: error:`) -> LSP `publishDiagnostics` -> Store (mantiene 0-based) -> Panel (`line+1:col+1`).
+
+Tests automatizados verifican posiciones (incluyendo rutas Windows con `C:`) para evitar regresiones.
 

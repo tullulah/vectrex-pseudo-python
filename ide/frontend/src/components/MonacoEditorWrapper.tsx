@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../state/editorStore';
 import Editor, { OnChange, Monaco, BeforeMount } from '@monaco-editor/react';
 // Import full ESM Monaco API and expose it globally so the react wrapper skips AMD loader.js
 import * as monacoApi from 'monaco-editor/esm/vs/editor/editor.api';
+// Include all standard editor contributions (hover, markers, etc.) so that
+// diagnostic underlines show native tooltips and language features work.
+// Without this, only the bare API loads and marker hovers won't appear.
+import 'monaco-editor/esm/vs/editor/editor.all';
 // Bundle the core editor worker via Vite (?worker) so we don't craft blob strings manually.
 // If later we add languages needing their own workers we can import them similarly.
 // import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'; (example)
@@ -95,15 +100,20 @@ function ensureLanguage(monaco: Monaco) {
 // Configure self-hosted Monaco paths (no CDN) to satisfy strict CSP 'script-src self'
 // We rely on Vite serving node_modules/monaco-editor/min under /monaco via alias injection in dev server config (future improvement: plugin).
 // For now we point to default 'vs' expected inside bundle; @monaco-editor/react will inline ESM without loader.js when possible.
-export const MonacoEditorWrapper: React.FC = () => {
+export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
+  const { t } = useTranslation(['editor','common']);
   // Use individual selectors to avoid creating a fresh object each render (React 19 getSnapshot loop guard)
   const documents = useEditorStore(s => s.documents);
   const active = useEditorStore(s => s.active);
+  const setActive = useEditorStore(s => s.setActive);
   const updateContent = useEditorStore(s => s.updateContent);
   const setDiagnostics = useEditorStore(s => s.setDiagnostics);
 
-  const doc = documents.find(d => d.uri === active);
+  const targetUri = uri || active;
+  const doc = documents.find(d => d.uri === targetUri);
   const lastModelRef = useRef<string | undefined>(undefined);
+  // Keep track of hover provider so we can dispose on remount (avoid duplicate hover tooltips)
+  const hoverDisposableRef = useRef<any>(null);
 
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -116,6 +126,9 @@ export const MonacoEditorWrapper: React.FC = () => {
       baseUrl: '/' // not strictly needed with ESM import but kept for completeness
     };
   };
+
+  // Track which URIs already sent didOpen to LSP
+  const openedRef = useRef<Set<string>>(new Set());
 
   const handleMount = useCallback((editor: any, monaco: Monaco) => {
     ensureLanguage(monaco);
@@ -132,13 +145,20 @@ export const MonacoEditorWrapper: React.FC = () => {
           const res = await (lspClient as any).request('textDocument/semanticTokens/full', params);
           if (!res || !res.data) return { data: new Uint32Array() } as any;
           return { data: new Uint32Array(res.data) } as any;
-        } catch (e) { console.warn('[LSP] semantic tokens error', e); return { data: new Uint32Array() } as any; }
+        } catch (e) {
+          // Evitar inundar logs: primer fallo puede ocurrir antes de didOpen sincronizado.
+          if (!(window as any)._vpySemanticWarned) {
+            console.warn('[LSP] semantic tokens error (silenced after first)', e);
+            (window as any)._vpySemanticWarned = true;
+          }
+          return { data: new Uint32Array() } as any;
+        }
       },
       releaseDocumentSemanticTokens: () => {}
     });
     // LSP-backed completion provider
     monaco.languages.registerCompletionItemProvider('vpy', {
-      triggerCharacters: ['_', '(', ',', ' '],
+      triggerCharacters: ['_', '(', ',', ' ', '.', ':'],
       provideCompletionItems: async (model, position) => {
         try {
           const uri = model.uri.toString();
@@ -151,7 +171,12 @@ export const MonacoEditorWrapper: React.FC = () => {
             context: { triggerKind: 1 }
           };
           const res = await (lspClient as any).request('textDocument/completion', params);
-          if (!res) return { suggestions: [] };
+          if (!res) {
+            // fallback: simple word scan
+            const words = Array.from(new Set(text.match(/[A-Za-z_][A-Za-z0-9_]{2,}/g) || []));
+            const suggestions = words.slice(0,100).map(w => ({ label:w, kind: monaco.languages.CompletionItemKind.Text, insertText:w }));
+            return { suggestions };
+          }
           const items = Array.isArray(res.items) ? res.items : (Array.isArray(res) ? res : []);
           const suggestions = items.map((it: any) => ({
             label: it.label,
@@ -159,6 +184,7 @@ export const MonacoEditorWrapper: React.FC = () => {
             insertText: it.insertText || it.label,
             range: undefined
           }));
+          // console.debug('[LSP] completion items', suggestions.length);
           return { suggestions };
         } catch (e) {
           console.warn('[LSP] completion error', e);
@@ -166,21 +192,96 @@ export const MonacoEditorWrapper: React.FC = () => {
         }
       }
     });
-    // Hover provider
-    monaco.languages.registerHoverProvider('vpy', {
+    // Rename provider
+    monaco.languages.registerRenameProvider('vpy', {
+      provideRenameEdits: async (model, position, newName) => {
+        try {
+          const uri = model.uri.toString();
+          const res = await (lspClient as any).rename(uri, position.lineNumber - 1, position.column - 1, newName);
+          if (!res) return { edits: [] } as any;
+          const edits: any[] = [];
+          if (res.changes) {
+            Object.keys(res.changes).forEach(docUri => {
+              const targetModel = monaco.editor.getModel(monaco.Uri.parse(docUri));
+              if (!targetModel) return;
+              res.changes[docUri].forEach((e:any) => {
+                edits.push({
+                  resource: targetModel.uri,
+                  edit: {
+                    range: new monaco.Range(
+                      e.range.start.line + 1,
+                      e.range.start.character + 1,
+                      e.range.end.line + 1,
+                      e.range.end.character + 1
+                    ),
+                    text: e.new_text
+                  }
+                });
+              });
+            });
+          }
+          return { edits } as any;
+        } catch (e) { console.warn('[LSP] rename error', e); return { edits: [] } as any; }
+      },
+      resolveRenameLocation: async (model, position) => {
+        // Optimistic: allow rename of any identifier; server will veto if not a symbol
+        const word = model.getWordAtPosition(position);
+        if (!word) return { range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column), text: '' } as any;
+        const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+        return { range, text: model.getValueInRange(range) } as any;
+      }
+    });
+    // Signature help provider
+    monaco.languages.registerSignatureHelpProvider('vpy', {
+      signatureHelpTriggerCharacters: ['(', ','],
+      provideSignatureHelp: async (model, position) => {
+        try {
+          const uri = model.uri.toString();
+          const res = await (lspClient as any).signatureHelp(uri, position.lineNumber - 1, position.column - 1);
+          if (!res) return { value: { signatures: [], activeParameter: 0, activeSignature: 0 }, dispose: () => {} };
+          return { value: res, dispose: () => {} } as any;
+        } catch (e) { console.warn('[LSP] signatureHelp error', e); return { value: { signatures: [], activeParameter: 0, activeSignature: 0 }, dispose: () => {} }; }
+      }
+    });
+    // Hover provider (dispose any previous instance first to avoid stacking)
+    if (hoverDisposableRef.current) {
+      try { hoverDisposableRef.current.dispose(); } catch {}
+      hoverDisposableRef.current = null;
+    }
+    hoverDisposableRef.current = monaco.languages.registerHoverProvider('vpy', {
       provideHover: async (model, position) => {
+        console.debug('[LSP][hover] trigger', model.uri.toString(), position.lineNumber, position.column);
         try {
           const uri = model.uri.toString();
           const params = { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 } };
           const res = await (lspClient as any).request('textDocument/hover', params);
           if (res && res.contents) {
             const contents = typeof res.contents === 'string' ? res.contents : (res.contents.value || '');
+            console.debug('[LSP][hover] response', contents);
             return { contents: [{ value: contents }], range: undefined } as any;
           }
         } catch (e) { console.warn('[LSP] hover error', e); }
+        console.debug('[LSP][hover] empty');
         return null as any;
       }
     });
+    console.debug('[LSP][hover] provider registered');
+    // Extra instrumentation: log mouse move & model language to diagnose missing hover triggers
+    try {
+      const lang = editor.getModel()?.getLanguageId();
+      console.debug('[hover-debug] current model languageId=', lang, 'uri=', editor.getModel()?.uri.toString());
+      let lastLog = 0;
+      editor.onMouseMove((e: any) => {
+        const now = performance.now();
+        if (now - lastLog < 250) return; // throttle
+        lastLog = now;
+        const pos = e.target?.position ? `${e.target.position.lineNumber}:${e.target.position.column}` : 'n/a';
+        console.debug('[hover-debug] mouseMove target=', e.target?.type, 'pos=', pos, 'detail=', e.target?.detail || '');
+      });
+      // Force re-apply hover enabled in case wrapper options lost
+      editor.updateOptions({ hover: { enabled: true, delay: 150 } });
+      // Fallback hover removed (native Monaco hover now active). If needed, reintroduce with a feature flag.
+    } catch (e) { console.warn('[hover-debug] instrumentation error', e); }
     // Definition provider
     monaco.languages.registerDefinitionProvider('vpy', {
       provideDefinition: async (model, position) => {
@@ -204,21 +305,32 @@ export const MonacoEditorWrapper: React.FC = () => {
       }
     });
     if (doc) {
-      const uri = monaco.Uri.parse(doc.uri);
-      let model = monaco.editor.getModel(uri);
+      const mUri = monaco.Uri.parse(doc.uri);
+      let model = monaco.editor.getModel(mUri);
       if (!model) {
-        model = monaco.editor.createModel(doc.content, 'vpy', uri);
+        model = monaco.editor.createModel(doc.content, 'vpy', mUri);
       }
       editor.setModel(model);
       lastModelRef.current = doc.uri;
       // Trigger an initial didChange to encourage semanticTokens/full soon after mount
-      lspClient.didChange(doc.uri, model.getValue());
+      if (!openedRef.current.has(doc.uri)) {
+        try { lspClient.didOpen(doc.uri, 'vpy', model.getValue()); openedRef.current.add(doc.uri); } catch {}
+      } else {
+        lspClient.didChange(doc.uri, model.getValue());
+      }
     }
+    return () => {
+      if (hoverDisposableRef.current) {
+        try { hoverDisposableRef.current.dispose(); } catch {}
+        hoverDisposableRef.current = null;
+      }
+    };
   }, [doc]);
 
   const handleChange: OnChange = useCallback((value) => {
     if (doc && typeof value === 'string') {
       updateContent(doc.uri, value);
+      try { lspClient.didChange(doc.uri, value); } catch {}
     }
   }, [doc, updateContent]);
 
@@ -226,10 +338,10 @@ export const MonacoEditorWrapper: React.FC = () => {
   useEffect(() => {
     if (monacoRef.current && editorRef.current && doc) {
       const monaco = monacoRef.current;
-      const uri = monaco.Uri.parse(doc.uri);
-      let model = monaco.editor.getModel(uri);
+      const mUri = monaco.Uri.parse(doc.uri);
+      let model = monaco.editor.getModel(mUri);
       if (!model) {
-        model = monaco.editor.createModel(doc.content, 'vpy', uri);
+        model = monaco.editor.createModel(doc.content, 'vpy', mUri);
       } else if (model.getValue() !== doc.content) {
         model.setValue(doc.content);
       }
@@ -256,9 +368,51 @@ export const MonacoEditorWrapper: React.FC = () => {
   useEffect(() => {
     const handler = (method: string, params: any) => {
       if (method === 'textDocument/publishDiagnostics' && monacoRef.current) {
-        console.debug('[LSP] diagnostics received', params);
-        const { uri, diagnostics } = params;
-        const model = monacoRef.current.editor.getModels().find(m => m.uri.toString() === uri);
+        const { uri, diagnostics } = params || {};
+        const rawUri: string = uri || '';
+        const cleaned = rawUri.replace(/\\/g,'/');
+        // Normalize: ensure triple slash after scheme for Windows paths, lowercase drive letter for matching
+        let norm = cleaned;
+        // file:///C:/ -> drive letter uppercase in Monaco normally; we will compare case-insensitive
+        if (/^file:\/\/[A-Za-z]:\//.test(norm)) {
+          // Add extra slash to make file:/// if only two
+          norm = norm.replace(/^file:\/\//,'file:///');
+        } else if (/^file:\/\/[A-Za-z]:\//.test(norm) === false && /^file:\/\/[A-Za-z]:/.test(norm) === false) {
+          // leave others
+        }
+        const lcNorm = norm.toLowerCase();
+        const models = monacoRef.current.editor.getModels();
+        let model = models.find(m => m.uri.toString().toLowerCase() === lcNorm);
+        if (!model) {
+          // Fallback: try collapsing multiple slashes or adding one
+            const variants = [
+              lcNorm.replace('file:////','file:///'),
+              lcNorm.replace('file:///','file://'),
+              lcNorm.replace(/^file:\/\//,'file:///')
+            ];
+            model = models.find(m => variants.includes(m.uri.toString().toLowerCase()));
+        }
+          if (!model) {
+            // Path-based loose match: compare file path tail ignoring case
+            try {
+              const rawPath = lcNorm.replace('file:///','').replace('file://','');
+              const tail = rawPath.split('/') .slice(-3).join('/'); // last 3 segments heuristic
+              model = models.find(m => m.uri.toString().toLowerCase().endsWith(tail));
+            } catch {}
+          }
+          if (!model) {
+            // As last resort, if this doc is currently active in store with same rawUri (ignoring case), recreate model so we can show markers.
+            try {
+              const st: any = (useEditorStore as any).getState();
+              const docMatch = st.documents.find((d: any) => d.uri.toLowerCase() === lcNorm);
+              if (docMatch && monacoRef.current) {
+                const mUri = monacoRef.current.Uri.parse(docMatch.uri);
+                model = monacoRef.current.editor.createModel(docMatch.content, 'vpy', mUri);
+                console.debug('[LSP][diag] recreated missing model for', docMatch.uri);
+              }
+            } catch {}
+          }
+        console.debug('[LSP] diagnostics received uri=', rawUri, 'norm=', lcNorm, 'count=', (diagnostics||[]).length, 'matchedModel=', !!model, 'models=', models.map(m=>m.uri.toString()));
         // Always update store even if model not currently open (will aggregate in Errors panel)
         const diagsForStore = (diagnostics || []).map((d: any) => ({
           message: d.message,
@@ -266,7 +420,13 @@ export const MonacoEditorWrapper: React.FC = () => {
           line: d.range.start.line,
           column: d.range.start.character
         }));
-        try { setDiagnostics(uri, diagsForStore as any); } catch (_) {}
+        try {
+          const storeUri = model ? model.uri.toString() : uri;
+          if (model && storeUri !== uri) {
+            console.debug('[LSP][diag] storeUri differs from raw uri', storeUri, uri);
+          }
+          setDiagnostics(storeUri, diagsForStore as any);
+        } catch (_) {}
         if (!model) return; // markers only for open model
         const markers = (diagnostics || []).map((d: any) => ({
           severity: severityToMonaco(d.severity, monacoRef.current!),
@@ -278,6 +438,7 @@ export const MonacoEditorWrapper: React.FC = () => {
             source: d.source || 'vpy'
         }));
         monacoRef.current.editor.setModelMarkers(model, 'vpy', markers);
+        console.debug('[LSP] applied markers', markers.length);
       }
     };
     lspClient.onNotification(handler);
@@ -328,8 +489,37 @@ export const MonacoEditorWrapper: React.FC = () => {
   }, []);
 
   if (!doc) {
-    return <div style={{padding:16, color:'#666'}}>No document open</div>;
+    return <div style={{ padding:16, color:'#666' }}>{t('editor:noFile')}</div>;
   }
+
+  // When this wrapper is tied to a specific uri prop and the tab gains focus, ensure active doc updates
+  useEffect(() => {
+    if (uri && doc && active !== doc.uri) {
+      // Passive: do not forcibly override global active unless this tab's model is shown (heuristic: small timeout after mount)
+      const t = setTimeout(() => {
+        try { setActive(doc.uri); } catch {}
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [uri, doc?.uri]);
+
+  // Lazy load content if this is a restored stub (empty content, has diskPath)
+  useEffect(() => {
+    if (doc && doc.diskPath && doc.content === '' && doc.lastSavedContent === '') {
+      const api: any = (window as any).files;
+      if (!api || !api.readFile) return;
+      api.readFile(doc.diskPath).then((res: any) => {
+        if (!res || res.error) return;
+        const text = res.content || '';
+        // Update content in store without marking dirty
+        try {
+          const st = (useEditorStore as any).getState();
+          st.updateContent(doc.uri, text);
+          st.markSaved(doc.uri, res.mtime);
+        } catch {}
+      });
+    }
+  }, [doc?.diskPath]);
 
   return (
     <Editor
@@ -349,8 +539,11 @@ export const MonacoEditorWrapper: React.FC = () => {
         scrollBeyondLastLine: false,
         wordWrap: 'on',
   wordBasedSuggestions: 'off',
+        hover: { enabled: true, delay: 150 },
         'semanticHighlighting.enabled': true,
-        quickSuggestions: { other: true, strings: false, comments: false }
+        quickSuggestions: { other: true, strings: false, comments: false },
+        suggestOnTriggerCharacters: true,
+        renderValidationDecorations: 'on'
       }}
     />
   );

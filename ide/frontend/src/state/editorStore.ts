@@ -10,6 +10,7 @@ interface EditorState {
   openDocument: (doc: DocumentModel) => void;
   setActive: (uri: string) => void;
   updateContent: (uri: string, content: string) => void;
+  markSaved: (uri: string, newMtime?: number) => void;
   setDiagnostics: (uri: string, diags: DiagnosticModel[]) => void;
   closeDocument: (uri: string) => void;
   gotoLocation: (uri: string, line: number, column: number) => void;
@@ -43,17 +44,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   active: undefined,
   allDiagnostics: [],
   openDocument: (doc) => set((s) => {
-    const documents = [...s.documents, doc];
+    // If document already open (by uri) just activate & optionally refresh metadata
+    const existing = s.documents.find(d => d.uri === doc.uri);
+    let documents: DocumentModel[];
+    if (existing) {
+      documents = s.documents.map(d => d.uri === doc.uri ? { ...d, ...doc, dirty: false, lastSavedContent: doc.content } : d);
+    } else {
+      documents = [...s.documents, { ...doc, dirty: false, lastSavedContent: doc.content }];
+    }
     return { documents, active: doc.uri, allDiagnostics: recomputeAllDiagnostics(documents) };
   }),
   setActive: (uri) => set({ active: uri }),
   updateContent: (uri, content) => {
     set((s) => {
-      const documents = s.documents.map(d => d.uri === uri ? { ...d, content, dirty: true } : d);
+      const documents = s.documents.map(d => d.uri === uri ? {
+        ...d,
+        content,
+        dirty: d.lastSavedContent !== undefined ? (content !== d.lastSavedContent) : true
+      } : d);
       return { documents, allDiagnostics: recomputeAllDiagnostics(documents) };
     });
     try { lspClient.didChange(uri, content); } catch (_) {}
   },
+  markSaved: (uri, newMtime) => set((s) => {
+    const documents = s.documents.map(d => d.uri === uri ? {
+      ...d,
+      dirty: false,
+      lastSavedContent: d.content,
+      mtime: newMtime ?? d.mtime
+    } : d);
+    return { documents };
+  }),
   setDiagnostics: (uri, diags) => set((s) => {
     const documents = s.documents.map(d => d.uri === uri ? { ...d, diagnostics: diags } : d);
     return { documents, allDiagnostics: recomputeAllDiagnostics(documents) };
@@ -65,7 +86,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gotoLocation: (uri, line, column) => {
     const s = get();
     if (!s.documents.some(d => d.uri === uri)) {
-  const documents: DocumentModel[] = [...s.documents, { uri, language: 'vpy', content: '', dirty: false, diagnostics: [] } as DocumentModel];
+      const documents: DocumentModel[] = [...s.documents, { uri, language: 'vpy', content: '', dirty: false, diagnostics: [], lastSavedContent: '' } as DocumentModel];
       set({ documents, active: uri, allDiagnostics: recomputeAllDiagnostics(documents) });
     } else {
       set({ active: uri });

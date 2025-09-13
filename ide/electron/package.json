@@ -7,9 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -w -p tsconfig.json",
-    "dev": "concurrently -k \"npm:renderer\" \"npm:watch\" \"npm:electron-start\"",
+  "dev": "concurrently -k -n renderer,types,electron -c auto \"npm:renderer\" \"npm:watch\" \"npm:electron-start\"",
     "renderer": "cd ../frontend && npm run dev",
-  "electron-start": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+  "electron-start": "wait-on tcp:5173 && wait-on file:dist/main.js && echo ELECTRON_START && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron . && echo ELECTRON_END",
     "package": "npm run build && electron-builder"
   },
   "devDependencies": {

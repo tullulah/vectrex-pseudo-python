@@ -41,7 +41,8 @@ class LspClient {
       if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
         // response
         if (msg.error) {
-          console.error('[LSP<-SERVER] error response', msg);
+          const pending = this.pending.get(msg.id);
+          console.error('[LSP<-SERVER] error response', msg, 'pendingMethod=', pending?.method);
         } else {
           console.debug('[LSP<-SERVER] response', msg);
         }
@@ -73,6 +74,7 @@ class LspClient {
 
   request(method: string, params: any): Promise<any> {
     const id = ++this.seq;
+    console.debug('[LSP][req.start]', id, method, params);
     const p = new Promise<any>((resolve, reject) => {
       this.pending.set(id, { resolve, reject, method });
     });
@@ -98,6 +100,21 @@ class LspClient {
     this.notify('textDocument/didChange', {
       textDocument: { uri, version: current },
       contentChanges: [ { text } ]
+    });
+  }
+
+  rename(uri: string, line: number, character: number, newName: string) {
+    return this.request('textDocument/rename', {
+      textDocument: { uri },
+      position: { line, character },
+      newName
+    });
+  }
+
+  signatureHelp(uri: string, line: number, character: number) {
+    return this.request('textDocument/signatureHelp', {
+      textDocument: { uri },
+      position: { line, character }
     });
   }
 }
