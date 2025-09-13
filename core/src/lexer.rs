@@ -16,7 +16,7 @@ pub enum TokenKind {
     StringLit(String),
     True, False,
     EqEq, NotEq, Lt, Le, Gt, Ge,
-    EOF,
+    Eof,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,10 +29,9 @@ pub struct Token {
 // lex: convert source text into a token stream with indentation tracking.
 pub fn lex(input: &str) -> Result<Vec<Token>> {
     let mut tokens = Vec::new();
-    let mut lines = input.lines().enumerate();
     let mut indent_stack: Vec<usize> = vec![0];
 
-    while let Some((i, raw_line)) = lines.next() {
+    for (i, raw_line) in input.lines().enumerate() {
         let line_no = i + 1;
         let trimmed = raw_line.trim();
     // Skip blank or comment-only lines (support '#' and ';' as comment starters)
@@ -60,7 +59,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
         indent_stack.pop();
         tokens.push(Token { kind: TokenKind::Dedent, line: 0, col: 0 });
     }
-    tokens.push(Token { kind: TokenKind::EOF, line: 0, col: 0 });
+    tokens.push(Token { kind: TokenKind::Eof, line: 0, col: 0 });
     Ok(tokens)
 }
 

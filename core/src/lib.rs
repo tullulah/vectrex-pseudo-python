@@ -5,7 +5,6 @@ pub mod codegen;
 pub mod target;
 pub mod backend;
 pub mod emulator;
-pub mod lsp;
 
 // Convenience re-exports
 pub use lexer::*;

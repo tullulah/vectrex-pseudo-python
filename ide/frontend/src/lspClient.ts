@@ -1,8 +1,5 @@
-import { invoke } from '@tauri-apps/api/tauri';
-import { listen } from '@tauri-apps/api/event';
-
-// Simple LSP client that frames JSON-RPC messages and parses server responses.
-// We only parse Content-Length headers and forward parsed JSON to handlers.
+// Simple LSP client (Electron + web fallback). Frames JSON-RPC messages and parses server responses.
+// Tauri support removed: runtime now Electron-only (web build is passive without LSP backend).
 
 export type LspNotificationHandler = (method: string, params: any) => void;
 export type LspResponseHandler = (id: number | string, result: any, error?: any) => void;
@@ -20,15 +17,13 @@ class LspClient {
 
   async start() {
     if (this.started) return;
-    if (typeof window === 'undefined' || !(window as any).__TAURI_IPC__) {
-      // Not running inside Tauri environment; skip starting LSP.
-      return;
-    }
-    await invoke('lsp_start');
-  await listen<string>('lsp://message', (e) => this.dispatchMessage(e.payload));
-  // Keep stdout / stderr listeners for debugging
-  await listen<string>('lsp://stdout', (e) => console.debug('[LSP-RAW]', e.payload));
-    await listen<string>('lsp://stderr', (e) => console.warn('[LSP-STDERR]', e.payload));
+    const w: any = typeof window !== 'undefined' ? window : undefined;
+    const isElectron = !!(w && w.electronAPI);
+    if (!isElectron) return; // plain web build: no backend
+    await w.electronAPI.lspStart();
+    w.electronAPI.onLspMessage((json: string) => this.dispatchMessage(json));
+    w.electronAPI.onLspStdout((line: string) => console.debug('[LSP-RAW]', line));
+    w.electronAPI.onLspStderr((line: string) => console.warn('[LSP-STDERR]', line));
     this.started = true;
   }
 
@@ -68,16 +63,12 @@ class LspClient {
   }
 
   private sendRaw(obj: any): Promise<any> {
-    if (!this.started) return Promise.resolve();
-    if (typeof window === 'undefined' || !(window as any).__TAURI_IPC__) {
-      // Running outside Tauri (e.g. plain web build) -> no-op
-      return Promise.resolve();
-    }
+    const w: any = typeof window !== 'undefined' ? window : undefined;
+    const isElectron = !!(w && w.electronAPI);
+    if (!isElectron) return Promise.resolve();
     const json = JSON.stringify(obj);
     console.debug('[LSP->SERVER]', json);
-    return invoke('lsp_send', { payload: json }).catch(err => {
-      console.warn('[LSP] send error', err);
-    });
+    return w.electronAPI.lspSend(json);
   }
 
   request(method: string, params: any): Promise<any> {

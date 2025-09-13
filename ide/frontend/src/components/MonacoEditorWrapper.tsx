@@ -1,6 +1,18 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../state/editorStore';
-import Editor, { OnChange, Monaco } from '@monaco-editor/react';
+import Editor, { OnChange, Monaco, BeforeMount } from '@monaco-editor/react';
+// Import full ESM Monaco API and expose it globally so the react wrapper skips AMD loader.js
+import * as monacoApi from 'monaco-editor/esm/vs/editor/editor.api';
+// Bundle the core editor worker via Vite (?worker) so we don't craft blob strings manually.
+// If later we add languages needing their own workers we can import them similarly.
+// import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'; (example)
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+
+// Ensure global monaco is present before @monaco-editor/react evaluates its loader path.
+// This prevents the fallback that attempts to inject https://cdn.jsdelivr.../loader.js
+if (!(window as any).monaco) {
+  (window as any).monaco = monacoApi;
+}
 import { dockBus } from '../state/dockBus';
 import { lspClient } from '../lspClient';
 // TODO(i18n): Adapt Monaco UI strings (context menu, messages) when supporting dynamic locale changes.
@@ -11,17 +23,30 @@ function ensureLanguage(monaco: Monaco) {
   if (!already) {
     monaco.languages.register({ id: 'vpy' });
     monaco.languages.setMonarchTokensProvider('vpy', {
-      // Extremely minimal placeholder tokenizer; refine later
+      // Improved tokenizer to highlight declarations and common constructs
       tokenizer: {
         root: [
+          // Comments
           [/#[^$]*/, 'comment'],
-          [/\b(META|CONST|DEF|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
+          // Function declaration: def <name>
+          [/(def)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','function.declaration']],
+          // Const declaration: const <NAME>
+          [/(const)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','constant']],
+          // Keywords (control/meta)
+          [/\b(META|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
+          // Built-in drawing / std library like calls
           [/\b(DRAW_(POLYGON|CIRCLE_SEG|CIRCLE|ARC|SPIRAL)|PRINT_TEXT)\b/, 'function'],
+          // Intensity / constant style (I_FOO) & ALL_CAPS identifiers
           [/\bI_[A-Z0-9_]+\b/, 'constant'],
           [/\b[A-Z_]{2,}\b/, 'constant'],
-          [/".*?"|'.*?'/, 'string'],
+          // Hex & decimal numbers
+          [/0x[0-9A-Fa-f]+\b/, 'number'],
           [/[0-9]+/, 'number'],
+          // Strings
+          [/".*?"|'.*?'/, 'string'],
+          // Operators
           [/[-+/*=<>!]+/, 'operator'],
+          // Identifiers (fallback) – 'main' will be colored by declaration rule if defined
           [/\b[A-Za-z_][A-Za-z0-9_]*\b/, 'identifier']
         ]
       }
@@ -67,19 +92,31 @@ function ensureLanguage(monaco: Monaco) {
   });
 }
 
+// Configure self-hosted Monaco paths (no CDN) to satisfy strict CSP 'script-src self'
+// We rely on Vite serving node_modules/monaco-editor/min under /monaco via alias injection in dev server config (future improvement: plugin).
+// For now we point to default 'vs' expected inside bundle; @monaco-editor/react will inline ESM without loader.js when possible.
 export const MonacoEditorWrapper: React.FC = () => {
-  const { documents, active, updateContent, setDiagnostics } = useEditorStore(s => ({
-    documents: s.documents,
-    active: s.active,
-    updateContent: s.updateContent,
-    setDiagnostics: s.setDiagnostics
-  }));
+  // Use individual selectors to avoid creating a fresh object each render (React 19 getSnapshot loop guard)
+  const documents = useEditorStore(s => s.documents);
+  const active = useEditorStore(s => s.active);
+  const updateContent = useEditorStore(s => s.updateContent);
+  const setDiagnostics = useEditorStore(s => s.setDiagnostics);
 
   const doc = documents.find(d => d.uri === active);
-  const lastModelRef = useRef<string | undefined>();
+  const lastModelRef = useRef<string | undefined>(undefined);
 
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const beforeMount: BeforeMount = (_monaco) => {
+    (window as any).MonacoEnvironment = {
+      getWorker: function (_moduleId: string, _label: string) {
+        // Return a new bundled worker instance; Vite inlines the URL with proper CSP compliance
+        return new (EditorWorker as any)();
+      },
+      baseUrl: '/' // not strictly needed with ESM import but kept for completeness
+    };
+  };
+
   const handleMount = useCallback((editor: any, monaco: Monaco) => {
     ensureLanguage(monaco);
     editorRef.current = editor;
@@ -281,6 +318,7 @@ export const MonacoEditorWrapper: React.FC = () => {
   value={undefined}
       onChange={handleChange}
       onMount={handleMount}
+      beforeMount={beforeMount}
       options={{
         automaticLayout: true,
         minimap: { enabled: false },

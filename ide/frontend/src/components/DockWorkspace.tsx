@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Layout, Model, TabNode, IJsonModel } from 'flexlayout-react';
+import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from 'flexlayout-react';
+import { useEditorStore } from '../state/editorStore';
 import { dockBus, DockEvent, DockComponent, notifyDockChanged } from '../state/dockBus';
 import 'flexlayout-react/style/dark.css';
 import { FileTreePanel } from './panels/FileTreePanel';
@@ -13,16 +14,16 @@ const STORAGE_KEY = 'vpy_dock_model_v2';
 
 const defaultJson = {
   global: { 
-    tabEnableClose: false,
-    tabEnableDrag: true,        // explicitly allow tab dragging (sometimes implicit default)
-    tabSetEnableDrop: true      // ensure tabsets accept drops
+    tabEnableClose: true,       // ahora se pueden cerrar (salvo que un tab específico lo deshabilite)
+    tabEnableDrag: true,
+    tabSetEnableDrop: true
   },
   layout: {
     type: 'row',
     weight: 100,
     children: [
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
-      { type: 'tabset', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor', enableClose: false } ] },
+  { type: 'tabset', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor', enableClose: true } ] },
   { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
   { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' } ], location: 'bottom' }
     ]
@@ -30,6 +31,8 @@ const defaultJson = {
 };
 
 export const DockWorkspace: React.FC = () => {
+  const documents = useEditorStore((s:any)=>s.documents);
+  const setActive = useEditorStore((s:any)=>s.setActive);
   const stored = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
   const model = useMemo(() => Model.fromJson((stored ? JSON.parse(stored) : defaultJson) as IJsonModel), [stored]);
   const layoutRef = useRef<Layout | null>(null);
@@ -37,6 +40,7 @@ export const DockWorkspace: React.FC = () => {
   // Expose globally so static handlers can reach
   (window as any).__vpyDragStateRef = dragStateRef;
   (window as any).__vpyDockModel = model;
+  //
 
   const factory = useCallback((node: TabNode) => {
     const comp = node.getComponent();
@@ -50,18 +54,70 @@ export const DockWorkspace: React.FC = () => {
     }
   }, []);
 
+  // Renderizador custom de tabs para añadir botón de cierre confiable incluso si flexlayout oculta el suyo en WebView2
+  const onRenderTab = useCallback((node: TabNode, renderValues: any) => {
+    const comp = (node as any)?._attributes?.component;
+    const canClose = true; // toutes las tabs cerrables ahora
+    if (canClose) {
+      // Asegurar array buttons existe
+      renderValues.buttons = renderValues.buttons || [];
+      // Evitar duplicados si el renderizador se invoca múltiples veces: filtrar previos con nuestra marca
+      renderValues.buttons = renderValues.buttons.filter((b:any) => !(b?.key && (""+b.key).startsWith('close-')));
+      renderValues.buttons.push(
+        <button
+          key={`close-${node.getId()}`}
+          className="vpy-tab-close"
+          title="Close"
+          onClick={(e) => {
+            e.stopPropagation();
+            try {
+              model.doAction(Actions.deleteTab(node.getId()));
+            } catch (err) {
+              console.warn('[Dock] close failed', err);
+            }
+          }}
+          style={{
+            background:'transparent', border:'none', color:'#aaa', cursor:'pointer', padding:0,
+            fontSize:12, lineHeight:1, width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center'
+          }}
+        >×</button>
+      );
+    }
+  }, [model]);
+
   // Persist changes
   const onModelChange = useCallback(() => {
     const json = model.toJson();
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+    // schedule DOM tagging refresh shortly after React commit
+    requestAnimationFrame(() => tagTabsetsWithIds(model));
   }, [model]);
 
   // Force relayout of Monaco when editor tab becomes visible
   const onAction = useCallback((action: any) => {
-    // After any internal flexlayout action, notify change (debounced naturally by React loop)
+    if (action.type === 'FlexLayout_DeleteTab') {
+      // Find node being deleted
+      const nodeId = action?.data?.node || action.node; // compat
+      let targetNode: any = undefined;
+      model.visitNodes((n: any) => { if (n.getId && n.getId() === nodeId) targetNode = n; });
+      const comp = targetNode?._attributes?.component;
+      if (comp === 'editor') {
+  const dirty = documents.some((d:any)=>d.dirty);
+        if (dirty) {
+          const confirmClose = window.confirm('Hay cambios sin guardar. ¿Cerrar de todos modos?');
+          if (!confirmClose) {
+            return undefined; // cancelar acción
+          }
+        }
+      }
+      // If closing current active doc, clear active (simple behavior)
+      if (comp === 'editor') {
+        setActive('');
+      }
+    }
     setTimeout(() => notifyDockChanged(), 0);
     return action;
-  }, []);
+  }, [documents, model, setActive]);
 
   // Helper to find if a component tab exists
   const hasComponent = useCallback((comp: DockComponent) => {
@@ -75,29 +131,52 @@ export const DockWorkspace: React.FC = () => {
 
   const addComponent = useCallback((comp: DockComponent) => {
     if (hasComponent(comp)) return;
-    // Decide target tabset based on comp
-    let target: string | undefined;
-    model.visitNodes((n) => {
-      // pick first tabset roughly matching typical region
-      if (n.getType && n.getType() === 'tabset' && !target) {
-        target = n.getId();
-      }
-    });
+    console.debug('[Dock] addComponent', comp);
+
+    // Map internal component name to display title
     const nameMap: Record<DockComponent,string> = {
       files: 'Files', editor: 'Editor', emulator: 'Emulator', debug: 'Debug', errors: 'Errors'
     };
-    if (target) {
-      model.doAction({
-        type: 'FlexLayout_AddNode',
-        json: { type: 'tab', component: comp, name: nameMap[comp] },
-        to: target,
-        // position -1 append
-        index: -1
-      } as any);
+
+    // Find anchor tabset (editor) for spatial placement
+    let editorTabset: string | undefined;
+    model.visitNodes(n => {
+      if ((n as any).getType && (n as any).getType() === 'tabset') {
+        const children: any[] = (n as any).getChildren?.() || [];
+        if (children.some(c => c?._attributes?.component === 'editor')) {
+          editorTabset = (n as any).getId?.();
+        }
+      }
+    });
+
+    // Fallback: first tabset id if editor not found
+    if (!editorTabset) {
+      model.visitNodes(n => { if (!editorTabset && (n as any).getType && (n as any).getType()==='tabset') editorTabset = (n as any).getId?.(); });
+    }
+
+    // Decide desired docking relative to editor for each component
+    let location: typeof DockLocation.CENTER = DockLocation.CENTER; // default center (same tabset)
+    if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors') location = DockLocation.BOTTOM;
+
+    try {
+      if (editorTabset) {
+        model.doAction(
+          Actions.addNode({ type: 'tab', component: comp, name: nameMap[comp] } as any, editorTabset, location, -1)
+        );
+      }
+      else {
+        // Ultimate fallback: append to any (center) if no tabset found
+        console.warn('[Dock] editorTabset not found; appending component in first tabset');
+        let first: string | undefined; model.visitNodes(n=>{ if (!first && (n as any).getType && (n as any).getType()==='tabset') first = (n as any).getId?.(); });
+        if (first) model.doAction(Actions.addNode({ type: 'tab', component: comp, name: nameMap[comp] } as any, first, DockLocation.CENTER, -1));
+      }
+    } catch (e) {
+      console.warn('[Dock] addComponent failed', e);
     }
   }, [hasComponent, model]);
 
   const removeComponent = useCallback((comp: DockComponent) => {
+    console.debug('[Dock] removeComponent', comp);
     const toRemove: string[] = [];
     model.visitNodes((n) => {
       // @ts-ignore
@@ -107,7 +186,7 @@ export const DockWorkspace: React.FC = () => {
       }
     });
     toRemove.forEach(id => {
-      model.doAction({ type: 'FlexLayout_DeleteTab', node: id } as any);
+      try { model.doAction(Actions.deleteTab(id)); } catch(e) { console.warn('[Dock] deleteTab failed', e); }
     });
   }, [model]);
 
@@ -116,16 +195,24 @@ export const DockWorkspace: React.FC = () => {
       if (ev.type === 'toggle') {
         if (hasComponent(ev.component)) removeComponent(ev.component); else addComponent(ev.component);
         notifyDockChanged();
+        requestAnimationFrame(()=>tagTabsetsWithIds(model));
       } else if (ev.type === 'reset') {
-        const fresh = Model.fromJson(defaultJson as IJsonModel);
-        // Replace model contents
-        // @ts-ignore internal API to swap, fallback recreation if needed
-        model._root = fresh._root;
-        notifyDockChanged();
+        try {
+          const fresh = Model.fromJson(defaultJson as IJsonModel);
+          // Replace model contents (internal API) then persist
+          // @ts-ignore internal API to swap, fallback recreation if needed
+          model._root = fresh._root;
+          onModelChange();
+          notifyDockChanged();
+          console.info('[Dock] Layout reset to defaults');
+          requestAnimationFrame(()=>tagTabsetsWithIds(model));
+        } catch (e) {
+          console.warn('[Dock] reset failed', e);
+        }
       }
     });
     return () => { unsub(); };
-  }, [addComponent, hasComponent, model, removeComponent]);
+  }, [addComponent, hasComponent, model, removeComponent, onModelChange]);
 
   // Migration: if layout persisted antes de existir 'Errors', añadir la pestaña automáticamente
   useEffect(() => {
@@ -144,12 +231,7 @@ export const DockWorkspace: React.FC = () => {
         });
         if (debugTabset) {
           try {
-            model.doAction({
-              type: 'FlexLayout_AddNode',
-              json: { type: 'tab', component: 'errors', name: 'Errors' },
-              to: debugTabset,
-              index: -1
-            } as any);
+            model.doAction(Actions.addNode({ type: 'tab', component: 'errors', name: 'Errors' } as any, debugTabset, DockLocation.CENTER, -1));
             notifyDockChanged();
             console.info('[Dock] Migrated layout: added missing Errors tab');
           } catch (e) {
@@ -162,64 +244,10 @@ export const DockWorkspace: React.FC = () => {
 
   useEffect(() => {
     // Example: add future dynamic tabs via layoutRef.current?.addTabWithDragAndDrop
+    tagTabsetsWithIds(model);
   }, []);
 
-  // Debug: log dragstart events in Tauri to help diagnose disabled drag interactions
-  // Removed custom drag listeners to let flexlayout manage DnD natively. Reintroduce if needed.
-  useEffect(() => {
-    if (!(window as any).__TAURI_IPC__) return;
-    const isTabButton = (el: EventTarget | null) => {
-      return !!(el instanceof HTMLElement && el.classList.contains('flexlayout__tab_button'));
-    };
-    const onDragStart = (e: DragEvent) => {
-      if (isTabButton(e.target)) {
-        try {
-          e.dataTransfer?.setData('text/plain', 'tab');
-          if (e.dataTransfer) {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.dropEffect = 'move';
-          }
-        } catch {}
-        // console.debug('[Dock] dragstart forced');
-      }
-    };
-    const onDragOver = (e: DragEvent) => {
-      // Allow dropping anywhere inside layout/tabset borders
-      const t = e.target as HTMLElement | null;
-      if (t && (t.closest('.flexlayout__tabset') || t.closest('.flexlayout__border') || t.classList.contains('flexlayout__layout'))) {
-        e.preventDefault();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-      }
-    };
-    document.addEventListener('dragstart', onDragStart, true);
-    document.addEventListener('dragover', onDragOver, true);
-    const onDragEnter = (e: DragEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.closest('.flexlayout__tabset') || t.closest('.flexlayout__border'))) {
-        e.preventDefault();
-      }
-    };
-    const onDrop = (e: DragEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.closest('.flexlayout__tabset') || t.closest('.flexlayout__border'))) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('dragenter', onDragEnter, true);
-    document.addEventListener('drop', onDrop, true);
-    // Force WebView2 to acknowledge draggable items (sometimes needed after dynamic creation)
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.flexlayout__tab_button').forEach(el => {
-        (el as HTMLElement).setAttribute('draggable','true');
-      });
-    });
-    return () => {
-      document.removeEventListener('dragstart', onDragStart, true);
-      document.removeEventListener('dragover', onDragOver, true);
-      document.removeEventListener('dragenter', onDragEnter, true);
-      document.removeEventListener('drop', onDrop, true);
-    };
-  }, []);
+  // Tauri-specific drag workaround removed (runtime is Electron + standard web now).
 
   return (
     <div style={{position:'absolute', inset:0}} onMouseDown={(e) => {
@@ -268,15 +296,18 @@ export const DockWorkspace: React.FC = () => {
       document.addEventListener('mouseup', handleDragEnd, true);
     }}>
       <Layout
-        ref={(r: Layout | null) => (layoutRef.current = r)}
+        ref={r => { layoutRef.current = r; }}
         model={model}
         factory={factory}
+        onRenderTab={onRenderTab}
         onModelChange={onModelChange}
         onAction={onAction}
       />
     </div>
   );
 };
+
+//
 
 function handleDragMove(e: MouseEvent) {
   const ref = (window as any).__vpyDragStateRef as React.MutableRefObject<any> | undefined;
@@ -344,7 +375,8 @@ function handleDragEnd(_e: MouseEvent) {
   const model = (window as any).__vpyDockModel as Model | undefined;
   if (!model) return;
   try {
-    model.doAction({ type: 'FlexLayout_MoveNode', node: tabId, to: destTabset, index: targetIndex } as any);
+    // Use official moveNode API (DockLocation.CENTER keeps in same tabset region)
+    model.doAction(Actions.moveNode(tabId, destTabset, DockLocation.CENTER, targetIndex));
     console.debug('[Dock] Moved tab', tabId, 'to tabset', destTabset, 'index', targetIndex);
   } catch (err) {
     console.warn('[Dock] move failed, fallback not applied', err);
@@ -352,10 +384,32 @@ function handleDragEnd(_e: MouseEvent) {
 }
 
 function deriveTabsetId(bar: HTMLElement): string | undefined {
-  // flexlayout-react doesn't expose id on DOM elements by default; we approximate: hash of tab button texts
-  const texts = Array.from(bar.querySelectorAll('.flexlayout__tab_button')).map(b=>b.textContent?.trim()||'').join('|');
-  if (!texts) return undefined;
-  // simple hash
-  let h = 0; for (let i=0;i<texts.length;i++){ h = (h*31 + texts.charCodeAt(i))|0; }
-  return 'ts_'+Math.abs(h);
+  return bar.getAttribute('data-tabsetid') || undefined;
+}
+
+function tagTabsetsWithIds(model: Model) {
+  try {
+    const tabsetBars = document.querySelectorAll('.flexlayout__tabset_tabbar_outer');
+    // Build mapping of first tab button text -> tabset id; but better: iterate model
+    const idByFirstName: Record<string,string> = {};
+    model.visitNodes((n:any) => {
+      if (n.getType && n.getType()==='tabset') {
+        const children = n.getChildren?.() || [];
+        if (children.length>0) {
+          const first = children[0];
+          const name = first?.getName?.();
+          if (name) idByFirstName[name] = n.getId();
+        }
+      }
+    });
+    tabsetBars.forEach(bar => {
+      const firstBtn = bar.querySelector('.flexlayout__tab_button');
+      const label = firstBtn?.textContent?.trim();
+      if (label && idByFirstName[label]) {
+        (bar as HTMLElement).setAttribute('data-tabsetid', idByFirstName[label]);
+      }
+    });
+  } catch (e) {
+    console.warn('[Dock] tagTabsetsWithIds failed', e);
+  }
 }

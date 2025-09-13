@@ -109,8 +109,8 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
                             crate::ast::VlEntry::Intensity(v) => {
                                 // Same friendly mapping as before
                                 let mut val = (*v & 0xFF) as u8;
-                                if *v >=0 && *v <=7 {
-                                    val = match *v { 0|1 => 0x1F, 2 => 0x3F, 3 => 0x5F, 4|5|6|7 => 0x7F, _ => 0x5F };
+                                if (0..=7).contains(v) {
+                                    val = match *v { 0|1 => 0x1F, 2 => 0x3F, 3 => 0x5F, 4..=7 => 0x7F, _ => 0x5F };
                                 }
                                 cmds.push(Cmd{ y:0, x:0, cmd:3, extra:Some(val) });
                             }
@@ -218,7 +218,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
                                 format!("; START to ({:+}, {:+})", abs_x, abs_y)
                             }
                             1 => { // LINE delta
-                                abs_y = (abs_y + sy) as i32; abs_x = (abs_x + sx) as i32;
+                                abs_y += sy; abs_x += sx;
                                 format!("; LINE dy={:+} dx={:+} -> ({:+}, {:+})", sy, sx, abs_x, abs_y)
                             }
                             3 => {
@@ -391,7 +391,7 @@ fn stmt_has_trig(s: &Stmt) -> bool {
         Stmt::Assign { value, .. } => expr_has_trig(value),
         Stmt::Let { value, .. } => expr_has_trig(value),
         Stmt::Expr(e) => expr_has_trig(e),
-        Stmt::For { start, end, step, body, .. } => expr_has_trig(start) || expr_has_trig(end) || step.as_ref().map(|e| expr_has_trig(e)).unwrap_or(false) || body.iter().any(stmt_has_trig),
+    Stmt::For { start, end, step, body, .. } => expr_has_trig(start) || expr_has_trig(end) || step.as_ref().map(expr_has_trig).unwrap_or(false) || body.iter().any(stmt_has_trig),
         Stmt::While { cond, body } => expr_has_trig(cond) || body.iter().any(stmt_has_trig),
         Stmt::If { cond, body, elifs, else_body } => expr_has_trig(cond) || body.iter().any(stmt_has_trig) || elifs.iter().any(|(c,b)| expr_has_trig(c) || b.iter().any(stmt_has_trig)) || else_body.as_ref().map(|eb| eb.iter().any(stmt_has_trig)).unwrap_or(false),
         Stmt::Return(o) => o.as_ref().map(expr_has_trig).unwrap_or(false),
@@ -469,7 +469,7 @@ fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
     let mut usage = RuntimeUsage::default();
     for item in &module.items {
         if let Item::Function(f) = item {
-            for s in &f.body { scan_stmt_runtime(s, &mut usage, &f.body); }
+            for s in &f.body { scan_stmt_runtime(s, &mut usage); }
         }
     }
     // Derive grouped variable needs from wrappers
@@ -482,7 +482,7 @@ fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
     usage
 }
 
-fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage, fn_body: &Vec<Stmt>) {
+fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
     match s {
         Stmt::Assign { value, .. } => { usage.needs_tmp_ptr = true; scan_expr_runtime(value, usage); },
         Stmt::Let { value, .. } => scan_expr_runtime(value, usage),
@@ -491,20 +491,20 @@ fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage, fn_body: &Vec<Stmt>) {
             scan_expr_runtime(start, usage);
             scan_expr_runtime(end, usage);
             if let Some(se) = step { scan_expr_runtime(se, usage); }
-            for st in body { scan_stmt_runtime(st, usage, fn_body); }
+            for st in body { scan_stmt_runtime(st, usage); }
         }
-        Stmt::While { cond, body } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage, fn_body); } }
+        Stmt::While { cond, body } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage); } }
         Stmt::If { cond, body, elifs, else_body } => {
             scan_expr_runtime(cond, usage);
-            for st in body { scan_stmt_runtime(st, usage, fn_body); }
-            for (c, b) in elifs { scan_expr_runtime(c, usage); for st in b { scan_stmt_runtime(st, usage, fn_body); } }
-            if let Some(eb) = else_body { for st in eb { scan_stmt_runtime(st, usage, fn_body); } }
+            for st in body { scan_stmt_runtime(st, usage); }
+            for (c, b) in elifs { scan_expr_runtime(c, usage); for st in b { scan_stmt_runtime(st, usage); } }
+            if let Some(eb) = else_body { for st in eb { scan_stmt_runtime(st, usage); } }
         }
         Stmt::Return(o) => { if let Some(e) = o { scan_expr_runtime(e, usage); } }
         Stmt::Switch { expr, cases, default } => {
             scan_expr_runtime(expr, usage);
-            for (ce, cb) in cases { scan_expr_runtime(ce, usage); for st in cb { scan_stmt_runtime(st, usage, fn_body); } }
-            if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage, fn_body); } }
+            for (ce, cb) in cases { scan_expr_runtime(ce, usage); for st in cb { scan_stmt_runtime(st, usage); } }
+            if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage); } }
             usage.needs_tmp_left = true; usage.needs_tmp_right = true; // switch lowering uses TMPLEFT
         }
         Stmt::Break | Stmt::Continue => {}
@@ -580,7 +580,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }
         out.push_str("    RTS\n");
     }
-    out.push_str("\n");
+    out.push('\n');
 }
 
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
@@ -695,9 +695,8 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         }
     }
     // Custom macro: DRAW_POLYGON(N, x0,y0,x1,y1,...,x_{N-1},y_{N-1}) all numeric constants -> inline lines with origin resets
-    if up == "DRAW_POLYGON" {
-        if !args.is_empty() {
-            if let Expr::Number(nv) = &args[0] {
+    if up == "DRAW_POLYGON" && !args.is_empty() {
+        if let Expr::Number(nv) = &args[0] {
                 let n = *nv as usize;
                 // Two accepted forms:
                 //  Form A: DRAW_POLYGON(N, x0,y0, x1,y1, ..., xN-1,yN-1)
@@ -709,11 +708,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 let (start_index, total_len_ok) = if args.len() == form_a_len { (1usize, true) } else if args.len() == form_b_len { (2usize, true) } else { (0,false) };
                 if total_len_ok {
                     if start_index == 2 { // intensity provided
-                        if let Expr::Number(iv) = &args[1] { intensity = *iv as i32; }
+                        if let Expr::Number(iv) = &args[1] { intensity = *iv; }
                     }
                     if args[start_index..].iter().all(|a| matches!(a, Expr::Number(_))) {
                         let mut verts: Vec<(i32,i32)> = Vec::new();
-                        for i in 0..n { if let (Expr::Number(xv), Expr::Number(yv)) = (&args[start_index+2*i], &args[start_index+2*i+1]) { verts.push((*xv as i32, *yv as i32)); } }
+                        for i in 0..n { if let (Expr::Number(xv), Expr::Number(yv)) = (&args[start_index+2*i], &args[start_index+2*i+1]) { verts.push((*xv, *yv)); } }
                         if verts.len()==n {
                             // DEBUG / SAFE MODE: draw each edge independently with a Reset0Ref + Moveto to start vertex.
                             // This is less efficient and may flicker more, but isolates any integrator drift issues.
@@ -744,14 +743,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 }
             }
         }
-    }
     // DRAW_CIRCLE(xc,yc,diam) or DRAW_CIRCLE(xc,yc,diam,intensity) all numeric constants -> approximate with 16-gon
-    if up == "DRAW_CIRCLE" {
-        if args.len()==3 || args.len()==4 {
-            if args.iter().all(|a| matches!(a, Expr::Number(_))) {
-                if let (Expr::Number(xc),Expr::Number(yc),Expr::Number(diam)) = (&args[0],&args[1],&args[2]) {
+    if up == "DRAW_CIRCLE" && (args.len()==3 || args.len()==4) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(xc),Expr::Number(yc),Expr::Number(diam)) = (&args[0],&args[1],&args[2]) {
                     let mut intensity: i32 = 0x5F;
-                    if args.len()==4 { if let Expr::Number(i) = &args[3] { intensity = *i as i32; } }
+                    if args.len()==4 { if let Expr::Number(i) = &args[3] { intensity = *i; } }
                     let segs = 16; // fixed approximation
                     let r = (*diam as f64)/2.0;
                     use std::f64::consts::PI;
@@ -777,17 +773,13 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                     }
                     out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
                     return true;
-                }
-            }
         }
     }
     // DRAW_CIRCLE_SEG(nseg, xc,yc,diam[,intensity]) variable segments
-    if up == "DRAW_CIRCLE_SEG" {
-        if args.len()==4 || args.len()==5 {
-            if args.iter().all(|a| matches!(a, Expr::Number(_))) {
-                if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(diam)) = (&args[0],&args[1],&args[2],&args[3]) {
-                    let mut intensity: i32 = 0x5F; if args.len()==5 { if let Expr::Number(i)=&args[4] { intensity=*i as i32; }}
-                    let mut segs = *nseg as i32; if segs < 3 { segs = 3; } if segs > 64 { segs = 64; }
+    if up == "DRAW_CIRCLE_SEG" && (args.len()==4 || args.len()==5) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(diam)) = (&args[0],&args[1],&args[2],&args[3]) {
+                    let mut intensity: i32 = 0x5F; if args.len()==5 { if let Expr::Number(i)=&args[4] { intensity = *i; }}
+                    let segs = (*nseg).clamp(3, 64);
                     let r = (*diam as f64)/2.0;
                     use std::f64::consts::PI;
                     let mut verts: Vec<(i32,i32)> = Vec::new();
@@ -797,16 +789,13 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                     let (sx,sy)=verts[0]; out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF),(sx & 0xFF)));
                     for i in 0..segs { let (x0,y0)=verts[i as usize]; let (x1,y1)=verts[((i+1)%segs) as usize]; let dx=(x1-x0)&0xFF; let dy=(y1-y0)&0xFF; out.push_str("    CLR Vec_Misc_Count\n"); out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx)); }
                     out.push_str("    CLRA\n    CLRB\n    STD RESULT\n"); return true;
-                }
-            }
         }
     }
     // DRAW_ARC(nseg, xc,yc,radius,start_deg,sweep_deg[,intensity]) open arc
-    if up == "DRAW_ARC" {
-        if (6..=7).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
-            if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(rad),Expr::Number(startd),Expr::Number(sweepd)) = (&args[0],&args[1],&args[2],&args[3],&args[4],&args[5]) {
-                let mut intensity: i32 = 0x5F; if args.len()==7 { if let Expr::Number(i)=&args[6]{ intensity=*i as i32; }}
-                let mut segs = *nseg as i32; if segs < 1 { segs = 1; } if segs > 96 { segs = 96; }
+    if up == "DRAW_ARC" && (6..=7).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(rad),Expr::Number(startd),Expr::Number(sweepd)) = (&args[0],&args[1],&args[2],&args[3],&args[4],&args[5]) {
+                let mut intensity: i32 = 0x5F; if args.len()==7 { if let Expr::Number(i)=&args[6] { intensity = *i; }}
+                let segs = (*nseg).clamp(1, 96);
                 let start = *startd as f64 * std::f64::consts::PI / 180.0; let sweep = *sweepd as f64 * std::f64::consts::PI / 180.0;
                 // Clamp radius to keep inside safe display range (~ +-120)
                 let r = (*rad as f64).clamp(4.0, 110.0);
@@ -818,18 +807,16 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 let (sx,sy)=verts[0]; out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF),(sx & 0xFF)));
                 for i in 0..steps { let (x0,y0)=verts[i as usize]; let (x1,y1)=verts[(i+1) as usize]; let dx=(x1-x0)&0xFF; let dy=(y1-y0)&0xFF; out.push_str("    CLR Vec_Misc_Count\n"); out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx)); }
                 out.push_str("    CLRA\n    CLRB\n    STD RESULT\n"); return true;
-            }
         }
     }
     // DRAW_SPIRAL(nseg, xc,yc,r_start,r_end,turns[,intensity]) open spiral
-    if up == "DRAW_SPIRAL" {
-        if (6..=8).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+    if up == "DRAW_SPIRAL" && (6..=8).contains(&args.len()) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
             // Accept forms with optional explicit intensity; if more than 6 args, last is intensity.
             let last_idx = args.len()-1;
             let (has_intensity, inten_expr_idx) = if args.len() > 6 { (true, last_idx) } else { (false, 0) };
             if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(r0),Expr::Number(r1),Expr::Number(turns)) = (&args[0],&args[1],&args[2],&args[3],&args[4],&args[5]) {
-                let mut intensity: i32 = 0x5F; if has_intensity { if let Expr::Number(iv)=&args[inten_expr_idx] { intensity=*iv as i32; } }
-                let mut segs = *nseg as i32; if segs < 4 { segs = 4; } if segs > 120 { segs = 120; }
+                let mut intensity: i32 = 0x5F; if has_intensity { if let Expr::Number(iv)=&args[inten_expr_idx] { intensity = *iv; } }
+                let segs = (*nseg).clamp(4, 120);
                 // Clamp turns to avoid huge angle wrap distortions
                 let turns_f = (*turns as f64).clamp(0.1, 4.0);
                 let total_ang = turns_f * 2.0 * std::f64::consts::PI;
@@ -842,31 +829,29 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 let (sx,sy)=verts[0]; out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF),(sx & 0xFF)));
                 for i in 0..steps { let (x0,y0)=verts[i as usize]; let (x1,y1)=verts[(i+1) as usize]; let dx=(x1-x0)&0xFF; let dy=(y1-y0)&0xFF; out.push_str("    CLR Vec_Misc_Count\n"); out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx)); }
                 out.push_str("    CLRA\n    CLRB\n    STD RESULT\n"); return true;
-            }
         }
     }
     // Inline classic single line when all numeric constants
-    if up=="VECTREX_DRAW_LINE" {
-        if args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
-            if let (Expr::Number(x0),Expr::Number(y0),Expr::Number(x1),Expr::Number(y1),Expr::Number(inten)) = (&args[0],&args[1],&args[2],&args[3],&args[4]) {
+    if up=="VECTREX_DRAW_LINE" && args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(x0),Expr::Number(y0),Expr::Number(x1),Expr::Number(y1),Expr::Number(inten)) = (&args[0],&args[1],&args[2],&args[3],&args[4]) {
                 // Always move explicitly to start for robustness (avoid chaining state mismatch)
-                let start_x = (*x0 as i32) & 0xFF; let start_y = (*y0 as i32) & 0xFF;
+                let start_x = *x0 & 0xFF; let start_y = *y0 & 0xFF;
                 // Ensure DP points to $D0 hardware registers (BIOS routines like Print_Str_d may have changed it)
                 out.push_str("    LDA #$D0\n    TFR A,DP\n");
-                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d ; move to ({}, {})\n", start_y, start_x, start_x as i32, start_y as i32));
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d ; move to ({}, {})\n", start_y, start_x, start_x, start_y));
                 // Intensity: only emit on first line or change
                 let first = FIRST_CONST_LINE.swap(false, Ordering::Relaxed);
-                let inten_low = (*inten as i32) & 0xFF;
+                let inten_low = *inten & 0xFF;
                 let prev_int = LAST_INTENSITY.load(Ordering::Relaxed) as i32;
                 if first || prev_int != inten_low {
                     if inten_low == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", inten_low)); }
                     LAST_INTENSITY.store(inten_low as usize, Ordering::Relaxed);
                 }
                 // Compute raw 8-bit signed deltas (allow full -128..127 range). BIOS handles larger |values| by hardware scaling.
-                let dx_i = (*x1 as i32) - (*x0 as i32);
-                let dy_i = (*y1 as i32) - (*y0 as i32);
-                let dx = (dx_i & 0xFF) as i32;
-                let dy = (dy_i & 0xFF) as i32;
+                let dx_i = *x1 - *x0;
+                let dy_i = *y1 - *y0;
+                let dx = dx_i & 0xFF;
+                let dy = dy_i & 0xFF;
                 // Clear Vec_Misc_Count like original stable version to ensure proper line timing
                 out.push_str("    CLR Vec_Misc_Count\n");
                 out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d ; dy={}, dx={}\n", dy, dx, dy_i, dx_i));
@@ -875,7 +860,6 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 LAST_END_Y.store((*y1 as usize) & 0xFF, Ordering::Relaxed);
                 LAST_END_SET.store(true, Ordering::Relaxed);
                 return true;
-            }
         }
     }
     if !is {
@@ -904,7 +888,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     }
     // ABS
     if matches!(up.as_str(), "ABS"|"MATH_ABS") {
-    if let Some(arg) = args.get(0) { emit_expr(arg, out, fctx, string_map, opts); } else { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
+    if let Some(arg) = args.first() { emit_expr(arg, out, fctx, string_map, opts); } else { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
         let done = fresh_label("ABS_DONE");
         out.push_str(&format!("    LDD RESULT\n    TSTA\n    BPL {}\n    COMA\n    COMB\n    ADDD #1\n{}: STD RESULT\n", done, done));
         return true;
@@ -958,7 +942,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     // Trig functions
     if matches!(up.as_str(), "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN") {
         // Expect 1 arg
-        if let Some(arg) = args.get(0) {
+    if let Some(arg) = args.first() {
             emit_expr(arg, out, fctx, string_map, opts);
             out.push_str("    LDD RESULT\n    ANDB #$7F\n    CLRA\n    ASLB\n    ROLA\n    LDX #SIN_TABLE\n");
             if up.ends_with("COS") { out.push_str("    LDX #COS_TABLE\n"); }
@@ -1121,7 +1105,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     out.push_str(&format!("{}:\n", end));
                     out.push_str(&format!("{}:\n", table_label));
                     for offset in 0..span as i32 {
-                        let actual = (min as i32 + offset) & 0xFFFF;
+                        let actual = (min + offset) & 0xFFFF;
                         if let Some(lbl) = label_map.get(&actual) { out.push_str(&format!("    FDB {}\n", lbl)); }
                         else if let Some(dl) = &def_label { out.push_str(&format!("    FDB {}\n", dl)); }
                         else { out.push_str(&format!("    FDB {}\n", end)); }
@@ -1136,7 +1120,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 emit_expr(cv, out, fctx, string_map, opts);
                 out.push_str("    LDD RESULT\n    SUBD TMPLEFT\n    LBEQ ");
                 out.push_str(lbl);
-                out.push_str("\n");
+                out.push('\n');
             }
             if let Some(dl) = &def_label { out.push_str(&format!("    LBRA {}\n", dl)); } else { out.push_str(&format!("    LBRA {}\n", end)); }
             for ((_, body), lbl) in cases.iter().zip(labels.iter()) {

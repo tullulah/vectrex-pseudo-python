@@ -4,7 +4,6 @@ mod parser;   // Parsing logic
 mod codegen;  // Optimization + backend dispatch
 mod target;   // Target info & selection
 mod backend; // Backend modules declared in src/backend/mod.rs
-mod lsp;     // LSP module
 
 use std::fs;
 use std::path::PathBuf;

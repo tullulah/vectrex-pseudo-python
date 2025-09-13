@@ -1,3 +1,18 @@
+# vectrex-pseudo-python
+
+## IDE (Electron Shell)
+
+Para arrancar la IDE de escritorio (Electron + React + Monaco + LSP):
+
+```
+./run-ide.ps1
+```
+
+Esto levanta:
+- Vite (frontend React) en `ide/frontend`
+- Electron shell en `ide/electron` (menú nativo oculto; la UI expone su propio menú)
+
+El antiguo runtime Tauri ha sido eliminado; Electron es ahora el único shell soportado.
 # Multi-Target Pseudo-Python Vector Compiler (Prototype)
 
 Rust prototype compiler turning a constrained Python-like subset into assembly for multiple vector platforms:
@@ -228,21 +243,15 @@ MIT
 
 ## IDE & Tooling (Desktop Prototype)
 
-Además del compilador CLI y la extensión de VS Code, el repo incluye un prototipo de IDE de escritorio (Tauri + React + Monaco + LSP Rust) ubicado en `ide/`:
+Además del compilador CLI y la extensión de VS Code, el repo incluye un prototipo de IDE de escritorio (Electron + React + Monaco + LSP Rust) ubicado en `ide/`:
 
 ### Estructura
-- `ide/ide-app`: Shell Tauri (ventana, IPC para lanzar LSP).
+    (El shell Tauri anterior ha sido retirado.)
 - `ide/frontend`: UI React (Monaco Editor, layout docking, cliente LSP).
 - `core/src/lsp.rs`: Servidor LSP (tower-lsp) compartiendo lexer/parser con el compilador.
 
 ### Script de desarrollo
-`./run-ide.ps1` (PowerShell 5.1+) admite flags:
-```
-./run-ide.ps1            # Construye y lanza Tauri + frontend + LSP
-./run-ide.ps1 -NoBuild   # Reusa binarios/artefactos previos
-./run-ide.ps1 -NoLsp     # Deja que Tauri arranque sólo el frontend (sin servidor LSP manual)
-./run-ide.ps1 -LspOnly   # Lanza solo el servidor LSP por consola
-```
+`./run-ide.ps1` (PowerShell 5.1+) admite flags principales (ver script para opciones de CSP/DevTools). Ya no existen modos Tauri.
 
 ### Capacidades LSP actuales
 - Initialize tolerante a respuestas espurias (-32600 inicial en algunas ejecuciones).
@@ -261,10 +270,20 @@ Se usa `flexlayout-react` para un workspace con pestañas: Files | Editor | Emul
 
 En Web: drag & drop nativo HTML5 permite reordenar/redistribuir pestañas.
 
-En Tauri (WebView2 Windows) se detectó restricción que mostraba cursor de prohibido pese a `preventDefault`. Se añadió un fallback de drag personalizado con:
-- Marker vertical azul indicando índice.
-- Overlay dashed indicando tabset destino.
-- Acción `FlexLayout_MoveNode` disparada al soltar.
+Layout con `flexlayout-react` gestionado por drag & drop nativo (no se requiere workaround específico de WebView2).
+
+### Menú (nuevo)
+Se reemplazó la fila de botones por una barra de menú minimal:
+
+- Menú File: Reset Layout, (placeholders para New/Open), Exit.
+- Menú View: toggles para mostrar/ocultar Files, Emulator, Debug, Errors. (Editor es fijo y no puede ocultarse / cerrarse).
+- Cada ítem de View muestra un check si la pestaña está presente; Errors añade badge con `nE` o `nW` (errores o warnings) si existen diagnostics.
+
+Las pestañas (excepto Editor) ahora se pueden cerrar con la X de la propia tab; se restauran desde View > (Nombre).
+
+Desde la versión reciente el Editor también puede cerrarse; si hay documentos con cambios sin guardar se mostrará un prompt de confirmación antes de cerrar. (Guardado real/flujo de persistencia de archivos pendiente de implementación: el prompt actualmente sólo avisa/cancela.)
+
+Persistencia: el layout sigue almacenándose en `localStorage` (`vpy_dock_model_v2`). Cerrar una pestaña y reiniciar respeta el estado; Reset Layout restaura el layout por defecto e inserta de nuevo la pestaña Errors si falta.
 
 LIMITACIONES (prototipo):
 - El fallback no genera todavía un "ghost" visual ni crea nuevos tabsets dinámicamente arrastrando al borde.
@@ -286,7 +305,7 @@ LIMITACIONES (prototipo):
 ### Cómo arrancar el IDE rápidamente
 1. `cargo build --bin vpy_lsp` (opcional; el script lo hará si no existe).
 2. `pwsh ./run-ide.ps1`
-3. Esperar a que Vite sirva `http://localhost:5173` y Tauri abra ventana.
+3. Esperar a que Vite sirva `http://localhost:5173` y Electron abra ventana.
 
 Si sólo deseas la experiencia web (sin wrapper desktop), entra a `ide/frontend` y ejecuta `npm run dev`.
 
@@ -298,5 +317,5 @@ Si sólo deseas la experiencia web (sin wrapper desktop), entra a `ide/frontend`
 - Integrado Monaco Editor con completado, hover, definición y resaltado semántico.
 - Tema oscuro `vpy-dark` + reglas para enumMember (constantes I_*).
 - Script PowerShell robusto para lanzar IDE (`run-ide.ps1`).
-- Fallback de drag de pestañas en Tauri (marcador + overlay) ante limitación WebView2.
+ (El fallback de drag específico de Tauri fue eliminado al migrar definitivamente a Electron.)
 

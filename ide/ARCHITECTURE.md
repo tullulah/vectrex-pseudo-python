@@ -1,12 +1,12 @@
 # VPy IDE Architecture
 
 ## Stack
-- Tauri (Rust backend shell)
+- Electron (desktop shell: spawns LSP child process)
 - React + TypeScript (UI)
 - Monaco Editor (code editing)
 - Zustand (state stores as ViewModels)
 - i18next (internationalization)
-- JSON-RPC LSP client (spawn existing `vpy_lsp`)
+- JSON-RPC LSP client (child process `vpy_lsp` framed over stdio)
 
 ## Layout
 Flex layout split:
@@ -33,7 +33,7 @@ Fallback: en.
 `initialize` will accept `initializationOptions.locale`. Diagnostics routed through translation helper `tr(locale, key)` with fallback.
 
 ## File Tree Acquisition
-Tauri command `list_dir_recursive` returns JSON tree. Future: file system watch.
+Planned: file system scan via a future Electron IPC + Node fs module bridge (not yet implemented).
 
 ## Semantic Tokens Flow
 1. editorStore opens doc

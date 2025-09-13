@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useEditorStore } from '../../state/editorStore';
 
 // Simple severity badge styling
 const sevColor: Record<string,string> = { error: '#F14C4C', warning: '#CCA700', info: '#3794FF' };
 
 export const ErrorsPanel: React.FC = () => {
-  const diagnostics = useEditorStore(s => s.getAllDiagnostics());
+  // Access raw documents once; derive diagnostics locally to keep selector stable
+  const documents = useEditorStore(s => s.documents); // retained if we need deeper info later
+  const allDiagnostics = useEditorStore(s => s.allDiagnostics);
   const goto = useEditorStore(s => s.gotoLocation);
+
+  // Prefer deterministic derivation here to avoid recreating array each store emit that is unrelated
+  const diagnostics = useMemo(() => allDiagnostics, [allDiagnostics]);
 
   return (
     <div style={{fontSize:12, height:'100%', display:'flex', flexDirection:'column'}}>

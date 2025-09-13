@@ -14,9 +14,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     out.push_str("; Vector table (prototype)\n    .section .isr_vector\n    .word _estack\n    .word Reset_Handler\n\nReset_Handler:\n    BL engine_init\n    BL main\n1:  B 1b\n\n");
     for item in &module.items {
-        if let Item::Function(f) = item { emit_function(f, &mut out, &string_map); }
-        else if let Item::Const { name, value } = item {
-            if let Expr::Number(n) = value { out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF)); }
+        if let Item::Function(f) = item {
+            emit_function(f, &mut out, &string_map);
+        } else if let Item::Const { name, value: Expr::Number(n) } = item {
+            out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF));
         }
     }
     out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
@@ -53,7 +54,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
         if frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", frame_size)); }
         out.push_str("    BX LR\n");
     }
-    out.push_str("\n");
+    out.push('\n');
 }
 
 #[derive(Default, Clone)]
@@ -67,43 +68,72 @@ impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) {
     match stmt {
         Stmt::Assign { target, value } => {
-                emit_expr(value, out, fctx, string_map);
-            if let Some(off) = fctx.offset_of(target) { out.push_str(&format!("    STRH r0, [sp, #{}]\n", off)); }
-            else { out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", target.to_uppercase())); }
-        }
-    Stmt::Let { name, value } => { emit_expr(value, out, fctx, string_map); if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    STRH r0, [sp, #{}]\n", off)); } }
-    Stmt::Expr(e) => emit_expr(e, out, fctx, string_map),
+            emit_expr(value, out, fctx, string_map);
+            if let Some(off) = fctx.offset_of(target) {
+                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", target.to_uppercase()));
+            }
+        },
+        Stmt::Let { name, value } => {
+            emit_expr(value, out, fctx, string_map);
+            if let Some(off) = fctx.offset_of(name) {
+                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
+            }
+        },
+        Stmt::Expr(e) => emit_expr(e, out, fctx, string_map),
         Stmt::Return(o) => {
             if let Some(e) = o { emit_expr(e, out, fctx, string_map); }
             if fctx.frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", fctx.frame_size)); }
             out.push_str("    BX LR\n");
-        }
+        },
         Stmt::Break => {
             if let Some(end) = &loop_ctx.end {
                 out.push_str(&format!("    B {}\n", end));
             }
-        }
+        },
         Stmt::Continue => {
             if let Some(st) = &loop_ctx.start {
                 out.push_str(&format!("    B {}\n", st));
             }
-        }
+        },
         Stmt::While { cond, body } => {
             let ls = fresh_label("WH");
             let le = fresh_label("WH_END");
             out.push_str(&format!("{}:\n", ls));
-                emit_expr(cond, out, fctx, string_map);
+            emit_expr(cond, out, fctx, string_map);
             out.push_str(&format!("    CMP r0, #0\n    BEQ {}\n", le));
-            let inner = LoopCtx {
-                start: Some(ls.clone()),
-                end: Some(le.clone()),
-            };
-            for s in body {
-                emit_stmt(s, out, &inner, fctx, string_map);
+            let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map); }
+            out.push_str(&format!("    B {}\n{}:\n", ls, le));
+        },
+        Stmt::For { var, start, end, step, body } => {
+            let ls = fresh_label("FOR");
+            let le = fresh_label("FOR_END");
+            emit_expr(start, out, fctx, string_map);
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", var.to_uppercase()));
+            }
+            out.push_str(&format!("{}:\n", ls));
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    LDRH r1, [sp, #{}]\n", off));
+            } else {
+                out.push_str(&format!("    LDR r1, =VAR_{}\n    LDR r1, [r1]\n", var.to_uppercase()));
+            }
+            emit_expr(end, out, fctx, string_map);
+            out.push_str(&format!("    CMP r1, r0\n    BGE {}\n", le));
+            let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map); }
+            if let Some(se) = step { emit_expr(se, out, fctx, string_map); } else { out.push_str("    MOV r0, #1\n"); }
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    LDRH r3, [sp, #{}]\n    ADD r3, r3, r0\n    AND r3, r3, #0xFFFF\n    STRH r3, [sp, #{}]\n", off, off));
+            } else {
+                out.push_str(&format!("    LDR r2, =VAR_{}\n    LDR r3, [r2]\n    ADD r3, r3, r0\n    STR r3, [r2]\n", var.to_uppercase()));
             }
             out.push_str(&format!("    B {}\n{}:\n", ls, le));
-        }
-    Stmt::For { var, start, end, step, body } => { let ls=fresh_label("FOR"); let le=fresh_label("FOR_END"); emit_expr(start,out,fctx,string_map); if let Some(off)=fctx.offset_of(var){ out.push_str(&format!("    STRH r0, [sp, #{}]\n",off)); } else { out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n",var.to_uppercase())); } out.push_str(&format!("{}:\n",ls)); if let Some(off)=fctx.offset_of(var){ out.push_str(&format!("    LDRH r1, [sp, #{}]\n",off)); } else { out.push_str(&format!("    LDR r1, =VAR_{}\n    LDR r1, [r1]\n",var.to_uppercase())); } emit_expr(end,out,fctx,string_map); out.push_str(&format!("    CMP r1, r0\n    BGE {}\n",le)); let inner=LoopCtx{start:Some(ls.clone()),end:Some(le.clone())}; for s in body { emit_stmt(s,out,&inner,fctx,string_map);} if let Some(se)=step { emit_expr(se,out,fctx,string_map);} else { out.push_str("    MOV r0, #1\n"); } if let Some(off)=fctx.offset_of(var){ out.push_str(&format!("    LDRH r3, [sp, #{}]\n    ADD r3, r3, r0\n    AND r3, r3, #0xFFFF\n    STRH r3, [sp, #{}]\n",off,off)); } else { out.push_str(&format!("    LDR r2, =VAR_{}\n    LDR r3, [r2]\n    ADD r3, r3, r0\n    STR r3, [r2]\n",var.to_uppercase())); } out.push_str(&format!("    B {}\n{}:\n",ls,le)); }
+        },
         Stmt::If { cond, body, elifs, else_body } => {
             let end = fresh_label("IF_END");
             let mut next = fresh_label("IF_NEXT");
@@ -113,16 +143,10 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             out.push_str(&format!("    B {}\n", end));
             for (i, (c, b)) in elifs.iter().enumerate() {
                 out.push_str(&format!("{}:\n", next));
-                let new_next = if i == elifs.len() - 1 && else_body.is_none() {
-                    end.clone()
-                } else {
-                    fresh_label("IF_NEXT")
-                };
+                let new_next = if i == elifs.len() - 1 && else_body.is_none() { end.clone() } else { fresh_label("IF_NEXT") };
                 emit_expr(c, out, fctx, string_map);
                 out.push_str(&format!("    CMP r0,#0\n    BEQ {}\n", new_next));
-                for s in b {
-                    emit_stmt(s, out, loop_ctx, fctx, string_map);
-                }
+                for s in b { emit_stmt(s, out, loop_ctx, fctx, string_map); }
                 out.push_str(&format!("    B {}\n", end));
                 next = new_next;
             }
@@ -133,7 +157,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 out.push_str(&format!("{}:\n", next));
             }
             out.push_str(&format!("{}:\n", end));
-        }
+        },
         Stmt::Switch { expr, cases, default } => {
             emit_expr(expr, out, fctx, string_map);
             out.push_str("    MOV r4,r0\n");
@@ -170,7 +194,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     out.push_str(&format!("{}:\n", end));
                     out.push_str(&format!("{}:\n", table_label));
                     for offset in 0..span as i32 {
-                        let actual = ((min as i32) + offset) & 0xFFFF;
+                        let actual = (min + offset) & 0xFFFF;
                         if let Some(lbl) = label_map.get(&actual) { out.push_str(&format!("    .word {}\n", lbl)); }
                         else if let Some(dl) = &def_label { out.push_str(&format!("    .word {}\n", dl)); }
                         else { out.push_str(&format!("    .word {}\n", end)); }
@@ -196,7 +220,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map); }
             }
             out.push_str(&format!("{}:\n", end));
-        }
+        },
     }
 }
 
@@ -315,7 +339,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
     }
 }
 
-fn emit_builtin_call_cm(name: &str, args: &Vec<Expr>, out: &mut String, fctx:&FuncCtx, string_map:&std::collections::BTreeMap<String,String>) -> bool {
+fn emit_builtin_call_cm(name: &str, args: &[Expr], out: &mut String, fctx:&FuncCtx, string_map:&std::collections::BTreeMap<String,String>) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
@@ -341,7 +365,7 @@ fn emit_builtin_call_cm(name: &str, args: &Vec<Expr>, out: &mut String, fctx:&Fu
         return true;
     }
     if matches!(up.as_str(),"ABS"|"MATH_ABS") {
-        if let Some(a)=args.get(0){ emit_expr(a,out,fctx,string_map);} else { out.push_str("    MOV r0,#0\n"); return true; }
+        if let Some(a)=args.first(){ emit_expr(a,out,fctx,string_map);} else { out.push_str("    MOV r0,#0\n"); return true; }
         let done = fresh_label("ABS_DONE");
         out.push_str(&format!("    CMP r0,#0\n    BGE {}\n    RSBS r0,r0,#0\n{}:\n",done,done));
         return true;
@@ -369,7 +393,7 @@ fn emit_builtin_call_cm(name: &str, args: &Vec<Expr>, out: &mut String, fctx:&Fu
         return true;
     }
     if matches!(up.as_str(),"SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN") {
-        if let Some(a)=args.get(0){ emit_expr(a,out,fctx,string_map); } else { out.push_str("    MOV r0,#0\n"); return true; }
+        if let Some(a)=args.first(){ emit_expr(a,out,fctx,string_map); } else { out.push_str("    MOV r0,#0\n"); return true; }
         out.push_str("    AND r0,r0,#0x7F\n    LSL r0,r0,#1\n    LDR r1,=SIN_TABLE\n");
         if up.ends_with("COS") { out.push_str("    LDR r1,=COS_TABLE\n"); }
         if up.ends_with("TAN") { out.push_str("    LDR r1,=TAN_TABLE\n"); }

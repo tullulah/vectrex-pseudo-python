@@ -41,11 +41,11 @@ impl<'a> Parser<'a> {
     fn parse_module(&mut self) -> Result<Module> {
         let mut items = Vec::new();
         let mut meta = ModuleMeta::default();
-        while !self.check(TokenKind::EOF) {
+    while !self.check(TokenKind::Eof) {
             // skip structural noise
             while self.match_kind(&TokenKind::Newline) {}
             while self.match_kind(&TokenKind::Dedent) {}
-            if self.check(TokenKind::EOF) { break; }
+            if self.check(TokenKind::Eof) { break; }
             if self.match_kind(&TokenKind::Const) || self.match_ident_case("CONST") {
                 let name = self.identifier()?;
                 self.consume(TokenKind::Equal)?;
@@ -94,7 +94,7 @@ impl<'a> Parser<'a> {
         loop {
             while self.match_kind(&TokenKind::Newline) {}
             if self.check(TokenKind::Dedent) { self.match_kind(&TokenKind::Dedent); break; }
-            if self.check(TokenKind::EOF) { break; }
+            if self.check(TokenKind::Eof) { break; }
             let cmd = match self.peek().kind.clone() { TokenKind::Identifier(s) => s, _ => break };
             let upper = cmd.to_ascii_uppercase();
             // consume identifier
@@ -110,32 +110,33 @@ impl<'a> Parser<'a> {
                 }
                 "POLYGON" => {
                     // Count can be an expression, vertices must be literal signed ints (no binary ops across coords).
-                    let cnt_expr = self.expression()?; let n = if let Some(nn)=const_eval(&cnt_expr) { nn } else { return self.err_here("POLYGON expects count"); };
-                    if n < 2 || n > 256 { return self.err_here("POLYGON count out of range"); }
+                    let cnt_expr = self.expression()?;
+                    let n = if let Some(nn) = const_eval(&cnt_expr) { nn } else { return self.err_here("POLYGON expects count"); };
+                    if !(2..=256).contains(&n) { return self.err_here("POLYGON count out of range"); }
                     let mut verts = Vec::new();
-                    for _ in 0..n { let x=self.parse_signed_number()?; let y=self.parse_signed_number()?; verts.push((x,y)); }
+                    for _ in 0..n { let x = self.parse_signed_number()?; let y = self.parse_signed_number()?; verts.push((x,y)); }
                     entries.push(VlEntry::Polygon(verts));
                 }
                 "CIRCLE" => {
                     // CIRCLE cx cy r [segs]
-                    let cx=self.parse_signed_number()?; let cy=self.parse_signed_number()?; let r=self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { if let Ok(s)=self.parse_signed_number(){ s } else { 16 } } else { 16 };
+                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let r = self.parse_signed_number()?;
+                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(16) } else { 16 };
                     let segs = segs.clamp(3,64);
                     entries.push(VlEntry::Circle { cx, cy, r, segs });
                 }
                 "ARC" => {
                     // ARC cx cy r startDeg sweepDeg [segs]
-                    let cx=self.parse_signed_number()?; let cy=self.parse_signed_number()?; let r=self.parse_signed_number()?; let start=self.parse_signed_number()?; let sweep=self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { if let Ok(s)=self.parse_signed_number(){ s } else { 16 } } else { 16 };
+                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let r = self.parse_signed_number()?; let start = self.parse_signed_number()?; let sweep = self.parse_signed_number()?;
+                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(16) } else { 16 };
                     let segs = segs.clamp(2,128);
-                    entries.push(VlEntry::Arc { cx, cy, r, start_deg:start, sweep_deg:sweep, segs });
+                    entries.push(VlEntry::Arc { cx, cy, r, start_deg: start, sweep_deg: sweep, segs });
                 }
                 "SPIRAL" => {
                     // SPIRAL cx cy r_start r_end turns [segs]
-                    let cx=self.parse_signed_number()?; let cy=self.parse_signed_number()?; let rs=self.parse_signed_number()?; let re=self.parse_signed_number()?; let turns=self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { if let Ok(s)=self.parse_signed_number(){ s } else { 64 } } else { 64 };
+                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let rs = self.parse_signed_number()?; let re = self.parse_signed_number()?; let turns = self.parse_signed_number()?;
+                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(64) } else { 64 };
                     let segs = segs.clamp(4,256);
-                    entries.push(VlEntry::Spiral { cx, cy, r_start:rs, r_end:re, turns, segs });
+                    entries.push(VlEntry::Spiral { cx, cy, r_start: rs, r_end: re, turns, segs });
                 }
                 _ => return self.err_here(&format!("Unknown vectorlist command {}", cmd)),
             }
@@ -199,8 +200,61 @@ impl<'a> Parser<'a> {
     fn comparison(&mut self) -> Result<Expr> { let first=self.term()?; if let Some(op0)=self.match_cmp_op(){ let mut operands=vec![first]; let mut ops=vec![op0]; operands.push(self.term()?); while let Some(nop)=self.match_cmp_op(){ ops.push(nop); operands.push(self.term()?);} if ops.len()==1 { let left=operands.remove(0); let right=operands.remove(0); return Ok(Expr::Compare { op:ops[0], left:Box::new(left), right:Box::new(right)});} let mut chain=None; for i in 0..ops.len(){ let cmp=Expr::Compare { op:ops[i], left:Box::new(operands[i].clone()), right:Box::new(operands[i+1].clone())}; chain=Some(if let Some(acc)=chain { Expr::Logic { op:LogicOp::And, left:Box::new(acc), right:Box::new(cmp)} } else { cmp }); } return Ok(chain.unwrap()); } Ok(first) }
     fn term(&mut self) -> Result<Expr> { let mut node=self.factor()?; while let Some(op)= if self.match_kind(&TokenKind::Plus){Some(BinOp::Add)} else if self.match_kind(&TokenKind::Minus){Some(BinOp::Sub)} else {None} { let rhs=self.factor()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)};} Ok(node) }
     fn factor(&mut self) -> Result<Expr> { let mut node=self.unary()?; while let Some(op)= if self.match_kind(&TokenKind::Star){Some(BinOp::Mul)} else if self.match_kind(&TokenKind::Slash){Some(BinOp::Div)} else if self.match_kind(&TokenKind::Percent){Some(BinOp::Mod)} else {None} { let rhs=self.unary()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)};} Ok(node) }
-    fn unary(&mut self) -> Result<Expr> { if self.match_kind(&TokenKind::Not){ let inner=self.unary()?; return Ok(Expr::Not(Box::new(inner))); } if self.match_kind(&TokenKind::Minus){ let rhs=self.unary()?; return Ok(Expr::Binary { op:BinOp::Sub, left:Box::new(Expr::Number(0)), right:Box::new(rhs) }); } if self.match_kind(&TokenKind::Plus){ return self.unary(); } if self.match_kind(&TokenKind::Tilde){ let inner=self.unary()?; return Ok(Expr::BitNot(Box::new(inner))); } self.primary() }
-    fn primary(&mut self) -> Result<Expr> { if let Some(n)=self.match_number(){ return Ok(Expr::Number(n)); } if let Some(s)=self.match_string(){ return Ok(Expr::StringLit(s)); } if self.match_kind(&TokenKind::True){ return Ok(Expr::Number(1)); } if self.match_kind(&TokenKind::False){ return Ok(Expr::Number(0)); } if let Some(first)=self.match_identifier(){ let mut full=first; while self.match_kind(&TokenKind::Dot){ if let Some(seg)=self.match_identifier(){ full.push('_'); full.push_str(&seg); } else { return self.err_here("Expected identifier after '.' in qualified name"); }} if self.match_kind(&TokenKind::LParen){ let mut args=Vec::new(); if !self.check(TokenKind::RParen){ loop { args.push(self.expression()?); if self.match_kind(&TokenKind::Comma){ continue; } break; } } self.consume(TokenKind::RParen)?; return Ok(Expr::Call { name:full, args }); } return Ok(Expr::Ident(full)); } if self.match_kind(&TokenKind::LParen){ let e=self.expression()?; self.consume(TokenKind::RParen)?; return Ok(e); } self.err_here(&format!("Unexpected token {:?}", self.peek().kind)) }
+    fn unary(&mut self) -> Result<Expr> {
+        if self.match_kind(&TokenKind::Not) {
+            let inner = self.unary()?;
+            return Ok(Expr::Not(Box::new(inner)));
+        } else if self.match_kind(&TokenKind::Minus) {
+            let rhs = self.unary()?;
+            return Ok(Expr::Binary { op: BinOp::Sub, left: Box::new(Expr::Number(0)), right: Box::new(rhs) });
+        } else if self.match_kind(&TokenKind::Plus) {
+            return self.unary();
+        } else if self.match_kind(&TokenKind::Tilde) {
+            let inner = self.unary()?;
+            return Ok(Expr::BitNot(Box::new(inner)));
+        }
+        self.primary()
+    }
+
+    fn primary(&mut self) -> Result<Expr> {
+        if let Some(n) = self.match_number() {
+            return Ok(Expr::Number(n));
+        } else if let Some(s) = self.match_string() {
+            return Ok(Expr::StringLit(s));
+        } else if self.match_kind(&TokenKind::True) {
+            return Ok(Expr::Number(1));
+        } else if self.match_kind(&TokenKind::False) {
+            return Ok(Expr::Number(0));
+        } else if let Some(first) = self.match_identifier() {
+            let mut full = first;
+            while self.match_kind(&TokenKind::Dot) {
+                if let Some(seg) = self.match_identifier() {
+                    full.push('_');
+                    full.push_str(&seg);
+                } else {
+                    return self.err_here("Expected identifier after '.' in qualified name");
+                }
+            }
+            if self.match_kind(&TokenKind::LParen) {
+                let mut args = Vec::new();
+                if !self.check(TokenKind::RParen) {
+                    loop {
+                        args.push(self.expression()?);
+                        if self.match_kind(&TokenKind::Comma) { continue; }
+                        break;
+                    }
+                }
+                self.consume(TokenKind::RParen)?;
+                return Ok(Expr::Call { name: full, args });
+            }
+            return Ok(Expr::Ident(full));
+        } else if self.match_kind(&TokenKind::LParen) {
+            let e = self.expression()?;
+            self.consume(TokenKind::RParen)?;
+            return Ok(e);
+        }
+        self.err_here(&format!("Unexpected token {:?}", self.peek().kind))
+    }
 
     // --- helpers ---
     fn match_ident_case(&mut self, upper:&str) -> bool { if let Some(TokenKind::Identifier(s))=self.peek_kind().cloned(){ if s.eq_ignore_ascii_case(upper){ self.advance(); return true; } } false }

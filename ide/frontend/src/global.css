@@ -1,4 +1,4 @@
-/* Global overrides for Tauri desktop to allow internal drag-drop of flexlayout tabs */
+/* Global layout + drag styles (Electron / web) */
 html, body, #root { height:100%; margin:0; padding:0; }
 /* Ensure the main layout region is explicitly non-draggable for the OS window */
 .flexlayout__layout { -webkit-app-region: no-drag; }
@@ -11,6 +11,32 @@ header button, header select { -webkit-app-region: no-drag; }
 .flexlayout__tab { cursor: default; }
 .flexlayout__tab_button { cursor: grab; }
 .flexlayout__tab_button:active { cursor: grabbing; }
+
+/* Asegurar que el botón de cerrar (close icon) sea visible */
+.flexlayout__tab_button_trailing, .flexlayout__tab_button_trailing * {
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+.flexlayout__tab_button_trailing svg, .flexlayout__tab_button_trailing span {
+	pointer-events: auto;
+}
+
+/* Hover estado para indicar clic en cerrar si existe */
+.flexlayout__tab_button_trailing:hover {
+	filter: brightness(1.2);
+}
+
+/* Botón de cierre custom */
+.vpy-tab-close {
+	font-family: inherit;
+	width: 14px;
+	height: 14px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 2px;
+}
+.vpy-tab-close:hover { background:#444; color:#fff; }
 
 /* Ensure sidebars/panels keep normal cursor */
 .flexlayout__tabset, .flexlayout__border, .flexlayout__layout { cursor: default; }

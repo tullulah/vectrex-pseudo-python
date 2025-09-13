@@ -38,7 +38,7 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
     if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }
     match ti.arch {
         CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, &effective),
-        CpuArch::ARM => backends_ref::emit_arm(&optimized, target, &ti, opts),
+    CpuArch::Arm => backends_ref::emit_arm(&optimized, target, &ti, opts),
         CpuArch::CortexM => backends_ref::emit_cortexm(&optimized, target, &ti, opts),
     }
 }
@@ -438,8 +438,8 @@ fn propagate_constants(m: &Module) -> Module {
     let mut globals: HashMap<String, i32> = HashMap::new();
     // Collect global const numeric values (only if literal number after folding)
     for it in &m.items {
-        if let Item::Const { name, value } = it {
-            if let Expr::Number(n) = value { globals.insert(name.clone(), *n); }
+        if let Item::Const { name, value: Expr::Number(n) } = it {
+            globals.insert(name.clone(), *n);
         }
     }
     Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }

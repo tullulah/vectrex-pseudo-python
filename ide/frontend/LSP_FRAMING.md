@@ -10,10 +10,10 @@ Content-Length: <bytes>\r\n
 \r\n
 <JSON payload bytes>
 
-Changes Implemented (2025-09-12)
+Changes Implemented (2025-09-13)
 ---------------------------------
-1. Rust (Tauri main) now parses headers and reads an exact byte length before emitting events.
-2. Each complete JSON payload is emitted via the `lsp://message` event (string JSON).
+1. Electron main process now parses headers and reads an exact byte length before emitting events.
+2. Each complete JSON payload is emitted via the `lsp://message` IPC channel (string JSON).
 3. Raw JSON also forwarded to `lsp://stdout` for debugging; stderr lines go to `lsp://stderr`.
 4. Frontend `lspClient` subscribes only to `lsp://message` for protocol handling; no heuristic line splitting.
 
@@ -21,12 +21,12 @@ Flow
 ----
 Frontend -> Server:
 1. Serialize JSON-RPC object.
-2. Invoke `lsp_send` (Tauri command) with raw JSON string.
-3. Rust writes `Content-Length` header + CRLF CRLF + body to LSP child stdin.
+2. Call `window.electronAPI.lspSend(json)`.
+3. Main writes `Content-Length` header + CRLF CRLF + body to LSP child stdin.
 
 Server -> Frontend:
 1. LSP child writes framed responses/notifications.
-2. Rust reader loop extracts bodies and emits `lsp://message` with UTF-8 JSON text.
+2. Main reader loop extracts bodies and emits `lsp://message` with UTF-8 JSON text.
 3. Frontend parses and routes responses or notifications.
 
 Error Handling & Edge Cases
@@ -50,4 +50,4 @@ Testing Tips
 
 Packaging Note
 --------------
-In a packaged build the `vpy_lsp` binary must be colocated with the main executable or on PATH. Current spawn relies on relative resolution; adjust in production packaging scripts if necessary.
+In a packaged build the `vpy_lsp` binary must be colocated with the main executable or on PATH. Current spawn relies on relative resolution; configure electron-builder (future) to copy it next to the app binary.

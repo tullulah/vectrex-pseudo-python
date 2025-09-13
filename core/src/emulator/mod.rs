@@ -10,7 +10,12 @@ pub struct CPU {
 impl Default for CPU { fn default()->Self { CPU { a:0,b:0,dp:0xD0,x:0,u:0,pc:0,call_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,mem:[0;65536],trace:false,bios_calls:Vec::new(),frame_count:0,last_intensity:0,draw_vl_count:0,reset0ref_count:0,print_str_count:0,print_list_count:0,moveto_count:0,bios_present:false,cycles:0 } } }
 
 impl CPU {
-    pub fn load_bin(&mut self,data:&[u8],base:u16){ for (i,b) in data.iter().enumerate(){ let addr=base as usize + i; if addr<65536 { self.mem[addr]=*b; } } }
+    pub fn load_bin(&mut self, data:&[u8], base:u16) {
+        for (i, b) in data.iter().enumerate() {
+            let addr = base as usize + i;
+            if addr < 65536 { self.mem[addr] = *b; }
+        }
+    }
     pub fn load_bios(&mut self,data:&[u8]){ if data.len()==8192 { self.load_bin(data,0xF000); self.bios_present=true; } }
     fn d(&self)->u16 { ((self.a as u16)<<8)|self.b as u16 }
     fn set_d(&mut self,v:u16){ self.a=(v>>8) as u8; self.b=v as u8; }
@@ -24,16 +29,20 @@ impl CPU {
                 "WAIT_RECAL"
             },
             0xF2A5 => { // INTENSITY_5F
-                self.last_intensity = 0x5F; "INTENSITY_5F" },
+                self.last_intensity = 0x5F;
+                "INTENSITY_5F"
+            },
             0xF2AB => { // INTENSITY_A
-                self.last_intensity = self.a; "INTENSITY_A" },
-            0xF37A => { self.print_str_count+=1; "PRINT_STR_D" },
-            0xF38A => { self.print_list_count+=1; "PRINT_LIST" },
+                self.last_intensity = self.a;
+                "INTENSITY_A"
+            },
+            0xF37A => { self.print_str_count += 1; "PRINT_STR_D" },
+            0xF38A => { self.print_list_count += 1; "PRINT_LIST" },
             0xF38C => "PRINT_LIST_CHK",
-            0xF312 => { self.moveto_count+=1; "MOVETO_D" },
-            0xF354 => { self.reset0ref_count+=1; "RESET0REF" },
+            0xF312 => { self.moveto_count += 1; "MOVETO_D" },
+            0xF354 => { self.reset0ref_count += 1; "RESET0REF" },
             0xF1AF => { self.dp = 0xC8; "DP_TO_C8" },
-            0xF3DD => { self.draw_vl_count+=1; "DRAW_VL" },
+            0xF3DD => { self.draw_vl_count += 1; "DRAW_VL" },
             0xFD0D => "MUSIC1",
             _ => "BIOS_UNKNOWN",
         };
@@ -71,10 +80,45 @@ impl CPU {
             // LDU extended (0xFE)
             0xFE => { let hi=self.mem[self.pc as usize]; let lo=self.mem[self.pc as usize+1]; self.pc+=2; let addr=((hi as u16)<<8)|lo as u16; let uh=self.mem[addr as usize]; let ul=self.mem[addr.wrapping_add(1) as usize]; self.u=((uh as u16)<<8)|ul as u16; if self.trace { println!("LDU ${:04X} -> {:04X}", addr, self.u);} }
         // JSR extended (BIOS intercept if addr>=F000)
-        0xBD => { let hi=self.mem[self.pc as usize]; let lo=self.mem[self.pc as usize+1]; self.pc+=2; let addr=((hi as u16)<<8)|lo as u16; if self.trace { println!("JSR ${:04X}", addr);} if addr>=0xF000 { if !self.bios_present { if self.trace { println!("Missing BIOS for call ${:04X}", addr);} return false; } // intercept: simulate call, no stack push
-            self.record_bios_call(addr); /* return immediately */ } else { let ret=self.pc; self.call_stack.push(ret); self.pc=addr; } cyc=7; }
+        0xBD => {
+            let hi = self.mem[self.pc as usize];
+            let lo = self.mem[self.pc as usize + 1];
+            self.pc += 2;
+            let addr = ((hi as u16) << 8) | lo as u16;
+            if self.trace { println!("JSR ${:04X}", addr); }
+            if addr >= 0xF000 {
+                if !self.bios_present {
+                    if self.trace { println!("Missing BIOS for call ${:04X}", addr); }
+                    return false;
+                }
+                // intercept: simulate call (no push)
+                self.record_bios_call(addr);
+            } else {
+                let ret = self.pc;
+                self.call_stack.push(ret);
+                self.pc = addr;
+            }
+            cyc = 7;
+        }
         // JSR direct (BIOS intercept)
-        0x9D => { let off=self.mem[self.pc as usize]; self.pc+=1; let addr=((self.dp as u16)<<8)|off as u16; if self.trace { println!("JSR ${:04X} (direct)", addr);} if addr>=0xF000 { if !self.bios_present { if self.trace { println!("Missing BIOS for call ${:04X}", addr);} return false; } self.record_bios_call(addr); } else { let ret=self.pc; self.call_stack.push(ret); self.pc=addr; } cyc=7; }
+        0x9D => {
+            let off = self.mem[self.pc as usize];
+            self.pc += 1;
+            let addr = ((self.dp as u16) << 8) | off as u16;
+            if self.trace { println!("JSR ${:04X} (direct)", addr); }
+            if addr >= 0xF000 {
+                if !self.bios_present {
+                    if self.trace { println!("Missing BIOS for call ${:04X}", addr); }
+                    return false;
+                }
+                self.record_bios_call(addr);
+            } else {
+                let ret = self.pc;
+                self.call_stack.push(ret);
+                self.pc = addr;
+            }
+            cyc = 7;
+        }
             // RTS
             0x39 => { if let Some(r)=self.call_stack.pop(){ if self.trace { println!("RTS -> {:04X}", r);} self.pc=r; } else if self.trace { println!("RTS (empty stack)"); } cyc=5; }
             0x4F => { self.a=0; self.update_nz8(self.a); if self.trace { println!("CLRA"); } }
