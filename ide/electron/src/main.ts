@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, session, dialog } from 'electron';
 import { spawn } from 'child_process';
+import { globalCpu } from './emu6809';
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { existsSync } from 'fs';
@@ -188,6 +189,41 @@ ipcMain.handle('file:open', async () => {
   } catch (e: any) {
     return { error: e?.message || 'read_failed' };
   }
+});
+
+// Binary open (returns base64)
+ipcMain.handle('bin:open', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Binary', extensions: ['bin'] }] });
+  if (canceled || filePaths.length === 0) return null;
+  const p = filePaths[0];
+  try {
+    const buf = await fs.readFile(p);
+    return { path: p, base64: buf.toString('base64'), size: buf.length };
+  } catch (e:any) {
+    return { error: e?.message || 'read_failed' };
+  }
+});
+
+// Emulator: load BIN
+ipcMain.handle('emu:load', async (_e, args: { base64: string }) => {
+  try {
+    const bytes = Buffer.from(args.base64, 'base64');
+    // Reset CPU
+    globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.u=0; globalCpu.pc=0; globalCpu.callStack=[]; globalCpu.lastIntensity=0x5F; globalCpu.frameSegments=[]; globalCpu.frameReady=false;
+    globalCpu.mem.fill(0);
+    globalCpu.loadBin(new Uint8Array(bytes), 0x0000);
+    return { ok: true };
+  } catch (e:any) { return { error: e?.message || 'emu_load_failed' }; }
+});
+
+// Emulator: run until next frame (or max steps)
+ipcMain.handle('emu:runFrame', async () => {
+  try {
+    const { frameReady, segments } = globalCpu.runUntilFrame();
+    return { frameReady, segments };
+  } catch (e:any) { return { error: e?.message || 'emu_run_failed' }; }
 });
 
 ipcMain.handle('file:openPath', async (_e, p: string) => {

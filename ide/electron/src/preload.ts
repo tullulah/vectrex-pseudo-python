@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLspStdout: (cb: (line: string) => void) => ipcRenderer.on('lsp://stdout', (_e: IpcRendererEvent, data: string) => cb(data)),
   onLspStderr: (cb: (line: string) => void) => ipcRenderer.on('lsp://stderr', (_e: IpcRendererEvent, data: string) => cb(data)),
   onCommand: (cb: (cmd: string, payload?: any) => void) => ipcRenderer.on('command', (_e, cmd, payload) => cb(cmd, payload)),
+  emuLoad: (base64: string) => ipcRenderer.invoke('emu:load', { base64 }) as Promise<{ ok?: boolean; error?: string }>,
+  emuRunFrame: () => ipcRenderer.invoke('emu:runFrame') as Promise<{ frameReady?: boolean; segments?: any[]; error?: string }>,
 });
 
 contextBridge.exposeInMainWorld('files', {
@@ -18,6 +20,7 @@ contextBridge.exposeInMainWorld('files', {
 
   openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ path: string } | null>,
   readFile: (path: string) => ipcRenderer.invoke('file:read', path) as Promise<{ path: string; content: string; mtime: number; size: number; name: string } | { error: string }>,
+  openBin: () => ipcRenderer.invoke('bin:open') as Promise<{ path: string; base64: string; size: number } | { error: string } | null>,
 });
 
 contextBridge.exposeInMainWorld('recents', {

@@ -12,31 +12,24 @@ export const EmulatorPanel: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement|null>(null);
   const [segments, setSegments] = useState<VectorSegment[]>([]);
   const [loadedBinName, setLoadedBinName] = useState<string|undefined>();
-  const animRef = useRef<number|null>(null);
+  const playRef = useRef(false);
+  const frameTimerRef = useRef<number|null>(null);
 
-  // Simple demo drawing placeholder (rotating triangle) until real emulator loop feeds segments.
-  useEffect(() => {
-    let angle = 0;
-    const tick = () => {
-      angle += 0.02;
-      // generate triangle in logical coords
-      const r = 100;
-      const cx = 0; const cy = 0;
-      const pts = [0, -r, r*Math.sin(Math.PI/3), r*Math.cos(Math.PI/3), -r*Math.sin(Math.PI/3), r*Math.cos(Math.PI/3)];
-      const rot = (x:number,y:number):[number,number] => [ x*Math.cos(angle)-y*Math.sin(angle), x*Math.sin(angle)+y*Math.cos(angle) ];
-      const p0 = rot(pts[0], pts[1]);
-      const p1 = rot(pts[2], pts[3]);
-      const p2 = rot(pts[4], pts[5]);
-      setSegments([
-        { x1:p0[0], y1:p0[1], x2:p1[0], y2:p1[1], intensity:0x5F },
-        { x1:p1[0], y1:p1[1], x2:p2[0], y2:p2[1], intensity:0x5F },
-        { x1:p2[0], y1:p2[1], x2:p0[0], y2:p0[1], intensity:0x5F },
-      ]);
-      animRef.current = requestAnimationFrame(tick);
-    };
-    tick();
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, []);
+  // Frame polling loop
+  const requestNextFrame = () => {
+    const w:any = window as any;
+    if (!playRef.current || !w.electronAPI?.emuRunFrame) return;
+    w.electronAPI.emuRunFrame().then((res:any) => {
+      if (res?.segments) setSegments(res.segments as VectorSegment[]);
+      if (playRef.current) frameTimerRef.current = window.setTimeout(requestNextFrame, 16);
+    });
+  };
+
+  const togglePlay = () => {
+    playRef.current = !playRef.current;
+    if (playRef.current) requestNextFrame();
+    else if (frameTimerRef.current) { clearTimeout(frameTimerRef.current); frameTimerRef.current=null; }
+  };
 
   // Render segments to canvas
   useEffect(() => {
@@ -77,25 +70,25 @@ export const EmulatorPanel: React.FC = () => {
   }, [segments]);
 
   const onLoadBin = () => {
-    // For now triggers a file open dialog (Electron preload expected to expose files API)
-    const w: any = window as any;
-    if (w.files?.openFile) {
-      w.files.openFile({ binary:true }).then((res: any) => {
-        if (!res || res.error || !res.content) return;
-        setLoadedBinName(res.path?.split(/[/\\]/).pop());
-        // TODO: Send content to backend emulator (Rust) via IPC or WASM once implemented.
-        console.debug('[EMU] Loaded BIN bytes', res.content.length);
+    const w:any = window as any;
+    if (!w.files?.openBin || !w.electronAPI?.emuLoad) { console.warn('BIN APIs missing'); return; }
+    w.files.openBin().then((res:any) => {
+      if (!res || res.error || !res.base64) return;
+      const name = res.path.split(/[/\\]/).pop();
+      w.electronAPI.emuLoad(res.base64).then((r:any) => {
+        if (!r || r.error) { console.warn('emuLoad failed', r); return; }
+        setLoadedBinName(name);
+        setSegments([]);
       });
-    } else {
-      console.warn('No file open API available');
-    }
+    });
   };
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', width:'100%', padding:8, boxSizing:'border-box', gap:8}}>
       <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
         <strong>{t('panel.emulator')}</strong>
-        <button onClick={onLoadBin} style={{padding:'4px 8px'}}>{loadedBinName ? t('emu.reload','Reload BIN') : t('emu.load','Load BIN')}</button>
+  <button onClick={onLoadBin} style={{padding:'4px 8px'}}>{loadedBinName ? t('emu.reload','Reload BIN') : t('emu.load','Load BIN')}</button>
+  <button disabled={!loadedBinName} onClick={togglePlay} style={{padding:'4px 8px'}}>{playRef.current ? t('emu.pause','Pause') : t('emu.play','Play')}</button>
         {loadedBinName && <span style={{fontSize:12, color:'#888'}}>{loadedBinName}</span>}
         <span style={{marginLeft:'auto', fontSize:11, color:'#666'}}>{t('emu.aspect','Aspect 3:4')}</span>
       </div>
