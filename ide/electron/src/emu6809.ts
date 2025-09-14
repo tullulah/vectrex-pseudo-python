@@ -138,3 +138,12 @@ export class Cpu6809 {
 }
 
 export const globalCpu = new Cpu6809();
+
+export function getStats(){
+  return {
+    unknownOpcodes: globalCpu.unknownLog,
+    regs: { a:globalCpu.a, b:globalCpu.b, x:globalCpu.x, y:globalCpu.y, u:globalCpu.u, pc:globalCpu.pc, dp:globalCpu.dp },
+  };
+}
+
+export function resetStats(){ globalCpu.unknownLog = {}; }

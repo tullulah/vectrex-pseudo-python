@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, session, dialog } from 'electron';
 import { spawn } from 'child_process';
-import { globalCpu } from './emu6809';
+import { globalCpu, getStats, resetStats } from './emu6809';
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { existsSync } from 'fs';
@@ -225,6 +225,10 @@ ipcMain.handle('emu:runFrame', async () => {
     return { frameReady, segments };
   } catch (e:any) { return { error: e?.message || 'emu_run_failed' }; }
 });
+ipcMain.handle('emu:stats', async () => {
+  return getStats();
+});
+ipcMain.handle('emu:statsReset', async () => { resetStats(); return { ok:true }; });
 
 ipcMain.handle('file:openPath', async (_e, p: string) => {
   if (!p) return { error: 'no_path' };

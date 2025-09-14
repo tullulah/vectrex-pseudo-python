@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCommand: (cb: (cmd: string, payload?: any) => void) => ipcRenderer.on('command', (_e, cmd, payload) => cb(cmd, payload)),
   emuLoad: (base64: string) => ipcRenderer.invoke('emu:load', { base64 }) as Promise<{ ok?: boolean; error?: string }>,
   emuRunFrame: () => ipcRenderer.invoke('emu:runFrame') as Promise<{ frameReady?: boolean; segments?: any[]; error?: string }>,
+  emuStats: () => ipcRenderer.invoke('emu:stats') as Promise<any>,
+  emuStatsReset: () => ipcRenderer.invoke('emu:statsReset') as Promise<{ok:boolean}>,
 });
 
 contextBridge.exposeInMainWorld('files', {
