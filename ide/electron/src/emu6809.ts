@@ -92,12 +92,18 @@ export class Cpu6809 {
         const hi=this.mem[this.pc]; const lo=this.mem[(this.pc+1)&0xFFFF]; this.pc=(this.pc+2)&0xFFFF; this.setD((hi<<8)|lo); this.nz16(this.d()); break; }
       case 0x86: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.a=v; this.nz8(this.a); break; }
       case 0xC6: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.b=v; this.nz8(this.b); break; }
+      case 0xCB: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.b=(this.b+v)&0xFF; this.nz8(this.b); break; } // ADDB imm
+      case 0xC0: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.b=(this.b - v) & 0xFF; this.nz8(this.b); break; } // SUBB imm
       case 0x8E: { const hi=this.mem[this.pc]; const lo=this.mem[(this.pc+1)&0xFFFF]; this.pc=(this.pc+2)&0xFFFF; this.x=((hi<<8)|lo)&0xFFFF; break; }
       case 0xCE: { const hi=this.mem[this.pc]; const lo=this.mem[(this.pc+1)&0xFFFF]; this.pc=(this.pc+2)&0xFFFF; this.u=((hi<<8)|lo)&0xFFFF; break; }
       case 0xC8: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.ldaSet((this.a+v)&0xFF); break; } // ADDA imm
       case 0x80: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.ldaSet((this.a - v) & 0xFF); break; } // SUBA imm
       case 0x96: { const addr=this.directAddr(); this.ldaSet(this.read8(addr)); break; } // LDA direct
       case 0x97: { const addr=this.directAddr(); this.write8(addr,this.a); break; } // STA direct
+      case 0xD6: { const addr=this.directAddr(); this.b=this.read8(addr); this.nz8(this.b); break; } // LDB direct
+      case 0xD7: { const addr=this.directAddr(); this.write8(addr,this.b); break; } // STB direct
+      case 0xDE: { const addr=this.directAddr(); const hi=this.read8(addr); const lo=this.read8(addr+1); this.u=((hi<<8)|lo)&0xFFFF; this.nz16(this.u); break; } // LDU direct
+      case 0xDF: { const addr=this.directAddr(); this.write8(addr,this.u>>8); this.write8(addr+1,this.u&0xFF); break; } // STU direct
       case 0xA6: { // LDA indexed (simple ,X)
         // Simplified: treat next byte as postbyte; only support 0x84 = ,X
         const post=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF;
@@ -110,6 +116,13 @@ export class Cpu6809 {
         const addr=this.directAddr(); this.write8(addr,0); this.cc_z=true; this.cc_n=false; break; }
       case 0x02: { /* treat as padding/data NOP */ break; }
       case 0x10: { if(!this.prefix10()) return false; break; }
+      case 0x88: { const v=this.mem[this.pc]; this.pc=(this.pc+1)&0xFFFF; this.a = (this.a ^ v) & 0xFF; this.nz8(this.a); break; } // EORA imm
+      case 0x50: { // NEGB: B = -B (two's complement)
+        this.b = (~this.b + 1) & 0xFF; this.nz8(this.b); break; }
+      case 0x04: { // LSRD logical shift right 16-bit D
+        const d=this.d(); const res=(d>>1)&0x7FFF; this.setD(res); this.nz16(res); break; }
+      case 0x06: { // RORA rotate A right through carry (simplified: ignore C flag updates)
+        const carry = this.a & 0x01; const newA = (this.a>>1) | (carry?0x80:0); this.a=newA&0xFF; this.nz8(this.a); break; }
       case 0xBD: { const hi=this.mem[this.pc]; const lo=this.mem[(this.pc+1)&0xFFFF]; this.pc=(this.pc+2)&0xFFFF; const addr=((hi<<8)|lo)&0xFFFF; if (addr>=0xF000){ this.interceptBios(addr); } else { this.callStack.push(this.pc); this.pc=addr; } break; }
       case 0x39: { // RTS
         this.pc = this.callStack.pop() ?? this.pc; break; }
