@@ -11,6 +11,7 @@ import { EditorSurface } from './EditorSurface';
 import { EmulatorPanel } from './panels/EmulatorPanel';
 import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
+import { OutputPanel } from './panels/OutputPanel';
 
 // Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
 const STORAGE_KEY = 'vpy_dock_model_v2';
@@ -31,7 +32,7 @@ const defaultJson = {
   // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
   { type: 'tabset', id: 'editor-host', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
-      { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' } ], location: 'bottom' }
+  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Output', component: 'output' } ], location: 'bottom' }
     ]
   }
 };
@@ -52,12 +53,13 @@ export const DockWorkspace: React.FC = () => {
     'editor-placeholder': { json: null as any },
     emulator: { json: null as any },
     debug: { json: null as any },
-    errors: { json: null as any }
+  errors: { json: null as any },
+  output: { json: null as any }
   });
   // Extra metadata to preserve docking edge for panels so re-pin restores original side
-  const panelMetaRef = useRef<Partial<Record<DockComponent, { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'} });
+  const panelMetaRef = useRef<Partial<Record<DockComponent, { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'} });
   const hiddenSetRef = useRef<Set<DockComponent>>(new Set());
-  const pinnedSetRef = useRef<Set<DockComponent>>(new Set(['files','emulator','debug','errors']));
+  const pinnedSetRef = useRef<Set<DockComponent>>(new Set(['files','emulator','debug','errors','output']));
   const [, forceRerender] = useState(0); // for pin UI updates
   (window as any).__pinnedPanelsRef = pinnedSetRef;
   // Expose globally so static handlers can reach
@@ -76,6 +78,7 @@ export const DockWorkspace: React.FC = () => {
       case 'emulator': return <EmulatorPanel />;
   case 'debug': return <DebugPanel />;
   case 'errors': return <ErrorsPanel />;
+  case 'output': return <OutputPanel />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);
@@ -212,7 +215,8 @@ export const DockWorkspace: React.FC = () => {
       'editor-placeholder': t('panel.editor', 'Editor'),
       emulator: t('panel.emulator', 'Emulator'),
       debug: t('panel.debug', 'Debug'),
-      errors: t('panel.errors', 'Errors')
+  errors: t('panel.errors', 'Errors'),
+  output: t('panel.output', 'Output')
     };
     if (customName) nameMap[comp] = customName;
 
@@ -243,7 +247,7 @@ export const DockWorkspace: React.FC = () => {
 
     // Decide desired docking relative to editor for each component
     let location: typeof DockLocation.CENTER = DockLocation.CENTER; // default center (same tabset)
-      if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
+  if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors' || comp === 'output') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
       // If we have meta specifying parent tabset and it still exists, attempt to restore directly there instead of relative add
       const meta = panelMetaRef.current[comp as DockComponent];
       if (meta?.parentTabsetId) {
@@ -303,7 +307,7 @@ export const DockWorkspace: React.FC = () => {
   const onRenderTabSet = useCallback((tabsetNode: any, renderValues: any) => {
     try {
       const children: any[] = tabsetNode.getChildren?.() || [];
-      const panelChildren: DockComponent[] = children.map(c => (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component)).filter((n: any) => ['files','emulator','debug','errors'].includes(n));
+  const panelChildren: DockComponent[] = children.map(c => (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component)).filter((n: any) => ['files','emulator','debug','errors','output'].includes(n));
       if (panelChildren.length === 0) return; // not a pure panel tabset
       const hasMixed = children.some(c => {
         const compName = (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component);
@@ -313,7 +317,7 @@ export const DockWorkspace: React.FC = () => {
       // Detect orientation/edge: inspect first panel child component to infer its last saved location
       // We'll treat debug/errors as bottom, files as left, emulator as right.
       let edge: 'left' | 'right' | 'bottom' | 'top' = 'top';
-      if (panelChildren.every(pc => pc === 'debug' || pc === 'errors')) edge = 'bottom';
+  if (panelChildren.every(pc => pc === 'debug' || pc === 'errors' || pc === 'output')) edge = 'bottom';
       else if (panelChildren.every(pc => pc === 'files')) edge = 'left';
       else if (panelChildren.every(pc => pc === 'emulator')) edge = 'right';
       // top currently unused but reserved if future top docking added
@@ -381,7 +385,7 @@ export const DockWorkspace: React.FC = () => {
     const unsub = dockBus.on((ev: DockEvent) => {
       if (ev.type === 'toggle') {
         const comp = ev.component;
-  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','editor-placeholder'].includes(comp)) {
+  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','output','editor-placeholder'].includes(comp)) {
           // Capture existing node before removal for restoration later
           let targetNode: any | undefined; let parentId: string | undefined; let index: number | undefined; let parentWeight: number | undefined;
           model.visitNodes((n:any) => {
@@ -667,7 +671,7 @@ export const DockWorkspace: React.FC = () => {
         ))}
       </div>
       <div className="vpy-rail bottom">
-        {(['debug','errors'] as DockComponent[]).filter(p=>!pinnedSetRef.current.has(p)).map(p=> (
+  {(['debug','errors','output'] as DockComponent[]).filter(p=>!pinnedSetRef.current.has(p)).map(p=> (
           <div key={p} className="rail-icon" title={t('action.showPanel','Show panel')+': '+t(`panel.${p}`, p)} onClick={()=>{ pinnedSetRef.current.add(p); persistPinnedPanels(); addComponent(p); forceRerender(n=>n+1); }}>📌 {t(`panel.${p}`, p)}</div>
         ))}
       </div>

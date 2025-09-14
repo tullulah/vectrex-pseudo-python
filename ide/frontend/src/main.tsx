@@ -62,8 +62,9 @@ function App() {
   const viewItems: Array<{ key: string; label: string; component?: any; disabled?: boolean; badge?: string; onClick?: () => void }> = [
     { key: 'files', label: t('panel.files'), component: 'files' },
     { key: 'emulator', label: t('panel.emulator'), component: 'emulator' },
-    { key: 'debug', label: t('panel.debug'), component: 'debug' },
-    { key: 'errors', label: t('panel.errors'), component: 'errors', badge: (errCount+warnCount>0) ? (errCount>0? `${errCount}E` : `${warnCount}W`) : undefined },
+  { key: 'debug', label: t('panel.debug'), component: 'debug' },
+  { key: 'errors', label: t('panel.errors'), component: 'errors', badge: (errCount+warnCount>0) ? (errCount>0? `${errCount}E` : `${warnCount}W`) : undefined },
+  { key: 'output', label: t('panel.output','Output'), component: 'output' },
   ];
 
   // Detect visibility via flexlayout model only

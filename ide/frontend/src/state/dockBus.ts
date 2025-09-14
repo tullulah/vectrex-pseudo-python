@@ -2,7 +2,7 @@
 // Events: toggle:<component>, resetLayout, dockChanged
 // Components: files | editor | emulator | debug | errors
 
-export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors';
+export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors' | 'output';
 export type DockEvent =
   | { type: 'toggle'; component: DockComponent } // legacy toggle (may remove later)
   | { type: 'ensure'; component: DockComponent } // ensure exists (create if missing)
