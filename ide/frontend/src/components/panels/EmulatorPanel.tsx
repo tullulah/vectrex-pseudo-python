@@ -18,7 +18,7 @@ export const EmulatorPanel: React.FC = () => {
   const [demoMode, setDemoMode] = useState(false);
   const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
   const [traceVectors, setTraceVectors] = useState(() => { try { return localStorage.getItem('emu_trace_vectors')==='1'; } catch { return false; } });
-  const [baseAddrHex, setBaseAddrHex] = useState('C000');
+  const [baseAddrHex, setBaseAddrHex] = useState('0000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
   const [toasts, setToasts] = useState<Array<{ id:number; msg:string; kind:'info'|'error'; ts:number }>>([]);
   const toastIdRef = useRef(1);
@@ -149,7 +149,7 @@ export const EmulatorPanel: React.FC = () => {
   const parseBase = () => {
     const v = baseAddrHex.trim();
     let n = parseInt(v.replace(/^0x/i,''),16);
-    if (!Number.isFinite(n) || isNaN(n)) n = 0xC000;
+    if (!Number.isFinite(n) || isNaN(n)) n = 0x0000;
     n &= 0xFFFF;
     return n;
   };
@@ -157,8 +157,22 @@ export const EmulatorPanel: React.FC = () => {
     setLastBinInfo(info);
     try { const json = JSON.stringify({ path:info.path, size:info.size, base:info.base }); localStorage.setItem('emu_last_bin_meta', json); } catch {}
   };
-  useEffect(()=>{ // restore meta
-    try { const meta = localStorage.getItem('emu_last_bin_meta'); if (meta){ const m = JSON.parse(meta); if (m.base) setBaseAddrHex(m.base.toString(16).toUpperCase()); }} catch{}
+  useEffect(()=>{ // restore meta & migrate legacy 0xC000 default
+    try {
+      const meta = localStorage.getItem('emu_last_bin_meta');
+      if (meta){
+        const m = JSON.parse(meta);
+        if (m.base !== undefined) {
+          if (m.base === 0xC000) {
+            // If the loaded binary appears to have a Vectrex header at offset 0, force migrate to 0000
+            setBaseAddrHex('0000');
+            pushToast('Migrated base from C000 to 0000 (fixed cart origin)', 'info');
+          } else {
+            setBaseAddrHex(m.base.toString(16).toUpperCase().padStart(4,'0'));
+          }
+        }
+      }
+    } catch{}
   }, []);
 
   // Persist selected source
@@ -259,7 +273,7 @@ export const EmulatorPanel: React.FC = () => {
   // (Replaced by performFullReset / onReset earlier)
   const onClearStats = () => { (globalEmu as any).resetStats?.(); };
 
-  // Manual load of arbitrary .bin cartridge (mapped at 0xC000)
+  // Manual load of arbitrary .bin cartridge (always mapped at 0x0000 now)
   const onLoadBin = async () => {
     const w:any = window as any;
     try {
@@ -337,7 +351,7 @@ export const EmulatorPanel: React.FC = () => {
         </label>
         <div style={{marginLeft:'auto', display:'flex', gap:6}}>
           <button style={btn} onClick={onBuild} title='Compile active .vpy or assemble .asm, load & run'>Build & Run</button>
-          <button style={btn} onClick={onLoadBin} title='Load arbitrary .bin into 0xC000 and run'>Load .bin</button>
+          <button style={btn} onClick={onLoadBin} title='Load arbitrary .bin at $0000 and run'>Load .bin</button>
           {status !== 'running' && <button style={btn} onClick={onPlay}>{status==='paused' ? 'Resume':'Play'}</button>}
           {status === 'running' && <button style={btn} onClick={onPause}>Pause</button>}
           <button style={btn} onClick={onStop} title='Stop (same as pause for now)'>Stop</button>
