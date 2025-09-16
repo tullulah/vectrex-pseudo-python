@@ -793,14 +793,14 @@ impl CPU {
         if self.trace { print!("{:04X}: {:02X} ", pc0, op); }
         // Base cycle seed (approximate) to refine in opcode handlers
         let mut cyc: u32 = match op {
-            // Immediate 2-cycle loads / ops
-            0x86|0xC6|0x8E|0xCE|0xCC => 2,
-            // Direct addressing (approx 4 cycles)
-            0x91|0x94|0x96|0x97|0x98|0x9A|0x9E|0x9C|0x99|0x9B|0xD6|0xD7|0xDA|0xDB|0xDC|0xDD|0xDE|0xDF => 4,
+            // Immediate 2-cycle loads / ops (added ABA 0x1B, ADCB imm 0xC9)
+            0x86|0xC6|0x8E|0xCE|0xCC|0x1B|0xC9 => 2,
+            // Direct addressing (approx 4 cycles) (added 0xC3 ADDD immediate classification here for timing approx)
+            0x91|0x94|0x96|0x97|0x98|0x9A|0x9E|0x9C|0x99|0x9B|0xC3|0xD6|0xD7|0xDA|0xDB|0xDC|0xDD|0xDE|0xDF => 4,
             // Extended addressing group (5 cycles)
             0xB6|0xB7|0xB4|0xB9|0xBB|0xF0|0xF4|0xF6|0xF7|0xF8|0xF9|0xFA|0xFC|0xFD|0xFE|0xFF => 5,
-            // Indexed group (5 cycles baseline)
-            0xA6|0xA7|0xA0|0xA2|0xA4|0xA5|0xA8|0xA9|0xAA|0xAB|0xE0|0xE1|0xE3|0xE4|0xE6|0xE7|0xEA|0xEB|0xEC|0xED|0xEE => 5,
+            // Indexed group (5 cycles baseline) (added 0xAE LDX indexed)
+            0xA6|0xA7|0xA0|0xA2|0xA4|0xA5|0xA8|0xA9|0xAA|0xAB|0xAE|0xE0|0xE1|0xE3|0xE4|0xE6|0xE7|0xEA|0xEB|0xEC|0xED|0xEE => 5,
             0xBD => 7, 0x9D => 6, 0x39 => 5,
             // Short branches (2 cycles base +1 if taken handled inline)
             0x20|0x22|0x23|0x24|0x25|0x26|0x27|0x28|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x2F => 2,
@@ -977,6 +977,8 @@ impl CPU {
             }
             0x1A => { let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let mut cc=self.pack_cc(); cc|=imm; self.unpack_cc(cc); if self.trace { println!("ORCC #${:02X}", imm);} }
             0x1C => { let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let mut cc=self.pack_cc(); cc&=imm; self.unpack_cc(cc); if self.trace { println!("ANDCC #${:02X}", imm);} }
+            0x1B => { // ABA (A = A + B)
+                let a0=self.a; let b0=self.b; let sum=(a0 as u16)+(b0 as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a0^b0) as u16) & ((a0^r) as u16) & 0x80)!=0; if self.trace { println!("ABA -> {:02X}", r);} }
             0x1F => { // TFR src,dst
                 let reg = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let src = (reg >> 4) & 0x0F; let dst = reg & 0x0F;
@@ -1212,6 +1214,8 @@ impl CPU {
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.read8(ea); self.a=v; self.update_nz8(v); if self.trace { println!("LDA [{}] -> {:02X}", ea,v);} }
             0xA7 => { // STA indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.a; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STA [{}] -> {:02X}", ea,v);} }
+            0xAE => { // LDX indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; self.x=val; self.update_nz16(val); if self.trace { println!("LDX [{}] -> {:04X}", ea,val);} }
             0xA1 => { // CMPA indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let res=a.wrapping_sub(m); self.flags_sub8(a,m,res); if self.trace { println!("CMPA [{}]", ea);} }
             0xAF => { // STX indexed
@@ -1388,6 +1392,8 @@ impl CPU {
                 self.set_d(res); self.flags_sub16(d0,val,res);
                 if self.trace { println!("SUBD #${:04X} -> {:04X}", val,res); }
             }
+            0xC3 => { // ADDD immediate
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let val=((hi as u16)<<8)|lo as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32) & ((d0^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD #${:04X} -> {:04X}", val,res);} }
             0x84 => { // ANDA immediate
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 self.a &= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA #${:02X}", imm);} }
@@ -1395,6 +1401,8 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a ^= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA #${:02X}", imm);} }
             0x8A => { // ORA immediate
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a |= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA #${:02X}", imm);} }
+            0xC9 => { // ADCB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(imm as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^imm) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB #${:02X}", imm);} }
             0x0B => { // SEV (Set V flag)
                 self.cc_v = true; if self.trace { println!("SEV"); } }
             0x19 => { // DAA (Decimal Adjust Accumulator) after addition on A
@@ -1513,6 +1521,8 @@ impl CPU {
             0x7B => { // Placeholder (undefined/unused in subset) - treat as NOP
                 if self.trace { println!("(placeholder 0x7B NOP)"); }
             }
+            0x38 => { if self.trace { println!("NOP (0x38)"); } }
+            0xCF => { if self.trace { println!("NOP (0xCF)"); } }
             0x8F => { // Placeholder (undocumented in current subset) - treat as NOP
                 if self.trace { println!("(placeholder 0x8F NOP)"); }
             }
