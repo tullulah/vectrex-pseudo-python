@@ -107,7 +107,7 @@ Exports (selection):
 - Assembled `.asm` returns base64 bytes inline via IPC response; loaded immediately.
 
 ### 5.5 Base Load Address
-- User-configurable (hex) base (default 0xC000) persisted to `localStorage` (`emu_last_bin_meta`). Applies when calling `loadProgram()`.
+Cartridge origin is now fixed at `0x0000`. The previous user-configurable base (historically default `0xC000`) caused binaries assembled for $0000 to execute incorrectly when mapped at $C000. The UI still shows a Base field for legacy flexibility, but if a Vectrex-style cartridge header pattern is detected at offset 0 and the entered base is not `0x0000`, it is auto-corrected (toast notifies user). Legacy persisted metadata with `base: 0xC000` is migrated to `0x0000`.
 
 ---
 ## 6. Electron IPC Surface
@@ -135,7 +135,7 @@ Preload (`ide/electron/src/preload.ts`) safely exposes the above to `window.elec
 - Canvas: 300×400 logical size, draws vector segments each frame (green glow lines, intensity mapped to alpha).
 - Frame loop: requestAnimationFrame while status is `running` and not `demoMode`.
 - Demo Mode: Use static `demoTriangle()` segments; suspends CPU frame loop.
-- Persistence: Last binary metadata (path, base, size) and base address preserved; quick reload button uses cached bytes.
+- Persistence: Last binary metadata (path, base, size) preserved; quick reload button uses cached bytes. Base address is effectively fixed at `0x0000` for normal cartridges; mismatched entries are auto-normalized.
 - Toast system: transient messages with auto-expire (4s).
 - Loop Watch: Optional checkbox to display last captured loop samples from CPU (limited sampling every N iterations of certain BIOS loops).
 

@@ -353,8 +353,8 @@ Metrics Dashboard (Output panel):
 Extending Metrics:
 To add more fields, edit `emulator/src/wasm_api.rs` `JsMetrics` struct and adjust `metrics_json()`; then update `MetricsSnapshot` in `ide/frontend/src/emulatorWasm.ts` and render logic in `OutputPanel.tsx`.
 
-Program Loading (Future):
-At present, the panel only auto-loads BIOS. A helper `loadProgram(bytes, base=0xC000)` is available on the `EmulatorService` to map cartridge binaries; UI wiring (drag & drop / Run integration) will be added in a subsequent iteration.
+Program Loading:
+The panel auto-loads BIOS (if present) and allows building / loading user binaries. Cartridge images are now always expected to be assembled for origin `$0000` (fixed Vectrex cartridge origin). Any attempt to load a binary that appears to contain a cartridge header while specifying another base will be auto-corrected to `0x0000` with a toast notification. Use `globalEmu.loadProgram(bytes, 0x0000)` (default) for manual wiring.
 
 Performance Notes:
 - JSON serialization is performed roughly once per second for the metrics polling loop; vector events are drained every frame. For higher-frequency metric updates, consider a shared memory snapshot struct and a typed array view to avoid repeated JSON parsing.

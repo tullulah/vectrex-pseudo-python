@@ -146,12 +146,30 @@ export const EmulatorPanel: React.FC = () => {
     setTimeout(()=>{ setToasts(t => t.filter(x=>x.id!==id)); }, 4000);
   };
 
+  // Parse the currently entered base (always forced to 0x0000 for Vectrex cartridge images now).
   const parseBase = () => {
     const v = baseAddrHex.trim();
     let n = parseInt(v.replace(/^0x/i,''),16);
     if (!Number.isFinite(n) || isNaN(n)) n = 0x0000;
     n &= 0xFFFF;
     return n;
+  };
+
+  // Detect a Vectrex cartridge header at offset 0 (very lightweight heuristic: bytes 0 & 1 are 0, reset vector near end non-zero).
+  // Classic Vectrex header layout: 0x00.. vectors; we just gate on first two bytes zero & length > 0x800.
+  const detectVectrexHeader = (bytes: Uint8Array) => {
+    if (!bytes || bytes.length < 0x20) return false;
+    if (bytes[0] !== 0x00 || bytes[1] !== 0x00) return false; // reset vector high/low may be later; simple sentinel
+    return true;
+  };
+
+  const enforceBaseForHeader = (bytes: Uint8Array, requestedBase: number) => {
+    if (detectVectrexHeader(bytes) && requestedBase !== 0x0000) {
+      pushToast('Cartridge header detected – forcing base 0000 (was '+requestedBase.toString(16)+')','info');
+      setBaseAddrHex('0000');
+      return 0x0000;
+    }
+    return requestedBase;
   };
   const saveLastBin = (info:{path?:string; size?:number; base:number; bytes?:Uint8Array}) => {
     setLastBinInfo(info);
@@ -230,7 +248,8 @@ export const EmulatorPanel: React.FC = () => {
             const binRes = await w.files.readFileBin(binGuess);
             if (binRes && !binRes.error && binRes.base64) {
               const bytes = Uint8Array.from(atob(binRes.base64), c=>c.charCodeAt(0));
-              const base = parseBase();
+              let base = parseBase();
+              base = enforceBaseForHeader(bytes, base);
               globalEmu.loadProgram(bytes, base);
               saveLastBin({ path: binGuess, size: bytes.length, base, bytes });
               pushToast('Loaded '+binGuess);
@@ -242,7 +261,8 @@ export const EmulatorPanel: React.FC = () => {
             const resp = await fetch(binGuess);
             if (resp.ok) {
               const buf=new Uint8Array(await resp.arrayBuffer());
-              const base = parseBase();
+              let base = parseBase();
+              base = enforceBaseForHeader(buf, base);
               globalEmu.loadProgram(buf, base);
               saveLastBin({ path:binGuess, size:buf.length, base, bytes:buf });
               pushToast('Loaded '+binGuess);
@@ -258,9 +278,10 @@ export const EmulatorPanel: React.FC = () => {
         const assembleRes = await w.electronAPI.emuAssemble({ asmPath: normalized });
         if (!assembleRes || !assembleRes.ok || !assembleRes.base64) { console.warn('Assembly failed', assembleRes); pushToast('Assembly failed','error'); setStatus('stopped'); return; }
         const bytes = Uint8Array.from(atob(assembleRes.base64), c=>c.charCodeAt(0));
-        const base = parseBase();
-        globalEmu.loadProgram(bytes, base);
-        saveLastBin({ path: normalized, size: bytes.length, base, bytes });
+  let base = parseBase();
+  base = enforceBaseForHeader(bytes, base);
+  globalEmu.loadProgram(bytes, base);
+  saveLastBin({ path: normalized, size: bytes.length, base, bytes });
         pushToast('Assembled & loaded');
       } else {
         console.warn('No build mechanism detected (runCompile / emuAssemble missing)'); pushToast('No build mechanism','error'); setStatus('stopped'); return;
@@ -281,10 +302,11 @@ export const EmulatorPanel: React.FC = () => {
         const res = await w.files.openBin();
         if (!res || res.error || !res.base64) { console.warn('openBin canceled or failed', res); return; }
         const bytes = Uint8Array.from(atob(res.base64), c=>c.charCodeAt(0));
-        const base = parseBase();
-        globalEmu.loadProgram(bytes, base);
-        performFullReset();
-        saveLastBin({ path: res.path, size: bytes.length, base, bytes });
+  let base = parseBase();
+  base = enforceBaseForHeader(bytes, base);
+  globalEmu.loadProgram(bytes, base);
+  performFullReset();
+  saveLastBin({ path: res.path, size: bytes.length, base, bytes });
         pushToast('Loaded '+(res.path||'binary'));
         setStatus('running');
         return;
@@ -297,7 +319,8 @@ export const EmulatorPanel: React.FC = () => {
         const reader = new FileReader();
         reader.onload = () => {
           const arr = new Uint8Array(reader.result as ArrayBuffer);
-          const base = parseBase();
+          let base = parseBase();
+          base = enforceBaseForHeader(arr, base);
           globalEmu.loadProgram(arr, base);
           performFullReset();
           saveLastBin({ size: arr.length, base, bytes:arr });
