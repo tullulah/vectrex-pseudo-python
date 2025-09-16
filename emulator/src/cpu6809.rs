@@ -819,13 +819,15 @@ impl CPU {
             // Misc immediate logical/arith (2 cycles)
             0xC4|0xD4|0x84|0x85|0x89|0x8A|0xC5|0xC8|0xCA|0xCB|0xD8|0xE8 => 2, // (F8 in extended group)
             0x30|0x31|0x32|0x33 => 5,
-            0x1A|0x1C|0x12|0x19 => 2,
+            0x1A|0x1C|0x12|0x19|0x13 => 2, // include SYNC (0x13) as 2-cycle placeholder
             0x1E|0x1F => 6,
             _ => 1,
         };
         match op {
             0x4C => { // INCA (ensure early dispatch)
                 let old = self.a; let res = old.wrapping_add(1); self.a = res; self.update_nz8(res); self.cc_v = res==0x80; if self.trace { println!("INCA -> {:02X}", res);} }
+            0x3D => { // MUL: A * B -> D (single implementation)
+                cyc = 11; let a=self.a as u16; let b=self.b as u16; let prod=a*b; self.a=(prod>>8) as u8; self.b=prod as u8; let d=self.d(); self.update_nz16(d); self.cc_c=false; self.cc_v=false; if self.trace { println!("MUL {:02X}*{:02X} -> {:04X}", a as u8, b as u8, d); } }
             // -------------------------------------------------------------------------
             // Extended memory RMW/JMP cluster 0x70..0x7F subset
             // -------------------------------------------------------------------------
@@ -862,6 +864,17 @@ impl CPU {
                 }
                 self.wai_halt = true; return true;
             }
+            0x3C => { // CWAI: AND CC with immediate mask then wait (push full state always)
+                let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let mut cc=self.pack_cc(); cc &= mask; self.unpack_cc(cc);
+                if self.trace { println!("CWAI #${:02X} (enter)", mask); }
+                self.cc_e=true; let saved_pc=self.pc; self.push16(saved_pc);
+                self.push16(self.u); self.push16(self.y); self.push16(self.x);
+                self.push8(self.dp); self.push8(self.b); self.push8(self.a); self.push8(self.pack_cc());
+                self.wai_pushed_frame=true; self.wai_halt=true; return true; }
+            0x13 => { // SYNC: low-power wait until interrupt (does not push state)
+                if self.trace { println!("SYNC"); }
+                self.wai_halt=true; return true; }
             // --- Begin large opcode set from legacy implementation (partial) ---
             // -------------------------------------------------------------------------
             // Accumulator RMW A
@@ -1139,7 +1152,6 @@ impl CPU {
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB ${:04X}", addr);} }
             0x04 => { // LSR direct (moved from decode_indexed_basic)
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.cc_c=(m & 0x01)!=0; let res=m>>1; self.write8(addr,res); self.cc_n=false; self.cc_z=res==0; self.cc_v=false; if self.trace { println!("LSR ${:04X} -> {:02X}", addr,res);} }
-            0x3D => { if self.trace { println!("SYNC (treated as NOP)"); } }
             0x9D => { // JSR direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let addr=((self.dp as u16)<<8)|off as u16;
