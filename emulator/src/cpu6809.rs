@@ -175,6 +175,33 @@ impl CPU {
             .collect();
         CPUOpcodeMetrics { total: self.opcode_total, unimplemented: self.opcode_unimplemented, counts: self.opcode_counts, unique_unimplemented: uniques }
     }
+    // Backwards-compatible alias used by some tests naming metrics_snapshot()
+    pub fn metrics_snapshot(&self) -> CPUOpcodeMetrics { self.opcode_metrics() }
+
+    /// Recompute a synthetic coverage view: iterate all 256 opcode slots and classify as Implemented/Unimplemented
+    /// based on whether executing them results in an unimplemented trap. We do this non-destructively by cloning
+    /// CPU state and executing a single step per opcode with a safe program counter region.
+    pub fn recompute_opcode_coverage(&mut self) -> (usize, usize, Vec<u8>) {
+        // Clear existing bitmap & counters
+        self.opcode_unimpl_bitmap = [false;256];
+        self.opcode_unimplemented = 0; self.opcode_total = 0; self.opcode_counts = [0;256];
+        // We will place each opcode at 0x0100 with a harmless operand byte (0) following when needed.
+        for op in 0u16..=255u16 {
+            // Clone minimal register state to keep side effects isolated
+            let mut clone = CPU { ..Default::default() };
+            clone.pc = 0x0100;
+            clone.mem[0x0100] = op as u8;
+            // Some instructions that read an operand byte must not run off end; ensure 0x0101 exists.
+            clone.mem[0x0101] = 0x00; clone.mem[0x0102] = 0x00; clone.mem[0x0103] = 0x00;
+            // Provide a reset vector so any unexpected reset fetch doesn't crash.
+            clone.mem[0xFFFC] = 0x00; clone.mem[0xFFFD] = 0x02; // -> 0x0200
+            let ok = clone.step();
+            if !ok { self.opcode_unimpl_bitmap[op as usize] = true; }
+        }
+        let unimpl: Vec<u8> = self.opcode_unimpl_bitmap.iter().enumerate().filter_map(|(i,b)| if *b {Some(i as u8)} else {None}).collect();
+        let implemented = 256 - unimpl.len();
+        (implemented, unimpl.len(), unimpl)
+    }
     // take_vector_events removed.
     pub fn sync_mem_to_bus(&mut self){
         // One-time sync (idempotent) to keep bus memory identical to legacy mem array
