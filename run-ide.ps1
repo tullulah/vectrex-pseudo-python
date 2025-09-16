@@ -52,27 +52,13 @@ function Install-NodeModulesIfMissing($dir){
 Install-NodeModulesIfMissing (Join-Path $root 'ide/frontend')
 Install-NodeModulesIfMissing (Join-Path $root 'ide/electron')
 
-# Build WASM (frontend) unless skipped
+# Build WASM (frontend) unless skipped; artifacts remain in src/wasm for static import
 if(-not $NoWasmBuild){
   Push-Location (Join-Path $root 'ide/frontend')
   Write-Host '[INFO] wasm: build (vectrex_emulator)' -ForegroundColor Cyan
   npm run wasm:build | Write-Host
   if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] wasm build falló' -ForegroundColor Red; exit 1 }
   Pop-Location
-  # Copy artifacts to public for direct fetch (ensure directory exists)
-  $wasmSrcDir = Join-Path $root 'ide/frontend/src/wasm'
-  $publicDir = Join-Path $root 'ide/frontend/public'
-  if(-not (Test-Path $publicDir)){ New-Item -ItemType Directory -Path $publicDir | Out-Null }
-  $filesToCopy = @('vectrex_emulator_bg.wasm','vectrex_emulator.js')
-  foreach($f in $filesToCopy){
-    $src = Join-Path $wasmSrcDir $f
-    if(Test-Path $src){
-      Copy-Item $src (Join-Path $publicDir $f) -Force
-      Write-Host "[INFO] Copiado WASM artifact: $f -> public" -ForegroundColor DarkCyan
-    } else {
-      Write-Host "[WARN] Artifact no encontrado (saltado): $f" -ForegroundColor Yellow
-    }
-  }
 }
 
 # Build Rust (LSP + core) salvo -NoRustBuild

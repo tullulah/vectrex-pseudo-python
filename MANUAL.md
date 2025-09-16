@@ -198,6 +198,13 @@ def main():
 ## 14. License
 MIT (see `README.md`).
 
+## 15. IDE / WASM Build Note
+Running the helper script `run-ide.ps1` now automatically:
+- Builds the Rust workspace (unless `-NoRustBuild`).
+- Builds the WebAssembly emulator artifacts (`npm run wasm:build`) unless `-NoWasmBuild` is passed.
+
+The wasm-bindgen outputs (`vectrex_emulator_bg.wasm`, `vectrex_emulator.js`) live in `ide/frontend/src/wasm/` and are statically imported by the React code. No copy to `public/` is required; Vite serves them via the module graph. If you change Rust emulator code, re-run the script (or `npm run wasm:build` in `ide/frontend`) and refresh the IDE.
+
 ---
 (End of Draft Section: This manual is a living document; update with each feature.)
 
