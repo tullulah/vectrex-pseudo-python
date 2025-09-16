@@ -7,6 +7,8 @@ interface EditorState {
   documents: DocumentModel[];
   active?: string; // uri
   allDiagnostics: FlatDiag[]; // kept sorted & stable reference unless content changes
+  scrollPositions: Record<string, number>; // vertical scrollTop per document
+  hadFocus: Record<string, boolean>; // whether doc was focused last interaction
   openDocument: (doc: DocumentModel) => void;
   setActive: (uri: string) => void;
   updateContent: (uri: string, content: string) => void;
@@ -14,6 +16,8 @@ interface EditorState {
   setDiagnostics: (uri: string, diags: DiagnosticModel[]) => void;
   closeDocument: (uri: string) => void;
   gotoLocation: (uri: string, line: number, column: number) => void;
+  setScrollPosition: (uri: string, top: number) => void;
+  setHadFocus: (uri: string, focused: boolean) => void;
 }
 
 function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
@@ -43,6 +47,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   documents: [],
   active: undefined,
   allDiagnostics: [],
+  scrollPositions: {},
+  hadFocus: {},
   openDocument: (doc) => set((s) => {
     // If document already open (by uri) just activate & optionally refresh metadata
     const existing = s.documents.find(d => d.uri === doc.uri);
@@ -93,5 +99,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     const ev = new CustomEvent('vpy.goto', { detail: { uri, line, column } });
     window.dispatchEvent(ev);
-  }
+  },
+  setScrollPosition: (uri, top) => set(s => ({ scrollPositions: { ...s.scrollPositions, [uri]: top } })),
+  setHadFocus: (uri, focused) => set(s => ({ hadFocus: { ...s.hadFocus, [uri]: focused } }))
 }));

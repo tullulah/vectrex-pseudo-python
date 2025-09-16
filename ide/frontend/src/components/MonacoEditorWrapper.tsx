@@ -108,6 +108,10 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const setActive = useEditorStore(s => s.setActive);
   const updateContent = useEditorStore(s => s.updateContent);
   const setDiagnostics = useEditorStore(s => s.setDiagnostics);
+  const setScrollPosition = useEditorStore(s => s.setScrollPosition);
+  const scrollPositions = useEditorStore(s => s.scrollPositions);
+  const setHadFocus = useEditorStore(s => s.setHadFocus);
+  const hadFocus = useEditorStore(s => s.hadFocus);
 
   const targetUri = uri || active;
   const doc = documents.find(d => d.uri === targetUri);
@@ -312,12 +316,36 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       }
       editor.setModel(model);
       lastModelRef.current = doc.uri;
+      // Restore previous scroll position if known
+      try {
+        const top = scrollPositions[doc.uri];
+        if (typeof top === 'number') {
+          editor.setScrollTop(top);
+        }
+        // Restore focus only if previously focused & container visible
+        if (hadFocus[doc.uri]) {
+          requestAnimationFrame(() => editor.focus());
+        }
+      } catch {}
       // Trigger an initial didChange to encourage semanticTokens/full soon after mount
       if (!openedRef.current.has(doc.uri)) {
         try { lspClient.didOpen(doc.uri, 'vpy', model.getValue()); openedRef.current.add(doc.uri); } catch {}
       } else {
         lspClient.didChange(doc.uri, model.getValue());
       }
+      // Listen for scroll to persist position (debounced lightly)
+      try {
+        let lastScrollEv = 0;
+        editor.onDidScrollChange((e: any) => {
+          const now = performance.now();
+          if (now - lastScrollEv > 50) {
+            lastScrollEv = now;
+            try { setScrollPosition(doc.uri, editor.getScrollTop()); } catch {}
+          }
+        });
+        editor.onDidBlurEditorWidget(() => { try { setHadFocus(doc.uri, false); } catch {} });
+        editor.onDidFocusEditorWidget(() => { try { setHadFocus(doc.uri, true); } catch {} });
+      } catch {}
     }
     return () => {
       if (hoverDisposableRef.current) {
@@ -325,7 +353,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         hoverDisposableRef.current = null;
       }
     };
-  }, [doc]);
+  }, [doc, scrollPositions, hadFocus, setScrollPosition, setHadFocus]);
 
   const handleChange: OnChange = useCallback((value) => {
     if (doc && typeof value === 'string') {
@@ -348,9 +376,19 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       if (lastModelRef.current !== doc.uri) {
         editorRef.current.setModel(model);
         lastModelRef.current = doc.uri;
+        // Restore scroll & focus after switching
+        try {
+          const top = scrollPositions[doc.uri];
+          if (typeof top === 'number') {
+            requestAnimationFrame(() => editorRef.current?.setScrollTop(top));
+          }
+          if (hadFocus[doc.uri]) {
+            requestAnimationFrame(() => editorRef.current?.focus());
+          }
+        } catch {}
       }
     }
-  }, [doc?.uri, doc?.content]);
+  }, [doc?.uri, doc?.content, scrollPositions, hadFocus]);
 
   useEffect(() => {
     const unsub = dockBus.on(ev => {
