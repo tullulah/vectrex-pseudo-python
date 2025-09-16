@@ -4,7 +4,7 @@
 export interface VectorSegment { x1:number; y1:number; x2:number; y2:number; intensity:number; }
 
 export class Cpu6809 {
-  a=0; b=0; dp=0xD0; x=0; y=0; u=0; s=0xC000; pc=0; cc_z=false; cc_n=false; cc_c=false; cc_v=false; cc_i=false; // add IRQ mask flag (I)
+  a=0; b=0; dp=0xD0; x=0; y=0; u=0; s=0xC000; pc=0; cc_z=false; cc_n=false; cc_c=false; cc_v=false; cc_i=false; // ORG fixed at $0000; stack still placed at $C000
   mem = new Uint8Array(65536);
   callStack: number[] = [];
   traceBiosVec = false; // enable extra tracing for BIOS vector routines (0xF3xx)
@@ -165,7 +165,7 @@ export class Cpu6809 {
   cpuReset(){
     // Preserve BIOS image and reload it to ensure contents
     if (this.biosPresent && this.biosImage) this.loadBin(this.biosImage, 0xF000);
-    this.a=0; this.b=0; this.dp=0xD0; this.x=0; this.y=0; this.u=0; this.s=0xC000;
+  this.a=0; this.b=0; this.dp=0xD0; this.x=0; this.y=0; this.u=0; this.s=0xC000; // preserve stack top
     this.cc_z=false; this.cc_n=false; this.cc_c=false; this.cc_v=false; this.cc_i=true; // I flag set after reset
     this.frameSegments.length=0; this.callStack.length=0; this.unknownLog={};
     this.cycles=0; this.waitingForVsync=false; this.irqPending=false; this.waiWaiting=false;

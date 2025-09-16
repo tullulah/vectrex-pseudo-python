@@ -10,7 +10,7 @@ let mainWindow: BrowserWindow | null = null;
 
 // --- Emulator load helpers (shared by emu:load and run:compile) -----------------
 function cpuColdReset(){
-  globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0;
+  globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0; // PC starts at $0000 (fixed cartridge ORG)
   globalCpu.callStack=[]; globalCpu.lastIntensity=0x5F; globalCpu.frameSegments=[]; globalCpu.frameReady=false;
   // Re-apply BIOS contents (if any) after bulk clear performed by caller.
   if (globalCpu.biosPresent && typeof globalCpu.reapplyBios === 'function') {

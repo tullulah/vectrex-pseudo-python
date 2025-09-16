@@ -61,8 +61,8 @@ export class EmulatorService {
 
   resetStats() { if (this.emu && (this.emu as any).reset_stats) { (this.emu as any).reset_stats(); } }
 
-  /** Load a raw program binary at the given base address (defaults to 0xC000 typical cartridge). */
-  loadProgram(bytes: Uint8Array, base = 0xC000) {
+  /** Load a raw program binary at the given base address (fixed cartridge origin now $0000). */
+  loadProgram(bytes: Uint8Array, base = 0x0000) {
     if (!this.emu) throw new Error('Emu not init');
     // wasm API returns void; assume success unless it throws
     this.emu.load_bin(base, bytes);

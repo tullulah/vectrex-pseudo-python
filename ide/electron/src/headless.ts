@@ -144,7 +144,7 @@ function loadBin(p:string){
     const buf = readFileSync(p);
     globalCpu.mem.fill(0);
     if (globalCpu.biosPresent && (globalCpu as any).reapplyBios) (globalCpu as any).reapplyBios();
-    globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0;
+  globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0; // fixed ORG $0000
     // Load cartridge image at 0x0000 user space
     globalCpu.mem.set(new Uint8Array(buf), 0x0000);
     // Decide initial PC based on entryMode
@@ -167,7 +167,7 @@ function loadBin(p:string){
           const buf2 = readFileSync(alt);
             globalCpu.mem.fill(0);
             if (globalCpu.biosPresent && (globalCpu as any).reapplyBios) (globalCpu as any).reapplyBios();
-            globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0;
+            globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0; // fixed ORG $0000
             if (globalCpu.biosPresent){
               const rvHi = globalCpu.mem[0xFFFE]; const rvLo = globalCpu.mem[0xFFFF];
               globalCpu.pc = ((rvHi<<8)|rvLo)&0xFFFF;

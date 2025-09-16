@@ -495,6 +495,16 @@ Targets:
 - VecFever (Cortex-M)
 - Vextreme (Cortex-M)
 
+### Fixed Cartridge Origin (Vectrex)
+The Motorola 6809 (Vectrex) backend now hardcodes `ORG $0000` for generated cartridges. Earlier experiments tried making the origin configurable (e.g. `$C000`) but this introduced ambiguity: the emulator loader and reset vectors expect code at `$0000` with a proper header. To avoid silent mismatches (frames advancing but no user code executed), we keep the origin fixed.
+
+Implications:
+- Loader should place the compiled binary at address `$0000`.
+- Stack is still initialized near `$C000` (independent of code origin).
+- Do not relocate by manually editing the emitted `ORG`; instead adjust emulator memory mapping if you need a different layout.
+
+If you see frame counters increasing but zero vector segments, double‑check that the binary was actually loaded at `$0000` and not at a higher RAM base.
+
 ## Current Feature Set
 - Functions (definitions, returns)
 - Up to 4 positional parameters (simple prototype ABI)

@@ -28,8 +28,11 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
     // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
     // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
-    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin={} ---\n", ti.name, opts.title, ti.origin));
-    out.push_str(&format!("        ORG {}\n", ti.origin));
+    // Origin is fixed at $0000 for Vectrex cartridge space. Using a configurable origin caused
+    // loader mismatches with the emulator; keep this constant and adjust the emulator loader base
+    // instead of relocating here.
+    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=$0000 ---\n", ti.name, opts.title));
+    out.push_str("        ORG $0000\n");
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // Classic include; no manual EQU needed.
         out.push_str("    INCLUDE \"../include/VECTREX.I\"\n\n");
