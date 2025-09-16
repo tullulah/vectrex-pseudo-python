@@ -17,6 +17,7 @@ export const EmulatorPanel: React.FC = () => {
   const [lastSegments, setLastSegments] = useState<Segment[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
+  const [traceVectors, setTraceVectors] = useState(() => { try { return localStorage.getItem('emu_trace_vectors')==='1'; } catch { return false; } });
   const [baseAddrHex, setBaseAddrHex] = useState('C000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
   const [toasts, setToasts] = useState<Array<{ id:number; msg:string; kind:'info'|'error'; ts:number }>>([]);
@@ -58,13 +59,20 @@ export const EmulatorPanel: React.FC = () => {
 
   const animationLoop = useCallback(() => {
     if (status !== 'running' || demoMode) return; // paused/stopped or demo mode stops loop
+    if (traceVectors) console.debug('[panel] animationLoop runFrame');
     globalEmu.runFrame();
     const regs = globalEmu.registers(); const m = globalEmu.metrics();
     if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
     if (regs) { if (!m) setFrameCount(regs.frame_count); if ((regs as any).bios_frame && biosFrame===0) setBiosFrame((regs as any).bios_frame); if ((regs as any).cycle_frame && cycleFrame===0) setCycleFrame((regs as any).cycle_frame); }
     const metrics = globalEmu.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
-    let segs = globalEmu.getSegmentsShared(); if (!segs.length) segs = globalEmu.drainSegmentsJson(); if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=globalEmu.loopWatch(); if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
-  }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame]);
+    let segs = globalEmu.getSegmentsShared();
+    if (!segs.length) {
+      if (traceVectors) console.debug('[panel] shared empty -> drain json');
+      segs = globalEmu.drainSegmentsJson();
+    }
+    if (traceVectors) console.debug('[panel] segments fetched count=', segs.length);
+    if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=globalEmu.loopWatch(); if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
+  }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame, traceVectors]);
 
   // Init
   useEffect(()=>{ let cancelled=false; (async()=>{ if (globalEmu.registers()) return; try { await globalEmu.init(); const biosPaths=['bios.bin','/bios.bin','/core/src/bios/bios.bin']; for (const p of biosPaths){ if (globalEmu.isBiosLoaded()) break; try { const resp=await fetch(p); if (resp.ok){ const buf=new Uint8Array(await resp.arrayBuffer()); globalEmu.loadBios(buf); break; } } catch{} } // After BIOS load, remain stopped until user presses Play
@@ -296,6 +304,9 @@ export const EmulatorPanel: React.FC = () => {
     pushToast('Reloaded last binary');
   };
 
+  // Apply trace flag to emulator service
+  useEffect(() => { (globalEmu as any).enableTrace?.(traceVectors); try { localStorage.setItem('emu_trace_vectors', traceVectors?'1':'0'); } catch {} }, [traceVectors]);
+
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', padding:8, boxSizing:'border-box', fontFamily:'monospace', fontSize:12}}>
       <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
@@ -320,6 +331,9 @@ export const EmulatorPanel: React.FC = () => {
         <span>Segments(last frame): {segmentsCount}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={showLoopWatch} onChange={e=> setShowLoopWatch(e.target.checked)} /> loop watch
+        </label>
+        <label style={{display:'flex', alignItems:'center', gap:4}}>
+          <input type='checkbox' checked={traceVectors} onChange={e=> setTraceVectors(e.target.checked)} /> trace vectors
         </label>
         <div style={{marginLeft:'auto', display:'flex', gap:6}}>
           <button style={btn} onClick={onBuild} title='Compile active .vpy or assemble .asm, load & run'>Build & Run</button>

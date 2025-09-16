@@ -219,6 +219,9 @@ export class WasmEmu {
     integrator_drain_segments() {
         wasm.wasmemu_integrator_drain_segments(this.__wbg_ptr);
     }
+    demo_triangle() {
+        wasm.wasmemu_demo_triangle(this.__wbg_ptr);
+    }
     /**
      * @returns {string}
      */

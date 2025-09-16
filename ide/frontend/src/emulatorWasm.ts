@@ -30,6 +30,10 @@ export class EmulatorService {
   private emu: WasmEmu | null = null;
   private memory: Uint8Array | null = null;
   private biosLoaded = false;
+  private trace = false;
+
+  enableTrace(on: boolean){ this.trace = on; (window as any).__emuTrace = on; }
+  isTrace(){ return this.trace; }
 
   async init(wasmUrl?: string) {
     if (this.emu) return; // idempotent
@@ -66,7 +70,11 @@ export class EmulatorService {
 
   runFrame(maxInstr = 200_000) {
     if (!this.emu) return;
+    if (this.trace) console.debug('[emu] runFrame start maxInstr=', maxInstr);
     this.emu.run_until_wait_recal(maxInstr);
+    if (this.trace) {
+      try { const m = this.metrics(); console.debug('[emu] runFrame done frame_count=', m?.frames, 'cycles=', m?.cycles); } catch {}
+    }
   }
 
   drainVectorEvents(): VectorEvent[] {
@@ -97,6 +105,7 @@ export class EmulatorService {
     const ptr = emuAny.integrator_segments_ptr();
     const len = emuAny.integrator_segments_len();
     const stride = emuAny.integrator_segment_stride();
+    if (this.trace) console.debug('[emu] getSegmentsShared ptr=',ptr,'len=',len,'stride=',stride);
     // wasm-bindgen usually exposes memory on the default export; attempt to discover
     const mem: WebAssembly.Memory | undefined = (emuAny.memory) || (emuAny.constructor?.memory) || ( (globalThis as any).wasmMemory );
     if (!mem) return [];
@@ -119,13 +128,23 @@ export class EmulatorService {
     if (!this.emu) return [];
     const emuAny: any = this.emu as any;
     if (!emuAny.integrator_segments_json) return [];
-    try { return JSON.parse(emuAny.integrator_segments_json()) as Segment[]; } catch { return []; }
+    try {
+      const raw = emuAny.integrator_segments_json();
+      const segs = JSON.parse(raw) as Segment[];
+      if (this.trace) console.debug('[emu] drainSegmentsJson count=', segs.length);
+      return segs;
+    } catch { return []; }
   }
   peekSegmentsJson(): Segment[] {
     if (!this.emu) return [];
     const emuAny: any = this.emu as any;
     if (!emuAny.integrator_segments_peek_json) return [];
-    try { return JSON.parse(emuAny.integrator_segments_peek_json()) as Segment[]; } catch { return []; }
+    try {
+      const raw = emuAny.integrator_segments_peek_json();
+      const segs = JSON.parse(raw) as Segment[];
+      if (this.trace) console.debug('[emu] peekSegmentsJson count=', segs.length);
+      return segs;
+    } catch { return []; }
   }
   drainSegments() {
     if (!this.emu) return;
