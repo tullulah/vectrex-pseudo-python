@@ -36,6 +36,8 @@ export class EmulatorService {
     try {
       await initWasm(wasmUrl as any);
       this.emu = new (WasmEmu as any)();
+      // Expose for debugging / demo fallback
+      (window as any).emu = this.emu;
     } catch (e:any) {
       console.error('[Emulator] WASM init failed. Did you run `npm run wasm:build`?', e);
       throw e;
@@ -52,6 +54,8 @@ export class EmulatorService {
   isBiosLoaded() { return this.biosLoaded; }
 
   reset() { if (this.emu) { this.emu.reset(); } }
+
+  resetStats() { if (this.emu && (this.emu as any).reset_stats) { (this.emu as any).reset_stats(); } }
 
   /** Load a raw program binary at the given base address (defaults to 0xC000 typical cartridge). */
   loadProgram(bytes: Uint8Array, base = 0xC000) {
@@ -127,6 +131,23 @@ export class EmulatorService {
     if (!this.emu) return;
     const emuAny: any = this.emu as any;
     if (emuAny.integrator_drain_segments) emuAny.integrator_drain_segments();
+  }
+
+  /** Generate a static demo triangle using wasm helper if available; returns latest segments. */
+  demoTriangle(): Segment[] {
+    if (!this.emu) return [];
+    const emuAny: any = this.emu as any;
+    if (typeof emuAny.demo_triangle === 'function') {
+      try { emuAny.demo_triangle(); } catch(e){ console.warn('demo_triangle call failed', e); }
+      // Prefer peek (non-drain) if available
+      if (typeof emuAny.integrator_segments_peek_json === 'function') {
+        try { return JSON.parse(emuAny.integrator_segments_peek_json()) as Segment[]; } catch { /* ignore */ }
+      }
+      if (typeof emuAny.integrator_segments_json === 'function') {
+        try { return JSON.parse(emuAny.integrator_segments_json()) as Segment[]; } catch { /* ignore */ }
+      }
+    }
+    return [];
   }
 }
 

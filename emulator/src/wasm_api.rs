@@ -49,6 +49,8 @@ struct JsMetrics {
     t1_expiries: u64,
     t2_expiries: u64,
     avg_lines_per_frame: Option<f64>,
+    hot00: Vec<(u16,u64)>,
+    hotff: Vec<(u16,u64)>,
 }
 
 #[cfg(feature="wasm")]
@@ -62,6 +64,7 @@ impl WasmEmu {
     #[wasm_bindgen] pub fn load_bios(&mut self, data:&[u8])->bool { let len=data.len(); if !(len==4096 || len==8192){return false;} self.cpu.load_bios(data); true }
     #[wasm_bindgen] pub fn load_bin(&mut self, base:u16, data:&[u8]){ for (i,b) in data.iter().enumerate(){ let addr=base as usize + i; if addr<65536 { self.cpu.mem[addr]=*b; self.cpu.bus.mem[addr]=*b; } } }
     #[wasm_bindgen] pub fn reset(&mut self){ self.cpu.reset(); }
+    #[wasm_bindgen] pub fn reset_stats(&mut self){ self.cpu.reset_stats(); }
     #[wasm_bindgen] pub fn step(&mut self, count:u32)->u32 { let mut ex=0; for _ in 0..count { if !self.cpu.step(){ break; } ex +=1; } ex }
     #[wasm_bindgen] pub fn run_until_wait_recal(&mut self, max_instr:u32)->u32 { let start=self.cpu.bios_frame; let mut ex=0; while ex<max_instr { if !self.cpu.step(){ break; } ex+=1; if self.cpu.bios_frame != start { break; } } ex }
     #[wasm_bindgen] pub fn registers_json(&self)->String { format!("{{\"a\":{},\"b\":{},\"dp\":{},\"x\":{},\"y\":{},\"u\":{},\"s\":{},\"pc\":{},\"cycles\":{},\"frame_count\":{},\"cycle_frame\":{},\"bios_frame\":{},\"last_intensity\":{} }}", self.cpu.a,self.cpu.b,self.cpu.dp,self.cpu.x,self.cpu.y,self.cpu.u,self.cpu.s,self.cpu.pc,self.cpu.cycles,self.cpu.frame_count,self.cpu.cycle_frame,self.cpu.bios_frame,self.cpu.last_intensity) }
@@ -115,6 +118,8 @@ impl WasmEmu {
             t1_expiries: self.cpu.t1_expiries,
             t2_expiries: self.cpu.t2_expiries,
             avg_lines_per_frame: if self.cpu.lines_per_frame_samples>0 { Some(self.cpu.lines_per_frame_accum as f64 / self.cpu.lines_per_frame_samples as f64) } else { None },
+            hot00: self.cpu.hot00.iter().copied().filter(|(_,c)| *c>0).collect(),
+            hotff: self.cpu.hotff.iter().copied().filter(|(_,c)| *c>0).collect(),
         };
         serde_json::to_string(&js).unwrap_or_else(|_|"{}".into())
     }
@@ -149,6 +154,27 @@ impl WasmEmu {
         #[wasm_bindgen] pub fn integrator_segments_len(&self) -> u32 { self.cpu.temp_segments_c.len() as u32 }
         #[wasm_bindgen] pub fn integrator_segment_stride(&self) -> u32 { std::mem::size_of::<crate::integrator::BeamSegmentC>() as u32 }
         #[wasm_bindgen] pub fn integrator_drain_segments(&mut self){ self.cpu.integrator.take_segments(); }
+        #[wasm_bindgen] pub fn demo_triangle(&mut self) {
+            // Ensure beam on with a mid intensity
+            let inten = if self.cpu.last_intensity==0 { 0x5F } else { self.cpu.last_intensity };
+            self.cpu.last_intensity = inten;
+            self.cpu.integrator.set_intensity(inten);
+            self.cpu.integrator.beam_on();
+            // Start at origin (reset) then draw three edges.
+            self.cpu.integrator.reset_origin();
+            let frame = self.cpu.cycle_frame;
+            let draw = |emu: &mut WasmEmu, vx: f32, vy: f32, cycles: u32| {
+                emu.cpu.integrator.set_velocity(vx, vy);
+                emu.cpu.integrator.tick(cycles, frame);
+                emu.cpu.integrator.set_velocity(0.0, 0.0);
+            };
+            // Triangle: right, up-left, down-left
+            draw(self, 30.0, 0.0, 40);
+            draw(self, -15.0, 26.0, 40);
+            draw(self, -15.0, -26.0, 40);
+            // Leave beam off afterward to avoid trailing lines
+            self.cpu.integrator.beam_off();
+        }
     #[wasm_bindgen] pub fn loop_watch_json(&self)->String {
         let mut out: Vec<JsLoopSample> = Vec::new();
         for s in &self.cpu.loop_watch_slots {

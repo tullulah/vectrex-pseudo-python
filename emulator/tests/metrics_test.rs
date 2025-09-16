@@ -29,8 +29,8 @@ fn opcode_metrics_collect() {
 fn recompute_opcode_coverage_snapshot() {
     let mut cpu = CPU::default();
     let (_impld, _missing, missing_list) = cpu.recompute_opcode_coverage();
-    // Ensure that at least one opcode is still unimplemented (sanity) and that implemented ones are *not* flagged.
-    assert!(!missing_list.is_empty(), "Expected at least one unimplemented opcode for now");
-    // Spot check an implemented opcode (LDA immediate 0x86) is not marked missing.
-    assert!(!missing_list.contains(&0x86), "Opcode 0x86 should be implemented");
+    // All primary opcodes are now implemented; ensure list is empty.
+    assert!(missing_list.is_empty(), "No primary opcodes should remain unimplemented; found: {:?}", missing_list);
+    // Spot check: LDA immediate 0x86 definitely implemented (redundant but keeps intent clear)
+    assert!(!missing_list.contains(&0x86));
 }

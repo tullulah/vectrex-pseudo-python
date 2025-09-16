@@ -235,6 +235,38 @@ function resolveLspPath(): string | null {
   return null;
 }
 
+// Enumerate .vpy and .asm under examples/ and working directory (non-recursive + shallow recursive examples)
+ipcMain.handle('list:sources', async (_e, args: { limit?: number } = {}) => {
+  const limit = args.limit ?? 200;
+  const cwd = process.cwd();
+  const exDir = join(cwd, 'examples');
+  const results: Array<{ path:string; kind:'vpy'|'asm'; size:number; mtime:number }> = [];
+  async function scanDir(dir:string, depth:number){
+    if (results.length >= limit) return;
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const ent of entries){
+        if (results.length >= limit) break;
+        const full = join(dir, ent.name);
+        if (ent.isDirectory()) { if (depth<1) await scanDir(full, depth+1); continue; }
+        if (/\.(vpy|asm)$/i.test(ent.name)) {
+          try {
+            const st = await fs.stat(full);
+            results.push({ path: full, kind: /\.vpy$/i.test(ent.name)?'vpy':'asm', size: st.size, mtime: st.mtimeMs });
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+  await scanDir(cwd, 0);
+  await scanDir(exDir, 0);
+  // De-dupe by path
+  const seen = new Set<string>();
+  const uniq = results.filter(r => { if (seen.has(r.path)) return false; seen.add(r.path); return true; });
+  uniq.sort((a,b)=> a.path.localeCompare(b.path));
+  return { ok:true, sources: uniq.slice(0, limit) };
+});
+
 ipcMain.handle('lsp_start', async () => {
   const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
   if (lsp) return;
@@ -675,6 +707,41 @@ ipcMain.handle('recents:write', async (_e, list: any[]) => {
   recentsCache = Array.isArray(list) ? list : [];
   await persistRecents();
   return { ok: true };
+});
+
+// Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
+// args: { asmPath: string; outPath?: string; extra?: string[] }
+ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {
+  const { asmPath, outPath, extra } = args || {} as any;
+  if (!asmPath) return { error: 'no_asm_path' };
+  // Normalize possible file:/// URI
+  let fsPath = asmPath;
+  if (/^file:\/\//i.test(fsPath)) {
+    try { const u = new URL(fsPath); fsPath = u.pathname; if (process.platform==='win32' && /^\/[A-Za-z]:/.test(fsPath)) fsPath = fsPath.slice(1); } catch {}
+  }
+  try { if (!existsSync(fsPath)) return { error: 'asm_not_found', path: fsPath }; } catch { return { error: 'asm_not_found', path: fsPath }; }
+  const outBin = outPath || fsPath.replace(/\.[^.]+$/, '.bin');
+  const script = join(process.cwd(), 'tools', 'lwasm.ps1');
+  try { if (!existsSync(script)) return { error: 'script_not_found', script }; } catch { return { error: 'script_not_found', script }; }
+  const baseArgs = ['-NoProfile','-ExecutionPolicy','Bypass','-File', script, '--6809','--format=raw', `--output=${outBin}`, fsPath];
+  if (Array.isArray(extra) && extra.length) baseArgs.push(...extra);
+  mainWindow?.webContents.send('run://status', `Assembling ${fsPath} -> ${outBin}`);
+  return new Promise((resolve) => {
+    const child = spawn('pwsh', baseArgs, { stdio:['ignore','pipe','pipe'] });
+    let stdoutBuf=''; let stderrBuf='';
+    child.stdout.on('data', (c:Buffer)=>{ const t=c.toString('utf8'); stdoutBuf+=t; mainWindow?.webContents.send('run://stdout', t); });
+    child.stderr.on('data', (c:Buffer)=>{ const t=c.toString('utf8'); stderrBuf+=t; mainWindow?.webContents.send('run://stderr', t); });
+    child.on('error', (err)=>{ mainWindow?.webContents.send('run://status', `Assembly spawn failed: ${err.message}`); resolve({ error:'spawn_failed', detail: err.message }); });
+    child.on('exit', async (code)=>{
+      if (code!==0){ mainWindow?.webContents.send('run://status', `Assembly FAILED (exit ${code})`); return resolve({ error:'assemble_failed', code, stdout:stdoutBuf, stderr:stderrBuf }); }
+      try {
+        const buf = await fs.readFile(outBin);
+        const base64 = Buffer.from(buf).toString('base64');
+        mainWindow?.webContents.send('run://status', `Assembly OK: ${outBin} (${buf.length} bytes)`);
+        resolve({ ok:true, binPath: outBin, size: buf.length, base64, stdout:stdoutBuf, stderr:stderrBuf });
+      } catch(e:any){ resolve({ error:'bin_read_failed', detail:e?.message }); }
+    });
+  });
 });
 
 // After window creation call buildMenus

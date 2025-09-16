@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   emuStats: () => ipcRenderer.invoke('emu:stats') as Promise<any>,
   emuStatsReset: () => ipcRenderer.invoke('emu:statsReset') as Promise<{ok:boolean}>,
   emuDiagnoseIntercept: (frames:number=8) => ipcRenderer.invoke('emu:diagnoseIntercept', frames) as Promise<any>,
+  emuAssemble: (args: { asmPath: string; outPath?: string; extra?: string[] }) => ipcRenderer.invoke('emu:assemble', args) as Promise<{ ok?: boolean; error?: string; binPath?: string; size?: number; base64?: string; stdout?: string; stderr?: string }>,
   runCompile: (args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean }) => ipcRenderer.invoke('run:compile', args) as Promise<{ ok?: boolean; error?: string; binPath?: string; size?: number; stdout?: string; stderr?: string; conflict?: boolean; currentMTime?: number }>,
   onRunStdout: (cb: (chunk: string) => void) => ipcRenderer.on('run://stdout', (_e: IpcRendererEvent, data: string) => cb(data)),
   onRunStderr: (cb: (chunk: string) => void) => ipcRenderer.on('run://stderr', (_e: IpcRendererEvent, data: string) => cb(data)),
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRunStatus: (cb: (line: string) => void) => ipcRenderer.on('run://status', (_e: IpcRendererEvent, data: string) => cb(data)),
   onEmuLoaded: (cb: (info: { size: number }) => void) => ipcRenderer.on('emu://loaded', (_e: IpcRendererEvent, data) => cb(data)),
   setVectorMode: (mode: 'intercept'|'via') => ipcRenderer.invoke('emu:setVectorMode', mode) as Promise<{ ok?:boolean; error?:string; mode?:string }>,
+  listSources: (args?: { limit?: number }) => ipcRenderer.invoke('list:sources', args) as Promise<{ ok?:boolean; sources?: Array<{ path:string; kind:'vpy'|'asm'; size:number; mtime:number }> }> ,
 });
 
 contextBridge.exposeInMainWorld('files', {

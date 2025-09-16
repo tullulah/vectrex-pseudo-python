@@ -9,7 +9,8 @@ import { FileTreePanel } from './panels/FileTreePanel';
 // Legacy EditorPanel kept for reference; replaced by custom EditorSurface for tab management.
 import { EditorSurface } from './EditorSurface';
 // Use new WASM-based emulator panel (migrated from root components path)
-import { EmulatorPanel } from './EmulatorPanel';
+// Use the demo-capable EmulatorPanel (with demo triangle toggle) from panels path
+import { EmulatorPanel } from './panels/EmulatorPanel';
 import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
 import { OutputPanel } from './panels/OutputPanel';

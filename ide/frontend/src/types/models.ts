@@ -42,6 +42,6 @@ export interface DebugState {
 }
 
 export interface EmulatorState {
-  status: 'running' | 'stopped';
+  status: 'running' | 'stopped' | 'paused';
   lastFrameTimestamp?: number;
 }

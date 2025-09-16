@@ -129,13 +129,6 @@ impl CPU {
             0x2C => { let off=self.mem[self.pc as usize] as i8; self.pc+=1; if !self.cc_n { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BGE taken {:04X}", new);} self.pc=new; } else if self.trace { println!("BGE not"); } }
             // LBRA
             0x16 => { let hi=self.mem[self.pc as usize]; let lo=self.mem[self.pc as usize+1]; self.pc+=2; let off = ((hi as u16)<<8)|lo as u16; let new = self.pc.wrapping_add(off as i16 as u16); if self.trace { println!("LBRA {:04X}", new);} self.pc=new; }
-            // Long branch prefix 0x10
-            0x10 => { let bop=self.mem[self.pc as usize]; self.pc+=1; let hi=self.mem[self.pc as usize]; let lo=self.mem[self.pc as usize+1]; self.pc+=2; let off=((hi as u16)<<8)|lo as u16; let target = self.pc.wrapping_add(off as i16 as u16); match bop { 0x26 => { if !self.cc_z { if self.trace { println!("LBNE {:04X}", target);} self.pc=target; } else if self.trace { println!("LBNE not"); } }, 0x27 => { if self.cc_z { if self.trace { println!("LBEQ {:04X}", target);} self.pc=target; } else if self.trace { println!("LBEQ not"); } }, _ => { if self.trace { println!("UNIMPL LONG BR {:02X}", bop);} return false; } } }
+            // Legacy emulator CPU removed. Re-export the unified implementation from emulator crate.
+            pub use vectrex_emulator::{CPU, Bus, Via6522, Integrator, BeamSegment, BeamState};
             // ORCC (ignored)
-            0x1A => { self.pc+=1; if self.trace { println!("ORCC (ignored)"); } }
-            op => { if self.trace { println!("UNIMPL OP {:02X} at {:04X}", op, pc0);} return false; }
-        }
-        self.cycles += cyc as u64; true
-    }
-    pub fn run(&mut self,max_steps:usize){ for _ in 0..max_steps { if !self.step() { if self.trace { println!("Stopped at {:04X}", self.pc);} break; } } }
-}

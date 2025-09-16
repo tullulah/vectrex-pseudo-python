@@ -93,6 +93,9 @@ export class WasmEmu {
     reset() {
         wasm.wasmemu_reset(this.__wbg_ptr);
     }
+    reset_stats() {
+        wasm.wasmemu_reset_stats(this.__wbg_ptr);
+    }
     /**
      * @param {number} count
      * @returns {number}
@@ -138,25 +141,6 @@ export class WasmEmu {
     /**
      * @returns {string}
      */
-    vector_events_json() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmemu_vector_events_json(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * @returns {string}
-     */
     metrics_json() {
         let deferred1_0;
         let deferred1_1;
@@ -172,6 +156,68 @@ export class WasmEmu {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
         }
+    }
+    /**
+     * @returns {string}
+     */
+    integrator_segments_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmemu_integrator_segments_json(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    integrator_segments_peek_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmemu_integrator_segments_peek_json(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    integrator_segments_ptr() {
+        const ret = wasm.wasmemu_integrator_segments_ptr(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    integrator_segments_len() {
+        const ret = wasm.wasmemu_integrator_segments_len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    integrator_segment_stride() {
+        const ret = wasm.wasmemu_integrator_segment_stride(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    integrator_drain_segments() {
+        wasm.wasmemu_integrator_drain_segments(this.__wbg_ptr);
     }
     /**
      * @returns {string}
@@ -203,6 +249,35 @@ export class WasmEmu {
      */
     irq_frame_fallback() {
         const ret = wasm.wasmemu_irq_frame_fallback(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {boolean} merge
+     */
+    set_integrator_merge_lines(merge) {
+        wasm.wasmemu_set_integrator_merge_lines(this.__wbg_ptr, merge);
+    }
+    /**
+     * @returns {boolean}
+     */
+    integrator_merge_lines() {
+        const ret = wasm.wasmemu_integrator_merge_lines(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    reset_integrator_segments() {
+        wasm.wasmemu_reset_integrator_segments(this.__wbg_ptr);
+    }
+    /**
+     * @param {boolean} en
+     */
+    set_integrator_auto_drain(en) {
+        wasm.wasmemu_set_integrator_auto_drain(this.__wbg_ptr, en);
+    }
+    /**
+     * @returns {boolean}
+     */
+    integrator_auto_drain() {
+        const ret = wasm.wasmemu_integrator_auto_drain(this.__wbg_ptr);
         return ret !== 0;
     }
 }
