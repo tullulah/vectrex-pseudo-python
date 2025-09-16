@@ -75,7 +75,16 @@ export const EmulatorPanel: React.FC = () => {
 
   // Demo mode effect (generate static triangle via WASM helper when toggled on)
   useEffect(()=>{ if (!demoMode) return; try { // Use high-level helper first
-      const segs = globalEmu.demoTriangle(); if (segs.length){ setLastSegments(segs); drawSegments(segs); return; }
+      let segs = globalEmu.demoTriangle();
+      if (segs.length){ setLastSegments(segs); drawSegments(segs); return; }
+      // Fallback: generate a simple static triangle in JS if WASM helper produced nothing
+      const fallback: Segment[] = [
+        { x0: -0.5, y0: -0.5, x1: 0.5, y1: -0.5, intensity: 255, frame: 0 },
+        { x0: 0.5, y0: -0.5, x1: 0, y1: 0.6, intensity: 255, frame: 0 },
+        { x0: 0, y0: 0.6, x1: -0.5, y1: -0.5, intensity: 255, frame: 0 },
+      ];
+      segs = fallback;
+      setLastSegments(segs); drawSegments(segs);
       const w:any=window; if (w.electronAPI?.emuDemoTriangle){ w.electronAPI.emuDemoTriangle().then((segs:any)=>{ if (Array.isArray(segs)) { setLastSegments(segs); drawSegments(segs); } }); return; }
       if ((w.emu as any)?.demo_triangle){ try { w.emu.demo_triangle(); } catch{} if (w.emu.integrator_segments_peek_json){ const json=w.emu.integrator_segments_peek_json(); const segs2:Segment[]=JSON.parse(json); setLastSegments(segs2); drawSegments(segs2); } }
     } catch(e){ console.warn('Demo triangle failed', e);} }, [demoMode]);
@@ -296,7 +305,14 @@ export const EmulatorPanel: React.FC = () => {
       </div>
       <div style={{flex:1, display:'flex', flexDirection:'column', marginTop:8}}>
         <div style={{display:'flex', justifyContent:'center'}}>
-          <canvas ref={canvasRef} style={{border:'1px solid #333', background:'#000', borderRadius:4, width:300, height:400}} />
+          <div style={{position:'relative'}}>
+            <canvas ref={canvasRef} style={{border:'1px solid #333', background:'#000', borderRadius:4, width:300, height:400}} />
+            {demoMode && lastSegments.length===0 && (
+              <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#68f', fontSize:12, textAlign:'center', padding:8}}>
+                Demo mode active but no segments produced. WASM demo helper missing? Fallback triangle should appear once available.
+              </div>
+            )}
+          </div>
         </div>
         <div style={{marginTop:12, display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12, alignItems:'start'}}>
           <div style={statBox}>
