@@ -8,6 +8,131 @@ import * as fs from 'fs/promises';
 
 let mainWindow: BrowserWindow | null = null;
 
+// --- Emulator load helpers (shared by emu:load and run:compile) -----------------
+function cpuColdReset(){
+  globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.y=0; globalCpu.u=0; globalCpu.s=0xC000; globalCpu.pc=0;
+  globalCpu.callStack=[]; globalCpu.lastIntensity=0x5F; globalCpu.frameSegments=[]; globalCpu.frameReady=false;
+  // Re-apply BIOS contents (if any) after bulk clear performed by caller.
+  if (globalCpu.biosPresent && typeof globalCpu.reapplyBios === 'function') {
+    globalCpu.reapplyBios();
+    // If BIOS present, honor its reset vector at 0xFFFE/0xFFFF
+    const rvHi = globalCpu.mem[0xFFFE];
+    const rvLo = globalCpu.mem[0xFFFF];
+    globalCpu.pc = ((rvHi<<8)|rvLo) & 0xFFFF;
+  }
+  // clear opcode stats so each run starts fresh
+  resetStats();
+}
+function loadBinaryBase64IntoEmu(base64: string){
+  const bytes = Buffer.from(base64, 'base64');
+  // Clear RAM only (do not wipe BIOS region if loaded). We'll zero everything first then reapply BIOS.
+  globalCpu.mem.fill(0);
+  if (globalCpu.biosPresent && typeof globalCpu.reapplyBios === 'function') globalCpu.reapplyBios();
+  cpuColdReset();
+  globalCpu.loadBin(new Uint8Array(bytes), 0x0000);
+  // Notify renderer explicitly so panels can react (e.g., auto-play)
+  mainWindow?.webContents.send('emu://loaded', { size: bytes.length, bios: globalCpu.biosPresent });
+  return { ok: true } as const;
+}
+
+// Attempt BIOS load early; search multiple locations and emit rich diagnostics.
+// Search order (first existing directory wins candidate ordering, but we aggregate unique files):
+//   1. core/bios/
+//   2. bios/ (at repo root)
+//   3. repo root (process.cwd())
+// Preferred filenames: bios.bin, vectrex.bin (each directory), then any other *.bin
+async function tryLoadBiosOnce(){
+  const trace = (note: string) => { try { if ((globalCpu as any).traceEnabled) (globalCpu as any).debugTraces.push({ type:'info', pc:0xF000, note }); } catch {} };
+  const cwd = process.cwd();
+  // Allow explicit override (can be a file or directory). If file, we try it directly; if directory, we search inside.
+  const envOverride = process.env.VPY_BIOS_PATH;
+  if (envOverride) trace(`bios-env:${envOverride}`);
+  // Heuristic repo root: walk up from cwd until we find Cargo.toml containing a [workspace] or a core/ directory.
+  function detectRepoRoot(start: string): string {
+    let dir = start;
+    for (let i=0;i<6;i++) { // limit upward traversal
+      try {
+        const cargo = join(dir, 'Cargo.toml');
+        if (existsSync(cargo)) return dir;
+      } catch {}
+      const parent = join(dir, '..');
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return start;
+  }
+  const repoRoot = detectRepoRoot(cwd);
+  if (repoRoot !== cwd) trace(`bios-root:${repoRoot}`);
+  // Candidate directories (in priority order):
+  //  - env override if it is a directory
+  //  - <repoRoot>/core/src/bios
+  //  - <repoRoot>/core/bios
+  //  - <repoRoot>/bios
+  //  - <repoRoot>
+  //  - cwd variants (if different) to maintain previous behavior
+  const dirCandidates: string[] = [];
+  if (envOverride && !/\.bin$/i.test(envOverride)) dirCandidates.push(envOverride);
+  dirCandidates.push(
+    join(repoRoot, 'core', 'src', 'bios'),
+    join(repoRoot, 'core', 'bios'),
+    join(repoRoot, 'bios'),
+    repoRoot
+  );
+  if (cwd !== repoRoot) {
+    dirCandidates.push(join(cwd, 'core', 'bios'), join(cwd, 'bios'), cwd);
+  }
+  // If env override looks like a .bin file, treat it as a single candidate path later.
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  for (const dir of dirCandidates){
+    try {
+      const entries = await fs.readdir(dir).catch(()=>null);
+      if (!entries) { trace(`bios-dir-missing:${dir}`); continue; }
+      if (!entries.length) { trace(`bios-dir-empty:${dir}`); continue; }
+      const lower = entries.map(e => e.toLowerCase());
+      const preferNames = ['bios.bin','vectrex.bin'];
+      const ordered: string[] = [];
+      for (const name of preferNames){
+        const idx = lower.indexOf(name);
+        if (idx !== -1) ordered.push(entries[idx]);
+      }
+      const rest = entries.filter(e => /\.bin$/i.test(e) && !ordered.includes(e));
+      const dirCandidates = [...ordered, ...rest].map(e => join(dir, e));
+      let added = 0;
+      for (const p of dirCandidates){ if (!seen.has(p)) { candidates.push(p); seen.add(p); added++; } }
+      trace(`bios-dir:${dir}:files=${entries.length}:candidatesAdded=${added}`);
+    } catch (e:any) {
+      trace(`bios-dir-error:${dir}`);
+    }
+  }
+  trace(`bios-candidates:${candidates.length}`);
+  // If env override is a file path, attempt it first (if not already in candidates list)
+  if (envOverride && /\.bin$/i.test(envOverride)) {
+    if (!seen.has(envOverride)) { trace(`bios-env-file:${envOverride}`); candidates.unshift(envOverride); seen.add(envOverride); }
+  }
+  for (const p of candidates){
+    // Per-candidate attempt
+    trace(`bios-try:${p}`);
+    try {
+      if (!existsSync(p)) { trace(`bios-missing-file:${p}`); continue; }
+      const buf = await fs.readFile(p);
+      const ok = (globalCpu as any).loadBios?.(new Uint8Array(buf));
+      if (ok) {
+        mainWindow?.webContents.send('emu://status', `Loaded Vectrex BIOS (${buf.length} bytes) from ${p}`);
+        trace(`bios-success:${p}`);
+        return true;
+      } else {
+        trace(`bios-load-failed:${p}`);
+      }
+    } catch (e:any) {
+      trace(`bios-error:${p}`);
+    }
+  }
+  mainWindow?.webContents.send('emu://status', 'Vectrex BIOS not found (looked for bios.bin / vectrex.bin in core/bios, bios, root). Execution will proceed without BIOS features.');
+  trace('bios-missing');
+  return false;
+}
+
 interface LspChild {
   proc: ReturnType<typeof spawn>;
   stdin: NodeJS.WritableStream;
@@ -19,17 +144,32 @@ async function createWindow() {
   if (verbose) console.log('[IDE] createWindow() start');
   // Asegurar que no exista menú antes de crear la ventana
   try { Menu.setApplicationMenu(null); } catch {}
+  const isDev = !!process.env.VITE_DEV_SERVER_URL;
+  const sandboxEnabled = process.env.VPY_IDE_SANDBOX !== '0'; // Permitir desactivar sólo si hay problema específico con preload
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
+      // Preload aislado: exporta API mínima vía contextBridge
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
+      // Sin integración Node directa en el renderer
       nodeIntegration: false,
+      // Sandbox Chromium (reduce superficie de ataque). Puede desactivarse con VPY_IDE_SANDBOX=0 para depurar si algo rompe.
+      sandbox: sandboxEnabled,
+      // No permitir contenido inseguro mixto
+      allowRunningInsecureContent: false,
+      // Bloquear navegación arbitraria (seguimos validando manualmente de todos modos)
+      webSecurity: true,
+      // DevTools sólo si se habilita variable explícita; en prod quedan bloqueadas incluso si usuario presiona F12
+      devTools: process.env.VPY_IDE_DEVTOOLS === '1',
+      // Desactivar spellcheck (no lo necesitamos y reduce código cargado)
+      spellcheck: false,
     },
     autoHideMenuBar: true,
     frame: true,
   });
+  if (verbose) console.log('[IDE] sandbox=', sandboxEnabled, 'dev=', isDev);
   // Refuerzo: eliminar menú y ocultar barra (Windows a veces muestra placeholder en primer frame)
   try {
     mainWindow.setMenu(null);
@@ -209,26 +349,250 @@ ipcMain.handle('bin:open', async () => {
 // Emulator: load BIN
 ipcMain.handle('emu:load', async (_e, args: { base64: string }) => {
   try {
-    const bytes = Buffer.from(args.base64, 'base64');
-    // Reset CPU
-    globalCpu.a=0; globalCpu.b=0; globalCpu.dp=0xD0; globalCpu.x=0; globalCpu.u=0; globalCpu.pc=0; globalCpu.callStack=[]; globalCpu.lastIntensity=0x5F; globalCpu.frameSegments=[]; globalCpu.frameReady=false;
-    globalCpu.mem.fill(0);
-    globalCpu.loadBin(new Uint8Array(bytes), 0x0000);
-    return { ok: true };
+    return loadBinaryBase64IntoEmu(args.base64);
   } catch (e:any) { return { error: e?.message || 'emu_load_failed' }; }
+});
+
+// Resolve compiler binary path. Supports env override VPY_COMPILER_BIN.
+function resolveCompilerPath(): string | null {
+  const override = process.env.VPY_COMPILER_BIN;
+  if (override) {
+    try { if (existsSync(override)) return override; } catch {}
+    mainWindow?.webContents.send('run://stderr', `VPY_COMPILER_BIN set but file not found: ${override}`);
+  }
+  const names = process.platform === 'win32' ? ['vectrexc.exe','vectrex_lang.exe'] : ['vectrexc','vectrex_lang'];
+  const cwd = process.cwd();
+  const candidates: string[] = [];
+  for (const exe of names) {
+    candidates.push(
+      join(cwd, 'target', 'debug', exe),
+      join(cwd, 'target', 'release', exe),
+      join(cwd, exe),
+      join(cwd, 'core', 'target', 'debug', exe),
+      join(cwd, 'core', 'target', 'release', exe),
+      join(cwd, '..', '..', 'target', 'debug', exe),
+      join(cwd, '..', '..', 'target', 'release', exe),
+      join(cwd, '..', '..', 'core', 'target', 'debug', exe),
+      join(cwd, '..', '..', 'core', 'target', 'release', exe),
+    );
+  }
+  for (const p of candidates) { try { if (existsSync(p)) return p; } catch {} }
+  mainWindow?.webContents.send('run://stderr', `Compiler binary not found. Tried paths (names: ${names.join(', ')}):\n${candidates.join('\n')}\nBuild with one of:\n  cargo build -p vectrex_lang --bin vectrexc\n  cargo build -p vectrex_lang --bin vectrex_lang\nOr set VPY_COMPILER_BIN=full\\path\\to\\compiler.exe`);
+  return null;
+}
+
+// run:compile => compile a .vpy file, produce .asm + .bin, load into emulator
+// args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number } }
+ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean }) => {
+  const { path, saveIfDirty, autoStart } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  // Normalize potential file:// URI to local filesystem path (especially on Windows)
+  let fsPath = path;
+  if (/^file:\/\//i.test(fsPath)) {
+    try {
+      // new URL handles decoding; strip leading slash for Windows drive letter patterns like /C:/
+      const u = new URL(fsPath);
+      fsPath = u.pathname;
+      if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(fsPath)) fsPath = fsPath.slice(1);
+      fsPath = fsPath.replace(/\//g, require('path').sep);
+    } catch {}
+  }
+  // Optionally save current buffer content before compiling
+  const targetDisplay = fsPath !== path ? `${path} -> ${fsPath}` : fsPath;
+  // Optionally save current buffer content before compiling
+  if (saveIfDirty && typeof saveIfDirty.content === 'string') {
+    try {
+      const statBefore = await fs.stat(fsPath).catch(()=>null);
+      if (saveIfDirty.expectedMTime && statBefore && statBefore.mtimeMs !== saveIfDirty.expectedMTime) {
+        return { conflict: true, currentMTime: statBefore.mtimeMs };
+      }
+      await fs.writeFile(fsPath, saveIfDirty.content, 'utf8');
+    } catch (e:any) {
+      return { error: 'save_failed_before_compile', detail: e?.message };
+    }
+  }
+  const compiler = resolveCompilerPath();
+  if (!compiler) return { error: 'compiler_not_found' };
+  const verbose = process.env.VPY_IDE_VERBOSE_RUN === '1';
+  if (verbose) console.log('[RUN] spawning compiler', compiler, fsPath);
+  mainWindow?.webContents.send('run://status', `Starting compilation: ${targetDisplay}`);
+  return new Promise(async (resolvePromise) => {
+    const outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
+    const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
+    const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'] });
+    let stdoutBuf = '';
+    let stderrBuf = '';
+    child.stdout.on('data', (c: Buffer) => { const txt = c.toString('utf8'); stdoutBuf += txt; mainWindow?.webContents.send('run://stdout', txt); });
+    child.stderr.on('data', (c: Buffer) => { const txt = c.toString('utf8'); stderrBuf += txt; mainWindow?.webContents.send('run://stderr', txt); });
+    child.on('error', (err) => { resolvePromise({ error: 'spawn_failed', detail: err.message }); });
+    child.on('exit', async (code) => {
+      if (code !== 0) {
+        mainWindow?.webContents.send('run://status', `Compilation FAILED (exit ${code})`);
+        // Attempt to parse basic diagnostics from stderr (pattern: filename:line:col: message)
+        const diags: Array<{ file:string; line:number; col:number; message:string }> = [];
+        const diagRegex = /(.*?):(\d+):(\d+):\s*(.*)/;
+        for (const line of stderrBuf.split(/\r?\n/)) {
+          const m = diagRegex.exec(line.trim());
+          if (m) {
+            diags.push({ file: m[1], line: parseInt(m[2],10)-1, col: parseInt(m[3],10)-1, message: m[4] });
+          }
+        }
+        if (diags.length) mainWindow?.webContents.send('run://diagnostics', diags);
+        return resolvePromise({ error: 'compile_failed', code, stdout: stdoutBuf, stderr: stderrBuf });
+      }
+      // On success, look for produced bin with same stem (.bin)
+      const binPath = outAsm.replace(/\.asm$/, '.bin');
+      try {
+        const buf = await fs.readFile(binPath);
+        const base64 = Buffer.from(buf).toString('base64');
+        // Load into emulator
+        // Directly load into emulator (previous attempt used ipcMain.invoke which is invalid here)
+        try {
+          const loadRes = loadBinaryBase64IntoEmu(base64);
+          if (verbose) console.log('[RUN] loaded binary', binPath, loadRes);
+          mainWindow?.webContents.send('run://status', `Compilation succeeded & loaded: ${binPath} (${buf.length} bytes)`);
+        } catch (e:any) {
+          mainWindow?.webContents.send('run://status', `Compilation succeeded but load FAILED: ${e?.message}`);
+          return resolvePromise({ error: 'emu_load_failed', detail: e?.message });
+        }
+        // If there are unknown opcodes already registered (rare immediately), surface them
+        try {
+          const stats = getStats();
+          const unknown = (stats as any).unknownOpcodes || {};
+          const keys = Object.keys(unknown);
+          if (keys.length) {
+            mainWindow?.webContents.send('run://status', `Unknown opcode counts after load:`);
+            keys.slice(0,20).forEach(k => {
+              mainWindow?.webContents.send('run://status', `  ${k}: ${unknown[k]}`);
+            });
+            if (keys.length > 20) mainWindow?.webContents.send('run://status', `  ... (${keys.length-20} more)`);
+          }
+        } catch {}
+        resolvePromise({ ok: true, binPath, size: buf.length, stdout: stdoutBuf, stderr: stderrBuf });
+      } catch (e:any) {
+        mainWindow?.webContents.send('run://status', `Compiled but failed to read bin: ${e?.message}`);
+        resolvePromise({ error: 'bin_read_failed', detail: e?.message });
+      }
+    });
+  });
 });
 
 // Emulator: run until next frame (or max steps)
 ipcMain.handle('emu:runFrame', async () => {
   try {
-    const { frameReady, segments } = globalCpu.runUntilFrame();
-    return { frameReady, segments };
+    const cpu:any = globalCpu as any;
+    const { frameReady, segments, viaEvents, debugTraces, opcodeTrace } = cpu.runUntilFrame();
+    return {
+      frameReady,
+      segments,
+      viaEvents,
+      debugTraces,
+      opcodeTrace: opcodeTrace || [],
+      irqPending: !!cpu.irqPending,
+      waiWaiting: !!cpu.waiWaiting,
+      pc: cpu.pc,
+    };
   } catch (e:any) { return { error: e?.message || 'emu_run_failed' }; }
+});
+
+// Debug helpers
+ipcMain.handle('emu:getPC', () => ({ pc: globalCpu.pc }));
+ipcMain.handle('emu:setPC', (_e, pc:number) => { globalCpu.pc = pc & 0xFFFF; return { ok:true, pc: globalCpu.pc }; });
+ipcMain.handle('emu:peek', (_e, addr:number, len:number=32) => {
+  addr &= 0xFFFF; len = Math.min(Math.max(len,1),256);
+  const bytes:number[] = [];
+  for (let i=0;i<len;i++){ bytes.push(globalCpu.mem[(addr+i)&0xFFFF]); }
+  return { base: addr, bytes };
+});
+ipcMain.handle('emu:toggleTrace', (_e, enabled?: boolean) => {
+  if (typeof enabled === 'boolean') globalCpu.traceEnabled = enabled;
+  else globalCpu.traceEnabled = !globalCpu.traceEnabled;
+  return { traceEnabled: globalCpu.traceEnabled };
+});
+// Auto-start heuristic toggle
+ipcMain.handle('emu:autoStart', (_e, enabled?: boolean) => {
+  if (typeof enabled === 'boolean') (globalCpu as any).autoStartUser = enabled;
+  else (globalCpu as any).autoStartUser = !(globalCpu as any).autoStartUser;
+  // Allow re-attempt if re-enabled before first frame
+  (globalCpu as any).attemptedAutoStart = false;
+  (globalCpu as any).autoStartInfo = null;
+  return { autoStartUser: (globalCpu as any).autoStartUser };
+});
+ipcMain.handle('emu:autoStartInfo', () => {
+  const cpu:any = globalCpu as any;
+  return { attempted: cpu.attemptedAutoStart, info: cpu.autoStartInfo };
+});
+ipcMain.handle('emu:toggleOpcodeTrace', (_e, enabled?: boolean) => {
+  const cpu:any = globalCpu as any;
+  if (typeof enabled === 'boolean') cpu.opcodeTraceEnabled = enabled; else cpu.opcodeTraceEnabled = !cpu.opcodeTraceEnabled;
+  cpu.opcodeTrace.length = 0; // clear when toggled
+  return { opcodeTraceEnabled: cpu.opcodeTraceEnabled };
+});
+ipcMain.handle('emu:regs', () => {
+  return { a:globalCpu.a, b:globalCpu.b, x:globalCpu.x, y:globalCpu.y, u:globalCpu.u, s:globalCpu.s, pc:globalCpu.pc, dp:globalCpu.dp };
+});
+ipcMain.handle('emu:forceStart', () => {
+  const cpu:any = globalCpu as any;
+  cpu.pc = 0x0000;
+  cpu.attemptedAutoStart = true;
+  cpu.autoStartInfo = { performed:true, reason:'forceStartIPC' };
+  if (cpu.traceEnabled) cpu.debugTraces.push({ type:'info', pc:0xFFFF, note:'force-start-user->0000' });
+  return { pc: cpu.pc };
+});
+ipcMain.handle('emu:status', () => {
+  const cpu:any = globalCpu as any;
+  return {
+    biosPresent: cpu.biosPresent,
+    vectorMode: cpu.vectorMode,
+    autoStartUser: cpu.autoStartUser,
+    opcodeTraceEnabled: cpu.opcodeTraceEnabled,
+    traceEnabled: cpu.traceEnabled,
+  };
+});
+ipcMain.handle('emu:biosStatus', () => {
+  const cpu:any = globalCpu as any;
+  return { biosPresent: cpu.biosPresent };
+});
+ipcMain.handle('emu:biosReload', async () => {
+  const ok = await tryLoadBiosOnce();
+  return { biosPresent: globalCpu.biosPresent, reloaded: ok };
 });
 ipcMain.handle('emu:stats', async () => {
   return getStats();
 });
 ipcMain.handle('emu:statsReset', async () => { resetStats(); return { ok:true }; });
+// Switch vector rendering mode (intercept vs via)
+ipcMain.handle('emu:setVectorMode', async (_e, mode: 'intercept' | 'via') => {
+  if (mode === 'intercept' || mode === 'via') {
+    try { (globalCpu as any).setVectorMode?.(mode); return { ok:true, mode }; } catch {}
+  }
+  return { error: 'invalid_mode' };
+});
+
+// Diagnostic: run N frames in intercept mode and summarize traces, opcode stats, U pointer data
+ipcMain.handle('emu:diagnoseIntercept', async (_e, frames: number = 8) => {
+  const cpu:any = globalCpu as any;
+  const originalMode = cpu.vectorMode;
+  try {
+    cpu.setVectorMode?.('intercept');
+    const out: any = { frames: [], regsStart: { a:cpu.a,b:cpu.b,x:cpu.x,y:cpu.y,u:cpu.u,pc:cpu.pc,dp:cpu.dp } };
+    for (let i=0;i<frames;i++){
+      const beforeU = cpu.u & 0xFFFF;
+      const memSample: number[] = [];
+      for (let j=0;j<16;j++) memSample.push(cpu.mem[(beforeU+j)&0xFFFF]);
+      const { frameReady, segments, debugTraces } = cpu.runUntilFrame();
+      const notes = (debugTraces||[]).map((t:any)=>t.note||t.type);
+      out.frames.push({ i, frameReady, segs: segments.length, notes, u: beforeU.toString(16), uBytes: memSample });
+    }
+    out.regsEnd = { a:cpu.a,b:cpu.b,x:cpu.x,y:cpu.y,u:cpu.u,pc:cpu.pc,dp:cpu.dp };
+    out.unknownOpcodes = { ...(cpu.unknownLog||{}) };
+    return out;
+  } catch (e:any){
+    return { error: e?.message || 'diagnose_failed' };
+  } finally {
+    if (originalMode !== 'intercept') { try { cpu.setVectorMode?.(originalMode); } catch {} }
+  }
+});
 
 ipcMain.handle('file:openPath', async (_e, p: string) => {
   if (!p) return { error: 'no_path' };
@@ -322,10 +686,9 @@ app.whenReady().then(() => {
   // Inyectar Content-Security-Policy por cabecera (más fuerte que meta) en dev y prod
   const isDev = !!process.env.VITE_DEV_SERVER_URL;
   // CSP:
-  // - Prod: máxima restricción (sin inline script/style, sin eval)
-  // - Dev: Vite React Fast Refresh inserta un preamble inline + estilos inline para HMR overlay.
-  //   Para que funcione el refresco sin errores, concedemos 'unsafe-inline' (script y style) y 'unsafe-eval'.
-  //   Estos sólo se añaden cuando isDev es true (cuando cargamos desde Vite dev server).
+  // - Prod (sin VITE_DEV_SERVER_URL): se espera estricta salvo que el empaquetado habilite relajación explícita.
+  // - Dev: ahora relajado por defecto (run-ide.ps1 exporta VPY_IDE_RELAX_CSP=1 a menos que se use -StrictCSP) para soportar React Fast Refresh.
+  //   Use -StrictCSP en el script de arranque para probar política estricta durante desarrollo.
   const relax = process.env.VPY_IDE_RELAX_CSP === '1';
   // En dev podemos necesitar React Refresh (eval + inline). Lo hacemos opt-in con VPY_IDE_RELAX_CSP=1
   const scriptSrc = (isDev && relax) ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'";
@@ -361,6 +724,8 @@ app.whenReady().then(() => {
   });
   if (verbose) console.log('[IDE] CSP applied');
   createWindow();
+  // Defer BIOS load slightly until window exists to allow status message.
+  setTimeout(()=>{ tryLoadBiosOnce(); }, 500);
 });
 app.on('render-process-gone', (_e, details) => {
   console.error('[IDE] render process gone', details);

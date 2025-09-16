@@ -71,7 +71,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
-    // Entry stub: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
+    // Entry sequence: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
     // Precompute flags
     let do_blink = opts.blink_intensity;
     let _do_per_frame_silence = opts.per_frame_silence;
@@ -249,7 +249,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     }
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference
     // Classic mode: don't duplicate string literals; rely on collected emission below
-    // (Legacy tail loop removed; entry stub already loops.)
+    // (Legacy trailing loop removed; entry sequence already loops.)
     // Suppress runtime/helpers only if trivial main was inlined
     let suppress_runtime = main_inlined; // unchanged logic for helper emission
     // Move runtime include AFTER vector lists like smartlist_demo
@@ -295,7 +295,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
         }
     }
-    // Global mutables already allocated via symbol list; (future) could emit non-zero inits via startup stub.
+    // Global mutables already allocated via symbol list; (future) could emit non-zero inits via a small startup routine.
     if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
     if !string_map.is_empty() {
         if string_map.len()==1 {

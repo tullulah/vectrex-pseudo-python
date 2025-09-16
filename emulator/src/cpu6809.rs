@@ -54,9 +54,7 @@ pub struct CPU {
     // Track if a WAI instruction already pushed the full frame so IRQ shouldn't push again
     pub wai_pushed_frame: bool,
     pub forced_irq_vector: bool,
-    // When true we short-circuit BIOS JSR calls (instrument only). When false we actually
-    // execute BIOS code (needed for real vector list generation). Default true keeps prior behavior.
-    pub bios_stub_calls: bool,
+    // BIOS code always executed for accuracy (single canonical path; legacy alternate removed).
     // Loop diagnostics
     pub loop_watch_slots: [LoopSample; 16],
     pub loop_watch_idx: usize,
@@ -130,7 +128,7 @@ impl Default for CPU { fn default()->Self {
     last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,bios_present:false,cycles:0,
         irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false, s:0xD000, in_irq_handler:false,
     opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
-        debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false, bios_stub_calls:true,
+    debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
         loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
         wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
     jsr_log:[0;128], jsr_log_len:0, enable_irq_frame_fallback:false, irq_frames_generated:0, last_irq_frame_cycles:0,
@@ -373,10 +371,8 @@ impl CPU {
                 // heuristics that we plan to deprecate. We no longer synthesize a bios_frame here.
                 self.dp = 0xD0;
                 self.wait_recal_calls = self.wait_recal_calls.wrapping_add(1);
-                if !self.bios_stub_calls {
-                    // Track initial call stack depth to attribute a subsequent RTS/RTI as a WAIT_RECAL return.
-                    if self.wait_recal_depth.is_none() { self.wait_recal_depth = Some(self.call_stack.len()); }
-                }
+                // Track initial call stack depth to attribute a subsequent RTS/RTI as a WAIT_RECAL return.
+                if self.wait_recal_depth.is_none() { self.wait_recal_depth = Some(self.call_stack.len()); }
                 if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] WAIT_RECAL call depth={:?} calls={}", self.wait_recal_depth, self.wait_recal_calls); }
                 "WAIT_RECAL" },
             0xF1AF => { self.dp = 0xC8; "DP_TO_C8" },
@@ -933,13 +929,8 @@ impl CPU {
                 if self.trace { println!("JSR ${:04X} (direct)", addr);} 
                 if addr>=0xF000 { 
                     if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
-                    // Always record
                     self.record_bios_call(addr);
-                    if self.bios_stub_calls { // legacy stub: do NOT actually call
-                        // nothing else
-                    } else { // real call semantics
-                        let ret=self.pc; self.call_stack.push(ret); self.pc=addr; 
-                    }
+                    let ret=self.pc; self.call_stack.push(ret); self.pc=addr;
                 } else { let ret=self.pc; self.call_stack.push(ret); self.pc=addr; }
                 cyc=7; }
             0xBD => { // JSR absolute
@@ -948,7 +939,7 @@ impl CPU {
                 if addr>=0xF000 { 
                     if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
                     self.record_bios_call(addr);
-                    if self.bios_stub_calls { /* skip execution */ } else { let ret=self.pc; self.call_stack.push(ret); self.pc=addr; }
+                    let ret=self.pc; self.call_stack.push(ret); self.pc=addr;
                 } else { let ret=self.pc; self.call_stack.push(ret); self.pc=addr; }
                 cyc=7; }
             0x97 => { // STA direct

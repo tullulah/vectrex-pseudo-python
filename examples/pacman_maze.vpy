@@ -118,7 +118,7 @@ vectorlist maze:
     MOVE 7 8
     RECT 7 8 8 24                 # mid right lower small vertical
 
-    # --- Center stubs bottom ---
+    # --- Center pillars bottom ---
     ORIGIN
     MOVE -4 60
     RECT -4 60 -3 68

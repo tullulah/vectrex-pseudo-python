@@ -1,0 +1,19 @@
+[package]
+name = "vectrex_emulator"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Daniel Ferrer <you@example.com>"]
+description = "Vectrex 6809 emulator core with optional WASM bindings"
+
+[features]
+default = []
+wasm = ["wasm-bindgen", "serde", "serde_json"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", optional = true, features=["serde-serialize"] }
+serde = { version = "1.0", features=["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[lib]
+crate-type = ["rlib", "cdylib"]

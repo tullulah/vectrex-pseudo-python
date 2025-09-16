@@ -9,13 +9,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "wasm:build": "npm run wasm:cargo && npm run wasm:bindgen",
+    "wasm:cargo": "cargo build -p vectrex_emulator --features wasm --target wasm32-unknown-unknown --release",
+    "wasm:bindgen": "wasm-bindgen --target web --out-dir src/wasm --no-typescript ../../target/wasm32-unknown-unknown/release/vectrex_emulator.wasm"
   },
   "dependencies": {
-  "@monaco-editor/react": "4.7.0",
+    "@monaco-editor/react": "4.7.0",
     "flexlayout-react": "^0.8.17",
     "i18next": "25.5.2",
     "monaco-editor": "0.53.0",
+    "pseudo-python": "file:../..",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-i18next": "15.7.3",

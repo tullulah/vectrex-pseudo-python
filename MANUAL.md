@@ -150,7 +150,7 @@ All arithmetic coerced via mask to 16 bits after operations where necessary.
 - Shifts emitted with `MOV r0,r4,LSL r5` / `MOV r0,r4,LSR r5` (prototype; assumes shift amount already in low bits).
 
 ### Cortex-M (VecFever / Vextreme)
-- Similar to ARM backend; vector table stub plus infinite loop after `main` returns.
+- Similar to ARM backend; provides a vector table and an infinite loop after `main` returns.
 - Locals follow same stack frame scheme as ARM (2 bytes per local, STRH/LDRH).
 - Same modulo / shift strategy as ARM (uses MVN for bitwise not).
 

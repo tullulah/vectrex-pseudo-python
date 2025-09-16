@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='TRIANGLE' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -10,30 +10,31 @@
 ;***************************************************************************
     FCC "g GCE 1982"
     FCB $80
-    FDB $0000 ; music pointer (0 = none)
-    FCB $F8 ; height
-    FCB $50 ; width
-    FCB $20 ; rel y
-    FCB $D0 ; rel x (-$30)
-    FCC "UNTITLED"
-    FCB $80 ; title terminator
-    FCB 0 ; reserved
-    RMB $0030-* ; pad header to $30
-    ORG $0030
+    FDB music1
+    FCB $F8,$50,$20,-$45
+    FCC "TRIANGLE"
+    FCB $80
+    FCB 0
 
 ;***************************************************************************
 ; CODE SECTION
 ;***************************************************************************
-; Init then implicit frame loop (auto_loop enabled)
-INIT_START: JSR >Wait_Recal
-    JSR VECTREX_BLINK_INT
-    JSR >Reset0Ref
-    BRA ENTRY_LOOP
-ENTRY_LOOP: JSR >Wait_Recal
-    JSR VECTREX_BLINK_INT
-        ; FRAME_BEGIN wrapper (called by user) may set different intensity / Reset0Ref.
+    JMP START
+
+START:
+    LDA #$80
+    STA VIA_t1_cnt_lo
+    LDX #Vec_Default_Stk
+    TFR X,S
+
+MAIN_LOOP:
+    JSR Wait_Recal
+    LDA #$D0
+    TFR A,DP
+    JSR Intensity_5F
+    JSR Reset0Ref
     JSR MAIN
-    BRA ENTRY_LOOP
+    BRA MAIN_LOOP
 
 X0 EQU 0
 Y0 EQU 0
@@ -80,7 +81,7 @@ CE_3:
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    JSR >VECTREX_FRAME_BEGIN
+    JSR VECTREX_FRAME_BEGIN
     CLRA
     CLRB
     STD RESULT
@@ -90,7 +91,7 @@ IF_NEXT_1:
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    JSR >VECTREX_FRAME_BEGIN
+    JSR VECTREX_FRAME_BEGIN
     CLRA
     CLRB
     STD RESULT
@@ -107,7 +108,7 @@ IF_END_0:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-    JSR >VECTREX_PRINT_TEXT
+    JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
@@ -123,103 +124,56 @@ IF_END_0:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-    JSR >VECTREX_PRINT_TEXT
+    JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    LDD #95
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG4
-    JSR >VECTREX_DRAW_LINE
+    LDA #$D0
+    TFR A,DP
+    LDA #$00
+    LDB #$00
+    JSR Moveto_d ; move to (0, 0)
+    JSR Intensity_5F
+    CLR Vec_Misc_Count
+    LDA #$00
+    LDB #$0A
+    JSR Draw_Line_d ; dy=0, dx=10
     CLRA
     CLRB
     STD RESULT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #40
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    LDD #95
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG4
-    JSR >VECTREX_DRAW_LINE
+    LDA #$D0
+    TFR A,DP
+    LDA #$00
+    LDB #$00
+    JSR Moveto_d ; move to (0, 0)
+    CLR Vec_Misc_Count
+    LDA #$00
+    LDB #$28
+    JSR Draw_Line_d ; dy=0, dx=40
     CLRA
     CLRB
     STD RESULT
-    LDD #40
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #20
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD #40
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    LDD #95
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG4
-    JSR >VECTREX_DRAW_LINE
+    LDA #$D0
+    TFR A,DP
+    LDA #$00
+    LDB #$28
+    JSR Moveto_d ; move to (40, 0)
+    CLR Vec_Misc_Count
+    LDA #$28
+    LDB #$EC
+    JSR Draw_Line_d ; dy=40, dx=-20
     CLRA
     CLRB
     STD RESULT
-    LDD #20
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #40
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    LDD #95
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG4
-    JSR >VECTREX_DRAW_LINE
+    LDA #$D0
+    TFR A,DP
+    LDA #$28
+    LDB #$14
+    JSR Moveto_d ; move to (20, 40)
+    CLR Vec_Misc_Count
+    LDA #$D8
+    LDB #$EC
+    JSR Draw_Line_d ; dy=-40, dx=-20
     CLRA
     CLRB
     STD RESULT
@@ -248,117 +202,18 @@ MAIN: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    JSR >DRAW_FRAME
+    JSR DRAW_FRAME
     LDD #0
     STD RESULT
     RTS
 
-;***************************************************************************
-; RUNTIME SECTION
-;***************************************************************************
-; --- Vectrex built-in wrappers ---
-VECTREX_VECTOR_PHASE_BEGIN:
-    ; Cambia a DP=$C8 para rutinas de lista de vectores y recentra.
-    JSR DP_to_C8
-    JSR Reset0Ref
-    RTS
-VECTREX_DBG_STATIC_VL:
-    ; Draw static debug vector list (one horizontal line).
-    JSR DP_to_C8
-    LDU #DBG_STATIC_LIST
-    LDA #$5F
-    JSR Intensity_a
-    JSR Draw_VL
-    RTS
-DBG_STATIC_LIST:
-    FCB $80,$20 ; end bit set, dy=0, dx=32
-VECTREX_SILENCE:
-    ; Comprehensive AY silence: zero tone periods (0-5), noise (6), mixer (7=0x3F), vols (8-10).
-    LDA #0
-    STA $D001 ; reg 0 select
-    CLR $D000 ; tone A coarse/low (write twice for 0 & 1)
-    LDA #1
-    STA $D001
-    CLR $D000
-    LDA #2
-    STA $D001
-    CLR $D000 ; tone B low
-    LDA #3
-    STA $D001
-    CLR $D000 ; tone B high
-    LDA #4
-    STA $D001
-    CLR $D000 ; tone C low
-    LDA #5
-    STA $D001
-    CLR $D000 ; tone C high
-    LDA #6
-    STA $D001
-    CLR $D000 ; noise period
-    LDA #7
-    STA $D001
-    LDA #$3F ; disable tone+noise all channels
-    STA $D000
-    LDA #8
-    STA $D001
-    CLR $D000 ; vol A
-    LDA #9
-    STA $D001
-    CLR $D000 ; vol B
-    LDA #10
-    STA $D001
-    CLR $D000 ; vol C
-    RTS
+    INCLUDE "../runtime/vectorlist_runtime.asm"
 VECTREX_PRINT_TEXT:
     ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
     LDU VAR_ARG2   ; string pointer (high-bit terminated)
     LDA VAR_ARG1+1 ; Y
     LDB VAR_ARG0+1 ; X
     JSR Print_Str_d
-    RTS
-; Draw single line using vector list. Args: (x0,y0,x1,y1,intensity) low bytes.
-; Assumes WAIT_RECAL already left DP at $D0. Only switches to $C8 for Draw_VL.
-VECTREX_DRAW_LINE:
-    ; Set intensity
-    LDA VAR_ARG4+1
-    JSR Intensity_a
-    LDA VAR_ARG1+1
-    LDB VAR_ARG0+1
-    JSR Moveto_d
-    ; Compute deltas (end - start) using low bytes
-    LDA VAR_ARG2+1
-    SUBA VAR_ARG0+1
-    STA VLINE_DX
-    LDA VAR_ARG3+1
-    SUBA VAR_ARG1+1
-    STA VLINE_DY
-    ; Clamp to +/-63
-    LDA VLINE_DX
-    CMPA #63
-    BLE VLX_OK_HI
-    LDA #63
-VLX_OK_HI: CMPA #-64
-    BGE VLX_OK_LO
-    LDA #-64
-VLX_OK_LO: STA VLINE_DX
-    LDA VLINE_DY
-    CMPA #63
-    BLE VLY_OK_HI
-    LDA #63
-VLY_OK_HI: CMPA #-64
-    BGE VLY_OK_LO
-    LDA #-64
-VLY_OK_LO: STA VLINE_DY
-    ; Build 2-byte vector list (Y|endbit, X)
-    LDA VLINE_DY
-    ORA #$80
-    STA VLINE_LIST
-    LDA VLINE_DX
-    STA VLINE_LIST+1
-    ; Switch to vector DP and draw, no restore (next WAIT_RECAL resets)
-    JSR DP_to_C8
-    LDU #VLINE_LIST
-    JSR Draw_VL
     RTS
 VECTREX_FRAME_BEGIN:
     LDA VAR_ARG0+1
@@ -375,42 +230,16 @@ TMPRIGHT  EQU RESULT+4
 TMPPTR    EQU RESULT+6
 VAR_FRAME_COUNTER EQU RESULT+26
 VAR_I EQU RESULT+28
-; String literals (high-bit terminated for Vectrex PRINT_STR_D)
+; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCB $44
-    FCB $45
-    FCB $4D
-    FCB $CF
+    FCC "DEMO"
+    FCB $80
 STR_1:
-    FCB $54
-    FCB $52
-    FCB $C9
+    FCC "TRI"
+    FCB $80
 ; Call argument scratch space
 VAR_ARG0 EQU RESULT+30
 VAR_ARG1 EQU RESULT+32
 VAR_ARG2 EQU RESULT+34
 VAR_ARG3 EQU RESULT+36
 VAR_ARG4 EQU RESULT+38
-VLINE_DX EQU RESULT+40
-VLINE_DY EQU RESULT+41
-VLINE_STEPS EQU RESULT+42
-VLINE_LIST EQU RESULT+43
-BLINK_STATE EQU RESULT+45
-; Blink intensity helper (toggles two intensity levels each call)
-VECTREX_BLINK_INT:
-    LDA BLINK_STATE
-    EORA #1
-    STA BLINK_STATE
-    BEQ BLINK_LOW
-    LDA #$5F
-    BRA BLINK_SET
-BLINK_LOW:
-    LDA #$20
-BLINK_SET:
-    JSR Intensity_a
-    RTS
-; Bank padding to 8192 bytes (fill with $FF)
-    IF * < $2000
-PADSIZE SET $2000-*
-    FILL $FF,PADSIZE
-    ENDC

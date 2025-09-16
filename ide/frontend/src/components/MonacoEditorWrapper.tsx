@@ -503,7 +503,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     }
   }, [uri, doc?.uri]);
 
-  // Lazy load content if this is a restored stub (empty content, has diskPath)
+  // Lazy load content if this is a restored placeholder (empty content, has diskPath)
   useEffect(() => {
     if (doc && doc.diskPath && doc.content === '' && doc.lastSavedContent === '') {
       const api: any = (window as any).files;

@@ -367,7 +367,7 @@ fn emit_builtin_call_arm(name: &str, args: &[Expr], out: &mut String, fctx: &Fun
         if let Some(new_up) = translated { return emit_builtin_call_arm(new_up, args, out, fctx, string_map); }
         return false;
     }
-    // For non-6809 targets we stub Vectrex-specific functions to no-ops (return 0) for portability
+    // For non-6809 targets treat Vectrex-specific functions as inert no-ops (return 0) for portability
     if matches!(up.as_str(),"VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY") {
         // Evaluate arguments for side-effects
         for a in args { emit_expr(a, out, fctx, string_map); }

@@ -1,4 +1,4 @@
-use std::fs; use vectrex_lang::emulator::CPU;
+use std::fs; use vectrex_emulator::CPU;
 fn main(){
     let args: Vec<String>=std::env::args().collect();
     if args.len()<2 { eprintln!("uso: emu <rom.bin> [trace]"); return; }

@@ -8,10 +8,12 @@ import 'flexlayout-react/style/dark.css';
 import { FileTreePanel } from './panels/FileTreePanel';
 // Legacy EditorPanel kept for reference; replaced by custom EditorSurface for tab management.
 import { EditorSurface } from './EditorSurface';
-import { EmulatorPanel } from './panels/EmulatorPanel';
+// Use new WASM-based emulator panel (migrated from root components path)
+import { EmulatorPanel } from './EmulatorPanel';
 import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
 import { OutputPanel } from './panels/OutputPanel';
+import { BuildOutputPanel } from './panels/BuildOutputPanel';
 
 // Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
 const STORAGE_KEY = 'vpy_dock_model_v2';
@@ -31,8 +33,8 @@ const defaultJson = {
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
   // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
   { type: 'tabset', id: 'editor-host', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
-      { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
-  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Output', component: 'output' } ], location: 'bottom' }
+    { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
+  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Output', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
     ]
   }
 };
@@ -46,7 +48,7 @@ export const DockWorkspace: React.FC = () => {
   const layoutRef = useRef<Layout | null>(null);
   const dragStateRef = useRef<{ active: boolean; tabId?: string; startX: number; startY: number; currentIndex?: number; targetIndex?: number; tabsetId?: string; marker?: HTMLDivElement; container?: HTMLElement; overlay?: HTMLDivElement; targetTabsetId?: string } | null>(null);
   // Saved layouts for hidden single-instance panels (files/emulator/debug/errors) + placeholder
-  type PanelKey = DockComponent | 'editor-placeholder';
+  type PanelKey = DockComponent | 'editor-placeholder' | 'build-output';
   const savedRef = useRef<Record<PanelKey, { json: any; parentTabsetId?: string; index?: number; tabsetWeight?: number }>>({
     files: { json: null as any },
     editor: { json: null as any },
@@ -54,12 +56,13 @@ export const DockWorkspace: React.FC = () => {
     emulator: { json: null as any },
     debug: { json: null as any },
   errors: { json: null as any },
-  output: { json: null as any }
+  output: { json: null as any },
+  'build-output': { json: null as any }
   });
   // Extra metadata to preserve docking edge for panels so re-pin restores original side
-  const panelMetaRef = useRef<Partial<Record<DockComponent, { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'} });
+  const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, 'build-output':{edge:'bottom'} });
   const hiddenSetRef = useRef<Set<DockComponent>>(new Set());
-  const pinnedSetRef = useRef<Set<DockComponent>>(new Set(['files','emulator','debug','errors','output']));
+  const pinnedSetRef = useRef<Set<DockComponent | 'build-output'>>(new Set(['files','emulator','debug','errors','output','build-output']));
   const [, forceRerender] = useState(0); // for pin UI updates
   (window as any).__pinnedPanelsRef = pinnedSetRef;
   // Expose globally so static handlers can reach
@@ -79,6 +82,7 @@ export const DockWorkspace: React.FC = () => {
   case 'debug': return <DebugPanel />;
   case 'errors': return <ErrorsPanel />;
   case 'output': return <OutputPanel />;
+  case 'build-output': return <BuildOutputPanel />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);

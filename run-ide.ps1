@@ -1,10 +1,10 @@
 param(
   [switch]$DevTools,
-  [switch]$RelaxCSP,
+  [switch]$StrictCSP,    # ahora la relajación es por defecto; usar -StrictCSP para política estricta
   [switch]$NoRustBuild,
-  [switch]$Fast,        # omite npm install si ya existe node_modules
-  [switch]$NoClear,     # evita limpiar pantalla (preserva logs)
-  [switch]$VerboseLsp   # más logging sobre ruta/estado LSP
+  [switch]$Fast,         # omite npm install si ya existe node_modules
+  [switch]$NoClear,      # evita limpiar pantalla (preserva logs)
+  [switch]$VerboseLsp    # más logging sobre ruta/estado LSP
 )
 <#
 Script simplificado (con dependencias automáticas):
@@ -29,7 +29,8 @@ if(-not (Get-Command npm -ErrorAction SilentlyContinue)){
 }
 
 if($DevTools){ $env:VPY_IDE_DEVTOOLS = '1' } else { Remove-Item Env:VPY_IDE_DEVTOOLS -ErrorAction SilentlyContinue | Out-Null }
-if($RelaxCSP){ $env:VPY_IDE_RELAX_CSP = '1' } else { Remove-Item Env:VPY_IDE_RELAX_CSP -ErrorAction SilentlyContinue | Out-Null }
+# Relajado por defecto (para permitir React Fast Refresh y estilos inline de desarrollo). Si se pasa -StrictCSP se limpia.
+if(-not $StrictCSP){ $env:VPY_IDE_RELAX_CSP = '1' } else { Remove-Item Env:VPY_IDE_RELAX_CSP -ErrorAction SilentlyContinue | Out-Null }
 if($NoClear){ $env:VPY_IDE_NO_CLEAR = '1' } else { Remove-Item Env:VPY_IDE_NO_CLEAR -ErrorAction SilentlyContinue | Out-Null }
 if($VerboseLsp){ $env:VPY_IDE_VERBOSE_LSP = '1' } else { Remove-Item Env:VPY_IDE_VERBOSE_LSP -ErrorAction SilentlyContinue | Out-Null }
 

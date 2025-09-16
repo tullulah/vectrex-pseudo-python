@@ -16,6 +16,16 @@ tokio = { version = "1.47", features = ["rt-multi-thread","macros","io-std"] }
 lazy_static = "1.4"
 serde_json = "1.0"
 
+# Use local emulator crate
+vectrex_emulator = { path = "../emulator" }
+
+[features]
+default = []
+
+
+[lib]
+crate-type = ["rlib"]
+
 [[bin]]
 name = "vpy_lsp"
 path = "src/bin/vpy_lsp.rs"

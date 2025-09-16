@@ -166,31 +166,31 @@ function App() {
         if (st.active) st.closeDocument(st.active);
         break; }
       case 'build.build':
-        console.log('[command] build (stub) ->', activeBinName);
+  console.log('[command] build (pending implementation) ->', activeBinName);
         break;
       case 'build.run':
-        console.log('[command] build & run (stub) ->', activeBinName);
+  console.log('[command] build & run (pending implementation) ->', activeBinName);
         break;
       case 'build.clean':
-        console.log('[command] clean build artifacts (stub)');
+  console.log('[command] clean build artifacts (pending implementation)');
         break;
       case 'debug.start':
-        console.log('[command] start debug (stub)');
+  console.log('[command] start debug (pending implementation)');
         break;
       case 'debug.stop':
-        console.log('[command] stop debug (stub)');
+  console.log('[command] stop debug (pending implementation)');
         break;
       case 'debug.stepOver':
-        console.log('[command] step over (stub)');
+  console.log('[command] step over (pending implementation)');
         break;
       case 'debug.stepInto':
-        console.log('[command] step into (stub)');
+  console.log('[command] step into (pending implementation)');
         break;
       case 'debug.stepOut':
-        console.log('[command] step out (stub)');
+  console.log('[command] step out (pending implementation)');
         break;
       case 'debug.toggleBreakpoint':
-        console.log('[command] toggle breakpoint (stub)');
+  console.log('[command] toggle breakpoint (pending implementation)');
         break;
       default:
         console.warn('[command] unknown', id);
