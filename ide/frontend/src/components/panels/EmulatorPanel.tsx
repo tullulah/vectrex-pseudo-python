@@ -85,6 +85,7 @@ export const EmulatorPanel: React.FC = () => {
       ];
       segs = fallback;
       setLastSegments(segs); drawSegments(segs);
+      pushToast('Demo fallback triangle','info');
       const w:any=window; if (w.electronAPI?.emuDemoTriangle){ w.electronAPI.emuDemoTriangle().then((segs:any)=>{ if (Array.isArray(segs)) { setLastSegments(segs); drawSegments(segs); } }); return; }
       if ((w.emu as any)?.demo_triangle){ try { w.emu.demo_triangle(); } catch{} if (w.emu.integrator_segments_peek_json){ const json=w.emu.integrator_segments_peek_json(); const segs2:Segment[]=JSON.parse(json); setLastSegments(segs2); drawSegments(segs2); } }
     } catch(e){ console.warn('Demo triangle failed', e);} }, [demoMode]);
