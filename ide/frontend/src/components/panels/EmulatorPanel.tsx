@@ -163,7 +163,34 @@ export const EmulatorPanel: React.FC = () => {
         // The run:compile path already loaded binary into emulator (TypeScript backend). If WASM backend expects manual load, we could fetch the produced .bin.
         // Attempt to locate produced .bin (replace .vpy with .bin) and load into WASM service.
         const binGuess = normalized.replace(/\.[^.]+$/, '.bin');
-        try { const resp = await fetch(binGuess); if (resp.ok) { const buf=new Uint8Array(await resp.arrayBuffer()); const base = parseBase(); globalEmu.loadProgram(buf, base); saveLastBin({ path:binGuess, size:buf.length, base, bytes:buf }); pushToast('Loaded '+binGuess); } } catch {}
+        // Attempt secure IPC-based binary read first (avoids CSP file:// restrictions)
+        try {
+          if (w.files?.readFileBin) {
+            const binRes = await w.files.readFileBin(binGuess);
+            if (binRes && !binRes.error && binRes.base64) {
+              const bytes = Uint8Array.from(atob(binRes.base64), c=>c.charCodeAt(0));
+              const base = parseBase();
+              globalEmu.loadProgram(bytes, base);
+              saveLastBin({ path: binGuess, size: bytes.length, base, bytes });
+              pushToast('Loaded '+binGuess);
+            } else {
+              console.warn('IPC readFileBin failed or returned error', binRes);
+            }
+          } else {
+            // Fallback to fetch (may be blocked by CSP if using file://)
+            const resp = await fetch(binGuess);
+            if (resp.ok) {
+              const buf=new Uint8Array(await resp.arrayBuffer());
+              const base = parseBase();
+              globalEmu.loadProgram(buf, base);
+              saveLastBin({ path:binGuess, size:buf.length, base, bytes:buf });
+              pushToast('Loaded '+binGuess);
+            }
+          }
+        } catch(e) {
+          console.warn('Binary load (post-compile) failed', e);
+          pushToast('Post-compile load failed','error');
+        }
       } else if (isAsm && w.electronAPI?.emuAssemble) {
         // Assemble raw .asm directly via lwasm -> load into WASM
         const normalized = diskPath.replace(/^file:\/+/, '');

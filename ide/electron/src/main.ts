@@ -650,6 +650,17 @@ ipcMain.handle('file:read', async (_e, path: string) => {
   }
 });
 
+// Read arbitrary binary file and return base64 (for emulator program loading without file:// fetch)
+ipcMain.handle('file:readBin', async (_e, path: string) => {
+  if (!path) return { error: 'no_path' };
+  try {
+    const buf = await fs.readFile(path);
+    return { path, base64: Buffer.from(buf).toString('base64'), size: buf.length, name: basename(path) };
+  } catch (e:any) {
+    return { error: e?.message || 'read_failed' };
+  }
+});
+
 ipcMain.handle('file:save', async (_e, args: { path: string; content: string; expectedMTime?: number }) => {
   const { path, content, expectedMTime } = args || {} as any;
   if (!path) return { error: 'no_path' };

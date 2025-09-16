@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('files', {
 
   openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ path: string } | null>,
   readFile: (path: string) => ipcRenderer.invoke('file:read', path) as Promise<{ path: string; content: string; mtime: number; size: number; name: string } | { error: string }>,
+  readFileBin: (path: string) => ipcRenderer.invoke('file:readBin', path) as Promise<{ path: string; base64: string; size: number; name: string } | { error: string }>,
   openBin: () => ipcRenderer.invoke('bin:open') as Promise<{ path: string; base64: string; size: number } | { error: string } | null>,
 });
 
