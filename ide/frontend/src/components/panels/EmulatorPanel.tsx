@@ -16,6 +16,7 @@ export const EmulatorPanel: React.FC = () => {
   const [segmentsCount, setSegmentsCount] = useState(0);
   const [lastSegments, setLastSegments] = useState<Segment[]>([]);
   const [demoMode, setDemoMode] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
   const [baseAddrHex, setBaseAddrHex] = useState('C000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
   const [toasts, setToasts] = useState<Array<{ id:number; msg:string; kind:'info'|'error'; ts:number }>>([]);
@@ -73,22 +74,50 @@ export const EmulatorPanel: React.FC = () => {
   useEffect(()=>{ fixedCanvasInit(); }, [fixedCanvasInit]);
   useEffect(()=>{ if (status==='running' && !demoMode){ if (!rafRef.current) rafRef.current=requestAnimationFrame(animationLoop); } else if (rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } }, [status, animationLoop, demoMode]);
 
-  // Demo mode effect (generate static triangle via WASM helper when toggled on)
-  useEffect(()=>{ if (!demoMode) return; try { // Use high-level helper first
-      let segs = globalEmu.demoTriangle();
-      if (segs.length){ setLastSegments(segs); drawSegments(segs); return; }
-      // Fallback: generate a simple static triangle in JS if WASM helper produced nothing
+  // Demo mode effect with retry logic before falling back
+  useEffect(() => {
+    let cancelled = false;
+    const attemptDemo = async () => {
+      setDemoStatus('waiting');
+      // Up to 6 attempts (~6 * 120ms) to allow wasm init & segment generation
+      for (let i=0;i<6 && !cancelled;i++) {
+        // Wait for emulator initialization
+        if (!globalEmu.registers()) {
+          await new Promise(r=>setTimeout(r, 120));
+          continue;
+        }
+        try {
+          const segs = globalEmu.demoTriangle();
+          if (segs.length) {
+            setLastSegments(segs);
+            drawSegments(segs);
+            setDemoStatus('ok');
+            return;
+          }
+        } catch (e) {
+          console.warn('demoTriangle attempt failed', e);
+        }
+        await new Promise(r=>setTimeout(r, 120));
+      }
+      if (cancelled) return;
+      // Fallback
       const fallback: Segment[] = [
         { x0: -0.5, y0: -0.5, x1: 0.5, y1: -0.5, intensity: 255, frame: 0 },
         { x0: 0.5, y0: -0.5, x1: 0, y1: 0.6, intensity: 255, frame: 0 },
         { x0: 0, y0: 0.6, x1: -0.5, y1: -0.5, intensity: 255, frame: 0 },
       ];
-      segs = fallback;
-      setLastSegments(segs); drawSegments(segs);
+      setLastSegments(fallback);
+      drawSegments(fallback);
+      setDemoStatus('fallback');
       pushToast('Demo fallback triangle','info');
-      const w:any=window; if (w.electronAPI?.emuDemoTriangle){ w.electronAPI.emuDemoTriangle().then((segs:any)=>{ if (Array.isArray(segs)) { setLastSegments(segs); drawSegments(segs); } }); return; }
-      if ((w.emu as any)?.demo_triangle){ try { w.emu.demo_triangle(); } catch{} if (w.emu.integrator_segments_peek_json){ const json=w.emu.integrator_segments_peek_json(); const segs2:Segment[]=JSON.parse(json); setLastSegments(segs2); drawSegments(segs2); } }
-    } catch(e){ console.warn('Demo triangle failed', e);} }, [demoMode]);
+    };
+    if (demoMode) {
+      attemptDemo();
+    } else {
+      setDemoStatus('idle');
+    }
+    return () => { cancelled = true; };
+  }, [demoMode]);
 
   const performFullReset = () => {
     globalEmu.reset();
@@ -308,9 +337,10 @@ export const EmulatorPanel: React.FC = () => {
         <div style={{display:'flex', justifyContent:'center'}}>
           <div style={{position:'relative'}}>
             <canvas ref={canvasRef} style={{border:'1px solid #333', background:'#000', borderRadius:4, width:300, height:400}} />
-            {demoMode && lastSegments.length===0 && (
-              <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#68f', fontSize:12, textAlign:'center', padding:8}}>
-                Demo mode active but no segments produced. WASM demo helper missing? Fallback triangle should appear once available.
+            {demoMode && demoStatus!=='ok' && lastSegments.length===0 && (
+              <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#68f', fontSize:12, textAlign:'center', padding:8, background:'rgba(0,0,0,0.4)'}}>
+                {demoStatus==='waiting' && 'Preparing demo… (building wasm or awaiting segments)'}
+                {demoStatus==='fallback' && 'Fallback triangle in use (wasm demo returned no segments). Rebuild wasm to restore native demo.'}
               </div>
             )}
           </div>
