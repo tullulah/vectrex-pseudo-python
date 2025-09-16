@@ -796,11 +796,11 @@ impl CPU {
             // Immediate 2-cycle loads / ops
             0x86|0xC6|0x8E|0xCE|0xCC => 2,
             // Direct addressing (approx 4 cycles)
-            0x91|0x94|0x96|0x97|0x98|0x9E|0x9C|0x99|0x9B|0xD6|0xD7|0xDA|0xDB|0xDC|0xDD|0xDE|0xDF => 4,
+            0x91|0x94|0x96|0x97|0x98|0x9A|0x9E|0x9C|0x99|0x9B|0xD6|0xD7|0xDA|0xDB|0xDC|0xDD|0xDE|0xDF => 4,
             // Extended addressing group (5 cycles)
             0xB6|0xB7|0xB4|0xB9|0xBB|0xF0|0xF4|0xF6|0xF7|0xF8|0xF9|0xFA|0xFC|0xFD|0xFE|0xFF => 5,
             // Indexed group (5 cycles baseline)
-            0xA6|0xA7|0xA0|0xA2|0xA4|0xA5|0xA8|0xA9|0xAA|0xAB|0xE0|0xE3|0xE4|0xE6|0xE7|0xEA|0xEB|0xEC|0xED|0xEE => 5,
+            0xA6|0xA7|0xA0|0xA2|0xA4|0xA5|0xA8|0xA9|0xAA|0xAB|0xE0|0xE1|0xE3|0xE4|0xE6|0xE7|0xEA|0xEB|0xEC|0xED|0xEE => 5,
             0xBD => 7, 0x9D => 6, 0x39 => 5,
             // Short branches (2 cycles base +1 if taken handled inline)
             0x20|0x22|0x23|0x24|0x25|0x26|0x27|0x28|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x2F => 2,
@@ -819,7 +819,7 @@ impl CPU {
             // Misc immediate logical/arith (2 cycles)
             0xC4|0xD4|0x84|0x85|0x89|0x8A|0xC5|0xC8|0xCA|0xCB|0xD8|0xE8 => 2, // (F8 in extended group)
             0x30|0x31|0x32|0x33 => 5,
-            0x1A|0x1C|0x12 => 2,
+            0x1A|0x1C|0x12|0x19 => 2,
             0x1E|0x1F => 6,
             _ => 1,
         };
@@ -1079,11 +1079,12 @@ impl CPU {
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA ${:04X}", addr);} }
             0x9C => { // CMPX direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let x0=self.x; let res=x0.wrapping_sub(val); self.flags_sub16(x0,val,res); if self.trace { println!("CMPX ${:04X}", addr);} }
-            // -------------------------------------------------------------------------
-            // Direct RMW operations
-            // -------------------------------------------------------------------------
+            0x9A => { // ORA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
             0x06 => { // ROR direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_ror(m); self.write8(addr,r); if self.trace { println!("ROR ${:04X} -> {:02X}", addr,r);} }
+            0xE1 => { // CMPB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB [{}]", ea);} }
             0x09 => { // ROL direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_rol(m); self.write8(addr,r); if self.trace { println!("ROL ${:04X} -> {:02X}", addr,r);} }
             0x0C => { // INC direct
@@ -1396,6 +1397,30 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a |= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA #${:02X}", imm);} }
             0x0B => { // SEV (Set V flag)
                 self.cc_v = true; if self.trace { println!("SEV"); } }
+            0x19 => { // DAA (Decimal Adjust Accumulator) after addition on A
+                // Reference 6809 rules (derived from 6800/6802 family but with C interaction):
+                // If (lower nibble > 9) or H set -> add 0x06 to A.
+                // If (upper nibble > 9) or C set or (upper nibble >9 after first adjust) -> add 0x60.
+                // C is set if a carry out of the high nibble occurs due to adding 0x60.
+                // H is undefined after instruction (we leave unchanged to minimize side effects; could clear).
+                // Z,N updated from result; V cleared per spec; C updated as above.
+                let mut adjust = 0u8; let a0 = self.a; let low = a0 & 0x0F; let high = (a0 >> 4) & 0x0F;
+                let mut carry = self.cc_c; // prior carry may influence high adjust
+                let half = self.cc_h; // existing half-carry state
+                if low > 9 || half { adjust = adjust.wrapping_add(0x06); }
+                let mut high_after = high;
+                if adjust != 0 { // simulate low adjust effect to evaluate high nibble overflow
+                    let tmp = a0.wrapping_add(0x06);
+                    high_after = (tmp >> 4) & 0x0F;
+                }
+                if high > 9 || high_after > 9 || carry { adjust = adjust.wrapping_add(0x60); carry = true; }
+                let res = a0.wrapping_add(adjust);
+                self.a = res;
+                self.update_nz8(res);
+                self.cc_v = false; // DAA clears V
+                self.cc_c = carry; // Updated carry (set if high adjust applied)
+                if self.trace { println!("DAA -> {:02X} (adj={:02X})", res, adjust); }
+            }
             0x21 => { // BRN (Branch never) - consume offset only
                 let _off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); if self.trace { println!("BRN (no branch)"); } }
             0x28 => { // BVC (Branch if V=0)
