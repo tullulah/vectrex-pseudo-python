@@ -275,6 +275,27 @@ Long Term:
 - 2025-09-16: Initial creation of SUPER_SUMMARY.md with full architecture & decisions.
  - 2025-09-16: Added deep dive (Sections 21–27), compiler & language spec draft, opcode appendix, expanded change log.
 - 2025-09-18: Stack/return diagnostic instrumentation begun (call events capture `ret_addr`); buffer size (32) identified as insufficient; C++ parity test added (pending build); classification of drift vs mismatch deferred.
+- 2025-09-18: Added opcode 0x14 & 0x15 to illegal/NOP handler set (previous test failure on 0x14 unimplemented classification resolved); `opcode_validity::illegal_opcodes_are_1_cycle_and_not_unimpl` now passes. Introduced temporary null-engine build path for C++ `vectrexy` to bypass outdated ImGui/SDL dependencies; created standalone `bios_callstack` tool (C++) mirroring Rust call stack trace (supports JSR direct/extended/indexed & BSR) but effort paused per focus shift back to Rust compiler/emulator. Illegal opcode list in Section 24 implicitly updated—ensure next comprehensive edit merges both enumerations (Section 24 & code). Warning: `unmapped_read_fallback` now dead code (candidate for removal or doc reference if open-bus fallback policy reintroduced).
+- 2025-09-18: Reintroducido registro de instrucción (trace) para WASM: nueva función interna `trace_maybe_record` empuja `TraceEntry` al inicio de `step()` cuando `trace_enabled` está activo (habilitado vía export wasm `enable_trace(en,limit)`). Panel Trace requiere pulsar "Capture Init" (no auto-on) para evitar sobrecoste por defecto. Límite configurable (`trace_limit`) protege memoria (cap lado UI a 200k). Documentado para evitar confusión futura sobre ausencia de entries si no se activa.
+ - 2025-09-18: Ampliado `TraceEntry` con campo `call_depth` (profundidad de pila de llamadas BIOS/JSR en el momento del fetch) y exportado en `trace_log_json()` como `depth`. No rompe compatibilidad: consumidores previos que ignoran campos extra siguen funcionando. Próximo paso: usar `depth` en UI para plegar/expandir trazas por nivel.
+ - 2025-09-18: Ciclos afinados para familia CMPX y JSR indexed: 0x8C (CMPX imm) = 5 ciclos, 0xAC (CMPX indexed) = 6, 0xBC (CMPX extended) = 7; añadido handler explícito para JSR indexed (0xAD = 7 ciclos) y CMPX indexed separando seeds. Nuevos tests `audit_cmpx_*` verifican 5/6/7 y `audit_jsr_extended_cycles` permanece verde. Prueba de enforcement `enforce_no_unimplemented_primary_opcodes` confirma 100% cobertura primaria válida. Lista de ilegales ampliada (incluye 0x41,0x42,0x4B,0x51,0x55,0x5B,0x5E,0x62,0x65,0x6B,0x71,0x72,0x75,0x87,0xC7,0xCD) tratadas como NOP de 1 ciclo sin contaminar métrica de unimplemented.
+
+### 24.7 Actualización Ciclos CMPX / JSR (2025-09-18)
+Resumen de ajuste puntual de temporización para mejorar fidelidad respecto a la tabla nominal MC6809:
+
+| Opcode | Modo       | Ciclos Emu (antes) | Ciclos Emu (ahora) | Nominal | Nota |
+|--------|------------|--------------------|--------------------|---------|------|
+| 0x8C   | CMPX imm   | 6 (grupo genérico) | 5                  | 5       | Seed individual añadido |
+| 0xAC   | CMPX indexed| 7 (grupo idx)     | 6                  | 6       | Handler + seed específica |
+| 0xBC   | CMPX ext   | 5 (erróneo)        | 7                  | 7       | Corregido; se retiró de grupo de 5 |
+| 0xAD   | JSR indexed| 5 (inexacto)       | 7                  | 7       | Handler dedicado (push + PC) |
+
+Tests añadidos (módulo unified_audit en `opcodes_all.rs`):
+- `audit_cmpx_immediate_cycles`
+- `audit_cmpx_indexed_cycles`
+- `audit_cmpx_extended_cycles`
+
+Estos aseguran valores 5/6/7 correctos y actuarán como regresión si se altera la semántica. Se mantiene la política: no introducir heurísticas de efectos secundarios; sólo medir efectos reales de instrucciones. Próximo paso sugerido: extender auditoría de ciclos a conjunto completo de comparaciones y saltos para converger a exactitud total.
 
 ---
 ## 21. CPU / VIA / Integrator Deep Dive
@@ -346,7 +367,7 @@ Identifiers `[A-Za-z_][A-Za-z0-9_]*`; ints (dec/hex). Strings with escapes. Expr
 ## 24. Opcode Appendix (Do Not Remove)
 Legend: [I]=Implemented, [NOP]=Illegal/Undefined but intentionally treated as NOP (counted implemented for coverage), [P]=Placeholder kept as NOP awaiting spec confirmation. Extended valid sub‑opcodes enumerated in `VALID_PREFIX10/11` in `cpu6809.rs` — all currently implemented.
 
-Summary (UPDATED 2025-09-17 – post open-bus refactor & final reclassification): 100% de los opcodes válidos implementados. Ilegales base (MC6809 no definidos):
+Summary (UPDATED 2025-09-18 – includes fix adding 0x14/0x15 explicit NOP handlers): 100% de los opcodes válidos implementados. Ilegales base (MC6809 no definidos):
 ```
 01 02 05 14 15 18 38 41 42 4B 51 52 55 5B 5E 61 62 65 6B 71 72 75 7B 87 8F C7 CD CF
 ```
@@ -648,4 +669,53 @@ Success Criteria:
 Follow-Up (Post Success):
 - Optional: selective event filtering (e.g., ignore balanced returns) to reduce telemetry noise.
 - Add regression test asserting zero mismatches on BIOS bootstrap for deterministic BIOS image.
+
+---
+## 31. External Tools / C++ Parity Status (2025-09-18)
+Purpose: Track auxiliary C++ implementation efforts (`vectrexy`) used for parity checks and investigative tooling.
+
+### 31.1 Null Engine Build Path
+- Configured to bypass SDL2/ImGui legacy backend friction by selecting `ENGINE_TYPE=null` and disabling tests.
+- Resulting `vectrexy.exe` builds successfully; runtime provides minimal loop suitable for headless validation.
+- Rationale: Decouple emulator parity investigations from stalled UI dependency updates.
+
+### 31.2 `bios_callstack` Tool
+- Standalone executable added under C++ libs/emulator/tools capturing BIOS call stack frames.
+- Supports: JSR direct (0xBD), JSR extended (0xBD), JSR indexed (0xAD), BSR (0x8D). Logs target addresses and maintains depth.
+- Added heuristic for indexed JSR detection via stack pointer delta.
+- Instrumentation (first 64 opcodes trace) revealed early BIOS loop (PC cycling F548–F54D) prior to premature process exit (code 1) — root cause undiagnosed (likely external abort or exit path in harness).
+- Work Paused: Per strategic refocus on Rust core and compiler.
+
+### 31.3 Pending / Future Parity Work
+- Re-run C++ tool after upgrading ImGui + backend to modern version (remove deprecated fields).
+- Align C++ CPU step timing table with Rust `cycle_table.rs` for apples-to-apples cycle diff.
+- Optionally export call stack JSON and compare against Rust stack event metrics once classifier implemented (see Section 30).
+
+### 31.4 De-scoping Justification
+- Rust emulator now authoritative; maintaining two active CPU cores risks divergence.
+- C++ path retained only for: (a) comparative debugging if Rust trace anomalies arise, (b) potential future native instrumentation.
+
+### 31.5 Cleanup Candidates
+- If no parity regressions appear over next milestone, archive or mark C++ tooling experimental in repository docs.
+
+Reference Cross-links: Sections 3.1 (CPU), 30 (Stack Diagnostics).
+
+### 32. Opcode Metadata Scaffold (2025-09-18)
+Context: Inicio de migración hacia tablas data-driven de longitud y ciclos por instrucción.
+
+Added:
+- `emulator/src/opcode_meta.rs` con `OpcodeMeta` (opcode completo con prefijo, tamaño bytes, ciclos base, flags de branch).
+- Subconjunto inicial: LDS inmediato (10 CE), JSR extendido (BD), BRA, BSR, RTS, SUBB inmediato.
+- Test `opcode_meta_subset.rs` valida que PC delta y ciclos reales coinciden (BRA tomado = base+1 se comprueba aparte de base_cycles almacenado).
+
+Motivación:
+- Separar semántica estática (tamaño/ciclos base) de la lógica de ejecución para permitir futura verificación automatizada y simplificación del gran `match` en `cpu6809.rs`.
+
+Estado:
+- Pasivo: no modifica la ejecución; sólo provee superficie de consulta para tests.
+- Siguiente paso previsto: expandir cobertura (todas las cargas/ALU básicas) y unir con `cycle_table.rs` o fusionar en una única fuente de verdad.
+
+Riesgos / ToDo:
+- Duplicación temporal de valores (inline seeds vs meta). Mitigación: añadir verificación incremental hasta migrar.
+- Aún no modela variaciones por postbyte indexado ni máscaras de pila (PSHS/PULS).
 
