@@ -4,20 +4,15 @@ use crate::integrator::Integrator;
 // Canonical 6809 vector addresses (high, low)
 const VEC_SWI3: u16 = 0xFFF0; // SWI3
 const VEC_SWI2: u16 = 0xFFF2; // SWI2
-const VEC_FIRQ: u16 = 0xFFF4; // FIRQ
-const VEC_IRQ:  u16 = 0xFFF6; // IRQ
+const VEC_FIRQ: u16 = 0xFFF4; // FIRQ (correct)
+const VEC_IRQ:  u16 = 0xFFF6; // IRQ (correct)
 const VEC_SWI:  u16 = 0xFFF8; // SWI
 const VEC_NMI:  u16 = 0xFFFA; // NMI
 const VEC_RESET:u16 = 0xFFFC; // RESET
 
 // Extracted CPU implementation from previous mod.rs
 // (functionality unchanged; to be refactored to use Bus & VIA later)
-// TODO Vector map alignment:
-//  6809 standard vectors:
-//   FFF0/FFF1: SWI3, FFF2/FFF3: SWI2, FFF4/FFF5: FIRQ, FFF6/FFF7: IRQ, FFF8/FFF9: SWI, FFFA/FFFB: NMI, FFFC/FFFD: RESET
-//  Current implementation temporarily uses FFF8/FFF9 for IRQ and SWI. Adjust once BIOS expectations confirmed.
-// TODO Add distinct service_firq() with partial stacking (no E, only CC+PC) and vector FFF4/FFF5.
-// TODO Implement SWI2/SWI3 if needed by higher-level tooling.
+// Vector map now aligned to standard 6809 layout.
 
 // ---------------------------------------------------------------------------------
 // Supporting structs (placed before CPU)
@@ -70,6 +65,8 @@ pub struct CPU {
     pub in_irq_handler: bool, // tracking if currently executing IRQ handler
     // Metrics
     pub opcode_total: u64,
+    // Debug: remaining instructions to force trace output regardless of cfg(test)
+    pub(crate) debug_autotrace_remaining: u32, // internal; use enable_autotrace() for external crates
     pub opcode_unimplemented: u64,
     pub opcode_counts: [u64;256],
     pub opcode_unimpl_bitmap: [bool;256],
@@ -121,6 +118,8 @@ pub struct CPU {
     pub t2_expiries: u64,
     pub lines_per_frame_accum: u64,
     pub lines_per_frame_samples: u64,
+    // Trace helpers
+    pub bios_handoff_logged: bool, // evita duplicar [BIOS->CART]
     // Temporary staging buffer for WASM shared memory segment export
     pub temp_segments_c: Vec<crate::integrator::BeamSegmentC>,
     // Last synthetic extended (prefix) coverage gaps captured by recompute_opcode_coverage
@@ -199,7 +198,7 @@ impl Default for CPU { fn default()->Self {
         wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
     jsr_log:[0;128], jsr_log_len:0, enable_irq_frame_fallback:false, irq_frames_generated:0, last_irq_frame_cycles:0,
     #[cfg(test)] last_return_expect: None,
-    integrator: { let mut i=Integrator::new(); #[cfg(not(target_arch="wasm32"))] { if std::env::var("VPY_NO_MERGE").ok().as_deref()==Some("1"){ i.set_merge(false); } } i },
+    integrator: { let i=Integrator::new(); #[cfg(not(target_arch="wasm32"))] { if std::env::var("VPY_NO_MERGE").ok().as_deref()==Some("1"){ /* merge toggle disabled */ } } i },
         integrator_auto_drain: false,
         integrator_last_frame_segments: 0,
         integrator_max_frame_segments: 0,
@@ -210,6 +209,8 @@ impl Default for CPU { fn default()->Self {
         last_extended_unimplemented: Vec::new(),
         hot00: [(0,0);4], hotff: [(0,0);4],
         trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(),
+        debug_autotrace_remaining:0,
+        bios_handoff_logged:false,
     }
 } }
 
@@ -344,10 +345,18 @@ impl CPU {
             firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
             temp_segments_c: Vec::new(),
             last_extended_unimplemented: Vec::new(),
-            hot00: [(0,0);4], hotff: [(0,0);4], trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(),
+            hot00: [(0,0);4], hotff: [(0,0);4], trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(), debug_autotrace_remaining:0,
+            bios_handoff_logged:false,
             #[cfg(test)] last_return_expect: None,
         }
     }
+
+    pub fn enable_autotrace(&mut self, n:u32){
+        self.debug_autotrace_remaining = n;
+        self.trace = true;
+    }
+    /// Constructor auxiliar para iniciar CPU en una dirección PC específica.
+    pub fn with_pc(pc:u16) -> Self { let mut c = Self::default(); c.pc = pc; c }
     #[cfg(not(target_arch="wasm32"))]
     fn env_trace_frame(&self) -> bool { std::env::var("TRACE_FRAME").ok().as_deref()==Some("1") }
     #[cfg(target_arch="wasm32")]
@@ -470,6 +479,7 @@ impl CPU {
                 sw3_hi,sw3_lo, sw2_hi,sw2_lo, firq_hi,firq_lo, irq_hi,irq_lo, swi_hi,swi_lo, nmi_hi,nmi_lo, rst_hi,rst_lo, vec);
             println!("[RESET] PC set to {:04X}{}", self.pc, if pc_set!=vec {" (forced canonical BIOS entry)"} else {""});
         }
+        // NOTE: no trace post-exec patch here; reset() is not an executed opcode path.
         // Debug bootstrap of VIA to force early Timer1 IRQs / frame progress if BIOS hasn't yet configured it.
         // Guard: only once, only if BIOS loaded, and IER still zero (meaning no BIOS init done yet).
         if self.bios_present && !self.debug_bootstrap_via_done && self.bus.via_ier()==0 {
@@ -557,6 +567,40 @@ impl CPU {
         let flags_pre = self.pack_cc();
         // Insert with placeholder cycles=0; we'll patch cycles + post flags after execution in step().
     self.trace_buf.push(TraceEntry { pc, opcode, sub, a:self.a, b:self.b, x:self.x, y:self.y, u:self.u, s:self.s, dp:self.dp, op_str, loop_count:0, flags:flags_pre, cycles:0, illegal:false, call_depth: self.call_stack.len() as u16 });
+    }
+
+    fn trace_patch_last_postexec(&mut self, start_cycles:u64){
+        if !self.trace_enabled { return; }
+        let len = self.trace_buf.len(); if len==0 { return; }
+        // Copy post state first
+        let delta = (self.cycles - start_cycles) as u32;
+        let a=self.a; let b=self.b; let x=self.x; let y=self.y; let u=self.u; let s=self.s; let dp=self.dp; let flags=self.pack_cc();
+        // Need opcode/sub for mnemonic fallback (immutable read before mutable borrow)
+        let (opcode, sub, needs_mnemonic) = {
+            let last_ref = &self.trace_buf[len-1];
+            (last_ref.opcode, last_ref.sub, last_ref.op_str.is_none())
+        };
+        if needs_mnemonic {
+            let mn = self.basic_mnemonic(opcode, sub);
+            if let Some(last_mut) = self.trace_buf.last_mut(){ if last_mut.op_str.is_none(){ last_mut.op_str = Some(mn); } }
+        }
+        if let Some(last_mut) = self.trace_buf.last_mut(){
+            last_mut.cycles = delta; last_mut.a=a; last_mut.b=b; last_mut.x=x; last_mut.y=y; last_mut.u=u; last_mut.s=s; last_mut.dp=dp; last_mut.flags=flags;
+        }
+    }
+
+    fn basic_mnemonic(&self, opcode:u8, sub:u8)->String{
+        match opcode {
+            0x86=>"LDA #".to_string(), 0xC6=>"LDB #".to_string(), 0xCC=>"LDD #".to_string(),
+            0xCE=>"LDU #".to_string(), 0x8E=>"LDX #".to_string(), 0x10=>{ // prefix 0x10
+                match sub { 0xCE=>"LDS #".to_string(), 0xB3=>"CMPD $".to_string(), _=>format!("PFX10 {:02X}",sub)} },
+            0x11=>format!("PFX11 {:02X}", sub),
+            0xFD=>"STD $".to_string(), 0xFF=>"STS $".to_string(), 0xBD=>"JSR $".to_string(),
+            0x8D=>"BSR $".to_string(), 0x27=>"BEQ $".to_string(),
+            0x04=>"LSR dir".to_string(), 0x03=>"COM dir".to_string(),
+            0xE0=>"SUBB [,X]".to_string(),
+            _=>format!("OP {:02X}", opcode)
+        }
     }
 
     #[allow(dead_code)]
@@ -650,7 +694,15 @@ impl CPU {
     fn push8(&mut self, v:u8){ self.s = self.s.wrapping_sub(1); self.write8(self.s, v); }
     fn push16(&mut self, v:u16){
         // Push high first then low so that low resides at top of descending stack for easy pop (low then high)
-        self.push8((v>>8) as u8); self.push8((v & 0xFF) as u8);
+        #[cfg(test)] let s_before = self.s; // local original S (only used in test logging)
+        let hi = (v>>8) as u8; let lo = (v & 0xFF) as u8;
+        self.push8(hi); self.push8(lo);
+        #[cfg(test)] {
+            // Log write addresses and bytes for diagnostics
+            let a_hi = s_before.wrapping_sub(1); // location where hi written
+            let a_lo = s_before.wrapping_sub(2); // then low below (because stack descends)
+            println!("[STACKPUSH] S_before={:04X} -> S_after={:04X} val={:04X} bytes_hi_low={:02X} {:02X} addrs={:04X} {:04X}", s_before, self.s, v, hi, lo, a_hi, a_lo);
+        }
     }
     fn pop8(&mut self)->u8 { let v = self.read8(self.s); self.s = self.s.wrapping_add(1); v }
     fn pop16(&mut self)->u16 { let lo = self.pop8(); let hi = self.pop8(); ((hi as u16)<<8)|lo as u16 }
@@ -743,36 +795,51 @@ impl CPU {
         self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; 0
     }
     fn service_irq(&mut self){
-        if self.trace { println!("[IRQ SERVICE]"); }
-        // If WAI already pushed the full frame, do NOT push it again.
+        if self.trace { println!("[IRQ ENTER]"); }
+        #[cfg(test)] let before_s = self.s;
+        // Correct 6809 hardware frame order for IRQ: CC,A,B,DP,X,Y,U,PC (PC pushed last).
         if !self.wai_pushed_frame {
-            // Push order (first to last): PC, U, Y, X, DP, B, A, CC so that CC is on top for RTI pop.
-            self.cc_e = true; // full frame indicator
-            let saved_pc = self.pc;
-            self.push16(saved_pc);
-            self.push16(self.u); self.push16(self.y); self.push16(self.x);
-            self.push8(self.dp); self.push8(self.b); self.push8(self.a);
-            let cc = self.pack_cc(); self.push8(cc);
+            self.cc_e = true; // full frame
+            let cc = self.pack_cc();
+            // Set IRQ mask bit before stacking (I=1). F flag unchanged for normal IRQ.
+            self.cc_i = true;
+            // Push in order so that final push16(PC) leaves return address at lowest addresses in frame.
+            self.push8(cc);
+            self.push8(self.a); self.push8(self.b); self.push8(self.dp);
+            self.push16(self.x); self.push16(self.y); self.push16(self.u);
+            self.push16(self.pc);
+            #[cfg(test)] {
+                let after_s = self.s;
+                let mut frame_dump = String::new();
+                for off in 0..16 { let addr = after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
+                println!("[IRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
+            }
         } else {
-            // Frame already on stack from WAI; clear marker so a nested IRQ (shouldn't happen) would push normally.
-            self.wai_pushed_frame = false;
+            self.wai_pushed_frame = false; // already stacked by WAI path
         }
-        self.cc_i = true; // mask further IRQs until RTI restores CC
-        let lo = self.read8(VEC_IRQ); let hi = self.read8(VEC_IRQ+1); self.pc = ((hi as u16)<<8)|lo as u16;
+        // Fetch vector: 6809 stores high byte at vector address, low at +1.
+        let hi = self.read8(VEC_IRQ); let lo = self.read8(VEC_IRQ+1); let vec = ((hi as u16)<<8)|lo as u16; self.pc = vec;
+        #[cfg(test)] { println!("[IRQ-VECTOR] fetched={:04X} (raw bytes {:02X} {:02X})", vec, hi, lo); }
         self.irq_pending = false; self.wai_halt = false; self.in_irq_handler = true;
-        self.via_irq_count += 1; // legacy field
-        self.irq_count = self.irq_count.wrapping_add(1);
+        self.via_irq_count += 1; self.irq_count = self.irq_count.wrapping_add(1);
     }
     fn service_firq(&mut self){
         if self.trace { println!("[FIRQ SERVICE]"); }
-        // Keep simple partial frame behavior (not currently used after remap)
+        #[cfg(test)] let before_s = self.s;
+        // FIRQ pushes only CC then PC (minimal frame). E flag remains 0.
         self.cc_e = false;
-        let saved_pc = self.pc; self.push16(saved_pc);
-        let cc = self.pack_cc(); self.push8(cc);
-        self.cc_i = true; self.cc_f = true;
-        let lo = self.read8(VEC_FIRQ); let hi = self.read8(VEC_FIRQ+1); self.pc = ((hi as u16)<<8)|lo as u16;
-        self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true;
-        self.firq_count = self.firq_count.wrapping_add(1);
+        let cc = self.pack_cc();
+        self.cc_i = true; self.cc_f = true; // set masks before stacking CC snapshot
+        self.push8(cc);      // CC
+        self.push16(self.pc); // PC
+        #[cfg(test)] {
+            let after_s = self.s; let mut frame_dump = String::new();
+            for off in 0..4 { let addr=after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
+            println!("[FIRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
+        }
+        let hi = self.read8(VEC_FIRQ); let lo = self.read8(VEC_FIRQ+1); let vec=((hi as u16)<<8)|lo as u16; self.pc = vec;
+        #[cfg(test)] { println!("[FIRQ-VECTOR] fetched={:04X} (raw {:02X} {:02X})", vec, hi, lo); }
+        self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
     }
     fn service_nmi(&mut self){
         if self.trace { println!("[NMI SERVICE]"); }
@@ -853,26 +920,39 @@ impl CPU {
         // Interrupt priority
         if self.nmi_pending {
             self.service_nmi();
-            if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } }
+            if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
         if self.firq_pending && !self.cc_f {
+            if self.trace { println!("[INT-DISPATCH] FIRQ pending at PC={:04X}", self.pc); }
             self.service_firq();
-            if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } }
+            if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
         if self.irq_pending && !self.cc_i {
+            if self.trace { println!("[INT-DISPATCH] IRQ pending at PC={:04X}", self.pc); }
             self.service_irq();
-            if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } }
+            if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
         if self.wai_halt { // remain halted until an unmasked interrupt serviced; still tick VIA one cycle per step
             self.advance_cycles(1);
-            if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } }
+            if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
     // Fetch opcode directly from internal mem array to honor tests that manipulate cpu.mem
     let pc0 = self.pc; let op = self.mem[self.pc as usize]; self.pc = self.pc.wrapping_add(1);
+    if self.opcode_total==0 && self.trace { // solo si trace activo
+        if op==0x10 || op==0x11 { let peek=self.mem[self.pc as usize]; println!("[FETCH0] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
+        else { println!("[FETCH0] pc={:04X} op={:02X}", pc0, op); }
+    }
+    #[cfg(test)] {
+        if self.opcode_total < 64 {
+            if op==0x10 || op==0x11 { let peek=self.mem[self.pc as usize]; println!("[FETCH] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
+            else { println!("[FETCH] pc={:04X} op={:02X}", pc0, op); }
+        }
+    }
+    if self.debug_autotrace_remaining>0 { self.trace=true; self.debug_autotrace_remaining-=1; if self.debug_autotrace_remaining==0 { self.trace=false; } }
         // Peek possible sub-opcode byte for extended prefixes (do not advance PC further here)
         let sub = if op==0x10 || op==0x11 { self.mem[self.pc as usize] } else { 0 }; 
         self.trace_maybe_record(pc0, op, sub);
@@ -942,7 +1022,10 @@ impl CPU {
             0xAD => { // JSR indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s);
                 if self.trace { println!("JSR [{}]", ea);} 
-                let ret=self.pc; self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                let ret=self.pc; // address after operand fetch (return point)
+                // Hardware behavior: push return address (high then low) onto S before transferring control
+                self.push16(ret);
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
                 if ea>=0xF000 { if self.bios_present { self.record_bios_call(ea); } else { if self.trace { println!("Missing BIOS ${:04X}", ea);} return false; } }
                 self.pc=ea; }
             0x3D => { // MUL: A * B -> D (single implementation)
@@ -983,7 +1066,7 @@ impl CPU {
                     let cc = self.pack_cc(); self.push8(cc);
                     self.wai_pushed_frame = true;
                 }
-                self.wai_halt = true; if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } } return true;
+                self.wai_halt = true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true;
             }
             0x3C => { // CWAI: AND CC with immediate mask then wait (push full state always)
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
@@ -992,10 +1075,10 @@ impl CPU {
                 self.cc_e=true; let saved_pc=self.pc; self.push16(saved_pc);
                 self.push16(self.u); self.push16(self.y); self.push16(self.x);
                 self.push8(self.dp); self.push8(self.b); self.push8(self.a); self.push8(self.pack_cc());
-                self.wai_pushed_frame=true; self.wai_halt=true; if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } } return true; }
+                self.wai_pushed_frame=true; self.wai_halt=true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true; }
             0x13 => { // SYNC: low-power wait until interrupt (does not push state)
                 if self.trace { println!("SYNC"); }
-                self.wai_halt=true; if self.trace_enabled { let delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ last.cycles=delta; last.flags=flags; } } return true; }
+                self.wai_halt=true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true; }
             // --- Begin large opcode set from legacy implementation (partial) ---
             // -------------------------------------------------------------------------
             // Accumulator RMW A
@@ -1055,9 +1138,38 @@ impl CPU {
                 if self.in_irq_handler { self.wai_halt=false; self.in_irq_handler=false; }
                 if let Some(d)=self.wait_recal_depth { if depth_before == d && self.call_stack.len() == d { self.bios_frame = self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
             }
+            0x35 => { // PULS (instrumented)
+                let mask = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                #[cfg(test)] let s_before = self.s; // test-only logging
+                #[cfg(test)] let mut popped: Vec<(char,u16)> = Vec::new();
+                // Hardware order (MC6809 Reference): bits processed from least to most significant => CC, A, B, DP, X, Y, U, PC
+                if (mask & 0x01)!=0 { let cc=self.pop8(); self.unpack_cc(cc); #[cfg(test)] { popped.push(('C', cc as u16)); } }
+                if (mask & 0x02)!=0 { let a=self.pop8(); self.a=a; #[cfg(test)] { popped.push(('A', a as u16)); } }
+                if (mask & 0x04)!=0 { let b=self.pop8(); self.b=b; #[cfg(test)] { popped.push(('B', b as u16)); } }
+                if (mask & 0x08)!=0 { let dp=self.pop8(); self.dp=dp; #[cfg(test)] { popped.push(('P', dp as u16)); } }
+                if (mask & 0x10)!=0 { let x=self.pop16(); self.x=x; #[cfg(test)] { popped.push(('X', x)); } }
+                if (mask & 0x20)!=0 { let y=self.pop16(); self.y=y; #[cfg(test)] { popped.push(('Y', y)); } }
+                if (mask & 0x40)!=0 { let u=self.pop16(); self.u=u; #[cfg(test)] { popped.push(('U', u)); } }
+                if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); } }
+                if self.trace { println!("PULS mask={:02X} -> PC={:04X}", mask, self.pc); }
+                if self.trace && !self.bios_handoff_logged {
+                    // Handoff detection: transición desde BIOS (>=E000) a cartucho (<E000)
+                    if self.pc < 0xE000 { println!("[BIOS->CART] handoff pc={:04X}", self.pc); self.bios_handoff_logged = true; }
+                }
+                if self.opcode_counts[0x35] == 0 { // primera vez que vemos PULS
+                    println!("[PULS-FIRST] mask={:02X} pc_after={:04X} S_now={:04X}", mask, self.pc, self.s);
+                }
+                #[cfg(test)] {
+                    println!("[PULS-INSTR] mask={:02X} S_before={:04X} S_after={:04X}", mask, s_before, self.s);
+                    for (k,v) in popped.iter() { println!("  POP {} {:04X}", k, v); }
+                }
+            }
             0x3B => { // RTI
                 let pull8 = |cpu: &mut CPU| { let v = cpu.read8(cpu.s); cpu.s = cpu.s.wrapping_add(1); v };
                 let pull16 = |cpu: &mut CPU| { let lo = pull8(cpu); let hi = pull8(cpu); ((hi as u16)<<8)|lo as u16 };
+                if self.trace && !self.bios_handoff_logged {
+                    if self.pc < 0xE000 { println!("[BIOS->CART] handoff pc={:04X} (RTS)", self.pc); self.bios_handoff_logged = true; }
+                }
                 let cc = pull8(self); self.unpack_cc(cc);
                 if self.cc_e { self.a=pull8(self); self.b=pull8(self); self.dp=pull8(self); self.x=pull16(self); self.y=pull16(self); self.u=pull16(self); self.pc=pull16(self); } else { self.pc=pull16(self); }
                 if self.trace { println!("RTI -> {:04X}", self.pc); }
@@ -1065,41 +1177,29 @@ impl CPU {
                 if let Some(d)=self.wait_recal_depth { if self.call_stack.len()==d { self.bios_frame=self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
             }
             0x3F => { self.service_swi_generic(VEC_SWI, "SWI"); }
-            0x34 => { // PSHS
+            0x34 => { // PSHS (mask bits: 0=CC,1=A,2=B,3=DP,4=X,5=Y,6=U,7=PC) push order PC,U,Y,X,DP,B,A,CC
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
-                if (mask & 0x02)!=0 { self.push8(self.a); }
-                if (mask & 0x04)!=0 { self.push8(self.b); }
-                if (mask & 0x08)!=0 { self.push8(self.dp); }
-                if (mask & 0x10)!=0 { self.push16(self.x); }
-                if (mask & 0x20)!=0 { self.push16(self.y); }
-                if (mask & 0x40)!=0 { self.push16(self.u); }
                 if (mask & 0x80)!=0 { self.push16(self.pc); }
+                if (mask & 0x40)!=0 { self.push16(self.u); }
+                if (mask & 0x20)!=0 { self.push16(self.y); }
+                if (mask & 0x10)!=0 { self.push16(self.x); }
+                if (mask & 0x08)!=0 { self.push8(self.dp); }
+                if (mask & 0x04)!=0 { self.push8(self.b); }
+                if (mask & 0x02)!=0 { self.push8(self.a); }
+                if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
                 if self.trace { println!("PSHS ${:02X}", mask); }
             }
-            0x35 => { // PULS
-                let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                if (mask & 0x80)!=0 { self.pc=self.pop16(); }
-                if (mask & 0x40)!=0 { self.u=self.pop16(); }
-                if (mask & 0x20)!=0 { self.y=self.pop16(); }
-                if (mask & 0x10)!=0 { self.x=self.pop16(); }
-                if (mask & 0x08)!=0 { self.dp=self.pop8(); }
-                if (mask & 0x04)!=0 { self.b=self.pop8(); }
-                if (mask & 0x02)!=0 { self.a=self.pop8(); }
-                if (mask & 0x01)!=0 { let cc=self.pop8(); self.unpack_cc(cc); }
-                if self.trace { println!("PULS ${:02X}", mask); }
-            }
-            0x36 => { // PSHU (reuse helpers with temp swap)
+            0x36 => { // PSHU - same push order PC,U,Y,X,DP,B,A,CC but using U stack
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let orig_s=self.s; let sp=self.u; self.s=sp;
-                if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
-                if (mask & 0x02)!=0 { self.push8(self.a); }
-                if (mask & 0x04)!=0 { self.push8(self.b); }
-                if (mask & 0x08)!=0 { self.push8(self.dp); }
-                if (mask & 0x10)!=0 { self.push16(self.x); }
-                if (mask & 0x20)!=0 { self.push16(self.y); }
-                if (mask & 0x40)!=0 { self.push16(orig_s); }
                 if (mask & 0x80)!=0 { self.push16(self.pc); }
+                if (mask & 0x40)!=0 { self.push16(orig_s); } // push S (per spec bit6=U for PSHS, but for PSHU bit6=S) current code used orig_s previously
+                if (mask & 0x20)!=0 { self.push16(self.y); }
+                if (mask & 0x10)!=0 { self.push16(self.x); }
+                if (mask & 0x08)!=0 { self.push8(self.dp); }
+                if (mask & 0x04)!=0 { self.push8(self.b); }
+                if (mask & 0x02)!=0 { self.push8(self.a); }
+                if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
                 self.u=self.s; self.s=orig_s; if self.trace { println!("PSHU ${:02X}", mask); }
             }
             0x37 => { // PULU
@@ -1287,32 +1387,26 @@ impl CPU {
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let addr=((self.dp as u16)<<8)|off as u16;
                 if self.trace { println!("JSR ${:04X} (direct)", addr);} 
+                let ret=self.pc; // after operand
+                self.push16(ret);
                 if addr>=0xF000 { 
                     if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
                     self.record_bios_call(addr);
-                    let ret=self.pc; self.call_stack.push(ret);
-                    #[cfg(test)] { self.last_return_expect = Some(ret); }
-                    self.pc=addr;
-                } else { 
-                    let ret=self.pc; self.call_stack.push(ret);
-                    #[cfg(test)] { self.last_return_expect = Some(ret); }
-                    self.pc=addr; 
                 }
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.pc=addr;
                 cyc=7; }
             0xBD => { // JSR absolute
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
                 let addr=((hi as u16)<<8)|lo as u16; if self.trace { println!("JSR ${:04X}", addr);} 
+                let ret=self.pc; // after operand
+                self.push16(ret);
                 if addr>=0xF000 { 
                     if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
                     self.record_bios_call(addr);
-                    let ret=self.pc; self.call_stack.push(ret);
-                    #[cfg(test)] { self.last_return_expect = Some(ret); }
-                    self.pc=addr;
-                } else { 
-                    let ret=self.pc; self.call_stack.push(ret);
-                    #[cfg(test)] { self.last_return_expect = Some(ret); }
-                    self.pc=addr; 
                 }
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.pc=addr; 
                 cyc=7; }
             0x97 => { // STA direct
                 let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
@@ -1397,7 +1491,19 @@ impl CPU {
                         self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let y=self.y; self.write8(ea,(y>>8) as u8); self.write8(ea.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY [{}]", ea);} }
                     0xBF => { // STY extended
                         self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let y=self.y; self.write8(addr,(y>>8) as u8); self.write8(addr.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY ${:04X}", addr);} }
-                    0xCE => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); self.s=((hi as u16)<<8)|lo as u16; self.update_nz16(self.s); if self.trace { println!("LDS #${:04X}", self.s);} cyc=5; }
+                    0xCE => { // LDS immediate
+                        self.pc=self.pc.wrapping_add(1);
+                        #[cfg(test)] let pc_operands = self.pc; // direccion de los bytes inmediatos
+                        let hi=self.read8(self.pc); let lo=self.read8(self.pc+1);
+                        self.pc=self.pc.wrapping_add(2);
+                        let new_s=((hi as u16)<<8)|lo as u16;
+                        #[cfg(test)] let old_s = self.s;
+                        self.s=new_s; self.update_nz16(self.s);
+                        if self.trace { println!("LDS #${:04X}", self.s);} cyc=5;
+                        #[cfg(test)] {
+                            println!("[LDS-IMM] pc_operands={:04X} bytes={:02X} {:02X} S_before={:04X} S_after={:04X}", pc_operands, hi, lo, old_s, self.s);
+                        }
+                    }
                     // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) NEW, extended (0xB3)
                     0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
                         0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
@@ -1698,7 +1804,7 @@ impl CPU {
             }
         }
         self.advance_cycles(cyc);
-        if self.trace_enabled { let maybe_delta=(self.cycles-cycles_before) as u32; let flags=self.pack_cc(); if let Some(last)=self.trace_buf.last_mut(){ if last.cycles==0 { last.cycles=maybe_delta; last.flags=flags; } } }
+        if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
         true
     }
 

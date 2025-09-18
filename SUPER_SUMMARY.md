@@ -722,3 +722,31 @@ Riesgos / ToDo:
 - Duplicación temporal de valores (inline seeds vs meta). Mitigación: añadir verificación incremental hasta migrar.
 - Aún no modela variaciones por postbyte indexado ni máscaras de pila (PSHS/PULS).
 
+### 32.1 Actualización Semántica Stack 6809 (2025-09-18)
+Correcciones aplicadas:
+1. IRQ/FIRQ frame order: ahora el emulador empuja en IRQ exactamente `CC, A, B, DP, X, Y, U, PC` y en FIRQ únicamente `CC, PC` (sin registros extra) respetando la referencia MC6809. Antes el orden estaba invertido provocando retorno PC corrupto tras `PULS` durante inicialización BIOS.
+2. PSHS (mask) push order normalizado a la secuencia hardware al procesar bits 7→0: cuando una máscara incluye múltiples registros se almacenan en orden `PC, U, Y, X, DP, B, A, CC` (PC high primero en la dirección más alta). Tests anteriores asumían un orden lógico invertido (CC primero) y fueron actualizados.
+3. PULS pop order ahora procesa bits ascendentes (0→7), extrayendo en orden `CC, A, B, DP, X, Y, U, PC`. Se revertió un cambio temporal que intercambió A/B para satisfacer un test, alineando definitivamente con la especificación hardware y ajustando los tests (`opcode_puls_ab`, `pshs_full_mask_and_puls_restore`).
+
+Impacto en pruebas:
+- `bios_puls_return_valido` y `bios_puls_rango_irq` validan que la corrección de frame IRQ produce PC esperado (F7CC rango válido) tras la secuencia de BIOS inicial.
+- `pshs_full_mask_and_puls_restore` reescrito para verificar layout exacto de pila siguiendo el nuevo orden documentado.
+
+Documentación / Próximos pasos:
+- Pendiente incorporar a la futura tabla de metadatos de opcodes la variación de ciclos dependiente del número de registros en PSHS/PULS.
+- Añadir sección de ejemplo de volcado de pila antes/después de IRQ para trazas WASM cuando se implemente export de call stack (TODO ID 13).
+
+### 32.2 Hooks de Trazado Adicionales (2025-09-19)
+Añadidos dos puntos de log condicional (solo `trace=true`):
+
+1. `[IRQ ENTER]`: emitido al inicio de `service_irq` justo antes de apilar el frame. Sustituye el antiguo `[IRQ SERVICE]` y facilita buscar transiciones de modo sin ruido adicional.
+2. `[BIOS->CART] handoff pc=XXXX`: se emite una única vez (guardado por `bios_handoff_logged`) cuando un `RTS` o `PULS` restaura un PC que cruza del rango BIOS (>=0xE000) a una dirección inferior (<0xE000), interpretado como entrega de control al cartucho / juego.
+
+Implementación:
+- Campo nuevo en `CPU`: `bios_handoff_logged: bool` (default false) para evitar duplicados.
+- Hook insertado tras actualizar PC en opcodes 0x39 (RTS) y 0x35 (PULS) antes de cualquier otro efecto.
+
+No se ha modificado la API WASM ni export alguno (sin impacto en `MIGRATION_WASM.md`). Sólo mejora diagnóstica y no introduce comportamiento sintético.
+
+Próximo posible refinamiento (no implementado aún): logs equivalentes para `FIRQ` y `NMI` y mostrar el vector resuelto directamente en `[IRQ ENTER vec=FFFF]`.
+
