@@ -367,11 +367,14 @@ Identifiers `[A-Za-z_][A-Za-z0-9_]*`; ints (dec/hex). Strings with escapes. Expr
 ## 24. Opcode Appendix (Do Not Remove)
 Legend: [I]=Implemented, [NOP]=Illegal/Undefined but intentionally treated as NOP (counted implemented for coverage), [P]=Placeholder kept as NOP awaiting spec confirmation. Extended valid sub‑opcodes enumerated in `VALID_PREFIX10/11` in `cpu6809.rs` — all currently implemented.
 
-Summary (UPDATED 2025-09-18 – includes fix adding 0x14/0x15 explicit NOP handlers): 100% de los opcodes válidos implementados. Ilegales base (MC6809 no definidos):
+Summary (UPDATED 2025-09-18 – includes fix adding 0x14/0x15 explicit NOP handlers): 100% de los opcodes válidos implementados.
+
+Illegal base (MC6809 no definidos) ahora centralizados en la constante `ILLEGAL_BASE_OPCODES` (archivo `cpu6809.rs`). Tests llaman a `is_illegal_base_opcode()` para evitar divergencia. Lista actual:
 ```
-01 02 05 14 15 18 38 41 42 4B 51 52 55 5B 5E 61 62 65 6B 71 72 75 7B 87 8F C7 CD CF
+01 02 05 14 15 38 45 4E 52 61 7B 8F CF
+41 42 4B 51 55 5B 5E 62 65 6B 71 72 75 87 C7 CD
 ```
-Tratados como NOP mínimos (1 ciclo) con bandera de "illegal" (no cuentan como unimplemented). Prefijos 0x10/0x11: todos los sub‑opcodes válidos implementados; cualquier hueco fuera de `VALID_PREFIX10/11` clasificado como ilegal y no afecta cobertura.
+Todos tratados como NOP mínimos (1 ciclo) con bandera de "illegal" (no cuentan como unimplemented). Prefijos 0x10/0x11: todos los sub‑opcodes válidos implementados; cualquier hueco fuera de `VALID_PREFIX10/11` clasificado como ilegal y no afecta cobertura.
 
 RMW Direct: 00,03,04,06,07,08,09,0C,0D,0E,0F [I]
 RMW Indexed: 60,63,64,66,67,68,69,6A,6C,6D,6E,6F [I]
@@ -408,9 +411,9 @@ Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (va
 - Cuando se active: permitirá descomponer Fetch / Decode / EA / Execute / WriteBack para integrador / timing VGA futuro.
 
 ### 24.5 Clasificación Final de OpCodes
-- Lista ilegal consolidada en `INVALID_BASE_OPCODES` (ver top de `cpu6809.rs`).
-- Escaneo `tests/opcode_scan.rs` ahora reporta UNIMPL VALID COUNT = 0.
-- Cualquier cambio futuro debe actualizar simultáneamente: `INVALID_BASE_OPCODES`, esta sección y tests `opcode_validity.rs`.
+- Lista ilegal consolidada en `ILLEGAL_BASE_OPCODES` (ver `cpu6809.rs`).
+- Escaneo de cobertura unificada reporta UNIMPL VALID COUNT = 0.
+- Cualquier cambio futuro debe actualizar simultáneamente: constante, esta sección y tests (bloques unified_* en `opcodes_all.rs`).
 
 ### 24.6 Métricas Ajustadas
 - `opcode_unimplemented` sólo cuenta verdaderos opcodes válidos sin handler (actualmente 0).
