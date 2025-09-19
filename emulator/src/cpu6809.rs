@@ -795,8 +795,9 @@ impl CPU {
         self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; 0
     }
     fn service_irq(&mut self){
-        if self.trace { println!("[IRQ ENTER]"); }
         #[cfg(test)] let before_s = self.s;
+        let prev_pc = self.pc; // dirección de retorno que será apilada
+        let sp_before = self.s; // SP antes de empujar el frame
         // Correct 6809 hardware frame order for IRQ: CC,A,B,DP,X,Y,U,PC (PC pushed last).
         if !self.wai_pushed_frame {
             self.cc_e = true; // full frame
@@ -819,13 +820,14 @@ impl CPU {
         }
         // Fetch vector: 6809 stores high byte at vector address, low at +1.
         let hi = self.read8(VEC_IRQ); let lo = self.read8(VEC_IRQ+1); let vec = ((hi as u16)<<8)|lo as u16; self.pc = vec;
+        if self.trace { println!("[IRQ ENTER pc={:04X} sp={:04X} vec={:04X}]", prev_pc, sp_before, vec); }
         #[cfg(test)] { println!("[IRQ-VECTOR] fetched={:04X} (raw bytes {:02X} {:02X})", vec, hi, lo); }
         self.irq_pending = false; self.wai_halt = false; self.in_irq_handler = true;
         self.via_irq_count += 1; self.irq_count = self.irq_count.wrapping_add(1);
     }
     fn service_firq(&mut self){
-        if self.trace { println!("[FIRQ SERVICE]"); }
         #[cfg(test)] let before_s = self.s;
+        let prev_pc = self.pc; let sp_before = self.s;
         // FIRQ pushes only CC then PC (minimal frame). E flag remains 0.
         self.cc_e = false;
         let cc = self.pack_cc();
@@ -838,6 +840,7 @@ impl CPU {
             println!("[FIRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
         }
         let hi = self.read8(VEC_FIRQ); let lo = self.read8(VEC_FIRQ+1); let vec=((hi as u16)<<8)|lo as u16; self.pc = vec;
+        if self.trace { println!("[FIRQ ENTER pc={:04X} sp={:04X} vec={:04X}]", prev_pc, sp_before, vec); }
         #[cfg(test)] { println!("[FIRQ-VECTOR] fetched={:04X} (raw {:02X} {:02X})", vec, hi, lo); }
         self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
     }
