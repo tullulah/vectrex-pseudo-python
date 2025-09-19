@@ -90,7 +90,22 @@ fn opcode_subb_immediate(){ let r=run_with_cycles(|c|{c.pc=0x0F00; c.b=0x30; c.t
 #[test]
 fn opcode_stb_direct(){ let r=run_with_cycles(|c|{c.pc=0x1000; c.dp=0x00; c.b=0x42; c.test_write8(0x1000,0xD7); c.test_write8(0x1001,0xFF);}); assert_eq!(r.cycles,4); assert_eq!(r.cpu.mem[0x00FF],0x42); }
 #[test]
-fn opcode_puls_ab(){ let r=run_with_cycles(|c|{c.pc=0x1100; c.test_write8(0x1100,0x35); c.test_write8(0x1101,0x06); c.s=0x2000; c.test_write8(0x2000,0xAA); c.test_write8(0x2001,0xBB);}); assert_eq!(r.cycles,5); assert_eq!(r.cpu.b,0xAA); assert_eq!(r.cpu.a,0xBB); }
+fn opcode_puls_ab(){ let r=run_with_cycles(|c|{c.pc=0x1100; c.test_write8(0x1100,0x35); c.test_write8(0x1101,0x06); c.s=0x2000; // stack bytes for A then B (A first at lowest address)
+    c.test_write8(0x2000,0xBB); c.test_write8(0x2001,0xAA);}); assert_eq!(r.cycles,5); assert_eq!(r.cpu.a,0xBB); assert_eq!(r.cpu.b,0xAA); }
+
+#[test]
+fn opcode_ora_extended(){
+    let r=run_with_cycles(|c|{
+        c.pc=0x1200;
+        c.a=0x55; // 0101_0101
+        c.test_write8(0x1200,0xBA); // ORA extended
+        c.test_write8(0x1201,0x13); // high byte address 0x1337
+        c.test_write8(0x1202,0x37);
+        c.test_write8(0x1337,0x0F); // 0000_1111
+    });
+    assert_eq!(r.cpu.a, 0x55 | 0x0F);
+    assert!(r.cycles>0); // ya validado timing base en tabla; sólo comprobamos ejecución
+}
 
 // --------------------------------------------------
 // Casos mínimos adicionales
@@ -289,18 +304,39 @@ fn pshs_full_mask_and_puls_restore(){
     let mut cpu=CPU::default();
     cpu.pc=0x0700; // instrucción PSHS en 0x700
     cpu.a=0x11; cpu.b=0x22; cpu.dp=0x33; cpu.x=0x4A4B; cpu.y=0x5C5D; cpu.u=0x6E6F; cpu.s=0x0400;
-    // PSHS 0xFF (push CC,A,B,DP,X,Y,U,PC). PC que se empuja es PC tras leer máscara => 0x702
+    // PSHS 0xFF (máscara completa). Orden hardware de pushes (bits 7->0): PC, U, Y, X, DP, B, A, CC.
+    // PC que se empuja es PC tras leer máscara => 0x702
     cpu.test_write8(0x0700,0x34); cpu.test_write8(0x0701,0xFF); // PSHS
     // Colocamos PULS inmediatamente después
     cpu.test_write8(0x0702,0x35); cpu.test_write8(0x0703,0xFF); // PULS
     // Ejecuta PSHS
     let ok=cpu.step(); assert!(ok);
     // Layout esperado (stack descendente). push16: high luego low.
-    // Orden pushes: CC, A, B, DP, X(h,l), Y(h,l), U(h,l), PC(h,l)
+    // Dirección más alta escrita (primer byte) = PC high en 0x03FF (si S inicial era 0x0400)
+    // Orden en memoria de mayor a menor dirección: PC hi, PC lo, U hi, U lo, Y hi, Y lo, X hi, X lo, DP, B, A, CC.
     let s_after_pshs = cpu.s; assert_eq!(s_after_pshs, 0x0400 - (1+1+1+1 +2+2+2 +2) , "S tras PSHS completo");
-    let mut addr=0x0400-1; // primer byte almacenado (CC)
-    // Reconstruimos CC esperado leyendo flags preservados en CPU (no tenemos acceso a pack_cc por privacidad)
-    let cc_expected = 
+    // Recorremos desde 0x03FF hacia abajo validando el orden descrito.
+    let mut addr=0x0400-1; // primer byte almacenado (PC high)
+    // PC 0x0702
+    assert_eq!(cpu.mem[addr as usize], 0x07, "PC high en stack"); addr-=1;
+    assert_eq!(cpu.mem[addr as usize], 0x02, "PC low en stack"); addr-=1;
+    // U
+    assert_eq!(cpu.mem[addr as usize], (cpu.u>>8) as u8, "U high"); addr-=1;
+    assert_eq!(cpu.mem[addr as usize], (cpu.u & 0xFF) as u8, "U low"); addr-=1;
+    // Y
+    assert_eq!(cpu.mem[addr as usize], (cpu.y>>8) as u8, "Y high"); addr-=1;
+    assert_eq!(cpu.mem[addr as usize], (cpu.y & 0xFF) as u8, "Y low"); addr-=1;
+    // X
+    assert_eq!(cpu.mem[addr as usize], (cpu.x>>8) as u8, "X high"); addr-=1;
+    assert_eq!(cpu.mem[addr as usize], (cpu.x & 0xFF) as u8, "X low"); addr-=1;
+    // DP
+    assert_eq!(cpu.mem[addr as usize], cpu.dp, "DP byte"); addr-=1;
+    // B
+    assert_eq!(cpu.mem[addr as usize], cpu.b, "B byte"); addr-=1;
+    // A
+    assert_eq!(cpu.mem[addr as usize], cpu.a, "A byte"); addr-=1;
+    // CC (último, menor dirección)
+    let cc_expected =
         (if cpu.cc_e {0x80} else {0}) |
         (if cpu.cc_f {0x40} else {0}) |
         (if cpu.cc_h {0x20} else {0}) |
@@ -309,21 +345,7 @@ fn pshs_full_mask_and_puls_restore(){
         (if cpu.cc_z {0x04} else {0}) |
         (if cpu.cc_v {0x02} else {0}) |
         (if cpu.cc_c {0x01} else {0});
-    assert_eq!(cpu.mem[addr as usize], cc_expected); addr-=1; // A
-    assert_eq!(cpu.mem[addr as usize], 0x11); addr-=1; // B
-    assert_eq!(cpu.mem[addr as usize], 0x22); addr-=1; // DP
-    assert_eq!(cpu.mem[addr as usize], 0x33); addr-=1; // X high next (push16 high then low)
-    assert_eq!(cpu.mem[addr as usize], (cpu.x>>8) as u8, "X high"); addr-=1; // X low position actually holds high? re-evaluate after retrieval
-    // Correct sequence: after DP we expect X high then X low; we already consumed DP at addr+1
-    // Adjust: previous line should check high, next line low
-    assert_eq!(cpu.mem[addr as usize], (cpu.x & 0xFF) as u8, "X low"); addr-=1; // proceed to Y high
-    assert_eq!(cpu.mem[addr as usize], (cpu.y>>8) as u8, "Y high"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.y & 0xFF) as u8, "Y low"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.u>>8) as u8, "U high"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.u & 0xFF) as u8, "U low"); addr-=1;
-    // PC pushed value should be 0x702 (after reading mask)
-    assert_eq!(cpu.mem[addr as usize], 0x07); addr-=1; // PC high
-    assert_eq!(cpu.mem[addr as usize], 0x02); // PC low
+    assert_eq!(cpu.mem[addr as usize], cc_expected, "CC byte");
 
     // Ejecuta PULS restaurando todo
     let ok2=cpu.step(); assert!(ok2);

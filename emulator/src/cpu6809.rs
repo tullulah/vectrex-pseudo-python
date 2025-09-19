@@ -1358,6 +1358,8 @@ impl CPU {
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.b=res; self.flags_sub8(b0,m,res); if self.trace { println!("SUBB [{}] -> {:02X}", ea,res);} }
             0xB4 => { // ANDA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a &= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA ${:04X}", addr);} }
+            0xBA => { // ORA extended (faltante)
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
             0xB9 => { // ADCA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA ${:04X}", addr);} }
             0xBB => { // ADDA extended

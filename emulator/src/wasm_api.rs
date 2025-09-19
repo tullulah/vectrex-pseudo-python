@@ -15,7 +15,6 @@ struct JsMetrics {
     unimplemented: u64,
     frames: u64, // legacy (mirrors cycle_frame; retained for compatibility)
     cycle_frame: u64,
-    bios_frame: u64,
     last_intensity: u8,
     unique_unimplemented: Vec<u8>,
     cycles: u64,
@@ -51,6 +50,10 @@ struct JsMetrics {
     avg_lines_per_frame: Option<f64>,
     hot00: Vec<(u16,u64)>,
     hotff: Vec<(u16,u64)>,
+    // Input (host -> emu) snapshot
+    input_x: i16,
+    input_y: i16,
+    input_buttons: u8,
 }
 
 #[cfg(feature="wasm")]
@@ -62,13 +65,42 @@ pub struct WasmEmu { cpu: CPU }
 impl WasmEmu {
     #[wasm_bindgen(constructor)] pub fn new() -> WasmEmu { WasmEmu { cpu: CPU::default() } }
     #[wasm_bindgen] pub fn load_bios(&mut self, data:&[u8])->bool { let len=data.len(); if !(len==4096 || len==8192){return false;} self.cpu.load_bios(data); true }
-    #[wasm_bindgen] pub fn load_bin(&mut self, base:u16, data:&[u8]){ for (i,b) in data.iter().enumerate(){ let addr=base as usize + i; if addr<65536 { self.cpu.mem[addr]=*b; self.cpu.bus.mem[addr]=*b; } } }
+    #[wasm_bindgen] pub fn load_bin(&mut self, base:u16, data:&[u8]){ self.cpu.load_bin(data, base); }
     #[wasm_bindgen] pub fn reset(&mut self){ self.cpu.reset(); }
     #[wasm_bindgen] pub fn reset_stats(&mut self){ self.cpu.reset_stats(); }
     #[wasm_bindgen] pub fn step(&mut self, count:u32)->u32 { let mut ex=0; for _ in 0..count { if !self.cpu.step(){ break; } ex +=1; } ex }
-    #[wasm_bindgen] pub fn run_until_wait_recal(&mut self, max_instr:u32)->u32 { let start=self.cpu.bios_frame; let mut ex=0; while ex<max_instr { if !self.cpu.step(){ break; } ex+=1; if self.cpu.bios_frame != start { break; } } ex }
-    #[wasm_bindgen] pub fn registers_json(&self)->String { format!("{{\"a\":{},\"b\":{},\"dp\":{},\"x\":{},\"y\":{},\"u\":{},\"s\":{},\"pc\":{},\"cycles\":{},\"frame_count\":{},\"cycle_frame\":{},\"bios_frame\":{},\"last_intensity\":{} }}", self.cpu.a,self.cpu.b,self.cpu.dp,self.cpu.x,self.cpu.y,self.cpu.u,self.cpu.s,self.cpu.pc,self.cpu.cycles,self.cpu.frame_count,self.cpu.cycle_frame,self.cpu.bios_frame,self.cpu.last_intensity) }
-    #[wasm_bindgen] pub fn memory_ptr(&self)->*const u8 { self.cpu.mem.as_ptr() }
+    /// Ejecuta instrucciones hasta que el frame_count cambie (heurística WAIT_RECAL) o se alcance el límite.
+    /// Devuelve el número de instrucciones ejecutadas. Reintroducido tras refactor.
+    #[wasm_bindgen] pub fn run_until_wait_recal(&mut self, max_instructions: u32) -> u32 {
+        let start = self.cpu.frame_count;
+        let mut executed = 0u32;
+        while executed < max_instructions {
+            if !self.cpu.step() { break; }
+            executed += 1;
+            if self.cpu.frame_count != start { break; }
+        }
+        executed
+    }
+    #[wasm_bindgen] pub fn registers_json(&self)->String { format!("{{\"a\":{},\"b\":{},\"dp\":{},\"x\":{},\"y\":{},\"u\":{},\"s\":{},\"pc\":{},\"cycles\":{},\"frame_count\":{},\"cycle_frame\":{},\"last_intensity\":{} }}", self.cpu.a,self.cpu.b,self.cpu.dp,self.cpu.x,self.cpu.y,self.cpu.u,self.cpu.s,self.cpu.pc,self.cpu.cycles,self.cpu.frame_count,self.cpu.cycle_frame,self.cpu.last_intensity) }
+    // Return pointer to unified bus memory so BIOS region (written via Bus) is visible to JS.
+    #[wasm_bindgen] pub fn memory_ptr(&self)->*const u8 { self.cpu.bus.mem.as_ptr() }
+    /// Read a single byte from unified bus memory (debug helper for JS console).
+    #[wasm_bindgen] pub fn read_mem8(&self, addr: u16) -> u8 { self.cpu.bus.mem[addr as usize] }
+    /// Return the base address where BIOS was loaded (F000 for 4K, E000 for 8K) or default if not present yet.
+    #[wasm_bindgen] pub fn bios_base(&self) -> u16 { self.cpu.bus.test_bios_base() }
+    // ---- Trace API ----
+    #[wasm_bindgen] pub fn enable_trace(&mut self, en: bool, limit: u32) { self.cpu.trace_enabled = en; if en { self.cpu.trace_limit = limit.min(200_000) as usize; } }
+    #[wasm_bindgen] pub fn trace_clear(&mut self) { self.cpu.trace_buf.clear(); }
+    #[wasm_bindgen] pub fn trace_len(&self) -> u32 { self.cpu.trace_buf.len() as u32 }
+    #[wasm_bindgen] pub fn trace_log_json(&self) -> String {
+    use serde::Serialize; #[derive(Serialize)] struct Row { pc:u16, op:u8, sub:u8, hex:String, m:&'static str, a:u8,b:u8,x:u16,y:u16,u:u16,s:u16,dp:u8, operand: Option<String>, repeat:u32, flags:u8, cycles:u32, illegal:bool, depth:u16 }
+        let mut out = Vec::with_capacity(self.cpu.trace_buf.len());
+        for e in &self.cpu.trace_buf {
+            let hex = if e.sub!=0 && (e.opcode==0x10 || e.opcode==0x11) { format!("{:02X} {:02X}", e.opcode, e.sub) } else { format!("{:02X}", e.opcode) };
+            out.push(Row{ pc:e.pc, op:e.opcode, sub:e.sub, hex, m: crate::cpu6809::opcode_mnemonic(e.opcode, e.sub), a:e.a,b:e.b,x:e.x,y:e.y,u:e.u,s:e.s,dp:e.dp, operand: e.op_str.clone(), repeat: e.loop_count, flags:e.flags, cycles:e.cycles, illegal:e.illegal, depth:e.call_depth });
+        }
+        serde_json::to_string(&out).unwrap_or_else(|_|"[]".into())
+    }
     #[wasm_bindgen] pub fn metrics_json(&self)->String {
         let m = self.cpu.opcode_metrics();
         // Compute average cycles per frame if we have at least 1 frame
@@ -83,7 +115,7 @@ impl WasmEmu {
             unimplemented: m.unimplemented,
             frames: self.cpu.frame_count,
             cycle_frame: self.cpu.cycle_frame,
-            bios_frame: self.cpu.bios_frame,
+            
             last_intensity: self.cpu.last_intensity,
             unique_unimplemented: m.unique_unimplemented,
             cycles: self.cpu.cycles,
@@ -120,6 +152,9 @@ impl WasmEmu {
             avg_lines_per_frame: if self.cpu.lines_per_frame_samples>0 { Some(self.cpu.lines_per_frame_accum as f64 / self.cpu.lines_per_frame_samples as f64) } else { None },
             hot00: self.cpu.hot00.iter().copied().filter(|(_,c)| *c>0).collect(),
             hotff: self.cpu.hotff.iter().copied().filter(|(_,c)| *c>0).collect(),
+            input_x: self.cpu.input_state.x,
+            input_y: self.cpu.input_state.y,
+            input_buttons: self.cpu.input_state.buttons,
         };
         serde_json::to_string(&js).unwrap_or_else(|_|"{}".into())
     }
@@ -134,6 +169,17 @@ impl WasmEmu {
         out.push(']');
         out
     }
+    // --- BIOS call stack export (TODO 13) ---
+    /// Devuelve las últimas llamadas BIOS registradas (máx 256) en formato JSON array de strings "FFFF:LABEL".
+    #[wasm_bindgen] pub fn bios_calls_json(&self) -> String {
+        if self.cpu.bios_calls.is_empty() { return "[]".into(); }
+        // Limitar a las últimas 256 para no crecer sin límite en sesiones largas.
+        let slice = if self.cpu.bios_calls.len() > 256 { &self.cpu.bios_calls[self.cpu.bios_calls.len()-256..] } else { &self.cpu.bios_calls[..] };
+        // Exportar simple array de strings (sin envolver en objetos) para consumo directo.
+        serde_json::to_string(slice).unwrap_or_else(|_|"[]".into())
+    }
+    /// Limpia el buffer de llamadas BIOS (útil en depuración / reinicios parciales en la UI).
+    #[wasm_bindgen] pub fn clear_bios_calls(&mut self){ self.cpu.bios_calls.clear(); }
         // Non-draining JSON view (does not clear internal buffer)
         #[wasm_bindgen] pub fn integrator_segments_peek_json(&self)->String {
             let segs = self.cpu.integrator.segments_slice();
@@ -191,4 +237,23 @@ impl WasmEmu {
     #[wasm_bindgen] pub fn reset_integrator_segments(&mut self) { self.cpu.integrator.segments.clear(); }
     #[wasm_bindgen] pub fn set_integrator_auto_drain(&mut self, en: bool) { self.cpu.integrator_auto_drain = en; }
     #[wasm_bindgen] pub fn integrator_auto_drain(&self) -> bool { self.cpu.integrator_auto_drain }
+    // --- Input API ---
+    /// Actualiza estado de entrada (joystick analógico -128..127, botones bits 0..3)
+    #[wasm_bindgen] pub fn set_input_state(&mut self, x: i16, y: i16, buttons: u8) {
+        let clamped_x = x.clamp(-128,127);
+        let clamped_y = y.clamp(-128,127);
+        self.cpu.input_state.x = clamped_x;
+        self.cpu.input_state.y = clamped_y;
+        self.cpu.input_state.buttons = buttons & 0x0F; // solo 4 botones
+        // Map simple: escribir valores en RAM fija si BIOS los sondea (provisional 0x00F0..0x00F2)
+        // 0x00F0: X (unsigned bias 128)
+        // 0x00F1: Y (unsigned bias 128)
+        // 0x00F2: botones (bit0..bit3)
+        let base = 0x00F0u16;
+        let bx = (clamped_x as i32 + 128) as u8;
+        let by = (clamped_y as i32 + 128) as u8;
+        self.cpu.mem[base as usize] = bx; self.cpu.bus.mem[base as usize] = bx;
+        self.cpu.mem[(base+1) as usize] = by; self.cpu.bus.mem[(base+1) as usize] = by;
+        self.cpu.mem[(base+2) as usize] = self.cpu.input_state.buttons; self.cpu.bus.mem[(base+2) as usize] = self.cpu.input_state.buttons;
+    }
 }
