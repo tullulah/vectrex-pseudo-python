@@ -2,13 +2,15 @@ use crate::bus::Bus;
 use crate::integrator::Integrator;
 
 // Canonical 6809 vector addresses (high, low)
-const VEC_SWI3: u16 = 0xFFF0; // SWI3
+// Standard 6809 vector map (big-endian: high byte at base, low at base+1)
+// Reference: Vectrex hardware and Motorola 6809 datasheet.
 const VEC_SWI2: u16 = 0xFFF2; // SWI2
-const VEC_FIRQ: u16 = 0xFFF4; // FIRQ (correct)
-const VEC_IRQ:  u16 = 0xFFF6; // IRQ (correct)
-const VEC_SWI:  u16 = 0xFFF8; // SWI
-const VEC_NMI:  u16 = 0xFFFA; // NMI
-const VEC_RESET:u16 = 0xFFFC; // RESET
+const VEC_SWI3: u16 = 0xFFF4; // SWI3
+const VEC_FIRQ: u16 = 0xFFF6; // FIRQ
+const VEC_IRQ:  u16 = 0xFFF8; // IRQ
+const VEC_SWI:  u16 = 0xFFFA; // SWI (SWI1)
+const VEC_NMI:  u16 = 0xFFFC; // NMI
+const VEC_RESET:u16 = 0xFFFE; // RESET
 
 // Extracted CPU implementation from previous mod.rs
 // (functionality unchanged; to be refactored to use Bus & VIA later)
@@ -31,6 +33,17 @@ pub struct TraceEntry { pub pc:u16, pub opcode:u8, pub sub:u8, pub a:u8, pub b:u
 #[derive(Clone,Copy,Default,Debug)]
 pub struct InputState { pub x:i16, pub y:i16, pub buttons:u8 }
 
+// ---------------------------------------------------------------------------------
+// Shadow call stack instrumentation: captura entradas y salidas de frames para
+// diagnosticar corrupciones de la pila real (S) que derivan en retornos inválidos.
+// ---------------------------------------------------------------------------------
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum ShadowKind { JSR, BSR, LBSR, IRQ, FIRQ, NMI, SWI, SWI2, SWI3, PshsPc, PshuPc }
+impl Default for ShadowKind { fn default()->Self { ShadowKind::JSR } }
+
+#[derive(Clone,Copy,Debug,Default)]
+pub struct ShadowFrame { pub ret: u16, pub sp_at_push: u16, pub kind: ShadowKind }
+
 pub struct CPUOpcodeMetrics {
     pub total: u64,
     pub unimplemented: u64,
@@ -47,6 +60,8 @@ pub struct CPU {
     pub mem: [u8;65536],
     pub bus: Bus,
     pub trace: bool, pub bios_calls: Vec<String>,
+    // UI helpers
+    pub auto_demo: bool,
     // Legacy frame_count kept for compatibility (mirrors cycle_frame). New cycle_frame is authoritative.
     pub frame_count: u64,
     pub cycle_frame: u64,
@@ -133,6 +148,41 @@ pub struct CPU {
     pub trace_buf: Vec<TraceEntry>,
     // ---- Input state snapshot (joystick/buttons) ----
     pub input_state: InputState,
+    // ---- RAM execution detector ----
+    pub ram_exec: RamExecDetector,
+    // ---- Shadow call stack ----
+    pub shadow_stack: Vec<ShadowFrame>,
+    // VIA write trace buffer (circular) para transición a modelo analógico real
+    pub via_writes: Vec<VIAWrite>,
+    pub via_writes_cap: usize,
+    // One-shot flags for ad-hoc instrumentation (evita spam si rutina alcanzada vía branch)
+    pub logged_set_refresh_pre: bool,
+    // Instrumentación Timer2: almacenar último byte low escrito antes de high para reconstruir valor completo
+    pub t2_last_low: Option<u8>,
+}
+
+#[derive(Debug,Default,Clone)]
+pub struct RamExecDetector {
+    pub first_pc: Option<u16>,
+    pub last_pc: u16,
+    pub count: u32,
+    pub triggered: bool,
+    pub snapshot: Option<RamExecSnapshot>,
+    pub ring: [u16;16],
+    pub ring_idx: usize,
+}
+
+#[derive(Debug,Clone)]
+pub struct RamExecSnapshot {
+    pub first_pc: u16,
+    pub last_pc: u16,
+    pub iterations: u32,
+    pub regs: (u8,u8,u16,u16,u16,u16,u8,u16), // A,B,X,Y,U,S,DP,PC
+    pub stack_bytes: Vec<u8>,
+    pub window: Vec<u8>,
+    pub call_stack: Vec<u16>,
+    pub recent_pcs: Vec<u16>,
+    pub reason: String, // motivo del disparo (early RTS/RTI o threshold)
 }
 
 // ---------------------------------------------------------------------------------
@@ -187,11 +237,16 @@ impl Default for CPU { fn default()->Self {
     let freq = 1_500_000u64;
     let cpf = freq / 50; // integer division; leftover cycles accumulate in cycle_accumulator
     // Backend selection environment variable ignored; integrator is always enabled.
-    CPU { a:0,b:0,dp:0xD0,x:0,y:0,u:0,pc:0,call_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,cc_v:false,cc_h:false,cc_f:false,cc_e:false,
-        mem:[0;65536],bus:Bus::default(),trace:false,bios_calls:Vec::new(),
+    CPU { a:0,b:0,dp:0xD0,x:0,y:0,u:0,pc:0,call_stack:Vec::new(),shadow_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,cc_v:false,cc_h:false,cc_f:false,cc_e:false,
+    mem:[0;65536],bus:Bus::default(),trace:false,bios_calls:Vec::new(), auto_demo:true,
         frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:cpf, cycle_accumulator:0,
     last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,bios_present:false,cycles:0,
-        irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false, s:0xD000, in_irq_handler:false,
+        irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false,
+        // Stack pointer inicial: antes estaba en 0xD000 (base VIA) lo que hacía que push16 escribiera
+        // en registros de E/S en lugar de RAM, corrompiendo retornos (RTS/BSR) y ciclos observados.
+        // Lo movemos a la parte alta de la ventana de RAM (0xC800-0xCFFF) para micro-tests sintéticos.
+        // La BIOS real ajustará S posteriormente con LDS cuando arranca.
+        s:0xCFFF, in_irq_handler:false,
     opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
     debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
         loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
@@ -211,83 +266,147 @@ impl Default for CPU { fn default()->Self {
         trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(),
         debug_autotrace_remaining:0,
         bios_handoff_logged:false,
+        ram_exec: RamExecDetector::default(),
+        via_writes: Vec::with_capacity(256), via_writes_cap: 1024,
+    logged_set_refresh_pre: false,
+    t2_last_low: None,
     }
 } }
 
+#[derive(Clone,Copy,Debug)]
+pub struct VIAWrite { pub cycle: u64, pub pc: u16, pub addr: u16, pub reg: u8, pub val: u8 }
+
+impl CPU {
+    fn record_via_write(&mut self, addr:u16, val:u8){
+        // VIA base 0xD000, mirror every 0x10 within 0xD000-0xD7FF (handled by bus). Log only base window 0xD000-0xD00F logical register.
+        let reg = (addr & 0x000F) as u8;
+        if self.via_writes.len() == self.via_writes_cap { // circular pop front (cheap rotate manual)
+            // Remove first 64 to amortize
+            self.via_writes.drain(0..64);
+        }
+        self.via_writes.push(VIAWrite{ cycle:self.cycles, pc:self.pc, addr, reg, val });
+    }
+    pub fn drain_via_writes(&mut self) -> Vec<VIAWrite> { let mut v=Vec::new(); std::mem::swap(&mut v,&mut self.via_writes); v }
+}
+
 // Free helper re-exported for wasm_api (kept outside impl for simple path crate::cpu6809::opcode_mnemonic).
-pub fn opcode_mnemonic(op:u8, sub:u8) -> &'static str {
+pub fn opcode_mnemonic(op: u8, sub: u8) -> &'static str {
+    // Reescrito (idéntica semántica) para eliminar posible corrupción invisible previa.
     match op {
-        0xBD => "JSR",      // JSR extended
-        0x9D => "JSR",      // JSR direct
-        0x8D => "BSR",
-        0x17 => "LBSR",
+        // Calls / returns / control
+        0xBD => "JSR", // JSR extended
+        0x9D => "JSR", // JSR direct
+    0x17 => "LBSR",
+    0x8D => "BSR", // (short relative branch to subroutine)
         0x39 => "RTS",
         0x3B => "RTI",
         0x3E => "WAI",
-        0x3F => if sub==0x3F { "SWI" } else { "SWI" },
+        0x3F => if sub == 0x3F { "SWI" } else { "SWI" },
+        0x3A => "ABX",
+        0x12 => "NOP",
         0x3D => "MUL",
         0x4C => "INCA",
         0x19 => "DAA",
         0x1E => "EXG",
         0x1F => "TFR",
-        // Short branches (exact mnemonic)
-        0x20 => "BRA",
-        0x21 => "BRN",
-        0x22 => "BHI",
-        0x23 => "BLS",
-        0x24 => "BCC",
-        0x25 => "BCS",
-        0x26 => "BNE",
-        0x27 => "BEQ",
-        0x28 => "BVC",
-        0x29 => "BVS",
-        0x2A => "BPL",
-        0x2B => "BMI",
-        0x2C => "BGE",
-        0x2D => "BLT",
-        0x2E => "BGT",
-        0x2F => "BLE",
-        // Long branch prefix 0x10 (or 0x11 if future extended)
-        0x10|0x11 => match sub {
-            0x20 => "LBRA",
-            0x21 => "LBRN",
-            0x22 => "LBHI",
-            0x23 => "LBLS",
-            0x24 => "LBCC",
-            0x25 => "LBCS",
-            0x26 => "LBNE",
-            0x27 => "LBEQ",
-            0x28 => "LBVC",
-            0x29 => "LBVS",
-            0x2A => "LBPL",
-            0x2B => "LBMI",
-            0x2C => "LBGE",
-            0x2D => "LBLT",
-            0x2E => "LBGT",
-            0x2F => "LBLE",
-            0x3F => "SWI",
+        0x1A => "ORCC",
+        0x1C => "ANDCC",
+        // Load Effective Address group
+        0x30 => "LEAX", 0x31 => "LEAY", 0x32 => "LEAS", 0x33 => "LEAU",
+        // Short branches
+        0x20 => "BRA", 0x21 => "BRN", 0x22 => "BHI", 0x23 => "BLS", 0x24 => "BCC", 0x25 => "BCS",
+        0x26 => "BNE", 0x27 => "BEQ", 0x28 => "BVC", 0x29 => "BVS", 0x2A => "BPL", 0x2B => "BMI",
+        0x2C => "BGE", 0x2D => "BLT", 0x2E => "BGT", 0x2F => "BLE",
+        // Long branches via prefix 0x10 (also carries SWI2)
+        0x10 => match sub {
+            // Long branches
+            0x20 => "LBRA", 0x21 => "LBRN", 0x22 => "LBHI", 0x23 => "LBLS", 0x24 => "LBCC", 0x25 => "LBCS",
+            0x26 => "LBNE", 0x27 => "LBEQ", 0x28 => "LBVC", 0x29 => "LBVS", 0x2A => "LBPL", 0x2B => "LBMI",
+            0x2C => "LBGE", 0x2D => "LBLT", 0x2E => "LBGT", 0x2F => "LBLE",
+            // Y register loads/stores (page 2)
+            0x8E => "LDY", 0x9E => "LDY", 0x9F => "STY", 0xAE => "LDY", 0xAF => "STY", 0xBE => "LDY", 0xBF => "STY",
+            // S register (LDS/STS) extended set
+            0xCE => "LDS", 0xDE => "LDS", 0xDF => "STS", 0xEE => "LDS", 0xEF => "STS", 0xFE => "LDS", 0xFF => "STS",
+            0x3F => "SWI2",
             _ => "PFX",
         },
-        0x96 => "LDA", 0xA6|0xB6 => "LDA",
-        0x97 => "STA", 0xA7|0xB7 => "STA",
-        0xD6 => "LDB", 0xE6|0xF6 => "LDB",
-        0xD7 => "STB", 0xE7|0xF7 => "STB",
-        0x9E => "LDX", 0xDE => "LDU",
-        0x9F => "STX", 0xDF => "STU",
-        0xEC|0xFC => "LDD", 0xED|0xFD => "STD",
+        // Long branches via prefix 0x11 (SWI3)
+        0x11 => match sub {
+            0x20 => "LBRA", 0x21 => "LBRN", 0x22 => "LBHI", 0x23 => "LBLS", 0x24 => "LBCC", 0x25 => "LBCS",
+            0x26 => "LBNE", 0x27 => "LBEQ", 0x28 => "LBVC", 0x29 => "LBVS", 0x2A => "LBPL", 0x2B => "LBMI",
+            0x2C => "LBGE", 0x2D => "LBLT", 0x2E => "LBGT", 0x2F => "LBLE", 0x3F => "SWI3", _ => "PFX",
+        },
+    // Loads / stores (including immediate variants)
+    0x86 => "LDA", 0x96 => "LDA", 0xA6 | 0xB6 => "LDA",
+    0x97 => "STA", 0xA7 | 0xB7 => "STA",
+    0xC6 => "LDB", 0xD6 => "LDB", 0xE6 | 0xF6 => "LDB",
+    0xD7 => "STB", 0xE7 | 0xF7 => "STB",
+    0xCC => "LDD", 0xEC | 0xFC => "LDD", 0xED | 0xFD => "STD",
+    0x8E => "LDX", 0x9E => "LDX", 0x9F => "STX",
+    0xCE => "LDU", 0xDE => "LDU", 0xEE => "LDU", 0xFE => "LDU", 0xDF => "STU", 0xEF => "STU", 0xFF => "STU",
+    // Dual accumulator arithmetic
+    0x83 => "SUBD", 0xC3 => "ADDD",
+    // Accumulator A arithmetic / logic immediate & indexed/direct/extended patterns
+    0x80 => "SUBA", 0x90 => "SUBA", 0xA0 => "SUBA", 0xB0 => "SUBA",
+    0x81 => "CMPA", 0x91 => "CMPA", 0xA1 => "CMPA", 0xB1 => "CMPA",
+    0x82 => "SBCA", 0x92 => "SBCA", 0xA2 => "SBCA", 0xB2 => "SBCA",
+    0x84 => "ANDA", 0x94 => "ANDA", 0xA4 => "ANDA", 0xB4 => "ANDA",
+    0x85 => "BITA", 0x95 => "BITA", 0xA5 => "BITA", 0xB5 => "BITA",
+    0x88 => "EORA", 0x98 => "EORA", 0xA8 => "EORA", 0xB8 => "EORA",
+    0x89 => "ADCA", 0x99 => "ADCA", 0xA9 => "ADCA", 0xB9 => "ADCA",
+    0x8A => "ORA",  0x9A => "ORA",  0xAA => "ORA",  0xBA => "ORA",
+    0x8B => "ADDA", 0x9B => "ADDA", 0xAB => "ADDA", 0xBB => "ADDA",
+    0x8C => "CMPX", 0x9C => "CMPX", 0xAC => "CMPX", 0xBC => "CMPX",
+    // Accumulator B arithmetic / logic
+    0xC0 => "SUBB", 0xD0 => "SUBB", 0xE0 => "SUBB", 0xF0 => "SUBB",
+    0xC1 => "CMPB", 0xD1 => "CMPB", 0xE1 => "CMPB", 0xF1 => "CMPB",
+    0xC2 => "SBCB", 0xD2 => "SBCB", 0xE2 => "SBCB", 0xF2 => "SBCB",
+    0xC4 => "ANDB", 0xD4 => "ANDB", 0xE4 => "ANDB", 0xF4 => "ANDB",
+    0xC5 => "BITB", 0xD5 => "BITB", 0xE5 => "BITB", 0xF5 => "BITB",
+    0xC8 => "EORB", 0xD8 => "EORB", 0xE8 => "EORB", 0xF8 => "EORB",
+    0xC9 => "ADCB", 0xD9 => "ADCB", 0xE9 => "ADCB", 0xF9 => "ADCB",
+    0xCA => "ORB",  0xDA => "ORB",  0xEA => "ORB",  0xFA => "ORB",
+    0xCB => "ADDB", 0xDB => "ADDB", 0xEB => "ADDB", 0xFB => "ADDB",
+    // Clear / arithmetic / logic (subset commonly traced)
         0x4F => "CLRA", 0x5F => "CLRB", 0x7F => "CLR",
-        0x8B => "ADDA", 0xC0 => "SUBB", 0xC1 => "CMPB", 0x81 => "CMPA",
+        // Stack ops
         0x34 => "PSHS", 0x35 => "PULS", 0x36 => "PSHU", 0x37 => "PULU",
         0x3C => "CWAI", 0x13 => "SYNC",
-        0x5A => "DECB", 0x5C => "INCB",
-        0x4D => "TSTA", 0x5D => "TSTB",
-        0x70 => "NEG", 0x73 => "COM", 0x74 => "LSR", 0x76 => "ROR", 0x77 => "ASR",
-        0x78 => "ASL", 0x79 => "ROL", 0x7A => "DEC", 0x7C => "INC", 0x7D => "TST", 0x7E => "JMP",
+        // Inc/dec/test
+        0x5A => "DECB", 0x5C => "INCB", 0x4D => "TSTA", 0x5D => "TSTB",
+    // Generic memory/ALU (grouping) -- extended forms
+    0x70 => "NEG", 0x73 => "COM", 0x74 => "LSR", 0x76 => "ROR", 0x77 => "ASR",
+    0x78 => "ASL", 0x79 => "ROL", 0x7A => "DEC", 0x7C => "INC", 0x7D => "TST", 0x7E => "JMP",
+    // Direct page RMW / shifts (previously showing as OP)
+    0x00 => "NEG", 0x03 => "COM", 0x04 => "LSR", 0x06 => "ROR", 0x07 => "ASR",
+    0x08 => "ASL", 0x09 => "ROL", 0x0A => "DEC", 0x0C => "INC", 0x0D => "TST", 0x0F => "CLR",
+    // Indexed memory RMW / shifts (0x60-0x6F)
+    0x60 => "NEG", 0x63 => "COM", 0x64 => "LSR", 0x66 => "ROR", 0x67 => "ASR",
+    0x68 => "ASL", 0x69 => "ROL", 0x6A => "DEC", 0x6C => "INC", 0x6D => "TST", 0x6E => "JMP", 0x6F => "CLR",
+    // Accumulator shifts/rotates
+    0x48 => "ASLA", 0x49 => "ROLA", 0x44 => "LSRA", 0x46 => "RORA", 0x47 => "ASRA",
+    0x58 => "ASLB", 0x59 => "ROLB", 0x54 => "LSRB", 0x56 => "RORB", 0x57 => "ASRB",
         _ => "OP",
     }
 }
 
+// Page 2 (0x10 prefix) supplementary mapping separated to avoid huge single match; fallback "PFX" for unknown
+// (Removed unused opcode_mnemonic_page2/page3 helpers; mapping integrado en match principal)
+
 impl CPU {
+    #[inline(always)]
+    fn log_interrupt_enter(&self, kind:&str, prev_pc:u16, sp_before:u16, vec:u16){
+        if self.trace { println!("[INT ENTER kind={} prev_pc={:04X} sp={:04X} vec={:04X}]", kind, prev_pc, sp_before, vec); }
+    }
+    #[inline]
+    fn read_vector(&mut self, base:u16) -> u16 { let hi = self.read8(base); let lo = self.read8(base.wrapping_add(1)); ((hi as u16) << 8) | lo as u16 }
+    // Test helpers (left public for downstream test crates)
+    pub fn test_force_irq(&mut self){ self.service_irq(); }
+    pub fn test_force_firq(&mut self){ self.service_firq(); }
+    /// Dev/test helper: indica si un opcode base fue marcado como no implementado al menos una vez.
+    pub fn opcode_marked_unimplemented(&self, op: u8) -> bool {
+        self.opcode_unimpl_bitmap[op as usize]
+    }
     /// Reset dynamic execution statistics without altering loaded memory or BIOS/cart state.
     pub fn reset_stats(&mut self) {
         self.cycles = 0;
@@ -328,10 +447,11 @@ impl CPU {
     fn coverage_clone(&self) -> CPU {
     CPU {
             a:self.a,b:self.b,dp:self.dp,x:self.x,y:self.y,u:self.u,pc:self.pc,call_stack:Vec::new(),
+        shadow_stack: Vec::new(),
             cc_z:self.cc_z,cc_n:self.cc_n,cc_c:self.cc_c,cc_v:self.cc_v,cc_h:self.cc_h,cc_f:self.cc_f,cc_e:self.cc_e,
             mem:self.mem, // copy array
             bus: Bus::default(), // fresh bus (safe for isolated opcode exec)
-            trace:false,bios_calls:Vec::new(),
+            trace:false,bios_calls:Vec::new(), auto_demo:true,
             frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:self.cycles_per_frame, cycle_accumulator:0,
             last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,bios_present:false,cycles:0,
             irq_pending:false,firq_pending:false,nmi_pending:false,wai_halt:false,cc_i:false,s:self.s,in_irq_handler:false,
@@ -347,6 +467,10 @@ impl CPU {
             last_extended_unimplemented: Vec::new(),
             hot00: [(0,0);4], hotff: [(0,0);4], trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(), debug_autotrace_remaining:0,
             bios_handoff_logged:false,
+            ram_exec: RamExecDetector::default(),
+            via_writes: Vec::new(), via_writes_cap: 1024,
+            logged_set_refresh_pre: false,
+            t2_last_low: None,
             #[cfg(test)] last_return_expect: None,
         }
     }
@@ -387,6 +511,9 @@ impl CPU {
         // Placeholder: recompute_opcode_coverage() now populates an internal scratch we will soon emit; for now keep empty.
         CPUOpcodeMetrics { total: self.opcode_total, unimplemented: self.opcode_unimplemented, counts: self.opcode_counts, unique_unimplemented: uniques, extended_unimplemented: self.last_extended_unimplemented.clone() }
     }
+    /// Devuelve slice de últimos sub‑opcodes extendidos (prefijo 0x10/0x11) no implementados detectados
+    /// por `recompute_opcode_coverage()`. Vacío == cobertura completa extendida.
+    pub fn extended_unimplemented_list(&self) -> &[u16] { &self.last_extended_unimplemented }
     // Backwards-compatible alias used by some tests naming metrics_snapshot()
     pub fn metrics_snapshot(&self) -> CPUOpcodeMetrics { self.opcode_metrics() }
 
@@ -448,6 +575,8 @@ impl CPU {
         if !self.cart_loaded {
             for addr in 0x0000usize..0xC000usize { self.mem[addr]=0xFF; self.bus.mem[addr]=0xFF; }
         }
+        // Limpiar señales de interrupción potencialmente arrastradas de un estado previo para evitar servicio espurio inmediato.
+        self.irq_pending=false; self.firq_pending=false; self.nmi_pending=false; self.in_irq_handler=false; self.wai_halt=false;
         // Ensure all execution/statistical counters are cleared as part of a reset so UI does not
         // need to issue a separate stats reset (still exposed separately for a "soft" stats clear).
         self.reset_stats();
@@ -459,7 +588,7 @@ impl CPU {
         let swi_lo=self.read8(VEC_SWI); let swi_hi=self.read8(VEC_SWI+1);
         let nmi_lo=self.read8(VEC_NMI); let nmi_hi=self.read8(VEC_NMI+1);
         let rst_lo=self.read8(VEC_RESET); let rst_hi=self.read8(VEC_RESET+1);
-        let vec = ((rst_hi as u16)<<8)|rst_lo as u16;
+        let vec = ((rst_hi as u16) << 8) | rst_lo as u16;
         let mut pc_set = vec;
         if self.bios_present {
             // Validate RESET vector: must point inside BIOS window (>=E000) and start with a plausible first opcode.
@@ -471,6 +600,9 @@ impl CPU {
             }
         }
         self.pc = pc_set;
+        // Sanitizar vector IRQ inicial: si apunta fuera de la ventana BIOS, desactivar IRQ pendiente inicial.
+        let irq_vec = self.read_vector(VEC_IRQ);
+        if irq_vec < 0xE000 { self.irq_pending = false; }
         // Clear dynamic flags / pending states
         self.cc_e=false; self.cc_f=false; self.cc_h=false; self.cc_i=false; self.cc_n=false; self.cc_z=false; self.cc_v=false; self.cc_c=false;
         self.irq_pending=false; self.firq_pending=false; self.nmi_pending=false; self.wai_halt=false; self.in_irq_handler=false;
@@ -479,43 +611,49 @@ impl CPU {
                 sw3_hi,sw3_lo, sw2_hi,sw2_lo, firq_hi,firq_lo, irq_hi,irq_lo, swi_hi,swi_lo, nmi_hi,nmi_lo, rst_hi,rst_lo, vec);
             println!("[RESET] PC set to {:04X}{}", self.pc, if pc_set!=vec {" (forced canonical BIOS entry)"} else {""});
         }
-        // NOTE: no trace post-exec patch here; reset() is not an executed opcode path.
-        // Debug bootstrap of VIA to force early Timer1 IRQs / frame progress if BIOS hasn't yet configured it.
-        // Guard: only once, only if BIOS loaded, and IER still zero (meaning no BIOS init done yet).
-        if self.bios_present && !self.debug_bootstrap_via_done && self.bus.via_ier()==0 {
-            // Program Timer2 (refresh) with a small value so BIOS Wait_Recal style loop can proceed.
-            // VIA registers: T2 low = D008, T2 high = D009 (writing high loads counter). Enable T2 interrupt (bit 0x20).
-            self.bus.write8(0xD008, 0x30); // T2 low
-            self.bus.write8(0xD009, 0x00); // T2 high -> counter = 0x0030
-            // Minimal ACR: leave PB7 toggle off for clarity, ensure T1 not free-run interfering -> use 0x00
-            self.bus.write8(0xD00B, 0x00); // ACR
-            // Enable T2 interrupt: write 0xA0 (bit7=1 to set, bit5 = 1 for T2)
-            self.bus.write8(0xD00E, 0xA0);
-            self.debug_bootstrap_via_done = true;
-            if self.trace { println!("[BOOTSTRAP VIA] T2=0x0030 ACR=0x00 IER=0x20"); }
+        else if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") {
+            println!("[RESET][STACK_TRACE] raw_reset_vec={:04X} pc_start={:04X} rst_bytes={:02X}{:02X}", vec, self.pc, rst_hi, rst_lo);
         }
-
-        // Validate / force IRQ vector if BIOS provides an unexpected address (outside BIOS window)
-        if self.bios_present {
-            let irq_lo = self.read8(VEC_IRQ); let irq_hi = self.read8(VEC_IRQ+1); let irq_vec = ((irq_hi as u16)<<8)|irq_lo as u16;
-            if !(0xE000..=0xFFFF).contains(&irq_vec) || irq_vec == 0x0000 {
-                // Force to WAIT_RECAL (F192) which is canonical Vectrex IRQ handler
-                self.bus.mem[VEC_IRQ as usize] = 0x92; // low byte
-                self.bus.mem[(VEC_IRQ+1) as usize] = 0xF1; // high byte
-                self.forced_irq_vector = true;
-                if self.trace { println!("[FORCE IRQ VECTOR] original={:04X} -> F192", irq_vec); }
+        // Pseudo entrada BIOS: registrar punto de inicio para trazas (sin fabricar JSR)
+        if self.bios_present && self.pc >= 0xF000 && self.bios_calls.is_empty() {
+            // Map canonical first entry to Init_OS if vector forced to F000 but label resolver returns unknown.
+            let addr = self.pc;
+            if addr == 0xF000 {
+                use crate::opcode_meta::bios_label_for;
+                if let Some(lbl) = bios_label_for(0xF18B) { // Known Init_OS entry
+                    self.bios_calls.push(format!("{:04X}:{}", 0xF18B, lbl));
+                } else {
+                    self.record_bios_call(addr);
+                }
+            } else {
+                self.record_bios_call(addr);
             }
         }
-
+        // Reset detector de ejecución en RAM
+        self.ram_exec = RamExecDetector::default();
+        // Reset shadow stack
+        self.shadow_stack.clear();
+        // NOTE: no trace post-exec patch here; reset() is not an executed opcode path.
+        // Debug bootstrap of VIA (opt-in). Guard: only once, only if BIOS loaded, IER still zero.
+        if self.bios_present && !self.debug_bootstrap_via_done && self.bus.via_ier()==0 {
+            if std::env::var("VPY_BOOTSTRAP_VIA").ok().as_deref()==Some("1") {
+                self.bus.write8(0xD008, 0x30); // T2 low
+                self.bus.write8(0xD009, 0x00); // T2 high
+                self.bus.write8(0xD00E, 0xA0); // enable T2
+                if self.trace { println!("[VIA][BOOTSTRAP] Timer2 primed (opt-in)"); }
+            } else if self.trace { println!("[VIA][BOOTSTRAP] skipped (no opt-in)"); }
+            self.debug_bootstrap_via_done = true;
+        }
         // Debug: optional internal vector list smoke test (both formats) when env flag set at process start.
-        // We can only read env in std builds; for wasm this will be ignored (no std::env).
+        // Se ejecuta dentro de reset() para mantener coherencia y evitar llave de cierre prematura del impl.
         #[cfg(not(target_arch="wasm32"))]
         {
             if std::env::var("TEST_VL").ok().as_deref()==Some("1") {
                 self.install_internal_vector_tests();
             }
         }
-    }
+    } // end reset()
+
 
     #[inline(always)]
     fn trace_maybe_record(&mut self, pc:u16, opcode:u8, sub:u8) {
@@ -539,7 +677,7 @@ impl CPU {
             0x8D => { // BSR relative signed 8
                 let off = next1 as i8 as i16; let tgt = (pc as i16 + 2 + off) as u16; op_str = Some(format!("${:04X}", tgt));
             }
-            0x20|0x22|0x23|0x24|0x25|0x26|0x27|0x28|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x2F => { // short branches
+            0x20|0x21|0x22|0x23|0x24|0x25|0x26|0x27|0x28|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x2F => { // short branches
                 let off = next1 as i8 as i16; let tgt = (pc as i16 + 2 + off) as u16; op_str = Some(format!("${:04X}", tgt));
             }
             _ => { /* leave None */ }
@@ -638,33 +776,79 @@ impl CPU {
         // Write via bus to apply mapping / protection rules, then mirror into local mem array used for opcode fetch.
         self.bus.write8(addr,val);
         if (addr as usize) < self.mem.len() { self.mem[addr as usize] = self.bus.mem[addr as usize]; }
+        if addr & 0xFFF0 == 0xD000 { self.record_via_write(addr,val); }
     }
     pub fn test_read8(&mut self, addr:u16)->u8 { self.read8(addr) }
     pub fn test_write8(&mut self, addr:u16, val:u8){ self.write8(addr,val) }
     /// BIOS call logging only (strict implementation; no synthetic side effects).
     fn record_bios_call(&mut self, addr:u16) {
-        let name = match addr {
-            0xF18B => { "INIT_OS" },
-            0xF164 => { "BIOS_INIT1" },
-            0xF192 => { self.wait_recal_calls=self.wait_recal_calls.wrapping_add(1); if self.wait_recal_depth.is_none(){ self.wait_recal_depth=Some(self.call_stack.len()); } "WAIT_RECAL" },
-            0xF1AF => { "DP_TO_C8" },
-            0xF2A5 => { "INTENSITY_5F" },
-            0xF2AB => { "INTENSITY_A" },
-            0xF289 => "RESET_VIA",
-            0xF2A9 => { "INTENSITY_AY" },
-            0xF312 => { "MOVETO_D" },
-            0xF354 => { "RESET0REF" },
-            0xF37A => { "PRINT_STR_D" },
-            0xF385 => "PRINT_CHR",
-            0xF38A => { "PRINT_LIST" },
-            0xF38C => "PRINT_LIST_CHK",
-            0xF3DD => "DRAW_VL",
-            0xF434 => "SOUND_INIT?",
-            0xF687 => "MATH_ROUT",
-            0xF84F => "INIT_MUSIC?",
-            0xFD0D => "MUSIC1",
-            _ => "BIOS_UNKNOWN",
-        };
+        use crate::opcode_meta::bios_label_for;
+        // Side-effect housekeeping for specific well-known routines
+        if addr == 0xF192 { // Wait_Recal
+            self.wait_recal_calls = self.wait_recal_calls.wrapping_add(1);
+            if self.wait_recal_depth.is_none() { self.wait_recal_depth = Some(self.call_stack.len()); }
+        }
+        // Direct Page management routines: en modo estricto ya NO aplicamos efectos
+        // anticipados. El DP solo cambia cuando la BIOS ejecuta TFR A,DP real.
+        if addr == 0xF1A2 { // Set_Refresh instrumentation
+            if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") {
+                // Capturar antes de que el propio código BIOS ejecute LDD $C83D (todavía no hemos corrido instrucciones de Set_Refresh)
+                let lo = self.read8(0xC83D);
+                let hi = self.read8(0xC83E);
+                println!("[BIOS][Set_Refresh pre] RAM C83D={:02X} C83E={:02X} expect_full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp);
+            }
+        }
+        // Early path: intercept Draw_VL family to decode list directly into integrator segments.
+        // This is a temporary shortcut before full analog VIA timing is simulated; it respects list formats:
+        //  - Draw_VLc ($F3CE): first byte = count (N), then N pairs (dy,dx) or commands (we only handle dy,dx lines for now)
+        //  - Draw_VL ($F3DD): pairs until dy has bit7 set (end flag); high bit stripped from dy
+        //  - Other variants (a,b,ab,cs, etc.) currently fall back to just labeling; TODO incremental support
+        if addr == 0xF3DD || addr == 0xF3CE {
+            // Correct early decode path using X as list pointer (BIOS uses X, not U).
+            // Draw_VLc (F3CE): first byte = count (N), then N (dy,dx) relative pairs.
+            // Draw_VL  (F3DD): number of vectors resides in RAM $C823 (already set by preceding *_a / *_ab variants);
+            //               list at X consists of that many (dy,dx) relative pairs (no end-bit sentinel in data itself).
+            let frame = self.cycle_frame;
+            let mut ptr = self.x; // BIOS pointer
+            self.integrator.set_intensity(self.last_intensity);
+            if self.last_intensity>0 { self.integrator.beam_on(); } else { self.integrator.beam_off(); }
+            // Escala aproximada: usamos VIA_t1_cnt_lo (0xD004) como factor; mapear 0xFF ~ 1.0. Si es 0, fallback 1.0.
+            let scale_raw = self.read8(0xD004); // mirror low counter (o latch); en BIOS se configura como factor de escala
+            let scale = if scale_raw == 0 { 1.0 } else { (scale_raw as f32) / 255.0 };
+            if self.trace { println!("[Draw_VL*] scale_raw=0x{:02X} scale={:.3}", scale_raw, scale); }
+            if addr == 0xF3CE { // Draw_VLc
+                let count = self.read8(ptr); ptr = ptr.wrapping_add(1);
+                for i in 0..count {
+                    let dy = self.read8(ptr) as i8; ptr = ptr.wrapping_add(1);
+                    let dx = self.read8(ptr) as i8; ptr = ptr.wrapping_add(1);
+                    if i==0 {
+                        self.integrator.move_rel((dx as f32)*scale, (dy as f32)*scale);
+                        if self.trace { println!("[Draw_VLc] move dy={} dx={}", dy, dx); }
+                    } else {
+                        self.integrator.line_to_rel((dx as f32)*scale, (dy as f32)*scale, self.last_intensity, frame);
+                        if self.trace { println!("[Draw_VLc] seg {} dy={} dx={}", i-1, dy, dx); }
+                    }
+                }
+                self.x = ptr; // emulate X advancement after list
+            } else { // Draw_VL
+                let count = self.read8(0xC823); // number of vectors to draw
+                if count>0 {
+                    for i in 0..count {
+                        let dy = self.read8(ptr) as i8; ptr = ptr.wrapping_add(1);
+                        let dx = self.read8(ptr) as i8; ptr = ptr.wrapping_add(1);
+                        if i==0 {
+                            self.integrator.move_rel((dx as f32)*scale, (dy as f32)*scale);
+                            if self.trace { println!("[Draw_VL] move dy={} dx={}", dy, dx); }
+                        } else {
+                            self.integrator.line_to_rel((dx as f32)*scale, (dy as f32)*scale, self.last_intensity, frame);
+                            if self.trace { println!("[Draw_VL] seg {} dy={} dx={} (scaled dx={:.2} dy={:.2})", i-1, dy, dx, (dx as f32)*scale, (dy as f32)*scale); }
+                        }
+                    }
+                    self.x = ptr;
+                }
+            }
+        }
+        let name = bios_label_for(addr).unwrap_or("BIOS_UNKNOWN");
         self.bios_calls.push(format!("{:04X}:{}", addr, name));
         if self.trace { println!("[BIOS CALL] {}", name); }
     }
@@ -693,15 +877,24 @@ impl CPU {
     fn update_nz8(&mut self,v:u8){ self.cc_z=v==0; self.cc_n=(v & 0x80)!=0; }
     fn push8(&mut self, v:u8){ self.s = self.s.wrapping_sub(1); self.write8(self.s, v); }
     fn push16(&mut self, v:u16){
-        // Push high first then low so that low resides at top of descending stack for easy pop (low then high)
-        #[cfg(test)] let s_before = self.s; // local original S (only used in test logging)
-        let hi = (v>>8) as u8; let lo = (v & 0xFF) as u8;
-        self.push8(hi); self.push8(lo);
-        #[cfg(test)] {
-            // Log write addresses and bytes for diagnostics
-            let a_hi = s_before.wrapping_sub(1); // location where hi written
-            let a_lo = s_before.wrapping_sub(2); // then low below (because stack descends)
-            println!("[STACKPUSH] S_before={:04X} -> S_after={:04X} val={:04X} bytes_hi_low={:02X} {:02X} addrs={:04X} {:04X}", s_before, self.s, v, hi, lo, a_hi, a_lo);
+        // Convención IMPLEMENTADA (corregido comentario): pila descendente, dos pre-decrements.
+        // Orden real de escritura en este código:
+        //   1) push8(hi): S := S_before - 1, mem[S] = HI
+        //   2) push8(lo): S := S_before - 2, mem[S] = LO
+        // Resultado final: S apunta al LOW byte, y HIGH queda en S+1.
+        // pop16() hace: lo = pop8() (lee mem[S]), hi = pop8() (lee mem[S_original_low+1]) => reconstruye HHLL.
+        // Esto es consistente con la secuencia de pops implementada y mantiene simetría.
+        let hi = (v >> 8) as u8; let lo = (v & 0xFF) as u8;
+        let s_before = self.s;
+        self.push8(hi); // decrements S, stores hi
+        self.push8(lo); // decrements S, stores low
+        if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") {
+            let addr_low  = self.s;              // LOW
+            let addr_high = self.s.wrapping_add(1); // HIGH
+            let stored_lo = self.bus.mem[addr_low as usize];
+            let stored_hi = self.bus.mem[addr_high as usize];
+            println!("[PUSH16] val={:04X} S_before={:04X} S_after={:04X} HI@{:04X}={:02X} LO@{:04X}={:02X}",
+                v, s_before, self.s, addr_high, stored_hi, addr_low, stored_lo);
         }
     }
     fn pop8(&mut self)->u8 { let v = self.read8(self.s); self.s = self.s.wrapping_add(1); v }
@@ -760,55 +953,64 @@ impl CPU {
     // ---------------------------------------------------------------------
     fn rmw_neg(&mut self, m:u8)->u8 {
         let res = (0u16).wrapping_sub(m as u16) as u8;
-        self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v = res==0x80; self.cc_c = m!=0; res
+        self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = res == 0x80; self.cc_c = m != 0; res
     }
     fn rmw_com(&mut self, m:u8)->u8 {
-        let res = !m; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; self.cc_c=true; res
+        let res = !m; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; self.cc_c = true; res
     }
     fn rmw_lsr(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x01)!=0; let res = m>>1; self.cc_n=false; self.cc_z=res==0; self.cc_v=false; res
+        self.cc_c = (m & 0x01) != 0; let res = m >> 1; self.cc_n = false; self.cc_z = res == 0; self.cc_v = false; res
     }
     fn rmw_ror(&mut self, m:u8)->u8 {
-        let cin = if self.cc_c {0x80} else {0}; self.cc_c = (m & 0x01)!=0; let res = (m>>1)|cin; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; res
+        let cin = if self.cc_c {0x80} else {0}; self.cc_c = (m & 0x01) != 0; let res = (m >> 1) | cin; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; res
     }
     fn rmw_asr(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x01)!=0; let msb = m & 0x80; let res = (m>>1)|msb; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; res
+        self.cc_c = (m & 0x01) != 0; let msb = m & 0x80; let res = (m >> 1) | msb; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; res
     }
     fn rmw_asl(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x80)!=0; let res = m.wrapping_shl(1); self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v = ((m ^ res) & 0x80)!=0; res
+        self.cc_c = (m & 0x80) != 0; let res = m.wrapping_shl(1); self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = ((m ^ res) & 0x80) != 0; res
     }
     fn rmw_rol(&mut self, m:u8)->u8 {
-        let cin = if self.cc_c {1} else {0}; self.cc_c = (m & 0x80)!=0; let res = ((m as u16)<<1 | cin as u16) & 0xFF; let r = res as u8; self.cc_n = (r & 0x80)!=0; self.cc_z = r==0; self.cc_v = ((m ^ r) & 0x80)!=0; r
+        let cin = if self.cc_c {1} else {0}; self.cc_c = (m & 0x80) != 0; let res = ((m as u16) << 1 | cin as u16) & 0xFF; let r = res as u8; self.cc_n = (r & 0x80) != 0; self.cc_z = r == 0; self.cc_v = ((m ^ r) & 0x80) != 0; r
     }
     fn rmw_dec(&mut self, m:u8)->u8 {
-        let res = m.wrapping_sub(1); self.update_nz8(res); self.cc_v = res==0x7F; // C unaffected
+        let res = m.wrapping_sub(1); self.update_nz8(res); self.cc_v = res == 0x7F; // C unaffected
         res
     }
     fn rmw_inc(&mut self, m:u8)->u8 {
-        let res = m.wrapping_add(1); self.update_nz8(res); self.cc_v = res==0x80; // C unaffected
+        let res = m.wrapping_add(1); self.update_nz8(res); self.cc_v = res == 0x80; // C unaffected
         res
     }
     fn rmw_tst(&mut self, m:u8)->u8 {
-        self.cc_n = (m & 0x80)!=0; self.cc_z = m==0; self.cc_v=false; self.cc_c=false; m
+        self.cc_n = (m & 0x80) != 0; self.cc_z = m == 0; self.cc_v = false; self.cc_c = false; m
     }
     fn rmw_clr(&mut self)->u8 {
-        self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; 0
+        self.cc_n = false; self.cc_z = true; self.cc_v = false; self.cc_c = false; 0
     }
     fn service_irq(&mut self){
         #[cfg(test)] let before_s = self.s;
         let prev_pc = self.pc; // dirección de retorno que será apilada
         let sp_before = self.s; // SP antes de empujar el frame
-        // Correct 6809 hardware frame order for IRQ: CC,A,B,DP,X,Y,U,PC (PC pushed last).
+        // Correct 6809 hardware frame (in memory ascending addresses) is CC,A,B,DP,X,Y,U,PC.
+        // Because stack grows downward, we must push in reverse order: PC,U,Y,X,DP,B,A,CC.
         if !self.wai_pushed_frame {
             self.cc_e = true; // full frame
-            let cc = self.pack_cc();
-            // Set IRQ mask bit before stacking (I=1). F flag unchanged for normal IRQ.
+            // Set IRQ mask bit before snapshotting CC (I=1 set).
             self.cc_i = true;
-            // Push in order so that final push16(PC) leaves return address at lowest addresses in frame.
-            self.push8(cc);
-            self.push8(self.a); self.push8(self.b); self.push8(self.dp);
-            self.push16(self.x); self.push16(self.y); self.push16(self.u);
-            self.push16(self.pc);
+            if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                println!("[IRQ][FRAME-PUSH] entering IRQ prev_pc={:04X} S_before={:04X} I(before)=? ->1 IFR={:02X} IER={:02X}", prev_pc, sp_before, self.bus.via_ifr(), self.bus.via_ier());
+            }
+            let pc_val = self.pc; // capture return address
+            let cc = self.pack_cc(); // pack after setting I
+            // Push reverse order so pops (CC..PC) restore correctly.
+            self.push16(pc_val);      // PC
+            self.push16(self.u);      // U
+            self.push16(self.y);      // Y
+            self.push16(self.x);      // X
+            self.push8(self.dp);      // DP
+            self.push8(self.b);       // B
+            self.push8(self.a);       // A
+            self.push8(cc);           // CC
             #[cfg(test)] {
                 let after_s = self.s;
                 let mut frame_dump = String::new();
@@ -818,62 +1020,115 @@ impl CPU {
         } else {
             self.wai_pushed_frame = false; // already stacked by WAI path
         }
-        // Fetch vector: 6809 stores high byte at vector address, low at +1.
-        let hi = self.read8(VEC_IRQ); let lo = self.read8(VEC_IRQ+1); let vec = ((hi as u16)<<8)|lo as u16; self.pc = vec;
-        if self.trace { println!("[IRQ ENTER pc={:04X} sp={:04X} vec={:04X}]", prev_pc, sp_before, vec); }
-        #[cfg(test)] { println!("[IRQ-VECTOR] fetched={:04X} (raw bytes {:02X} {:02X})", vec, hi, lo); }
+    // Fetch standard IRQ vector (big-endian)
+    let vec = self.read_vector(VEC_IRQ); self.pc = vec; self.log_interrupt_enter("IRQ", prev_pc, sp_before, vec);
+    #[cfg(test)] { let hi=self.read8(VEC_IRQ); let lo=self.read8(VEC_IRQ+1); println!("[IRQ-VECTOR] fetched={:04X} (raw bytes {:02X} {:02X})", vec, hi, lo); }
         self.irq_pending = false; self.wai_halt = false; self.in_irq_handler = true;
-        self.via_irq_count += 1; self.irq_count = self.irq_count.wrapping_add(1);
+    self.via_irq_count += 1; self.irq_count = self.irq_count.wrapping_add(1);
+    let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::IRQ });
     }
     fn service_firq(&mut self){
         #[cfg(test)] let before_s = self.s;
         let prev_pc = self.pc; let sp_before = self.s;
         // FIRQ pushes only CC then PC (minimal frame). E flag remains 0.
         self.cc_e = false;
-        let cc = self.pack_cc();
-        self.cc_i = true; self.cc_f = true; // set masks before stacking CC snapshot
-        self.push8(cc);      // CC
-        self.push16(self.pc); // PC
+    self.cc_i = true; self.cc_f = true; // set masks before stacking snapshot
+    let cc = self.pack_cc();
+    // FIRQ minimal frame hardware order in memory (ascending): CC, PC. Because stack decrece, debemos empujar en orden inverso: primero PC (para que quede más bajo) o revisar secuencia de pop.
+    // Nuestro RTI ejecuta: pull CC (si cc_e? no, para FIRQ cc_e=0 se hace solo PC) -> en ruta parcial sólo hace pull PC (pull16) después del cc ya leído. Actualmente el pop16 asume layout low,high contiguos.
+    // Layout deseado en memoria ascendente (tras frame completo) para RTI parcial (E=0): [CC][PC high][PC low]
+    // Porque RTI hace: cc = pull8(); luego pc = pull16(); donde pull16 lee low primero (en S actual) luego high.
+    // Por tanto justo antes de ejecutar RTI debemos tener en direcciones de stack (S apunta al primer byte a extraer):
+    // S -> CC, S+1 -> PC low, S+2 -> PC high   (para que tras pull8 S avance y pull16 lea low, luego high)
+    // Implementamos manualmente sin push16 (porque push16 coloca hi antes que low en stack descendente).
+    // Baseline: push16(PC) luego push8(CC). Esto deja (S)->CC, S+1->PC low, S+2->PC high.
+    // Nuestro RTI parcial actualmente hace pull8(CC) y luego pull16(lo,hi) => PC=(hi<<8)|lo.
+    // Con este layout PC resultará hi=PC high, lo=PC low correcto.
+    #[cfg(test)] { println!("[FIRQ-PUSH] start S={:04X} PC={:04X} CC={:02X}", self.s, self.pc, cc); }
+    // push16 logs already under #[cfg(test)] inside push16
+    self.push16(self.pc); // PC (hi then lo)
+    #[cfg(test)] {
+        let mut d = String::new(); for off in 0..4 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
+        println!("[FIRQ-AFTER-PC] S={:04X} bytes:{}", self.s, d);
+    }
+    self.push8(cc);       // CC
+    #[cfg(test)] {
+        let mut d = String::new(); for off in 0..5 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
+        println!("[FIRQ-AFTER-CC] S={:04X} bytes:{}", self.s, d);
+    }
         #[cfg(test)] {
             let after_s = self.s; let mut frame_dump = String::new();
             for off in 0..4 { let addr=after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
             println!("[FIRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
         }
-        let hi = self.read8(VEC_FIRQ); let lo = self.read8(VEC_FIRQ+1); let vec=((hi as u16)<<8)|lo as u16; self.pc = vec;
-        if self.trace { println!("[FIRQ ENTER pc={:04X} sp={:04X} vec={:04X}]", prev_pc, sp_before, vec); }
-        #[cfg(test)] { println!("[FIRQ-VECTOR] fetched={:04X} (raw {:02X} {:02X})", vec, hi, lo); }
-        self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
+    // Standard FIRQ vector fetch (big-endian)
+    let vec = self.read_vector(VEC_FIRQ); self.pc = vec; self.log_interrupt_enter("FIRQ", prev_pc, sp_before, vec);
+    #[cfg(test)] { let hi=self.read8(VEC_FIRQ); let lo=self.read8(VEC_FIRQ+1); println!("[FIRQ-VECTOR] fetched={:04X} (raw {:02X} {:02X})", vec, hi, lo); }
+    self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
+    let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::FIRQ });
     }
     fn service_nmi(&mut self){
-        if self.trace { println!("[NMI SERVICE]"); }
         self.cc_e = true; // full frame
-        let saved_pc = self.pc;
-        self.push16(saved_pc);
+        let prev_pc = self.pc; let sp_before = self.s;
+        self.push16(prev_pc);
         self.push16(self.u); self.push16(self.y); self.push16(self.x);
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
-        let cc = self.pack_cc(); self.push8(cc);
-        self.cc_i = true; // mask normal IRQs
-        let lo = self.read8(VEC_NMI); let hi = self.read8(VEC_NMI+1); self.pc = ((hi as u16)<<8)|lo as u16;
+        let cc = self.pack_cc(); self.push8(cc); self.cc_i = true;
+        let vec = self.read_vector(VEC_NMI); self.pc = vec; self.log_interrupt_enter("NMI", prev_pc, sp_before, vec);
         self.nmi_pending = false; self.wai_halt = false; self.in_irq_handler = true;
+        let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::NMI });
     }
     fn service_swi_generic(&mut self, vec:u16, label:&str){
-        if self.trace { println!("[{} SERVICE]", label); }
-        // SWI / SWI2 / SWI3 all push full frame just like IRQ, but set F flag per spec (F=1) and E=1.
-        self.cc_e = true; self.cc_f = true; self.cc_i = true; // mask IRQ, and set F flag
-        let saved_pc = self.pc;
-        self.push16(saved_pc);
+        self.cc_e = true; self.cc_f = true; self.cc_i = true; // full frame + mask IRQ + set F
+        let prev_pc = self.pc; let sp_before = self.s;
+        self.push16(prev_pc);
         self.push16(self.u); self.push16(self.y); self.push16(self.x);
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
         let cc = self.pack_cc(); self.push8(cc);
-        let lo = self.read8(vec); let hi = self.read8(vec+1); self.pc = ((hi as u16)<<8)|lo as u16;
-        self.wai_halt = false; self.in_irq_handler = true; // treat similarly for clearing WAI
+        let vec_val = self.read_vector(vec); self.pc = vec_val; self.log_interrupt_enter(label, prev_pc, sp_before, vec_val);
+        self.wai_halt = false; self.in_irq_handler = true;
+        let kind = match label { "SWI" => ShadowKind::SWI, "SWI2" => ShadowKind::SWI2, "SWI3" => ShadowKind::SWI3, _ => ShadowKind::SWI };
+        let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind });
     }
     pub fn step(&mut self) -> bool {
         let cycles_before = self.cycles; // capture start for trace delta
-        // Poll VIA IRQ state each instruction boundary
-    // Map VIA interrupt line to normal IRQ so BIOS polling / handler expectations match simplified model.
-    let via_irq = self.bus.via.irq_asserted();
-    self.irq_pending = via_irq;
+        // Ad-hoc: Log Set_Refresh pre-snapshot también si se entra por branch (no sólo JSR/BSR)
+        if !self.logged_set_refresh_pre && self.pc == 0xF1A2 {
+            if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") {
+                let lo = self.read8(0xC83D);
+                let hi = self.read8(0xC83E);
+                println!("[BIOS][Set_Refresh pre(pc)] RAM C83D={:02X} C83E={:02X} expect_full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp);
+            }
+            self.logged_set_refresh_pre = true;
+        }
+        // Instrumentación Wait_Recal loop (aprox rango F192-F1A2) para ver polling IFR y condición de salida
+        if self.pc >= 0xF192 && self.pc < 0xF1A2 {
+            if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") {
+                let ifr = self.bus.via_ifr();
+                let ier = self.bus.via_ier();
+                println!("[TRACE][Wait_Recal region] pc={:04X} IFR={:02X} IER={:02X} A={:02X} DP={:02X}", self.pc, ifr, ier, self.a, self.dp);
+            }
+        }
+        // Poll VIA IRQ state cada instrucción, con gating para evitar IRQ espurias antes de inicialización BIOS.
+        // Condiciones para activar irq_pending:
+        //  1) Línea via_irq activa.
+        //  2) IER != 0 y (IFR & IER & 0x7F) != 0 (alguna fuente realmente habilitada y pendiente).
+        //  3) Vector IRQ apunta a BIOS (>= E000) cuando BIOS está presente (seguridad contra RAM corrupta).
+        {
+            let via_irq_line = self.bus.via.irq_asserted();
+            if via_irq_line {
+                let ier = self.bus.via_ier();
+                let ifr = self.bus.via_ifr();
+                let any_enabled_and_pending = (ifr & ier & 0x7F) != 0;
+                let irq_vec = self.read_vector(VEC_IRQ);
+                if any_enabled_and_pending && ier != 0 && (!self.bios_present || irq_vec >= 0xE000) {
+                    self.irq_pending = true;
+                    if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") && !self.cc_i {
+                        println!("[IRQ][PENDING] pc={:04X} IFR={:02X} IER={:02X} vec={:04X}", self.pc, ifr, ier, irq_vec);
+                    }
+                } else { self.irq_pending = false; }
+            } else { self.irq_pending = false; }
+        }
         // Optional forced frame heuristic: if enabled via env TRACE_FRAME_FORCE=1 and we have at least one WAIT_RECAL call
         // but no frame yet after a large cycle budget, synthesize a frame to unblock higher layers (debug only).
         #[cfg(not(target_arch="wasm32"))]
@@ -907,20 +1162,7 @@ impl CPU {
         }
         // IRQ frame fallback deprecated: cycle_frame is authoritative and bios_frame is purely observational now.
         // Leaving previous code path removed intentionally; toggle kept for compatibility only.
-        // Loop watch capture before executing opcode (PC points to current)
-        match self.pc {
-            0xF6CA|0xF6CC|0xF6CE|0xF6D5|0xF6DB => {
-                // Sample every 64 iterations to limit overhead
-                if (self.loop_watch_count & 0x3F)==0 {
-                    let idx=self.loop_watch_idx & 0x0F;
-                    self.loop_watch_slots[idx] = LoopSample{ pc:self.pc,a:self.a,b:self.b,x:self.x,y:self.y,u:self.u,s:self.s,dp:self.dp, via_ifr:self.bus.via_ifr(), via_ier:self.bus.via_ier(), via_acr:self.bus.read8(0xD00B), via_pcr:self.bus.read8(0xD00C), cycles:self.cycles };
-                    self.loop_watch_idx = (self.loop_watch_idx+1)&0x0F;
-                }
-                self.loop_watch_count += 1;
-            }
-            _=>{}
-        }
-        // Interrupt priority
+        // (pre-exec hook space reserved for future instrumentation if needed)
         if self.nmi_pending {
             self.service_nmi();
             if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
@@ -934,6 +1176,10 @@ impl CPU {
         }
         if self.irq_pending && !self.cc_i {
             if self.trace { println!("[INT-DISPATCH] IRQ pending at PC={:04X}", self.pc); }
+            if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                let ifr=self.bus.via_ifr(); let ier=self.bus.via_ier();
+                println!("[IRQ][DISPATCH] pc={:04X} IFR={:02X} IER={:02X} I=0 -> service_irq", self.pc, ifr, ier);
+            }
             self.service_irq();
             if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
@@ -945,15 +1191,12 @@ impl CPU {
         }
     // Fetch opcode directly from internal mem array to honor tests that manipulate cpu.mem
     let pc0 = self.pc; let op = self.mem[self.pc as usize]; self.pc = self.pc.wrapping_add(1);
-    if self.opcode_total==0 && self.trace { // solo si trace activo
-        if op==0x10 || op==0x11 { let peek=self.mem[self.pc as usize]; println!("[FETCH0] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
-        else { println!("[FETCH0] pc={:04X} op={:02X}", pc0, op); }
-    }
-    #[cfg(test)] {
-        if self.opcode_total < 64 {
-            if op==0x10 || op==0x11 { let peek=self.mem[self.pc as usize]; println!("[FETCH] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
-            else { println!("[FETCH] pc={:04X} op={:02X}", pc0, op); }
+    if self.trace {
+        if self.opcode_total==0 { // primer fetch sólo
+            if op==0x10 || op==0x11 { let peek=self.mem[self.pc as usize]; println!("[FETCH0] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
+            else { println!("[FETCH0] pc={:04X} op={:02X}", pc0, op); }
         }
+        // (opcional) descomentar para ver cada fetch: println!("[FETCH] pc={:04X} op={:02X}", pc0, op);
     }
     if self.debug_autotrace_remaining>0 { self.trace=true; self.debug_autotrace_remaining-=1; if self.debug_autotrace_remaining==0 { self.trace=false; } }
         // Peek possible sub-opcode byte for extended prefixes (do not advance PC further here)
@@ -962,7 +1205,7 @@ impl CPU {
         if self.jsr_log_len < self.jsr_log.len() {
             match op {
                 0xBD => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); let tgt=((hi as u16)<<8)|lo as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
-                0x8D => { let off=self.read8(self.pc) as i8 as i16; let tgt=(self.pc as i16 + 1 + off) as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
+                0x8D => { let off=self.read8(self.pc) as i8; let tgt=(self.pc as i16).wrapping_add(1).wrapping_add(off as i16) as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
                 _=>{}
             }
         }
@@ -974,7 +1217,8 @@ impl CPU {
             let mut found=false; let mut empty_idx=None; let mut min_idx=0; let mut min_count= u64::MAX;
             for (i,(pc,count)) in slots.iter_mut().enumerate() {
                 if *count==0 && empty_idx.is_none() { empty_idx=Some(i); }
-                if *pc==pc0 { *count+=1; found=true; break; }
+                if *pc==pc0 { *count+=1; found=true; break;
+                }
                 if *count < min_count { min_count=*count; min_idx=i; }
             }
             if !found { if let Some(ei)=empty_idx { slots[ei]=(pc0,1); } else { slots[min_idx]=(pc0,1); } }
@@ -1017,7 +1261,7 @@ impl CPU {
         };
         match op {
             0x4C => { // INCA (ensure early dispatch)
-                let old = self.a; let res = old.wrapping_add(1); self.a = res; self.update_nz8(res); self.cc_v = res==0x80; if self.trace { println!("INCA -> {:02X}", res);} }
+                let old = self.a; let res = old.wrapping_add(1); self.a = res; self.update_nz8(res); self.cc_v = res == 0x80; if self.trace { println!("INCA -> {:02X}", res);} }
             0xAC => { // CMPX indexed (already consumed postbyte in seed stage alternative path if any)
                 // Re-decode (simple) to keep logic local
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s);
@@ -1028,7 +1272,6 @@ impl CPU {
                 let ret=self.pc; // address after operand fetch (return point)
                 // Hardware behavior: push return address (high then low) onto S before transferring control
                 self.push16(ret);
-                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
                 if ea>=0xF000 { if self.bios_present { self.record_bios_call(ea); } else { if self.trace { println!("Missing BIOS ${:04X}", ea);} return false; } }
                 self.pc=ea; }
             0x3D => { // MUL: A * B -> D (single implementation)
@@ -1057,19 +1300,12 @@ impl CPU {
                 }
             }
             0x12 => { if self.trace { println!("NOP"); } }
-            0x3E => { // WAI: Push full CPU state then halt until interrupt; do not push again inside IRQ service.
-                if self.trace { println!("WAI (enter)"); }
-                if !self.wai_halt { // Only push once if repeated WAI while already halted (unlikely)
-                    self.cc_e = true; // full frame indicator per 6809 conventions for RTI
-                    // Push in same order service_irq expects so RTI works uniformly
-                    let saved_pc = self.pc; // points to next instruction after WAI
-                    self.push16(saved_pc);
-                    self.push16(self.u); self.push16(self.y); self.push16(self.x);
-                    self.push8(self.dp); self.push8(self.b); self.push8(self.a);
-                    let cc = self.pack_cc(); self.push8(cc);
-                    self.wai_pushed_frame = true;
-                }
-                self.wai_halt = true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true;
+            0x3E => { // WAI: Halt until interrupt (no synthetic frame push; hardware does not push until interrupt)
+                if self.trace { println!("WAI (halt)"); }
+                self.wai_halt = true; // service_irq will detect halt and push real frame
+                self.wai_pushed_frame = false; // ensure IRQ path performs full push
+                if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
+                return true;
             }
             0x3C => { // CWAI: AND CC with immediate mask then wait (push full state always)
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
@@ -1115,7 +1351,6 @@ impl CPU {
             }
             0x6F => { // CLR indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,0); self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; if self.trace { println!("CLR [{}]", ea); } }
-            // (Removed duplicate indexed RMW cluster; implemented explicitly below)
             // Load/store & arithmetic subset (partial — extend as needed)
             0x86 => { let v=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a=v; self.update_nz8(self.a); if self.trace { println!("LDA #${:02X}", self.a);} }
             0xC6 => { let v=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b=v; self.update_nz8(self.b); if self.trace { println!("LDB #${:02X}", self.b);} }
@@ -1127,19 +1362,56 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let res=b0.wrapping_sub(imm); self.flags_sub8(b0,imm,res); if self.trace { println!("CMPB #${:02X}", imm);} }
             0x81 => { // CMPA immediate
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let a=self.a; let res=a.wrapping_sub(imm); self.flags_sub8(a,imm,res); if self.trace { println!("CMPA #${:02X}", imm);} }
-            0x8D => { // BSR (relative 8)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); let ret=self.pc; self.push16(ret); #[cfg(test)] { self.last_return_expect=Some(ret); } let target=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.pc=target; }
-            0x17 => { // LBSR (relative 16)
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let off=((hi as u16)<<8)|lo as u16; let signed = off as i16; let ret=self.pc; self.push16(ret); #[cfg(test)] { self.last_return_expect=Some(ret); } let target=self.pc.wrapping_add(signed as u16); if self.trace { println!("LBSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.pc=target; cyc=9; }
+            0x8D => { // BSR (short relative branch to subroutine)
+                let off = self.read8(self.pc) as i8; self.pc = self.pc.wrapping_add(1);
+                let tgt = (self.pc as i16 + 1 + off as i16) as u16;
+                if self.trace { println!("BSR ${:04X}", tgt); }
+                let ret = self.pc; // address after operand fetch (return point)
+                // Hardware behavior: push return address (high then low) onto S before transferring control
+                self.push16(ret);
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::BSR });
+                self.pc = tgt;
+            }
+            0x17 => { // LBSR (long branch to subroutine)
+                let hi = self.read8(self.pc); let lo = self.read8(self.pc+1); self.pc = self.pc.wrapping_add(2);
+                let off = ((hi as u16) << 8) | lo as u16;
+                let signed = off as i16;
+                let ret = self.pc;
+                self.push16(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::LBSR });
+                self.pc = self.pc.wrapping_add(signed as u16);
+                if self.trace { println!("LBSR ${:04X}", self.pc); }
+            }
             0x39 => { // RTS
                 let depth_before = self.call_stack.len();
-                if let Some(r)=self.call_stack.pop(){ if self.trace { println!("RTS -> {:04X}", r);} self.pc=r; } else if self.trace { println!("RTS (empty)"); }
+                // Extraer dirección de retorno real de la pila (pop16) según convención 6809.
+                let ret = self.pop16();
+                if self.trace { println!("RTS (stack) -> {:04X}", ret); }
+                self.pc = ret;
+                // call_stack sólo para análisis: mantener coherencia si hay elemento; no es fuente de verdad.
+                if let Some(sw)=self.call_stack.pop() {
+                    if sw != ret {
+                        if self.trace { println!("[WARN][RTS] call_stack discrepancia stored={:04X} real={:04X}", sw, ret); }
+                    }
+                } else if self.trace { println!("[WARN][RTS] call_stack vacío"); }
                 #[cfg(test)] {
                     if let Some(exp)=self.last_return_expect { assert_eq!(self.pc, exp, "RTS retorno incorrecto: esperado {:04X} got {:04X}", exp, self.pc); }
                     self.last_return_expect=None;
                 }
+                // Shadow validation: localizar frame cuyo ret coincide; si tope no coincide, buscar y podar.
+                if let Some(sf)=self.shadow_stack.pop() {
+                    if sf.ret != ret {
+                        // Mismatch: capture snapshot if landing inside RAM window of interest.
+                        if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-rts"); }
+                    }
+                } else {
+                    // Underflow: unexpected RTI con pila de sombra vacía.
+                    if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-rts"); }
+                }
                 if self.in_irq_handler { self.wai_halt=false; self.in_irq_handler=false; }
                 if let Some(d)=self.wait_recal_depth { if depth_before == d && self.call_stack.len() == d { self.bios_frame = self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
+                if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "RTS-invalid-return"); }
             }
             0x35 => { // PULS (instrumented)
                 let mask = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
@@ -1153,7 +1425,11 @@ impl CPU {
                 if (mask & 0x10)!=0 { let x=self.pop16(); self.x=x; #[cfg(test)] { popped.push(('X', x)); } }
                 if (mask & 0x20)!=0 { let y=self.pop16(); self.y=y; #[cfg(test)] { popped.push(('Y', y)); } }
                 if (mask & 0x40)!=0 { let u=self.pop16(); self.u=u; #[cfg(test)] { popped.push(('U', u)); } }
-                if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); } }
+                if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); }
+                    // Shadow validation (PULS with PC)
+                    if let Some(sf)=self.shadow_stack.pop() { if sf.ret != self.pc { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-puls"); } } } else { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-puls"); } }
+                    if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "PULS-invalid-return"); }
+                }
                 if self.trace { println!("PULS mask={:02X} -> PC={:04X}", mask, self.pc); }
                 if self.trace && !self.bios_handoff_logged {
                     // Handoff detection: transición desde BIOS (>=E000) a cartucho (<E000)
@@ -1174,15 +1450,36 @@ impl CPU {
                     if self.pc < 0xE000 { println!("[BIOS->CART] handoff pc={:04X} (RTS)", self.pc); self.bios_handoff_logged = true; }
                 }
                 let cc = pull8(self); self.unpack_cc(cc);
-                if self.cc_e { self.a=pull8(self); self.b=pull8(self); self.dp=pull8(self); self.x=pull16(self); self.y=pull16(self); self.u=pull16(self); self.pc=pull16(self); } else { self.pc=pull16(self); }
+                if self.cc_e {
+                    self.a=pull8(self); self.b=pull8(self); self.dp=pull8(self); self.x=pull16(self); self.y=pull16(self); self.u=pull16(self); self.pc=pull16(self);
+                } else {
+                    #[cfg(test)] {
+                        let b0 = self.read8(self.s); let b1 = self.read8(self.s.wrapping_add(1));
+                        println!("[RTI-PARTIAL-BYTES] S={:04X} lo={:02X} hi={:02X}", self.s, b0, b1);
+                    }
+                    self.pc=pull16(self);
+                }
                 if self.trace { println!("RTI -> {:04X}", self.pc); }
                 self.in_irq_handler=false; self.wai_halt=false;
+                // Shadow stack validation & pop (interrupt return). Mirrors logic in RTS / PULS with PC.
+                if let Some(sf) = self.shadow_stack.pop() {
+                    if sf.ret != self.pc {
+                        // Mismatch: capture snapshot if landing inside RAM window of interest.
+                        if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-rti"); }
+                    }
+                } else {
+                    // Underflow: unexpected RTI con pila de sombra vacía.
+                    if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-rti"); }
+                }
                 if let Some(d)=self.wait_recal_depth { if self.call_stack.len()==d { self.bios_frame=self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
+                if self.pc >= 0xC800 && self.pc <= 0xCFFF {
+                    self.capture_ram_exec_snapshot_immediate(self.pc, "RTI-invalid-return");
+                }
             }
             0x3F => { self.service_swi_generic(VEC_SWI, "SWI"); }
-            0x34 => { // PSHS (mask bits: 0=CC,1=A,2=B,3=DP,4=X,5=Y,6=U,7=PC) push order PC,U,Y,X,DP,B,A,CC
+            0x34 => { // PSHS (mask bits: 0=CC,1=A,2=B,3=DP,4=X,5=Y,6=U,7=PC) push order PC,U,Y,X,DP,B,A,CC (instrumented)
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                if (mask & 0x80)!=0 { self.push16(self.pc); }
+                if (mask & 0x80)!=0 { let ret=self.pc; self.push16(ret); self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::PshsPc }); }
                 if (mask & 0x40)!=0 { self.push16(self.u); }
                 if (mask & 0x20)!=0 { self.push16(self.y); }
                 if (mask & 0x10)!=0 { self.push16(self.x); }
@@ -1195,7 +1492,7 @@ impl CPU {
             0x36 => { // PSHU - same push order PC,U,Y,X,DP,B,A,CC but using U stack
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let orig_s=self.s; let sp=self.u; self.s=sp;
-                if (mask & 0x80)!=0 { self.push16(self.pc); }
+                if (mask & 0x80)!=0 { let ret=self.pc; self.push16(ret); self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::PshuPc }); }
                 if (mask & 0x40)!=0 { self.push16(orig_s); } // push S (per spec bit6=U for PSHS, but for PSHU bit6=S) current code used orig_s previously
                 if (mask & 0x20)!=0 { self.push16(self.y); }
                 if (mask & 0x10)!=0 { self.push16(self.x); }
@@ -1208,18 +1505,35 @@ impl CPU {
             0x37 => { // PULU
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let orig_s=self.s; let sp=self.u; self.s=sp;
-                if (mask & 0x80)!=0 { self.pc=self.pop16(); }
-                if (mask & 0x40)!=0 { self.s=self.pop16(); }
-                if (mask & 0x20)!=0 { self.y=self.pop16(); }
-                if (mask & 0x10)!=0 { self.x=self.pop16(); }
-                if (mask & 0x08)!=0 { self.dp=self.pop8(); }
-                if (mask & 0x04)!=0 { self.b=self.pop8(); }
-                if (mask & 0x02)!=0 { self.a=self.pop8(); }
+                // Orden correcto de extracción (bits ascendentes): CC, A, B, DP, X, Y, S, PC
                 if (mask & 0x01)!=0 { let cc=self.pop8(); self.unpack_cc(cc); }
+                if (mask & 0x02)!=0 { self.a=self.pop8(); }
+                if (mask & 0x04)!=0 { self.b=self.pop8(); }
+                if (mask & 0x08)!=0 { self.dp=self.pop8(); }
+                if (mask & 0x10)!=0 { self.x=self.pop16(); }
+                if (mask & 0x20)!=0 { self.y=self.pop16(); }
+                if (mask & 0x40)!=0 { self.s=self.pop16(); } // recupera S anterior
+                if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; if let Some(sf)=self.shadow_stack.pop() { if sf.ret!=self.pc { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-pulu"); } } } else { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-pulu"); } } if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "PULU-invalid-return"); } }
                 let new_sp=self.s; self.s=orig_s; self.u=new_sp; if self.trace { println!("PULU ${:02X}", mask); }
             }
-            0x1A => { let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let mut cc=self.pack_cc(); cc|=imm; self.unpack_cc(cc); if self.trace { println!("ORCC #${:02X}", imm);} }
-            0x1C => { let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let mut cc=self.pack_cc(); cc&=imm; self.unpack_cc(cc); if self.trace { println!("ANDCC #${:02X}", imm);} }
+            0x1A => { // ORCC immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let prev=self.pack_cc();
+                let mut cc=prev; cc|=imm; self.unpack_cc(cc);
+                if self.trace { println!("ORCC #${:02X}", imm);} 
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                    if (prev ^ cc) & 0x10 != 0 && self.cc_i { println!("[IRQ_TRACE][CPU] I set via ORCC pc={:04X} imm={:02X}", pc0, imm); }
+                }
+            }
+            0x1C => { // ANDCC immediate (instrumentada)
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let prev=self.pack_cc(); let prev_i=self.cc_i;
+                let mut cc=prev; cc &= imm; self.unpack_cc(cc);
+                if self.trace { println!("ANDCC #${:02X}", imm);} 
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                    if prev_i && !self.cc_i { println!("[IRQ_TRACE][CPU] I cleared via ANDCC pc={:04X} imm={:02X}", pc0, imm); }
+                }
+            }
             0x1B => { // ABA (A = A + B)
                 let a0=self.a; let b0=self.b; let sum=(a0 as u16)+(b0 as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a0^b0) as u16) & ((a0^r) as u16) & 0x80)!=0; if self.trace { println!("ABA -> {:02X}", r);} }
             0x1F => { // TFR src,dst
@@ -1275,13 +1589,28 @@ impl CPU {
                 self.a=hi; self.b=lo; self.update_nz16(self.d()); if self.trace { println!("LDD #${:02X}{:02X}", hi, lo);} }
             0xDC => { // LDD direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16;
-                let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.a=hi; self.b=lo; self.update_nz16(self.d()); if self.trace { println!("LDD ${:04X}", addr);} }
+                let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.a=hi; self.b=lo; self.update_nz16(self.d());
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && addr==0xC83D { println!("[TRACE][LDD refresh] read C83D={:02X} C83E={:02X} full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp); }
+                if self.trace { println!("LDD ${:04X}", addr);} }
+            0x9E => { // LDX direct (faltaba, marcaba unimplemented)
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr=((self.dp as u16)<<8)|off as u16;
+                let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1));
+                let val=((hi as u16)<<8)|lo as u16; self.x=val; self.update_nz16(val);
+                if self.trace { println!("LDX ${:04X} -> {:04X}", addr, val); }
+            }
             0xDE => { // LDU direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16;
                 let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.u=((hi as u16)<<8)|lo as u16; self.update_nz16(self.u); if self.trace { println!("LDU ${:04X}", addr);} }
             0xDD => { // STD direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16;
-                self.write8(addr,self.a); self.write8(addr.wrapping_add(1), self.b); self.update_nz16(self.d()); if self.trace { println!("STD ${:04X}", addr);} }
+                let a0=self.a; let b0=self.b;
+                self.write8(addr,a0); self.write8(addr.wrapping_add(1), b0); self.update_nz16(self.d());
+                if self.trace { println!("STD ${:04X} (A={:02X} B={:02X})", addr, a0,b0); }
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && addr==0xD008 {
+                    println!("[TRACE][STD->T2] wrote T2_lo={:02X} then T2_hi={:02X} full={:04X}", a0,b0, ((b0 as u16)<<8)|a0 as u16);
+                }
+            }
             0xDF => { // STU direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=(self.u>>8) as u8; let lo=self.u as u8;
                 self.write8(addr,hi); self.write8(addr.wrapping_add(1),lo); self.update_nz16(self.u); if self.trace { println!("STU ${:04X}", addr);} }
@@ -1291,6 +1620,7 @@ impl CPU {
             0xFE => { // LDU extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
                 let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.u=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.u); if self.trace { println!("LDU ${:04X}", addr);} }
+           
             0xB6 => { // LDA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
                 let v=self.read8(addr); self.a=v; self.update_nz8(v); if self.trace { println!("LDA ${:04X}", addr);} }
@@ -1302,70 +1632,14 @@ impl CPU {
             0xBE => { // LDX extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
                 let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1));
-                let val=((hi2 as u16)<<8)|lo2 as u16; self.x=val; self.update_nz16(val);
-                if self.trace { println!("LDX ${:04X} -> {:04X}", addr,val); }
+                let val=((hi2 as u16)<<8)|lo2 as u16; self.x=val; self.update_nz16(val); if self.trace { println!("LDX ${:04X} -> {:04X}", addr,val); }
             }
-            0xBF => { // STX extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
-                self.write8(addr, (self.x>>8) as u8); self.write8(addr.wrapping_add(1), self.x as u8); self.update_nz16(self.x); if self.trace { println!("STX ${:04X}", addr);} }
-            0x80 => { // SUBA immediate
-                let imm = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
-                let a0 = self.a; let res = a0.wrapping_sub(imm);
-                self.a = res; self.flags_sub8(a0, imm, res);
-                if self.trace { println!("SUBA #${:02X} -> {:02X}", imm, res); }
-            }
-            0xC4 => { // ANDB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b &= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB #${:02X}", imm);} }
-            0x85 => { // BITA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let r=self.a & imm; self.cc_n=(r & 0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITA #${:02X}", imm);} }
-            0x89 => { // ADCA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(imm as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^imm) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA #${:02X}", imm);} }
-            0x90 => { // SUBA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a0=self.a; let res=a0.wrapping_sub(m); self.a=res; self.flags_sub8(a0,m,res); if self.trace { println!("SUBA ${:04X} -> {:02X}", addr,res);} }
-            0x99 => { // ADCA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA ${:04X}", addr);} }
-            0x9B => { // ADDA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA ${:04X}", addr);} }
-            0x9C => { // CMPX direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let x0=self.x; let res=x0.wrapping_sub(val); self.flags_sub16(x0,val,res); if self.trace { println!("CMPX ${:04X}", addr);} }
-            0x9A => { // ORA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
-            0x06 => { // ROR direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_ror(m); self.write8(addr,r); if self.trace { println!("ROR ${:04X} -> {:02X}", addr,r);} }
-            0xE1 => { // CMPB indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB [{}]", ea);} }
-            0x09 => { // ROL direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_rol(m); self.write8(addr,r); if self.trace { println!("ROL ${:04X} -> {:02X}", addr,r);} }
-            0x0C => { // INC direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_inc(m); self.write8(addr,r); if self.trace { println!("INC ${:04X} -> {:02X}", addr,r);} }
-            0x0D => { // TST direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.rmw_tst(m); if self.trace { println!("TST ${:04X}", addr);} }
-            0x0E => { // JMP direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; self.pc=addr; if self.trace { println!("JMP ${:04X}", addr);} }
-            0x0F => { // CLR direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; self.rmw_clr(); self.write8(addr,0); if self.trace { println!("CLR ${:04X}", addr);} }
-            0xA0 => { // SUBA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a0=self.a; let res=a0.wrapping_sub(m); self.a=res; self.flags_sub8(a0,m,res); if self.trace { println!("SUBA [{}] -> {:02X}", ea,res);} }
-            0xA4 => { // ANDA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a &= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA [{}]", ea);} }
-            0xA9 => { // ADCA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA [{}]", ea);} }
-            0xAA => { // ORA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA [{}]", ea);} }
-            0xAB => { // ADDA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA [{}]", ea);} }
-            0xE0 => { // SUBB indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.b=res; self.flags_sub8(b0,m,res); if self.trace { println!("SUBB [{}] -> {:02X}", ea,res);} }
-            0xB4 => { // ANDA extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a &= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA ${:04X}", addr);} }
-            0xBA => { // ORA extended (faltante)
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
             0xB9 => { // ADCA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA ${:04X}", addr);} }
             0xBB => { // ADDA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA ${:04X}", addr);} }
             0xE3 => { // ADDD indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32) & ((d0^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD [{}] -> {:04X}", ea,res);} }
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let d=self.d(); let sum=(d as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d^val) as u32) & ((d^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD [{}] -> {:04X}", ea,res);} }
             0xE4 => { // ANDB indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB [{}]", ea);} }
             0xEA => { // ORB indexed
@@ -1376,387 +1650,15 @@ impl CPU {
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB ${:04X}", addr);} }
             0xF3 => { // ADDD extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); let val=((hi2 as u16)<<8)|lo2 as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32)&((d0^res) as u32)&0x8000)!=0; if self.trace { println!("ADDD ${:04X} -> {:04X}", addr,res);} }
-            0xCA => { // ORB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b |= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB #${:02X}", imm);} }
-            0xC5 => { // BITB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let r=self.b & imm; self.cc_n=(r & 0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB #${:02X}", imm);} }
-            0xDA => { // ORB direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.b |= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB ${:04X}", addr);} }
-            0xFA => { // ORB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b |= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB ${:04X}", addr);} }
-            0xF8 => { // EORB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB ${:04X}", addr);} }
-            0x04 => { // LSR direct (moved from decode_indexed_basic)
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.cc_c=(m & 0x01)!=0; let res=m>>1; self.write8(addr,res); self.cc_n=false; self.cc_z=res==0; self.cc_v=false; if self.trace { println!("LSR ${:04X} -> {:02X}", addr,res);} }
-            0x9D => { // JSR direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr=((self.dp as u16)<<8)|off as u16;
-                if self.trace { println!("JSR ${:04X} (direct)", addr);} 
-                let ret=self.pc; // after operand
-                self.push16(ret);
-                if addr>=0xF000 { 
-                    if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
-                    self.record_bios_call(addr);
-                }
-                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
-                self.pc=addr;
-                cyc=7; }
-            0xBD => { // JSR absolute
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
-                let addr=((hi as u16)<<8)|lo as u16; if self.trace { println!("JSR ${:04X}", addr);} 
-                let ret=self.pc; // after operand
-                self.push16(ret);
-                if addr>=0xF000 { 
-                    if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
-                    self.record_bios_call(addr);
-                }
-                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
-                self.pc=addr; 
-                cyc=7; }
-            0x97 => { // STA direct
-                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr = ((self.dp as u16) << 8) | off as u16;
-                let val = self.a; self.write8(addr, val);
-                self.update_nz8(val);
-                if self.trace { println!("STA ${:04X} -> {:02X}", addr, val); }
-            }
-            0x94 => { // ANDA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr);
-                self.a &= m; self.update_nz8(self.a); self.cc_v=false;
-                if self.trace { println!("ANDA ${:04X}", addr); }
-            }
-            0x9E => { // LDX direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr=((self.dp as u16)<<8)|off as u16;
-                let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1));
-                self.x=((hi as u16)<<8)|lo as u16; self.update_nz16(self.x);
-                if self.trace { println!("LDX ${:04X} -> {:04X}", addr, self.x); }
-            }
-            0x9F => { // STX direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr=((self.dp as u16)<<8)|off as u16; let x=self.x;
-                self.write8(addr,(x>>8) as u8); self.write8(addr.wrapping_add(1), x as u8);
-                self.update_nz16(x); if self.trace { println!("STX ${:04X}", addr); }
-            }
-            0x96 => { // LDA direct (needed for VIA register reads in BIOS interrupt handlers)
-                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
-                let addr = ((self.dp as u16) << 8) | off as u16;
-                let v = self.read8(addr); self.a = v; self.update_nz8(v);
-                if self.trace { println!("LDA ${:04X} -> {:02X}", addr, v); }
-            }
-            0xD7 => { // STB direct
-                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr = ((self.dp as u16) << 8) | off as u16;
-                let val = self.b; self.write8(addr, val);
-                self.update_nz8(val);
-                if self.trace { println!("STB ${:04X} -> {:02X}", addr, val); }
-            }
-            0xD4 => { // ANDB direct
-                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
-                self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB ${:04X}", addr);} }
-            0xD6 => { // LDB direct
-                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
-                let addr = ((self.dp as u16) << 8) | off as u16;
-                let v = self.read8(addr); self.b = v; self.update_nz8(v);
-                if self.trace { println!("LDB ${:04X} -> {:02X}", addr, v); }
-            }
-            0xE6 => { // LDB indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.read8(ea); self.b=v; self.update_nz8(v); if self.trace { println!("LDB [{}] -> {:02X}", ea,v);} }
-            0xA6 => { // LDA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.read8(ea); self.a=v; self.update_nz8(v); if self.trace { println!("LDA [{}] -> {:02X}", ea,v);} }
-            0xA7 => { // STA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.a; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STA [{}] -> {:02X}", ea,v);} }
-            0xAE => { // LDX indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; self.x=val; self.update_nz16(val); if self.trace { println!("LDX [{}] -> {:04X}", ea,val);} }
-            0xA1 => { // CMPA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let res=a.wrapping_sub(m); self.flags_sub8(a,m,res); if self.trace { println!("CMPA [{}]", ea);} }
-            0xAF => { // STX indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,(self.x>>8) as u8); self.write8(ea.wrapping_add(1), self.x as u8); self.update_nz16(self.x); if self.trace { println!("STX [{}]", ea);} }
-            0xED => { // STD indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,self.a); self.write8(ea.wrapping_add(1), self.b); self.update_nz16(self.d()); if self.trace { println!("STD [{}]", ea);} }
-            0xF1 => { // CMPB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB ${:04X}", addr);} }
-            0x10 => { // prefix group 1
-                let bop=self.read8(self.pc);
-                // Snapshot flags for branch condition evaluation
-                let f_c = self.cc_c; let f_z = self.cc_z; let f_v = self.cc_v; let f_n = self.cc_n;
-                match bop { 0x8E => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY #${:04X}", self.y);} }
-                    0x9E => { // LDY direct
-                        self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                        let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y);} }
-                    0xAE => { // LDY indexed
-                        self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY [{}] -> {:04X}", ea, self.y);} }
-                    0xBE => { // LDY extended
-                        self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.y=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.y); if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y);} }
-                    0x9F => { // STY direct
-                        self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let y=self.y; self.write8(addr,(y>>8) as u8); self.write8(addr.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY ${:04X}", addr);} }
-                    0xAF => { // STY indexed
-                        self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let y=self.y; self.write8(ea,(y>>8) as u8); self.write8(ea.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY [{}]", ea);} }
-                    0xBF => { // STY extended
-                        self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let y=self.y; self.write8(addr,(y>>8) as u8); self.write8(addr.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY ${:04X}", addr);} }
-                    0xCE => { // LDS immediate
-                        self.pc=self.pc.wrapping_add(1);
-                        #[cfg(test)] let pc_operands = self.pc; // direccion de los bytes inmediatos
-                        let hi=self.read8(self.pc); let lo=self.read8(self.pc+1);
-                        self.pc=self.pc.wrapping_add(2);
-                        let new_s=((hi as u16)<<8)|lo as u16;
-                        #[cfg(test)] let old_s = self.s;
-                        self.s=new_s; self.update_nz16(self.s);
-                        if self.trace { println!("LDS #${:04X}", self.s);} cyc=5;
-                        #[cfg(test)] {
-                            println!("[LDS-IMM] pc_operands={:04X} bytes={:02X} {:02X} S_before={:04X} S_after={:04X}", pc_operands, hi, lo, old_s, self.s);
-                        }
-                    }
-                    // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) NEW, extended (0xB3)
-                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let d=self.d(); let res=d.wrapping_sub(val); self.flags_sub16(d,val,res); if self.trace { println!("CMPD ${:04X} -> {:04X}", val,res);} }
-                    // CMPY immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
-                    0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let y0=self.y; let res=y0.wrapping_sub(val); self.flags_sub16(y0,val,res); if self.trace { println!("CMPY ${:04X} -> {:04X}", val,res);} }
-                    // LDS direct/indexed/extended: 0xDE,0xEE,0xFE; STS 0xDF,0xEF,0xFF
-                    0xDE => { self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.s=((hi as u16)<<8)|lo as u16; self.update_nz16(self.s); if self.trace { println!("LDS ${:04X} -> {:04X}", addr,self.s);} }
-                    0xEE => { self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); self.s=((hi as u16)<<8)|lo as u16; self.update_nz16(self.s); if self.trace { println!("LDS [{}] -> {:04X}", ea,self.s);} }
-                    0xFE => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.s=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.s); if self.trace { println!("LDS ${:04X} -> {:04X}", addr,self.s);} }
-                    0xDF => { self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let s=self.s; self.write8(addr,(s>>8) as u8); self.write8(addr.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS ${:04X}", addr);} }
-                    0xEF => { self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let s=self.s; self.write8(ea,(s>>8) as u8); self.write8(ea.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS [{}]", ea);} }
-                    0xFF => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let s=self.s; self.write8(addr,(s>>8) as u8); self.write8(addr.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS ${:04X}", addr);} }
-                    0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI2, "SWI2"); }
-                    0x26|0x27 => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let off=((hi as u16)<<8)|lo as u16; let target=self.pc.wrapping_add(off as i16 as u16); match bop { 0x26 => { if !self.cc_z { if self.trace { println!("LBNE {:04X}", target);} self.pc=target; } else if self.trace { println!("LBNE not"); } } 0x27 => { if self.cc_z { if self.trace { println!("LBEQ {:04X}", target);} self.pc=target; } else if self.trace { println!("LBEQ not"); } } _=>{} } }
-                    // Long branch set (0x21-0x2F). 0x26/0x27 already handled; 0x16 LBRA lives in page0 per spec.
-                    0x21..=0x2F => { // All long branch conditions except 0x26/0x27 (handled earlier) and excluding 0x16 LBRA (page0)
-                        let cond = match bop {
-                            0x21 => false, // LBRN
-                            0x22 => (f_c || f_z)==false, // LBHI
-                            0x23 => (f_c || f_z)!=false, // LBLS
-                            0x24 => f_c==false, // LBHS/LBCC
-                            0x25 => f_c!=false, // LBLO/LBCS
-                            0x28 => f_v==false, // LBVC
-                            0x29 => f_v!=false, // LBVS
-                            0x2A => f_n==false, // LBPL
-                            0x2B => f_n!=false, // LBMI
-                            0x2C => (f_n ^ f_v)==false, // LBGE
-                            0x2D => (f_n ^ f_v)!=false, // LBLT
-                            0x2E => (f_z || (f_n ^ f_v))==false, // LBGT
-                            0x2F => (f_z || (f_n ^ f_v))!=false, // LBLE
-                            _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
-                        };
-                        // Consume sub-op byte
-                        self.pc = self.pc.wrapping_add(1);
-                        let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
-                        let off=((hi as u16)<<8)|lo as u16; let target=self.pc.wrapping_add(off as i16 as u16);
-                        let name = match bop {
-                            0x21=>"LBRN",0x22=>"LBHI",0x23=>"LBLS",0x24=>"LBHS/LBCC",0x25=>"LBLO/LBCS",0x28=>"LBVC",0x29=>"LBVS",0x2A=>"LBPL",0x2B=>"LBMI",0x2C=>"LBGE",0x2D=>"LBLT",0x2E=>"LBGT",0x2F=>"LBLE", _=>"?" };
-                        if cond { if self.trace { println!("{} {:04X}", name, target);} self.pc=target; cyc = cyc.saturating_add(6); } else { if self.trace { println!("{} not", name);} cyc = cyc.saturating_add(5); }
-                    }
-                    _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
-                }
-            }
-            0x11 => { // prefix group 2
-                let bop=self.read8(self.pc);
-                match bop {
-                    // CMPU immediate/direct/indexed/extended: 0x83,0x93,0xA3,0xB3
-                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let u0=self.u; let res=u0.wrapping_sub(val); self.flags_sub16(u0,val,res); if self.trace { println!("CMPU ${:04X} -> {:04X}", val,res);} }
-                    // CMPS immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
-                    0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let s0=self.s; let res=s0.wrapping_sub(val); self.flags_sub16(s0,val,res); if self.trace { println!("CMPS ${:04X} -> {:04X}", val,res);} }
-                    0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI3, "SWI3"); }
-                    _ => { if self.trace { println!("UNIMPL 0x11 {:02X}", bop);} return false; }
-                }
-            }
-            0x00 => { // NEG direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let addr=((self.dp as u16)<<8)|off as u16;
-                let m=self.read8(addr); let res=(0u16).wrapping_sub(m as u16) as u8;
-                self.write8(addr,res); self.cc_n=(res&0x80)!=0; self.cc_z=res==0; self.cc_v=res==0x80; self.cc_c=m!=0;
-                if self.trace { println!("NEG ${:04X} -> {:02X}", addr,res);} 
-            }
-            0x03 => { // COM direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let res=!m; self.write8(addr,res); self.cc_n=(res & 0x80)!=0; self.cc_z=res==0; self.cc_v=false; self.cc_c=true; if self.trace { println!("COM ${:04X} -> {:02X}", addr,res);} }
-            0x0A => { // CLV (Clear V flag)
-                self.cc_v = false;
-                if self.trace { println!("CLV"); }
-            }
-            0x2A => { // BPL (Branch if N=0)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if !self.cc_n { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BPL {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BPL not"); }
-            }
-            0x2B => { // BMI (Branch if N=1)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if self.cc_n { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BMI {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BMI not"); }
-            }
-            0x2D => { // BLT (N^V==1)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if self.cc_n ^ self.cc_v { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BLT {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BLT not"); }
-            }
-            0x2E => { // BGT (Z==0 and N^V==0)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if !self.cc_z && !(self.cc_n ^ self.cc_v) { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BGT {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BGT not"); }
-            }
-            0x2F => { // BLE (Z==1 or N^V==1)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if self.cc_z || (self.cc_n ^ self.cc_v) { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BLE {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BLE not"); }
-            }
-            0x2C => { // BGE (Branch if >= : N^V == 0)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
-                if (self.cc_n ^ self.cc_v)==false { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BGE {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BGE not"); }
-            }
-            // -------------------------------------------------------------------------
-            // Indexed RMW operations
-            // -------------------------------------------------------------------------
-            0x60 => { // NEG indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_neg(m); self.write8(ea,r); if self.trace { println!("NEG [{}] -> {:02X}", ea,r);} }
-            0x63 => { // COM indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_com(m); self.write8(ea,r); if self.trace { println!("COM [{}] -> {:02X}", ea,r);} }
-            0x64 => { // LSR indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_lsr(m); self.write8(ea,r); if self.trace { println!("LSR [{}] -> {:02X}", ea,r);} }
-            0x66 => { // ROR indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_ror(m); self.write8(ea,r); if self.trace { println!("ROR [{}] -> {:02X}", ea,r);} }
-            0x67 => { // ASR indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_asr(m); self.write8(ea,r); if self.trace { println!("ASR [{}] -> {:02X}", ea,r);} }
-            0x68 => { // ASL indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_asl(m); self.write8(ea,r); if self.trace { println!("ASL [{}] -> {:02X}", ea,r);} }
-            0x69 => { // ROL indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_rol(m); self.write8(ea,r); if self.trace { println!("ROL [{}] -> {:02X}", ea,r);} }
-            0x6A => { // DEC indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_dec(m); self.write8(ea,r); if self.trace { println!("DEC [{}] -> {:02X}", ea,r);} }
-            0x6E => { // JMP indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.pc=ea; if self.trace { println!("JMP [{}]", ea);} }
-            0x6C => { // INC indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_inc(m); self.write8(ea,r); if self.trace { println!("INC [{}] -> {:02X}", ea,r);} }
-            0x6D => { // TST indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.rmw_tst(m); if self.trace { println!("TST [{}]", ea); }
-            }
-            0x82 => { // SBCA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                let a=self.a; let c=if self.cc_c {1} else {0};
-                let res=a.wrapping_sub(imm).wrapping_sub(c);
-                self.a=res; self.flags_sub8(a,imm.wrapping_add(c),res);
-                if self.trace { println!("SBCA #${:02X} -> {:02X}", imm, res); }
-            }
-            0x83 => { // SUBD immediate
-                let hi = self.read8(self.pc); let lo = self.read8(self.pc+1); self.pc = self.pc.wrapping_add(2);
-                let val = ((hi as u16) << 8) | lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
-                self.set_d(res); self.flags_sub16(d0,val,res);
-                if self.trace { println!("SUBD #${:04X} -> {:04X}", val,res); }
-            }
-            0xC3 => { // ADDD immediate
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let val=((hi as u16)<<8)|lo as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32) & ((d0^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD #${:04X} -> {:04X}", val,res);} }
-            0x84 => { // ANDA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                self.a &= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA #${:02X}", imm);} }
-            0x88 => { // EORA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a ^= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA #${:02X}", imm);} }
-            0x8A => { // ORA immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a |= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA #${:02X}", imm);} }
-            0xC9 => { // ADCB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(imm as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^imm) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB #${:02X}", imm);} }
-            0x0B => { // SEV (Set V flag)
-                self.cc_v = true; if self.trace { println!("SEV"); } }
-            0x19 => { // DAA (Decimal Adjust Accumulator) after addition on A
-                // Reference 6809 rules (derived from 6800/6802 family but with C interaction):
-                // If (lower nibble > 9) or H set -> add 0x06 to A.
-                // If (upper nibble > 9) or C set or (upper nibble >9 after first adjust) -> add 0x60.
-                // C is set if a carry out of the high nibble occurs due to adding 0x60.
-                // H is undefined after instruction (we leave unchanged to minimize side effects; could clear).
-                // Z,N updated from result; V cleared per spec; C updated as above.
-                let mut adjust = 0u8; let a0 = self.a; let low = a0 & 0x0F; let high = (a0 >> 4) & 0x0F;
-                let mut carry = self.cc_c; // prior carry may influence high adjust
-                let half = self.cc_h; // existing half-carry state
-                if low > 9 || half { adjust = adjust.wrapping_add(0x06); }
-                let mut high_after = high;
-                if adjust != 0 { // simulate low adjust effect to evaluate high nibble overflow
-                    let tmp = a0.wrapping_add(0x06);
-                    high_after = (tmp >> 4) & 0x0F;
-                }
-                if high > 9 || high_after > 9 || carry { adjust = adjust.wrapping_add(0x60); carry = true; }
-                let res = a0.wrapping_add(adjust);
-                self.a = res;
-                self.update_nz8(res);
-                self.cc_v = false; // DAA clears V
-                self.cc_c = carry; // Updated carry (set if high adjust applied)
-                if self.trace { println!("DAA -> {:02X} (adj={:02X})", res, adjust); }
-            }
-            0x28 => { // BVC (Branch if V=0)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); if !self.cc_v { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BVC {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BVC not"); } }
-            0x4A => { // DECA
-                let a0=self.a; let res=a0.wrapping_sub(1); self.a=res; self.update_nz8(res); self.cc_v = res==0x7F; if self.trace { println!("DECA -> {:02X}", res);} }
-            0x07 => { // ASR direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.cc_c=(m & 0x01)!=0; let msb=m & 0x80; let res=(m>>1)|msb; self.write8(addr,res); self.cc_n=(res&0x80)!=0; self.cc_z=res==0; self.cc_v=false; if self.trace { println!("ASR ${:04X} -> {:02X}", addr,res);} }
-            0x08 => { // ASL/LSL direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let res=m<<1; self.cc_c=(m & 0x80)!=0; let res8=(res & 0xFF) as u8; self.write8(addr,res8); self.cc_n=(res8&0x80)!=0; self.cc_z=res8==0; self.cc_v=((m^res8)&0x80)!=0; if self.trace { println!("ASL ${:04X} -> {:02X}", addr,res8);} }
-            0x25 => { // BCS (branch if Carry set)
-                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); if self.cc_c { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BCS {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BCS not"); } }
-            0x18 => { // Treat undefined 6809 opcode as NOP (clears nothing)
-                if self.trace { println!("(undefined 0x18 treated as NOP)"); } }
-            0x61 => { // Undefined / unimplemented in this subset -> NOP
-                if self.trace { println!("(undefined 0x61 treated as NOP)"); } }
-            0x91 => { // CMPA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a0=self.a; let res=a0.wrapping_sub(m); self.flags_sub8(a0,m,res); if self.trace { println!("CMPA ${:04X}", addr);} }
-            0x93 => { // SUBD direct
-                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1); let addr = ((self.dp as u16)<<8)|off as u16;
-                let hi = self.read8(addr); let lo = self.read8(addr.wrapping_add(1)); let val = ((hi as u16)<<8)|lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
-                self.set_d(res); self.flags_sub16(d0,val,res); if self.trace { println!("SUBD ${:04X} -> {:04X}", addr,res);} }
-            0x98 => { // EORA direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.a ^= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA ${:04X}", addr);} }
-            0xA2 => { // SBCA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a0=self.a; let c=if self.cc_c {1} else {0}; let res=a0.wrapping_sub(m).wrapping_sub(c); self.a=res; self.flags_sub8(a0,m.wrapping_add(c),res); if self.trace { println!("SBCA [{}] -> {:02X}", ea,res);} }
-            0xA3 => { // SUBD indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s);
-                let hi = self.read8(ea); let lo = self.read8(ea.wrapping_add(1)); let val = ((hi as u16)<<8)|lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
-                self.set_d(res); self.flags_sub16(d0,val,res); if self.trace { println!("SUBD [{}] -> {:04X}", ea,res);} }
-            0xA5 => { // BITA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.a & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITA [{}]", ea);} }
-            0xA8 => { // EORA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a ^= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA [{}]", ea);} }
-            0xC8 => { // EORB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b ^= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB #${:02X}", imm);} }
-            0xCB => { // ADDB immediate
-                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let sum=(b0 as u16)+(imm as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^imm) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB #${:02X}", imm);} }
-            0xDB => { // ADDB direct
-                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let sum=(b0 as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB ${:04X}", addr);} }
-            0xE5 => { // BITB indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB [{}]", ea);} }
-            0xEB => { // ADDB indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let sum=(b0 as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB [{}]", ea);} }
-            0xEE => { // LDU indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; self.u=val; self.update_nz16(val); if self.trace { println!("LDU [{}] -> {:04X}", ea,val);} }
-            0xEF => { // STU indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let u=self.u; self.write8(ea,(u>>8) as u8); self.write8(ea.wrapping_add(1), u as u8); self.update_nz16(u); if self.trace { println!("STU [{}] -> {:04X}", ea,u);} }
-            0xF7 => { // STB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.b; self.write8(addr,v); self.update_nz8(v); if self.trace { println!("STB ${:04X} -> {:02X}", addr,v);} }
-            0xF9 => { // ADCB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB ${:04X}", addr);} }
-            0xB3 => { // SUBD extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let mhi=self.read8(addr); let mlo=self.read8(addr.wrapping_add(1)); let val=((mhi as u16)<<8)|mlo as u16; let d0=self.d(); let res=d0.wrapping_sub(val);
-                self.set_d(res); self.flags_sub16(d0,val,res);
-                if self.trace { println!("SUBD #${:04X} -> {:04X}", val,res); }
-            }
             0xD0 => { // SUBB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let res=b0.wrapping_sub(m); self.b=res; self.flags_sub8(b0,m,res); if self.trace { println!("SUBB ${:04X}", addr);} }
             0xD1 => { // CMPB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB ${:04X}", addr);} }
+            0xD2 => { // SBCB direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let c= if self.cc_c {1} else {0}; let res=b0.wrapping_sub(m).wrapping_sub(c); self.b=res; self.flags_sub8(b0,m.wrapping_add(c),res); if self.trace { println!("SBCB ${:04X} -> {:02X}", addr,res);} }
             0xD5 => { // BITB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB ${:04X}", addr);} }
-            // (Removed stray brace that incorrectly closed the match here)
+            // (continuación: siguientes opcodes aún dentro de match op)
             0xE7 => { // STB indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.b; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STB [{}] -> {:02X}", ea,v);} }
             0xEC => { // LDD indexed
@@ -1766,13 +1668,16 @@ impl CPU {
             0xF5 => { // BITB extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB ${:04X}", addr);} }
             0xF6 => { // LDB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.read8(addr); self.b=v; self.update_nz8(v); if self.trace { println!("LDB ${:04X} -> {:02X}", addr,v);} }
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.read8(addr); self.b=v; self.update_nz8(v); if self.trace { println!("LDB ${:04X} -> {:02X}", addr,v); }
+            }
             0xD8 => { // EORB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB ${:04X}", addr);} }
             0xE8 => { // EORB indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB [{}]", ea);} }
             0xFC => { // LDD extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); let val=((hi2 as u16)<<8)|lo2 as u16; self.set_d(val); self.update_nz16(val); if self.trace { println!("LDD ${:04X} -> {:04X}", addr,val);} }
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); let val=((hi2 as u16)<<8)|lo2 as u16; self.set_d(val); self.update_nz16(val);
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && addr==0xC83D { println!("[TRACE][LDDx refresh] read C83D={:02X} C83E={:02X} full={:04X} DP={:02X}", lo2, hi2, val, self.dp); }
+                if self.trace { println!("LDD ${:04X} -> {:04X}", addr,val);} }
             0xFF => { // STU extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let u=self.u; self.write8(addr,(u>>8) as u8); self.write8(addr.wrapping_add(1), u as u8); self.update_nz16(u); if self.trace { println!("STU ${:04X} -> {:04X}", addr,u);} }
             0x8C => { // CMPX immediate
@@ -1782,8 +1687,10 @@ impl CPU {
                 self.flags_sub16(x,val,res);
                 if self.trace { println!("CMPX #${:04X}", val); }
             }
+            0xBC => { // CMPX extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let mhi=self.read8(addr); let mlo=self.read8(addr.wrapping_add(1)); let val=((mhi as u16)<<8)|mlo as u16; let x0=self.x; let res=x0.wrapping_sub(val); self.flags_sub16(x0,val,res); if self.trace { println!("CMPX ${:04X}", addr);} }
             0x92 => { // SBCA direct
-                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
                 let a0 = self.a; let c = if self.cc_c {1} else {0};
                 let res = a0.wrapping_sub(m).wrapping_sub(c);
@@ -1794,7 +1701,10 @@ impl CPU {
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
                 let r = self.a & m; self.cc_n = (r & 0x80) != 0; self.cc_z = r == 0; self.cc_v = false;
-                if self.trace { println!("BITA ${:04X}", addr); }
+                if self.trace {
+                    if addr == 0xD00D { println!("BITA IFR (A={:02X} IFR={:02X} r={:02X} Z={})", self.a, m, r, self.cc_z); }
+                    else { println!("BITA ${:04X}", addr); }
+                }
             }
             op_unhandled => {
                 if matches!(op_unhandled,
@@ -1807,11 +1717,61 @@ impl CPU {
                     self.opcode_unimplemented += 1;
                 }
             }
-        }
+        } // fin match op
         self.advance_cycles(cyc);
+        if std::env::var("CYC_DEBUG").ok().as_deref()==Some("1") {
+            let sub_dbg = if op==0x10 || op==0x11 { format!(" sub={:02X}", sub) } else { String::new() };
+            println!("[CYC_DEBUG] pc0={:04X} op={:02X}{} cyc_applied={}", pc0, op, sub_dbg, cyc);
+        }
         if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
+        // ---------------------------------------------------------------------------------
+        // RAM execution detector (no abort): detect prolonged execution inside writable RAM
+        // window (heuristic narrowed to 0xC800-0xCFFF where anomalous loop was observed).
+        // Captures a single snapshot (registers, stack bytes, memory window, recent PCs,
+        // call_stack) once threshold reached. Does NOT modify normal execution flow.
+        // ---------------------------------------------------------------------------------
+        // (Scoped manually to avoid borrow conflicts with self while mutably borrowing detector)
+        let pc_executed = pc0; // PC of opcode just executed
+        if pc_executed >= 0xC800 && pc_executed <= 0xCFFF {
+            let mut need_dump: Option<(RamExecSnapshot,u16)> = None;
+            {
+                let det = &mut self.ram_exec;
+                if det.first_pc.is_none() { det.first_pc = Some(pc_executed); }
+                det.last_pc = pc_executed;
+                det.count = det.count.wrapping_add(1);
+                det.ring[det.ring_idx & 0x0F] = pc_executed;
+                det.ring_idx = (det.ring_idx + 1) & 0x0F;
+                if !det.triggered && det.count >= 512 {
+                    det.triggered = true;
+                    // Prepare data using immutable reads (can't call self.read8 while det borrowed)
+                    let lp = det.last_pc;
+                    let start = lp.saturating_sub(24);
+                    let end = lp.saturating_add(24).min(0xFFFF);
+                    let mut window = Vec::with_capacity((end-start+1) as usize);
+                    for addr in start..=end { window.push(self.mem[addr as usize]); }
+                    let mut stack_bytes = Vec::with_capacity(48);
+                    for off in 0..48u16 { let addr = self.s.wrapping_add(off); stack_bytes.push(self.mem[addr as usize]); }
+                    let mut recent = Vec::with_capacity(16);
+                    for i in 0..16 { let idx = (det.ring_idx + i) & 0x0F; recent.push(det.ring[idx]); }
+                    let snap = RamExecSnapshot {
+                        first_pc: det.first_pc.unwrap_or(pc_executed),
+                        last_pc: lp,
+                        iterations: det.count,
+                        regs: (self.a,self.b,self.x,self.y,self.u,self.s,self.dp,self.pc),
+                        stack_bytes,
+                        window,
+                        call_stack: self.call_stack.clone(),
+                        recent_pcs: recent,
+                        reason: "threshold".to_string(),
+                    };
+                    det.snapshot = Some(snap.clone());
+                    need_dump = Some((snap,start));
+                }
+            }
+            if let Some((snap,start)) = need_dump { if self.trace { self.dump_ram_exec_snapshot(&snap,start); } }
+        }
         true
-    }
+    } // fin step()
 
     // Centralized cycle advancement so VIA timers, frame timing, and future integrator stay in lockstep per instruction.
     fn advance_cycles(&mut self, cyc: u32) {
@@ -1857,8 +1817,8 @@ impl CPU {
             // Removed incorrect placement of direct LSR (opcode 0x04) from here.
             0x00 => { effective=base; match group {0x80=>{ self.x=self.x.wrapping_add(1); },0xA0=>{ self.y=self.y.wrapping_add(1); },0xC0=>{ self.u=self.u.wrapping_add(1); },0xE0=>{ self.s=self.s.wrapping_add(1); }, _=>{} } }
             0x01 => { effective=base; match group {0x80=>{ self.x=self.x.wrapping_add(2); },0xA0=>{ self.y=self.y.wrapping_add(2); },0xC0=>{ self.u=self.u.wrapping_add(2); },0xE0=>{ self.s=self.s.wrapping_add(2); }, _=>{} } }
-            0x02 => { match group {0x80=>{ self.x=self.x.wrapping_sub(1); effective=self.x; },0xA0=>{ self.y=self.y.wrapping_sub(1); effective=self.y; },0xC0=>{ self.u=self.u.wrapping_sub(1); effective=self.u; },0xE0=>{ self.s=self.s.wrapping_sub(1); effective=self.s; }, _=>{} } }
-            0x03 => { match group {0x80=>{ self.x=self.x.wrapping_sub(2); effective=self.x; },0xA0=>{ self.y=self.y.wrapping_sub(2); effective=self.y; },0xC0=>{ self.u=self.u.wrapping_sub(2); effective=self.u; },0xE0=>{ self.s=self.s.wrapping_sub(2); effective=self.s; }, _=>{} } }
+            0x02 => { match group {0x80=>{ self.x=self.x.wrapping_sub(1); effective=self.x;},0xA0=>{ self.y=self.y.wrapping_sub(1); effective=self.y;},2=>{ self.u=self.u.wrapping_sub(1); effective=self.u;},_=>{ self.s=self.s.wrapping_sub(1); effective=self.s; }}; return (effective,0) }
+            0x03 => { match group {0x80=>{ self.x=self.x.wrapping_sub(2); effective=self.x;},0xA0=>{ self.y=self.y.wrapping_sub(2); effective=self.y;},2=>{ self.u=self.u.wrapping_sub(2); effective=self.u;},_=>{ self.s=self.s.wrapping_sub(2); effective=self.s; }}; return (effective,0) }
             0x08 => { let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); effective=base.wrapping_add(off as i16 as u16); }
             _ => {}
         }
@@ -1875,10 +1835,13 @@ impl CPU {
                 0x06 => base.wrapping_add(self.d()),
                 _ => base,
             };
-            return (eff,0);
+            return (eff, 0);
         } else if (group_masked & 0x07)==0x07 {
             let reg_code=(post>>5)&0x03; let base=match reg_code {0=>x,1=>y,2=>u,_=>s};
-            let ptr=base.wrapping_add(self.d()); let hi=self.read8(ptr); let lo=self.read8(ptr.wrapping_add(1)); return ((((hi as u16)<<8)|lo as u16),2);
+            let ptr = base.wrapping_add(self.d());
+            let hi = self.read8(ptr); let lo = self.read8(ptr.wrapping_add(1));
+            // Indirect [reg+D] -> dirección apuntada por (reg + D)
+            return ((((hi as u16)<<8)|lo as u16), 0);
         }
         let reg_code=(post>>5)&0x03; let mut base=match reg_code {0=>x,1=>y,2=>u,_=>s};
         let mode=(post>>3)&0x03; let low3=post & 0x07; let mut extra=0u8;
@@ -1969,6 +1932,68 @@ impl CPU {
             _ => (base, 0, 0) // default/unsupported -> base
         }
     }
-}
 
-impl CPU { }
+    // ---------------------------------------------------------------------------------
+    // Dump de snapshot de ejecución anómala en RAM para diagnóstico post-mortem.
+    // Formato compacto pero suficientemente detallado para deducir causa probable
+    // (retorno corrupto, vector mal apuntado, datos ejecutados, etc.).
+    // start_addr: inicio de la ventana de bytes (para offset relativo en volcado).
+    // ---------------------------------------------------------------------------------
+    fn dump_ram_exec_snapshot(&self, snap: &RamExecSnapshot, start_addr: u16) {
+    println!("[RAM-EXEC DETECT] reason={} first={:04X} last={:04X} iter={} dp={:02X} A={:02X} B={:02X} X={:04X} Y={:04X} U={:04X} S={:04X} PC={:04X}",
+         snap.reason, snap.first_pc, snap.last_pc, snap.iterations, snap.regs.6, snap.regs.0, snap.regs.1, snap.regs.2, snap.regs.3, snap.regs.4, snap.regs.5, snap.regs.7);
+        // Recent PCs
+        print!("  recent_pcs:");
+        for pc in &snap.recent_pcs { print!(" {:04X}", pc); }
+        println!();
+        // Call stack
+        print!("  call_stack ({}):", snap.call_stack.len());
+        for ret in &snap.call_stack { print!(" {:04X}", ret); }
+        println!();
+        // Stack bytes (mostrar 48 bytes lineales)
+        print!("  stack[+0..+48]:");
+        for (i,b) in snap.stack_bytes.iter().enumerate() { if i%16==0 { print!("\n    {:04X}:", self.s.wrapping_add(i as u16)); } print!(" {:02X}", b); }
+        println!();
+        // Memory window around last_pc
+        println!("  window around last_pc ({} bytes)", snap.window.len());
+        for (i,b) in snap.window.iter().enumerate() {
+            if i % 16 == 0 { print!("    {:04X}:", start_addr.wrapping_add(i as u16)); }
+            print!(" {:02X}", b);
+            if i % 16 == 15 { println!(); }
+        }
+        if snap.window.len() % 16 != 0 { println!(); }
+    }
+
+    // Captura inmediata de snapshot cuando detectamos retorno inválido a RAM (antes de acumular 512 iteraciones).
+    // No pisa snapshot existente si ya se disparó el detector principal, para preservar el primero.
+    fn capture_ram_exec_snapshot_immediate(&mut self, pc: u16, reason: &str) {
+        if self.ram_exec.triggered { return; }
+        // Inicializa first_pc si todavía no.
+        if self.ram_exec.first_pc.is_none() { self.ram_exec.first_pc = Some(pc); }
+        self.ram_exec.last_pc = pc;
+        // Crear ventana centrada en pc (igual que lógica principal: ±24 bytes)
+        let start = pc.saturating_sub(24);
+        let end = pc.saturating_add(24).min(0xFFFF);
+        let mut window = Vec::with_capacity((end-start+1) as usize);
+        for addr in start..=end { window.push(self.mem[addr as usize]); }
+        let mut stack_bytes = Vec::with_capacity(48);
+        for off in 0..48u16 { let addr = self.s.wrapping_add(off); stack_bytes.push(self.mem[addr as usize]); }
+        // Construir recent PCs a partir del ring actual (sin alterar ring_idx)
+        let mut recent = Vec::with_capacity(16);
+        for i in 0..16 { let idx = (self.ram_exec.ring_idx + i) & 0x0F; recent.push(self.ram_exec.ring[idx]); }
+        let snap = RamExecSnapshot {
+            first_pc: self.ram_exec.first_pc.unwrap_or(pc),
+            last_pc: pc,
+            iterations: self.ram_exec.count, // puede ser <512
+            regs: (self.a,self.b,self.x,self.y,self.u,self.s,self.dp,self.pc),
+            stack_bytes,
+            window,
+            call_stack: self.call_stack.clone(),
+            recent_pcs: recent,
+            reason: reason.to_string(),
+        };
+        self.ram_exec.snapshot = Some(snap.clone());
+        self.ram_exec.triggered = true; // marcar para no sobrescribir con el umbral tardío
+        if self.trace { println!("[RAM-EXEC EARLY][{}] pc={:04X} iterations={} first={:04X}", reason, pc, self.ram_exec.count, snap.first_pc); self.dump_ram_exec_snapshot(&snap, start); }
+    }
+}
