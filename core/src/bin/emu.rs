@@ -3,7 +3,7 @@ fn main(){
     let args: Vec<String>=std::env::args().collect();
     if args.len()<2 { eprintln!("uso: emu <rom.bin> [trace]"); return; }
     let data=fs::read(&args[1]).expect("no lee rom");
-    let mut cpu = CPU { pc: 0x0030, ..CPU::default() }; // BIOS jumps to $0030 after header
+    let mut cpu = CPU::with_pc(0x0030); // BIOS salta a $0030 tras header
     cpu.load_bin(&data,0x0000);
     cpu.trace = args.iter().any(|s| s=="--trace");
     let mut max_steps: usize = 5000;

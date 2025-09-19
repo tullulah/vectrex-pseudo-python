@@ -81,5 +81,21 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Preferir extensiones incrementales (añadir campos / rutas) antes que sustituciones destructivas.
 - Cualquier reducción de detalle en tracing debe justificarse y documentarse en `SUPER_SUMMARY.md` y discutirse antes.
 
+## 15. Fuente de la Verdad de Semántica (CPU/VIA)
+En caso de cualquier duda sobre:
+- Orden de pushes/pops de pila 6809 (RTS, interrupt frames, PSHS/PSHU, PULS/PULU)
+- Manejo de temporizadores VIA (Timer1 / Timer2: expiración, recarga, limpieza de IFR, bits IER)
+- Semántica de flags IFR/IER y generación de IRQ
+- Secuencias de inicialización BIOS que dependan de timing real
+
+La referencia primaria de comparación (solo lectura, para validar comportamiento, NO copiar código) es el código de la implementación de referencia localizada en:
+`C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\vectrexy`
+
+Política:
+1. Usar esta referencia únicamente para confirmar orden y efectos (nunca portar bloques de código textualmente — mantener originalidad y evitar problemas de copyright).
+2. Si se detecta divergencia entre nuestra emulación y la referencia, primero instrumentar y demostrar con logs antes de cambiar lógica.
+3. Cualquier corrección derivada debe anotar brevemente en `SUPER_SUMMARY.md` (sección CPU/VIA) el aspecto validado y la fecha.
+4. Mantener comentarios críticos en español (o bilingües) al introducir cambios basados en esta verificación.
+
 ---
 Última actualización: (auto) mantener este archivo conforme se completen los TODOs listados.

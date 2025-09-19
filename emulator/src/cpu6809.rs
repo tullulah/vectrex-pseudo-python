@@ -374,15 +374,16 @@ pub fn opcode_mnemonic(op: u8, sub: u8) -> &'static str {
         0x3C => "CWAI", 0x13 => "SYNC",
         // Inc/dec/test
         0x5A => "DECB", 0x5C => "INCB", 0x4D => "TSTA", 0x5D => "TSTB",
-    // Generic memory/ALU (grouping) -- extended forms
+    // Generic memory/ALU (grouping) -- indexed and extended forms
+    // Indexed addressing (0x60..0x6F)
+    0x60 => "NEG", 0x63 => "COM", 0x64 => "LSR", 0x66 => "ROR", 0x67 => "ASR",
+    0x68 => "ASL", 0x69 => "ROL", 0x6A => "DEC", 0x6C => "INC", 0x6D => "TST", 0x6E => "JMP", 0x6F => "CLR",
+    // Extended addressing (0x70..0x7F)
     0x70 => "NEG", 0x73 => "COM", 0x74 => "LSR", 0x76 => "ROR", 0x77 => "ASR",
     0x78 => "ASL", 0x79 => "ROL", 0x7A => "DEC", 0x7C => "INC", 0x7D => "TST", 0x7E => "JMP",
     // Direct page RMW / shifts (previously showing as OP)
     0x00 => "NEG", 0x03 => "COM", 0x04 => "LSR", 0x06 => "ROR", 0x07 => "ASR",
     0x08 => "ASL", 0x09 => "ROL", 0x0A => "DEC", 0x0C => "INC", 0x0D => "TST", 0x0F => "CLR",
-    // Indexed memory RMW / shifts (0x60-0x6F)
-    0x60 => "NEG", 0x63 => "COM", 0x64 => "LSR", 0x66 => "ROR", 0x67 => "ASR",
-    0x68 => "ASL", 0x69 => "ROL", 0x6A => "DEC", 0x6C => "INC", 0x6D => "TST", 0x6E => "JMP", 0x6F => "CLR",
     // Accumulator shifts/rotates
     0x48 => "ASLA", 0x49 => "ROLA", 0x44 => "LSRA", 0x46 => "RORA", 0x47 => "ASRA",
     0x58 => "ASLB", 0x59 => "ROLB", 0x54 => "LSRB", 0x56 => "RORB", 0x57 => "ASRB",
@@ -953,39 +954,39 @@ impl CPU {
     // ---------------------------------------------------------------------
     fn rmw_neg(&mut self, m:u8)->u8 {
         let res = (0u16).wrapping_sub(m as u16) as u8;
-        self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = res == 0x80; self.cc_c = m != 0; res
+        self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v = res==0x80; self.cc_c = m!=0; res
     }
     fn rmw_com(&mut self, m:u8)->u8 {
-        let res = !m; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; self.cc_c = true; res
+        let res = !m; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; self.cc_c=true; res
     }
     fn rmw_lsr(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x01) != 0; let res = m >> 1; self.cc_n = false; self.cc_z = res == 0; self.cc_v = false; res
+        self.cc_c = (m & 0x01)!=0; let res = m>>1; self.cc_n=false; self.cc_z=res==0; self.cc_v=false; res
     }
     fn rmw_ror(&mut self, m:u8)->u8 {
-        let cin = if self.cc_c {0x80} else {0}; self.cc_c = (m & 0x01) != 0; let res = (m >> 1) | cin; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; res
+        let cin = if self.cc_c {0x80} else {0}; self.cc_c = (m & 0x01)!=0; let res = (m>>1)|cin; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; res
     }
     fn rmw_asr(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x01) != 0; let msb = m & 0x80; let res = (m >> 1) | msb; self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = false; res
+        self.cc_c = (m & 0x01)!=0; let msb = m & 0x80; let res = (m>>1)|msb; self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v=false; res
     }
     fn rmw_asl(&mut self, m:u8)->u8 {
-        self.cc_c = (m & 0x80) != 0; let res = m.wrapping_shl(1); self.cc_n = (res & 0x80) != 0; self.cc_z = res == 0; self.cc_v = ((m ^ res) & 0x80) != 0; res
+        self.cc_c = (m & 0x80)!=0; let res = m.wrapping_shl(1); self.cc_n = (res & 0x80)!=0; self.cc_z = res==0; self.cc_v = ((m ^ res) & 0x80)!=0; res
     }
     fn rmw_rol(&mut self, m:u8)->u8 {
-        let cin = if self.cc_c {1} else {0}; self.cc_c = (m & 0x80) != 0; let res = ((m as u16) << 1 | cin as u16) & 0xFF; let r = res as u8; self.cc_n = (r & 0x80) != 0; self.cc_z = r == 0; self.cc_v = ((m ^ r) & 0x80) != 0; r
+        let cin = if self.cc_c {1} else {0}; self.cc_c = (m & 0x80)!=0; let res = ((m as u16)<<1 | cin as u16) & 0xFF; let r = res as u8; self.cc_n = (r & 0x80)!=0; self.cc_z = r==0; self.cc_v = ((m ^ r) & 0x80)!=0; r
     }
     fn rmw_dec(&mut self, m:u8)->u8 {
-        let res = m.wrapping_sub(1); self.update_nz8(res); self.cc_v = res == 0x7F; // C unaffected
+        let res = m.wrapping_sub(1); self.update_nz8(res); self.cc_v = res==0x7F; // C unaffected
         res
     }
     fn rmw_inc(&mut self, m:u8)->u8 {
-        let res = m.wrapping_add(1); self.update_nz8(res); self.cc_v = res == 0x80; // C unaffected
+        let res = m.wrapping_add(1); self.update_nz8(res); self.cc_v = res==0x80; // C unaffected
         res
     }
     fn rmw_tst(&mut self, m:u8)->u8 {
-        self.cc_n = (m & 0x80) != 0; self.cc_z = m == 0; self.cc_v = false; self.cc_c = false; m
+        self.cc_n = (m & 0x80)!=0; self.cc_z = m==0; self.cc_v=false; self.cc_c=false; m
     }
     fn rmw_clr(&mut self)->u8 {
-        self.cc_n = false; self.cc_z = true; self.cc_v = false; self.cc_c = false; 0
+        self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; 0
     }
     fn service_irq(&mut self){
         #[cfg(test)] let before_s = self.s;
@@ -1205,7 +1206,7 @@ impl CPU {
         if self.jsr_log_len < self.jsr_log.len() {
             match op {
                 0xBD => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); let tgt=((hi as u16)<<8)|lo as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
-                0x8D => { let off=self.read8(self.pc) as i8; let tgt=(self.pc as i16).wrapping_add(1).wrapping_add(off as i16) as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
+                0x8D => { let off=self.read8(self.pc) as i8 as i16; let tgt=(self.pc as i16 + 1 + off) as u16; self.jsr_log[self.jsr_log_len]=tgt; self.jsr_log_len+=1; }
                 _=>{}
             }
         }
@@ -1217,8 +1218,7 @@ impl CPU {
             let mut found=false; let mut empty_idx=None; let mut min_idx=0; let mut min_count= u64::MAX;
             for (i,(pc,count)) in slots.iter_mut().enumerate() {
                 if *count==0 && empty_idx.is_none() { empty_idx=Some(i); }
-                if *pc==pc0 { *count+=1; found=true; break;
-                }
+                if *pc==pc0 { *count+=1; found=true; break; }
                 if *count < min_count { min_count=*count; min_idx=i; }
             }
             if !found { if let Some(ei)=empty_idx { slots[ei]=(pc0,1); } else { slots[min_idx]=(pc0,1); } }
@@ -1261,7 +1261,7 @@ impl CPU {
         };
         match op {
             0x4C => { // INCA (ensure early dispatch)
-                let old = self.a; let res = old.wrapping_add(1); self.a = res; self.update_nz8(res); self.cc_v = res == 0x80; if self.trace { println!("INCA -> {:02X}", res);} }
+                let old = self.a; let res = old.wrapping_add(1); self.a = res; self.update_nz8(res); self.cc_v = res==0x80; if self.trace { println!("INCA -> {:02X}", res);} }
             0xAC => { // CMPX indexed (already consumed postbyte in seed stage alternative path if any)
                 // Re-decode (simple) to keep logic local
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s);
@@ -1272,6 +1272,7 @@ impl CPU {
                 let ret=self.pc; // address after operand fetch (return point)
                 // Hardware behavior: push return address (high then low) onto S before transferring control
                 self.push16(ret);
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
                 if ea>=0xF000 { if self.bios_present { self.record_bios_call(ea); } else { if self.trace { println!("Missing BIOS ${:04X}", ea);} return false; } }
                 self.pc=ea; }
             0x3D => { // MUL: A * B -> D (single implementation)
@@ -1351,6 +1352,7 @@ impl CPU {
             }
             0x6F => { // CLR indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,0); self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; if self.trace { println!("CLR [{}]", ea); } }
+            // (Removed duplicate indexed RMW cluster; implemented explicitly below)
             // Load/store & arithmetic subset (partial — extend as needed)
             0x86 => { let v=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a=v; self.update_nz8(self.a); if self.trace { println!("LDA #${:02X}", self.a);} }
             0xC6 => { let v=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b=v; self.update_nz8(self.b); if self.trace { println!("LDB #${:02X}", self.b);} }
@@ -1362,27 +1364,12 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let res=b0.wrapping_sub(imm); self.flags_sub8(b0,imm,res); if self.trace { println!("CMPB #${:02X}", imm);} }
             0x81 => { // CMPA immediate
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let a=self.a; let res=a.wrapping_sub(imm); self.flags_sub8(a,imm,res); if self.trace { println!("CMPA #${:02X}", imm);} }
-            0x8D => { // BSR (short relative branch to subroutine)
-                let off = self.read8(self.pc) as i8; self.pc = self.pc.wrapping_add(1);
-                let tgt = (self.pc as i16 + 1 + off as i16) as u16;
-                if self.trace { println!("BSR ${:04X}", tgt); }
-                let ret = self.pc; // address after operand fetch (return point)
-                // Hardware behavior: push return address (high then low) onto S before transferring control
-                self.push16(ret);
-                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
-                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::BSR });
-                self.pc = tgt;
-            }
-            0x17 => { // LBSR (long branch to subroutine)
-                let hi = self.read8(self.pc); let lo = self.read8(self.pc+1); self.pc = self.pc.wrapping_add(2);
-                let off = ((hi as u16) << 8) | lo as u16;
-                let signed = off as i16;
-                let ret = self.pc;
-                self.push16(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
-                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::LBSR });
-                self.pc = self.pc.wrapping_add(signed as u16);
-                if self.trace { println!("LBSR ${:04X}", self.pc); }
-            }
+            0x8D => { // BSR (relative 8)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); let ret=self.pc; let s_before=self.s; self.push16(ret);
+                if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[BSR] ret={:04X} S_before={:04X} S_after={:04X}", ret, s_before, self.s); }
+                #[cfg(test)] { self.last_return_expect=Some(ret); } let target=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::BSR }); self.pc=target; }
+            0x17 => { // LBSR (relative 16)
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let off=((hi as u16)<<8)|lo as u16; let signed = off as i16; let ret=self.pc; self.push16(ret); #[cfg(test)] { self.last_return_expect=Some(ret); } let target=self.pc.wrapping_add(signed as u16); if self.trace { println!("LBSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::LBSR }); self.pc=target; cyc=9; }
             0x39 => { // RTS
                 let depth_before = self.call_stack.len();
                 // Extraer dirección de retorno real de la pila (pop16) según convención 6809.
@@ -1402,12 +1389,8 @@ impl CPU {
                 // Shadow validation: localizar frame cuyo ret coincide; si tope no coincide, buscar y podar.
                 if let Some(sf)=self.shadow_stack.pop() {
                     if sf.ret != ret {
-                        // Mismatch: capture snapshot if landing inside RAM window of interest.
                         if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-rts"); }
                     }
-                } else {
-                    // Underflow: unexpected RTI con pila de sombra vacía.
-                    if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-rts"); }
                 }
                 if self.in_irq_handler { self.wai_halt=false; self.in_irq_handler=false; }
                 if let Some(d)=self.wait_recal_depth { if depth_before == d && self.call_stack.len() == d { self.bios_frame = self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
@@ -1468,7 +1451,7 @@ impl CPU {
                         if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-rti"); }
                     }
                 } else {
-                    // Underflow: unexpected RTI con pila de sombra vacía.
+                    // Underflow: unexpected RTI with empty shadow stack.
                     if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-rti"); }
                 }
                 if let Some(d)=self.wait_recal_depth { if self.call_stack.len()==d { self.bios_frame=self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
@@ -1620,7 +1603,6 @@ impl CPU {
             0xFE => { // LDU extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
                 let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.u=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.u); if self.trace { println!("LDU ${:04X}", addr);} }
-           
             0xB6 => { // LDA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
                 let v=self.read8(addr); self.a=v; self.update_nz8(v); if self.trace { println!("LDA ${:04X}", addr);} }
@@ -1632,14 +1614,72 @@ impl CPU {
             0xBE => { // LDX extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
                 let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1));
-                let val=((hi2 as u16)<<8)|lo2 as u16; self.x=val; self.update_nz16(val); if self.trace { println!("LDX ${:04X} -> {:04X}", addr,val); }
+                let val=((hi2 as u16)<<8)|lo2 as u16; self.x=val; self.update_nz16(val);
+                if self.trace { println!("LDX ${:04X} -> {:04X}", addr,val); }
             }
+            0xBF => { // STX extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16;
+                self.write8(addr, (self.x>>8) as u8); self.write8(addr.wrapping_add(1), self.x as u8); self.update_nz16(self.x); if self.trace { println!("STX ${:04X}", addr);} }
+            0x80 => { // SUBA immediate
+                let imm = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let a0 = self.a; let res = a0.wrapping_sub(imm);
+                self.a = res; self.flags_sub8(a0, imm, res);
+                if self.trace { println!("SUBA #${:02X} -> {:02X}", imm, res); }
+            }
+            0xC4 => { // ANDB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b &= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB #${:02X}", imm);} }
+            0x85 => { // BITA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let r=self.a & imm; self.cc_n=(r & 0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITA #${:02X}", imm);} }
+            0x89 => { // ADCA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(imm as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^imm) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA #${:02X}", imm);} }
+            0x90 => { // SUBA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a0=self.a; let res=a0.wrapping_sub(m); self.a=res; self.flags_sub8(a0,m,res); if self.trace { println!("SUBA ${:04X} -> {:02X}", addr,res);} }
+            0x99 => { // ADCA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA ${:04X}", addr);} }
+            0x9B => { // ADDA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA ${:04X}", addr);} }
+            0x9C => { // CMPX direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let x0=self.x; let res=x0.wrapping_sub(val); self.flags_sub16(x0,val,res); if self.trace { println!("CMPX ${:04X}", addr);} }
+            0x9A => { // ORA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
+            0x06 => { // ROR direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_ror(m); self.write8(addr,r); if self.trace { println!("ROR ${:04X} -> {:02X}", addr,r);} }
+            0xE1 => { // CMPB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB [{}]", ea);} }
+            0x09 => { // ROL direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_rol(m); self.write8(addr,r); if self.trace { println!("ROL ${:04X} -> {:02X}", addr,r);} }
+            0x0C => { // INC direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.rmw_inc(m); self.write8(addr,r); if self.trace { println!("INC ${:04X} -> {:02X}", addr,r);} }
+            0x0D => { // TST direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.rmw_tst(m); if self.trace { println!("TST ${:04X}", addr);} }
+            0x0E => { // JMP direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; self.pc=addr; if self.trace { println!("JMP ${:04X}", addr);} }
+            0x0F => { // CLR direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; self.rmw_clr(); self.write8(addr,0); if self.trace { println!("CLR ${:04X}", addr);} }
+            0xA0 => { // SUBA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a0=self.a; let res=a0.wrapping_sub(m); self.a=res; self.flags_sub8(a0,m,res); if self.trace { println!("SUBA [{}] -> {:02X}", ea,res);} }
+            0xB0 => { // SUBA extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a0=self.a; let res=a0.wrapping_sub(m); self.a=res; self.flags_sub8(a0,m,res); if self.trace { println!("SUBA ${:04X} -> {:02X}", addr,res);} }
+            0xA4 => { // ANDA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a &= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA [{}]", ea);} }
+            0xA9 => { // ADCA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA [{}]", ea);} }
+            0xAA => { // ORA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA [{}]", ea);} }
+            0xAB => { // ADDA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA [{}]", ea);} }
+            0xE0 => { // SUBB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let res=b0.wrapping_sub(m); self.b=res; self.flags_sub8(b0,m,res); if self.trace { println!("SUBB [{}] -> {:02X}", ea,res);} }
+            0xB4 => { // ANDA extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a &= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA ${:04X}", addr);} }
+            0xBA => { // ORA extended (faltante)
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.a |= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA ${:04X}", addr);} }
             0xB9 => { // ADCA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a=self.a; let c= if self.cc_c {1}else{0}; let sum=(a as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADCA ${:04X}", addr);} }
             0xBB => { // ADDA extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let a=self.a; let sum=(a as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.a=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((a^m) as u16)&((a^r) as u16)&0x80)!=0; if self.trace { println!("ADDA ${:04X}", addr);} }
             0xE3 => { // ADDD indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let d=self.d(); let sum=(d as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d^val) as u32) & ((d^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD [{}] -> {:04X}", ea,res);} }
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32) & ((d0^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD [{}] -> {:04X}", ea,res);} }
             0xE4 => { // ANDB indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB [{}]", ea);} }
             0xEA => { // ORB indexed
@@ -1650,6 +1690,384 @@ impl CPU {
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB ${:04X}", addr);} }
             0xF3 => { // ADDD extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); let val=((hi2 as u16)<<8)|lo2 as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32)&((d0^res) as u32)&0x8000)!=0; if self.trace { println!("ADDD ${:04X} -> {:04X}", addr,res);} }
+            0xCA => { // ORB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b |= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB #${:02X}", imm);} }
+            0xC5 => { // BITB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let r=self.b & imm; self.cc_n=(r & 0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB #${:02X}", imm);} }
+            0xDA => { // ORB direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.b |= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB ${:04X}", addr);} }
+            0xFA => { // ORB extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b |= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ORB ${:04X}", addr);} }
+            0xF8 => { // EORB extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB ${:04X}", addr);} }
+            0x04 => { // LSR direct (moved from decode_indexed_basic)
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.cc_c=(m & 0x01)!=0; let res=m>>1; self.write8(addr,res); self.cc_n=false; self.cc_z=res==0; self.cc_v=false; if self.trace { println!("LSR ${:04X} -> {:02X}", addr,res);} }
+            0x9D => { // JSR direct
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16;
+                if self.trace { println!("JSR ${:04X}", addr); }
+                let ret = self.pc; self.push16(ret);
+                if addr >= 0xF000 {
+                    if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr); } return false; }
+                    self.record_bios_call(addr);
+                }
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::JSR });
+                self.pc = addr; cyc = 7; },
+            0xBD => { // JSR absolute
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
+                let addr=((hi as u16)<<8)|lo as u16; if self.trace { println!("JSR ${:04X}", addr);} 
+                let ret=self.pc; // after operand
+                let s_before=self.s; self.push16(ret);
+                if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[JSR] to={:04X} ret={:04X} S_before={:04X} S_after={:04X}", addr, ret, s_before, self.s); }
+                if addr>=0xF000 { 
+                    if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
+                    self.record_bios_call(addr);
+                }
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
+                self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::JSR });
+                self.pc=addr; 
+                cyc=7; }
+            0x97 => { // STA direct
+                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16;
+                let val = self.a; self.write8(addr, val);
+                self.update_nz8(val);
+                if self.trace { println!("STA ${:04X} -> {:02X}", addr, val); }
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
+                    if addr==0xD008 { self.t2_last_low=Some(val); }
+                    if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STA] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STA] high={:02X} (low missing)", val); } }
+                }
+            }
+            0x94 => { // ANDA direct
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
+                self.a &= m; self.update_nz8(self.a); self.cc_v = false;
+                if self.trace { println!("ANDA ${:04X}", addr); }
+            }
+            0x9F => { // STX direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr=((self.dp as u16)<<8)|off as u16; let x=self.x;
+                self.write8(addr,(x>>8) as u8); self.write8(addr.wrapping_add(1), x as u8);
+                self.update_nz16(x); if self.trace { println!("STX ${:04X}", addr); }
+            }
+            0x96 => { // LDA direct (needed for VIA register reads in BIOS interrupt handlers)
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16;
+                let v = self.read8(addr); self.a = v; self.update_nz8(v);
+                if self.trace { println!("LDA ${:04X} -> {:02X}", addr, v); }
+            }
+            0xD7 => { // STB direct
+                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16;
+                let val = self.b; self.write8(addr, val);
+                self.update_nz8(val);
+                if self.trace { println!("STB ${:04X} -> {:02X}", addr, val); }
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
+                    if addr==0xD008 { self.t2_last_low=Some(val); }
+                    if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STB] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STB] high={:02X} (low missing)", val); } }
+                }
+            }
+            0xD4 => { // ANDB direct
+                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
+                self.b &= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("ANDB ${:04X}", addr);} }
+            0xD6 => { // LDB direct
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+                let addr = ((self.dp as u16) << 8) | off as u16;
+                let v = self.read8(addr); self.b = v; self.update_nz8(v);
+                if self.trace { println!("LDB ${:04X} -> {:02X}", addr, v); }
+            }
+            0xE6 => { // LDB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.read8(ea); self.b=v; self.update_nz8(v); if self.trace { println!("LDB [{}] -> {:02X}", ea,v);} }
+            0xA6 => { // LDA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.read8(ea); self.a=v; self.update_nz8(v); if self.trace { println!("LDA [{}] -> {:02X}", ea,v);} }
+            0xA7 => { // STA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.a; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STA [{}] -> {:02X}", ea,v);} }
+            0xAE => { // LDX indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; self.x=val; self.update_nz16(val); if self.trace { println!("LDX [{}] -> {:04X}", ea,val);} }
+            0xA1 => { // CMPA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a=self.a; let res=a.wrapping_sub(m); self.flags_sub8(a,m,res); if self.trace { println!("CMPA [{}]", ea);} }
+            0xAF => { // STX indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,(self.x>>8) as u8); self.write8(ea.wrapping_add(1), self.x as u8); self.update_nz16(self.x); if self.trace { println!("STX [{}]", ea);} }
+            0xED => { // STD indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.write8(ea,self.a); self.write8(ea.wrapping_add(1), self.b); self.update_nz16(self.d()); if self.trace { println!("STD [{}]", ea);} }
+            0xF1 => { // CMPB extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let b0=self.b; let res=b0.wrapping_sub(m); self.flags_sub8(b0,m,res); if self.trace { println!("CMPB ${:04X}", addr);} }
+            0x10 => { // prefix group 1
+                let bop=self.read8(self.pc);
+                // Snapshot flags for branch condition evaluation
+                let f_c = self.cc_c; let f_z = self.cc_z; let f_v = self.cc_v; let f_n = self.cc_n;
+                match bop { 0x8E => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY #${:04X}", self.y);} }
+                    0x9E => { // LDY direct
+                        self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                        let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y);} }
+                    0xAE => { // LDY indexed
+                        self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); self.y=((hi as u16)<<8)|lo as u16; self.update_nz16(self.y); if self.trace { println!("LDY [{}] -> {:04X}", ea, self.y);} }
+                    0xBE => { // LDY extended
+                        self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.y=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.y); if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y);} }
+                    0x9F => { // STY direct
+                        self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let y=self.y; self.write8(addr,(y>>8) as u8); self.write8(addr.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY ${:04X}", addr);} }
+                    0xAF => { // STY indexed
+                        self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let y=self.y; self.write8(ea,(y>>8) as u8); self.write8(ea.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY [{}]", ea);} }
+                    0xBF => { // STY extended
+                        self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let y=self.y; self.write8(addr,(y>>8) as u8); self.write8(addr.wrapping_add(1), y as u8); self.update_nz16(y); if self.trace { println!("STY ${:04X}", addr);} }
+                    0xCE => { // LDS immediate
+                        self.pc=self.pc.wrapping_add(1);
+                        #[cfg(test)] let pc_operands = self.pc; // direccion de los bytes inmediatos
+                        let hi=self.read8(self.pc); let lo=self.read8(self.pc+1);
+                        self.pc=self.pc.wrapping_add(2);
+                        let new_s=((hi as u16)<<8)|lo as u16;
+                        #[cfg(test)] let old_s = self.s;
+                        self.s=new_s; self.update_nz16(self.s);
+                        if self.trace { println!("LDS #${:04X}", self.s);} cyc=5;
+                        #[cfg(test)] {
+                            println!("[LDS-IMM] pc_operands={:04X} bytes={:02X} {:02X} S_before={:04X} S_after={:04X}", pc_operands, hi, lo, old_s, self.s);
+                        }
+                    }
+                    // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) NEW, extended (0xB3)
+                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
+                        0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                        0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                    }; let d=self.d(); let res=d.wrapping_sub(val); self.flags_sub16(d,val,res); if self.trace { println!("CMPD ${:04X} -> {:04X}", val,res);} }
+                    // CMPY immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
+                    0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
+                        0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                        0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                    }; let y0=self.y; let res=y0.wrapping_sub(val); self.flags_sub16(y0,val,res); if self.trace { println!("CMPY ${:04X} -> {:04X}", val,res);} }
+                    // LDS direct/indexed/extended: 0xDE,0xEE,0xFE; STS 0xDF,0xEF,0xFF
+                    0xDE => { self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.s=((hi as u16)<<8)|lo as u16; self.update_nz16(self.s); if self.trace { println!("LDS ${:04X} -> {:04X}", addr,self.s);} }
+                    0xEE => { self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); self.s=((hi as u16)<<8)|lo as u16; self.update_nz16(self.s); if self.trace { println!("LDS [{}] -> {:04X}", ea,self.s);} }
+                    0xFE => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let hi2=self.read8(addr); let lo2=self.read8(addr.wrapping_add(1)); self.s=((hi2 as u16)<<8)|lo2 as u16; self.update_nz16(self.s); if self.trace { println!("LDS ${:04X} -> {:04X}", addr,self.s);} }
+                    0xDF => { self.pc=self.pc.wrapping_add(1); let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let s=self.s; self.write8(addr,(s>>8) as u8); self.write8(addr.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS ${:04X}", addr);} }
+                    0xEF => { self.pc=self.pc.wrapping_add(1); let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let s=self.s; self.write8(ea,(s>>8) as u8); self.write8(ea.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS [{}]", ea);} }
+                    0xFF => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let s=self.s; self.write8(addr,(s>>8) as u8); self.write8(addr.wrapping_add(1), s as u8); self.update_nz16(s); if self.trace { println!("STS ${:04X}", addr);} }
+                    0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI2, "SWI2"); }
+                    0x26|0x27 => { self.pc=self.pc.wrapping_add(1); let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let off=((hi as u16)<<8)|lo as u16; let target=self.pc.wrapping_add(off as i16 as u16); match bop { 0x26 => { if !self.cc_z { if self.trace { println!("LBNE {:04X}", target);} self.pc=target; } else if self.trace { println!("LBNE not"); } } 0x27 => { if self.cc_z { if self.trace { println!("LBEQ {:04X}", target);} self.pc=target; } else if self.trace { println!("LBEQ not"); } } _=>{} } }
+                    // Long branch set (0x21-0x2F). 0x26/0x27 already handled; 0x16 LBRA lives in page0 per spec.
+                    0x21..=0x2F => { // All long branch conditions except 0x26/0x27 (handled earlier) and excluding 0x16 LBRA (page0)
+                        let cond = match bop {
+                            0x21 => false, // LBRN
+                            0x22 => (f_c || f_z)==false, // LBHI
+                            0x23 => (f_c || f_z)!=false, // LBLS
+                            0x24 => f_c==false, // LBHS/LBCC
+                            0x25 => f_c!=false, // LBLO/LBCS
+                            0x28 => f_v==false, // LBVC
+                            0x29 => f_v!=false, // LBVS
+                            0x2A => f_n==false, // LBPL
+                            0x2B => f_n!=false, // LBMI
+                            0x2C => (f_n ^ f_v)==false, // LBGE
+                            0x2D => (f_n ^ f_v)!=false, // LBLT
+                            0x2E => (f_z || (f_n ^ f_v))==false, // LBGT
+                            0x2F => (f_z || (f_n ^ f_v))!=false, // LBLE
+                            _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
+                        };
+                        // Consume sub-op byte
+                        self.pc = self.pc.wrapping_add(1);
+                        let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
+                        let off=((hi as u16)<<8)|lo as u16; let target=self.pc.wrapping_add(off as i16 as u16);
+                        let name = match bop {
+                            0x21=>"LBRN",0x22=>"LBHI",0x23=>"LBLS",0x24=>"LBHS/LBCC",0x25=>"LBLO/LBCS",0x28=>"LBVC",0x29=>"LBVS",0x2A=>"LBPL",0x2B=>"LBMI",0x2C=>"LBGE",0x2D=>"LBLT",0x2E=>"LBGT",0x2F=>"LBLE", _=>"?" };
+                        if cond { if self.trace { println!("{} {:04X}", name, target);} self.pc=target; cyc = cyc.saturating_add(6); } else { if self.trace { println!("{} not", name);} cyc = cyc.saturating_add(5); }
+                    }
+                    _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
+                }
+            }
+            0x11 => { // prefix group 2
+                let bop=self.read8(self.pc);
+                match bop {
+                    // CMPU immediate/direct/indexed/extended: 0x83,0x93,0xA3,0xB3
+                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
+                        0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                        0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                    }; let u0=self.u; let res=u0.wrapping_sub(val); self.flags_sub16(u0,val,res); if self.trace { println!("CMPU ${:04X} -> {:04X}", val,res);} }
+                    // CMPS immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
+                    0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
+                        0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                        0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                    }; let s0=self.s; let res=s0.wrapping_sub(val); self.flags_sub16(s0,val,res); if self.trace { println!("CMPS ${:04X} -> {:04X}", val,res);} }
+                    0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI3, "SWI3"); }
+                    _ => { if self.trace { println!("UNIMPL 0x11 {:02X}", bop);} return false; }
+                }
+            }
+            0x00 => { // NEG direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let addr=((self.dp as u16)<<8)|off as u16;
+                let m=self.read8(addr); let res=(0u16).wrapping_sub(m as u16) as u8;
+                self.write8(addr,res); self.cc_n=(res&0x80)!=0; self.cc_z=res==0; self.cc_v=res==0x80; self.cc_c=m!=0;
+                if self.trace { println!("NEG ${:04X} -> {:02X}", addr,res);} 
+            }
+            0x03 => { // COM direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let res=!m; self.write8(addr,res); self.cc_n=(res & 0x80)!=0; self.cc_z=res==0; self.cc_v=false; self.cc_c=true; if self.trace { println!("COM ${:04X} -> {:02X}", addr,res);} }
+            0x0A => { // CLV (Clear V flag)
+                self.cc_v = false;
+                if self.trace { println!("CLV"); }
+            }
+            0x2A => { // BPL (Branch if N=0)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if !self.cc_n { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BPL {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BPL not"); }
+            }
+            0x2B => { // BMI (Branch if N=1)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if self.cc_n { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BMI {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BMI not"); }
+            }
+            0x2D => { // BLT (N^V==1)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if self.cc_n ^ self.cc_v { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BLT {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BLT not"); }
+            }
+            0x2E => { // BGT (Z==0 and N^V==0)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if !self.cc_z && !(self.cc_n ^ self.cc_v) { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BGT {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BGT not"); }
+            }
+            0x2F => { // BLE (Z==1 or N^V==1)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if self.cc_z || (self.cc_n ^ self.cc_v) { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BLE {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BLE not"); }
+            }
+            0x2C => { // BGE (Branch if >= : N^V == 0)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
+                if (self.cc_n ^ self.cc_v)==false { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BGE {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BGE not"); }
+            }
+            // -------------------------------------------------------------------------
+            // Indexed RMW operations
+            // -------------------------------------------------------------------------
+            0x60 => { // NEG indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_neg(m); self.write8(ea,r); if self.trace { println!("NEG [{}] -> {:02X}", ea,r);} }
+            0x63 => { // COM indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_com(m); self.write8(ea,r); if self.trace { println!("COM [{}] -> {:02X}", ea,r);} }
+            0x64 => { // LSR indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_lsr(m); self.write8(ea,r); if self.trace { println!("LSR [{}] -> {:02X}", ea,r);} }
+            0x66 => { // ROR indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_ror(m); self.write8(ea,r); if self.trace { println!("ROR [{}] -> {:02X}", ea,r);} }
+            0x67 => { // ASR indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_asr(m); self.write8(ea,r); if self.trace { println!("ASR [{}] -> {:02X}", ea,r);} }
+            0x68 => { // ASL indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_asl(m); self.write8(ea,r); if self.trace { println!("ASL [{}] -> {:02X}", ea,r);} }
+            0x69 => { // ROL indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_rol(m); self.write8(ea,r); if self.trace { println!("ROL [{}] -> {:02X}", ea,r);} }
+            0x6A => { // DEC indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_dec(m); self.write8(ea,r); if self.trace { println!("DEC [{}] -> {:02X}", ea,r);} }
+            0x6E => { // JMP indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); self.pc=ea; if self.trace { println!("JMP [{}]", ea);} }
+            0x6C => { // INC indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.rmw_inc(m); self.write8(ea,r); if self.trace { println!("INC [{}] -> {:02X}", ea,r);} }
+            0x6D => { // TST indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.rmw_tst(m); if self.trace { println!("TST [{}]", ea); }
+            }
+            0x82 => { // SBCA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let a=self.a; let c=if self.cc_c {1} else {0};
+                let res=a.wrapping_sub(imm).wrapping_sub(c);
+                self.a=res; self.flags_sub8(a,imm.wrapping_add(c),res);
+                if self.trace { println!("SBCA #${:02X} -> {:02X}", imm, res); }
+            }
+            0x83 => { // SUBD immediate
+                let hi = self.read8(self.pc); let lo = self.read8(self.pc+1); self.pc = self.pc.wrapping_add(2);
+                let val = ((hi as u16) << 8) | lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
+                self.set_d(res); self.flags_sub16(d0,val,res);
+                if self.trace { println!("SUBD #${:04X} -> {:04X}", val,res); }
+            }
+            0xC3 => { // ADDD immediate
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let val=((hi as u16)<<8)|lo as u16; let d0=self.d(); let sum=(d0 as u32)+(val as u32); let res=(sum & 0xFFFF) as u16; self.set_d(res); self.update_nz16(res); self.cc_c=(sum & 0x10000)!=0; self.cc_v=(!((d0^val) as u32) & ((d0^res) as u32) & 0x8000)!=0; if self.trace { println!("ADDD #${:04X} -> {:04X}", val,res);} }
+            0x84 => { // ANDA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                self.a &= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ANDA #${:02X}", imm);} }
+            0x88 => { // EORA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a ^= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA #${:02X}", imm);} }
+            0x8A => { // ORA immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.a |= imm; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("ORA #${:02X}", imm);} }
+            0xC9 => { // ADCB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(imm as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^imm) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB #${:02X}", imm);} }
+            0x0B => { // SEV (Set V flag)
+                self.cc_v = true; if self.trace { println!("SEV"); } }
+            0x19 => { // DAA (Decimal Adjust Accumulator) after addition on A
+                // Reference 6809 rules (derived from 6800/6802 family but with C interaction):
+                // If (lower nibble > 9) or H set -> add 0x06 to A.
+                // If (upper nibble > 9) or C set or (upper nibble >9 after first adjust) -> add 0x60.
+                // C is set if a carry out of the high nibble occurs due to adding 0x60.
+                // H is undefined after instruction (we leave unchanged to minimize side effects; could clear).
+                // Z,N updated from result; V cleared per spec; C updated as above.
+                let mut adjust = 0u8; let a0 = self.a; let low = a0 & 0x0F; let high = (a0 >> 4) & 0x0F;
+                let mut carry = self.cc_c; // prior carry may influence high adjust
+                let half = self.cc_h; // existing half-carry state
+                if low > 9 || half { adjust = adjust.wrapping_add(0x06); }
+                let mut high_after = high;
+                if adjust != 0 { // simulate low adjust effect to evaluate high nibble overflow
+                    let tmp = a0.wrapping_add(0x06);
+                    high_after = (tmp >> 4) & 0x0F;
+                }
+                if high > 9 || high_after > 9 || carry { adjust = adjust.wrapping_add(0x60); carry = true; }
+                let res = a0.wrapping_add(adjust);
+                self.a = res;
+                self.update_nz8(res);
+                self.cc_v = false; // DAA clears V
+                self.cc_c = carry; // Updated carry (set if high adjust applied)
+                if self.trace { println!("DAA -> {:02X} (adj={:02X})", res, adjust); }
+            }
+            0x28 => { // BVC (Branch if V=0)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); if !self.cc_v { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BVC {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BVC not"); } }
+            0x4A => { // DECA
+                let a0=self.a; let res=a0.wrapping_sub(1); self.a=res; self.update_nz8(res); self.cc_v = res==0x7F; if self.trace { println!("DECA -> {:02X}", res);} }
+            0x07 => { // ASR direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.cc_c=(m & 0x01)!=0; let msb=m & 0x80; let res=(m>>1)|msb; self.write8(addr,res); self.cc_n=(res&0x80)!=0; self.cc_z=res==0; self.cc_v=false; if self.trace { println!("ASR ${:04X} -> {:02X}", addr,res);} }
+            0x08 => { // ASL/LSL direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let res=m<<1; self.cc_c=(m & 0x80)!=0; let res8=(res & 0xFF) as u8; self.write8(addr,res8); self.cc_n=(res8&0x80)!=0; self.cc_z=res8==0; self.cc_v=((m^res8)&0x80)!=0; if self.trace { println!("ASL ${:04X} -> {:02X}", addr,res8);} }
+            0x25 => { // BCS (branch if Carry set)
+                let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); if self.cc_c { let new=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BCS {:04X}", new);} self.pc=new; cyc=3; } else if self.trace { println!("BCS not"); } }
+            0x18 => { // Treat undefined 6809 opcode as NOP (clears nothing)
+                if self.trace { println!("(undefined 0x18 treated as NOP)"); } }
+            0x61 => { // Undefined / unimplemented in this subset -> NOP
+                if self.trace { println!("(undefined 0x61 treated as NOP)"); } }
+            0x91 => { // CMPA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let a0=self.a; let res=a0.wrapping_sub(m); self.flags_sub8(a0,m,res); if self.trace { println!("CMPA ${:04X}", addr);} }
+            0x93 => { // SUBD direct
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1); let addr = ((self.dp as u16)<<8)|off as u16;
+                let hi = self.read8(addr); let lo = self.read8(addr.wrapping_add(1)); let val = ((hi as u16)<<8)|lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
+                self.set_d(res); self.flags_sub16(d0,val,res); if self.trace { println!("SUBD ${:04X} -> {:04X}", addr,res);} }
+            0x98 => { // EORA direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.a ^= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA ${:04X}", addr);} }
+            0xA2 => { // SBCA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let a0=self.a; let c=if self.cc_c {1} else {0}; let res=a0.wrapping_sub(m).wrapping_sub(c); self.a=res; self.flags_sub8(a0,m.wrapping_add(c),res); if self.trace { println!("SBCA [{}] -> {:02X}", ea,res);} }
+            0xA3 => { // SUBD indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s);
+                let hi = self.read8(ea); let lo = self.read8(ea.wrapping_add(1)); let val = ((hi as u16)<<8)|lo as u16; let d0 = self.d(); let res = d0.wrapping_sub(val);
+                self.set_d(res); self.flags_sub16(d0,val,res); if self.trace { println!("SUBD [{}] -> {:04X}", ea,res);} }
+            0xA5 => { // BITA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.a & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITA [{}]", ea);} }
+            0xA8 => { // EORA indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); self.a ^= m; self.update_nz8(self.a); self.cc_v=false; if self.trace { println!("EORA [{}]", ea);} }
+            0xC8 => { // EORB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); self.b ^= imm; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB #${:02X}", imm);} }
+            0xCB => { // ADDB immediate
+                let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let b0=self.b; let sum=(b0 as u16)+(imm as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^imm) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB #${:02X}", imm);} }
+            0xDB => { // ADDB direct
+                let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let sum=(b0 as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB ${:04X}", addr);} }
+            0xE5 => { // BITB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB [{}]", ea);} }
+            0xEB => { // ADDB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let sum=(b0 as u16)+(m as u16); let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16) & ((b0^r) as u16) & 0x80)!=0; if self.trace { println!("ADDB [{}]", ea);} }
+            0xE9 => { // ADCB indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let m=self.read8(ea); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB [{}]", ea);} }
+            0xEE => { // LDU indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let hi=self.read8(ea); let lo=self.read8(ea.wrapping_add(1)); let val=((hi as u16)<<8)|lo as u16; self.u=val; self.update_nz16(val); if self.trace { println!("LDU [{}] -> {:04X}", ea,val);} }
+            0xEF => { // STU indexed
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let u=self.u; self.write8(ea,(u>>8) as u8); self.write8(ea.wrapping_add(1), u as u8); self.update_nz16(u); if self.trace { println!("STU [{}] -> {:04X}", ea,u);} }
+            0xF7 => { // STB extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.b; self.write8(addr,v); self.update_nz8(v); if self.trace { println!("STB ${:04X} -> {:02X}", addr,v);} }
+            0xF9 => { // ADCB extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let b0=self.b; let c= if self.cc_c {1}else{0}; let sum=(b0 as u16)+(m as u16)+c as u16; let r=(sum & 0xFF) as u8; self.b=r; self.update_nz8(r); self.cc_c=(sum & 0x100)!=0; self.cc_v=(!((b0^m) as u16)&((b0^r) as u16)&0x80)!=0; if self.trace { println!("ADCB ${:04X}", addr);} }
+            0xB3 => { // SUBD extended
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let mhi=self.read8(addr); let mlo=self.read8(addr.wrapping_add(1)); let val=((mhi as u16)<<8)|mlo as u16; let d0=self.d(); let res=d0.wrapping_sub(val);
+                self.set_d(res); self.flags_sub16(d0,val,res);
+                if self.trace { println!("SUBD #${:04X} -> {:04X}", val,res); }
+            }
             0xD0 => { // SUBB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let res=b0.wrapping_sub(m); self.b=res; self.flags_sub8(b0,m,res); if self.trace { println!("SUBB ${:04X}", addr);} }
             0xD1 => { // CMPB direct
@@ -1658,7 +2076,7 @@ impl CPU {
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let b0=self.b; let c= if self.cc_c {1} else {0}; let res=b0.wrapping_sub(m).wrapping_sub(c); self.b=res; self.flags_sub8(b0,m.wrapping_add(c),res); if self.trace { println!("SBCB ${:04X} -> {:02X}", addr,res);} }
             0xD5 => { // BITB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB ${:04X}", addr);} }
-            // (continuación: siguientes opcodes aún dentro de match op)
+            // (Removed stray brace that incorrectly closed the match here)
             0xE7 => { // STB indexed
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post,self.x,self.y,self.u,self.s); let v=self.b; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STB [{}] -> {:02X}", ea,v);} }
             0xEC => { // LDD indexed
@@ -1668,8 +2086,7 @@ impl CPU {
             0xF5 => { // BITB extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let m=self.read8(addr); let r=self.b & m; self.cc_n=(r&0x80)!=0; self.cc_z=r==0; self.cc_v=false; if self.trace { println!("BITB ${:04X}", addr);} }
             0xF6 => { // LDB extended
-                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.read8(addr); self.b=v; self.update_nz8(v); if self.trace { println!("LDB ${:04X} -> {:02X}", addr,v); }
-            }
+                let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let v=self.read8(addr); self.b=v; self.update_nz8(v); if self.trace { println!("LDB ${:04X} -> {:02X}", addr,v);} }
             0xD8 => { // EORB direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; let m=self.read8(addr); self.b ^= m; self.update_nz8(self.b); self.cc_v=false; if self.trace { println!("EORB ${:04X}", addr);} }
             0xE8 => { // EORB indexed
@@ -1690,7 +2107,7 @@ impl CPU {
             0xBC => { // CMPX extended
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; let mhi=self.read8(addr); let mlo=self.read8(addr.wrapping_add(1)); let val=((mhi as u16)<<8)|mlo as u16; let x0=self.x; let res=x0.wrapping_sub(val); self.flags_sub16(x0,val,res); if self.trace { println!("CMPX ${:04X}", addr);} }
             0x92 => { // SBCA direct
-                let off = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+                let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
                 let a0 = self.a; let c = if self.cc_c {1} else {0};
                 let res = a0.wrapping_sub(m).wrapping_sub(c);
@@ -1717,7 +2134,7 @@ impl CPU {
                     self.opcode_unimplemented += 1;
                 }
             }
-        } // fin match op
+        }
         self.advance_cycles(cyc);
         if std::env::var("CYC_DEBUG").ok().as_deref()==Some("1") {
             let sub_dbg = if op==0x10 || op==0x11 { format!(" sub={:02X}", sub) } else { String::new() };
@@ -1771,7 +2188,7 @@ impl CPU {
             if let Some((snap,start)) = need_dump { if self.trace { self.dump_ram_exec_snapshot(&snap,start); } }
         }
         true
-    } // fin step()
+    }
 
     // Centralized cycle advancement so VIA timers, frame timing, and future integrator stay in lockstep per instruction.
     fn advance_cycles(&mut self, cyc: u32) {
@@ -1817,8 +2234,8 @@ impl CPU {
             // Removed incorrect placement of direct LSR (opcode 0x04) from here.
             0x00 => { effective=base; match group {0x80=>{ self.x=self.x.wrapping_add(1); },0xA0=>{ self.y=self.y.wrapping_add(1); },0xC0=>{ self.u=self.u.wrapping_add(1); },0xE0=>{ self.s=self.s.wrapping_add(1); }, _=>{} } }
             0x01 => { effective=base; match group {0x80=>{ self.x=self.x.wrapping_add(2); },0xA0=>{ self.y=self.y.wrapping_add(2); },0xC0=>{ self.u=self.u.wrapping_add(2); },0xE0=>{ self.s=self.s.wrapping_add(2); }, _=>{} } }
-            0x02 => { match group {0x80=>{ self.x=self.x.wrapping_sub(1); effective=self.x;},0xA0=>{ self.y=self.y.wrapping_sub(1); effective=self.y;},2=>{ self.u=self.u.wrapping_sub(1); effective=self.u;},_=>{ self.s=self.s.wrapping_sub(1); effective=self.s; }}; return (effective,0) }
-            0x03 => { match group {0x80=>{ self.x=self.x.wrapping_sub(2); effective=self.x;},0xA0=>{ self.y=self.y.wrapping_sub(2); effective=self.y;},2=>{ self.u=self.u.wrapping_sub(2); effective=self.u;},_=>{ self.s=self.s.wrapping_sub(2); effective=self.s; }}; return (effective,0) }
+            0x02 => { match group {0x80=>{ self.x=self.x.wrapping_sub(1); effective=self.x; },0xA0=>{ self.y=self.y.wrapping_sub(1); effective=self.y; },0xC0=>{ self.u=self.u.wrapping_sub(1); effective=self.u; },0xE0=>{ self.s=self.s.wrapping_sub(1); effective=self.s; }, _=>{} } }
+            0x03 => { match group {0x80=>{ self.x=self.x.wrapping_sub(2); effective=self.x; },0xA0=>{ self.y=self.y.wrapping_sub(2); effective=self.y; },0xC0=>{ self.u=self.u.wrapping_sub(2); effective=self.u; },0xE0=>{ self.s=self.s.wrapping_sub(2); effective=self.s; }, _=>{} } }
             0x08 => { let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); effective=base.wrapping_add(off as i16 as u16); }
             _ => {}
         }
@@ -1835,13 +2252,10 @@ impl CPU {
                 0x06 => base.wrapping_add(self.d()),
                 _ => base,
             };
-            return (eff, 0);
+            return (eff,0);
         } else if (group_masked & 0x07)==0x07 {
             let reg_code=(post>>5)&0x03; let base=match reg_code {0=>x,1=>y,2=>u,_=>s};
-            let ptr = base.wrapping_add(self.d());
-            let hi = self.read8(ptr); let lo = self.read8(ptr.wrapping_add(1));
-            // Indirect [reg+D] -> dirección apuntada por (reg + D)
-            return ((((hi as u16)<<8)|lo as u16), 0);
+            let ptr=base.wrapping_add(self.d()); let hi=self.read8(ptr); let lo=self.read8(ptr.wrapping_add(1)); return ((((hi as u16)<<8)|lo as u16),2);
         }
         let reg_code=(post>>5)&0x03; let mut base=match reg_code {0=>x,1=>y,2=>u,_=>s};
         let mode=(post>>3)&0x03; let low3=post & 0x07; let mut extra=0u8;

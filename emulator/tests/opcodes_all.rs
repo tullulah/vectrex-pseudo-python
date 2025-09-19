@@ -26,6 +26,15 @@ fn run_with_cycles<F: FnOnce(&mut CPU)>(setup: F) -> ExecResult {
 }
 fn step_once(mut cpu: CPU) -> (CPU, u32) { let before=cpu.cycles; let ok=cpu.step(); assert!(ok); let d=(cpu.cycles-before) as u32; (cpu,d) }
 
+// Empuja una dirección de retorno en la pila hardware (S) reproduciendo exactamente
+// la convención implementada en el núcleo: primero decrementa S y escribe HIGH, luego
+// decrementa y escribe LOW, quedando S apuntando al LOW. pop16 del core recuperará LOW luego HIGH.
+fn push16_hw(cpu: &mut CPU, val: u16) {
+    let hi = (val >> 8) as u8; let lo = (val & 0xFF) as u8;
+    cpu.s = cpu.s.wrapping_sub(1); cpu.test_write8(cpu.s, hi);
+    cpu.s = cpu.s.wrapping_sub(1); cpu.test_write8(cpu.s, lo);
+}
+
 // --------------------------------------------------
 // Subconjunto metadatos (size + ciclos base)
 // --------------------------------------------------
@@ -48,7 +57,8 @@ fn opcode_meta_subset_validates() {
             // BSR relativo: push de return address y salto relativo
             0x008D => { let mut cpu=CPU::default(); cpu.pc=0x0500; cpu.test_write8(0x0500,0x8D); cpu.test_write8(0x0501,0x05); let before=cpu.cycles; let ok=cpu.step(); assert!(ok); let cyc=(cpu.cycles-before) as u32; assert_eq!(cyc as u8,meta.base_cycles,"BSR cycles"); assert_eq!(cpu.pc,0x0500 + meta.size as u16 + 0x05); }
             // RTS: sólo validamos ciclos (PC se restaura desde la pila)
-            0x0039 => { let mut cpu=CPU::default(); cpu.pc=0x0600; cpu.test_write8(0x0600,0x39); cpu.call_stack.push(0x0777); let before=cpu.cycles; let ok=cpu.step(); assert!(ok); let cyc=(cpu.cycles-before) as u32; assert_eq!(cyc as u8,meta.base_cycles,"RTS cycles"); assert_eq!(cpu.pc,0x0777); }
+            0x0039 => { let mut cpu=CPU::default(); cpu.pc=0x0600; cpu.test_write8(0x0600,0x39); push16_hw(&mut cpu, 0x0777); // pila real
+                let before=cpu.cycles; let ok=cpu.step(); assert!(ok); let cyc=(cpu.cycles-before) as u32; assert_eq!(cyc as u8,meta.base_cycles,"RTS cycles"); assert_eq!(cpu.pc,0x0777); }
             // SUBB inmediato: PC delta = size, ciclos base exactos
             0x00C0 => { let (_cpu,cyc,pc_d)=run_one(&[0xC0,0x10],0x0700); assert_eq!(pc_d as u8,meta.size,"SUBB size"); assert_eq!(cyc as u8,meta.base_cycles,"SUBB cycles"); }
             _ => {}
@@ -72,7 +82,7 @@ fn opcode_lda_immediate(){ let r=run_with_cycles(|c|{c.pc=0x0600; c.test_write8(
 #[test]
 fn opcode_tfr_a_to_b(){ let r=run_with_cycles(|c|{c.pc=0x0700; c.a=0x55; c.test_write8(0x0700,0x1F); c.test_write8(0x0701,0x89);}); assert_eq!(r.cycles,6); assert_eq!(r.cpu.b,0x55); }
 #[test]
-fn opcode_rts(){ let r=run_with_cycles(|c|{c.pc=0x0800; c.test_write8(0x0800,0x39); c.call_stack.push(0x0AAA);}); assert_eq!(r.cycles,5); assert_eq!(r.cpu.pc,0x0AAA); }
+fn opcode_rts(){ let r=run_with_cycles(|c|{c.pc=0x0800; c.test_write8(0x0800,0x39); push16_hw(c, 0x0AAA); }); assert_eq!(r.cycles,5); assert_eq!(r.cpu.pc,0x0AAA); }
 #[test]
 fn opcode_ldb_immediate(){ let r=run_with_cycles(|c|{c.pc=0x0900; c.test_write8(0x0900,0xC6); c.test_write8(0x0901,0xE1);}); assert_eq!(r.cycles,2); assert_eq!(r.cpu.b,0xE1); }
 #[test]
@@ -105,6 +115,65 @@ fn opcode_ora_extended(){
     });
     assert_eq!(r.cpu.a, 0x55 | 0x0F);
     assert!(r.cycles>0); // ya validado timing base en tabla; sólo comprobamos ejecución
+}
+
+// --- Pending implementation exposure tests ---
+#[test]
+fn opcode_cmpx_extended_missing() {
+    // Prepare X greater than memory so result !=0 and C flag expected from subtraction semantics if borrow.
+    let mut cpu = CPU::default(); cpu.pc=0x1300; cpu.x=0x1234; cpu.test_write8(0x1300,0xBC); cpu.test_write8(0x1301,0x20); cpu.test_write8(0x1302,0x00); // address 0x2000
+    cpu.test_write8(0x2000,0x12); cpu.test_write8(0x2001,0x00); // value 0x1200
+    // Forzar Z=1 antes: implementación correcta debe dejar Z=0 porque 0x1234 - 0x1200 !=0.
+    cpu.cc_z = true; // así detectamos que la instrucción realmente tocó flags
+    let before_cycles=cpu.cycles; let ok=cpu.step(); assert!(ok, "step false"); let delta=cpu.cycles-before_cycles; assert!(delta>0, "opcode 0xBC no avanzó ciclos");
+    assert_eq!(cpu.cc_z, false, "CMPX ext debería dejar Z=0 (valor no igual)");
+}
+
+#[test]
+fn opcode_sbcb_direct_missing() {
+    // Direct SBCB (0xD2) AFFECTA B: B = B - M - Carry
+    let mut cpu=CPU::default(); cpu.pc=0x1400; cpu.dp=0x00; cpu.b=0x30; cpu.cc_c=false; // carry clear
+    cpu.test_write8(0x1400,0xD2); cpu.test_write8(0x1401,0x80); // direct addr 0x0080
+    cpu.test_write8(0x0080,0x10);
+    let _ = cpu.step();
+    // Esperado: B=0x20 si implementado. De momento test marcará fallo si no es 0x20.
+    assert_eq!(cpu.b,0x20, "SBCB direct (0xD2) debería producir 0x20");
+}
+
+// Barrido completo base (0x00-0xFF) para detectar implementaciones faltantes en tiempo de ejecución.
+// Ignora opcodes ilegales documentados (ILLEGAL_BASE_OPCODES en cpu) y aquellos tratados explícitamente como NOP legales.
+// Si encuentra alguno que no avanza ciclos (step devuelve false o delta==0 cuando la tabla marca válido) lo acumula y falla.
+#[test]
+fn opcode_base_full_sweep_unimplemented() {
+    let mut cpu = CPU::default();
+    // Lista de ilegales (copiada estáticamente para evitar dependencia privada). Debe mantenerse sincronizada con cpu6809.rs ILLEGAL_BASE_OPCODES.
+    const ILLEGAL: &[u8] = &[0x01,0x02,0x05,0x14,0x15,0x38,0x41,0x42,0x45,0x4B,0x4E,0x51,0x52,0x55,0x5B,0x5E,0x61,0x62,0x65,0x6B,0x71,0x72,0x75,0x7B,0x87,0x8F,0xC7,0xCD,0xCF];
+    let mut missing: Vec<u8> = Vec::new();
+    for op in 0u16..=0xFF {
+        let op8 = op as u8;
+        if ILLEGAL.contains(&op8) { continue; }
+        cpu.pc = 0x500; // región segura
+        // Sembrar opcode y hasta 3 bytes dummy para cubrir modos largos
+        cpu.test_write8(0x500, op8);
+        cpu.test_write8(0x501, 0x00);
+        cpu.test_write8(0x502, 0x00);
+        cpu.test_write8(0x503, 0x00);
+        let before_c = cpu.cycles; let before_pc = cpu.pc;
+        let ok = cpu.step();
+        // Determinar si el opcode debería existir según tabla de ciclos base (excluyendo ilegales arriba)
+        let expected_valid = CYCLES_BASE[op8 as usize] != INVALID;
+        let delta_c = cpu.cycles - before_c;
+        // Criterio de fallo: esperado válido pero (a) step false, (b) delta cero, o (c) bitmap lo marcó unimplemented
+        if expected_valid && ( !ok || delta_c == 0 || cpu.opcode_marked_unimplemented(op8) ) {
+            missing.push(op8);
+        }
+        // Restaurar PC para evitar arrastre de saltos largos; reinit parcial más rápido que reset completo
+        cpu.cycles = before_c; // Aislar delta (no queremos que se acumulen ciclos entre iteraciones)
+        cpu.pc = before_pc; // no estrictamente necesario, se resobrescribe
+    }
+    if !missing.is_empty() {
+        panic!("Unimplemented base opcodes detectados: {:02X?}", missing);
+    }
 }
 
 // --------------------------------------------------

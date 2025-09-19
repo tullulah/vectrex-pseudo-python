@@ -31,6 +31,8 @@ export class EmulatorService {
   private memory: Uint8Array | null = null;
   private biosLoaded = false;
   private trace = false;
+  private biosLoadingPromise: Promise<boolean> | null = null;
+  private memoryDirty = true; // rebind view when pointer/memory may have changed
 
   enableTrace(on: boolean){ this.trace = on; (window as any).__emuTrace = on; }
   isTrace(){ return this.trace; }
@@ -48,11 +50,41 @@ export class EmulatorService {
     }
   }
 
+  /** Ensure BIOS loaded exactly once. */
+  async ensureBios(opts?: { bytes?: Uint8Array; urlCandidates?: string[] }): Promise<boolean> {
+    if (this.biosLoaded) return true;
+    if (!this.emu) await this.init();
+    if (this.biosLoaded) return true;
+    if (this.biosLoadingPromise) return this.biosLoadingPromise;
+    const run = async (): Promise<boolean> => {
+      if (opts?.bytes) {
+        try { this.loadBios(opts.bytes); return true; } catch(e){ console.warn('[Emu] provided BIOS bytes failed', e); }
+      }
+      const list = opts?.urlCandidates || [];
+      for (const u of list) {
+        try {
+          if (this.trace) console.debug('[Emu] BIOS fetch try', u);
+          const resp = await fetch(u);
+          if (resp.ok) {
+            const buf = new Uint8Array(await resp.arrayBuffer());
+            if (buf.length===4096 || buf.length===8192) {
+              try { this.loadBios(buf); if (this.trace) console.debug('[Emu] BIOS loaded from', u, 'size', buf.length); return true; } catch(e){ console.warn('[Emu] loadBios failed for', u, e); }
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      return this.biosLoaded;
+    };
+    this.biosLoadingPromise = run().finally(()=>{ this.biosLoadingPromise = null; });
+    return this.biosLoadingPromise;
+  }
+
   loadBios(bytes: Uint8Array) {
     if (!this.emu) throw new Error('Emu not init');
     if (!this.emu.load_bios(bytes)) throw new Error('Invalid BIOS size');
     this.emu.reset();
     this.biosLoaded = true;
+    this.memoryDirty = true;
   }
 
   isBiosLoaded() { return this.biosLoaded; }
@@ -66,14 +98,44 @@ export class EmulatorService {
     if (!this.emu) throw new Error('Emu not init');
     // wasm API returns void; assume success unless it throws
     this.emu.load_bin(base, bytes);
+    this.memoryDirty = true;
   }
 
   runFrame(maxInstr = 200_000) {
     if (!this.emu) return;
+    if (!this.biosLoaded) { if (this.trace) console.warn('[emu] runFrame ignorado: BIOS no cargada'); return; }
     if (this.trace) console.debug('[emu] runFrame start maxInstr=', maxInstr);
-    this.emu.run_until_wait_recal(maxInstr);
+    const anyEmu: any = this.emu as any;
+    if (typeof anyEmu.run_until_wait_recal === 'function') {
+      anyEmu.run_until_wait_recal(maxInstr);
+    } else {
+      // Fallback: si el método no está, probablemente wasm glue desactualizado.
+      if (!anyEmu.__warnedMissingRunUntil) {
+        console.warn('[emu] run_until_wait_recal ausente. Ejecutando fallback con step(). Re‑genera wasm: npm run wasm:build');
+        anyEmu.__warnedMissingRunUntil = true;
+      }
+      // Heurística: consumir instrucciones en bloques hasta exceder maxInstr.
+      let remaining = maxInstr;
+      const chunk = 2000;
+      while (remaining > 0) {
+        const exec = Math.min(chunk, remaining);
+        if (typeof anyEmu.step === 'function') {
+          anyEmu.step(exec);
+        } else {
+          break; // nada más que hacer
+        }
+        remaining -= exec;
+      }
+    }
     if (this.trace) {
       try { const m = this.metrics(); console.debug('[emu] runFrame done frame_count=', m?.frames, 'cycles=', m?.cycles); } catch {}
+    }
+  }
+
+  setInput(x:number, y:number, buttons:number){
+    const anyEmu:any = this.emu as any; if (!anyEmu) return;
+    if (typeof anyEmu.set_input_state === 'function') {
+      try { anyEmu.set_input_state(x,y,buttons); } catch(e){ if (this.trace) console.warn('set_input_state failed', e); }
     }
   }
 
@@ -91,6 +153,16 @@ export class EmulatorService {
     if (!this.emu) return null;
     try { return JSON.parse(this.emu.registers_json()) as RegistersSnapshot; } catch { return null; }
   }
+
+  // ---- Trace helpers ----
+  enableTraceCapture(on:boolean, limit=10_000){ const anyEmu:any=this.emu; if(anyEmu?.enable_trace){ anyEmu.enable_trace(on, limit); } }
+  clearTrace(){ const anyEmu:any=this.emu; if(anyEmu?.trace_clear){ anyEmu.trace_clear(); } }
+  traceLen(): number { const anyEmu:any=this.emu; return anyEmu?.trace_len ? anyEmu.trace_len() : 0; }
+  traceLog(): any[]{ const anyEmu:any=this.emu; if(anyEmu?.trace_log_json){ try { return JSON.parse(anyEmu.trace_log_json()); } catch{} } return []; }
+
+  // BIOS call stack helpers (new wasm API)
+  biosCalls(): string[] { const anyEmu:any=this.emu; if(anyEmu?.bios_calls_json){ try { return JSON.parse(anyEmu.bios_calls_json()) as string[]; } catch{} } return []; }
+  clearBiosCalls(){ const anyEmu:any=this.emu; if(anyEmu?.clear_bios_calls){ try { anyEmu.clear_bios_calls(); } catch{} } }
 
 
   loopWatch(): any[] {
@@ -168,6 +240,72 @@ export class EmulatorService {
     }
     return [];
   }
+
+  /** Returns a full 64K snapshot (Uint8Array copy) of emulated memory. */
+  snapshotMemory(): Uint8Array {
+    const anyEmu: any = this.emu as any; if (!anyEmu) return new Uint8Array();
+    // Rebind if first time or flagged dirty (BIOS/program loaded, reset, or memory grew)
+    if (!this.memory || this.memoryDirty) {
+      const buf = (anyEmu.memory?.buffer) || (anyEmu.constructor?.memory?.buffer) || (globalThis as any).wasmMemory?.buffer;
+      const ptr = anyEmu.memory_ptr?.() || 0;
+      this.memory = new Uint8Array(buf, ptr, 65536);
+      this.memoryDirty = false;
+    }
+    const src = this.memory;
+    const out = new Uint8Array(65536);
+    out.set(src);
+    // Heuristic fallback: if everything looks zero but wasm helper read_mem8 shows data, rebuild manually.
+    if (this.biosLoaded) {
+      let nonZero = false;
+      for (let i=0;i<512;i++){ if (out[i]!==0){ nonZero=true; break; } }
+      if (!nonZero) {
+        try {
+          // Probe a few addresses via direct API
+            const probe0 = typeof anyEmu.read_mem8 === 'function' ? anyEmu.read_mem8(0) : 0;
+            const probeBios = typeof anyEmu.read_mem8 === 'function' ? anyEmu.read_mem8(0xE000) : 0;
+            if ((probe0|probeBios) !== 0) {
+              if (this.trace) console.warn('[emu] snapshotMemory primary view all zero; falling back to per-byte read_mem8 copy');
+              for (let a=0;a<65536;a++){ out[a] = anyEmu.read_mem8(a & 0xFFFF); }
+            }
+        } catch(err) { /* ignore */ }
+      }
+    }
+    return out;
+  }
+
+  /** Force next snapshotMemory call to rebind underlying view. */
+  invalidateMemoryView(){ this.memoryDirty = true; }
 }
 
 export const globalEmu = new EmulatorService();
+// Expose a stable global handle + helpers for quick DevTools inspection.
+if (typeof window !== 'undefined') {
+  const w:any = window as any;
+  if (!w.globalEmu) w.globalEmu = globalEmu;
+  // Hex dump helper: emuDump(addr=0,len=64)
+  w.emuDump = (addr:number=0, len:number=64) => {
+    const emu: EmulatorService = w.globalEmu;
+    if (!emu || !emu.isBiosLoaded()) { console.warn('emuDump: BIOS not loaded yet'); }
+    const mem = emu.snapshotMemory();
+    const end = Math.min(0x10000, addr + len);
+    const lines:string[] = [];
+    for (let a=addr; a<end; a+=16) {
+      const slice = mem.slice(a, Math.min(end, a+16));
+      const hex = Array.from(slice).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+      lines.push(a.toString(16).padStart(4,'0')+': '+hex);
+    }
+    const out = lines.join('\n');
+    console.log(out);
+    return out;
+  };
+  // Force BIOS ensure with default candidates (if panel code hasn't yet triggered it)
+  w.emuEnsureBios = async () => {
+    try {
+      return await w.globalEmu.ensureBios({ urlCandidates: [
+        '/bios.bin','bios.bin','/assets/bios.bin','assets/bios.bin','/src/assets/bios.bin'
+      ]});
+    } catch(e){ console.error('emuEnsureBios failed', e); return false; }
+  };
+  // Quick reset + stats reset
+  w.emuResetAll = () => { try { w.globalEmu.reset(); w.globalEmu.resetStats(); console.log('Emulator reset'); } catch(e){ console.warn('emuResetAll failed', e); } };
+}

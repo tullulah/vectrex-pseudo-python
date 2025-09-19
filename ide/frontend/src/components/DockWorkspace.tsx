@@ -15,6 +15,9 @@ import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
 import { OutputPanel } from './panels/OutputPanel';
 import { BuildOutputPanel } from './panels/BuildOutputPanel';
+import { MemoryPanel } from './panels/MemoryPanel';
+import { TracePanel } from './panels/TracePanel';
+import { BiosCallsPanel } from './panels/BiosCallsPanel';
 
 // Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
 const STORAGE_KEY = 'vpy_dock_model_v2';
@@ -57,13 +60,16 @@ export const DockWorkspace: React.FC = () => {
     emulator: { json: null as any },
     debug: { json: null as any },
   errors: { json: null as any },
+  memory: { json: null as any },
+  trace: { json: null as any },
+  bioscalls: { json: null as any },
   output: { json: null as any },
   'build-output': { json: null as any }
   });
   // Extra metadata to preserve docking edge for panels so re-pin restores original side
-  const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, 'build-output':{edge:'bottom'} });
+  const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, memory:{edge:'right'}, trace:{edge:'right'}, bioscalls:{edge:'right'}, 'build-output':{edge:'bottom'} });
   const hiddenSetRef = useRef<Set<DockComponent>>(new Set());
-  const pinnedSetRef = useRef<Set<DockComponent | 'build-output'>>(new Set(['files','emulator','debug','errors','output','build-output']));
+  const pinnedSetRef = useRef<Set<DockComponent | 'build-output'>>(new Set(['files','emulator','memory','trace','bioscalls','debug','errors','output','build-output']));
   const [, forceRerender] = useState(0); // for pin UI updates
   (window as any).__pinnedPanelsRef = pinnedSetRef;
   // Expose globally so static handlers can reach
@@ -82,6 +88,9 @@ export const DockWorkspace: React.FC = () => {
       case 'emulator': return <EmulatorPanel />;
   case 'debug': return <DebugPanel />;
   case 'errors': return <ErrorsPanel />;
+  case 'memory': return <MemoryPanel />;
+  case 'trace': return <TracePanel />;
+  case 'bioscalls': return <BiosCallsPanel />;
   case 'output': return <OutputPanel />;
   case 'build-output': return <BuildOutputPanel />;
       default: return <div>Unknown: {comp}</div>;
@@ -220,8 +229,11 @@ export const DockWorkspace: React.FC = () => {
       'editor-placeholder': t('panel.editor', 'Editor'),
       emulator: t('panel.emulator', 'Emulator'),
       debug: t('panel.debug', 'Debug'),
-  errors: t('panel.errors', 'Errors'),
-  output: t('panel.output', 'Output')
+      errors: t('panel.errors', 'Errors'),
+      output: t('panel.output', 'Output'),
+  memory: t('panel.memory', 'Memory'),
+  trace: t('panel.trace', 'Trace'),
+  bioscalls: t('panel.bioscalls', 'BIOS Calls')
     };
     if (customName) nameMap[comp] = customName;
 
@@ -252,7 +264,7 @@ export const DockWorkspace: React.FC = () => {
 
     // Decide desired docking relative to editor for each component
     let location: typeof DockLocation.CENTER = DockLocation.CENTER; // default center (same tabset)
-  if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors' || comp === 'output') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
+  if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'memory' || comp === 'trace' || comp === 'bioscalls') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors' || comp === 'output') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
       // If we have meta specifying parent tabset and it still exists, attempt to restore directly there instead of relative add
       const meta = panelMetaRef.current[comp as DockComponent];
       if (meta?.parentTabsetId) {
@@ -312,7 +324,7 @@ export const DockWorkspace: React.FC = () => {
   const onRenderTabSet = useCallback((tabsetNode: any, renderValues: any) => {
     try {
       const children: any[] = tabsetNode.getChildren?.() || [];
-  const panelChildren: DockComponent[] = children.map(c => (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component)).filter((n: any) => ['files','emulator','debug','errors','output'].includes(n));
+  const panelChildren: DockComponent[] = children.map(c => (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component)).filter((n: any) => ['files','emulator','debug','errors','output','memory','trace','bioscalls'].includes(n));
       if (panelChildren.length === 0) return; // not a pure panel tabset
       const hasMixed = children.some(c => {
         const compName = (typeof c.getComponent === 'function' ? c.getComponent() : c?._attributes?.component);
@@ -324,7 +336,7 @@ export const DockWorkspace: React.FC = () => {
       let edge: 'left' | 'right' | 'bottom' | 'top' = 'top';
   if (panelChildren.every(pc => pc === 'debug' || pc === 'errors' || pc === 'output')) edge = 'bottom';
       else if (panelChildren.every(pc => pc === 'files')) edge = 'left';
-      else if (panelChildren.every(pc => pc === 'emulator')) edge = 'right';
+  else if (panelChildren.every(pc => pc === 'emulator' || pc === 'memory' || pc === 'trace' || pc === 'bioscalls')) edge = 'right';
       // top currently unused but reserved if future top docking added
       const allPinned = panelChildren.every(pc => pinnedSetRef.current.has(pc));
       // Record parent tabset id for each panel child so re-pin returns here
@@ -333,7 +345,7 @@ export const DockWorkspace: React.FC = () => {
         if (parentId) {
           // edge inference again
           let edge: 'left'|'right'|'bottom'|'top' = 'top';
-          if (pc === 'files') edge='left'; else if (pc==='emulator') edge='right'; else if (pc==='debug' || pc==='errors') edge='bottom';
+          if (pc === 'files') edge='left'; else if (pc==='emulator' || pc==='memory' || pc==='trace' || pc==='bioscalls') edge='right'; else if (pc==='debug' || pc==='errors' || pc==='output') edge='bottom';
           panelMetaRef.current[pc] = { edge, parentTabsetId: parentId };
         }
       });
@@ -390,7 +402,7 @@ export const DockWorkspace: React.FC = () => {
     const unsub = dockBus.on((ev: DockEvent) => {
       if (ev.type === 'toggle') {
         const comp = ev.component;
-  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','output','editor-placeholder'].includes(comp)) {
+  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','output','memory','trace','bioscalls','editor-placeholder'].includes(comp)) {
           // Capture existing node before removal for restoration later
           let targetNode: any | undefined; let parentId: string | undefined; let index: number | undefined; let parentWeight: number | undefined;
           model.visitNodes((n:any) => {
@@ -551,6 +563,13 @@ export const DockWorkspace: React.FC = () => {
           }
         }
       }
+      // Auto-inject memory panel if missing (new feature). We place it similar to emulator (right) by calling addComponent.
+      // This corresponds to the user-observed log: "[Dock] restore panel fallback add memory" when toggled manually.
+      try {
+  if (!hasComponent('memory')) { try { addComponent('memory'); console.info('[Dock] Migrated layout: added missing Memory tab'); } catch(e) { console.warn('[Dock] Failed to auto-add Memory tab', e); } }
+  if (!hasComponent('trace')) { try { addComponent('trace'); console.info('[Dock] Migrated layout: added missing Trace tab'); } catch(e) { console.warn('[Dock] Failed to auto-add Trace tab', e); } }
+  if (!hasComponent('bioscalls')) { try { addComponent('bioscalls'); console.info('[Dock] Migrated layout: added missing BIOS Calls tab'); } catch(e) { console.warn('[Dock] Failed to auto-add BIOS Calls tab', e); } }
+      } catch (e) { console.warn('[Dock] Failed to auto-add Memory tab', e); }
     }, 50);
   }, [hasComponent, model]);
 

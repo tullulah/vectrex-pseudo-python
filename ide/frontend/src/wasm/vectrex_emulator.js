@@ -105,11 +105,13 @@ export class WasmEmu {
         return ret >>> 0;
     }
     /**
-     * @param {number} max_instr
+     * Ejecuta instrucciones hasta que el frame_count cambie (heurística WAIT_RECAL) o se alcance el límite.
+     * Devuelve el número de instrucciones ejecutadas. Reintroducido tras refactor.
+     * @param {number} max_instructions
      * @returns {number}
      */
-    run_until_wait_recal(max_instr) {
-        const ret = wasm.wasmemu_run_until_wait_recal(this.__wbg_ptr, max_instr);
+    run_until_wait_recal(max_instructions) {
+        const ret = wasm.wasmemu_run_until_wait_recal(this.__wbg_ptr, max_instructions);
         return ret >>> 0;
     }
     /**
@@ -137,6 +139,59 @@ export class WasmEmu {
     memory_ptr() {
         const ret = wasm.wasmemu_memory_ptr(this.__wbg_ptr);
         return ret >>> 0;
+    }
+    /**
+     * Read a single byte from unified bus memory (debug helper for JS console).
+     * @param {number} addr
+     * @returns {number}
+     */
+    read_mem8(addr) {
+        const ret = wasm.wasmemu_read_mem8(this.__wbg_ptr, addr);
+        return ret;
+    }
+    /**
+     * Return the base address where BIOS was loaded (F000 for 4K, E000 for 8K) or default if not present yet.
+     * @returns {number}
+     */
+    bios_base() {
+        const ret = wasm.wasmemu_bios_base(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {boolean} en
+     * @param {number} limit
+     */
+    enable_trace(en, limit) {
+        wasm.wasmemu_enable_trace(this.__wbg_ptr, en, limit);
+    }
+    trace_clear() {
+        wasm.wasmemu_trace_clear(this.__wbg_ptr);
+    }
+    /**
+     * @returns {number}
+     */
+    trace_len() {
+        const ret = wasm.wasmemu_trace_len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {string}
+     */
+    trace_log_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmemu_trace_log_json(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * @returns {string}
@@ -175,6 +230,32 @@ export class WasmEmu {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
         }
+    }
+    /**
+     * Devuelve las últimas llamadas BIOS registradas (máx 256) en formato JSON array de strings "FFFF:LABEL".
+     * @returns {string}
+     */
+    bios_calls_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmemu_bios_calls_json(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Limpia el buffer de llamadas BIOS (útil en depuración / reinicios parciales en la UI).
+     */
+    clear_bios_calls() {
+        wasm.wasmemu_clear_bios_calls(this.__wbg_ptr);
     }
     /**
      * @returns {string}
@@ -216,11 +297,33 @@ export class WasmEmu {
         const ret = wasm.wasmemu_integrator_segment_stride(this.__wbg_ptr);
         return ret >>> 0;
     }
+    /**
+     * Devuelve el número de segmentos actualmente acumulados SIN copiar ni drenar.
+     * Útil para saber si hay algo antes de decidir usar JSON o acceso compartido.
+     * @returns {number}
+     */
+    integrator_segments_count() {
+        const ret = wasm.wasmemu_integrator_segments_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
     integrator_drain_segments() {
         wasm.wasmemu_integrator_drain_segments(this.__wbg_ptr);
     }
     demo_triangle() {
         wasm.wasmemu_demo_triangle(this.__wbg_ptr);
+    }
+    /**
+     * @param {boolean} en
+     */
+    set_auto_demo(en) {
+        wasm.wasmemu_set_auto_demo(this.__wbg_ptr, en);
+    }
+    /**
+     * @returns {boolean}
+     */
+    auto_demo_enabled() {
+        const ret = wasm.wasmemu_auto_demo_enabled(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
      * @returns {string}
@@ -282,6 +385,15 @@ export class WasmEmu {
     integrator_auto_drain() {
         const ret = wasm.wasmemu_integrator_auto_drain(this.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * Actualiza estado de entrada (joystick analógico -128..127, botones bits 0..3)
+     * @param {number} x
+     * @param {number} y
+     * @param {number} buttons
+     */
+    set_input_state(x, y, buttons) {
+        wasm.wasmemu_set_input_state(this.__wbg_ptr, x, y, buttons);
     }
 }
 

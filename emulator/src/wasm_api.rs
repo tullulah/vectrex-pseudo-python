@@ -79,6 +79,11 @@ impl WasmEmu {
             executed += 1;
             if self.cpu.frame_count != start { break; }
         }
+        // Fallback visual: si tras algún frame no hay ningún segmento acumulado, generar un triángulo demo.
+        // No altera estado BIOS / memoria; sólo usa integrator (visual). Se puede desactivar vía flag wasm.
+        if self.cpu.frame_count > 0 && self.cpu.integrator_total_segments == 0 {
+            if self.auto_demo_enabled() { self.demo_triangle(); }
+        }
         executed
     }
     #[wasm_bindgen] pub fn registers_json(&self)->String { format!("{{\"a\":{},\"b\":{},\"dp\":{},\"x\":{},\"y\":{},\"u\":{},\"s\":{},\"pc\":{},\"cycles\":{},\"frame_count\":{},\"cycle_frame\":{},\"last_intensity\":{} }}", self.cpu.a,self.cpu.b,self.cpu.dp,self.cpu.x,self.cpu.y,self.cpu.u,self.cpu.s,self.cpu.pc,self.cpu.cycles,self.cpu.frame_count,self.cpu.cycle_frame,self.cpu.last_intensity) }
@@ -199,28 +204,48 @@ impl WasmEmu {
         }
         #[wasm_bindgen] pub fn integrator_segments_len(&self) -> u32 { self.cpu.temp_segments_c.len() as u32 }
         #[wasm_bindgen] pub fn integrator_segment_stride(&self) -> u32 { std::mem::size_of::<crate::integrator::BeamSegmentC>() as u32 }
+        /// Devuelve el número de segmentos actualmente acumulados SIN copiar ni drenar.
+        /// Útil para saber si hay algo antes de decidir usar JSON o acceso compartido.
+        #[wasm_bindgen] pub fn integrator_segments_count(&self) -> u32 { self.cpu.integrator.segments.len() as u32 }
         #[wasm_bindgen] pub fn integrator_drain_segments(&mut self){ self.cpu.integrator.take_segments(); }
         #[wasm_bindgen] pub fn demo_triangle(&mut self) {
-            // Ensure beam on with a mid intensity
+            // Genera un triángulo equilátero aproximado de tamaño moderado centrado cerca del origen.
+            // Evitamos usar velocidades enormes * ciclos que antes saturaban (clamp) y producían distorsión.
+            // Estrategia: líneas definidas por puntos absolutos, velocidad = delta / cycles.
             let inten = if self.cpu.last_intensity==0 { 0x5F } else { self.cpu.last_intensity };
             self.cpu.last_intensity = inten;
             self.cpu.integrator.set_intensity(inten);
-            self.cpu.integrator.beam_on();
-            // Start at origin (reset) then draw three edges.
-            self.cpu.integrator.reset_origin();
+            // Puntos del triángulo (equilátero aproximado). Dibujamos en un solo frame con continuidad.
             let frame = self.cpu.cycle_frame;
-            let draw = |emu: &mut WasmEmu, vx: f32, vy: f32, cycles: u32| {
+            let p0 = (0.0_f32, 180.0_f32);
+            let p1 = (-155.9_f32, -90.0_f32); // 180*sin(60)=155.88
+            let p2 = (155.9_f32, -90.0_f32);
+            // Colocar en p0 sin trazar segmento (teleport), luego encender haz y recorrer p1, p2, p0.
+            self.cpu.integrator.instant_move(p0.0, p0.1);
+            self.cpu.integrator.beam_on();
+            let draw_cont = |emu: &mut WasmEmu, from:(f32,f32), to:(f32,f32)| {
+                let cycles: u32 = 100; // más ciclos = línea más larga; mantiene uniformidad
+                let dx = to.0 - from.0; let dy = to.1 - from.1;
+                let vx = dx / (cycles as f32);
+                let vy = dy / (cycles as f32);
                 emu.cpu.integrator.set_velocity(vx, vy);
                 emu.cpu.integrator.tick(cycles, frame);
                 emu.cpu.integrator.set_velocity(0.0, 0.0);
             };
-            // Triangle: right, up-left, down-left
-            draw(self, 30.0, 0.0, 40);
-            draw(self, -15.0, 26.0, 40);
-            draw(self, -15.0, -26.0, 40);
-            // Leave beam off afterward to avoid trailing lines
+            draw_cont(self, p0, p1);
+            draw_cont(self, p1, p2);
+            draw_cont(self, p2, p0); // cierre
             self.cpu.integrator.beam_off();
+            let added = self.cpu.integrator.segments.len() as u32;
+            if added > 0 && self.cpu.integrator_total_segments == 0 {
+                self.cpu.integrator_last_frame_segments = added;
+                if added > self.cpu.integrator_max_frame_segments { self.cpu.integrator_max_frame_segments = added; }
+                self.cpu.integrator_total_segments = added as u64;
+            }
         }
+        // --- Auto demo toggle ---
+        #[wasm_bindgen] pub fn set_auto_demo(&mut self, en: bool) { self.cpu.auto_demo = en; }
+        #[wasm_bindgen] pub fn auto_demo_enabled(&self) -> bool { self.cpu.auto_demo }
     #[wasm_bindgen] pub fn loop_watch_json(&self)->String {
         let mut out: Vec<JsLoopSample> = Vec::new();
         for s in &self.cpu.loop_watch_slots {

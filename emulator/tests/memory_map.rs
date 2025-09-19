@@ -5,8 +5,8 @@ fn unmapped_read_defaults() {
     let mut cpu = CPU::default();
     // Ensure we have some cart length so 0x0000 space is considered mapped for OOB logic separate from unmapped region.
     cpu.bus.set_cart_len(0x100); // small cart
-    // Choose address in 0xD010..0xEFFF (open in simplified model); pick 0xD050.
-    let val = cpu.test_read8(0xD050);
+    // Choose address in defined GAP (unmapped) region 0xC000-0xC7FF; pick 0xC050.
+    let val = cpu.test_read8(0xC050);
     assert_eq!(val, 0xFF, "Unmapped read should return 0xFF (got {val:02X})");
 }
 

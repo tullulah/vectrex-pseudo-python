@@ -34,32 +34,65 @@ impl Via6522 {
             0x0E => { // IER
                 (self.ier() & 0x7F) | 0x80
             }
-            0x04 => { // T1C-L read clears IFR6
+            0x04 => { // T1C-L read clears IFR6 (spec)
                 let val = self.t1_counter as u8;
-                self.regs[0x0D] &= !0x40;
-                self.recompute_irq();
-                val
-            }
-            0x05 => { // T1C-H (also clear IFR6; some code reads high first)
-                let val = (self.t1_counter >> 8) as u8;
-                if self.ifr() & 0x40 != 0 { self.regs[0x0D] &= !0x40; self.recompute_irq(); }
-                val
-            }
-            0x08 => { // T2C-L (does NOT clear IFR5 per 6522 spec)
-                (self.t2_counter & 0xFF) as u8
-            }
-            0x09 => { // T2C-H read clears IFR5
-                let val = (self.t2_counter >> 8) as u8;
-                if self.ifr() & 0x20 != 0 { // only touch if set
-                    self.regs[0x0D] &= !0x20;
+                if self.ifr() & 0x40 != 0 { // only clear if set
+                    self.regs[0x0D] &= !0x40;
                     self.recompute_irq();
+                    if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                        eprintln!("[IRQ_TRACE][VIA] READ T1C-L -> {:02X} (clear IFR6)", val);
+                    }
                 }
                 val
+            }
+            0x05 => { // T1C-H read does NOT clear IFR6 (spec)
+                (self.t1_counter >> 8) as u8
+            }
+            0x08 => { // T2C-L read clears IFR5 (spec)
+                let val = (self.t2_counter & 0xFF) as u8;
+                if self.ifr() & 0x20 != 0 { // clear on low read
+                    self.regs[0x0D] &= !0x20;
+                    self.recompute_irq();
+                    if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
+                        eprintln!("[IRQ_TRACE][VIA] READ T2C-L -> {:02X} (clear IFR5)", val);
+                    }
+                }
+                val
+            }
+            0x09 => { // T2C-H read no clear
+                (self.t2_counter >> 8) as u8
             }
             _ => self.regs[r]
         }
     }
-    pub fn write(&mut self, reg: u8, val: u8) { let r = (reg & 0x0F) as usize; match r { 0x0D => { let clear_mask = val & 0x7F; self.regs[0x0D] &= !clear_mask; self.recompute_irq(); }, 0x0E => { let set_mode = (val & 0x80) != 0; let mask = val & 0x7F; let cur = self.ier() & 0x7F; let next = if set_mode { cur | mask } else { cur & !mask }; self.regs[0x0E] = next; self.recompute_irq(); }, 0x04 => { self.regs[0x04] = val; }, 0x05 => { let lo = self.regs[0x04] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t1_latch = full; self.t1_counter = full; self.regs[0x0D] &= !0x40; self.regs[0x05] = val; self.recompute_irq(); }, 0x08 => { self.regs[0x08] = val; }, 0x09 => { let lo = self.regs[0x08] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t2_latch = full; self.t2_counter = full; self.regs[0x0D] &= !0x20; self.regs[0x09] = val; self.recompute_irq(); }, 0x0A => { self.regs[0x0A] = val; let acr = self.regs[0x0B]; let mode = (acr >> 2) & 0x07; if mode == 0b100 { self.shifting = true; self.sr_bits_remaining = 8; self.regs[0x0D] &= !0x10; self.recompute_irq(); } }, _ => { self.regs[r] = val; } } }
+    pub fn write(&mut self, reg: u8, val: u8) {
+        let r = (reg & 0x0F) as usize;
+        match r {
+            0x0D => { // IFR clear bits
+                let clear_mask = val & 0x7F; self.regs[0x0D] &= !clear_mask; self.recompute_irq();
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") && clear_mask!=0 { eprintln!("[IRQ_TRACE][VIA] WRITE IFR clear_mask={:02X} newIFR={:02X}", clear_mask, self.ifr()); }
+            }
+            0x0E => { // IER set/clear
+                let set_mode = (val & 0x80) != 0; let mask = val & 0x7F; let cur = self.ier() & 0x7F; let next = if set_mode { cur | mask } else { cur & !mask }; self.regs[0x0E] = next; self.recompute_irq();
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] WRITE IER set_mode={} mask={:02X} -> newIER={:02X}", set_mode, mask, self.ier()); }
+            }
+            0x04 => { self.regs[0x04] = val; } // T1 low latch
+            0x05 => { // T1 high latch/load
+                let lo = self.regs[0x04] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t1_latch = full; self.t1_counter = full; self.regs[0x0D] &= !0x40; self.regs[0x05] = val; self.recompute_irq();
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] LOAD T1 full={:#06X} (clear IFR6)", full); }
+            }
+            0x08 => { self.regs[0x08] = val; } // T2 low (no latch action yet until high written)
+            0x09 => { // T2 high latch/load
+                let lo = self.regs[0x08] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t2_latch = full; self.t2_counter = full; self.regs[0x0D] &= !0x20; self.regs[0x09] = val; self.recompute_irq();
+                if std::env::var("VIA_T2_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][T2 load] value={:#06X}", full); }
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] LOAD T2 full={:#06X} (clear IFR5)", full); }
+            }
+            0x0A => { // Shift register write
+                self.regs[0x0A] = val; let acr = self.regs[0x0B]; let mode = (acr >> 2) & 0x07; if mode == 0b100 { self.shifting = true; self.sr_bits_remaining = 8; self.regs[0x0D] &= !0x10; self.recompute_irq(); }
+            }
+            _ => { self.regs[r] = val; }
+        }
+    }
     pub fn tick(&mut self, cycles: u32){
         if self.t1_counter > 0 {
             let mut remaining_cycles = cycles as u32;
@@ -83,9 +116,11 @@ impl Via6522 {
         }
         if self.t2_counter > 0 {
             if cycles as u16 >= self.t2_counter {
-                self.t2_counter = 0;
-                self.regs[0x0D] |= 0x20;
+                self.t2_counter = 0; // expire
+                self.regs[0x0D] |= 0x20; // IFR5
                 self.recompute_irq();
+                if std::env::var("VIA_T2_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][T2 expire] IFR5 set"); }
+                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] T2 EXPIRE set IFR5 (IFR={:02X} IER={:02X})", self.ifr(), self.ier()); }
             } else {
                 self.t2_counter -= cycles as u16;
             }

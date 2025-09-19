@@ -9,10 +9,10 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 
 ## 1. Tabla Resumen (Conteo)
 
-- Primarios implementados: ~TODO
-- Prefijo 0x10 implementados: ~TODO
-- Prefijo 0x11 implementados: ~TODO
-- No implementados: 0 (según `opcov` en este commit)
+- Primarios implementados: 256 / 256 (incluyendo ilegales tratados como NOP controlado)
+- Prefijo 0x10 implementados (válidos): 31 / 31
+- Prefijo 0x11 implementados (válidos): 16 / 16
+- No implementados (válidos): 0
 
 ## 2. Opcodes Primarios (00–FF)
 
@@ -32,6 +32,7 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 | 0x0E | JMP (direct) | Salto directo | ✅ |
 | 0x0F | CLR (direct) | Pone 0 en memoria | ✅ |
 | 0x12 | NOP | No operación | ✅ |
+| 0x13 | SYNC | Espera hasta IRQ/FIRQ/NMI (no apila) | ✅ |
 | 0x16 | LBRA | Long branch always | ✅ |
 | 0x18 | (NOP*) | Tratado como NOP en emulador | ✅ (NOP) |
 | 0x19 | DAA | Ajuste decimal acumulador A | ✅ |
@@ -68,8 +69,8 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 | 0x38 | (NOP*) | Marcado NOP local | ✅ (NOP) |
 | 0x39 | RTS | Return subrutina | ✅ |
 | 0x3B | RTI | Return from interrupt | ✅ |
-| 0x3C | CWAI | (No implementado explícito) | ❌ |
-| 0x3D | SYNC | Tratado como NOP | ✅ (NOP) |
+| 0x3C | CWAI | AND CC con máscara inmediata; push frame completo y entra en wait | ✅ |
+| 0x3D | MUL | A*B -> D (8x8=16) flags(Z,N,C,V=0) | ✅ |
 | 0x3E | WAI | Halt hasta interrupt | ✅ |
 | 0x3F | SWI | Software interrupt | ✅ |
 | 0x40 | NEGA | Neg A | ✅ |
@@ -222,7 +223,7 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 | 0xFF | STU ext | Store U ext | ✅ |
 
 ### Prefijo 0x10 (Página extendida 1)
-(Por brevedad se listan principales; añadir si faltan)
+Listado completo de sub‑opcodes válidos (cualquier otro se trata como ilegal / no asignado y no cuenta como brecha):
 
 | Opcode (10 xx) | Mnemonic | Descripción | Impl |
 |----------------|----------|-------------|------|
@@ -264,7 +265,7 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 | 0x11 0xBC | CMPS ext | Compare S ext | ✅ |
 
 ## 3. VIA 6522 Registros
-(Asignaciones típicas; confirmar con implementación del bus.)
+(Asignaciones confirmadas: coincide con mapeo en `bus.rs` y `via6522.rs` – lectura IFR master bit sintetizado, timers resetean flags al leer alto, etc.)
 
 | Dirección | Nombre | Descripción | Implementado |
 |-----------|--------|------------|--------------|
@@ -286,10 +287,58 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 | 0xD00F | ORA2 | Registro espejo / handshake | ✅ |
 
 ## 4. Pendientes / Notas
-- CWAI (0x3C) no está implementado aún (marcado ❌). Puede implementarse similar a WAI pero empujando CC y A/B/DP opcionalmente según estándar 6809.
-- Verificar si MUL (0x3D en 6809 original) es requerido; actualmente se usa SYNC/NOP en este emulador.
-- Revisar precisión de ciclos (agrupados en seeds) para sincronización fina.
-- Añadir pruebas unitarias para nuevas instrucciones aritméticas (AB A, ADDD, ADCB, DAA, etc.).
+- Ciclos: varias instrucciones aún usan tiempos agrupados aproximados; pendiente tabla exacta por modo.
+- Flags: Validar exhaustivamente DAA contra vectores oficiales; añadir test de MUL (cálculo C=bit15) y CWAI (estado WAI + frame push único).
+- Instrucciones ilegales (0x01,0x02,0x05,0x45,0x4E,0x52, placeholders 0x7B,0x8F si aparecen) se tratan como NOP y registran cobertura como implementadas (NOP) para no contaminar métrica.
+- Exportar JSON de cobertura extendida para UI (lista `extended_unimplemented`).
+ - Listado explícito de ilegales manejados como NOP para trazabilidad: 0x01,0x02,0x05,0x18,0x38,0x45,0x4E,0x52,0x7B,0x8F (si el hardware los clasifica distintos, documentar divergencia en próxima revisión).
+
+## 5. Tabla de Ciclos Emulados (Snapshot)
+Metodología: ejecución sintética de cada opcode individual en un CPU clonado con `gen_cycles` (bin añadido) que coloca el opcode en $0100 y ejecuta un único `step()`, midiendo `cycles` delta. Los prefijos 0x10 y 0x11 reportan 0 ciclos porque el coste real se consume al ejecutar el sub‑opcode (separado en filas EXT10/EXT11). Esto refleja el modelo actual (agrupación aproximada) y no necesariamente los tiempos oficiales del 6809.
+
+Archivo generado: `cycles.csv` (en raíz de workspace tras correr el bin). Formato:
+```
+type,opcode,sub,cycles
+PRIMARY,8E,,3
+EXT10,10,8E,5
+...
+```
+
+Observaciones rápidas:
+- Prefijos (0x10/0x11) = 0 ciclos previos (se podría ajustar para sumar 1 ciclo de fetch adicional según tablas oficiales si se desea precisión futura).
+- Instrucciones ilegales tratadas como NOP = 1 ciclo actualmente.
+- RMW y saltos largos muestran variación (e.g. LBRA = 5 ciclos en este modelo simplificado).
+
+Próximos pasos recomendados para exactitud:
+1. Incorporar tabla oficial (Motorola) y columna "nominal" para comparar.
+2. Ajustar `cyc` por modo de direccionamiento (actualmente varios modos comparten seeds genéricos).
+3. Integrar verificación automática: fallo si desviación > tolerancia (configurable).
+4. Añadir campo de ciclos a la exportación de métricas para introspección en la UI (agregado opcional).
+
+Para regenerar:
+```
+cargo run -p vectrex_emulator --bin gen_cycles > cycles.csv
+```
+
+### 5.1 Discrepancias vs Nominal (Resumen)
+Fuente: `gen_cycles_compare` + `6809_cycles_nominal.json`.
+
+Estado actual: Principales desvíos corregidos (JMP, SYNC, SEX, EXG, BRN, WAI, CWAI). Los opcodes auditados muestran Δ=0 para las entradas ajustadas.
+
+Nota: JMP extended (0x7E) se ajustó a 4 ciclos para coincidir con la tabla de `vectrexy` (anteriormente 3 en este emulador). Documentamos esta divergencia respecto a algunas tablas que listan 3; si se habilita modo "estricto Motorola" podría revertirse.
+
+Próximos ajustes pendientes (si se amplía nominal JSON):
+- Ilegales/NOP (ej. 0x01,0x02,0x05) emulados a 1 ciclo mientras nominal JSON marca 2 como placeholder; decidir criterio (mantener 1 para rendimiento o alinear a 2 por fidelidad).
+- Modelar diferencia branch taken vs not taken (+1) si se requiere fidelidad completa.
+- Completar tabla nominal para todos los modos faltantes (aritmética extendida, prefijos adicionales si se añaden nuevas instrucciones).
+- Normalizar coste de instrucciones ilegales tratadas como NOP (decidir si 1 o 2 ciclos según referencia escogida).
+
+Regenerar discrepancias:
+```
+cargo run -p vectrex_emulator --bin gen_cycles_compare > cycles_compare.csv
+```
+
+Esta sección debe actualizarse cuando cambie la lógica de determinación de `cyc` en `step()`.
 
 ## 5. Próximos Pasos Sugeridos
 1. Implementar CWAI si alguna ROM lo necesita.  

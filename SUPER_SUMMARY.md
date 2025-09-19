@@ -30,6 +30,8 @@ Provide a modern toolchain + IDE for authoring Vectrex programs in a higher-leve
 - Instruction coverage: Large direct match over opcodes; missing / undefined opcodes mapped to lightweight NOP or recorded via `UNIMPL OP` branch.
 - Recently added: Indexed RMW cluster (0x60–0x6F) fully implemented; placeholder NOP handlers for 0x7B & 0x8F to suppress noise in unimplemented list.
 - Unimplemented tracking: `opcode_unimpl_bitmap[256]` + list aggregated into `unique_unimplemented` in metrics. Any opcode falling through final `op_unhandled` arm increments counter.
+ - RAM Execution Detector (nuevo 2025-09-19, ampliado 2025-09-19b/c): Instrumentación ligera que observa ejecuciones prolongadas dentro de ventana RAM 0xC800–0xCFFF. Tras 512 iteraciones captura snapshot (regs, stack bytes, ventana ±24 bytes alrededor de PC, recent PCs, call_stack) sin abortar ejecución. Ampliación b: hook temprano en RTS/RTI que si el retorno cae directamente dentro de 0xC800–0xCFFF captura snapshot inmediato (`[RAM-EXEC EARLY][RTS-invalid-return]`). Ampliación c: cada snapshot incluye campo `reason` = `threshold` o etiqueta del disparo temprano (ej: `RTS-invalid-return`, `RTI-invalid-return`). No sobreescribe snapshot si ya estaba disparado. Volcado sólo si `trace` activo. Campo: `cpu.ram_exec.snapshot`.
+ - Pseudo BIOS initial call: durante `reset()` si BIOS presente y `bios_calls` vacío, se registra una entrada inicial con la dirección de arranque (sin fabricar JSR) para trazas de secuencia inicial (facilita correlación con tests que esperan primera etiqueta BIOS).
 #### 3.1.1 Execution Model (Simplified)
 Inputs per instruction: PC, registers, flat memory + Bus (≥0xD000), pending interrupts. Output: mutated state, cycles, integrator side-effects, metrics.
 Cycles: Approximate per opcode group; refined for taken branches. `advance_cycles()` updates VIA timers, integrator, frame counters.
@@ -56,15 +58,45 @@ Objetivo: evitar diagnósticos confusos causados por "avance artificial" que enm
 - Data-driven opcode table (mnemonic, cycles, flags) to shrink match arm duplication.
 - Selective trace filters (PC allowlist) for low-noise debugging.
 - Golden trace comparison harness.
+ - Extender detector RAM a: (a) conteo por ventanas múltiples (b) heurística de detección de patrón cíclico usando período mínimo en ring PCs.
+ - Export WASM de snapshot (`bios_calls_json` paralelo) para UI (ver TODO ID 13 en copilot-instructions).
 
 ### 3.2 VIA & Timing
 - VIA memory-mapped region at 0xD000 range (simplified mapping). Timers tick via centralized `advance_cycles()`.
 - Interrupt servicing order: NMI > FIRQ (if F flag clear) > IRQ (if I flag clear). WAI halts until serviced.
 
 ### 3.3 Integrator / Vector Generation
-- Beam simulation converts DAC position & intensity changes into `Segment` records (x0,y0,x1,y1,intensity).
-- Access from JS via wasm exports: `getSegmentsShared()` (shared memory view) + `drainSegmentsJson()` fallback.
-- Frame boundary detection leverages BIOS WAIT_RECAL returns (tracking call depth) + internal cycle framing.
+
+### 3.4 Shadow Call Stack & RAM Execution Diagnostics (2025-09-19)
+Para diagnosticar el bucle espurio observado en RAM (0xC800–0xCFFF) se añadió una pila sombra (shadow stack) que rastrea entradas/salidas de frames de control y valida retornos.
+
+ShadowKind (tipos de frame registrados):
+- JSR, BSR, LBSR: retorno = PC tras la instrucción; push16 real ya efectuado (BSR/LBSR) o se añade para JSR.
+- PshsPc / PshuPc: PSHS/PSHU con bit PC (0x80) empujan PC y se registra frame para validar PULS/PULU posteriores.
+- IRQ, FIRQ, NMI, SWI, SWI2, SWI3: tras apilar el frame hardware de interrupción se añade frame sombra con el PC previo (ret) y SP resultante.
+
+Validación:
+- RTS: compara PC destino con frame (espera JSR/BSR/LBSR).
+- PULS/PULU (bit PC): compara con frame PshsPc/PshuPc.
+- RTI: compara con frame de tipo de interrupción correspondiente.
+
+Snapshot Razones (cuando PC cae en 0xC800–0xCFFF o mismatch):
+- `RTS-invalid-return`, `RTI-invalid-return`, `PULS-invalid-return`, `PULU-invalid-return` (ret directo a RAM sin mismatch shadow necesario).
+- `shadow-mismatch-rts|puls|pulu|rti` cuando frame difiere.
+- `shadow-underflow-*` si se intentó retornar sin frame.
+
+Snapshot incluye: regs, ring de últimos PCs, bytes de stack (ventana), bytes alrededor de PC (±24), call_stack lógico, shadow_stack restante y reason.
+
+Notas de diseño:
+- Cero efectos secundarios: la pila sombra no altera estado 6809.
+- Los frames de interrupción se registran post-push para correlacionar SP exacto y detectar corrupción.
+- Política “no heurísticas”: sólo se registra, nunca se fabrica estado (DP, intensidades, etc.).
+
+Pendiente / Futuro:
+- Exportar snapshot + shadow stack vía WASM (TODO 13: `bios_calls_json` paralelo o nuevo `bios_calls_and_shadow_json`).
+- Tests para RTI con anidamiento (IRQ dentro de NMI, etc.).
+- Detección de períodos repetitivos en ring PCs para clasificar tipo de bucle RAM.
+
 
 ---
 ## 4. WASM API
@@ -254,6 +286,7 @@ Long Term:
 - Added placeholder handlers for 0x7B & 0x8F instead of logging unimplemented repeatedly. (2025-09)
 - Source enumeration moved to dedicated IPC `listSources` instead of heuristic guessing. (2025-09)
 - Build pipeline decoupled from unused `build.build` command; direct IPC invocation. (2025-09)
+- Hardened opcode sweep detection (bitmap+cycle delta+ok) and reduced fetch logging noise (trace-gated). (2025-09-19)
 
 ---
 ## 19. How to Start Fresh After Cloning
@@ -279,6 +312,26 @@ Long Term:
 - 2025-09-18: Reintroducido registro de instrucción (trace) para WASM: nueva función interna `trace_maybe_record` empuja `TraceEntry` al inicio de `step()` cuando `trace_enabled` está activo (habilitado vía export wasm `enable_trace(en,limit)`). Panel Trace requiere pulsar "Capture Init" (no auto-on) para evitar sobrecoste por defecto. Límite configurable (`trace_limit`) protege memoria (cap lado UI a 200k). Documentado para evitar confusión futura sobre ausencia de entries si no se activa.
  - 2025-09-18: Ampliado `TraceEntry` con campo `call_depth` (profundidad de pila de llamadas BIOS/JSR en el momento del fetch) y exportado en `trace_log_json()` como `depth`. No rompe compatibilidad: consumidores previos que ignoran campos extra siguen funcionando. Próximo paso: usar `depth` en UI para plegar/expandir trazas por nivel.
  - 2025-09-18: Ciclos afinados para familia CMPX y JSR indexed: 0x8C (CMPX imm) = 5 ciclos, 0xAC (CMPX indexed) = 6, 0xBC (CMPX extended) = 7; añadido handler explícito para JSR indexed (0xAD = 7 ciclos) y CMPX indexed separando seeds. Nuevos tests `audit_cmpx_*` verifican 5/6/7 y `audit_jsr_extended_cycles` permanece verde. Prueba de enforcement `enforce_no_unimplemented_primary_opcodes` confirma 100% cobertura primaria válida. Lista de ilegales ampliada (incluye 0x41,0x42,0x4B,0x51,0x55,0x5B,0x5E,0x62,0x65,0x6B,0x71,0x72,0x75,0x87,0xC7,0xCD) tratadas como NOP de 1 ciclo sin contaminar métrica de unimplemented.
+- 2025-09-19: Barrido 0x00–0xFF endurecido (ok + delta ciclos + bitmap) y fetch logging reducido (solo trace). Añadido helper público `opcode_marked_unimplemented`.
+ - 2025-09-19: Añadidos barridos adicionales: (a) sweep extendido 0x10/0x11 validando que `extended_unimplemented_list()` está vacío y cada sub‑opcode válido avanza ciclos; (b) sweep básico VIA 0xD000–0xD00F verificando coherencia IFR bit7. Ref ref: tests `opcode_extended_and_via_sweeps.rs`.
+ - 2025-09-19: Integrado mapeo exhaustivo de etiquetas BIOS en `bios_label_for()` y uso en `record_bios_call` (eliminando "BIOS_UNKNOWN" para rutinas estándar). Incluye Init_VIA, Warm_Start, Intensity_* variantes, Print_List*, Draw_VL, rotación (Rot_VL_*), sonido (Sound_Byte*, Clear_Sound, Do_Sound), contadores (Dec_*), y helpers de rotación/rise-run.
+ - 2025-09-19: Ampliado mapeo BIOS: añadido scoreboard / score math (Strip_Zeros, Compare_Score, New_High_Score), colisiones (Obj_Will_Hit_u, Obj_Will_Hit, Obj_Hit), efectos (Explosion_Snd), más intensidad (Intensity_1F, Intensity_3F), variantes sonido (Sound_Bytes*, Do_Sound_x) para erradicar remanentes "BIOS_UNKNOWN".
+ - 2025-09-19: Limpieza mapeo BIOS: eliminado duplicado `Moveto_d` (0xF312) que causaba warning de pattern inalcanzable y añadido test de regresión `bios_label_coverage` (archivo `emulator/tests/bios_labels.rs`) que valida presencia de etiquetas para todas las direcciones conocidas.
+ - 2025-09-19: Ampliación final mapeo BIOS (fase Option A completa): añadidas rutinas restantes: Reset0Ref_D0, Check0Ref, Reset_Pen, Reset0Int, familia Print_* (Str_hwyx, Str_yx, Str_d, List_hw, List, List_chk, Ships_x, Ships, Str genérico), variantes combinadas Mov_Draw_VL*, variantes de dibujo Draw_VL* (c, b, cs, ab, a, principal, line), patrones Draw_Pat_VL*, modos Draw_VL_mode, variantes pre-move Draw_VLp*, random (Random_3, Random), inicialización música (Init_Music_Buf, Init_Music_chk, Init_Music, Init_Music_dft), clears de memoria (Clear_x_b, Clear_C8_RAM, Clear_x_256, Clear_x_d, Clear_x_b_80, Clear_x_b_a), contadores (Dec_6_Counters), suite de delays (Delay_3/2/1/0/b/RTS), utilidades Bitmask_a, Abs_a_b, Abs_b, Rise_Run_Angle, transformaciones Xform_* y Move_Mem_a*/_1. Test actualizado para cubrir todas. Objetivo: cero "BIOS_UNKNOWN" para llamadas legítimas.
+ - 2025-09-19: Corrección frame IRQ y validación RTI: ajustado orden de push del frame de IRQ a la secuencia inversa de la restauración hardware (push: PC,U,Y,X,DP,B,A,CC) eliminando inversión de endian que causaba retorno 0x0001 en test. Añadido pop/validación de frame sombra en RTI (antes faltaba, produciendo fuga de shadow frames). Test `irq_rti_shadow_frame` ahora pasa con retorno exacto y pila sombra vaciada.
+
+ - 2025-09-19: Intercept temprano Draw_VL / Draw_VLc (fase transitoria antes de emulación analógica completa VIA/DAC). Implementado en `record_bios_call` detectando direcciones $F3DD (Draw_VL) y $F3CE (Draw_VLc). Características:
+   * Usa `X` como puntero de lista (corrección respecto al uso previo incorrecto de `U`).
+   * Draw_VLc: primer byte = cuenta N; se leen N pares (dy,dx). Draw_VL: cuenta leída desde RAM $C823; se consumen ese número de pares (dy,dx) sin bit sentinela.
+   * Escala aproximada aplicada por factor `scale = (VIA_T1_low / 255.0)` leyendo 0xD004; si 0 => 1.0.
+   * Primer par tratado como movimiento (reposición del haz) sin emitir segmento (`Integrator::move_rel`), alineado con semántica de rutinas BIOS que posicionan antes de dibujar.
+   * Segmentos posteriores emitidos con `line_to_rel` (sin integración temporal, un segmento por par) para acelerar representación.
+   * Intensidad: se utiliza la intensidad vigente (`last_intensity`) ya gestionada por la CPU al cambiar registros BIOS; no se simula decaimiento ni ramp up.
+   * Limitaciones actuales: (a) no se soportan variantes de patrón (Draw_Pat_VL*), (b) no se procesan modos/rotaciones fuera de que la BIOS ya haya transformado coordenadas en la RAM, (c) no modela timing real (no jitter, no distorsión por integrador analógico), (d) no respeta latencias de DAC ni blanking hardware entre movimiento y primer trazo.
+   * Política de “No Sintético”: se evita introducir heurísticas como intensidades derivadas o escalas inventadas; la única aproximación temporal aceptada es el factor lineal de T1 low (valor ya configurado por BIOS). Cuando se implemente VIA/DAC real este intercept será eliminado y reemplazado por flujo de escritura de registros + integración por ciclos.
+   * Impacto en métricas: conteo de segmentos por frame disminuye (primer par ya no genera segmento), mejorando concordancia esperada con arte de arranque original.
+   * Próximo paso: remover intercept tras introducir pipeline real (writes a DAC X/Y, latch escala, blanking) y añadir trazado de patrones basándose en rutinas BIOS `Draw_Pat_VL*` sin stubs.
+
 
 ### 24.7 Actualización Ciclos CMPX / JSR (2025-09-18)
 Resumen de ajuste puntual de temporización para mejorar fidelidad respecto a la tabla nominal MC6809:
@@ -301,25 +354,71 @@ Estos aseguran valores 5/6/7 correctos y actuarán como regresión si se altera 
 ## 21. CPU / VIA / Integrator Deep Dive
 ### 21.1 CPU Flags & Registers
 A,B (8-bit) forming D, X,Y,U,S (16-bit), DP (high byte for direct), CC bits EFHINZVC. E marks full frame pushed; F masks FIRQ; H reserved (half-carry pending proper BCD support); I masks IRQ.
-### 21.2 Interrupt Entry Summary
+### 21.2 Interrupt Entry Summary (POST-MIGRATION STANDARD MAP)
 | Src | Frame | Sets E | Sets F | Sets I | Vector | Return |
 |-----|-------|--------|--------|--------|--------|--------|
-| IRQ | Full  | Y | N | Y | 0xFFF6 | RTI |
-| FIRQ| Partial (PC+CC) | N | Y | Y | 0xFFF4 | RTI |
-| NMI | Full  | Y | N | Y | 0xFFFA | RTI |
-| SWI | Full  | Y | Y | Y | 0xFFF8 | RTI |
+| FIRQ| Partial (CC+PC) | N | Y | Y | 0xFFF6 | RTI |
+| IRQ | Full  | Y | N | Y | 0xFFF8 | RTI |
+| SWI | Full  | Y | Y | Y | 0xFFFA | RTI |
+| NMI | Full  | Y | N | Y | 0xFFFC | RTI |
+| RESET | Full (hardware) | Y | N | Y | 0xFFFE | (fetch) |
 | SWI2| Full  | Y | Y | Y | 0xFFF2 | RTI |
-| SWI3| Full  | Y | Y | Y | 0xFFF0 | RTI |
+| SWI3| Full  | Y | Y | Y | 0xFFF4 | RTI |
 | WAI | Pre (once) | Y | – | – | (next int) | RTI |
+
+Nota: El orden de la tabla se ha ajustado para reflejar el mapa estándar ascendente de vectores (SWI2→RESET) y destacar la corrección aplicada el 2025-09-19 (ver subsección 21.2.1).
+
+#### 21.2.1 Interrupt Vector Layout Migration (2025-09-19)
+Histórico: Antes de esta fecha el emulador utilizaba un layout divergente heredado donde:
+```
+FIRQ = 0xFFF4 (bytes low,high invertidos en lectura)
+IRQ  = 0xFFF6
+SWI  = 0xFFF8
+NMI  = 0xFFFA
+RESET= 0xFFFC
+```
+Esto implicaba:
+- FIRQ vector desplazado 2 bytes abajo respecto al estándar 6809.
+- Lectura especial (endian invertido) para FIRQ.
+- Potencial confusión al comparar trazas con otros emuladores (jsvecx / vectrexy) y documentación oficial.
+
+Migración aplicada:
+```
+SWI2 = 0xFFF2
+SWI3 = 0xFFF4
+FIRQ = 0xFFF6
+IRQ  = 0xFFF8
+SWI  = 0xFFFA (alias SWI1)
+NMI  = 0xFFFC
+RESET= 0xFFFE
+```
+Cambios técnicos:
+- Introducido helper `read_vector(base)` con lectura big-endian uniforme (hi=mem[base], lo=mem[base+1]).
+- Eliminada ruta especial de FIRQ que invertía bytes.
+- Actualizados tests (`irq_rti_shadow_test`, `firq_single_return_test`, `nested_irq_firq_test`) para escribir vectores en las nuevas direcciones.
+- Añadido push de shadow frame consistente tras cada servicio (IRQ/FIRQ) con `sp_at_push` correcto.
+
+Resultados:
+- Alineación con mapas estándar → simplifica correlación con desensamblados BIOS y otras implementaciones.
+- Elimina fuente de divergencias en trazas y necesidad de comentarios aclaratorios en tests.
+- Todos los tests existentes pasan tras actualización (suite completa verde al momento de la migración).
+
+Riesgos mitigados:
+- Posibles futuros bugs de salto a handler incorrecto por error de offset desaparecen al consolidar la convención.
+- Evita confusión en documentación (tabla 21.2 ahora refleja layout estándar aceptado).
+
+Acciones futuras (opcionales):
+- Añadir test de invariantes que verifique en arranque que cada vector apunta dentro de rango válido (ej. BIOS presente o cart) y no a página 0x0000 accidental si la BIOS aún no fue cargada.
+- Exportar por WASM (TODO ID 13) la pila de llamadas BIOS incluyendo identificación de interrupción y vector usado.
 ### 21.3 VIA 6522 Map (0xD000)
 | Ofs | Reg | Notes |
 |-----|-----|-------|
 |00|ORB|Experimental horizontal velocity|
 |01|ORA|Experimental vertical velocity|
 |04|T1C-L|Read clears IFR6|
-|05|T1C-H|Read clears IFR6 (if set) & reloads|
-|08|T2C-L|No clear|
-|09|T2C-H|Read clears IFR5|
+|05|T1C-H|No clear (counter high)|
+|08|T2C-L|Read clears IFR5 (updated semantics)|
+|09|T2C-H|No clear|
 |0A|SR|Intensity latch (experimental) + shift mode|
 |0B|ACR|Timer modes + PB7 toggle|
 |0C|PCR|Control lines (pass-through)|
@@ -367,7 +466,8 @@ Identifiers `[A-Za-z_][A-Za-z0-9_]*`; ints (dec/hex). Strings with escapes. Expr
 ## 24. Opcode Appendix (Do Not Remove)
 Legend: [I]=Implemented, [NOP]=Illegal/Undefined but intentionally treated as NOP (counted implemented for coverage), [P]=Placeholder kept as NOP awaiting spec confirmation. Extended valid sub‑opcodes enumerated in `VALID_PREFIX10/11` in `cpu6809.rs` — all currently implemented.
 
-Summary (UPDATED 2025-09-18 – includes fix adding 0x14/0x15 explicit NOP handlers): 100% de los opcodes válidos implementados.
+Summary (UPDATED 2025-09-18 – incluye fix añadiendo handlers NOP explícitos para 0x14/0x15): 100% de los opcodes válidos implementados.
+Summary (REVALIDATED 2025-09-19 – barrido endurecido + bitmap): Cobertura base permanece 100%; cualquier regresión fallará inmediatamente en `opcode_base_full_sweep_unimplemented`.
 
 Illegal base (MC6809 no definidos) ahora centralizados en la constante `ILLEGAL_BASE_OPCODES` (archivo `cpu6809.rs`). Tests llaman a `is_illegal_base_opcode()` para evitar divergencia. Lista actual:
 ```
@@ -444,6 +544,8 @@ Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (va
 - 2025-09-04: SUPER_SUMMARY initial.
 - 2025-09-05: Deep dive + opcode appendix.
 - 2025-09-17: Open bus unificado (`last_bus_value`), RAM power-on pseudo-aleatoria, tablas de ciclos data-driven, infraestructura micro-steps (desactivada), re-clasificación final de opcodes ilegales (cobertura válida = 100%), batch de implementación (LBSR, ABX, SBCB/ADCB variantes, ADDD direct, CMPX idx/ext, SUBA/SBCA/BITA/EORA/ORA extended, ADDB extended), tests `opcode_validity.rs` y `opcode_scan.rs` estabilizados.
+ - 2025-09-19: Barrido 0x00–0xFF endurecido (ok + delta ciclos + bitmap) y fetch logging reducido (solo trace). Añadido helper público `opcode_marked_unimplemented`.
+ - 2025-09-19: Migración layout vectores de interrupción a estándar 6809 (FIRQ=FFF6, IRQ=FFF8, SWI=FFFA, NMI=FFFC, RESET=FFFE) + helper `read_vector` big-endian; tests actualizados.
 
 ---
 ## 28. Línea de Tiempo de los 39 Pasos Recientes
@@ -535,6 +637,17 @@ This section consolidates cross-cutting functional gaps and planned work specifi
 
 ### 28.1 Audio (PSG) – Not Yet Implemented
 Vectrex uses a General Instrument AY-3-8912 (PSG). Currently no sound path exists.
+
+TEMP (2025-09-19): Se implementará un stub mínimo de avance musical (únicamente para permitir que la BIOS complete la intro y limpie Vec_Music_Flag). Este stub:
+- No generará audio.
+- Sólo replicará pasos estrictos (decremento de duración, avance de punteros, detección de terminador) basándose en datos reales escritos por la BIOS a las estructuras de música.
+- Debe ELIMINARSE en cuanto se implemente emulación real del AY-3-8912. Añadir recordatorio aquí evita que el stub se perpetúe y viole la política de “no heurísticas permanentes”.
+
+Checklist al retirar el stub:
+1. Implementar temporización real de canales / envolventes ADSR según tablas BIOS.
+2. Mapear registros shadow ($C800-$C80E) a estado interno del emulador de PSG.
+3. Verificar que la intro BIOS (Mine Storm) progresa sin necesidad de lógica auxiliar.
+4. Actualizar esta sección y eliminar este bloque TEMP.
 Pending work:
 - Memory / I/O mapping: Decide addressing interface (BIOS expects VIA port lines & PSG latch writes; need abstraction layer).
 - Implement PSG register model (16 regs: tone (A/B/C), noise, mixer, amplitudes, envelope period/shape, I/O port).
@@ -542,7 +655,7 @@ Pending work:
 - WASM <-> JS bridge: Ring buffer or AudioWorklet (preferred) for low-latency streaming.
 - Volume scaling / mute toggle / enable flag.
 - Performance: Batch generate per frame or fixed sample quantum (e.g. 512 samples) decoupled from video frames.
-- Testing: Golden register write sequences producing deterministic short WAV snapshot for regression.
+- Testing: Golden register write sequences producing audible tones with stable pitch.
 
 Acceptance criteria:
 - BIOS sound test rom produces audible tones with stable pitch.
@@ -737,16 +850,18 @@ Documentación / Próximos pasos:
 - Añadir sección de ejemplo de volcado de pila antes/después de IRQ para trazas WASM cuando se implemente export de call stack (TODO ID 13).
 
 ### 32.2 Hooks de Trazado Adicionales (2025-09-19)
-Añadidos dos puntos de log condicional (solo `trace=true`):
+Actualización: Sistema de logging unificado para entradas de interrupción.
 
-1. `[IRQ ENTER]`: emitido al inicio de `service_irq` justo antes de apilar el frame. Sustituye el antiguo `[IRQ SERVICE]` y facilita buscar transiciones de modo sin ruido adicional.
-2. `[BIOS->CART] handoff pc=XXXX`: se emite una única vez (guardado por `bios_handoff_logged`) cuando un `RTS` o `PULS` restaura un PC que cruza del rango BIOS (>=0xE000) a una dirección inferior (<0xE000), interpretado como entrega de control al cartucho / juego.
+Hooks activos (solo cuando `trace=true`):
+1. `[INT ENTER kind=K prev_pc=PPPP sp=SSSS vec=VVVV]` – Empleado ahora para todas las rutas de servicio (`IRQ`, `FIRQ`, `NMI`, `SWI`, `SWI2`, `SWI3`). Reemplaza los mensajes separados `[IRQ ENTER ...]`, `[FIRQ ENTER ...]`, etc. Formato estable para parsing automático futuro.
+2. `[BIOS->CART] handoff pc=XXXX` – Emitido una sola vez al primer retorno (`RTS`, `PULS` con bit PC o `RTI`) que cruza de BIOS (>=0xE000) a cartucho (<0xE000). Conservado sin cambios.
 
-Implementación:
-- Campo nuevo en `CPU`: `bios_handoff_logged: bool` (default false) para evitar duplicados.
-- Hook insertado tras actualizar PC en opcodes 0x39 (RTS) y 0x35 (PULS) antes de cualquier otro efecto.
+Detalles:
+- Helper interno `log_interrupt_enter(kind, prev_pc, sp_before, vec)` centraliza formato y gating.
+- Todas las rutas (incluyendo NMI y SWI/SWI2/SWI3) ahora usan `read_vector()` big-endian para coherencia tras la migración del layout de vectores (ver 21.2.1).
+- Mensajes anteriores específicos (`[IRQ ENTER pc=...]`, `[FIRQ ENTER pc=...]`, `[NMI SERVICE]`, `[SWI SERVICE]`) fueron retirados para reducir ruido y facilitar regex único.
 
-No se ha modificado la API WASM ni export alguno (sin impacto en `MIGRATION_WASM.md`). Sólo mejora diagnóstica y no introduce comportamiento sintético.
-
-Próximo posible refinamiento (no implementado aún): logs equivalentes para `FIRQ` y `NMI` y mostrar el vector resuelto directamente en `[IRQ ENTER vec=FFFF]`.
+Consideraciones futuras:
+- Exportar estos eventos en JSON (junto a `trace_log_json`) o integrarlos en el planned `bios_calls_json()` (TODO ID 13) con tipo y vector.
+- Añadir flag incremental que permita filtrar únicamente tipos específicos (`trace_int_mask`).
 

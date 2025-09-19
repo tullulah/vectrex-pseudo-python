@@ -167,4 +167,22 @@ impl Integrator {
             _pad0:0,_pad1:0,_pad2:0, frame:s.frame, _reserved:0
         }).collect()
     }
+
+    // Direct relative line emission (used by early BIOS Draw_VL decode shortcut until full VIA/DAC execution path is implemented).
+    // This purposefully bypasses velocity integration and emits a single segment per list entry.
+    pub fn line_to_rel(&mut self, dx:f32, dy:f32, intensity:u8, frame:u64){
+        let x0 = self.state.x; let y0 = self.state.y;
+        let mut x1 = x0 + dx; let mut y1 = y0 + dy;
+        x1 = x1.clamp(self.coord_min, self.coord_max);
+        y1 = y1.clamp(self.coord_min, self.coord_max);
+        if intensity>0 { self.push_segment(x0,y0,x1,y1,intensity,frame); }
+        self.state.x = x1; self.state.y = y1;
+    }
+    // Pure movement relative without emitting a segment (used for first vector in Draw_VL family = reposition).
+    pub fn move_rel(&mut self, dx:f32, dy:f32){
+        let mut x1 = self.state.x + dx; let mut y1 = self.state.y + dy;
+        x1 = x1.clamp(self.coord_min, self.coord_max);
+        y1 = y1.clamp(self.coord_min, self.coord_max);
+        self.state.x = x1; self.state.y = y1;
+    }
 }

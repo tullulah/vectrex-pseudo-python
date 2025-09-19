@@ -65,6 +65,8 @@ function App() {
   { key: 'debug', label: t('panel.debug'), component: 'debug' },
   { key: 'errors', label: t('panel.errors'), component: 'errors', badge: (errCount+warnCount>0) ? (errCount>0? `${errCount}E` : `${warnCount}W`) : undefined },
   { key: 'output', label: t('panel.output','Output'), component: 'output' },
+  { key: 'memory', label: t('panel.memory','Memory'), component: 'memory' },
+  { key: 'trace', label: t('panel.trace','Trace'), component: 'trace' },
   ];
 
   // Detect visibility via flexlayout model only
@@ -309,7 +311,7 @@ function App() {
                     const selected = n.getSelectedNode?.();
                     if (selected) {
                       const c = typeof selected.getComponent === 'function' ? selected.getComponent() : selected?._attributes?.component;
-                      if (['files','emulator','debug','errors'].includes(c)) activeComp = c;
+                      if (['files','emulator','debug','errors','memory'].includes(c)) activeComp = c;
                     }
                   }
                 });
@@ -326,7 +328,7 @@ function App() {
                     const selected = n.getSelectedNode?.();
                     if (selected) {
                       const c = typeof selected.getComponent === 'function' ? selected.getComponent() : selected?._attributes?.component;
-                      if (['files','emulator','debug','errors'].includes(c)) activeComp = c;
+                      if (['files','emulator','debug','errors','memory'].includes(c)) activeComp = c;
                     }
                   }
                 });

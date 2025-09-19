@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { globalEmu, VectorEvent, Segment } from '../../emulatorWasm';
+// @ts-ignore import binary asset (Vite will turn into URL)
+import biosUrl from '../../assets/bios.bin';
+import { inputManager } from '../../inputManager';
 import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
 
@@ -18,6 +21,7 @@ export const EmulatorPanel: React.FC = () => {
   const [demoMode, setDemoMode] = useState(false);
   const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
   const [traceVectors, setTraceVectors] = useState(() => { try { return localStorage.getItem('emu_trace_vectors')==='1'; } catch { return false; } });
+  const [holdSegments, setHoldSegments] = useState(() => { try { return localStorage.getItem('emu_hold_segments')==='1'; } catch { return false; } });
   const [baseAddrHex, setBaseAddrHex] = useState('0000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
   const [toasts, setToasts] = useState<Array<{ id:number; msg:string; kind:'info'|'error'; ts:number }>>([]);
@@ -41,7 +45,7 @@ export const EmulatorPanel: React.FC = () => {
     canvas.style.width = WIDTH + 'px'; canvas.style.height = HEIGHT + 'px';
   }, []);
 
-  const drawSegments = (segments: Segment[]) => {
+  const drawSegments = (segments: any[]) => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext('2d'); if (!ctx) return;
     const dpr = window.devicePixelRatio || 1; ctx.save(); ctx.scale(dpr,dpr);
@@ -50,16 +54,93 @@ export const EmulatorPanel: React.FC = () => {
     if (!segments.length) {
       ctx.fillStyle = '#0f0'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
       const cx = WIDTH/2, cy = HEIGHT/2;
-      if (!globalEmu.isBiosLoaded()) { ctx.fillText('BIOS missing', cx, cy-10); ctx.fillText('Place bios.bin in /ide/frontend/public', cx, cy+10);} else { ctx.fillText('No segments yet', cx, cy);} ctx.restore(); return;
+      if (!globalEmu.isBiosLoaded()) { ctx.fillText('Loading BIOS...', cx, cy); }
+      else { ctx.fillText('No segments yet', cx, cy); }
+      ctx.restore(); return;
     }
-    const scale = Math.min(WIDTH, HEIGHT)/2 * 0.95; const cx = WIDTH/2; const cy = HEIGHT/2; ctx.lineWidth = 1;
-    for (const s of segments) { const x0=cx + s.x0*scale; const y0=cy - s.y0*scale; const x1=cx + s.x1*scale; const y1=cy - s.y1*scale; const i=Math.max(0,Math.min(255,s.intensity|0)); ctx.strokeStyle=`rgba(0,255,120,${(i/255).toFixed(3)})`; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); }
+    ctx.lineWidth = 1;
+    // 1) Detectar si los valores parecen ya normalizados (-1..1) o son crudos (rango grande)
+    let maxAbs = 0;
+    for (const s of segments) {
+      const {x0,y0,x1,y1} = normalizeSeg(s);
+      maxAbs = Math.max(maxAbs, Math.abs(x0), Math.abs(y0), Math.abs(x1), Math.abs(y1));
+    }
+    // Si maxAbs <= 1.2 asumimos normalizados. Si no, trabajamos con valores crudos (no dividimos todavía)
+    const normalizedInput = maxAbs <= 1.2;
+    // 2) Calcular bounding box en el espacio “bruto” (si normalizados, el bruto ya es [-1,1])
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const sRaw of segments) {
+      const s = normalizeSeg(sRaw);
+      if (!Number.isFinite(s.x0) || !Number.isFinite(s.y0) || !Number.isFinite(s.x1) || !Number.isFinite(s.y1)) continue;
+      minX = Math.min(minX, s.x0, s.x1);
+      maxX = Math.max(maxX, s.x0, s.x1);
+      minY = Math.min(minY, s.y0, s.y1);
+      maxY = Math.max(maxY, s.y0, s.y1);
+    }
+    if (minX === Infinity) { ctx.restore(); return; }
+    const spanX = Math.max(1e-6, maxX - minX);
+    const spanY = Math.max(1e-6, maxY - minY);
+    // 3) Padding (5%)
+    const padX = spanX * 0.05;
+    const padY = spanY * 0.05;
+    minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+    // 4) Escala uniforme para encajar dentro del canvas manteniendo aspecto
+    const spanX2 = maxX - minX; const spanY2 = maxY - minY;
+    const scale = Math.min(WIDTH / spanX2, HEIGHT / spanY2);
+    // 5) Origen (minX,minY) -> (0,0) y centrado
+    const offsetX = minX; const offsetY = minY;
+    // 6) Dibujar
+    for (const sRaw of segments) {
+      const s = normalizeSeg(sRaw);
+      if (!Number.isFinite(s.x0) || !Number.isFinite(s.y0) || !Number.isFinite(s.x1) || !Number.isFinite(s.y1)) {
+        if (holdSegments) console.debug('[draw] skip invalid seg', sRaw);
+        continue;
+      }
+      const x0 = ( (s.x0 - offsetX) * scale );
+      const y0 = ( (s.y0 - offsetY) * scale );
+      const x1 = ( (s.x1 - offsetX) * scale );
+      const y1 = ( (s.y1 - offsetY) * scale );
+      // Centrar en canvas
+      const dx = (WIDTH - spanX2 * scale) * 0.5;
+      const dy = (HEIGHT - spanY2 * scale) * 0.5;
+      const i = Math.max(0, Math.min(255, s.intensity|0));
+      ctx.strokeStyle = `rgba(0,255,120,${(i/255).toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(dx + x0, HEIGHT - (dy + y0)); ctx.lineTo(dx + x1, HEIGHT - (dy + y1)); ctx.stroke();
+      if (holdSegments && (window as any).console) {
+        // Log formato compacto: frame idx; coords originales y transformadas
+        // Nota: se deja nivel debug para poder filtrarlo fácilmente
+        try { console.debug('[draw] seg', {frame:s.frame, raw:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1,i:s.intensity}, bb:{minX,maxX,minY,maxY}, canvas:{x0:dx+x0,y0:HEIGHT-(dy+y0),x1:dx+x1,y1:HEIGHT-(dy+y1)}, scale}); } catch {}
+      }
+    }
     ctx.restore();
+  };
+
+  // Normaliza un segmento que puede venir como objeto {x0,y0,x1,y1,intensity,frame}
+  // o como array [x0,y0,x1,y1,intensity,frame].
+  const normalizeSeg = (s:any):Segment => {
+    if (Array.isArray(s)) {
+      return { x0:s[0], y0:s[1], x1:s[2], y1:s[3], intensity:s[4] ?? 0, frame:s[5] ?? 0 };
+    }
+    return s as Segment;
   };
 
   const animationLoop = useCallback(() => {
     if (status !== 'running' || demoMode) return; // paused/stopped or demo mode stops loop
     if (traceVectors) console.debug('[panel] animationLoop runFrame');
+    // Update input state before running frame
+    try {
+      const snap = inputManager.update();
+      const emuSvc: any = (globalEmu as any);
+      if (emuSvc && typeof emuSvc.setInput === 'function') {
+        emuSvc.setInput(snap.x, snap.y, snap.buttons);
+      } else {
+        // Fallback: legacy direct wasm export access
+        const direct = (emuSvc?.emu) || (window as any).emu;
+        if (direct && typeof direct.set_input_state === 'function') {
+          direct.set_input_state(snap.x, snap.y, snap.buttons);
+        }
+      }
+    } catch(e){ /* non-fatal */ }
     globalEmu.runFrame();
     const regs = globalEmu.registers(); const m = globalEmu.metrics();
     if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
@@ -67,17 +148,37 @@ export const EmulatorPanel: React.FC = () => {
     const metrics = globalEmu.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
     let segs = globalEmu.getSegmentsShared();
     if (!segs.length) {
-      if (traceVectors) console.debug('[panel] shared empty -> drain json');
-      segs = globalEmu.drainSegmentsJson();
+      if (traceVectors) console.debug('[panel] shared empty -> drain json/peek');
+      segs = holdSegments ? globalEmu.peekSegmentsJson() : globalEmu.drainSegmentsJson();
+      // Fallback 1: si métricas dicen que existen segmentos acumulados (total >0) pero ambos métodos vacíos, intentar peek.
+      if (!segs.length) {
+        const mm:any = metrics || globalEmu.metrics();
+        if (mm && typeof mm.integrator_total_segments === 'number' && mm.integrator_total_segments > 0) {
+          if (traceVectors) console.debug('[panel] metrics report segments total >0; trying peekSegmentsJson');
+          segs = globalEmu.peekSegmentsJson();
+        }
+      }
+      // Fallback 2: si seguimos sin nada y auto-demo debería haberse generado, invocar demoTriangle manual.
+      if (!segs.length) {
+        const anyEmu:any = (globalEmu as any).emu || (window as any).emu;
+        try {
+          const autoDemo = anyEmu?.auto_demo_enabled ? anyEmu.auto_demo_enabled() : true;
+          if (autoDemo) {
+            if (traceVectors) console.debug('[panel] invoking demo_triangle manual fallback');
+            globalEmu.demoTriangle();
+            segs = globalEmu.peekSegmentsJson();
+          }
+        } catch {/* ignore */}
+      }
     }
     if (traceVectors) console.debug('[panel] segments fetched count=', segs.length);
     if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=globalEmu.loopWatch(); if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
   }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame, traceVectors]);
 
   // Init
-  useEffect(()=>{ let cancelled=false; (async()=>{ if (globalEmu.registers()) return; try { await globalEmu.init(); const biosPaths=['bios.bin','/bios.bin','/core/src/bios/bios.bin']; for (const p of biosPaths){ if (globalEmu.isBiosLoaded()) break; try { const resp=await fetch(p); if (resp.ok){ const buf=new Uint8Array(await resp.arrayBuffer()); globalEmu.loadBios(buf); break; } } catch{} } // After BIOS load, remain stopped until user presses Play
-        if (!cancelled){ setStatus('stopped'); }
-      } catch(e){ console.error('Emulator init failed', e); setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line
+  useEffect(()=>{ let cancelled=false; (async()=>{ try { await globalEmu.init(); await (globalEmu as any).ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); } catch(e){ console.error('Emulator init/BIOS load failed', e); } if (!cancelled){ setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line
+
+  // (listener moved below utility declarations)
 
   useEffect(()=>{ fixedCanvasInit(); }, [fixedCanvasInit]);
   useEffect(()=>{ if (status==='running' && !demoMode){ if (!rafRef.current) rafRef.current=requestAnimationFrame(animationLoop); } else if (rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } }, [status, animationLoop, demoMode]);
@@ -191,6 +292,26 @@ export const EmulatorPanel: React.FC = () => {
         }
       }
     } catch{}
+  }, []);
+
+  // Listen for compiledBin events from main (run:compile completion) and load into WASM
+  useEffect(()=>{
+    const w:any = window as any;
+    if (!w.electronAPI?.onCompiledBin) return;
+    const handler = (payload:{ base64:string; size:number; binPath:string }) => {
+      try {
+        const bytes = Uint8Array.from(atob(payload.base64), c=>c.charCodeAt(0));
+        let base = parseBase();
+        base = enforceBaseForHeader(bytes, base);
+        globalEmu.loadProgram(bytes, base);
+        saveLastBin({ path: payload.binPath, size: bytes.length, base, bytes });
+        performFullReset();
+        setStatus('running');
+        pushToast('Compiled & loaded '+(payload.binPath||'binary'));
+      } catch(e){ console.warn('onCompiledBin load failed', e); pushToast('Compiled bin load failed','error'); }
+    };
+    w.electronAPI.onCompiledBin(handler);
+    return () => { try { w.electronAPI?.onCompiledBin?.(()=>{}); } catch {} };
   }, []);
 
   // Persist selected source
@@ -348,6 +469,7 @@ export const EmulatorPanel: React.FC = () => {
     <div style={{display:'flex', flexDirection:'column', height:'100%', padding:8, boxSizing:'border-box', fontFamily:'monospace', fontSize:12}}>
       <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
         {(() => { const statusColor = status==='running' ? '#0f0' : status==='paused' ? '#fa0' : '#f55'; return (<span>Status: <span style={{color:statusColor}}>{status}</span></span>); })()}
+        <span style={{fontSize:11, padding:'2px 6px', borderRadius:4, background: globalEmu.isBiosLoaded()? '#1d4d1d':'#4d1d1d', color:'#eee'}}>BIOS {globalEmu.isBiosLoaded()? 'OK':'…'}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>Base
           <input value={baseAddrHex} onChange={e=> setBaseAddrHex(e.target.value.toUpperCase())} style={{width:60, background:'#111', color:'#ccc', border:'1px solid #333', fontSize:11, padding:'1px 4px'}} />
         </label>
@@ -371,6 +493,9 @@ export const EmulatorPanel: React.FC = () => {
         </label>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={traceVectors} onChange={e=> setTraceVectors(e.target.checked)} /> trace vectors
+        </label>
+        <label style={{display:'flex', alignItems:'center', gap:4}}>
+          <input type='checkbox' checked={holdSegments} onChange={e=> { const v=e.target.checked; setHoldSegments(v); try { localStorage.setItem('emu_hold_segments', v?'1':'0'); } catch{} }} /> hold segs
         </label>
         <div style={{marginLeft:'auto', display:'flex', gap:6}}>
           <button style={btn} onClick={onBuild} title='Compile active .vpy or assemble .asm, load & run'>Build & Run</button>

@@ -20,6 +20,8 @@
   "panel.variables": "Variables",
   "panel.constants": "Constantes",
   "panel.logs": "Logs",
+  "panel.memory": "Memoria",
+  "panel.trace": "Traza",
   "status.running": "Ejecutando",
   "status.stopped": "Detenido",
   "lang.english": "Inglés",

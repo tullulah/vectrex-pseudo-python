@@ -54,6 +54,7 @@ export default defineConfig({
   'vs': path.resolve(__dirname, 'node_modules/monaco-editor/min/vs')
     }
   },
+  assetsInclude: ['**/*.bin'],
   optimizeDeps: {
     // Ensure monaco-editor pieces are pre-bundled, reducing dynamic injections
     include: ['monaco-editor/esm/vs/editor/editor.api']
