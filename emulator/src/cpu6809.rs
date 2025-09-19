@@ -1,16 +1,16 @@
 use crate::bus::Bus;
 use crate::integrator::Integrator;
 
-// Canonical 6809 vector addresses (high, low)
-// Standard 6809 vector map (big-endian: high byte at base, low at base+1)
-// Reference: Vectrex hardware and Motorola 6809 datasheet.
-const VEC_SWI2: u16 = 0xFFF2; // SWI2
-const VEC_SWI3: u16 = 0xFFF4; // SWI3
-const VEC_FIRQ: u16 = 0xFFF6; // FIRQ
-const VEC_IRQ:  u16 = 0xFFF8; // IRQ
-const VEC_SWI:  u16 = 0xFFFA; // SWI (SWI1)
-const VEC_NMI:  u16 = 0xFFFC; // NMI
-const VEC_RESET:u16 = 0xFFFE; // RESET
+// --- Modularization: split constants, types and mnemonics into submodules ---
+mod cpu6809_constants;
+mod cpu6809_types;
+mod cpu6809_mnemonics;
+
+pub use cpu6809_constants::*;
+pub use cpu6809_types::*;
+// opcode_mnemonic stays defined in this module via legacy location until full migration
+
+// Vector constants moved to cpu6809_constants.rs
 
 // Extracted CPU implementation from previous mod.rs
 // (functionality unchanged; to be refactored to use Bus & VIA later)
@@ -19,38 +19,15 @@ const VEC_RESET:u16 = 0xFFFE; // RESET
 // ---------------------------------------------------------------------------------
 // Supporting structs (placed before CPU)
 // ---------------------------------------------------------------------------------
-#[derive(Clone,Copy,Debug,Default)]
-pub struct LoopSample {
-    pub pc: u16,
-    pub a: u8, pub b: u8, pub x: u16, pub y: u16, pub u: u16, pub s: u16, pub dp: u8,
-    pub via_ifr: u8, pub via_ier: u8, pub via_acr: u8, pub via_pcr: u8,
-    pub cycles: u64,
-}
-
-#[derive(Clone,Debug)]
-pub struct TraceEntry { pub pc:u16, pub opcode:u8, pub sub:u8, pub a:u8, pub b:u8, pub x:u16, pub y:u16, pub u:u16, pub s:u16, pub dp:u8, pub op_str: Option<String>, pub loop_count:u32, pub flags:u8, pub cycles:u32, pub illegal: bool, pub call_depth: u16 }
-
-#[derive(Clone,Copy,Default,Debug)]
-pub struct InputState { pub x:i16, pub y:i16, pub buttons:u8 }
+// Types moved to cpu6809_types.rs
 
 // ---------------------------------------------------------------------------------
 // Shadow call stack instrumentation: captura entradas y salidas de frames para
 // diagnosticar corrupciones de la pila real (S) que derivan en retornos inválidos.
 // ---------------------------------------------------------------------------------
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum ShadowKind { JSR, BSR, LBSR, IRQ, FIRQ, NMI, SWI, SWI2, SWI3, PshsPc, PshuPc }
-impl Default for ShadowKind { fn default()->Self { ShadowKind::JSR } }
+// Shadow stack types moved to cpu6809_types.rs
 
-#[derive(Clone,Copy,Debug,Default)]
-pub struct ShadowFrame { pub ret: u16, pub sp_at_push: u16, pub kind: ShadowKind }
-
-pub struct CPUOpcodeMetrics {
-    pub total: u64,
-    pub unimplemented: u64,
-    pub counts: [u64;256],
-    pub unique_unimplemented: Vec<u8>,
-    pub extended_unimplemented: Vec<u16>,
-}
+// CPUOpcodeMetrics remains here (internal tool); keep for now
 
 pub struct CPU {
     pub a: u8, pub b: u8, pub dp: u8, pub x: u16, pub y: u16, pub u: u16, pub pc: u16,

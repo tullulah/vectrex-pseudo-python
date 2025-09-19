@@ -110,7 +110,15 @@ fn opcode_tfr_a_to_b() {
 #[test]
 fn opcode_rts() {
     let r = run_with_cycles(|c| {
-    c.pc = 0x0800; c.test_write8(0x0800,0x39); c.call_stack.push(0x0AAA); });
+        // Preparamos un retorno real en la pila hardware (6809):
+        // pop16 lee LO en mem[S], luego HI en mem[S+1]. Queremos volver a 0x0AAA.
+        c.s = 0x2000; // tope de pila
+        c.test_write8(0x2000, 0xAA); // low
+        c.test_write8(0x2001, 0x0A); // high
+        // Ejecutamos RTS en 0x0800
+        c.pc = 0x0800;
+        c.test_write8(0x0800, 0x39);
+    });
     let cpu = r.cpu;
     assert_eq!(r.cycles, 5, "RTS ciclos 5 got {}", r.cycles);
     assert_eq!(cpu.pc, 0x0AAA);

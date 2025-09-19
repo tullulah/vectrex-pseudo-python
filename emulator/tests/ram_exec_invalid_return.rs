@@ -17,12 +17,17 @@ fn early_snapshot_on_rts_invalid_return() {
     let mut cpu = CPU::default();
     load_real_bios(&mut cpu);
     cpu.reset();
-    // Simular una llamada: empujar dirección de retorno que cae en RAM (ej. C900).
-    // Para que el shadow stack también refleje la llamada falsa añadimos frame manual.
+    // Ejecutaremos RTS desde RAM (no BIOS) y prepararemos la pila real con retorno 0xC900.
+    // 1) Colocar opcode RTS en RAM en una dirección cualquiera.
+    cpu.pc = 0xC8F0;
+    cpu.test_write8(0xC8F0, 0x39);
+    // 2) Preparar la pila hardware con el valor de retorno 0xC900 (LO en S, HI en S+1).
+    cpu.s = 0xC8A0;
+    cpu.test_write8(0xC8A0, 0x00); // LO
+    cpu.test_write8(0xC8A1, 0xC9); // HI
+    // 3) Opcional: reflejar la "llamada" en stacks de análisis (no requerido por el detector pero útil para coherencia).
     cpu.call_stack.push(0xC900);
     cpu.shadow_stack.push(vectrex_emulator::cpu6809::ShadowFrame{ ret:0xC900, sp_at_push: cpu.s, kind: vectrex_emulator::cpu6809::ShadowKind::JSR });
-    // Ejecutar opcode RTS (0x39) manualmente.
-    cpu.mem[cpu.pc as usize] = 0x39; // inyectar RTS en posición PC actual
     cpu.step();
     // Verificar que snapshot temprano se generó.
     let det = &cpu.ram_exec;
