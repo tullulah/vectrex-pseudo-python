@@ -37,5 +37,6 @@ vscode-extension/dist/
 dist/
  
 # C++ experimental host / not part of Rust core build
-vectrexy/
 
+
+# C++ parity host (vectrexy) versionado: marker2
