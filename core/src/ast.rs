@@ -32,7 +32,7 @@ pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<Stri
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-	Assign { target: String, value: Expr },
+	Assign { target: AssignTarget, value: Expr },
 	Let { name: String, value: Expr },
 	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
 	While { cond: Expr, body: Vec<Stmt> },
@@ -45,11 +45,22 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentInfo { pub name: String, pub line: usize, pub col: usize }
+
+// Nuevo: información de asignación con span para el identificador del LHS.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssignTarget { pub name: String, pub line: usize, pub col: usize }
+
+// Información de llamadas con span del identificador (primer segmento calificado).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallInfo { pub name: String, pub line: usize, pub col: usize, pub args: Vec<Expr> }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
 	Number(i32),
 	StringLit(String),
-	Ident(String),
-	Call { name: String, args: Vec<Expr> },
+	Ident(IdentInfo),
+	Call(CallInfo),
 	Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
 	Compare { op: CmpOp, left: Box<Expr>, right: Box<Expr> },
 	Logic { op: LogicOp, left: Box<Expr>, right: Box<Expr> },

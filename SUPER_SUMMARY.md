@@ -882,7 +882,9 @@ Se añadió `validate_semantics` en `core/src/codegen.rs` ejecutado al inicio de
 - Verifica que cualquier `Expr::Ident` o target de `Assign` haya sido declarado previamente por `Let`, como parámetro de función, variable de bucle `for`, o global (`Const` / `GlobalLet`).
 - En caso de violación genera `panic!("SemanticsError: ...")` (pendiente migrar a sistema de diagnósticos estructurados no-panicking para LSP / IDE).
 - Objetivo: evitar que optimizaciones plieguen/eliminen pistas de errores de nombre no declarado.
-Futuros pasos: warning de variable no usada (S6 propuesto), validación de aridad de llamadas (M3), sistema de tipos básico (L1).
+- (S6 COMPLETADO) Advertencias de variable no usada: se recolectan lecturas y para cada variable declarada (no parámetro / no global) que nunca se lee se emite a stderr: `[warn][unused-var] funcion='f' var='x'`.
+
+Backlog relacionado pendiente: conversión de estos panics y warnings a un canal estructurado (S8 / S9) y eventual sistema de tipos básico (L1).
 
 ### 32.4 Modelo Numérico / Truncamiento 16-bit (2025-09-20)
 El compilador opera con un modelo entero de 16 bits sin signo/signed diferenciados a nivel de análisis: cualquier operación aritmética o bitwise aplica `& 0xFFFF` (ver `INT_MASK` y `trunc16()` en `core/src/codegen.rs`). Implicaciones:
@@ -890,4 +892,55 @@ El compilador opera con un modelo entero de 16 bits sin signo/signed diferenciad
 - Comparaciones usan los valores truncados; no hay semántica separada para signed vs unsigned (el usuario debe ajustar manualmente si requiere interpretación signed).
 - Constant folding aplica el truncamiento durante el plegado, asegurando que tests de optimización reflejen el mismo resultado que la ejecución.
 Backlog: futura extensión podría introducir tipos (`int16`, `uint16`, `int32`) y retrasar el truncamiento a la frontera backend.
+
+### 32.5 Validación de Aridad de Builtins (2025-09-20 / actualizado centralización)
+Estado final tras S7 → S10 + refactor posterior:
+
+1. Aridad chequeada temprano en `validate_semantics` antes de optimizaciones.
+2. Panics iniciales (S7) fueron migrados a diagnósticos estructurados (`DiagnosticCode::ArityMismatch`) en S9.
+3. Centralización: tabla única `BUILTIN_ARITIES` en `core/src/codegen.rs` + helper `expected_builtin_arity()` normaliza prefijo opcional `VECTREX_`.
+4. Backend 6809 debe permanecer en sincronía (`emit_builtin_call` / `scan_expr_runtime`); política: cualquier cambio de aridad o nuevo builtin → actualizar tabla + backend + test + esta sección.
+5. Test dedicado: `core/tests/builtin_arities.rs` verifica para cada builtin que (a) la aridad correcta NO produce `ArityMismatch` y (b) una aridad incorrecta SÍ lo produce (regresión preventiva contra drift silencioso).
+
+Builtins actuales y aridad esperada:
+`PRINT_TEXT(3)`, `MOVE_TO(2)`, `DRAW_TO(2)`, `DRAW_LINE(5)`, `DRAW_VL(2)`, `FRAME_BEGIN(1)`, `VECTOR_PHASE_BEGIN(0)`, `SET_ORIGIN(0)`, `SET_INTENSITY(1)`, `WAIT_RECAL(0)`, `PLAY_MUSIC1(0)`, `DBG_STATIC_VL(0)`.
+
+Motivación reforzada: eliminar duplicación (antes había un `match` extenso inline) reduciendo riesgo de divergencia entre validación y emisión; habilitar futura exportación para autocompletado/documentación dinámica.
+
+Backlog relacionado: exponer (opcional) esta tabla vía API pública para tooling externo / LSP, y añadir metadatos de categoría o documentación breve por builtin.
+
+### 32.6 Canal de Diagnostics (S8/S9) (2025-09-20)
+Se añadió API `emit_asm_with_diagnostics` que devuelve `(String, Vec<Diagnostic>)` y un wrapper retrocompatible `emit_asm` (que imprime sólo warnings). Cambios clave:
+- Warnings `[unused-var]` pasan a canal estructurado (`DiagnosticSeverity::Warning`).
+- Errores de semántica que antes provocaban panic (`SemanticsError`, `SemanticsErrorArity`, asignación a no declarada) ahora generan entradas `DiagnosticSeverity::Error` y abortan emisión (string vacío) sin panickear.
+- Tests de semántica migrados: ya no usan `#[should_panic]`; validan presencia de mensajes en el vector de diagnostics y añaden caso de warning por variable no usada.
+Backlog: añadir localización (file/line/col), códigos numéricos y severidades adicionales (Info, Hint), así como exportación JSON directa para LSP.
+
+### 32.7 Códigos de Diagnóstico (S10) (2025-09-20)
+Se introduce `DiagnosticCode` para permitir tests y tooling más robusto sin depender de substrings de mensajes:
+- `UnusedVar` – variable declarada nunca leída.
+- `UndeclaredVar` – uso de identificador no declarado.
+- `UndeclaredAssign` – asignación a variable no declarada.
+- `ArityMismatch` – número de argumentos distinto al esperado en builtin.
+Estructura `Diagnostic` ahora incluye `code`, `line`, `col` (estas últimas `None` en pase semántico inicial al no llevar spans). Próximo paso: propagar spans desde parser hasta `validate_semantics` para población de posiciones.
+
+Actualización posterior (spans iniciales):
+- `Expr::Ident` ahora lleva `IdentInfo { name, line, col }` poblado en `parser.rs` usando el token original.
+- `UndeclaredVar` emite ya `line`/`col` reales; `UndeclaredAssign` usa `(0,0)` placeholder pendiente de capturar token de asignación (TODO futuro).
+- Resto de diagnósticos (UnusedVar, ArityMismatch) permanecen sin spans hasta decidir si se asocian al identificador o a la llamada completa.
+
+Actualización adicional (2025-09-20, spans en Assign + Call):
+- Se introduce `AssignTarget { name, line, col }` reemplazando el uso directo de `String` en el LHS de `Stmt::Assign`, permitiendo capturar el span exacto del identificador asignado.
+- Se introduce `CallInfo { name, line, col, args }` y la variante del AST pasa de `Expr::Call { name, args }` (struct-like) a `Expr::Call(CallInfo)` (tuple con struct). El `line/col` corresponde al primer token del identificador de la llamada (namespace future-friendly si se añaden cualificados). 
+- `validate_semantics` ahora adjunta `line/col` reales a `DiagnosticCode::ArityMismatch` usando la info de `CallInfo` (ya no quedan sin span). 
+- Tests actualizados (`builtin_arities.rs`, `semantics.rs`) para construir llamadas mediante `Expr::Call(CallInfo { ... })` con spans dummy `0,0` (las pruebas no dependen aún de la posición, sólo de la presencia / ausencia del código de diagnóstico).
+- Backends actualizados (m6809, arm, cortexm) y recolectores de símbolos para usar la nueva forma; se eliminó cualquier patrón residual `Expr::Call { name, args }` (grep limpio).
+- Beneficio inmediato: tooling y futuros LSP pueden subrayar directamente la llamada que viola aridad; reduce ambigüedad cuando múltiples invocaciones aparecen en la misma línea.
+
+Backlog / próximos pasos relacionados con spans:
+1. Capturar span del identificador en el LHS de asignaciones para `UndeclaredAssign` (ahora posible tras `AssignTarget`).
+2. Propagar spans a binops / lógicos (quizá wrapper `SpanInfo { line, col, end_line, end_col }` futuro) para diagnósticos más precisos (ej. división por cero constante, advertencias de overflow intencional). 
+3. Evaluar si `UnusedVar` debe señalar la declaración (span del `Let`) en vez de (0,0). 
+4. Exportar spans vía WASM/LSP en formato JSON (`diagnostics_json`) manteniendo backward compatibility.
+5. Documentar en sección separada la política de estabilidad del AST para consumidores externos (nota: cambio a `Expr::Call` es breaking para crates que construían manualmente AST sin parser).
 

@@ -169,7 +169,18 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::Return) { return self.return_stmt(); }
         if self.match_kind(&TokenKind::Break) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Break); }
         if self.match_kind(&TokenKind::Continue) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Continue); }
-        if let Some(name)=self.try_identifier() { if self.match_kind(&TokenKind::Equal) { let expr=self.expression()?; self.consume(TokenKind::Newline)?; return Ok(Stmt::Assign { target:name, value:expr }); } else { self.unread_identifier(name); } }
+        if let Some(name)=self.try_identifier() {
+            // Hemos consumido un identificador potencialmente para asignación. Guardar token previo.
+            let ident_tok = self.tokens[self.pos-1].clone();
+            if self.match_kind(&TokenKind::Equal) {
+                let expr = self.expression()?;
+                self.consume(TokenKind::Newline)?;
+                return Ok(Stmt::Assign { target: crate::ast::AssignTarget { name, line: ident_tok.line, col: ident_tok.col }, value: expr });
+            } else {
+                // No era asignación, revertir.
+                self.unread_identifier(name);
+            }
+        }
         let expr = self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Expr(expr))
     }
 
@@ -226,6 +237,7 @@ impl<'a> Parser<'a> {
         } else if self.match_kind(&TokenKind::False) {
             return Ok(Expr::Number(0));
         } else if let Some(first) = self.match_identifier() {
+            let ident_token = self.tokens[self.pos-1].clone();
             let mut full = first;
             while self.match_kind(&TokenKind::Dot) {
                 if let Some(seg) = self.match_identifier() {
@@ -245,9 +257,9 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.consume(TokenKind::RParen)?;
-                return Ok(Expr::Call { name: full, args });
+                return Ok(Expr::Call(crate::ast::CallInfo { name: full, line: ident_token.line, col: ident_token.col, args }));
             }
-            return Ok(Expr::Ident(full));
+            return Ok(Expr::Ident(crate::ast::IdentInfo { name: full, line: ident_token.line, col: ident_token.col }));
         } else if self.match_kind(&TokenKind::LParen) {
             let e = self.expression()?;
             self.consume(TokenKind::RParen)?;

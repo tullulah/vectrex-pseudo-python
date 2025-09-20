@@ -87,13 +87,17 @@ Short (1-2 semanas):
 4. (S4) Tests constant folding / dead store – COMPLETADO 2025-09-20 (`core/tests/opt_pipeline.rs`).
 5. (S5) Documentación truncamiento 16-bit – COMPLETADO 2025-09-20 (SUPER_SUMMARY sección 32.4).
 6. (S6) Warnings variables no usadas – COMPLETADO 2025-09-20 (stderr `[warn][unused-var]`).
+7. (S7) Aridad básica builtins – COMPLETADO 2025-09-20 (validación en `validate_semantics`). (Actualizado: centralizada en `BUILTIN_ARITIES` + test `builtin_arities_stable`).
+8. (S8) Canal estructurado de warnings – COMPLETADO 2025-09-20 (`emit_asm_with_diagnostics`, warnings `[unused-var]`).
+9. (S9) Errores semánticos estructurados – COMPLETADO 2025-09-20 (se reemplazan panics por diagnostics `Error`).
+10. (S10) Códigos de diagnóstico y estructura extendida – COMPLETADO 2025-09-20 (enum `DiagnosticCode`, campos opcionales line/col aún no poblados en pase semántico).
 
 Mid (3-6 semanas):
 6. IR intermedio opcional (linear SSA-lite o tree simplificado) para separar optimizaciones de AST. (ID M1)
 7. Liveness + mejora dead_store_elim (detectar efectos laterales). (ID M2)
-8. Detección de aridad en llamadas a builtins / wrappers. (ID M3)
-9. Tests para switch folding y dead_code_elim. (ID M4)
-10. Soporte de INCLUDE/IMPORT de módulos (sin circular). (ID M5)
+8. Tests para switch folding y dead_code_elim. (ID M3)
+9. Soporte de INCLUDE/IMPORT de módulos (sin circular). (ID M4)
+10. Enriquecer diagnostics con posiciones file:line:col y códigos (seguir S8/S9). (ID M5)
 
 Long (6+ semanas):
 11. Sistema de tipos básico (int vs maybe future fixed-point). (ID L1)
@@ -108,9 +112,9 @@ Long (6+ semanas):
 - Cobertura tests: % de nodos AST visitados en suite (meta inicial: >60%).
 
 ## 12. Próximos Pasos Inmediatos (actualizado)
-1. S7: Aridad básica de llamadas / validación mínima builtins.
-2. S8: Canal estructurado para warnings (integración LSP).
-3. S9: Convertir `SemanticsError` panics a resultado estructurado (no abortar proceso).
+1. S8: Canal estructurado para warnings (integración LSP) (extensión de S6).
+2. S9: Convertir `SemanticsError`/`SemanticsErrorArity` panics a resultado estructurado (no abortar proceso).
+3. S10: Normalizar mensaje de warnings a estructura (JSON) para futura LSP sin parseo de stderr.
 
 ---
 Notas de mantenimiento: mantener este archivo actualizado cuando se cierren IDs. Añadir fecha y breve changelog al inicio.
@@ -120,3 +124,7 @@ Changelog:
 - 2025-09-20: Añadido smoke test (S1) y wrapper `VECTREX_DRAW_TO` implementado (S2). Actualizada sección backend y backlog.
 - 2025-09-20: Pase semántico básico (`validate_semantics`) marca error en uso/asignación de variable no declarada (S3 completado).
 - 2025-09-20: Tests optimización (S4), doc truncamiento 16-bit (S5) y warnings unused-var (S6) completados.
+- 2025-09-20: Aridad builtins validada (S7) añade panics `SemanticsErrorArity` para mismatch.
+- 2025-09-20: Refactor: tabla centralizada `BUILTIN_ARITIES` + helper `expected_builtin_arity`, añadido test `core/tests/builtin_arities.rs`.
+- 2025-09-20: S8/S9: introducido canal `emit_asm_with_diagnostics` (warnings y errores estructurados). Panics `SemanticsError*` sustituidos por diagnostics `Error`; tests actualizados.
+- 2025-09-20: S10: añadidos codes (`UnusedVar`, `UndeclaredVar`, `UndeclaredAssign`, `ArityMismatch`) y assertions de tests migradas a codes; groundwork para posiciones.

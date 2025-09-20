@@ -69,10 +69,10 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
     match stmt {
         Stmt::Assign { target, value } => {
             emit_expr(value, out, fctx, string_map);
-            if let Some(off) = fctx.offset_of(target) {
+            if let Some(off) = fctx.offset_of(&target.name) {
                 out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
             } else {
-                out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", target.to_uppercase()));
+                out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", target.name.to_uppercase()));
             }
         },
         Stmt::Let { name, value } => {
@@ -230,14 +230,14 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
     Expr::Number(n) => out.push_str(&format!("    MOV r0,#{}\n", *n)),
     Expr::StringLit(s) => { if let Some(label)=string_map.get(s){ out.push_str(&format!("    LDR r0, ={}\n", label)); } else { out.push_str("    MOV r0,#0 ; missing string label\n"); } }
         Expr::Ident(name) => {
-            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDR r0, [sp, #{}]\n", off)); }
-            else { out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0,[r0]\n", name.to_uppercase())); }
+            if let Some(off) = fctx.offset_of(&name.name) { out.push_str(&format!("    LDR r0, [sp, #{}]\n", off)); }
+            else { out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0,[r0]\n", name.name.to_uppercase())); }
         }
-        Expr::Call { name, args } => {
-            if emit_builtin_call_cm(name, args, out, fctx, string_map) { return; }
-            let limit = args.len().min(4);
-            for idx in (0..limit).rev() { emit_expr(&args[idx], out, fctx, string_map); if idx!=0 { out.push_str(&format!("    MOV r{} , r0\n", idx)); } }
-            out.push_str(&format!("    BL {}\n", name));
+        Expr::Call(ci) => {
+            if emit_builtin_call_cm(&ci.name, &ci.args, out, fctx, string_map) { return; }
+            let limit = ci.args.len().min(4);
+            for idx in (0..limit).rev() { emit_expr(&ci.args[idx], out, fctx, string_map); if idx!=0 { out.push_str(&format!("    MOV r{} , r0\n", idx)); } }
+            out.push_str(&format!("    BL {}\n", ci.name));
         }
         Expr::Binary { op, left, right } => {
             if let BinOp::Mul = op {
@@ -424,7 +424,7 @@ fn collect_symbols(module: &Module) -> Vec<String> {
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
     Stmt::Assign { target, value } => {
-            set.insert(target.clone());
+            set.insert(target.name.clone());
             collect_expr_syms(value, set);
         }
     Stmt::Let { name: _ , value } => { collect_expr_syms(value, set); } // locals excluded
@@ -476,13 +476,9 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
 fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) {
     match expr {
         Expr::Ident(n) => {
-            set.insert(n.clone());
+            set.insert(n.name.clone());
         }
-        Expr::Call { args, .. } => {
-            for a in args {
-                collect_expr_syms(a, set);
-            }
-        }
+        Expr::Call(ci) => { for a in &ci.args { collect_expr_syms(a, set); } }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {

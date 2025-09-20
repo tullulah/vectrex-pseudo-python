@@ -1,6 +1,60 @@
 use crate::ast::*;
 use crate::target::{info, CpuArch, Target};
 use std::collections::{HashSet, HashMap};
+use std::cell::RefCell;
+
+// ---------------- Diagnostics (S8) ----------------
+// Canal estructurado para warnings (y pronto errores S9).
+// S8: warnings estructurados.
+// S9: errores semánticos ahora también se recolectan (ya no panic) y se devuelven para que el
+// consumidor decida si abortar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagnosticSeverity { Warning, Error }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagnosticCode {
+    UnusedVar,
+    UndeclaredVar,
+    UndeclaredAssign,
+    ArityMismatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub code: DiagnosticCode,
+    pub message: String,
+    pub line: Option<usize>,
+    pub col: Option<usize>,
+}
+
+thread_local! {
+    static TL_ACCUM: RefCell<Vec<Diagnostic>> = RefCell::new(Vec::new());
+}
+
+// Tabla centralizada de builtins (nombre normalizado sin prefijo VECTREX_) -> aridad.
+// Mantener sincronizada con backend m6809 (emit_builtin_call / scan_expr_runtime).
+static BUILTIN_ARITIES: &[(&str, usize)] = &[
+    ("PRINT_TEXT", 3),
+    ("MOVE_TO", 2),
+    ("DRAW_TO", 2),
+    ("DRAW_LINE", 5),
+    ("DRAW_VL", 2),
+    ("FRAME_BEGIN", 1),
+    ("VECTOR_PHASE_BEGIN", 0),
+    ("SET_ORIGIN", 0),
+    ("SET_INTENSITY", 1),
+    ("WAIT_RECAL", 0),
+    ("PLAY_MUSIC1", 0),
+    ("DBG_STATIC_VL", 0),
+];
+
+fn expected_builtin_arity(name: &str) -> Option<usize> {
+    let upper = name.to_ascii_uppercase();
+    let core = if let Some(stripped) = upper.strip_prefix("VECTREX_") { stripped } else { upper.as_str() };
+    for (n,a) in BUILTIN_ARITIES { if *n == core { return Some(*a); } }
+    None
+}
 
 // Re-export backend emitters under stable names.
 mod backends_ref {
@@ -28,9 +82,23 @@ pub struct CodegenOptions {
 
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
-    // Paso 1: validación semántica básica (variables declaradas / usos). Esto ocurre
-    // antes de cualquier transformación para que los mensajes reflejen código fuente.
-    validate_semantics(module);
+    let (_asm, diags) = emit_asm_with_diagnostics(module, target, opts);
+    // Compat: imprimir warnings a stderr para no romper flujo existente.
+    for d in diags.iter().filter(|d| matches!(d.severity, DiagnosticSeverity::Warning)) {
+        eprintln!("[warn] {}", d.message);
+    }
+    _asm
+}
+
+// Nueva API estructurada (S8). Mantiene mismo comportamiento pero devuelve diagnostics.
+pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &CodegenOptions) -> (String, Vec<Diagnostic>) {
+    // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
+    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    validate_semantics(module, &mut diagnostics);
+    let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
+    if has_errors {
+        return (String::new(), diagnostics);
+    }
     // Paso 2: pipeline de optimización (dead_store_elim preserva asignaciones con literales string).
     let optimized = optimize_module(module);
     let ti = info(target);
@@ -39,11 +107,12 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
     // Pass music/copyright through metas hashmap for backend (reuse existing fields via metas)
     if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }
-    match ti.arch {
+    let asm = match ti.arch {
         CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, &effective),
-    CpuArch::Arm => backends_ref::emit_arm(&optimized, target, &ti, opts),
+        CpuArch::Arm => backends_ref::emit_arm(&optimized, target, &ti, opts),
         CpuArch::CortexM => backends_ref::emit_cortexm(&optimized, target, &ti, opts),
-    }
+    };
+    (asm, diagnostics)
 }
 
 // optimize_module: iterative fixpoint optimization pipeline (max 5 iterations).
@@ -78,7 +147,7 @@ fn optimize_module(m: &Module) -> Module {
 // shadowing por Let local (esto sobrescribe variable anterior). Las Const y GlobalLet son visibles
 // para todas las funciones (ya que se resolvieron en parse a este AST plano y el lenguaje actual
 // no define módulos). Las params son visibles en el cuerpo de la función.
-pub fn validate_semantics(module: &Module) {
+pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
     // Recolectar globals declaradas (Const + GlobalLet + VectorList nombres no son variables de expr)
     let mut globals: HashSet<String> = HashSet::new();
     for it in &module.items {
@@ -90,11 +159,16 @@ pub fn validate_semantics(module: &Module) {
     }
     // Validar cada función independientemente.
     for it in &module.items {
-        if let Item::Function(func) = it { validate_function(func, &globals); }
+        if let Item::Function(func) = it {
+            TL_ACCUM.with(|acc| acc.borrow_mut().clear());
+            validate_function(func, &globals, diagnostics);
+            // Mover errores recolectados (uso/assign/arity) del thread-local
+            TL_ACCUM.with(|acc| diagnostics.extend(acc.borrow().iter().cloned()));
+        }
     }
 }
 
-fn validate_function(f: &Function, globals: &HashSet<String>) {
+fn validate_function(f: &Function, globals: &HashSet<String>, diagnostics: &mut Vec<Diagnostic>) {
     // ámbito inicial: globals + params
     let mut scope: Vec<HashSet<String>> = Vec::new();
     scope.push(globals.clone());
@@ -109,7 +183,7 @@ fn validate_function(f: &Function, globals: &HashSet<String>) {
     for frame in &scope { for v in frame { declared.insert(v.clone()); } }
     for d in declared {
         if !reads.contains(&d) && !f.params.contains(&d) && !globals.contains(&d) {
-            eprintln!("[warn][unused-var] funcion='{}' var='{}'", f.name, d);
+            diagnostics.push(Diagnostic { severity: DiagnosticSeverity::Warning, code: DiagnosticCode::UnusedVar, message: format!("[unused-var] funcion='{}' var='{}'", f.name, d), line: None, col: None });
         }
     }
 }
@@ -131,8 +205,8 @@ fn validate_stmt_collect(stmt: &Stmt, scope: &mut Vec<HashSet<String>>, reads: &
     match stmt {
         Stmt::Let { name, value } => { validate_expr_collect(value, scope, reads); declare(name, scope); }
         Stmt::Assign { target, value } => {
-            if !is_declared(target, scope) {
-                panic!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target, target);
+            if !is_declared(&target.name, scope) {
+                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.line), col: Some(target.col) }));
             }
             validate_expr_collect(value, scope, reads);
         }
@@ -171,13 +245,19 @@ fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) { let mut dummy=Has
 
 fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut HashSet<String>) {
     match e {
-        Expr::Ident(name) => {
-            if !is_declared(name, scope) {
-                panic!("SemanticsError: uso de variable no declarada '{}'.", name);
-            }
-            reads.insert(name.clone());
+        Expr::Ident(info) => {
+            if !is_declared(&info.name, scope) {
+                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredVar, message: format!("SemanticsError: uso de variable no declarada '{}'.", info.name), line: Some(info.line), col: Some(info.col) }));
+            } else { reads.insert(info.name.clone()); }
         }
-        Expr::Call { args, .. } => { for a in args { validate_expr_collect(a, scope, reads); } }
+        Expr::Call(ci) => {
+            if let Some(exp) = expected_builtin_arity(&ci.name) {
+                if ci.args.len() != exp {
+                    TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::ArityMismatch, message: format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", ci.name, ci.args.len(), exp), line: Some(ci.line), col: Some(ci.col) }));
+                }
+            }
+            for a in &ci.args { validate_expr_collect(a, scope, reads); }
+        }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
             validate_expr_collect(left, scope, reads); validate_expr_collect(right, scope, reads);
         }
@@ -326,7 +406,7 @@ fn opt_expr(e: &Expr) -> Expr {
                 Expr::Not(Box::new(ni))
             }
         }
-    Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(opt_expr).collect() },
+    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), line: ci.line, col: ci.col, args: ci.args.iter().map(opt_expr).collect() }),
     Expr::Ident(i) => Expr::Ident(i.clone()),
     Expr::Number(n) => Expr::Number(trunc16(*n)),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
@@ -436,10 +516,10 @@ fn dse_function(f: &Function) -> Function {
     for stmt in f.body.iter().rev() {
         match stmt {
             Stmt::Assign { target, value } => {
-                if !used.contains(target) && !expr_has_call(value) && !expr_contains_string_lit(value) {
+                if !used.contains(&target.name) && !expr_has_call(value) && !expr_contains_string_lit(value) {
                 } else {
                     collect_reads_expr(value, &mut used);
-                    used.insert(target.clone());
+                    used.insert(target.name.clone());
                     new_body.push(stmt.clone());
                 }
             }
@@ -484,7 +564,7 @@ fn dse_function(f: &Function) -> Function {
 
 fn expr_has_call(e: &Expr) -> bool {
     match e {
-        Expr::Call { .. } => true,
+    Expr::Call(_) => true,
     Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
     Expr::Not(inner) | Expr::BitNot(inner) => expr_has_call(inner),
         _ => false,
@@ -498,7 +578,7 @@ fn expr_contains_string_lit(e: &Expr) -> bool {
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => expr_contains_string_lit(left) || expr_contains_string_lit(right),
-        Expr::Call { args, .. } => args.iter().any(expr_contains_string_lit),
+    Expr::Call(ci) => ci.args.iter().any(expr_contains_string_lit),
         Expr::Not(inner) | Expr::BitNot(inner) => expr_contains_string_lit(inner),
         _ => false,
     }
@@ -535,11 +615,9 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
 fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
     match e {
         Expr::Ident(n) => {
-            used.insert(n.clone());
+            used.insert(n.name.clone());
         }
-        Expr::Call { args, .. } => {
-            for a in args { collect_reads_expr(a, used); }
-        }
+        Expr::Call(ci) => { for a in &ci.args { collect_reads_expr(a, used); } }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {
@@ -580,10 +658,10 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
         Stmt::Assign { target, value } => {
             let v2 = cp_expr(value, env);
             if let Expr::Number(n) = v2 {
-                env.insert(target.clone(), n);
+                env.insert(target.name.clone(), n);
                 Stmt::Assign { target: target.clone(), value: Expr::Number(n) }
             } else {
-                env.remove(target);
+                env.remove(&target.name);
                 Stmt::Assign { target: target.clone(), value: v2 }
             }
         }
@@ -683,13 +761,13 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
 
 fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
     match e {
-        Expr::Ident(name) => env.get(name).map(|v| Expr::Number(*v)).unwrap_or_else(|| Expr::Ident(name.clone())),
+    Expr::Ident(name) => env.get(&name.name).map(|v| Expr::Number(*v)).unwrap_or_else(|| Expr::Ident(name.clone())),
         Expr::Binary { op, left, right } => Expr::Binary { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
         Expr::Compare { op, left, right } => Expr::Compare { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
         Expr::Logic { op, left, right } => Expr::Logic { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
     Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
     Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
-        Expr::Call { name, args } => Expr::Call { name: name.clone(), args: args.iter().map(|a| cp_expr(a, env)).collect() },
+    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), line: ci.line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
     }
@@ -745,7 +823,7 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
         }
         Stmt::While { cond, body } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb }); }
         Stmt::For { var, start, end, step, body } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb }); }
-        Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
+    Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
         Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
         Stmt::Expr(e) => out.push(Stmt::Expr(e.clone())),
         Stmt::Return(o) => out.push(Stmt::Return(o.clone())),

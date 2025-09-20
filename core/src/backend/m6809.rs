@@ -370,8 +370,8 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
 }
 fn expr_has_trig(e: &Expr) -> bool {
     match e {
-        Expr::Call { name, .. } => {
-            let u = name.to_ascii_lowercase();
+        Expr::Call(ci) => {
+            let u = ci.name.to_ascii_lowercase();
             u == "sin" || u == "cos" || u == "tan" || u == "math.sin" || u == "math.cos" || u == "math.tan"
         }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_trig(left) || expr_has_trig(right),
@@ -447,7 +447,7 @@ fn scan_stmt_args(s: &Stmt) -> usize {
 
 fn scan_expr_args(e: &Expr) -> usize {
     match e {
-        Expr::Call { args, .. } => args.len().min(5).max(args.iter().map(scan_expr_args).max().unwrap_or(0)),
+        Expr::Call(ci) => ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0)),
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => scan_expr_args(left).max(scan_expr_args(right)),
         Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_args(inner),
         _ => 0,
@@ -527,9 +527,9 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             scan_expr_runtime(left, usage);
             scan_expr_runtime(right, usage);
         }
-        Expr::Call { name, args } => { 
+        Expr::Call(ci) => { 
             // Track wrapper usage (normalize like emit_builtin_call)
-            let up = name.to_ascii_uppercase();
+            let up = ci.name.to_ascii_uppercase();
             let resolved = match up.as_str() {
                 "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
                 "MOVE_TO" => Some("VECTREX_MOVE_TO"),
@@ -546,13 +546,13 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                 _ => None
             };
             if let Some(r) = resolved {
-                if r == "VECTREX_DRAW_LINE" && args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+                if r == "VECTREX_DRAW_LINE" && ci.args.len()==5 && ci.args.iter().all(|a| matches!(a, Expr::Number(_))) {
                     // Will inline classic pattern; do not mark runtime wrapper.
                 } else {
                     usage.wrappers_used.insert(r.to_string());
                 }
             }
-            for a in args { scan_expr_runtime(a, usage); }
+            for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
             scan_expr_runtime(left, usage);
@@ -682,7 +682,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 out.push_str(&format!("    LDX #VL_{}\n    JSR Run_VectorList\n", s.to_ascii_uppercase()));
                 return true;
             } else if let Expr::Ident(id) = &args[0] {
-                out.push_str(&format!("    LDX #VL_{}\n    JSR Run_VectorList\n", id.to_ascii_uppercase()));
+                out.push_str(&format!("    LDX #VL_{}\n    JSR Run_VectorList\n", id.name.to_ascii_uppercase()));
                 return true;
             }
         }
@@ -690,7 +690,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     if up == "DRAW_VECTORLIST" {
         if args.is_empty() { return true; }
         if let Expr::Ident(v) = &args[0] {
-            out.push_str(&format!("    JSR VL_{}\n", v.to_ascii_uppercase()));
+            out.push_str(&format!("    JSR VL_{}\n", v.name.to_ascii_uppercase()));
             return true;
         } else if let Expr::StringLit(s) = &args[0] {
             out.push_str(&format!("    JSR VL_{}\n", s.to_ascii_uppercase()));
@@ -981,11 +981,10 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
     match stmt {
         Stmt::Assign { target, value } => {
             emit_expr(value, out, fctx, string_map, opts);
-            if let Some(off) = fctx.offset_of(target) {
+            if let Some(off) = fctx.offset_of(&target.name) {
                 out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
             } else {
-                // Global/store: load 16-bit value from RESULT into X then store via U pointer
-                out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", target.to_uppercase()));
+                out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", target.name.to_uppercase()));
             }
         }
         Stmt::Let { name, value } => {
@@ -1155,18 +1154,18 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             }
         }
         Expr::Ident(name) => {
-            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); }
-            else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.to_uppercase())); }
+            if let Some(off) = fctx.offset_of(&name.name) { out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); }
+            else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.name.to_uppercase())); }
         }
-        Expr::Call { name, args } => {
-            if emit_builtin_call(name, args, out, fctx, string_map, opts) { return; }
-            for (i, arg) in args.iter().enumerate() {
+        Expr::Call(ci) => {
+            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts) { return; }
+            for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
                 emit_expr(arg, out, fctx, string_map, opts);
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i));
             }
-            if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", name.to_uppercase())); } else { out.push_str(&format!("    JSR {}\n", name.to_uppercase())); }
+            if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", ci.name.to_uppercase())); } else { out.push_str(&format!("    JSR {}\n", ci.name.to_uppercase())); }
         }
         Expr::Binary { op, left, right } => {
             // x+x and x-x peepholes
@@ -1288,7 +1287,7 @@ fn power_of_two_const(expr: &Expr) -> Option<u32> {
 // format_expr_ref: helper for peephole comparisons.
 fn format_expr_ref(e: &Expr) -> String {
     match e {
-        Expr::Ident(n) => format!("I:{}", n),
+    Expr::Ident(n) => format!("I:{}", n.name),
         Expr::Number(n) => format!("N:{}", n),
         _ => "?".into(),
     }
@@ -1314,7 +1313,7 @@ fn collect_symbols(module: &Module) -> Vec<String> {
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
     Stmt::Assign { target, value } => {
-            set.insert(target.clone());
+            set.insert(target.name.clone());
             collect_expr_syms(value, set);
         }
     Stmt::Let { name: _ , value } => { collect_expr_syms(value, set); } // exclude locals
@@ -1378,8 +1377,8 @@ fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
 // collect_expr_syms: process expression identifiers.
 fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) {
     match expr {
-        Expr::Ident(n) => { set.insert(n.clone()); }
-        Expr::Call { args, .. } => { for a in args { collect_expr_syms(a, set); } }
+    Expr::Ident(n) => { set.insert(n.name.clone()); }
+        Expr::Call(ci) => { for a in &ci.args { collect_expr_syms(a, set); } }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {
