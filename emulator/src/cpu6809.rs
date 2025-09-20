@@ -2,8 +2,12 @@ use crate::bus::Bus;
 use crate::integrator::Integrator;
 
 // --- Modularization: split constants, types and mnemonics into submodules ---
+// Use explicit #[path] to point to canonical versions inside the cpu6809/ directory.
+#[path = "cpu6809/cpu6809_constants.rs"]
 mod cpu6809_constants;
+#[path = "cpu6809/cpu6809_types.rs"]
 mod cpu6809_types;
+#[path = "cpu6809/cpu6809_mnemonics.rs"]
 mod cpu6809_mnemonics;
 
 pub use cpu6809_constants::*;
