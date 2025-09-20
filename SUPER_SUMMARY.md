@@ -884,3 +884,10 @@ Se añadió `validate_semantics` en `core/src/codegen.rs` ejecutado al inicio de
 - Objetivo: evitar que optimizaciones plieguen/eliminen pistas de errores de nombre no declarado.
 Futuros pasos: warning de variable no usada (S6 propuesto), validación de aridad de llamadas (M3), sistema de tipos básico (L1).
 
+### 32.4 Modelo Numérico / Truncamiento 16-bit (2025-09-20)
+El compilador opera con un modelo entero de 16 bits sin signo/signed diferenciados a nivel de análisis: cualquier operación aritmética o bitwise aplica `& 0xFFFF` (ver `INT_MASK` y `trunc16()` en `core/src/codegen.rs`). Implicaciones:
+- Overflows se pliegan de forma silenciosa: `40000` → `40000 & 0xFFFF = 4096`.
+- Comparaciones usan los valores truncados; no hay semántica separada para signed vs unsigned (el usuario debe ajustar manualmente si requiere interpretación signed).
+- Constant folding aplica el truncamiento durante el plegado, asegurando que tests de optimización reflejen el mismo resultado que la ejecución.
+Backlog: futura extensión podría introducir tipos (`int16`, `uint16`, `int32`) y retrasar el truncamiento a la frontera backend.
+

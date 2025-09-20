@@ -53,6 +53,9 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
 // 3. propagate_constants: forward constant propagation with branch merging
 // 4. dead_store_elim: eliminate unused assignments without side-effects
 // 5. fold_const_switches: replace switch whose expression & cases are all constant numbers with selected body (or default)
+#[allow(dead_code)]
+pub fn debug_optimize_module_for_tests(m: &Module) -> Module { optimize_module(m) }
+
 fn optimize_module(m: &Module) -> Module {
     let mut current = m.clone();
     for _ in 0..5 {
@@ -87,9 +90,7 @@ pub fn validate_semantics(module: &Module) {
     }
     // Validar cada función independientemente.
     for it in &module.items {
-        if let Item::Function(func) = it {
-            validate_function(func, &globals);
-        }
+        if let Item::Function(func) = it { validate_function(func, &globals); }
     }
 }
 
@@ -100,7 +101,17 @@ fn validate_function(f: &Function, globals: &HashSet<String>) {
     let mut param_set: HashSet<String> = HashSet::new();
     for p in &f.params { param_set.insert(p.clone()); }
     scope.push(param_set);
-    for stmt in &f.body { validate_stmt(stmt, &mut scope); }
+    // tracking de lecturas para warning de variables no usadas
+    let mut reads: HashSet<String> = HashSet::new();
+    for stmt in &f.body { validate_stmt_collect(stmt, &mut scope, &mut reads); }
+    // Advertencias (stderr) para variables declaradas pero no leídas (excluye params por ahora)
+    let mut declared: HashSet<String> = HashSet::new();
+    for frame in &scope { for v in frame { declared.insert(v.clone()); } }
+    for d in declared {
+        if !reads.contains(&d) && !f.params.contains(&d) && !globals.contains(&d) {
+            eprintln!("[warn][unused-var] funcion='{}' var='{}'", f.name, d);
+        }
+    }
 }
 
 fn push_scope(scope: &mut Vec<HashSet<String>>) { scope.push(HashSet::new()); }
@@ -113,57 +124,64 @@ fn is_declared(name: &str, scope: &Vec<HashSet<String>>) -> bool {
     false
 }
 
-fn validate_stmt(stmt: &Stmt, scope: &mut Vec<HashSet<String>>) {
+#[allow(dead_code)]
+fn validate_stmt(stmt: &Stmt, scope: &mut Vec<HashSet<String>>) { validate_stmt_collect(stmt, scope, &mut HashSet::new()); }
+
+fn validate_stmt_collect(stmt: &Stmt, scope: &mut Vec<HashSet<String>>, reads: &mut HashSet<String>) {
     match stmt {
-        Stmt::Let { name, value } => { validate_expr(value, scope); declare(name, scope); }
+        Stmt::Let { name, value } => { validate_expr_collect(value, scope, reads); declare(name, scope); }
         Stmt::Assign { target, value } => {
             if !is_declared(target, scope) {
                 panic!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target, target);
             }
-            validate_expr(value, scope);
+            validate_expr_collect(value, scope, reads);
         }
         Stmt::For { var, start, end, step, body } => {
-            validate_expr(start, scope); validate_expr(end, scope); if let Some(se) = step { validate_expr(se, scope); }
+            validate_expr_collect(start, scope, reads); validate_expr_collect(end, scope, reads); if let Some(se) = step { validate_expr_collect(se, scope, reads); }
             push_scope(scope); // cuerpo loop con var declarada
             declare(var, scope);
-            for s in body { validate_stmt(s, scope); }
+            for s in body { validate_stmt_collect(s, scope, reads); }
             pop_scope(scope);
         }
         Stmt::While { cond, body } => {
-            validate_expr(cond, scope);
+            validate_expr_collect(cond, scope, reads);
             push_scope(scope);
-            for s in body { validate_stmt(s, scope); }
+            for s in body { validate_stmt_collect(s, scope, reads); }
             pop_scope(scope);
         }
         Stmt::If { cond, body, elifs, else_body } => {
-            validate_expr(cond, scope);
-            push_scope(scope); for s in body { validate_stmt(s, scope); } pop_scope(scope);
-            for (ec, eb) in elifs { validate_expr(ec, scope); push_scope(scope); for s in eb { validate_stmt(s, scope); } pop_scope(scope); }
-            if let Some(eb) = else_body { push_scope(scope); for s in eb { validate_stmt(s, scope); } pop_scope(scope); }
+            validate_expr_collect(cond, scope, reads);
+            push_scope(scope); for s in body { validate_stmt_collect(s, scope, reads); } pop_scope(scope);
+            for (ec, eb) in elifs { validate_expr_collect(ec, scope, reads); push_scope(scope); for s in eb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
+            if let Some(eb) = else_body { push_scope(scope); for s in eb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
         }
         Stmt::Switch { expr, cases, default } => {
-            validate_expr(expr, scope);
-            for (ce, cb) in cases { validate_expr(ce, scope); push_scope(scope); for s in cb { validate_stmt(s, scope); } pop_scope(scope); }
-            if let Some(db) = default { push_scope(scope); for s in db { validate_stmt(s, scope); } pop_scope(scope); }
+            validate_expr_collect(expr, scope, reads);
+            for (ce, cb) in cases { validate_expr_collect(ce, scope, reads); push_scope(scope); for s in cb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
+            if let Some(db) = default { push_scope(scope); for s in db { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
         }
-        Stmt::Expr(e) => validate_expr(e, scope),
-        Stmt::Return(o) => { if let Some(e) = o { validate_expr(e, scope); } }
+        Stmt::Expr(e) => validate_expr_collect(e, scope, reads),
+        Stmt::Return(o) => { if let Some(e) = o { validate_expr_collect(e, scope, reads); } }
         Stmt::Break | Stmt::Continue => {}
     }
 }
 
-fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) {
+#[allow(dead_code)]
+fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) { let mut dummy=HashSet::new(); validate_expr_collect(e, scope, &mut dummy); }
+
+fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut HashSet<String>) {
     match e {
         Expr::Ident(name) => {
             if !is_declared(name, scope) {
                 panic!("SemanticsError: uso de variable no declarada '{}'.", name);
             }
+            reads.insert(name.clone());
         }
-        Expr::Call { args, .. } => { for a in args { validate_expr(a, scope); } }
+        Expr::Call { args, .. } => { for a in args { validate_expr_collect(a, scope, reads); } }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-            validate_expr(left, scope); validate_expr(right, scope);
+            validate_expr_collect(left, scope, reads); validate_expr_collect(right, scope, reads);
         }
-        Expr::Not(inner) | Expr::BitNot(inner) => validate_expr(inner, scope),
+        Expr::Not(inner) | Expr::BitNot(inner) => validate_expr_collect(inner, scope, reads),
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }
