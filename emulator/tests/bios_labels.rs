@@ -7,6 +7,9 @@ use vectrex_emulator::opcode_meta::bios_label_for;
 fn bios_label_coverage() {
     // Curated list of addresses currently mapped. Keep sorted.
     let addresses: &[u16] = &[
+        0xF000, // Start
+        0xF01C, // Intro_Loop_1
+        0xF0A4, // Intro_Loop_2
         0xF06C, // Warm_Start
         0xF14C, // Init_VIA
         0xF164, // Init_OS_RAM
@@ -135,6 +138,7 @@ fn bios_label_coverage() {
         0xF8F3, // Obj_Will_Hit
         0xF8FF, // Obj_Hit
         0xF92E, // Explosion_Snd
+        0xFF9F, // Draw_Grid_VL
     ];
 
     for &addr in addresses {

@@ -26,6 +26,10 @@ pub struct OpcodeMeta {
 // Nota: mantener sincronizado con bios.asm. Sólo añadir etiquetas confirmadas del listado original.
 pub fn bios_label_for(addr: u16) -> Option<&'static str> {
     match addr {
+    // Entry / reset & intro loops
+    0xF000 => Some("Start"), // Punto de entrada BIOS (Reset vector apunta aquí)
+    0xF01C => Some("Intro_Loop_1"), // Primer bucle power-up (logo VECTREX, música intro)
+    0xF0A4 => Some("Intro_Loop_2"), // Segundo bucle (copyright + high score + salto a cartucho)
         // System / init
         0xF06C => Some("Warm_Start"),
         0xF14C => Some("Init_VIA"),
@@ -176,6 +180,7 @@ pub fn bios_label_for(addr: u16) -> Option<&'static str> {
         0xF8FF => Some("Obj_Hit"),
         // Effects
         0xF92E => Some("Explosion_Snd"),
+        0xFF9F => Some("Draw_Grid_VL"), // Rutina grilla 16x16 (vector list compuesta)
         // Final
         _ => None,
     }
