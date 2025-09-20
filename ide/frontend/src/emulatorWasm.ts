@@ -8,7 +8,9 @@ export interface MetricsSnapshot {
   total: number;
   unimplemented: number;
   frames: number;
-  draw_vl: number;
+  cycle_frame?: number; // legacy naming alignment
+  bios_frame?: number;
+  draw_vl: number; // unified name (exported now by wasm). Fallback to draw_vl_count if absent.
   last_intensity: number;
   unique_unimplemented: number[];
   cycles: number;

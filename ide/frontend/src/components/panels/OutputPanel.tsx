@@ -44,7 +44,8 @@ export const OutputPanel: React.FC = () => {
         <div>A: {hex8(regs?.a)} B: {hex8(regs?.b)} X: {hex16(regs?.x)} Y: {hex16(regs?.y)} U: {hex16(regs?.u)} S: {hex16(regs?.s)} DP: {hex8(regs?.dp)}</div>
         <div>Cycles: {metrics?.cycles ?? 0}</div>
         <div>Avg Cycles/frame: {metrics?.avg_cycles_per_frame ? metrics!.avg_cycles_per_frame.toFixed(0) : '--'}</div>
-        <div>Draw VL: {metrics?.draw_vl ?? 0}</div>
+  <div>Draw VL: {metrics?.draw_vl ?? (regs?.draw_vl_count ?? 0)}</div>
+  <div>BIOS Frames: {metrics?.bios_frame ?? (regs?.bios_frame ?? 0)}</div>
         <div>Last Intensity: {hex8(metrics?.last_intensity)}</div>
         <div>Unimpl Count: {metrics?.unimplemented ?? 0}</div>
         <div>Unique Unimpl: {unknownList.length}</div>

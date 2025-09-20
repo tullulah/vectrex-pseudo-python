@@ -18,6 +18,7 @@ export const EmulatorPanel: React.FC = () => {
   const [loopSamples, setLoopSamples] = useState<any[]>([]);
   const [segmentsCount, setSegmentsCount] = useState(0);
   const [lastSegments, setLastSegments] = useState<Segment[]>([]);
+  const [instrBudget, setInstrBudget] = useState(25000); // ~1.5M / 60 fps
   const [demoMode, setDemoMode] = useState(false);
   const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
   const [traceVectors, setTraceVectors] = useState(() => { try { return localStorage.getItem('emu_trace_vectors')==='1'; } catch { return false; } });
@@ -141,9 +142,10 @@ export const EmulatorPanel: React.FC = () => {
         }
       }
     } catch(e){ /* non-fatal */ }
-    globalEmu.runFrame();
+  // Throttle: limit instructions per visual frame to approximate target CPU rate
+  globalEmu.runFrame(instrBudget | 0);
     const regs = globalEmu.registers(); const m = globalEmu.metrics();
-    if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
+  if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
     if (regs) { if (!m) setFrameCount(regs.frame_count); if ((regs as any).bios_frame && biosFrame===0) setBiosFrame((regs as any).bios_frame); if ((regs as any).cycle_frame && cycleFrame===0) setCycleFrame((regs as any).cycle_frame); }
     const metrics = globalEmu.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
     let segs = globalEmu.getSegmentsShared();
@@ -173,7 +175,15 @@ export const EmulatorPanel: React.FC = () => {
     }
     if (traceVectors) console.debug('[panel] segments fetched count=', segs.length);
     if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=globalEmu.loopWatch(); if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
-  }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame, traceVectors]);
+  }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame, traceVectors, instrBudget]);
+
+  // Inline small control rendering helpers (inserción tardía para no reordenar demasiado código existente)
+  const renderInstrBudgetControl = () => (
+    <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11}} title='Instrucciones máximas por frame visual (~1.5M/s objetivo)'>
+      Instr/frame
+      <input type='number' min={1000} max={200000} step={1000} value={instrBudget} onChange={e=>setInstrBudget(Math.max(1000,Math.min(200000, parseInt(e.target.value)||25000)))} style={{width:80,background:'#111',color:'#ddd',border:'1px solid #333'}} />
+    </label>
+  );
 
   // Init
   useEffect(()=>{ let cancelled=false; (async()=>{ try { await globalEmu.init(); await (globalEmu as any).ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); } catch(e){ console.error('Emulator init/BIOS load failed', e); } if (!cancelled){ setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line

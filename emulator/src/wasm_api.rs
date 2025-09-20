@@ -15,6 +15,7 @@ struct JsMetrics {
     unimplemented: u64,
     frames: u64, // legacy (mirrors cycle_frame; retained for compatibility)
     cycle_frame: u64,
+    bios_frame: u64,
     last_intensity: u8,
     unique_unimplemented: Vec<u8>,
     cycles: u64,
@@ -37,6 +38,7 @@ struct JsMetrics {
     integrator_max_frame_segments: u32,
     integrator_total_segments: u64,
     integrator_auto_drain: bool,
+    draw_vl: u64,
     reads_unmapped: u64,
     writes_unmapped: u64,
     writes_bios_ignored: u64,
@@ -120,6 +122,7 @@ impl WasmEmu {
             unimplemented: m.unimplemented,
             frames: self.cpu.frame_count,
             cycle_frame: self.cpu.cycle_frame,
+            bios_frame: self.cpu.bios_frame,
             
             last_intensity: self.cpu.last_intensity,
             unique_unimplemented: m.unique_unimplemented,
@@ -141,6 +144,7 @@ impl WasmEmu {
             integrator_max_frame_segments: self.cpu.integrator_max_frame_segments,
             integrator_total_segments: self.cpu.integrator_total_segments,
             integrator_auto_drain: self.cpu.integrator_auto_drain,
+            draw_vl: self.cpu.draw_vl_count,
             reads_unmapped: self.cpu.bus.stats.reads_unmapped,
             writes_unmapped: self.cpu.bus.stats.writes_unmapped,
             writes_bios_ignored: self.cpu.bus.stats.writes_bios_ignored,
