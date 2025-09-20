@@ -307,6 +307,13 @@ Long Term:
 
 ---
 ## CHANGE NOTES
+### (Nuevo) 2025-09-20: Estado del Compilador
+Se añadió el documento `COMPILER_STATUS.md` con un inventario completo del front-end DSL (`vectrex_lang`):
+- Capacidades actuales: lexing por indentación, parser con control de flujo (if/elif/else, for range, while, switch), expresiones aritméticas/bitwise/lógicas, comparaciones encadenadas, listas vectoriales (INTENSITY, ORIGIN, MOVE, RECT, POLYGON, CIRCLE, ARC, SPIRAL), pipeline de optimización (constant folding, DCE, propagación, dead store elim, fold const switch), backend 6809 con wrappers Vectrex.
+- Principales carencias: verificación semántica (uso de variables no declaradas), implementación real de `VECTREX_DRAW_TO`, ausencia de smoke test, falta de IR intermedio y análisis de liveness, sin sistema de tipos.
+- Backlog priorizado (short/mid/long) incluido con IDs (S1.., M1.., L1..).
+Referencia: ver `COMPILER_STATUS.md` para detalles y próximos pasos inmediatos (añadir smoke test y completar DRAW_TO).
+
 - 2025-09-16: Initial creation of SUPER_SUMMARY.md with full architecture & decisions.
  - 2025-09-16: Added deep dive (Sections 21–27), compiler & language spec draft, opcode appendix, expanded change log.
 - 2025-09-18: Stack/return diagnostic instrumentation begun (call events capture `ret_addr`); buffer size (32) identified as insufficient; C++ parity test added (pending build); classification of drift vs mismatch deferred.
