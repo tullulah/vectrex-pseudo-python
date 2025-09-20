@@ -91,9 +91,8 @@ fn bios_label_coverage() {
         0xF548, // Clear_x_d
         0xF550, // Clear_x_b_80
         0xF552, // Clear_x_b_a
-        0xF55A, // Dec_3_Counters
-        0xF55E, // Dec_6_Counters
-        0xF55A, // Dec_3_Counters
+    0xF55A, // Dec_3_Counters
+    0xF55E, // Dec_6_Counters
         0xF563, // Dec_Counters
         0xF56D, // Delay_3
         0xF571, // Delay_2
@@ -141,4 +140,6 @@ fn bios_label_coverage() {
     for &addr in addresses {
         assert!(bios_label_for(addr).is_some(), "Missing BIOS label for address 0x{addr:04X}");
     }
+    // Sane guard: ensure none of these resolves to placeholder name (should not happen because we unwrap before).
+    // (If future refactor changes bios_label_for to return placeholder, this will catch it.)
 }

@@ -59,7 +59,8 @@ Objetivo: evitar diagnósticos confusos causados por "avance artificial" que enm
 - Selective trace filters (PC allowlist) for low-noise debugging.
 - Golden trace comparison harness.
  - Extender detector RAM a: (a) conteo por ventanas múltiples (b) heurística de detección de patrón cíclico usando período mínimo en ring PCs.
- - Export WASM de snapshot (`bios_calls_json` paralelo) para UI (ver TODO ID 13 en copilot-instructions).
+- Export WASM de snapshot (`bios_calls_json` paralelo) para UI (TODO 13 completado 2025-09-19).
+  - Nota: Entrada inicial Init_OS (0xF18B) ahora etiquetada explícitamente; parte del TODO 11 (mapeo direcciones BIOS) actualizada.
 
 ### 3.2 VIA & Timing
 - VIA memory-mapped region at 0xD000 range (simplified mapping). Timers tick via centralized `advance_cycles()`.

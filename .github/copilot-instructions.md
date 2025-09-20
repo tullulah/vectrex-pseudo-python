@@ -41,7 +41,7 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Evitar duplicación de la cadena de ruta en muchos archivos (refactor pendiente cuando aparezca el segundo uso).
 
 ## 10. Próximos TODO Prioritarios
-1. (ID 11) Comparar call stack con `bios.asm` y etiquetar direcciones faltantes (ej.: 0xF18B).
+1. (ID 11) Comparar call stack con `bios.asm` y etiquetar direcciones faltantes (ej.: 0xF18B).  [Actualización 2025-09-20: 0xF18B mapeado como Init_OS]
 2. (ID 13) Exportar call stack vía WASM (`bios_calls_json`).
 3. (ID 5) Resumen estado compilador (análisis de `vectrex_lang` pendiente).
 
