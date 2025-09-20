@@ -107,6 +107,7 @@ Exports (selection):
 - Introspection: `registers()`, `metrics()`, `loopWatch()`.
 - Vector data: `getSegmentsShared()` (preferred zero-copy) and `drainSegmentsJson()` (JSON fallback).
 - Demo: `demoTriangle()` returns canned triangle segments (used for visual sanity test / demo mode).
+- BIOS Call Stack: `bios_calls_json()` (añadido 2025-09-19, completa TODO 13) devuelve últimas ≤256 entradas "FFFF:LABEL"; `clear_bios_calls()` las borra.
 
 ---
 ## 5. Build / Compilation Pipeline

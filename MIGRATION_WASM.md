@@ -47,6 +47,9 @@ set_integrator_auto_drain(bool)
 integrator_auto_drain() -> bool
 // Debug
 loop_watch_json() -> String
+// BIOS call stack (añadido 2025-09-19, TODO 13 completado)
+bios_calls_json() -> String          // Últimas llamadas BIOS (array JSON de strings "FFFF:LABEL", máx 256)
+clear_bios_calls()                   // Limpia buffer de llamadas BIOS
 demo_triangle()
 // Input
 set_input_state(x: i16, y: i16, buttons: u8)
