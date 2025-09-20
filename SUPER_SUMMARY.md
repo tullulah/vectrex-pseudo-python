@@ -1012,3 +1012,7 @@ Backlog / próximos pasos relacionados con spans:
 4. Exportar spans vía WASM/LSP en formato JSON (`diagnostics_json`) manteniendo backward compatibility.
 5. Documentar en sección separada la política de estabilidad del AST para consumidores externos (nota: cambio a `Expr::Call` es breaking para crates que construían manualmente AST sin parser).
 
+---
+TestMarker: WRITE_CHECK (reinsertado porque no se encontró en esta versión) – verificación persistencia previa
+TestMarker2: ADMIN_WRITE_CHECK 2025-09-20T00:00Z segunda verificación con privilegios elevados
+
