@@ -185,6 +185,48 @@ Preload (`ide/electron/src/preload.ts`) safely exposes the above to `window.elec
 - Displays registers, cycle metrics, frames, number of unique unimplemented opcodes, vector list draw counts, top opcode histogram, and list of unimplemented opcodes.
 - Refresh: manual or auto (1s interval).
 
+### 7.3 (Nuevo 2025-09-20) Capa de Abstracción del Núcleo del Emulador
+Objetivo: desacoplar la UI (paneles React) de una implementación concreta (Rust/WASM) permitiendo introducir y comparar otros backends (p.ej. futuro jsvecx puro JS) sin reescribir la UI ni propagar dependencias wasm-bindgen.
+
+Componentes introducidos:
+- `emulatorCore.ts`: Define la interfaz estable `IEmulatorCore` (métodos: init, ensureBios?, loadBios, isBiosLoaded, reset, resetStats?, loadProgram, runFrame, metrics, registers, biosCalls?, clearBiosCalls?, enableTraceCapture?, clearTrace?, traceLog?, loopWatch?, getSegmentsShared, drainSegmentsJson?, peekSegmentsJson?, demoTriangle?, snapshotMemory?, invalidateMemoryView?, setInput?). Expone tipos `RegistersSnapshot`, `MetricsSnapshot`, `Segment` y union `EmulatorBackend`.
+- `rustWasmCore.ts`: Adaptador que envuelve la clase existente `EmulatorService` delegando 1:1 todos los métodos y exponiendo `raw` para debugging avanzado.
+- `jsvecxCore.ts`: Stub inicial de backend alternativo. Implementa lo mínimo para no romper la fábrica y retorna datos vacíos / lanza error claro en métodos críticos pendientes. Permitirá integración incremental sin bloquear la UI.
+- `emulatorFactory.ts`: Fábrica que elige backend leyendo (prioridad): query param `?emu_backend=jsvecx|rust`, luego `localStorage.emu_backend`, con fallback seguro a `rust` si algo falla.
+- `emulatorCoreSingleton.ts`: Crea instancia única `emuCore` usada por todos los paneles y la expone en `window.emuCore` más alias transitorio `window.globalEmu` (para compatibilidad temporal y consola). El alias se marcará para eliminación una vez el backend alternativo esté funcional y los scripts externos migrados.
+
+Integración en Paneles:
+- Todos los paneles (`EmulatorPanel` nuevos y legacy, `OutputPanel`, `TracePanel`, `MemoryPanel`, `BiosCallsPanel`) migrados para usar `emuCore` en lugar del objeto global previo.
+- Se añadió en `OutputPanel` un selector de backend (combo) que persiste elección y fuerza recarga para reinstanciar el singleton con el backend elegido. Elección almacenada en `localStorage` (`emu_backend`) y también aceptada vía query param para pruebas rápidas (ej.: `http://localhost:5173/?emu_backend=jsvecx`).
+
+Razones de diseño:
+- Minimizar superficie de cambio al introducir/retirar WASM exports — la UI sólo conoce la interfaz estable.
+- Facilitar tests A/B (futuro) corriendo dos backends en paralelo (la interfaz facilita añadir un modo dual sin tocar lógica de paneles).
+- Permitir cargar un backend alterno que quizá no provea todas las capacidades (métodos opcionales con guards `?.`).
+
+Política de alias `globalEmu`:
+- Alias legacy mantenido únicamente para debugging manual y scripts preexistentes.
+- No debe usarse en nuevo código TS/React (linters futuros podrán advertir).
+- Eliminación planificada: después de integrar al menos un método real en `JsVecxEmulatorCore` (render básico de segmentos) y actualizar documentación externa. Añadir TODO visible antes de esa eliminación.
+
+Persistencia / Llaves nuevas:
+- `emu_backend` (localStorage): 'rust' | 'jsvecx'. Cambiarla y recargar re‑instancia el singleton.
+
+Limitaciones actuales del backend jsvecx stub:
+- Sin métricas, registros ni segmentos (todos retornan vacíos / null). La UI mostrará simplemente valores vacíos; esto es aceptable hasta implementar puente con librería real.
+- Métodos de tracing y BIOS calls devuelven arrays vacíos para no romper paneles.
+
+Impacto en Documentación Anterior:
+- Se reemplaza toda referencia práctica a `globalEmu` por `emuCore` (excepto alias temporal y notas históricas en este documento).
+- Se actualiza la sección 11 (Deprecated) para incluir `globalEmu` como API transitoria.
+
+Próximos pasos sugeridos (fase 2):
+1. Implementar carga dinámica del bundle jsvecx y mapear memoria/BIOS reales en `JsVecxEmulatorCore`.
+2. Proveer conversión de trazas a formato común (`traceLog`) para comparaciones diff.
+3. Añadir modo “dual-run” (ejecutar frame en ambos backends y comparar regs selectivos + divergencias de segmentos).
+4. Telemetría de latencia inicialización backend para panel Output (campo metrics extendido opcional).
+
+
 ---
 ## 8. Vector Rendering & Segment Flow
 1. User builds program → binary loaded at base (default 0xC000) via `globalEmu.loadProgram(bytes, base)`.
@@ -307,6 +349,24 @@ Long Term:
 
 ---
 ## CHANGE NOTES
+### (Nuevo) 2025-09-20: Capa de Abstracción del Núcleo (emuCore)
+- Introducida interfaz `IEmulatorCore` + adaptador `RustWasmEmulatorCore` + stub `JsVecxEmulatorCore` + fábrica `emulatorFactory` y singleton `emuCore`.
+- Paneles migrados a `emuCore`; agregado selector de backend en OutputPanel (`emu_backend` en localStorage o query param) con fallback robusto.
+- Alias legacy `globalEmu` mantenido temporalmente (solo debugging). Plan de eliminación tras primera integración funcional jsvecx.
+- Objetivo: facilitar comparación multi-backend y reducir acoplamiento UI ↔ WASM.
+
+### (Nuevo) 2025-09-20: Métricas de Frame Timing y Expiraciones T2
+### (Nuevo) 2025-09-20: Integración Inicial jsvecx (Backend Alternativo)
+- Añadido puente mínimo en `JsVecxEmulatorCore` que intenta `import()` dinámico de fuentes preprocesadas (`jsvecx/src/preprocess/*`). Si el árbol no está presente en la build, el backend permanece inerte y el selector vuelve automáticamente a mostrar métricas vacías sin romper la UI.
+- Implementado: init (carga condicional), loadBios (copia 8K), loadProgram (carga cart 32K), runFrame (ejecuta ~25k ciclos y extrae `vectors_draw` → normaliza a rango [-1,1]), metrics parciales (frames, draw_vl, last_intensity). Registros y demás introspección retornan null/arrays vacíos.
+- Limitaciones: sin sincronización real de frame boundary (heurística de ciclos fija), sin snapshot memoria, sin BIOS calls, sin trace.
+- Próximos pasos: exponer registros CPU 6809 jsvecx, mapear timers VIA, y habilitar modo comparación dual.
+- Añadidos campos `last_wait_recal_return_cycle` y `prev_wait_recal_return_cycle` en CPU para medir delta de ciclos entre retornos sucesivos de `Wait_Recal` (RTS/RTI) y registrar en trazas `delta_cycles`.
+- Añadido contador `t2_expirations_count` que se incrementa en `advance_cycles()` cuando IFR bit5 (Timer2) se detecta activo; sirve como señal independiente de progreso temporal hardware incluso si `bios_frame` tarda en incrementarse.
+- Actualizado test `bios_frame_progress` para aceptar éxito si (a) `bios_frame > 1` o (b) ya se observaron ≥2 expiraciones de T2 y al menos un retorno de `Wait_Recal`, reduciendo falsos negativos en fases tempranas de inicialización.
+- Log de incrementos de frame ahora diferencia origen (RTS/RTI) e incluye `(first)` en el primer retorno antes de disponer de delta.
+- Política mantenida: no se fabrican frames; sólo se registran métricas reales. Estas métricas se usarán para depurar sincronización con futuras mejoras de temporización precisa VIA/Timer.
+
 ### (Nuevo) 2025-09-20: Estado del Compilador
 Se añadió el documento `COMPILER_STATUS.md` con un inventario completo del front-end DSL (`vectrex_lang`):
 - Capacidades actuales: lexing por indentación, parser con control de flujo (if/elif/else, for range, while, switch), expresiones aritméticas/bitwise/lógicas, comparaciones encadenadas, listas vectoriales (INTENSITY, ORIGIN, MOVE, RECT, POLYGON, CIRCLE, ARC, SPIRAL), pipeline de optimización (constant folding, DCE, propagación, dead store elim, fold const switch), backend 6809 con wrappers Vectrex.
@@ -600,6 +660,14 @@ Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (ma
 37. (Docs) Apéndice actualizado lista ilegal final. [DOC_UPDATE]
 38. (Metric Integrity) Métrica ajustada: ilegales excluidos de unimplemented. [METRIC_FIX]
 39. (Handoff) Preparación de SUPER_SUMMARY post-reinicio (este documento). [HANDOFF]
+40. (Multi-Backend) Integración mínima backend jsvecx (segments + metrics básicos). [BACKEND]
+41. (Registers Parity) Exposición registros y ciclos aproximados en jsvecxCore (a,b,dp,x,y,u,s,pc,cycles,frame_count,draw_vl_count) + avg_cycles_per_frame derivado. (2025-09-20). [BACKEND_PARITY]
+42. (Input & FrameCycles) jsvecxCore ahora usa Globals.FCYCLES_INIT para ciclos por frame (sustituye constante 25000) y `setInput` mapea X/Y (-1..1) → alg_jch0/1 (0..255, centro 128) + snapshot de botones. (2025-09-20). [BACKEND_IMPROVE]
+43. (Frame Rollover + Snapshot) jsvecxCore detecta rollover de frame usando fcycles (after>before) en lugar de incrementar fijo, añade cycle_frame (fcInit - fcycles) en metrics/registers y exporta snapshotMemory 64K (cart, gap=0xFF, RAM mirror, VIA parcial, BIOS). (2025-09-20). [BACKEND_FRAME]
+44. (Import Simplification) jsvecxCore deja de intentar importar archivos sueltos `/jsvecx/src/preprocess/*.js` desde `public/` (provocaba warning Vite: "file is in /public and will be copied as-is...") y ahora sólo realiza `import('/jsvecx/vecx_full.js')` usando bundle generado por `npm run jsvecx:bundle`. Se añade declaración ambient `types-jsvecx.d.ts` para silenciar TypeScript respecto al módulo externo. Resultado: build limpia sin fallo de Rollup ni warning de import de public. (2025-09-20). [BACKEND_CLEAN_IMPORT]
+45. (Bundle Relocation) El bundle jsvecx se duplica ahora a `src/generated/jsvecx/vecx_full.js` (script `bundle_jsvecx.cjs` genera en `public/jsvecx` y en `src/generated/jsvecx`). `jsvecxCore` pasa a importar la versión interna relativa (`./generated/jsvecx/vecx_full.js`), eliminando totalmente el warning de Vite sobre imports desde `/public`. Se actualiza `types-jsvecx.d.ts` para apuntar al nuevo path y se conserva copia en `public/` sólo para inspección/manual fallback fuera del build. (2025-09-20). [BACKEND_BUNDLE_RELOC]
+46. (Macro Preprocess) Añadido paso de preprocesado en `bundle_jsvecx.cjs` que convierte líneas `#define` simples en `const` o funciones arrow (`#define NAME(args) expr`). Esto elimina el `SyntaxError: Private field '#define' must be declared in an enclosing class` al importar el bundle procesado dentro de Vite/ESM. Limitaciones documentadas: no soporta macros multiline ni sustituciones complejas; suficiente para los macros usados (flags, getters bit, offsets AY). (2025-09-20). [BACKEND_MACRO_PP]
+47. (Strip #if 0 Blocks) El bundler ahora elimina bloques envueltos en `#if 0 ... #endif` (e6809/e8910/vecx) para evitar que directivas de preprocesador C residuales causen `SyntaxError: Private field '#if'` en el parser ES. Implementado con regex simple `/#if\s+0[\s\S]*?#endif/gm`, limitado a condiciones literales `0` (no toca futuros `#if 1`). (2025-09-20). [BACKEND_STRIP_IF0]
 
 ### 28.1 Checklist Eliminación de Heurísticas / Stubs / Sintéticos
 | Nº | Paso | Tipo | Estado |
