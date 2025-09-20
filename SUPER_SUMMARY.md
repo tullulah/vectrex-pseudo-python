@@ -1016,3 +1016,41 @@ Backlog / próximos pasos relacionados con spans:
 TestMarker: WRITE_CHECK (reinsertado porque no se encontró en esta versión) – verificación persistencia previa
 TestMarker2: ADMIN_WRITE_CHECK 2025-09-20T00:00Z segunda verificación con privilegios elevados
 
+
+### 32.8 Vendorización de `vectrexy` y `jsvecx` (2025-09-20)
+Contexto: previamente ambos directorios eran submódulos Git (gitlinks modo 160000), lo que ocultaba su contenido real en el árbol y dificultaba auditoría / reproducibilidad offline.
+
+Acciones realizadas:
+1. Eliminado gitlink `vectrexy` (`git rm --cached vectrexy`) tras retirar la regla de ignore que lo ocultaba; añadido el árbol completo (≈17K objetos) manteniendo estructura original (incluye libs, herramientas y metadatos vcpkg).
+2. Eliminado gitlink `jsvecx` de igual forma; vendorizado todo su código fuente JavaScript, scripts de preprocesado, assets, ROMs, ejecutables auxiliares y binarios.
+3. Se preservan licencias originales (`LICENSE`, `README`) en cada árbol; no se han aplicado refactors masivos para conservar diff legible frente a origen.
+4. Hardening previo aplicado a la ruta jsvecx (constantes AY_* fijadas y sanitizador del bundle) se mantiene; la vendorización garantiza que la fuente exacta usada para regenerar el backend alternativo está versionada.
+
+Motivación principal:
+- Transparencia total para auditorías de integridad (evitar dependencia implícita de commits externos).
+- Reproducibilidad: clonar el repositorio es suficiente para reconstruir cualquier backend sin red.
+- Mitigar riesgos de supply‑chain (cambios upstream inesperados) y facilitar hashing interno futuro.
+
+Políticas tras vendorización:
+1. No reinstaurar submódulos para estos componentes; cualquier actualización debe realizarse mediante "sync commit" explícito (fetch upstream, comparar, aplicar patch manual o cherry-pick selectivo) documentado aquí con fecha y rango de commits origen.
+2. Cambios locales a `vectrexy` o `jsvecx` deben describirse en secciones posteriores (CHANGE NOTES) si afectan comportamiento observable, build, o superficie API interna usada por el IDE / WASM.
+3. Mantener licencias encabezadas intactas; si upstream añade NOTICEs adicionales, incorporarlos textualmente (no resumir).
+4. Evitar limpieza estética agresiva (reformat) que dificulte futuros diffs de sincronización; preferir parches focalizados.
+5. Para jsvecx: mantener activo el sanitizador y el script que fija bloques canónicos hasta que el empaquetado determinista completo (rewrite parser/bundler) esté implementado.
+
+Integridad / próximos pasos relacionados (pendientes al momento de esta nota):
+- Escaneo de archivos de longitud cero y reporte.
+- Hash SHA-256 de archivos críticos (lista blanca seleccionada: fuentes Rust núcleo, fuentes vendorizadas, ROM BIOS) almacenado en un manifiesto (`INTEGRITY_MANIFEST.json`).
+- Ejecución de suite `cargo test -p vectrex_emulator` y comparación de tiempos/estadísticas antes/después de cada sync grande.
+- Build TypeScript / bundle IDE para asegurar que no emergen dependencias dinámicas externas escondidas.
+- Archivo de respaldo comprimido (zip) reproducible marcado con fecha para baseline interna.
+
+Riesgos mitigados:
+- Pérdida de acceso a upstream no bloquea desarrollo.
+- Inyección silenciosa en submódulo sin commit en repo principal deja de ser posible.
+- Divergencias de lógica en AY_* o vectores BIOS no podrán originarse por actualización upstream no auditada.
+
+Seguimiento: cualquier futura sincronización agregará subsección incremental `32.8.x` con fecha y lista de diffs significativos.
+
+Nota lingüística: mantener esta sección en español (principal) con terminología técnica estable para facilitar búsquedas internas (tags: vendorización, submódulos, supply-chain, integridad).
+
