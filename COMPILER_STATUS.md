@@ -1,6 +1,6 @@
 # Compiler Status (vectrex_lang)
 
-Fecha: 2025-09-20
+Fecha: 2025-09-20 (actualizado tras implementación DRAW_TO)
 
 Este documento resume el estado actual del compilador DSL (`vectrex_lang`, carpeta `core/`), capacidades implementadas, carencias detectadas y backlog priorizado.
 
@@ -53,11 +53,10 @@ Riesgos / Pendiente:
 ## 5. Backend 6809 (backend/m6809.rs)
 - Emite prólogo, asignación de argumentos (hasta 4), stack frame (2 bytes por local 16-bit).
 - Wrappers condicionales generados en función de `RuntimeUsage` (intensidad, move, draw line, vector phase, blink, silence, debug, frame begin, set origin, draw VL, wait recal fast).
-- NOTA: `VECTREX_DRAW_TO` contiene TODO (no implementa trazo; sólo actualiza posición).
+- `VECTREX_DRAW_TO` ahora dibuja realmente una línea: calcula dx/dy respecto a (VCUR_X,VCUR_Y), hace clamp (-64..63) y llama a `Draw_Line_d`, luego actualiza VCUR_*.
 - Opciones `CodegenOptions` específicas Vectrex: `per_frame_silence`, `debug_init_draw`, `blink_intensity`, `exclude_ram_org`, `fast_wait`.
 
 Limitaciones:
-- Falta implementación real `DRAW_TO` (debería usar `Draw_VL` dinámico o secuencia de vectores incremental).
 - No tracking de registro usado / allocation: uso directo de variables globales (`VAR_ARG*`, `VCUR_X/Y`).
 - No soporte banco/align a pesar de `_bank_size` placeholder.
 
@@ -82,11 +81,11 @@ Limitaciones:
 
 ## 10. Backlog Prioritario (Short / Mid / Long)
 Short (1-2 semanas):
-1. Implementar smoke test: fuente mínima -> tokens -> parse -> emit_asm -> asserts básicos (no panic, contiene etiqueta función). (ID S1)
-2. Implementar `VECTREX_DRAW_TO` real (usar generación temporal de lista con delta en X/Y o BIOS `Moveto_d` + `Draw_Line_d`). (ID S2)
-3. Añadir verificación simple de variables: usar set de declaradas (let/param/const/global) y reportar error si asign o uso no declarado. (ID S3)
-4. Añadir test constant folding para casos binarios y lógicos. (ID S4)
-5. Documentar truncamiento 16-bit en este archivo y `SUPER_SUMMARY.md`. (ID S5)
+1. (S1) Smoke test básico – COMPLETADO 2025-09-20 (`core/tests/smoke_compile.rs`).
+2. (S2) `VECTREX_DRAW_TO` real – COMPLETADO 2025-09-20.
+3. (S3) Añadir verificación simple de variables (pendiente).
+4. (S4) Tests constant folding (pendiente).
+5. (S5) Documentar truncamiento 16-bit también en `SUPER_SUMMARY.md` (pendiente).
 
 Mid (3-6 semanas):
 6. IR intermedio opcional (linear SSA-lite o tree simplificado) para separar optimizaciones de AST. (ID M1)
@@ -107,9 +106,14 @@ Long (6+ semanas):
 - Recuento de optimizaciones aplicadas (pliegues, stores eliminados) — instrumentar contadores.
 - Cobertura tests: % de nodos AST visitados en suite (meta inicial: >60%).
 
-## 12. Próximos Pasos Inmediatos (ejecución ahora)
-1. Crear smoke test (S1).
-2. Referenciar este documento desde `SUPER_SUMMARY.md` (sección compilador).
+## 12. Próximos Pasos Inmediatos (actualizado)
+1. S3: Verificación semántica básica de variables.
+2. S4: Tests constant folding / dead store.
+3. S5: Doc truncamiento 16-bit en `SUPER_SUMMARY.md`.
 
 ---
 Notas de mantenimiento: mantener este archivo actualizado cuando se cierren IDs. Añadir fecha y breve changelog al inicio.
+
+---
+Changelog:
+- 2025-09-20: Añadido smoke test (S1) y wrapper `VECTREX_DRAW_TO` implementado (S2). Actualizada sección backend y backlog.
