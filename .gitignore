@@ -38,3 +38,4 @@ dist/
  
 # C++ experimental host / not part of Rust core build
 vectrexy/
+
