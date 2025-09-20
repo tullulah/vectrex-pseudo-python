@@ -8,7 +8,7 @@
 //!   --cycles=N   ciclos máximos a simular (por defecto ~500_000)
 //!   --trace      activa cpu.trace para ver PCs iniciales
 use vectrex_emulator::CPU;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet; // HashMap eliminado (no usado)
 
 const BIOS_PATH: &str = r"C:\\Users\\DanielFerrerGuerrero\\source\\repos\\pseudo-python\\ide\\frontend\\dist\\bios.bin";
 
