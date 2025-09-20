@@ -366,6 +366,12 @@ impl CPU {
         let mut extended_unimpl: Vec<u16> = Vec::new();
         // We will place each opcode at 0x0100 with a harmless operand byte (0) following when needed.
         for op in 0u16..=255u16 {
+            // Referenciar directamente listas de prefijos válidos e ilegales para marcar cobertura (activa constantes y elimina dead_code).
+            if is_illegal_base_opcode(op as u8) {
+                // Marcar como no implementado para efectos de métrica, pero no ejecutar step (evita gastar tiempo).
+                self.opcode_unimpl_bitmap[op as usize] = true;
+                continue;
+            }
             // Clone minimal register state to keep side effects isolated (preserve fields via coverage_clone)
             let base = self.coverage_clone();
             let mut clone = base;

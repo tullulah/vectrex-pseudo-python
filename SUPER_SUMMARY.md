@@ -470,13 +470,14 @@ Legend: [I]=Implemented, [NOP]=Illegal/Undefined but intentionally treated as NO
 
 Summary (UPDATED 2025-09-18 – incluye fix añadiendo handlers NOP explícitos para 0x14/0x15): 100% de los opcodes válidos implementados.
 Summary (REVALIDATED 2025-09-19 – barrido endurecido + bitmap): Cobertura base permanece 100%; cualquier regresión fallará inmediatamente en `opcode_base_full_sweep_unimplemented`.
+Summary (UPDATED 2025-09-20 – integración listas en cobertura): `recompute_opcode_coverage()` ahora marca directamente como "missing" únicamente los opcodes base ilegales listados en `ILLEGAL_BASE_OPCODES` sin intentar ejecutarlos. Esto activa el uso real de la constante eliminando `#[allow(dead_code)]` y mantiene la semántica: ilegales tratados como NOP en ejecución normal, pero separados explícitamente en la métrica de cobertura.
 
-Illegal base (MC6809 no definidos) ahora centralizados en la constante `ILLEGAL_BASE_OPCODES` (archivo `cpu6809.rs`). Tests llaman a `is_illegal_base_opcode()` para evitar divergencia. Lista actual:
+Illegal base (MC6809 no definidos) ahora centralizados en la constante `ILLEGAL_BASE_OPCODES` (archivo `cpu6809_constants.rs`, re-export en crate root). Tests usan esa lista para validar que no existan faltantes adicionales. Lista actual:
 ```
 01 02 05 14 15 38 45 4E 52 61 7B 8F CF
 41 42 4B 51 55 5B 5E 62 65 6B 71 72 75 87 C7 CD
 ```
-Todos tratados como NOP mínimos (1 ciclo) con bandera de "illegal" (no cuentan como unimplemented). Prefijos 0x10/0x11: todos los sub‑opcodes válidos implementados; cualquier hueco fuera de `VALID_PREFIX10/11` clasificado como ilegal y no afecta cobertura.
+Todos tratados como NOP mínimos (1 ciclo) con bandera de "illegal" (no se consideran una falta de implementación funcional). En cobertura se listan explícitamente para distinguirlos de opcodes válidos. Prefijos 0x10/0x11: el barrido ahora sólo itera los sub‑opcodes definidos en `VALID_PREFIX10/11`; sub‑opcodes fuera de esas listas se omiten (no se ejecutan ni marcan) preservando una lista de huecos extendidos (`last_extended_unimplemented`) vacía cuando todo lo válido está cubierto.
 
 RMW Direct: 00,03,04,06,07,08,09,0C,0D,0E,0F [I]
 RMW Indexed: 60,63,64,66,67,68,69,6A,6C,6D,6E,6F [I]
@@ -490,7 +491,7 @@ Cycle Snapshot: ver `docs/6809_opcodes.md` sección "Tabla de Ciclos Emulados" y
 
 Cycle Delta Audit: bin `gen_cycles_compare` + `docs/6809_cycles_nominal.json` produce `cycles_compare.csv` con columnas emu/nom/delta; sección 5.1 del doc de opcodes resume los desvíos prioritarios (JMP, SEX, WAI/CWAI, SYNC, BRN). Ajustar `cyc` en `step()` según roadmap.
 
-Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (vacío tras snapshot) y `last_extended_unimplemented` (lista vacía cuando completo).
+Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (marca sólo ilegales base) y `last_extended_unimplemented` (lista vacía cuando todo lo válido extendido está cubierto). Usa `is_illegal_base_opcode()` + `VALID_PREFIX10/11`.
 
 ### 24.1 Open Bus & Lecturas Fuera de Rango
 - Ahora las lecturas en regiones no mapeadas / gaps (cart out-of-bounds, C000 gap, región ilegal) devuelven el último byte físicamente colocado en el bus (`last_bus_value`).

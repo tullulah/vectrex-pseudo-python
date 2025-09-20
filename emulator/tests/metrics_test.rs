@@ -29,8 +29,11 @@ fn opcode_metrics_collect() {
 fn recompute_opcode_coverage_snapshot() {
     let mut cpu = CPU::default();
     let (_impld, _missing, missing_list) = cpu.recompute_opcode_coverage();
-    // All primary opcodes are now implemented; ensure list is empty.
-    assert!(missing_list.is_empty(), "No primary opcodes should remain unimplemented; found: {:?}", missing_list);
+    // Ajuste: ahora la métrica marca explícitamente los opcodes base ilegales del 6809 (tratados como NOP de 1 ciclo)
+    // usando ILLEGAL_BASE_OPCODES. La cobertura sólo debe reportar exactamente esos y ninguno adicional.
+    let expected: std::collections::BTreeSet<u8> = vectrex_emulator::ILLEGAL_BASE_OPCODES.iter().cloned().collect();
+    let got: std::collections::BTreeSet<u8> = missing_list.iter().cloned().collect();
+    assert_eq!(got, expected, "La lista de opcodes no implementados debe coincidir con ILLEGAL_BASE_OPCODES. got={:?} expected={:?}", got, expected);
     // Spot check: LDA immediate 0x86 definitely implemented (redundant but keeps intent clear)
     assert!(!missing_list.contains(&0x86));
 }

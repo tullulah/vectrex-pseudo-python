@@ -11,20 +11,17 @@ pub const VEC_RESET:u16 = 0xFFFE; // RESET
 
 // Centralized list of illegal / undefined base opcodes for MC6809 treated as
 // 1-cycle NOPs. Includes placeholders 0x7B, 0x8F currently handled as NOP to
-// suppress noise. Any modification here MUST be reflected in documentation
-// (SUPER_SUMMARY.md section 24) and tests using is_illegal_base_opcode.
-#[allow(dead_code)] // TODO(id:constants-usage) Referenciar desde verificación de cobertura para eliminar allow.
+// suppress noise. Any modification here MUST be reflected en documentación
+// (SUPER_SUMMARY.md sección 24) y tests usando is_illegal_base_opcode.
 pub const ILLEGAL_BASE_OPCODES: &[u8] = &[
     0x01,0x02,0x05,0x14,0x15,0x38,0x45,0x4E,0x52,0x61,0x7B,0x8F,0xCF,
     0x41,0x42,0x4B,0x51,0x55,0x5B,0x5E,0x62,0x65,0x6B,0x71,0x72,0x75,0x87,0xC7,0xCD
 ];
 
 #[inline]
-#[allow(dead_code)] // TODO(id:constants-usage) Usar en validación dinámica de ejecución si se reactiva.
 pub fn is_illegal_base_opcode(op: u8) -> bool { ILLEGAL_BASE_OPCODES.contains(&op) }
 
 // Valid extended prefixes (page 2 & 3)
-#[allow(dead_code)] // TODO(id:constants-usage) Integrar en barrido extendido para filtrar sub-opcodes inválidos.
 pub const VALID_PREFIX10: &[u8] = &[
     // Long branches (all conditional forms) 0x21-0x2F
     0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2A,0x2B,0x2C,0x2D,0x2E,0x2F,
@@ -43,7 +40,6 @@ pub const VALID_PREFIX10: &[u8] = &[
     0xDF,0xEF,0xFF, // STS direct/indexed/extended
 ];
 
-#[allow(dead_code)] // TODO(id:constants-usage) Igual que VALID_PREFIX10.
 pub const VALID_PREFIX11: &[u8] = &[
     // SWI3
     0x3F,

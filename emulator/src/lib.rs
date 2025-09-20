@@ -8,6 +8,7 @@ pub mod cycle_table; // added
 pub mod opcode_meta; // export metadata subset for tests
 
 pub use cpu6809::CPU;
+pub use cpu6809::ILLEGAL_BASE_OPCODES; // re-export para tests de cobertura
 pub use bus::Bus;
 pub use via6522::Via6522;
 pub use integrator::{Integrator, BeamSegment, BeamState};
