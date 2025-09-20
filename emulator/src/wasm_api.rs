@@ -144,6 +144,7 @@ impl WasmEmu {
             integrator_max_frame_segments: self.cpu.integrator_max_frame_segments,
             integrator_total_segments: self.cpu.integrator_total_segments,
             integrator_auto_drain: self.cpu.integrator_auto_drain,
+            // Real Draw_VL invocation counter
             draw_vl: self.cpu.draw_vl_count,
             reads_unmapped: self.cpu.bus.stats.reads_unmapped,
             writes_unmapped: self.cpu.bus.stats.writes_unmapped,

@@ -1,16 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { globalEmu, MetricsSnapshot } from '../../emulatorWasm';
+import { emuCore } from '../../emulatorCoreSingleton';
+import type { MetricsSnapshot, EmulatorBackend } from '../../emulatorCore';
+import { persistPreference, readPreference } from '../../emulatorFactory';
 
 export const OutputPanel: React.FC = () => {
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [regs, setRegs] = useState<any>(null);
   const [auto, setAuto] = useState(true);
+  const [backend, setBackend] = useState<EmulatorBackend>(()=>readPreference());
   const timerRef = useRef<number|null>(null);
 
   const fetchStats = () => {
     try {
-      const m = globalEmu.metrics();
-      const r = globalEmu.registers();
+  const m = emuCore.metrics();
+  const r = emuCore.registers();
       if (m) setMetrics(m);
       if (r) setRegs(r);
     } catch {/* ignore until wasm loaded */}
@@ -34,6 +37,16 @@ export const OutputPanel: React.FC = () => {
       <div style={{padding:'4px 8px', borderBottom:'1px solid #333', display:'flex', alignItems:'center', gap:12}}>
         <strong>Emulator Metrics</strong>
         <button onClick={fetchStats} style={btnStyle}>Refresh</button>
+        <label style={{display:'flex', alignItems:'center', gap:4}} title='Backend del núcleo emulador (requiere recarga)'>Backend
+          <select value={backend} onChange={e=>{
+            const b = e.target.value as EmulatorBackend; setBackend(b); persistPreference(b);
+            // Forzar recarga tras cambio para reinstanciar singleton con nuevo backend
+            setTimeout(()=>{ location.reload(); }, 120);
+          }} style={{background:'#111', color:'#ddd', border:'1px solid #333', fontSize:11}}>
+            <option value='rust'>rust</option>
+            <option value='jsvecx'>jsvecx</option>
+          </select>
+        </label>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={auto} onChange={e=>setAuto(e.target.checked)} /> Auto
         </label>

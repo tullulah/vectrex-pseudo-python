@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { globalEmu } from '../../emulatorWasm';
+import { emuCore } from '../../emulatorCoreSingleton';
 
 interface TraceRow { pc:number; op:number; sub:number; hex:string; m:string; a:number; b:number; x:number; y:number; u:number; s:number; dp:number; operand?:string|null; repeat?:number; flags?:number; cycles?:number; illegal?:boolean; }
 
@@ -9,17 +9,17 @@ export const TracePanel: React.FC = () => {
   const [limit, setLimit] = useState(10000);
 
   const refresh = useCallback(()=>{
-    const list = globalEmu.traceLog();
+  const list = emuCore.traceLog ? emuCore.traceLog() : [];
     setRows(list);
   },[]);
 
   const startCapture = () => {
-    globalEmu.clearTrace();
-    globalEmu.enableTraceCapture(true, limit);
+  emuCore.clearTrace?.();
+  emuCore.enableTraceCapture?.(true, limit);
     setCapturing(true);
   };
-  const stopCapture = () => { globalEmu.enableTraceCapture(false, limit); setCapturing(false); refresh(); };
-  const clear = () => { globalEmu.clearTrace(); refresh(); };
+  const stopCapture = () => { emuCore.enableTraceCapture?.(false, limit); setCapturing(false); refresh(); };
+  const clear = () => { emuCore.clearTrace?.(); refresh(); };
 
   useEffect(()=>{ refresh(); },[refresh]);
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { globalEmu } from '../../emulatorWasm';
+import { emuCore } from '../../emulatorCoreSingleton';
 
 interface Region { name:string; start:number; end:number; }
 
@@ -38,7 +38,7 @@ export const MemoryPanel: React.FC = () => {
   const [ts, setTs] = useState<number>(0);
 
   const refresh = useCallback(() => {
-    const snap = globalEmu.snapshotMemory();
+  const snap = emuCore.snapshotMemory ? emuCore.snapshotMemory() : new Uint8Array();
     if (snap.length !== 65536) {
       setText('[memory] Snapshot failed or emulator not initialized.');
       return;
@@ -61,7 +61,7 @@ export const MemoryPanel: React.FC = () => {
     URL.revokeObjectURL(url);
   };
   const saveBin = () => {
-    const data = globalEmu.snapshotMemory();
+  const data = emuCore.snapshotMemory ? emuCore.snapshotMemory() : new Uint8Array();
     // Use a copy of the underlying ArrayBuffer to satisfy BlobPart typing across environments
   const copy = new Uint8Array(data.length);
   copy.set(data);

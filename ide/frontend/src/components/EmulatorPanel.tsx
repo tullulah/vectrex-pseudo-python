@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { globalEmu, VectorEvent, Segment } from '../emulatorWasm';
+import { emuCore } from '../emulatorCoreSingleton';
+import type { Segment } from '../emulatorCore';
+// VectorEvent mínimo para compatibilidad rápida
+type VectorEvent = { kind:string; pc:number };
 import { useEmulatorStore } from '../state/emulatorStore';
 
 export const EmulatorPanel: React.FC = () => {
@@ -49,7 +52,7 @@ export const EmulatorPanel: React.FC = () => {
     ctx.fillStyle = '#0f0';
     ctx.font = `${12 * (window.devicePixelRatio||1)}px monospace`;
     ctx.textAlign = 'center';
-    if (!globalEmu.isBiosLoaded()) {
+  if (!emuCore.isBiosLoaded()) {
       ctx.fillText('BIOS missing', centerX, centerY - 10);
       ctx.fillText('Place bios.bin in /ide/frontend/public', centerX, centerY + 10);
     } else if (!total) {
@@ -83,7 +86,7 @@ export const EmulatorPanel: React.FC = () => {
       ctx.font = '12px monospace';
       ctx.textAlign = 'center';
       const centerX = WIDTH/2, centerY = HEIGHT/2;
-      if (!globalEmu.isBiosLoaded()) {
+  if (!emuCore.isBiosLoaded()) {
         ctx.fillText('BIOS missing', centerX, centerY - 10);
         ctx.fillText('Place bios.bin in /ide/frontend/public', centerX, centerY + 10);
       } else {
@@ -114,9 +117,9 @@ export const EmulatorPanel: React.FC = () => {
 
   const animationLoop = useCallback(() => {
     if (status !== 'running') return; // paused/stopped halts loop
-    globalEmu.runFrame();
-    const regs = globalEmu.registers();
-    const m = globalEmu.metrics();
+  emuCore.runFrame();
+  const regs = emuCore.registers();
+  const m = emuCore.metrics();
     if (m) {
       // Prefer authoritative cycle_frame (timing counter) if present; fallback to registers.frame_count
       const cf = (m as any).cycle_frame as number | undefined;
@@ -129,7 +132,7 @@ export const EmulatorPanel: React.FC = () => {
       if ((regs as any).bios_frame && biosFrame === 0) setBiosFrame((regs as any).bios_frame);
       if ((regs as any).cycle_frame && cycleFrame === 0) setCycleFrame((regs as any).cycle_frame);
     }
-    const metrics = globalEmu.metrics();
+  const metrics = emuCore.metrics();
     if (metrics) {
       const t1 = (metrics as any).via_t1;
       const ifr = (metrics as any).via_ifr;
@@ -141,17 +144,17 @@ export const EmulatorPanel: React.FC = () => {
       }
     }
     // Prefer shared memory segment export; fallback to JSON drain if unavailable
-    let segs = globalEmu.getSegmentsShared();
+  let segs = emuCore.getSegmentsShared();
     if (!segs.length) {
       // try drain JSON once per frame
-      segs = globalEmu.drainSegmentsJson();
+  segs = emuCore.drainSegmentsJson ? emuCore.drainSegmentsJson() : segs;
     }
     if (segs.length) {
       setSegmentsCount(segs.length);
       setLastSegments(segs);
     }
     if (showLoopWatch) {
-      const lw = globalEmu.loopWatch();
+  const lw = emuCore.loopWatch ? emuCore.loopWatch() : [];
       if (lw.length) setLoopSamples(lw);
     }
     drawSegments(segs.length ? segs : lastSegments);
@@ -162,17 +165,17 @@ export const EmulatorPanel: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (globalEmu.registers()) return; // already initialized
+  if (emuCore.registers()) return; // already initialized
       try {
-        await globalEmu.init();
+  await emuCore.init();
         const biosPaths = ['bios.bin','/bios.bin','/core/src/bios/bios.bin'];
         for (const p of biosPaths) {
-          if (globalEmu.isBiosLoaded()) break;
+          if (emuCore.isBiosLoaded()) break;
           try {
             const resp = await fetch(p);
             if (resp.ok) {
               const buf = new Uint8Array(await resp.arrayBuffer());
-              globalEmu.loadBios(buf);
+              emuCore.loadBios(buf);
               break;
             }
           } catch {/*ignore*/}
@@ -202,7 +205,7 @@ export const EmulatorPanel: React.FC = () => {
 
   const onPlay = () => setStatus('running');
   const onPause = () => setStatus('stopped');
-  const onReset = () => { globalEmu.reset(); setFrameCount(0); setVecEvents([]); lastVecEventsRef.current = []; drawVectors([]); };
+  const onReset = () => { emuCore.reset(); setFrameCount(0); setVecEvents([]); lastVecEventsRef.current = []; drawVectors([]); };
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', padding:8, boxSizing:'border-box', fontFamily:'monospace', fontSize:12}}>
@@ -211,14 +214,14 @@ export const EmulatorPanel: React.FC = () => {
         <span>Frames: {frameCount}</span>
   <span>BIOS frames: {biosFrame}</span>
   <span>(legacy count: {frameCount})</span>
-        {cycleFrame===0 && globalEmu.isBiosLoaded() &&
+  {cycleFrame===0 && emuCore.isBiosLoaded() &&
           <span style={{color:'#fa0'}}>No frame boundary reached yet (check WAIT_RECAL instrumentation)</span>}
-        {!globalEmu.isBiosLoaded() &&
+  {!emuCore.isBiosLoaded() &&
           <span style={{color:'#f55'}}>BIOS not loaded (place bios.bin in /ide/frontend/public)</span>}
         <span>Last events: {vecEvents.length}</span>
-        <span>PC: {(() => { const r=globalEmu.registers(); return r? r.pc.toString(16):'--'; })()}</span>
-        <span>Cycles: {(() => { const r=globalEmu.registers(); return r? r.cycles:'--'; })()}</span>
-        <span>Bios: {globalEmu.isBiosLoaded() ? 'loaded' : 'missing'}</span>
+  <span>PC: {(() => { const r=emuCore.registers(); return r? r.pc.toString(16):'--'; })()}</span>
+  <span>Cycles: {(() => { const r=emuCore.registers(); return r? r.cycles:'--'; })()}</span>
+  <span>Bios: {emuCore.isBiosLoaded() ? 'loaded' : 'missing'}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={showLoopWatch} onChange={e=> setShowLoopWatch(e.target.checked)} /> loop watch
         </label>

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { globalEmu, VectorEvent, Segment } from '../../emulatorWasm';
+import { VectorEvent, Segment } from '../../emulatorCore';
+import { emuCore } from '../../emulatorCoreSingleton';
 // @ts-ignore import binary asset (Vite will turn into URL)
 import biosUrl from '../../assets/bios.bin';
 import { inputManager } from '../../inputManager';
 import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
+
+// emuCore singleton importado (sustituye createEmulatorCore inline)
 
 export const EmulatorPanel: React.FC = () => {
   const status = useEmulatorStore(s => s.status);
@@ -55,7 +58,7 @@ export const EmulatorPanel: React.FC = () => {
     if (!segments.length) {
       ctx.fillStyle = '#0f0'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
       const cx = WIDTH/2, cy = HEIGHT/2;
-      if (!globalEmu.isBiosLoaded()) { ctx.fillText('Loading BIOS...', cx, cy); }
+  if (!emuCore.isBiosLoaded()) { ctx.fillText('Loading BIOS...', cx, cy); }
       else { ctx.fillText('No segments yet', cx, cy); }
       ctx.restore(); return;
     }
@@ -131,50 +134,40 @@ export const EmulatorPanel: React.FC = () => {
     // Update input state before running frame
     try {
       const snap = inputManager.update();
-      const emuSvc: any = (globalEmu as any);
-      if (emuSvc && typeof emuSvc.setInput === 'function') {
-        emuSvc.setInput(snap.x, snap.y, snap.buttons);
-      } else {
-        // Fallback: legacy direct wasm export access
-        const direct = (emuSvc?.emu) || (window as any).emu;
-        if (direct && typeof direct.set_input_state === 'function') {
-          direct.set_input_state(snap.x, snap.y, snap.buttons);
-        }
-      }
+      emuCore.setInput?.(snap.x, snap.y, snap.buttons);
     } catch(e){ /* non-fatal */ }
-  // Throttle: limit instructions per visual frame to approximate target CPU rate
-  globalEmu.runFrame(instrBudget | 0);
-    const regs = globalEmu.registers(); const m = globalEmu.metrics();
-  if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
+    emuCore.runFrame(instrBudget | 0);
+    const regs = emuCore.registers(); const m = emuCore.metrics();
+    if (m) { const cf=(m as any).cycle_frame as number|undefined; const bf=(m as any).bios_frame as number|undefined; if (typeof cf==='number'){ setCycleFrame(cf); if (cf>frameCount) setFrameCount(cf);} if (typeof bf==='number') setBiosFrame(bf);} 
     if (regs) { if (!m) setFrameCount(regs.frame_count); if ((regs as any).bios_frame && biosFrame===0) setBiosFrame((regs as any).bios_frame); if ((regs as any).cycle_frame && cycleFrame===0) setCycleFrame((regs as any).cycle_frame); }
-    const metrics = globalEmu.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
-    let segs = globalEmu.getSegmentsShared();
+    const metrics = emuCore.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
+    let segs = emuCore.getSegmentsShared();
     if (!segs.length) {
       if (traceVectors) console.debug('[panel] shared empty -> drain json/peek');
-      segs = holdSegments ? globalEmu.peekSegmentsJson() : globalEmu.drainSegmentsJson();
+  segs = holdSegments ? (emuCore.peekSegmentsJson?.() || []) : (emuCore.drainSegmentsJson?.() || []);
       // Fallback 1: si métricas dicen que existen segmentos acumulados (total >0) pero ambos métodos vacíos, intentar peek.
       if (!segs.length) {
-        const mm:any = metrics || globalEmu.metrics();
+  const mm:any = metrics || emuCore.metrics();
         if (mm && typeof mm.integrator_total_segments === 'number' && mm.integrator_total_segments > 0) {
           if (traceVectors) console.debug('[panel] metrics report segments total >0; trying peekSegmentsJson');
-          segs = globalEmu.peekSegmentsJson();
+          segs = emuCore.peekSegmentsJson?.() || [];
         }
       }
       // Fallback 2: si seguimos sin nada y auto-demo debería haberse generado, invocar demoTriangle manual.
       if (!segs.length) {
-        const anyEmu:any = (globalEmu as any).emu || (window as any).emu;
+  const anyEmu:any = (emuCore as any).raw || (window as any).emu;
         try {
           const autoDemo = anyEmu?.auto_demo_enabled ? anyEmu.auto_demo_enabled() : true;
           if (autoDemo) {
             if (traceVectors) console.debug('[panel] invoking demo_triangle manual fallback');
-            globalEmu.demoTriangle();
-            segs = globalEmu.peekSegmentsJson();
+            emuCore.demoTriangle?.();
+            segs = emuCore.peekSegmentsJson?.() || [];
           }
         } catch {/* ignore */}
       }
     }
     if (traceVectors) console.debug('[panel] segments fetched count=', segs.length);
-    if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=globalEmu.loopWatch(); if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
+  if (segs.length){ setSegmentsCount(segs.length); setLastSegments(segs);} if (showLoopWatch){ const lw=emuCore.loopWatch?.() || []; if (lw.length) setLoopSamples(lw);} drawSegments(segs.length?segs:lastSegments); rafRef.current=requestAnimationFrame(animationLoop);
   }, [status, showLoopWatch, lastSegments, demoMode, frameCount, biosFrame, cycleFrame, traceVectors, instrBudget]);
 
   // Inline small control rendering helpers (inserción tardía para no reordenar demasiado código existente)
@@ -186,7 +179,7 @@ export const EmulatorPanel: React.FC = () => {
   );
 
   // Init
-  useEffect(()=>{ let cancelled=false; (async()=>{ try { await globalEmu.init(); await (globalEmu as any).ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); } catch(e){ console.error('Emulator init/BIOS load failed', e); } if (!cancelled){ setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line
+  useEffect(()=>{ let cancelled=false; (async()=>{ try { await emuCore.init(); await emuCore.ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); } catch(e){ console.error('Emulator init/BIOS load failed', e); } if (!cancelled){ setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line
 
   // (listener moved below utility declarations)
 
@@ -201,12 +194,12 @@ export const EmulatorPanel: React.FC = () => {
       // Up to 6 attempts (~6 * 120ms) to allow wasm init & segment generation
       for (let i=0;i<6 && !cancelled;i++) {
         // Wait for emulator initialization
-        if (!globalEmu.registers()) {
+  if (!emuCore.registers()) {
           await new Promise(r=>setTimeout(r, 120));
           continue;
         }
         try {
-          const segs = globalEmu.demoTriangle();
+          const segs = emuCore.demoTriangle?.() || [];
           if (segs.length) {
             setLastSegments(segs);
             drawSegments(segs);
@@ -239,7 +232,7 @@ export const EmulatorPanel: React.FC = () => {
   }, [demoMode]);
 
   const performFullReset = () => {
-    globalEmu.reset();
+  emuCore.reset();
     setFrameCount(0); setBiosFrame(0); setCycleFrame(0); setVecEvents([]); lastVecEventsRef.current=[]; setViaMetrics(null); setLoopSamples([]); setSegmentsCount(0); setLastSegments([]);
   };
   const onPlay = () => setStatus('running');
@@ -313,7 +306,7 @@ export const EmulatorPanel: React.FC = () => {
         const bytes = Uint8Array.from(atob(payload.base64), c=>c.charCodeAt(0));
         let base = parseBase();
         base = enforceBaseForHeader(bytes, base);
-        globalEmu.loadProgram(bytes, base);
+  emuCore.loadProgram(bytes, base);
         saveLastBin({ path: payload.binPath, size: bytes.length, base, bytes });
         performFullReset();
         setStatus('running');
@@ -381,7 +374,7 @@ export const EmulatorPanel: React.FC = () => {
               const bytes = Uint8Array.from(atob(binRes.base64), c=>c.charCodeAt(0));
               let base = parseBase();
               base = enforceBaseForHeader(bytes, base);
-              globalEmu.loadProgram(bytes, base);
+              emuCore.loadProgram(bytes, base);
               saveLastBin({ path: binGuess, size: bytes.length, base, bytes });
               pushToast('Loaded '+binGuess);
             } else {
@@ -394,7 +387,7 @@ export const EmulatorPanel: React.FC = () => {
               const buf=new Uint8Array(await resp.arrayBuffer());
               let base = parseBase();
               base = enforceBaseForHeader(buf, base);
-              globalEmu.loadProgram(buf, base);
+              emuCore.loadProgram(buf, base);
               saveLastBin({ path:binGuess, size:buf.length, base, bytes:buf });
               pushToast('Loaded '+binGuess);
             }
@@ -411,7 +404,7 @@ export const EmulatorPanel: React.FC = () => {
         const bytes = Uint8Array.from(atob(assembleRes.base64), c=>c.charCodeAt(0));
   let base = parseBase();
   base = enforceBaseForHeader(bytes, base);
-  globalEmu.loadProgram(bytes, base);
+  emuCore.loadProgram(bytes, base);
   saveLastBin({ path: normalized, size: bytes.length, base, bytes });
         pushToast('Assembled & loaded');
       } else {
@@ -423,7 +416,7 @@ export const EmulatorPanel: React.FC = () => {
     } catch(e){ console.error('Build pipeline failed', e); setStatus('stopped'); }
   };
   // (Replaced by performFullReset / onReset earlier)
-  const onClearStats = () => { (globalEmu as any).resetStats?.(); };
+  const onClearStats = () => { (emuCore as any).resetStats?.(); };
 
   // Manual load of arbitrary .bin cartridge (always mapped at 0x0000 now)
   const onLoadBin = async () => {
@@ -435,7 +428,7 @@ export const EmulatorPanel: React.FC = () => {
         const bytes = Uint8Array.from(atob(res.base64), c=>c.charCodeAt(0));
   let base = parseBase();
   base = enforceBaseForHeader(bytes, base);
-  globalEmu.loadProgram(bytes, base);
+  emuCore.loadProgram(bytes, base);
   performFullReset();
   saveLastBin({ path: res.path, size: bytes.length, base, bytes });
         pushToast('Loaded '+(res.path||'binary'));
@@ -452,7 +445,7 @@ export const EmulatorPanel: React.FC = () => {
           const arr = new Uint8Array(reader.result as ArrayBuffer);
           let base = parseBase();
           base = enforceBaseForHeader(arr, base);
-          globalEmu.loadProgram(arr, base);
+          emuCore.loadProgram(arr, base);
           performFullReset();
           saveLastBin({ size: arr.length, base, bytes:arr });
           pushToast('Loaded file');
@@ -466,26 +459,29 @@ export const EmulatorPanel: React.FC = () => {
 
   const onQuickReload = () => {
     if (!lastBinInfo?.bytes) { pushToast('No previous binary','error'); return; }
-    globalEmu.loadProgram(lastBinInfo.bytes, lastBinInfo.base);
+  emuCore.loadProgram(lastBinInfo.bytes, lastBinInfo.base);
     performFullReset();
     setStatus('running');
     pushToast('Reloaded last binary');
   };
 
   // Apply trace flag to emulator service
-  useEffect(() => { (globalEmu as any).enableTrace?.(traceVectors); try { localStorage.setItem('emu_trace_vectors', traceVectors?'1':'0'); } catch {} }, [traceVectors]);
+  useEffect(() => { (emuCore as any).enableTraceCapture?.(traceVectors); try { localStorage.setItem('emu_trace_vectors', traceVectors?'1':'0'); } catch {} }, [traceVectors]);
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', padding:8, boxSizing:'border-box', fontFamily:'monospace', fontSize:12}}>
       <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
         {(() => { const statusColor = status==='running' ? '#0f0' : status==='paused' ? '#fa0' : '#f55'; return (<span>Status: <span style={{color:statusColor}}>{status}</span></span>); })()}
-        <span style={{fontSize:11, padding:'2px 6px', borderRadius:4, background: globalEmu.isBiosLoaded()? '#1d4d1d':'#4d1d1d', color:'#eee'}}>BIOS {globalEmu.isBiosLoaded()? 'OK':'…'}</span>
+  <span style={{fontSize:11, padding:'2px 6px', borderRadius:4, background: emuCore.isBiosLoaded()? '#1d4d1d':'#4d1d1d', color:'#eee'}}>BIOS {emuCore.isBiosLoaded()? 'OK':'…'}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>Base
           <input value={baseAddrHex} onChange={e=> setBaseAddrHex(e.target.value.toUpperCase())} style={{width:60, background:'#111', color:'#ccc', border:'1px solid #333', fontSize:11, padding:'1px 4px'}} />
         </label>
   {lastBinInfo && <span style={{opacity:0.7}}>Last: {(lastBinInfo.path? lastBinInfo.path.split(/[\\\/]/).pop(): 'binary')} @ {'0x'+lastBinInfo.base.toString(16).toUpperCase()} ({lastBinInfo.size}B)</span>}
   {activeDoc && <span style={{opacity:0.6}}>Active: {activeDoc.diskPath ? activeDoc.diskPath : activeDoc.uri}</span>}
-        <span>Frames: {frameCount}</span>
+  {/* Legacy frame counter (cycle_frame). Keep for comparison but de-emphasize. */}
+  <span style={{opacity:0.6}}>Frames(legacy): {frameCount}</span>
+  {/* Prominent BIOS frame counter (authoritative) */}
+  <span style={{fontWeight:'bold', color:'#8f8'}}>BIOS Frame: {biosFrame}</span>
         {sourceList.length>0 && (
           <label style={{display:'flex', alignItems:'center', gap:4}}>Source
             <select value={selectedSource} onChange={e=> setSelectedSource(e.target.value)} style={{background:'#111', color:'#ccc', border:'1px solid #333', fontSize:11}}>
@@ -493,10 +489,9 @@ export const EmulatorPanel: React.FC = () => {
             </select>
           </label>
         )}
-        <span>BIOS frames: {biosFrame}</span>
-        <span>(legacy count: {frameCount})</span>
-        {cycleFrame===0 && globalEmu.isBiosLoaded() && <span style={{color:'#fa0'}}>No frame boundary yet (WAIT_RECAL?)</span>}
-        {!globalEmu.isBiosLoaded() && <span style={{color:'#f55'}}>BIOS not loaded</span>}
+  {/* Removed duplicate BIOS frames line; consolidated above */}
+  {cycleFrame===0 && emuCore.isBiosLoaded() && <span style={{color:'#fa0'}}>No frame boundary yet (WAIT_RECAL?)</span>}
+  {!emuCore.isBiosLoaded() && <span style={{color:'#f55'}}>BIOS not loaded</span>}
         <span>Segments(last frame): {segmentsCount}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={showLoopWatch} onChange={e=> setShowLoopWatch(e.target.checked)} /> loop watch
@@ -560,7 +555,7 @@ export const EmulatorPanel: React.FC = () => {
           )}
           <div style={statBox}>
             <div style={statTitle}>Hot 0x00 / 0xFF PCs</div>
-            {(() => { const m:any = globalEmu.metrics(); if (!m) return <div style={{opacity:0.5}}>(no metrics)</div>; const h00=(m.hot00||[]) as [number,number][]; const hff=(m.hotff||[]) as [number,number][]; if (!h00.length && !hff.length) return <div style={{opacity:0.5}}>(none)</div>; return (
+            {(() => { const m:any = emuCore.metrics(); if (!m) return <div style={{opacity:0.5}}>(no metrics)</div>; const h00=(m.hot00||[]) as [number,number][]; const hff=(m.hotff||[]) as [number,number][]; if (!h00.length && !hff.length) return <div style={{opacity:0.5}}>(none)</div>; return (
               <div style={{display:'flex', gap:12}}>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:'bold', color:'#ccc'}}>0x00</div>

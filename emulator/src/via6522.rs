@@ -42,6 +42,7 @@ impl Via6522 {
                     if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
                         eprintln!("[IRQ_TRACE][VIA] READ T1C-L -> {:02X} (clear IFR6)", val);
                     }
+                    if std::env::var("VIA_T1_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][T1 read] T1C-L={:02X} (clear IFR6)", val); }
                 }
                 val
             }
@@ -80,12 +81,17 @@ impl Via6522 {
             0x05 => { // T1 high latch/load
                 let lo = self.regs[0x04] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t1_latch = full; self.t1_counter = full; self.regs[0x0D] &= !0x40; self.regs[0x05] = val; self.recompute_irq();
                 if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] LOAD T1 full={:#06X} (clear IFR6)", full); }
+                if std::env::var("VIA_T1_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][T1 load] value={:#06X}", full); }
             }
             0x08 => { self.regs[0x08] = val; } // T2 low (no latch action yet until high written)
             0x09 => { // T2 high latch/load
                 let lo = self.regs[0x08] as u16; let hi = val as u16; let full = (hi << 8) | lo; self.t2_latch = full; self.t2_counter = full; self.regs[0x0D] &= !0x20; self.regs[0x09] = val; self.recompute_irq();
                 if std::env::var("VIA_T2_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][T2 load] value={:#06X}", full); }
                 if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { eprintln!("[IRQ_TRACE][VIA] LOAD T2 full={:#06X} (clear IFR5)", full); }
+            }
+            0x0B => { // ACR write
+                self.regs[0x0B] = val;
+                if std::env::var("VIA_T1_TRACE").ok().as_deref()==Some("1") { eprintln!("[VIA][ACR write] ACR={:02X} cont={} pb7={}", val, (val & 0x40)!=0, (val & 0x80)!=0); }
             }
             0x0A => { // Shift register write
                 self.regs[0x0A] = val; let acr = self.regs[0x0B]; let mode = (acr >> 2) & 0x07; if mode == 0b100 { self.shifting = true; self.sr_bits_remaining = 8; self.regs[0x0D] &= !0x10; self.recompute_irq(); }

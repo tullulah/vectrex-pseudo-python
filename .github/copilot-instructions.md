@@ -4,7 +4,10 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 
 ## 1. BIOS Usage
 - Nunca generar BIOS sintética en tests ni código de ejemplo.
-- Usar siempre la BIOS real en: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\ide\frontend\dist\bios.bin`.
+- Rutas válidas (mantenidas en sincronía, preferir la de assets para futuras referencias):
+	- Primaria (assets): `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\ide\frontend\src\assets\bios.bin`
+	- Legacy (dist empaquetado actual): `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\ide\frontend\dist\bios.bin`
+	(Si divergen, actualizar ambas o unificar mediante script de build.)
 - Si se necesita ruta en WASM/frontend, exponer una única función helper (pending) o documentar claramente.
 
 ## 2. Call Stack / BIOS Tracing

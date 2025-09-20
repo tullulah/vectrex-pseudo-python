@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { globalEmu } from '../../emulatorWasm';
+import { emuCore } from '../../emulatorCoreSingleton';
 
 // Simple panel to display BIOS call stack (recent calls) fetched from wasm.
 // Non-intrusive, polls only on manual refresh to avoid overhead.
@@ -11,7 +11,7 @@ export const BiosCallsPanel: React.FC = () => {
   const [intervalMs, setIntervalMs] = useState<number>(1000);
 
   const refresh = useCallback(()=>{
-    try { setCalls(globalEmu.biosCalls()); setTs(Date.now()); } catch { /* ignore */ }
+  try { setCalls(emuCore.biosCalls ? emuCore.biosCalls() : []); setTs(Date.now()); } catch { /* ignore */ }
   },[]);
 
   useEffect(()=>{ refresh(); },[refresh]);
@@ -20,7 +20,7 @@ export const BiosCallsPanel: React.FC = () => {
     if(!auto) return; const id = setInterval(()=>refresh(), intervalMs); return ()=>clearInterval(id);
   },[auto, intervalMs, refresh]);
 
-  const clear = () => { globalEmu.clearBiosCalls(); refresh(); };
+  const clear = () => { emuCore.clearBiosCalls?.(); refresh(); };
 
   return (
     <div style={{display:'flex',flexDirection:'column',height:'100%',fontFamily:'monospace'}}>

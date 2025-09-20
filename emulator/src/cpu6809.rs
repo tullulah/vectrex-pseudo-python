@@ -103,6 +103,8 @@ pub struct CPU {
     pub integrator_last_frame_segments: u32,
     pub integrator_max_frame_segments: u32,
     pub integrator_total_segments: u64,
+    // Real counter of Draw_VL / Draw_VLc invocations decoded early (for UI metric)
+    pub draw_vl_count: u64,
     // Cartridge validation & diagnostics
     pub cart_valid: bool,
     pub cart_title: [u8;16],
@@ -116,6 +118,11 @@ pub struct CPU {
     pub lines_per_frame_samples: u64,
     // Trace helpers
     pub bios_handoff_logged: bool, // evita duplicar [BIOS->CART]
+    // Timing de frames: ciclos en los que retornó Wait_Recal (para medir duración entre frames reales)
+    pub prev_wait_recal_return_cycle: Option<u64>,
+    pub last_wait_recal_return_cycle: Option<u64>,
+    // Contador de expiraciones de T2 (para tests y métricas de cadencia)
+    pub t2_expirations_count: u64,
     // Temporary staging buffer for WASM shared memory segment export
     pub temp_segments_c: Vec<crate::integrator::BeamSegmentC>,
     // Last synthetic extended (prefix) coverage gaps captured by recompute_opcode_coverage
@@ -197,7 +204,8 @@ impl Default for CPU { fn default()->Self {
         integrator_auto_drain: false,
         integrator_last_frame_segments: 0,
         integrator_max_frame_segments: 0,
-        integrator_total_segments: 0,
+    integrator_total_segments: 0,
+    draw_vl_count: 0,
         cart_valid:false, cart_title:[0;16], cart_validation_done:false,
         firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
         temp_segments_c: Vec::new(),
@@ -210,6 +218,9 @@ impl Default for CPU { fn default()->Self {
         via_writes: Vec::with_capacity(256), via_writes_cap: 1024,
     logged_set_refresh_pre: false,
     t2_last_low: None,
+    prev_wait_recal_return_cycle: None,
+    last_wait_recal_return_cycle: None,
+    t2_expirations_count: 0,
     }
 } }
 
@@ -269,6 +280,7 @@ impl CPU {
         self.integrator_last_frame_segments = 0;
         self.integrator_max_frame_segments = 0;
         self.integrator_total_segments = 0;
+    self.draw_vl_count = 0;
         self.irq_count = 0; self.firq_count = 0;
         self.t1_expiries = 0; self.t2_expiries = 0;
         self.lines_per_frame_accum = 0; self.lines_per_frame_samples = 0;
@@ -299,7 +311,7 @@ impl CPU {
             loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
             wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
             jsr_log:[0;128], jsr_log_len:0, enable_irq_frame_fallback:false, irq_frames_generated:0, last_irq_frame_cycles:0,
-            integrator: Integrator::new(), integrator_auto_drain:false, integrator_last_frame_segments:0, integrator_max_frame_segments:0, integrator_total_segments:0,
+            integrator: Integrator::new(), integrator_auto_drain:false, integrator_last_frame_segments:0, integrator_max_frame_segments:0, integrator_total_segments:0, draw_vl_count:0,
             cart_valid:false, cart_title:[0;16], cart_validation_done:false,
             firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
             temp_segments_c: Vec::new(),
@@ -310,6 +322,9 @@ impl CPU {
             via_writes: Vec::new(), via_writes_cap: 1024,
             logged_set_refresh_pre: false,
             t2_last_low: None,
+            prev_wait_recal_return_cycle: None,
+            last_wait_recal_return_cycle: None,
+            t2_expirations_count: 0,
             #[cfg(test)] last_return_expect: None,
         }
     }
@@ -631,7 +646,20 @@ impl CPU {
         // Side-effect housekeeping for specific well-known routines
         if addr == 0xF192 { // Wait_Recal
             self.wait_recal_calls = self.wait_recal_calls.wrapping_add(1);
-            if self.wait_recal_depth.is_none() { self.wait_recal_depth = Some(self.call_stack.len()); }
+            if self.wait_recal_depth.is_none() {
+                // BUG histórico (corregido 2025-09-20): guardábamos la profundidad EXACTA tras el push del frame
+                // de la BIOS (JSR ya hizo push16 + call_stack.push). Al hacer RTS el pop reduce la longitud en 1,
+                // haciendo imposible la condición (depth_before == d && len == d). Solución: almacenar la
+                // profundidad "base" (antes de la llamada) = len-1, y simplificar la condición de incremento a
+                // (call_stack.len() == stored_depth) tras el RTS/RTI. Esto alinea el incremento con el retorno
+                // efectivo de Wait_Recal.
+                let len = self.call_stack.len();
+                let base_depth = if len>0 { len-1 } else { 0 }; // len==0 solo en escenarios anómalos
+                self.wait_recal_depth = Some(base_depth);
+                if std::env::var("TRACE_WAIT_DEPTH").ok().as_deref()==Some("1") {
+                    println!("[WAIT_DEPTH][enter] calls={} call_stack_len={} stored_base={} top_ret={:04X}", self.wait_recal_calls, len, base_depth, self.call_stack.last().copied().unwrap_or(0));
+                }
+            }
         }
         // Direct Page management routines: en modo estricto ya NO aplicamos efectos
         // anticipados. El DP solo cambia cuando la BIOS ejecuta TFR A,DP real.
@@ -649,6 +677,7 @@ impl CPU {
         //  - Draw_VL ($F3DD): pairs until dy has bit7 set (end flag); high bit stripped from dy
         //  - Other variants (a,b,ab,cs, etc.) currently fall back to just labeling; TODO incremental support
         if addr == 0xF3DD || addr == 0xF3CE {
+            self.draw_vl_count = self.draw_vl_count.wrapping_add(1);
             // Correct early decode path using X as list pointer (BIOS uses X, not U).
             // Draw_VLc (F3CE): first byte = count (N), then N (dy,dx) relative pairs.
             // Draw_VL  (F3DD): number of vectors resides in RAM $C823 (already set by preceding *_a / *_ab variants);
@@ -1185,7 +1214,13 @@ impl CPU {
             0x59 => { let r=self.rmw_rol(self.b); self.b=r; if self.trace { println!("ROLB -> {:02X}", r);} }
             0x5D => { let v=self.b; self.cc_n=(v&0x80)!=0; self.cc_z=v==0; self.cc_v=false; self.cc_c=false; if self.trace { println!("TSTB"); } }
             0x5A => { // DECB
-                let old = self.b; let res = old.wrapping_sub(1); self.b = res; self.update_nz8(res); self.cc_v = res==0x7F; if self.trace { println!("DECB -> {:02X}", res);} }
+                let old = self.b; let res = old.wrapping_sub(1); self.b = res; self.update_nz8(res); self.cc_v = res==0x7F; if self.trace { println!("DECB -> {:02X}", res);} 
+                if cfg!(not(target_arch="wasm32")) {
+                    if std::env::var("LOOP_F4EB_TRACE").ok().as_deref()==Some("1") {
+                        if self.pc==0xF4EF || self.pc==0xF4EE || self.pc==0xF4ED || self.pc==0xF4EB { println!("[F4EB_LOOP][after DECB] PC={:04X} B={:02X} Z={} N={} V={}", self.pc, self.b, self.cc_z as u8, self.cc_n as u8, self.cc_v as u8); }
+                    }
+                }
+            }
             0x5C => { // INCB
                 let old = self.b; let res = old.wrapping_add(1); self.b = res; self.update_nz8(res); self.cc_v = res==0x80; if self.trace { println!("INCB -> {:02X}", res);} }
             0x4F => { // CLRA
@@ -1211,11 +1246,13 @@ impl CPU {
             0x8D => { // BSR (relative 8)
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); let ret=self.pc; let s_before=self.s; self.push16(ret);
                 if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[BSR] ret={:04X} S_before={:04X} S_after={:04X}", ret, s_before, self.s); }
-                #[cfg(test)] { self.last_return_expect=Some(ret); } let target=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::BSR }); self.pc=target; }
+                // Unificar con JSR: también mantenemos call_stack para BSR para que la lógica de wait_recal_depth
+                // (que basa el incremento de bios_frame en la profundidad tras el pop) sea consistente.
+                self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect=Some(ret); }
+                let target=(self.pc as i32 + off as i32) as u16; if self.trace { println!("BSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::BSR }); self.pc=target; }
             0x17 => { // LBSR (relative 16)
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let off=((hi as u16)<<8)|lo as u16; let signed = off as i16; let ret=self.pc; self.push16(ret); #[cfg(test)] { self.last_return_expect=Some(ret); } let target=self.pc.wrapping_add(signed as u16); if self.trace { println!("LBSR {:04X}", target);} if target>=0xF000 && self.bios_present { self.record_bios_call(target); } self.shadow_stack.push(ShadowFrame{ ret, sp_at_push:self.s, kind: ShadowKind::LBSR }); self.pc=target; cyc=9; }
             0x39 => { // RTS
-                let depth_before = self.call_stack.len();
                 // Extraer dirección de retorno real de la pila (pop16) según convención 6809.
                 let ret = self.pop16();
                 if self.trace { println!("RTS (stack) -> {:04X}", ret); }
@@ -1237,7 +1274,24 @@ impl CPU {
                     }
                 }
                 if self.in_irq_handler { self.wai_halt=false; self.in_irq_handler=false; }
-                if let Some(d)=self.wait_recal_depth { if depth_before == d && self.call_stack.len() == d { self.bios_frame = self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
+                if let Some(d)=self.wait_recal_depth { if self.call_stack.len() == d { // retorno al nivel base de Wait_Recal
+                    self.bios_frame = self.bios_frame.wrapping_add(1);
+                    // Timing frames reales
+                    self.prev_wait_recal_return_cycle = self.last_wait_recal_return_cycle;
+                    self.last_wait_recal_return_cycle = Some(self.cycles);
+                    self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1);
+                    if self.trace || self.env_trace_frame() {
+                        if let (Some(prev), Some(last)) = (self.prev_wait_recal_return_cycle, self.last_wait_recal_return_cycle) {
+                            let delta = last - prev; println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={} delta_cycles={}", self.bios_frame, self.wait_recal_returns, delta);
+                        } else {
+                            println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={} (first)", self.bios_frame, self.wait_recal_returns);
+                        }
+                    }
+                } else {
+                    if std::env::var("TRACE_WAIT_DEPTH").ok().as_deref()==Some("1") {
+                        println!("[WAIT_DEPTH][RTS no-inc] call_stack_len={} stored_base={} top_ret={:04X}", self.call_stack.len(), d, self.call_stack.last().copied().unwrap_or(0));
+                    }
+                } }
                 if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "RTS-invalid-return"); }
             }
             0x35 => { // PULS (instrumented)
@@ -1298,7 +1352,23 @@ impl CPU {
                     // Underflow: unexpected RTI with empty shadow stack.
                     if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-rti"); }
                 }
-                if let Some(d)=self.wait_recal_depth { if self.call_stack.len()==d { self.bios_frame=self.bios_frame.wrapping_add(1); self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1); if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={}", self.bios_frame, self.wait_recal_returns); } } }
+                if let Some(d)=self.wait_recal_depth { if self.call_stack.len()==d { // retorno por RTI al nivel base
+                    self.bios_frame=self.bios_frame.wrapping_add(1);
+                    self.prev_wait_recal_return_cycle = self.last_wait_recal_return_cycle;
+                    self.last_wait_recal_return_cycle = Some(self.cycles);
+                    self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1);
+                    if self.trace || self.env_trace_frame() {
+                        if let (Some(prev), Some(last)) = (self.prev_wait_recal_return_cycle, self.last_wait_recal_return_cycle) {
+                            let delta = last - prev; println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={} delta_cycles={}", self.bios_frame, self.wait_recal_returns, delta);
+                        } else {
+                            println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={} (first)", self.bios_frame, self.wait_recal_returns);
+                        }
+                    }
+                } else {
+                    if std::env::var("TRACE_WAIT_DEPTH").ok().as_deref()==Some("1") {
+                        println!("[WAIT_DEPTH][RTI no-inc] call_stack_len={} stored_base={} top_ret={:04X}", self.call_stack.len(), d, self.call_stack.last().copied().unwrap_or(0));
+                    }
+                } }
                 if self.pc >= 0xC800 && self.pc <= 0xCFFF {
                     self.capture_ram_exec_snapshot_immediate(self.pc, "RTI-invalid-return");
                 }
@@ -1417,7 +1487,11 @@ impl CPU {
             0xDC => { // LDD direct
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16;
                 let hi=self.read8(addr); let lo=self.read8(addr.wrapping_add(1)); self.a=hi; self.b=lo; self.update_nz16(self.d());
-                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && addr==0xC83D { println!("[TRACE][LDD refresh] read C83D={:02X} C83E={:02X} full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp); }
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && addr==0xC83D {
+                    // Nota: En BIOS, C83D = byte bajo (lo) y C83E = byte alto (hi) del timer2.
+                    // Valor combinado = (hi<<8)|lo. Antes se mostraba visualmente invertido (ej: 3075) causando confusión.
+                    println!("[TRACE][LDD refresh] read C83D(lo)={:02X} C83E(hi)={:02X} full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp);
+                }
                 if self.trace { println!("LDD ${:04X}", addr);} }
             0x9E => { // LDX direct (faltaba, marcaba unimplemented)
                 let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
@@ -2045,7 +2119,10 @@ impl CPU {
         // Detect timer expiries (IFR bits 6: T1, 5: T2) and count rising events.
         let ifr = self.bus.via_ifr();
         if (ifr & 0x40)!=0 { self.t1_expiries = self.t1_expiries.wrapping_add(1); }
-        if (ifr & 0x20)!=0 { self.t2_expiries = self.t2_expiries.wrapping_add(1); }
+        if (ifr & 0x20)!=0 {
+            self.t2_expiries = self.t2_expiries.wrapping_add(1);
+            self.t2_expirations_count = self.t2_expirations_count.wrapping_add(1);
+        }
         while self.cycle_accumulator >= self.cycles_per_frame {
             self.cycle_accumulator -= self.cycles_per_frame;
             self.cycle_frame = self.cycle_frame.wrapping_add(1);
