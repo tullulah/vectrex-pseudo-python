@@ -877,3 +877,10 @@ Consideraciones futuras:
 - Exportar estos eventos en JSON (junto a `trace_log_json`) o integrarlos en el planned `bios_calls_json()` (TODO ID 13) con tipo y vector.
 - Añadir flag incremental que permita filtrar únicamente tipos específicos (`trace_int_mask`).
 
+### 32.3 Pase Semántico Básico (2025-09-20)
+Se añadió `validate_semantics` en `core/src/codegen.rs` ejecutado al inicio de `emit_asm` (antes de optimizaciones):
+- Verifica que cualquier `Expr::Ident` o target de `Assign` haya sido declarado previamente por `Let`, como parámetro de función, variable de bucle `for`, o global (`Const` / `GlobalLet`).
+- En caso de violación genera `panic!("SemanticsError: ...")` (pendiente migrar a sistema de diagnósticos estructurados no-panicking para LSP / IDE).
+- Objetivo: evitar que optimizaciones plieguen/eliminen pistas de errores de nombre no declarado.
+Futuros pasos: warning de variable no usada (S6 propuesto), validación de aridad de llamadas (M3), sistema de tipos básico (L1).
+

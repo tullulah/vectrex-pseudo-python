@@ -41,9 +41,15 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Evitar duplicación de la cadena de ruta en muchos archivos (refactor pendiente cuando aparezca el segundo uso).
 
 ## 10. Próximos TODO Prioritarios
-1. (ID 11) Comparar call stack con `bios.asm` y etiquetar direcciones faltantes (ej.: 0xF18B).  [Actualización 2025-09-20: 0xF18B mapeado como Init_OS]
-2. (ID 13) Exportar call stack vía WASM (`bios_calls_json`).
-3. (ID 5) Resumen estado compilador (análisis de `vectrex_lang` pendiente).
+Estado IDs previos:
+- (ID 11) Mapeo completo BIOS / etiquetas → COMPLETADO 2025-09-20 (incluye Init_OS y loops intro).
+- (ID 13) Export WASM `bios_calls_json()` → COMPLETADO 2025-09-19.
+- (ID 5) Resumen estado compilador (`COMPILER_STATUS.md`) → COMPLETADO 2025-09-20.
+
+Nuevos focos (short):
+S3 Verificación semántica básica variables (en progreso planificación).
+S4 Tests constant folding / dead store.
+S5 Documentar truncamiento entero 16-bit en SUPER_SUMMARY.
 
 ## 11. Seguridad / Pureza de Entorno
 - No escribir en la BIOS cargada (bus lo marca read-only); tests deben respetar esto.

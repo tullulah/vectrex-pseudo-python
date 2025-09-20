@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::target::{info, CpuArch, Target};
+use std::collections::{HashSet, HashMap};
 
 // Re-export backend emitters under stable names.
 mod backends_ref {
@@ -27,8 +28,10 @@ pub struct CodegenOptions {
 
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
-    // Run optimization pipeline; we've adjusted dead_store_elim to keep string literal
-    // assignments so literals still get collected for backend emission.
+    // Paso 1: validación semántica básica (variables declaradas / usos). Esto ocurre
+    // antes de cualquier transformación para que los mensajes reflejen código fuente.
+    validate_semantics(module);
+    // Paso 2: pipeline de optimización (dead_store_elim preserva asignaciones con literales string).
     let optimized = optimize_module(module);
     let ti = info(target);
     // If source defines CONST TITLE = "..." let it override CLI title.
@@ -64,6 +67,105 @@ fn optimize_module(m: &Module) -> Module {
     current = sw;
     }
     current
+}
+
+// ---------------- Semántica básica ----------------
+// validate_semantics: asegura que toda variable usada ha sido declarada previamente en su ámbito
+// (modelo simple: ámbitos anidados para funciones y bucles). No hace shadowing complejo; permite
+// shadowing por Let local (esto sobrescribe variable anterior). Las Const y GlobalLet son visibles
+// para todas las funciones (ya que se resolvieron en parse a este AST plano y el lenguaje actual
+// no define módulos). Las params son visibles en el cuerpo de la función.
+pub fn validate_semantics(module: &Module) {
+    // Recolectar globals declaradas (Const + GlobalLet + VectorList nombres no son variables de expr)
+    let mut globals: HashSet<String> = HashSet::new();
+    for it in &module.items {
+        match it {
+            Item::Const { name, .. } | Item::GlobalLet { name, .. } => { globals.insert(name.clone()); },
+            Item::VectorList { .. } => {},
+            Item::Function(_) => {}
+        }
+    }
+    // Validar cada función independientemente.
+    for it in &module.items {
+        if let Item::Function(func) = it {
+            validate_function(func, &globals);
+        }
+    }
+}
+
+fn validate_function(f: &Function, globals: &HashSet<String>) {
+    // ámbito inicial: globals + params
+    let mut scope: Vec<HashSet<String>> = Vec::new();
+    scope.push(globals.clone());
+    let mut param_set: HashSet<String> = HashSet::new();
+    for p in &f.params { param_set.insert(p.clone()); }
+    scope.push(param_set);
+    for stmt in &f.body { validate_stmt(stmt, &mut scope); }
+}
+
+fn push_scope(scope: &mut Vec<HashSet<String>>) { scope.push(HashSet::new()); }
+fn pop_scope(scope: &mut Vec<HashSet<String>>) { scope.pop(); }
+
+fn declare(name: &str, scope: &mut Vec<HashSet<String>>) { if let Some(top) = scope.last_mut() { top.insert(name.to_string()); } }
+
+fn is_declared(name: &str, scope: &Vec<HashSet<String>>) -> bool {
+    for s in scope.iter().rev() { if s.contains(name) { return true; } }
+    false
+}
+
+fn validate_stmt(stmt: &Stmt, scope: &mut Vec<HashSet<String>>) {
+    match stmt {
+        Stmt::Let { name, value } => { validate_expr(value, scope); declare(name, scope); }
+        Stmt::Assign { target, value } => {
+            if !is_declared(target, scope) {
+                panic!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target, target);
+            }
+            validate_expr(value, scope);
+        }
+        Stmt::For { var, start, end, step, body } => {
+            validate_expr(start, scope); validate_expr(end, scope); if let Some(se) = step { validate_expr(se, scope); }
+            push_scope(scope); // cuerpo loop con var declarada
+            declare(var, scope);
+            for s in body { validate_stmt(s, scope); }
+            pop_scope(scope);
+        }
+        Stmt::While { cond, body } => {
+            validate_expr(cond, scope);
+            push_scope(scope);
+            for s in body { validate_stmt(s, scope); }
+            pop_scope(scope);
+        }
+        Stmt::If { cond, body, elifs, else_body } => {
+            validate_expr(cond, scope);
+            push_scope(scope); for s in body { validate_stmt(s, scope); } pop_scope(scope);
+            for (ec, eb) in elifs { validate_expr(ec, scope); push_scope(scope); for s in eb { validate_stmt(s, scope); } pop_scope(scope); }
+            if let Some(eb) = else_body { push_scope(scope); for s in eb { validate_stmt(s, scope); } pop_scope(scope); }
+        }
+        Stmt::Switch { expr, cases, default } => {
+            validate_expr(expr, scope);
+            for (ce, cb) in cases { validate_expr(ce, scope); push_scope(scope); for s in cb { validate_stmt(s, scope); } pop_scope(scope); }
+            if let Some(db) = default { push_scope(scope); for s in db { validate_stmt(s, scope); } pop_scope(scope); }
+        }
+        Stmt::Expr(e) => validate_expr(e, scope),
+        Stmt::Return(o) => { if let Some(e) = o { validate_expr(e, scope); } }
+        Stmt::Break | Stmt::Continue => {}
+    }
+}
+
+fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) {
+    match e {
+        Expr::Ident(name) => {
+            if !is_declared(name, scope) {
+                panic!("SemanticsError: uso de variable no declarada '{}'.", name);
+            }
+        }
+        Expr::Call { args, .. } => { for a in args { validate_expr(a, scope); } }
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+            validate_expr(left, scope); validate_expr(right, scope);
+        }
+        Expr::Not(inner) | Expr::BitNot(inner) => validate_expr(inner, scope),
+        Expr::Number(_) | Expr::StringLit(_) => {}
+    }
 }
 
 fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } } }
@@ -445,7 +547,6 @@ fn propagate_constants(m: &Module) -> Module {
     Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
 }
 
-use std::collections::HashMap;
 
 fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<String, i32>) -> Function {
     let mut env = HashMap::<String, i32>::new();

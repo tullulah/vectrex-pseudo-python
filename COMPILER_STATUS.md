@@ -83,7 +83,7 @@ Limitaciones:
 Short (1-2 semanas):
 1. (S1) Smoke test básico – COMPLETADO 2025-09-20 (`core/tests/smoke_compile.rs`).
 2. (S2) `VECTREX_DRAW_TO` real – COMPLETADO 2025-09-20.
-3. (S3) Añadir verificación simple de variables (pendiente).
+3. (S3) Verificación simple de variables – COMPLETADO 2025-09-20 (nuevo pase `validate_semantics`).
 4. (S4) Tests constant folding (pendiente).
 5. (S5) Documentar truncamiento 16-bit también en `SUPER_SUMMARY.md` (pendiente).
 
@@ -107,9 +107,9 @@ Long (6+ semanas):
 - Cobertura tests: % de nodos AST visitados en suite (meta inicial: >60%).
 
 ## 12. Próximos Pasos Inmediatos (actualizado)
-1. S3: Verificación semántica básica de variables.
-2. S4: Tests constant folding / dead store.
-3. S5: Doc truncamiento 16-bit en `SUPER_SUMMARY.md`.
+1. S4: Tests constant folding / dead store.
+2. S5: Doc truncamiento 16-bit en `SUPER_SUMMARY.md`.
+3. S6 (propuesto): Warning variables nunca usadas (extensión de `validate_semantics`).
 
 ---
 Notas de mantenimiento: mantener este archivo actualizado cuando se cierren IDs. Añadir fecha y breve changelog al inicio.
@@ -117,3 +117,4 @@ Notas de mantenimiento: mantener este archivo actualizado cuando se cierren IDs.
 ---
 Changelog:
 - 2025-09-20: Añadido smoke test (S1) y wrapper `VECTREX_DRAW_TO` implementado (S2). Actualizada sección backend y backlog.
+- 2025-09-20: Pase semántico básico (`validate_semantics`) marca error en uso/asignación de variable no declarada (S3 completado).
