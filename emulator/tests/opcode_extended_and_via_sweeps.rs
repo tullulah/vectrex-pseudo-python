@@ -3,6 +3,7 @@
 //! 2. VIA register sweep básico: lecturas 0xD000..0xD00F no paniquean y bit7 IFR coherente.
 
 use vectrex_emulator::cpu6809::{CPU, VALID_PREFIX10, VALID_PREFIX11};
+use vectrex_emulator::ILLEGAL_BASE_OPCODES;
 use vectrex_emulator::cycle_table::{CYCLES_PREFIX10, CYCLES_PREFIX11, INVALID};
 
 #[test]
@@ -36,7 +37,9 @@ fn via_register_sweep_basic() {
     let mut cpu = CPU::default();
     // Antes de interactuar con VIA: vigilar que no haya huecos de implementación (primarios ni extendidos)
     let (_impld0, _cnt0, primary_missing0) = cpu.recompute_opcode_coverage();
-    assert!(primary_missing0.is_empty(), "Huecos primarios antes de VIA: {:?}", primary_missing0);
+    let expected_illegals: std::collections::BTreeSet<u8> = ILLEGAL_BASE_OPCODES.iter().cloned().collect();
+    let got_primary: std::collections::BTreeSet<u8> = primary_missing0.iter().cloned().collect();
+    assert_eq!(got_primary, expected_illegals, "Huecos primarios antes de VIA no coinciden con ilegales. got={:?} expected={:?}", got_primary, expected_illegals);
     assert!(cpu.extended_unimplemented_list().is_empty(), "Huecos extendidos antes de VIA: {:?}", cpu.extended_unimplemented_list());
     // Asegurar memoria limpia en ventana VIA
     for ofs in 0xD000..=0xD00F { let _ = cpu.test_read8(ofs); } // lecturas iniciales
@@ -54,6 +57,7 @@ fn via_register_sweep_basic() {
     assert_eq!(((ifr2 >> 7) & 1) != 0, (ifr2 & 0x7F) != 0, "IFR bit7 inconsistente tras pasos (0x{:02X})", ifr2);
     // Tras interacción con VIA: volver a vigilar cobertura por si algún refactor futuro modifica tablas dinámicamente
     let (_impld1, _cnt1, primary_missing1) = cpu.recompute_opcode_coverage();
-    assert!(primary_missing1.is_empty(), "Huecos primarios tras VIA: {:?}", primary_missing1);
+    let got_after: std::collections::BTreeSet<u8> = primary_missing1.iter().cloned().collect();
+    assert_eq!(got_after, expected_illegals, "Huecos primarios tras VIA cambiaron. got={:?} expected={:?}", got_after, expected_illegals);
     assert!(cpu.extended_unimplemented_list().is_empty(), "Huecos extendidos tras VIA: {:?}", cpu.extended_unimplemented_list());
 }
