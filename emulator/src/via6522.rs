@@ -10,9 +10,10 @@ pub struct Via6522 {
     pb7_state: bool,
     sr_bits_remaining: u8,
     shifting: bool,
+    cycles_since_shift: u8,
 }
 
-impl Default for Via6522 { fn default() -> Self { Self { regs:[0;16], t1_counter:0, t1_latch:0, t2_counter:0, t2_latch:0, irq_line:false, on_irq_change:None, pb7_state:false, sr_bits_remaining:0, shifting:false } } }
+impl Default for Via6522 { fn default() -> Self { Self { regs:[0;16], t1_counter:0, t1_latch:0, t2_counter:0, t2_latch:0, irq_line:false, on_irq_change:None, pb7_state:false, sr_bits_remaining:0, shifting:false, cycles_since_shift:0 } } }
 
 impl Via6522 {
     pub fn new() -> Self { Self::default() }
@@ -70,7 +71,7 @@ impl Via6522 {
         let r = (reg & 0x0F) as usize;
         
         // Debug ALL VIA writes
-        println!("🎯 VIA WRITE: reg=0x{:02X} val=0x{:02X}", reg, val);
+        // println!("🎯 VIA WRITE: reg=0x{:02X} val=0x{:02X}", reg, val);  // SILENCED FOR SPEED TEST
         
         match r {
             0x0D => { // IFR clear bits
@@ -138,60 +139,62 @@ impl Via6522 {
      * Verificado: ✓ OK - Timing critical para Mine Storm y BIOS initialization
      */
     pub fn tick(&mut self, cycles: u32){
-        // Process Timer1 cycle by cycle for precise timing (like Vectrexy)
-        let mut remaining_cycles = cycles;
-        while remaining_cycles > 0 && self.t1_counter > 0 {
-            let step = remaining_cycles.min(self.t1_counter as u32);
-            self.t1_counter -= step as u16;
-            remaining_cycles -= step;
-            if self.t1_counter == 0 {
-                self.regs[0x0D] |= 0x40; // IFR bit 6 (Timer1)
-                let acr = self.regs[0x0B];
-                let pb7_enable = (acr & 0x80) != 0;
-                let continuous = (acr & 0x40) != 0;
-                if pb7_enable { self.pb7_state = !self.pb7_state; }
-                self.recompute_irq();
-                if continuous { 
-                    self.t1_counter = self.t1_latch; 
-                } else { 
-                    break; 
-                }
-            }
-        }
-        
-        // Process Timer2 cycle by cycle for precise timing (like Vectrexy)  
-        let mut remaining_cycles = cycles;
-        while remaining_cycles > 0 && self.t2_counter > 0 {
-            let step = remaining_cycles.min(self.t2_counter as u32);
-            self.t2_counter -= step as u16;
-            remaining_cycles -= step;
-            if self.t2_counter == 0 {
-                self.regs[0x0D] |= 0x20; // IFR bit 5 (Timer2)
-                self.recompute_irq();
-                if std::env::var("VIA_T2_TRACE").ok().as_deref()==Some("1") { 
-                    eprintln!("[VIA][T2 expire] IFR5 set"); 
-                }
-                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { 
-                    eprintln!("[IRQ_TRACE][VIA] T2 EXPIRE set IFR5 (IFR={:02X} IER={:02X})", self.ifr(), self.ier()); 
-                }
-                break; // Timer2 is one-shot only
-            }
-        }
-        
-        // Optional legacy hack removed: allow BIOS to explicitly clear IFR5 by reading T2C-H
-        if self.shifting {
-            let mut bits_advance = (cycles / 8) as u8;
-            while bits_advance > 0 && self.sr_bits_remaining > 0 {
-                self.regs[0x0A] = (self.regs[0x0A] << 1) | 0x01;
-                self.sr_bits_remaining -= 1;
-                bits_advance -= 1;
-                if self.sr_bits_remaining == 0 {
-                    self.regs[0x0D] |= 0x10;
-                    self.recompute_irq();
+        // FIXED: Actualizar ciclo por ciclo como vectrexy para timing exacto
+        // Vectrexy: while (cyclesLeft-- > 0) { m_timer2.Update(1); }
+        let mut cycles_left = cycles;
+        while cycles_left > 0 {
+            // Timer1 update: 1 cycle at a time
+            if self.t1_counter > 0 {
+                self.t1_counter -= 1;
+                if self.t1_counter == 0 {
+                    self.regs[0x0D] |= 0x40; // IFR bit 6 (Timer1)
                     let acr = self.regs[0x0B];
-                    let mode = (acr >> 2) & 0x07;
-                    if mode == 0b100 { self.sr_bits_remaining = 8; break; } else { self.shifting = false; }
+                    let pb7_enable = (acr & 0x80) != 0;
+                    let continuous = (acr & 0x40) != 0;
+                    if pb7_enable { self.pb7_state = !self.pb7_state; }
+                    self.recompute_irq();
+                    if continuous { 
+                        self.t1_counter = self.t1_latch; 
+                    }
                 }
+            }
+            
+            // Timer2 update: 1 cycle at a time (critical for BIOS timing)
+            if self.t2_counter > 0 {
+                self.t2_counter -= 1;
+                if self.t2_counter == 0 {
+                    self.regs[0x0D] |= 0x20; // IFR bit 5 (Timer2)
+                    self.recompute_irq();
+                    if std::env::var("VIA_T2_TRACE").ok().as_deref()==Some("1") { 
+                        eprintln!("[VIA][T2 expire] IFR5 set"); 
+                    }
+                    if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") { 
+                        eprintln!("[IRQ_TRACE][VIA] T2 EXPIRE set IFR5 (IFR={:02X} IER={:02X})", self.ifr(), self.ier()); 
+                    }
+                    // Timer2 is one-shot, no reload
+                }
+            }
+            
+            cycles_left -= 1;
+        }
+        
+        // Shift register update: cycle-accurate (shift every 8 cycles like vectrexy)
+        if self.shifting {
+            for _ in 0..cycles {
+                // Simplificado: advance shift register cada 8 VIA cycles
+                // TODO: sincronizar con Timer2 cuando mode=4 (shift out under T2 control)  
+                if (self.cycles_since_shift + 1) % 8 == 0 && self.sr_bits_remaining > 0 {
+                    self.regs[0x0A] = (self.regs[0x0A] << 1) | 0x01;
+                    self.sr_bits_remaining -= 1;
+                    if self.sr_bits_remaining == 0 {
+                        self.regs[0x0D] |= 0x10; // IFR bit 4 (Shift Register)
+                        self.recompute_irq();
+                        let acr = self.regs[0x0B];
+                        let mode = (acr >> 2) & 0x07;
+                        if mode == 0b100 { self.sr_bits_remaining = 8; } else { self.shifting = false; }
+                    }
+                }
+                self.cycles_since_shift = (self.cycles_since_shift + 1) % 8;
             }
         }
     }

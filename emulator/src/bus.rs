@@ -101,7 +101,7 @@ impl Bus {
     pub fn write8(&mut self, addr:u16, val:u8){
         // Debug ALL writes to VIA range
         if addr >= 0xD000 && addr <= 0xD00F {
-            println!("💾 BUS WRITE VIA: addr=0x{:04X} val=0x{:02X}", addr, val);
+            // println!("💾 BUS WRITE VIA: addr=0x{:04X} val=0x{:02X}", addr, val);  // SILENCED FOR SPEED TEST
         }
         
         match memory_map::classify(addr) {
