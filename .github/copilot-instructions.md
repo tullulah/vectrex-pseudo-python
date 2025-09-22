@@ -2,6 +2,12 @@
 
 These guidelines are critical for ongoing work in this repository. Keep them in mind for every future change.
 
+## 0. PowerShell Usage
+- Usuario usa Windows PowerShell v5.1 (NO PowerShell 7+).
+- NUNCA usar `&&` para concatenar comandos - usar `;` en su lugar.
+- Sintaxis correcta: `cd emulator; cargo build` (NO `cd emulator && cargo build`).
+- PowerShell v5.1 no soporta `&&` como separador de comandos.
+
 ## 1. BIOS Usage
 - Nunca generar BIOS sintética en tests ni código de ejemplo.
 - Rutas válidas (mantenidas en sincronía, preferir la de assets para futuras referencias):

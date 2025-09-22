@@ -1,4 +1,5 @@
 use crate::via6522::Via6522;
+use crate::psg_ay::AyPsg;
 use crate::memory_map::{self, Region};
 
 // Basic Vectrex memory map (simplified):
@@ -19,8 +20,8 @@ pub struct MemStats {
     pub cart_oob_reads: u64,
 }
 
-pub struct Bus { pub mem: [u8;65536], pub via: Via6522, bios_read_only: bool, pub last_via_write: Option<(u16,u8)>, pub total_cycles: u64, pub stats: MemStats, bios_base: u16, cart_len: usize, pub last_bus_value: u8, power_on_seed: u64, deterministic_power_on: bool }
-impl Default for Bus { fn default()->Self{ Self{ mem:[0;65536], via:Via6522::new(), bios_read_only:false, last_via_write:None, total_cycles:0, stats:MemStats::default(), bios_base:memory_map::BIOS_START, cart_len:0, last_bus_value:0xFF, power_on_seed:0, deterministic_power_on:false } } }
+pub struct Bus { pub mem: [u8;65536], pub via: Via6522, pub psg: AyPsg, bios_read_only: bool, pub last_via_write: Option<(u16,u8)>, pub total_cycles: u64, pub stats: MemStats, bios_base: u16, cart_len: usize, pub last_bus_value: u8, power_on_seed: u64, deterministic_power_on: bool }
+impl Default for Bus { fn default()->Self{ Self{ mem:[0;65536], via:Via6522::new(), psg:AyPsg::new(1_500_000, 44_100, 14), bios_read_only:false, last_via_write:None, total_cycles:0, stats:MemStats::default(), bios_base:memory_map::BIOS_START, cart_len:0, last_bus_value:0xFF, power_on_seed:0, deterministic_power_on:false } } }
 impl Bus {
     pub fn new()->Self{Self::default()}
     pub fn set_bios_read_only(&mut self, ro: bool){ self.bios_read_only = ro; }
@@ -98,11 +99,23 @@ impl Bus {
         val
     }
     pub fn write8(&mut self, addr:u16, val:u8){
+        // Debug ALL writes to VIA range
+        if addr >= 0xD000 && addr <= 0xD00F {
+            println!("💾 BUS WRITE VIA: addr=0x{:04X} val=0x{:02X}", addr, val);
+        }
+        
         match memory_map::classify(addr) {
             Region::Cartridge => { if (memory_map::cart_offset(addr) as usize) < self.mem.len() { self.mem[addr as usize]=val; self.last_bus_value=val; } }
             Region::Gap | Region::Illegal | Region::Unmapped => { self.unmapped_write_record(addr); }
             Region::Ram => { let o = memory_map::ram_offset(addr); self.mem[(memory_map::RAM_START as usize)+o]=val; self.last_bus_value=val; }
-            Region::Via => { let r = memory_map::via_reg(addr); self.via.write(r,val); self.last_via_write=Some((addr,val)); self.last_bus_value=val; }
+            Region::Via => { 
+                let r = memory_map::via_reg(addr); 
+                self.via.write(r,val); 
+                
+                // Synchronous integrator updates like vectrexy/jsvecx (no deferred processing)
+                // last_via_write removed - CPU handles updates immediately in write8()
+                self.last_bus_value=val; 
+            }
             Region::Bios => {
                 if self.bios_read_only { self.stats.writes_bios_ignored = self.stats.writes_bios_ignored.wrapping_add(1); } else { self.mem[addr as usize]=val; self.last_bus_value=val; }
             }
@@ -111,8 +124,15 @@ impl Bus {
     pub fn tick(&mut self, cycles:u32){
         if cycles>0 { self.total_cycles = self.total_cycles.wrapping_add(cycles as u64); }
         self.via.tick(cycles);
+        // Tick audio PSG con mismos ciclos de CPU (clock provisional = CPU clock)
+        self.psg.tick(cycles);
     }
     pub fn total_cycles(&self)->u64 { self.total_cycles }
     pub fn via_ifr(&self)->u8 { self.via.raw_ifr() }
     pub fn via_ier(&self)->u8 { self.via.raw_ier() }
+    
+    // Helper para triggear Timer1 IRQ desde CPU
+    pub fn trigger_timer1_irq(&mut self) {
+        self.via.trigger_timer1_irq();
+    }
 }

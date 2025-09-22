@@ -53,6 +53,17 @@ clear_bios_calls()                   // Limpia buffer de llamadas BIOS
 demo_triangle()
 // Input
 set_input_state(x: i16, y: i16, buttons: u8)
+// Audio (PSG – fase 1)
+psg_prepare_pcm() -> u32          // genera snapshot lineal del ring (devuelve muestras)
+psg_pcm_ptr() -> *const i16       // puntero a muestras i16 little-endian
+psg_pcm_len() -> u32              // número de muestras en snapshot
+psg_pcm_stride() -> u32           // bytes por muestra (2)
+psg_pcm_serial() -> u64           // contador incremental de snapshot
+// Audio (PSG – delta incremental 2025-09-21)
+psg_prepare_delta_pcm() -> u32    // prepara sólo muestras nuevas desde última export (full o delta)
+psg_delta_pcm_ptr() -> *const i16 // puntero a delta (0 si ninguna)
+psg_delta_pcm_len() -> u32        // longitud del delta
+psg_delta_overflow() -> bool      // true si se perdió continuidad y se emitió snapshot completo
 ```
 
 ## 4. Pasos de Migración Ejecutados

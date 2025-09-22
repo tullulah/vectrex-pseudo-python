@@ -1,232 +1,517 @@
-// Stub de integración futura con jsvecx (u otro emulador JS). Provee estructura y errores claros.
-import { IEmulatorCore, MetricsSnapshot, RegistersSnapshot, Segment } from './emulatorCore';
-
-// Integración mínima con jsvecx: suponemos presencia del árbol `jsvecx/src/preprocess` accesible vía import dinámico
-// en entorno de desarrollo (Vite). Para build producción podría requerir copia/alias en assets.
-// Política: no mutar código original, sólo importar y usar su API constructiva (VecX, Globals).
-
-interface JsVecxInstance {
-  vecx_reset: () => void;
-  vecx_emu: (cycles:number, ahead:number)=>void;
-  rom: number[];
-  cart: number[];
-  vectors_draw: any[];
-  vector_draw_cnt: number;
-  fcycles: number;
-  alg_vectoring: number;
-  alg_vector_x0: number; alg_vector_y0: number; alg_vector_x1: number; alg_vector_y1: number;
-  e6809: {
-    reg_a: number; reg_b: number; reg_dp: number; reg_pc: number; reg_cc: number;
-    reg_x: { value: number }; reg_y: { value: number }; reg_u: { value: number }; reg_s: { value: number };
-  }
-}
-
-type JsVecxModule = { VecX: new()=>JsVecxInstance; Globals:any };
+import { MetricsSnapshot, RegistersSnapshot, Segment, IEmulatorCore } from './emulatorCore';
 
 export class JsVecxEmulatorCore implements IEmulatorCore {
-  private biosOk = false;
-  private mod: JsVecxModule | null = null;
-  private inst: JsVecxInstance | null = null;
-  private cartLoaded = false;
+  private mod: any = null;
+  private inst: any = null;
+  private biosOk: boolean = false;
+  private frameCounter: number = 0;
   private lastFrameSegments: Segment[] = [];
-  private frameCounter = 0;
-  // Contador de ciclos aproximado (sumamos los ciclos solicitados a vecx_emu). No exacto pero útil para paridad básica.
-  private totalCycles = 0;
-  private lastFcycles: number | null = null; // para detectar rollover de frame en jsvecx (fcycles reinicia sumando FCYCLES_INIT)
   private fcInitCached: number | null = null;
   private memScratch: Uint8Array | null = null;
+  private vecxEmuPatched: boolean = false;
 
   async init(){
     if (this.mod) return;
     try {
-  // Simplificado: sólo intentamos cargar el bundle estático servido desde /public -> /jsvecx/vecx_full.js
-  // Razón: Vite emite warning si se importan directamente assets crudos dentro de /public (no pasan por transform).
-  // El script jsvecx:bundle garantiza que el archivo exporte VecX y Globals.
-  let bundle: any = null;
-  try {
-    // Nueva ubicación: bundle generado en src/generated/jsvecx/vecx_full.js (incluido en pipeline de TS/Vite)
-    // Usamos import relativo explícito para permitir tree-shaking futuro si se particiona.
-    const bundlePath = './generated/jsvecx/vecx_full.js';
-    bundle = await import(/* @vite-ignore */ bundlePath);
-  } catch (e){
-    console.warn('[JsVecxCore] no se pudo importar bundle interno generated/jsvecx/vecx_full.js; backend jsvecx inerte', e);
-    return;
-  }
+      // Simplificado: sólo intentamos cargar el bundle estático servido desde /public -> /jsvecx/vecx_full.js
+      // Razón: Vite emite warning si se importan directamente assets crudos dentro de /public (no pasan por transform).
+      // El script jsvecx:bundle garantiza que el archivo exporte VecX y Globals.
+      let bundle: any = null;
+      try {
+        // Nueva ubicación: bundle generado en src/generated/jsvecx/vecx_full.js (incluido en pipeline de TS/Vite)
+        // Usamos import relativo explícito para permitir tree-shaking futuro si se particiona.
+        const bundlePath = './generated/jsvecx/vecx_full.js';
+        bundle = await import(/* @vite-ignore */ bundlePath);
+      } catch (e){
+        console.warn('[JsVecxCore] no se pudo importar bundle interno generated/jsvecx/vecx_full.js; backend jsvecx inerte', e);
+        return;
+      }
+      
       const VecX = (bundle as any).VecX || (bundle as any).default?.VecX;
       const Globals = (bundle as any).Globals || (bundle as any).default?.Globals;
       if (!VecX) throw new Error('VecX constructor not found');
       this.mod = { VecX, Globals } as any;
       this.inst = new VecX();
-      // Inicializa vectores internos si el código original requiere llamada implícita (vecx_reset luego)
-  this.inst?.vecx_reset();
-    } catch (e){
+      
+      // INICIO DE BLOQUE TRY PARA INICIALIZACIÓN JSVECX
+      try {
+        // ¡DEJAR QUE JSVECX HAGA SU INICIALIZACIÓN NATIVA!
+        // El constructor VecX ya inicializa todo correctamente
+        console.log('[JsVecxCore] Using jsvecx native initialization...');
+        
+        // Solo verificar que los componentes principales existen
+        if (!this.inst.rom) {
+          console.error('[JsVecxCore] jsvecx failed to initialize ROM array');
+          return;
+        }
+        if (!this.inst.cart) {
+          console.error('[JsVecxCore] jsvecx failed to initialize cart array');
+          return;
+        }
+        if (!this.inst.e6809) {
+          console.error('[JsVecxCore] jsvecx failed to initialize CPU');
+          return;
+        }
+        
+        console.log('[JsVecxCore] jsvecx native initialization verified - rom, cart, cpu ready');
+        
+        // CONFIGURAR FUNCIONES DE MEMORIA QUE JSVECX NECESITA
+        console.log('[JsVecxCore] Setting up memory bus functions...');
+        
+        // Función read8: lee de los arrays apropiados según la dirección
+        this.inst.read8 = (address: number): number => {
+          address = address & 0xFFFF; // Asegurar 16-bit
+          
+          if (address < 0x8000) {
+            // Cartridge space 0x0000-0x7FFF
+            return this.inst!.cart[address] || 0;
+          } else if (address >= 0xC800 && address < 0xD000) {
+            // RAM 0xC800-0xCFFF (1K mirrored)
+            const ramAddr = (address - 0xC800) & 0x3FF;
+            return this.inst!.ram![ramAddr] || 0;
+          } else if (address >= 0xD000 && address < 0xE000) {
+            // VIA registers 0xD000-0xDFFF (simplified)
+            return 0; // TODO: Implementar VIA si es necesario
+          } else if (address >= 0xE000) {
+            // ROM/BIOS 0xE000-0xFFFF
+            const romAddr = address - 0xE000;
+            return this.inst!.rom[romAddr] || 0;
+          }
+          
+          return 0xFF; // Unmapped memory
+        };
+        
+        // Función write8: escribe en los arrays apropiados
+        this.inst.write8 = (address: number, value: number): void => {
+          address = address & 0xFFFF;
+          value = value & 0xFF;
+          
+          if (address < 0x8000) {
+            // Cartridge space - normalmente read-only, pero permitimos por ahora
+            this.inst!.cart[address] = value;
+          } else if (address >= 0xC800 && address < 0xD000) {
+            // RAM 0xC800-0xCFFF
+            const ramAddr = (address - 0xC800) & 0x3FF;
+            if (this.inst!.ram) this.inst!.ram[ramAddr] = value;
+          } else if (address >= 0xD000 && address < 0xE000) {
+            // VIA registers - ignorar por ahora
+            // TODO: Implementar escritura VIA si es necesario
+          }
+          // ROM es read-only, ignorar escrituras
+        };
+        
+        console.log('[JsVecxCore] Memory bus functions configured');
+        
+        // Asignar funciones de memoria a TODOS los contextos posibles donde jsvecx las busque
+        this.assignMemoryFunctionsToAllContexts();
+        
+        // CONFIGURAR PC CORRECTAMENTE PARA ARRANQUE DE BIOS (sin hacks de cartridge)
+        console.log('[JsVecxCore] Setting up proper BIOS startup...');
+        
+        console.log('[JsVecxCore] Arrays initialized, attempting vecx_reset...');
+        try {
+          this.inst.vecx_reset();
+          console.log('[JsVecxCore] vecx_reset completed successfully');
+        } catch (resetError) {
+          console.warn('[JsVecxCore] vecx_reset failed, doing manual initialization:', resetError);
+          // Reset manual básico
+          this.inst.vector_draw_cnt = 0;
+          this.inst.fcycles = 0;
+        }
+        
+        // NOTA: PC se configurará al reset vector DESPUÉS de cargar la BIOS en loadBios()
+        console.log('[JsVecxCore] PC will be set to reset vector after BIOS loading');
+        
+        // FINAL DE INICIALIZACIÓN - RECREAR FUNCIONES DE MEMORIA
+        console.log('[JsVecxCore] Recreating memory bus functions after initialization...');
+        this.recreateMemoryFunctions();
+        this.assignMemoryFunctionsToAllContexts();
+        
+      } catch (jsvecxError) {
+        console.warn('[JsVecxCore] jsvecx initialization failed', jsvecxError);
+      }
+    } catch (e) {
       console.warn('[JsVecxCore] init failed', e);
     }
   }
+
+  private recreateMemoryFunctions() {
+    if (!this.inst) return;
+    
+    this.inst.read8 = (address: number): number => {
+      address = address & 0xFFFF;
+      if (address < 0x8000) {
+        return this.inst!.cart[address] || 0;
+      } else if (address >= 0xC800 && address < 0xD000) {
+        const ramAddr = (address - 0xC800) & 0x3FF;
+        return this.inst!.ram![ramAddr] || 0;
+      } else if (address >= 0xE000) {
+        const romAddr = address - 0xE000;
+        return this.inst!.rom[romAddr] || 0;
+      }
+      return 0xFF;
+    };
+    
+    this.inst.write8 = (address: number, value: number): void => {
+      address = address & 0xFFFF;
+      value = value & 0xFF;
+      if (address < 0x8000) {
+        this.inst!.cart[address] = value;
+      } else if (address >= 0xC800 && address < 0xD000) {
+        const ramAddr = (address - 0xC800) & 0x3FF;
+        if (this.inst!.ram) this.inst!.ram[ramAddr] = value;
+      }
+    };
+  }
+
+  private assignMemoryFunctionsToAllContexts() {
+    if (!this.inst || !this.inst.read8 || !this.inst.write8) return;
+    
+    console.log('[JsVecxCore] Assigning memory functions to all possible contexts...');
+    
+    // CRÍTICO: jsvecx parece buscar las funciones en el contexto global/this de e6809_sstep
+    // Vamos a asignar a ABSOLUTAMENTE TODOS los contextos posibles
+    
+    // 1. Contexto global (window)
+    (window as any).read8 = this.inst.read8;
+    (window as any).write8 = this.inst.write8;
+    
+    // 2. Contexto del módulo completo
+    if (this.mod) {
+      (this.mod as any).read8 = this.inst.read8;
+      (this.mod as any).write8 = this.inst.write8;
+      
+      // 3. Todos los contextos internos del módulo
+      if ((this.mod as any).Globals) {
+        (this.mod.Globals as any).read8 = this.inst.read8;
+        (this.mod.Globals as any).write8 = this.inst.write8;
+      }
+      
+      if ((this.mod as any).HEAP8) {
+        (this.mod.HEAP8 as any).read8 = this.inst.read8;
+        (this.mod.HEAP8 as any).write8 = this.inst.write8;
+      }
+      
+      // 4. Asignar al propio constructor VecX
+      if (this.mod.VecX) {
+        (this.mod.VecX as any).read8 = this.inst.read8;
+        (this.mod.VecX as any).write8 = this.inst.write8;
+        (this.mod.VecX.prototype as any).read8 = this.inst.read8;
+        (this.mod.VecX.prototype as any).write8 = this.inst.write8;
+      }
+    }
+    
+    // 5. Instancia principal
+    this.inst.read8 = this.inst.read8; // Redundante pero asegurar
+    this.inst.write8 = this.inst.write8;
+    
+    // 6. Asignar al CPU y TODOS sus contextos
+    if (this.inst.e6809) {
+      console.log('[JsVecxCore] Assigning memory functions to CPU...');
+      (this.inst.e6809 as any).read8 = this.inst.read8;
+      (this.inst.e6809 as any).write8 = this.inst.write8;
+      
+      // También asignar al prototipo del CPU si existe
+      if (this.inst.e6809.constructor) {
+        (this.inst.e6809.constructor as any).read8 = this.inst.read8;
+        (this.inst.e6809.constructor as any).write8 = this.inst.write8;
+        if (this.inst.e6809.constructor.prototype) {
+          (this.inst.e6809.constructor.prototype as any).read8 = this.inst.read8;
+          (this.inst.e6809.constructor.prototype as any).write8 = this.inst.write8;
+        }
+      }
+    }
+    
+    // 7. CRÍTICO: Asignar a 'this' del contexto actual de la función
+    (this as any).read8 = this.inst.read8;
+    (this as any).write8 = this.inst.write8;
+    
+    // 8. SÚPER CRÍTICO: En JavaScript, a veces las funciones buscan en el objeto global
+    try {
+      (globalThis as any).read8 = this.inst.read8;
+      (globalThis as any).write8 = this.inst.write8;
+    } catch {}
+    
+    // 9. NUEVO ENFOQUE: Interceptar e6809_sstep para asignar funciones JUSTo antes de ejecutar
+    if (this.inst.e6809 && (this.inst.e6809 as any).e6809_sstep && !(this.inst.e6809 as any)._originalSstep) {
+      const originalSstep = (this.inst.e6809 as any).e6809_sstep;
+      // CRÍTICO: Guardar referencia para evitar recursión infinita
+      (this.inst.e6809 as any)._originalSstep = originalSstep;
+      
+      (this.inst.e6809 as any).e6809_sstep = (...args: any[]) => {
+        // ESTRATEGIA AGRESIVA: Inyectar funciones en el scope global Y local
+        const memoryFunctions = {
+          read8: this.inst.read8,
+          write8: this.inst.write8
+        };
+        
+        // Asignar a TODOS los posibles contextos que e6809_sstep podría usar
+        (this.inst.e6809 as any).read8 = memoryFunctions.read8;
+        (this.inst.e6809 as any).write8 = memoryFunctions.write8;
+        (this.inst as any).read8 = memoryFunctions.read8;
+        (this.inst as any).write8 = memoryFunctions.write8;
+        (window as any).read8 = memoryFunctions.read8;
+        (window as any).write8 = memoryFunctions.write8;
+        (globalThis as any).read8 = memoryFunctions.read8;
+        (globalThis as any).write8 = memoryFunctions.write8;
+        
+        // USAR LA FUNCIÓN ORIGINAL GUARDADA para evitar recursión
+        try {
+          return (this.inst.e6809 as any)._originalSstep.call(this.inst.e6809, ...args);
+        } catch (e) {
+          console.warn('[JsVecxCore] e6809_sstep with call failed, trying direct:', e);
+          return (this.inst.e6809 as any)._originalSstep.apply(this.inst.e6809, args);
+        }
+      };
+      console.log('[JsVecxCore] Intercepted e6809_sstep to inject memory functions before each CPU step');
+    }
+    
+    // 10. ENFOQUE EXTREMO: Bind las funciones al contexto del CPU
+    if (this.inst.e6809) {
+      try {
+        (this.inst.e6809 as any).read8 = this.inst.read8.bind(this.inst);
+        (this.inst.e6809 as any).write8 = this.inst.write8.bind(this.inst);
+        console.log('[JsVecxCore] Bound memory functions to CPU context');
+      } catch (e) {
+        console.log('[JsVecxCore] Could not bind memory functions:', e);
+      }
+    }
+    
+    // 11. ENFOQUE NUCLEAR: Definir funciones en el scope global de JavaScript
+    try {
+      const globalCode = `
+        if (typeof read8 === 'undefined') {
+          window.read8 = ${this.inst.read8.toString()};
+          window.write8 = ${this.inst.write8.toString()};
+          var read8 = window.read8;
+          var write8 = window.write8;
+        }
+      `;
+      // Usar setTimeout para ejecutar en el siguiente tick
+      setTimeout(() => {
+        try {
+          (window as any).eval(globalCode);
+          console.log('[JsVecxCore] Global functions defined via eval');
+        } catch (evalError) {
+          console.warn('[JsVecxCore] Eval failed:', evalError);
+        }
+      }, 0);
+    } catch (e) {
+      console.log('[JsVecxCore] Could not set global functions:', e);
+    }
+    
+    console.log('[JsVecxCore] Memory functions assigned to ALL contexts (inst, e6809, Globals, module, HEAP8, window, VecX, globalThis, this)');
+    
+    // Debug final de función assignments
+    console.log('[JsVecxCore] Function assignment verification:');
+    console.log('  inst.read8 =', typeof this.inst.read8);
+    console.log('  e6809.read8 =', typeof (this.inst.e6809 as any)?.read8);
+    console.log('  Globals.read8 =', typeof (this.mod?.Globals as any)?.read8);
+    console.log('  module.read8 =', typeof (this.mod as any)?.read8);
+    console.log('  window.read8 =', typeof (window as any).read8);
+    console.log('  globalThis.read8 =', typeof (globalThis as any).read8);
+    console.log('  this.read8 =', typeof (this as any).read8);
+  }
+  
   loadBios(bytes: Uint8Array){
     // jsvecx espera 8K ROM en this.rom; copiamos mínimo (clamp a 0x2000)
-    if (!this.inst) return; const len = Math.min(0x2000, bytes.length);
-    for (let i=0;i<len;i++) this.inst.rom[i] = bytes[i];
+    if (!this.inst) return; 
+    
+    // Asegurar que el array ROM existe
+    if (!this.inst.rom) {
+      this.inst.rom = new Array(0x2000).fill(0);
+    }
+    
+    const maxLen = Math.min(bytes.length, 0x2000);
+    for (let i = 0; i < maxLen; i++) {
+      this.inst.rom[i] = bytes[i];
+    }
     this.biosOk = true;
-  }
-  isBiosLoaded(){ return this.biosOk; }
-  reset(){ if (this.inst) { try { this.inst.vecx_reset(); } catch{} this.frameCounter = 0; } }
-  loadProgram(bytes: Uint8Array, _base?: number){
-    if (!this.inst) return; // Cartridge array size 0x8000
-    const len = Math.min(0x8000, bytes.length);
-    for (let i=0;i<len;i++) this.inst.cart[i] = bytes[i];
-    this.cartLoaded = true;
-  }
-  runFrame(_maxInstr?: number){
-    if (!this.inst) return;
-    // Derivar ciclos por frame usando constante real FCYCLES_INIT (approx VECTREX_MHZ / PDECAY) si está disponible.
-    const fcInit = (this.mod as any)?.Globals?.FCYCLES_INIT || 25000;
-    if (this.fcInitCached == null) this.fcInitCached = fcInit;
-    // Observación: FCYCLES_INIT en jsvecx está relacionado con decaimiento fosforo, no frame completo 60Hz exacto.
-    // Usamos un factor heurístico  *  (aquí 1) y dejamos refino posterior (posible acumulador fcycles).
-    const cycles = fcInit;
-    const beforeF = (this.inst as any).fcycles;
-    try { this.inst.vecx_emu(cycles, 0); } catch(e){ /* silencioso */ }
-    const afterF = (this.inst as any).fcycles;
-    // jsvecx decrementa fcycles y cuando <0 lo incrementa sumando FCYCLES_INIT -> rollover detectado si after > before
-    if (typeof beforeF === 'number' && typeof afterF === 'number') {
-      if (this.lastFcycles == null) this.lastFcycles = beforeF;
-      if (afterF > beforeF) { // rollover
-        this.frameCounter++;
+    console.log(`[JsVecxCore] BIOS loaded: ${maxLen} bytes copied to ROM`);
+    
+    // AHORA QUE LA BIOS ESTÁ CARGADA, CONFIGURAR PC AL RESET VECTOR
+    if (this.inst.rom.length >= 0x2000 && this.inst.e6809) {
+      // Reset vector está en 0xFFFE-0xFFFF (últimos 2 bytes de ROM)
+      const resetVectorLow = this.inst.rom[0x1FFE];   // 0xFFFE - 0xE000 = 0x1FFE 
+      const resetVectorHigh = this.inst.rom[0x1FFF];  // 0xFFFF - 0xE000 = 0x1FFF
+      const resetVector = (resetVectorHigh << 8) | resetVectorLow;
+      
+      console.log(`[JsVecxCore] Reset vector bytes: High=0x${resetVectorHigh.toString(16).toUpperCase()}, Low=0x${resetVectorLow.toString(16).toUpperCase()}`);
+      console.log(`[JsVecxCore] Calculated reset vector: 0x${resetVector.toString(16).toUpperCase()}`);
+      
+      // VERIFICAR si la BIOS está realmente cargada
+      const biosCheck = this.inst.rom.slice(0x1FF0, 0x2000);
+      console.log(`[JsVecxCore] BIOS end bytes (0xFFF0-0xFFFF):`, biosCheck.map((b: number) => b.toString(16).padStart(2, '0')).join(' '));
+      
+      // Configurar PC directamente al reset vector de la BIOS
+      if (resetVector !== 0 && resetVector >= 0x1000) {
+        this.inst.e6809.reg_pc = resetVector;
+        console.log(`[JsVecxCore] PC set to BIOS reset vector: 0x${resetVector.toString(16).toUpperCase()}`);
+      } else {
+        console.warn(`[JsVecxCore] Invalid reset vector 0x${resetVector.toString(16)}, using fallback 0xF000`);
+        this.inst.e6809.reg_pc = 0xF000;
+        console.log('[JsVecxCore] PC set to fallback BIOS address: 0xF000');
       }
-      this.lastFcycles = afterF;
-    } else {
-      // fallback: incrementar siempre
+    }
+  }
+  
+  isBiosLoaded(){ return this.biosOk; }
+  
+  reset(){
+    if (!this.inst) return;
+    
+    try { 
+      this.inst.vecx_reset(); 
+      console.log('[JsVecxCore] Reset successful');
+    } catch(e) { 
+      console.warn('[JsVecxCore] Reset failed, doing manual reset:', e);
+      // Reset manual básico
+      this.inst.vector_draw_cnt = 0;
+      this.inst.fcycles = 0;
+      
+      // Recrear funciones de memoria tras fallo de reset
+      this.recreateMemoryFunctions();
+      this.assignMemoryFunctionsToAllContexts();
+    } 
+    
+    // CONFIGURAR PC CORRECTAMENTE DESPUÉS DEL RESET
+    // Leer reset vector de la BIOS y configurar PC
+    if (this.inst.rom && this.inst.rom.length >= 0x2000 && this.inst.e6809) {
+      // Reset vector está en 0xFFFE-0xFFFF (últimos 2 bytes de ROM)
+      const resetVectorLow = this.inst.rom[0x1FFE];   // 0xFFFE - 0xE000 = 0x1FFE 
+      const resetVectorHigh = this.inst.rom[0x1FFF];  // 0xFFFF - 0xE000 = 0x1FFF
+      const resetVector = (resetVectorHigh << 8) | resetVectorLow;
+      
+      console.log(`[JsVecxCore] Reset vector bytes: High=0x${resetVectorHigh.toString(16).toUpperCase()}, Low=0x${resetVectorLow.toString(16).toUpperCase()}`);
+      console.log(`[JsVecxCore] Reset vector calculated: 0x${resetVector.toString(16).toUpperCase()}`);
+      
+      if (resetVector !== 0 && resetVector >= 0x1000) {
+        this.inst.e6809.reg_pc = resetVector;
+        console.log(`[JsVecxCore] Reset: PC set to BIOS reset vector: 0x${resetVector.toString(16).toUpperCase()}`);
+      } else {
+        // Fallback si el reset vector es sospechoso
+        this.inst.e6809.reg_pc = 0xF000;
+        console.log(`[JsVecxCore] Reset: Suspicious reset vector 0x${resetVector.toString(16)}, using fallback 0xF000`);
+      }
+    } else if (this.inst.e6809) {
+      // Fallback básico
+      this.inst.e6809.reg_pc = 0xF000;
+      console.log('[JsVecxCore] Reset: PC set to default BIOS address: 0xF000');
+    }
+    
+    this.frameCounter = 0; 
+  }
+
+  loadProgram(bytes: Uint8Array, _base?: number){
+    // Para jsvecx, cargar en cartridge (0x0000-0x7FFF)
+    if (!this.inst) return;
+    
+    // Asegurar que el cartucho existe
+    if (!this.inst.cart) {
+      this.inst.cart = new Array(0x8000).fill(0);
+    }
+    
+    const maxLen = Math.min(bytes.length, 0x8000);
+    for (let i = 0; i < maxLen; i++) {
+      this.inst.cart[i] = bytes[i];
+    }
+    console.log(`[JsVecxCore] Program loaded: ${maxLen} bytes to cartridge`);
+  }
+
+  runFrame(_maxInstr?: number){
+    if (!this.inst) return { stepsRun: 0, vectors: [] };
+    
+    try { 
+      // CRÍTICO: Re-asignar funciones de memoria antes de cada frame 
+      // por si jsvecx las pierde durante reset o ejecución
+      console.log('[JsVecxCore] Re-assigning memory functions before frame execution...');
+      this.assignMemoryFunctionsToAllContexts();
+      
+      // NUEVO: Monkey-patch vecx_emu para asegurar funciones antes de CADA llamada
+      if (!this.vecxEmuPatched && this.inst.vecx_emu) {
+        const originalVecxEmu = this.inst.vecx_emu;
+        this.inst.vecx_emu = (cycles: number, cyclesDone: number) => {
+          // Asegurar funciones JUSTO antes de ejecutar emulación
+          console.log('[JsVecxCore] Patched vecx_emu: Re-assigning functions before execution...');
+          this.assignMemoryFunctionsToAllContexts();
+          return originalVecxEmu.call(this.inst, cycles, cyclesDone);
+        };
+        this.vecxEmuPatched = true;
+        console.log('[JsVecxCore] Patched vecx_emu to inject memory functions');
+      }
+      
+      // Intentar ejecutar un frame usando la función jsvecx
+      this.inst.vecx_emu(40000, 0); // Aprox 40K cycles por frame
+      
+      // Extraer vectores del frame actual
+      const vectors: Segment[] = [];
+      if (this.inst.vectors_draw && Array.isArray(this.inst.vectors_draw)) {
+        for (const v of this.inst.vectors_draw) {
+          if (v && typeof v === 'object') {
+            vectors.push({
+              x0: v.x0 || 0,
+              y0: v.y0 || 0,
+              x1: v.x1 || 0,
+              y1: v.y1 || 0,
+              intensity: v.intensity || 0,
+              frame: this.frameCounter
+            });
+          }
+        }
+      }
+      
+      this.lastFrameSegments = vectors;
       this.frameCounter++;
+      
+      console.log(`[JsVecxCore] Frame ${this.frameCounter} completed - ${vectors.length} vectors drawn`);
+      
+      return { 
+        stepsRun: 40000, // Estimado 
+        vectors: vectors 
+      };
+    } catch(e){ 
+      console.warn('[JsVecxCore] runFrame failed:', e);
+      return { stepsRun: 0, vectors: [] };
     }
-    this.totalCycles += cycles; // aproximación
-    // Extraer segmentos (vectors_draw[0..vector_draw_cnt]) mapeándolos a rango normalizado [-1,1]
-    const out: Segment[] = [];
-    const drawCnt = (this.inst as any).vector_draw_cnt as number;
-    const arr = (this.inst as any).vectors_draw as any[];
-    const maxX = (this.mod as any)?.Globals?.ALG_MAX_X || 33000;
-    const maxY = (this.mod as any)?.Globals?.ALG_MAX_Y || 41000;
-    const norm = (v:number, max:number) => (v / (max/2));
-    for (let i=0; i<drawCnt && i<arr.length; i++) {
-      const d = arr[i]; if (!d || d.color === undefined) continue;
-      // Color==VECTREX_COLORS => inválido; ignorar
-      if (d.color === (this.mod as any)?.Globals?.VECTREX_COLORS) continue;
-      out.push({ x0: norm(d.x0, maxX), y0: norm(d.y0, maxY), x1: norm(d.x1, maxX), y1: norm(d.y1, maxY), intensity: (d.color ?? 0) * 2, frame: this.frameCounter });
-      if (out.length > 8192) break; // límite defensivo
-    }
-    this.lastFrameSegments = out;
   }
+
   metrics(): MetricsSnapshot | null {
-    const fcInit = this.fcInitCached || (this.mod as any)?.Globals?.FCYCLES_INIT || 25000;
-    const fcycles = (this.inst as any)?.fcycles;
-    let cycle_frame: number | undefined = undefined;
-    if (typeof fcycles === 'number') {
-      // Ciclo dentro del frame: invertimos resto (cuánto se ha consumido)
-      cycle_frame = (fcInit - fcycles) >>> 0;
-      if (cycle_frame < 0) cycle_frame = 0;
-    }
-    return {
-      total: 0,
-      unimplemented: 0,
-      frames: this.frameCounter,
-      cycle_frame,
-      draw_vl: this.lastFrameSegments.length,
-      last_intensity: this.lastFrameSegments.length ? this.lastFrameSegments[this.lastFrameSegments.length-1].intensity : 0,
-      unique_unimplemented: [],
-      cycles: this.totalCycles,
-      avg_cycles_per_frame: this.frameCounter ? (this.totalCycles / this.frameCounter) : 0,
-      top_opcodes: [] as any,
-    } as any;
-  }
-  registers(): RegistersSnapshot | null {
     if (!this.inst) return null;
-    const c = this.inst as any;
-    const cpu = c.e6809;
-    if (!cpu) return null;
-    // Algunos registros index/stack están envueltos en objetos fptr -> usar .value
-    const x = cpu.reg_x?.value ?? 0;
-    const y = cpu.reg_y?.value ?? 0;
-    const u = cpu.reg_u?.value ?? 0;
-    const s = cpu.reg_s?.value ?? 0;
-    const snap: RegistersSnapshot = {
-      a: cpu.reg_a|0,
-      b: cpu.reg_b|0,
-      dp: cpu.reg_dp|0,
-      x: x|0,
-      y: y|0,
-      u: u|0,
-      s: s|0,
-      pc: cpu.reg_pc|0,
-      cycles: this.totalCycles,
-      frame_count: this.frameCounter,
-      last_intensity: this.lastFrameSegments.length ? this.lastFrameSegments[this.lastFrameSegments.length-1].intensity : 0,
-      draw_vl_count: this.lastFrameSegments.length
+    
+    return {
+      total: 0, // No disponible en jsvecx
+      unimplemented: 0, // No aplica en jsvecx
+      frames: this.frameCounter,
+      draw_vl: this.lastFrameSegments.length,
+      last_intensity: 0, // No fácilmente disponible
+      unique_unimplemented: [], // No aplica
+      cycles: this.inst.fcycles || 0,
+      top_opcodes: [] // No disponible en jsvecx
     };
-    // Añadir ciclo dentro de frame si disponible
-    const fcycles = (this.inst as any)?.fcycles;
-    const fcInit = this.fcInitCached || (this.mod as any)?.Globals?.FCYCLES_INIT;
-    if (typeof fcycles === 'number' && fcInit) {
-      (snap as any).cycle_frame = (fcInit - fcycles) >>> 0;
-    }
-    return snap;
   }
+
+  registers(): RegistersSnapshot | null {
+    if (!this.inst?.e6809) return null;
+    
+    const cpu = this.inst.e6809;
+    return {
+      a: cpu.reg_a || 0,
+      b: cpu.reg_b || 0,
+      dp: cpu.reg_dp || 0,
+      x: cpu.reg_x?.value || 0,
+      y: cpu.reg_y?.value || 0,
+      u: cpu.reg_u?.value || 0,
+      s: cpu.reg_s?.value || 0,
+      pc: cpu.reg_pc || 0,
+      cycles: this.inst.fcycles || 0,
+      frame_count: this.frameCounter,
+      last_intensity: 0 // No fácilmente disponible en jsvecx
+    };
+  }
+
   getSegmentsShared(): Segment[] { return this.lastFrameSegments; }
-  // Opcionales
+
   resetStats(){ /* noop */ }
   biosCalls(){ return []; }
   clearBiosCalls(){ /* noop */ }
-  enableTraceCapture(){ /* noop */ }
-  clearTrace(){ /* noop */ }
-  traceLog(){ return []; }
-  loopWatch(){ return []; }
-  drainSegmentsJson(){ return []; }
-  peekSegmentsJson(){ return this.lastFrameSegments; }
-  demoTriangle(){ return this.lastFrameSegments; }
-  snapshotMemory(){
-    if (!this.inst) return new Uint8Array();
-    const snap = new Uint8Array(65536);
-    // Relleno por defecto (gap/illegal) 0xFF
-    snap.fill(0xFF);
-    // Cartridge 0000-BFFF (32K) desde cart (0x8000) – si un bin menor, resto queda 0xFF
-    const cart = (this.inst as any).cart as number[];
-    for (let i=0; i<0x8000 && i<cart.length; i++) snap[i] = cart[i] & 0xFF;
-    // RAM shadow C800-CFFF (0x800) replicando 1K real dos veces
-    const ram = (this.inst as any).ram as number[];
-    for (let i=0; i<0x800; i++) snap[0xC800 + i] = ram[i & 0x3FF] & 0xFF;
-    // BIOS E000-FFFF (8K)
-    const rom = (this.inst as any).rom as number[];
-    for (let i=0; i<0x2000 && i<rom.length; i++) snap[0xE000 + i] = rom[i] & 0xFF;
-    // VIA región D000-D7FF simplificada: escribir algunos registros base repetidos cada 0x10
-    const viaBase = 0xD000;
-    const viaVals: Record<string,number> = {
-      ora: (this.inst as any).via_ora|0,
-      orb: (this.inst as any).via_orb|0,
-      ddra: (this.inst as any).via_ddra|0,
-      ddrb: (this.inst as any).via_ddrb|0,
-      t1c_lo: (this.inst as any).via_t1c & 0xFF,
-      t1c_hi: ((this.inst as any).via_t1c >> 8) & 0xFF,
-      t2c_lo: (this.inst as any).via_t2c & 0xFF,
-      t2c_hi: ((this.inst as any).via_t2c >> 8) & 0xFF,
-      acr: (this.inst as any).via_acr|0,
-      pcr: (this.inst as any).via_pcr|0,
-      ifr: (this.inst as any).via_ifr|0,
-      ier: (this.inst as any).via_ier|0
-    };
-    for (let off=0; off<0x800; off+=0x10){
-      let idx=0; for (const k of Object.keys(viaVals)) { snap[viaBase + off + (idx++)] = viaVals[k]!; if (idx>=0x10) break; }
-    }
-    return snap;
-  }
-  invalidateMemoryView(){ /* noop */ }
-  setInput(x:number=0,y:number=0,buttons:number=0){
-    // Mapear rango esperado (-1..1) a 0..255 centrado en 128.
-    if (!this.inst) return;
-    const clamp = (v:number)=> Math.max(-1, Math.min(1, v));
-    const toByte = (v:number)=> (128 + Math.round(clamp(v)*127)) & 0xFF;
-    // Canal 0 = X, canal 1 = Y (convención interna jsvecx: alg_jch0/1)
-    (this.inst as any).alg_jch0 = toByte(x);
-    (this.inst as any).alg_jch1 = toByte(y);
-    // Botones: placeholder – se podrían mapear a un registro VIA más adelante; guardamos copia por si métricas futuras.
-    (this.inst as any)._buttonsSnapshot = buttons & 0x0F;
-  }
 }

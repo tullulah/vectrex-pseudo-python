@@ -28,6 +28,33 @@ export class RustWasmEmulatorCore implements IEmulatorCore {
   snapshotMemory(){ return this.svc.snapshotMemory?.(); }
   invalidateMemoryView(){ this.svc.invalidateMemoryView?.(); }
   setInput(x:number,y:number,buttons:number){ this.svc.setInput?.(x,y,buttons); }
+  audioPrepareDelta?(): Int16Array {
+    const raw: any = (this.svc as any).emu; if (!raw) return new Int16Array();
+    if (typeof raw.psg_prepare_delta_pcm !== 'function') return new Int16Array();
+    try {
+      const count = raw.psg_prepare_delta_pcm() >>> 0;
+      if (count === 0) return new Int16Array();
+      const ptr = raw.psg_delta_pcm_ptr();
+      const len = raw.psg_delta_pcm_len() >>> 0;
+      if (!ptr || len === 0) return new Int16Array();
+      // memory discovery similar to segments
+      const mem: WebAssembly.Memory | undefined = (raw.memory) || (raw.constructor?.memory) || ((globalThis as any).wasmMemory);
+      if (!mem) return new Int16Array();
+      const bytes = new Int16Array(mem.buffer, ptr, len);
+      // Copiamos para no retener view que se invalidará con próximas escrituras
+      return new Int16Array(bytes);
+    } catch { return new Int16Array(); }
+  }
+  audioSampleRate?(): number {
+    const raw: any = (this.svc as any).emu; if (!raw) return 0;
+    if (typeof raw.psg_sample_rate === 'function') { try { return raw.psg_sample_rate()|0; } catch {} }
+    return 0;
+  }
+  audioHasOverflow?(): boolean {
+    const raw: any = (this.svc as any).emu; if (!raw) return false;
+    if (typeof raw.psg_delta_overflow === 'function') { try { return !!raw.psg_delta_overflow(); } catch {} }
+    return false;
+  }
   // Exponer acceso directo por si debugging desea llegar al wasm interno.
   get raw(){ return (this.svc as any).emu; }
 }

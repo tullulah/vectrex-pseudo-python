@@ -349,6 +349,41 @@ Long Term:
 
 ---
 ## CHANGE NOTES
+### (Nuevo) 2025-09-21: Integración Parcial PSG AY-3-8912 (Fase 1)
+- Añadido módulo `psg_ay.rs` (registro 16 bytes, 3 canales tono, LFSR ruido 17-bit, mezcla lineal provisional, ring buffer PCM interno).
+- Integrado tick en `Bus::tick()` con clock provisional = CPU (1.5 MHz) y sample rate 44.1 kHz (config hardcoded fase inicial).
+- Exportadas métricas iniciales a WASM (`psg_samples`, `psg_tone_toggles`, `psg_noise_shifts`). Aún sin función de drenaje PCM al frontend ni curva log/envolvente.
+- No se modificó aún `SIMULATION_LIMITATIONS` para reflejar finalización total: el audio pasa de 'no implementado' a 'parcial (fase 1)'. Próximas fases: envolvente (regs 11–13), curva log amplitud, export buffer compartido, temporización exacta AY vs CPU.
+ - (Ampliación) Export PCM fase 1b: añadidas funciones `psg_prepare_pcm()`, `psg_pcm_ptr()`, `psg_pcm_len()`, `psg_pcm_stride()`, `psg_pcm_serial()` para snapshot lineal i16. No incremental diff todavía; UI debe copiar entero si necesita audio. Próximo paso: delta por serial + tamaño configurable ring.
+### (Nuevo) 2025-09-21: Audio Fase 2 (Curva Log + Envolvente)
+- Añadida tabla de volumen log aproximada (16 niveles) basada en relación empírica AY (valores normalizados usados en mezcla).
+- Implementado generador de envolvente (regs 11-13) con soporte bits: Continue (C), Attack (A), Alternate (Alt), Hold según reg 13 (mask 0x0F). Reinicio automático al escribir período (regs 11/12) o shape (13) si algún canal tiene bit4 activado.
+- Mezcla ahora usa nivel envolvente cuando bit4 de regs 8-10 está alto; amplitud nibble ignorado en ese caso.
+- Métrica nueva: `psg_env_steps` exportada en `metrics_json`.
+- Tests: `psg_envelope.rs` (ataque y hold) y parte log monotonicidad. (Nota: harness actual muestra 0 tests porque se compilan como ejecutables; mantener asserts para fallo inmediato). Próximo ajuste: convertir estos archivos a módulo `#[cfg(test)]` interno o usar pattern canonical para que el runner cuente casos.
+
+### (Nuevo) 2025-09-21: Audio Fase 2b (Delta PCM Export)
+- Añadido soporte de export incremental de audio: nuevas funciones WASM `psg_prepare_delta_pcm()`, `psg_delta_pcm_ptr()`, `psg_delta_pcm_len()`, `psg_delta_overflow()`.
+- Estado interno `last_export_write` y `delta_staging` en `AyPsg` permiten copiar sólo muestras nuevas desde la última export (full o delta) reduciendo coste de copia/memcpy para streaming en UI.
+- En caso de producirse más muestras que la longitud del ring entre lecturas (overflow) se marca flag y se devuelve snapshot completo (fall back) sin perder continuidad lógica de serial.
+- Mejora pendiente futura: exponer timestamp/cycle por bloque para sincronizar con frames de video o latencia dinámica de AudioWorklet. Se documentará cuando se añada.
+### (Nuevo) 2025-09-21: Audio Fase 3 (Integración Frontend / Streaming)
+- Extendida interfaz `IEmulatorCore` con métodos opcionales audio: `audioPrepareDelta()`, `audioSampleRate()`, `audioHasOverflow()`.
+- Implementación en `rustWasmCore` mapea a exports WASM (`psg_prepare_delta_pcm`, `psg_delta_pcm_ptr`, etc.) copiando el delta a `Int16Array` independiente para seguridad.
+- Stub `jsvecxCore` devuelve silencio (compatibilidad sin romper selector backend).
+- Nuevo módulo `psgAudio.ts` crea `AudioContext` + `AudioWorklet` (fallback ScriptProcessor) y hace polling cada ~16ms del delta PCM para stream continuo sin fabricar muestras.
+- Panel `EmulatorPanel` añade toggle `audio` persistente (`emu_audio_enabled`). Se inicia/pausa con estado Run/Pause/Stop.
+- Política mantenida: no se aplica post-procesado (sin filtros, sin mezcla adicional). Sólo conversión i16 -> float [-1,1].
+- Próximos pasos: timestamp per delta para sync, buffer adaptativo según drift y UI de latencia.
+
+### (Nuevo) 2025-09-21: Audio Fase 3b (Estadísticas / Overflow / UI)
+- Añadido conteo de overflows en export incremental (`psg_delta_overflow` ya existía; ahora se acumula en `psgAudio` y se expone en UI).
+- `psgAudio.ts`: métricas internas `pushedSamples`, `consumedSamples`, `bufferedSamples`, `bufferedMs` y `overflowCount`. Método público `getStats()` retorna snapshot.
+- Worklet (o ScriptProcessor fallback) envía eventos 'consumed' para mantener conteo de drenaje real sin heurísticas.
+- Panel `EmulatorPanel` ahora muestra caja "Audio PSG" (visible sólo con audio activado) con: sample rate, ms en buffer, pushed/consumed totals y overflows (resaltado en rojo si >0).
+- No se fabrican muestras ni se rellena de ceros en desincronizaciones: si overflow ocurre, se detecta y se registra pero el ring reutiliza snapshot completo (ya documentado en Fase 2b) — política de fidelidad mantenida.
+- Próximos micro‑pasos: (a) exponer timestamp/cycle para cada delta, (b) algoritmo de ajuste dinámico (shrink/grow) del objetivo de buffer, (c) indicador de drift acumulado.
+
 ### (Nuevo) 2025-09-20: Capa de Abstracción del Núcleo (emuCore)
 - Introducida interfaz `IEmulatorCore` + adaptador `RustWasmEmulatorCore` + stub `JsVecxEmulatorCore` + fábrica `emulatorFactory` y singleton `emuCore`.
 - Paneles migrados a `emuCore`; agregado selector de backend en OutputPanel (`emu_backend` en localStorage o query param) con fallback robusto.
@@ -1054,3 +1089,102 @@ Seguimiento: cualquier futura sincronización agregará subsección incremental 
 
 Nota lingüística: mantener esta sección en español (principal) con terminología técnica estable para facilitar búsquedas internas (tags: vendorización, submódulos, supply-chain, integridad).
 
+Context verificado: estamos en el repositorio original (cwd: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python`). El subdirectorio `clean_clone` existe pero no estamos dentro de él ahora. `git status -s SUPER_SUMMARY.md` no muestra cambios pendientes en el original (limpio).
+
+A continuación te dejo:
+
+## Pendientes específicos para completar la integración jsvecx
+
+(Enfocado a convertir el vendorizado en un backend realmente utilizable dentro del IDE / WASM y cerrar riesgos que ya identificaste)
+
+1. Backend Core / Abstracción
+   - Implementar `JsVecxEmulatorCore` real (fuera de placeholder) que cumpla la interfaz `IEmulatorCore`.
+   - Cargar bundle jsvecx vendorizado de forma determinista (sin depender de CDN ni rutas externas).
+   - Exponer métodos mínimos: init(reset BIOS + cart), step(frames o instrucciones), getFrameVectors / getAudio, teardown.
+
+2. Instanciación Segura
+   - Aislar ejecución del bundle en un Worker (frontend) para no bloquear UI principal.
+   - Canalizar mensajes (init, loadRom, runSteps, getState) con esquema JSON tipado.
+   - Timeouts y watchdog (evitar loop infinito en caso de bug jsvecx).
+
+3. Sanitización y Determinismo
+   - El sanitizador actual de bloque AY_* en bundler: moverlo a etapa build reproducible.
+   - Implementar hash del bundle final y compararlo con lista blanca (para detectar corrupción futura).
+   - Congelar/normalizar cualquier timestamp o Math.random si jsvecx lo utilizara (asegurar determinismo para tests).
+
+4. BIOS / ROM Handling
+   - Usar la BIOS real vendorizada; validar que jsvecx no intente cargar su propia copia alternativa.
+   - Comprobar mapeo de memoria coincide con layout Rust (0xE000 BIOS base) y no introduce espejos sintéticos.
+
+5. Vector Output Parity
+   - Mapear API jsvecx de vectores a formato interno existente (lista de segmentos o draw ops).
+   - Implementar adaptador para integrator (si el backend solo produce line segments raw, reusar pipeline actual).
+
+6. Audio (AY)
+   - Verificar que las constantes AY hardcodeadas en vendorizado coinciden con lo que espera el mixer interno.
+   - Si se exportan buffers PCM, normalizar longitud y sample rate antes de mezclarlos con backend Rust (soporte intercambiable).
+
+7. Tracing / Debug
+   - Hooks para trace CPU steps (limitados por política: <= N entradas).
+   - Búsqueda de equivalentes a `bios_calls_json()` o reconstruir call detection (JS: instrumentar JSR/BSR >= 0xF000).
+   - Extraer PC actual, SP, DP, A/B/X/Y/U/CC si jsvecx los expone (o añadir instrumentation patch en vendorizado).
+
+8. Integridad / Seguridad
+   - Script de verificación de integridad jsvecx: hash de cada archivo crítico (core JS, preprocess scripts).
+   - Validar que no hay código dinámico `eval` residual o `Function(...)`.
+   - Añadir a `INTEGRITY_MANIFEST.json` (futuro) entradas jsvecx/* relevantes.
+
+9. Build/Empaquetado
+   - Ajustar pipeline de build frontend para generar un único bundle jsvecx estable (min.js + source map opcional) con hash insertado.
+   - Asegurar tree-shaking (si procede) no elimina piezas que backend expecta via reflection.
+
+10. API Surface Consistencia
+   - Normalizar resultado de `reset()` (estado inicial común a ambos backends).
+   - Establecer convención para errores (throw vs return codes); unificar con Rust wrapper (promesas rechazadas traducidas a UI toast/log).
+
+11. Testing
+   - Prueba de arranque BIOS: comparar PCs iniciales y primer WAIT_RECAL equivalencia con backend Rust.
+   - Test vector determinismo: render same test ROM produce mismo set de líneas (tolerancia ±1 en intensidades si difiere escalado) entre backends.
+   - Test hash bundle: si cambia sin actualizar manifest → test falla.
+   - Test call stack BIOS: al menos registrar primeras N llamadas claves (Init, Reset0Ref, etc.) coherentes con Rust.
+
+12. Performance / Budget
+   - Benchmark básico: número de instrucciones/seg vs Rust para ROM simple (documentar en SUPER_SUMMARY sección comparativa).
+   - Si gap > X% evaluar micro-opt (desactivar features debug de jsvecx en build release).
+
+13. Documentación
+   - Añadir subsección 32.8.x con “Estado de integración jsvecx” (fecha).
+   - Incluir limitaciones (si carece de audio perfecto, timers, etc.).
+   - Actualizar MIGRATION_WASM si WASM capa incorpora selección dinámica de backend.
+
+14. Selección Dinámica en IDE
+   - Preferencia persistente (localStorage) “backend=wasm|jsvecx”.
+   - Fallback automático: si wasm init falla (sin WebAssembly disponible), autoseleccionar jsvecx.
+   - UI indicador del backend activo (para reportes de bugs precisos).
+
+15. Telemetría / Validación Cruza
+   - Modo comparativo: ejecutar un frame en ambos backends y diffs (PC divergente, vector count mismatch) para pruebas internas.
+   - No habilitar por defecto (coste performance); toggle debug.
+
+16. Limpieza Técnica (post-integración)
+   - Eliminar código de placeholder jsvecxCore previo.
+   - Consolidar helpers de carga BIOS (evitar rutas duplicadas).
+   - Añadir tipos TypeScript para mensajes Worker (d.ts).
+
+17. Riesgos Abiertos
+   - Divergencia de timings (jsvecx puede tener modelo de ciclos simplificado) → Documentar impacto: jitter en vectores.
+   - Diferencias en sonido (si mixer implementado distinto).
+   - Posible ausencia de algunas instrucciones o quirks no emulados igual (mapear lista tras primeras pruebas).
+
+## Notas sobre la anomalía de la sesión
+
+- Síntoma previo: `apply_patch` reportaba éxito pero contenido no visible o Git ignoraba cambios; flag H (assume-unchanged) persistía.
+- Reapareció para `.gitignore` pero luego se comprobó que el archivo no contenía patrones tras patch (similar patrón a fase anterior).
+- Reinicio de máquina resolvió el caso de `SUPER_SUMMARY`; eso sugiere caching del lado herramienta/editor y/o hook local.
+- Para continuidad: en la nueva sesión validar siempre con `git diff` inmediatamente tras patch crítico; si no aparece, intentar rename/recreate.
+
+Checklist rápido para la nueva sesión (ejecutar al retomar):
+1. `git pull --rebase` (por si se suben commits entre sesiones).
+2. `git ls-files -v | findstr \"^H \"` asegurando que ningún archivo clave aparece con H.
+3. Añadir un sentinel trivial a un archivo no crítico y confirmar `git status` lo ve.
+4. Continuar con tareas jsvecx según lista arriba.

@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { VectorEvent, Segment } from '../../emulatorCore';
+import { Segment } from '../../emulatorCore';
 import { emuCore } from '../../emulatorCoreSingleton';
 // @ts-ignore import binary asset (Vite will turn into URL)
 import biosUrl from '../../assets/bios.bin';
 import { inputManager } from '../../inputManager';
 import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
+import { psgAudio } from '../../psgAudio';
+type VectorEvent = { kind: 'move_to' | 'draw_vl'; pc: number; frame: number };
 
 // emuCore singleton importado (sustituye createEmulatorCore inline)
 
@@ -25,7 +27,10 @@ export const EmulatorPanel: React.FC = () => {
   const [demoMode, setDemoMode] = useState(false);
   const [demoStatus, setDemoStatus] = useState<'idle'|'waiting'|'ok'|'fallback'>('idle');
   const [traceVectors, setTraceVectors] = useState(() => { try { return localStorage.getItem('emu_trace_vectors')==='1'; } catch { return false; } });
-  const [holdSegments, setHoldSegments] = useState(() => { try { return localStorage.getItem('emu_hold_segments')==='1'; } catch { return false; } });
+  const [audioEnabled, setAudioEnabled] = useState(() => { try { return localStorage.getItem('emu_audio_enabled')!=='0'; } catch { return true; } });
+  // Audio stats (opcional Fase 3b): se refrescan periódicamente cuando audio está activo
+  const [audioStats, setAudioStats] = useState<{ sampleRate:number; pushed:number; consumed:number; bufferedSamples:number; bufferedMs:number; overflowCount:number }|null>(null);
+
   const [baseAddrHex, setBaseAddrHex] = useState('0000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
   const [toasts, setToasts] = useState<Array<{ id:number; msg:string; kind:'info'|'error'; ts:number }>>([]);
@@ -55,6 +60,25 @@ export const EmulatorPanel: React.FC = () => {
     const dpr = window.devicePixelRatio || 1; ctx.save(); ctx.scale(dpr,dpr);
     const WIDTH = canvas.width / dpr; const HEIGHT = canvas.height / dpr;
     ctx.fillStyle = 'black'; ctx.fillRect(0,0,WIDTH,HEIGHT);
+    
+    // LOG VECTORES: Mostrar coordenadas recibidas + FRAME INFO
+    if (segments.length > 0) {
+      console.log(`[EmulatorPanel] Rendering ${segments.length} segments:`);
+      segments.slice(0, 5).forEach((seg, i) => {
+        console.log(`  Raw Segment ${i}: (${seg.length}) [${seg[0]}, ${seg[1]}, ${seg[2]}, ${seg[3]}, ${seg[4]}, frame=${seg[5]}]`);
+        const s = normalizeSeg(seg);
+        console.log(`  Normalized Segment ${i}: (${s.x0.toFixed(2)}, ${s.y0.toFixed(2)}) -> (${s.x1.toFixed(2)}, ${s.y1.toFixed(2)}) frame=${seg[5]}`);
+      });
+      if (segments.length > 5) {
+        console.log(`  ... and ${segments.length - 5} more segments (all frame=${segments[5]?.[5] || 'unknown'})`);
+      }
+      
+      // 🔍 ANÁLISIS DE DIVERSIDAD
+      const uniqueSegments = new Set(segments.map(seg => `${seg[0]},${seg[1]},${seg[2]},${seg[3]}`));
+      const frames = new Set(segments.map(seg => seg[5]));
+      console.log(`  🔍 DIVERSIDAD: ${uniqueSegments.size} patrones únicos, ${frames.size} frames diferentes`);
+    }
+    
     if (!segments.length) {
       ctx.fillStyle = '#0f0'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
       const cx = WIDTH/2, cy = HEIGHT/2;
@@ -97,7 +121,7 @@ export const EmulatorPanel: React.FC = () => {
     for (const sRaw of segments) {
       const s = normalizeSeg(sRaw);
       if (!Number.isFinite(s.x0) || !Number.isFinite(s.y0) || !Number.isFinite(s.x1) || !Number.isFinite(s.y1)) {
-        if (holdSegments) console.debug('[draw] skip invalid seg', sRaw);
+        if (traceVectors) console.debug('[draw] skip invalid seg', sRaw);
         continue;
       }
       const x0 = ( (s.x0 - offsetX) * scale );
@@ -110,7 +134,7 @@ export const EmulatorPanel: React.FC = () => {
       const i = Math.max(0, Math.min(255, s.intensity|0));
       ctx.strokeStyle = `rgba(0,255,120,${(i/255).toFixed(3)})`;
       ctx.beginPath(); ctx.moveTo(dx + x0, HEIGHT - (dy + y0)); ctx.lineTo(dx + x1, HEIGHT - (dy + y1)); ctx.stroke();
-      if (holdSegments && (window as any).console) {
+      if (traceVectors && (window as any).console) {
         // Log formato compacto: frame idx; coords originales y transformadas
         // Nota: se deja nivel debug para poder filtrarlo fácilmente
         try { console.debug('[draw] seg', {frame:s.frame, raw:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1,i:s.intensity}, bb:{minX,maxX,minY,maxY}, canvas:{x0:dx+x0,y0:HEIGHT-(dy+y0),x1:dx+x1,y1:HEIGHT-(dy+y1)}, scale}); } catch {}
@@ -143,16 +167,9 @@ export const EmulatorPanel: React.FC = () => {
     const metrics = emuCore.metrics(); if (metrics) { const t1=(metrics as any).via_t1; const ifr=(metrics as any).via_ifr; const ier=(metrics as any).via_ier; const irq_line=(metrics as any).via_irq_line; const irq_count=(metrics as any).via_irq_count; if ([t1,ifr,ier,irq_line,irq_count].every(v=>v!==undefined)) { setViaMetrics({t1,ifr,ier,irq_line,irq_count}); } }
     let segs = emuCore.getSegmentsShared();
     if (!segs.length) {
-      if (traceVectors) console.debug('[panel] shared empty -> drain json/peek');
-  segs = holdSegments ? (emuCore.peekSegmentsJson?.() || []) : (emuCore.drainSegmentsJson?.() || []);
-      // Fallback 1: si métricas dicen que existen segmentos acumulados (total >0) pero ambos métodos vacíos, intentar peek.
-      if (!segs.length) {
-  const mm:any = metrics || emuCore.metrics();
-        if (mm && typeof mm.integrator_total_segments === 'number' && mm.integrator_total_segments > 0) {
-          if (traceVectors) console.debug('[panel] metrics report segments total >0; trying peekSegmentsJson');
-          segs = emuCore.peekSegmentsJson?.() || [];
-        }
-      }
+      if (traceVectors) console.debug('[panel] shared empty -> drain json');
+      segs = emuCore.drainSegmentsJson?.() || [];
+      // Si no hay segmentos disponibles, simplemente no dibujamos nada (comportamiento real)
       // Fallback 2: si seguimos sin nada y auto-demo debería haberse generado, invocar demoTriangle manual.
       if (!segs.length) {
   const anyEmu:any = (emuCore as any).raw || (window as any).emu;
@@ -161,7 +178,7 @@ export const EmulatorPanel: React.FC = () => {
           if (autoDemo) {
             if (traceVectors) console.debug('[panel] invoking demo_triangle manual fallback');
             emuCore.demoTriangle?.();
-            segs = emuCore.peekSegmentsJson?.() || [];
+            segs = emuCore.drainSegmentsJson?.() || [];
           }
         } catch {/* ignore */}
       }
@@ -185,6 +202,23 @@ export const EmulatorPanel: React.FC = () => {
 
   useEffect(()=>{ fixedCanvasInit(); }, [fixedCanvasInit]);
   useEffect(()=>{ if (status==='running' && !demoMode){ if (!rafRef.current) rafRef.current=requestAnimationFrame(animationLoop); } else if (rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; } }, [status, animationLoop, demoMode]);
+  // Audio lifecycle: init worklet on enable; start/stop with status
+  useEffect(()=>{ (async()=>{ if (audioEnabled){ try { await psgAudio.init(); if (status==='running') psgAudio.start(); } catch(e){ console.warn('[EmulatorPanel] audio init failed', e); } } else { psgAudio.stop(); } })(); }, [audioEnabled]);
+  useEffect(()=>{ if (!audioEnabled){ return; } if (status==='running'){ psgAudio.start(); } else { psgAudio.stop(); } }, [status, audioEnabled]);
+  // Poll de estadísticas de audio (cada ~500ms mientras audioEnabled)
+  useEffect(()=>{
+    if (!audioEnabled) { setAudioStats(null); return; }
+    let cancelled=false;
+    const tick = () => {
+      try {
+        const s = psgAudio.getStats?.();
+        if (s && !cancelled) setAudioStats(s);
+      } catch {/* ignore */}
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return ()=>{ cancelled=true; clearInterval(id); };
+  }, [audioEnabled]);
 
   // Demo mode effect with retry logic before falling back
   useEffect(() => {
@@ -494,13 +528,13 @@ export const EmulatorPanel: React.FC = () => {
   {!emuCore.isBiosLoaded() && <span style={{color:'#f55'}}>BIOS not loaded</span>}
         <span>Segments(last frame): {segmentsCount}</span>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
+          <input type='checkbox' checked={audioEnabled} onChange={e=>{ const v=e.target.checked; setAudioEnabled(v); try { localStorage.setItem('emu_audio_enabled', v?'1':'0'); } catch{} if(!v) psgAudio.stop(); }} /> audio
+        </label>
+        <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={showLoopWatch} onChange={e=> setShowLoopWatch(e.target.checked)} /> loop watch
         </label>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={traceVectors} onChange={e=> setTraceVectors(e.target.checked)} /> trace vectors
-        </label>
-        <label style={{display:'flex', alignItems:'center', gap:4}}>
-          <input type='checkbox' checked={holdSegments} onChange={e=> { const v=e.target.checked; setHoldSegments(v); try { localStorage.setItem('emu_hold_segments', v?'1':'0'); } catch{} }} /> hold segs
         </label>
         <div style={{marginLeft:'auto', display:'flex', gap:6}}>
           <button style={btn} onClick={onBuild} title='Compile active .vpy or assemble .asm, load & run'>Build & Run</button>
@@ -527,6 +561,21 @@ export const EmulatorPanel: React.FC = () => {
           </div>
         </div>
         <div style={{marginTop:12, display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12, alignItems:'start'}}>
+          {audioEnabled && (
+            <div style={statBox}>
+              <div style={statTitle}>Audio PSG</div>
+              {audioStats ? (
+                <>
+                  <div>Rate: {audioStats.sampleRate} Hz</div>
+                  <div>Buffered: {audioStats.bufferedMs.toFixed(1)} ms ({audioStats.bufferedSamples} smp)</div>
+                  <div>Pushed/Consumed: {audioStats.pushed}/{audioStats.consumed}</div>
+                  <div style={{color: audioStats.overflowCount>0? '#f66':'#6c6'}}>
+                    Overflows: {audioStats.overflowCount}{audioStats.overflowCount>0 && ' (!!)'}
+                  </div>
+                </>
+              ) : <div style={{opacity:0.5}}>(no stats)</div>}
+            </div>
+          )}
           <div style={statBox}>
             <div style={statTitle}>Recent Events ({vecEvents.length})</div>
             <ul style={{margin:0, paddingLeft:16, listStyle:'none', maxHeight:140, overflow:'auto'}}>

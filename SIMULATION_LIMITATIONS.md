@@ -19,7 +19,7 @@
 - Segment generation tied to register writes rather than analog thresholds.
 
 ## Audio (PSG AY-3-8912)
-- Not implemented (silence). BIOS calls expecting sound no-op.
+- Parcial (Fase 1 2025-09-21): tono 3 canales + ruido + mezcla lineal simple. Sin envolvente, curva log, ni temporización dedicada del reloj AY. No export de buffer todavía (sólo métricas básicas). BIOS que configure envolventes aún no obtiene variación.
 
 ## Input
 - Estado mínimo: snapshot joystick analógico + 4 botones vía RAM fija ($00F0..$00F2). No integración aún con puertos VIA reales ni edge detection; BIOS que espere lectura por bit en puertos puede requerir adaptación futura.

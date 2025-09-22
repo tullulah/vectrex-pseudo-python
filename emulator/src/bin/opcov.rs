@@ -20,7 +20,7 @@ fn main() {
         for &sub in list {
             tested += 1;
             let mut clone = CPU::default();
-            clone.pc=0x0100; clone.mem[0x0100]=prefix; clone.mem[0x0101]=sub; clone.mem[0xFFFC]=0x00; clone.mem[0xFFFD]=0x02;
+            clone.pc=0x0100; clone.bus.mem[0x0100]=prefix; clone.bus.mem[0x0101]=sub; clone.bus.mem[0xFFFC]=0x00; clone.bus.mem[0xFFFD]=0x02;
             if !clone.step() { ext_missing.push(((prefix as u16)<<8)|sub as u16); }
         }
     }
@@ -40,7 +40,7 @@ fn main() {
         if !cpu.step() {
             // last executed opcode flagged as unimplemented; record it
             let pc = cpu.pc.wrapping_sub(1); // step() increments pc after fetch
-            let op = cpu.mem[pc as usize];
+            let op = cpu.bus.mem[pc as usize];
             if !runtime_unimpl.contains(&op) { runtime_unimpl.push(op); }
             break;
         }

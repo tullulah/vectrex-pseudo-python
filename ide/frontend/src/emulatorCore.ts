@@ -29,6 +29,10 @@ export interface IEmulatorCore {
   snapshotMemory?(): Uint8Array;
   invalidateMemoryView?(): void;
   setInput?(x:number,y:number,buttons:number): void;
+  // Audio (opcional): devuelve delta de muestras i16 (copiadas) y sample rate fijo.
+  audioPrepareDelta?(): Int16Array; // retorna nuevas muestras (puede longitud 0)
+  audioSampleRate?(): number;       // Hz (ej. 44100)
+  audioHasOverflow?(): boolean;     // true si último delta fue snapshot completo por overflow
 }
 
 // Tipo del identificador de backend.

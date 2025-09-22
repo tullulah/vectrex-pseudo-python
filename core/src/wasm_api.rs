@@ -30,7 +30,7 @@ impl WasmEmu {
     /// Load a binary blob (cartridge/user program) at supplied base address.
     #[wasm_bindgen]
     pub fn load_bin(&mut self, base: u16, data: &[u8]) {
-        for (i,b) in data.iter().enumerate() { let addr = base as usize + i; if addr < 65536 { self.cpu.mem[addr] = *b; self.cpu.bus.mem[addr] = *b; } }
+        for (i,b) in data.iter().enumerate() { let addr = base as usize + i; if addr < 65536 { self.cpu.bus.mem[addr] = *b; } }
     }
 
     /// Perform a soft reset (re-evaluates vectors, clears dynamic flags).
@@ -61,7 +61,7 @@ impl WasmEmu {
 
     /// Direct pointer to full 64K memory (read-only view in JS via Uint8Array::new(memory_buffer)).
     #[wasm_bindgen]
-    pub fn memory_ptr(&self) -> *const u8 { self.cpu.mem.as_ptr() }
+    pub fn memory_ptr(&self) -> *const u8 { self.cpu.bus.mem.as_ptr() }
 
     /// Snapshot opcode metrics (human readable multiline string).
     #[wasm_bindgen]
