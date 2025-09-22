@@ -9,7 +9,6 @@ fn load_real_bios(cpu: &mut CPU) {
     assert_eq!(data.len(), 8192, "BIOS size inesperado");
     for (i, b) in data.iter().enumerate() { 
         let addr = 0xE000 + i as u16; 
-        cpu.mem[addr as usize] = *b; 
         cpu.bus.mem[addr as usize] = *b; 
     }
     cpu.bios_present = true;

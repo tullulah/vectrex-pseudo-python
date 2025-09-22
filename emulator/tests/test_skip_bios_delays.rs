@@ -19,7 +19,7 @@ fn test_skip_bios_delays() {
 
     println!("🚀 Iniciando test con skip de delays de BIOS");
     
-    let mut max_steps = 50000;
+    let max_steps = 50000;
     let mut step_count = 0;
     let mut last_pc = 0;
     let mut pc_count = 0;

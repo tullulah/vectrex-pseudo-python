@@ -575,7 +575,7 @@ mod unified_new_ops {
 }
 
 // --- INC A casos adicionales ---
-mod unified_inca { use vectrex_emulator::CPU; #[test] fn inca_basic(){ let mut cpu=CPU::default(); cpu.a=0x00; cpu.pc=0x0100; cpu.mem[0x0100]=0x4C; cpu.step(); assert_eq!(cpu.a,0x01); assert!(!cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_sets_zero(){ let mut cpu=CPU::default(); cpu.a=0xFF; cpu.pc=0x0200; cpu.mem[0x0200]=0x4C; cpu.step(); assert_eq!(cpu.a,0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_overflow_flag(){ let mut cpu=CPU::default(); cpu.a=0x7F; cpu.pc=0x0300; cpu.mem[0x0300]=0x4C; cpu.step(); assert_eq!(cpu.a,0x80); assert!(cpu.cc_n && cpu.cc_v && !cpu.cc_z); } }
+mod unified_inca { use vectrex_emulator::CPU; #[test] fn inca_basic(){ let mut cpu=CPU::default(); cpu.a=0x00; cpu.pc=0x0100; cpu.bus.mem[0x0100]=0x4C; cpu.step(); assert_eq!(cpu.a,0x01); assert!(!cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_sets_zero(){ let mut cpu=CPU::default(); cpu.a=0xFF; cpu.pc=0x0200; cpu.mem[0x0200]=0x4C; cpu.step(); assert_eq!(cpu.a,0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_overflow_flag(){ let mut cpu=CPU::default(); cpu.a=0x7F; cpu.pc=0x0300; cpu.mem[0x0300]=0x4C; cpu.step(); assert_eq!(cpu.a,0x80); assert!(cpu.cc_n && cpu.cc_v && !cpu.cc_z); } }
 
 // --- RMW / adicionales ---
 mod unified_rmw_added { use vectrex_emulator::CPU; fn run(mut cpu:CPU)->CPU{ cpu.step(); cpu }

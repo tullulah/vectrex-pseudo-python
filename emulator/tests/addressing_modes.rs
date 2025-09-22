@@ -51,16 +51,16 @@ fn sta_direct_escribe_en_pagina_dp() {
         c.dp=0x21; c.a=0xAB; c.pc=0x0500;
         c.test_write8(0x0500,0x97); c.test_write8(0x0501,0x10); // STA direct offset 0x10 -> 0x2110
     });
-    assert_eq!(cpu.mem[0x2110],0xAB,"STA direct no escribió en página DP correcta");
+    assert_eq!(cpu.bus.mem[0x2110],0xAB,"STA direct no escribió en página DP correcta");
 }
 
 #[test]
 fn sta_indexed_x() {
     let (cpu,_cyc)=run_one(|c|{
         c.x=0x5000; c.a=0xEE; c.pc=0x0600;
-        c.test_write8(0x0600,0xA7); c.test_write8(0x0601,0x84); // STA ,X
+        c.test_write8(0x0600,0xA7); c.test_write8(0x0601,0x80); // STA ,X (corrected postbyte)
     });
-    assert_eq!(cpu.mem[0x5000],0xEE,"STA ,X no almacenó en dirección indexada");
+    assert_eq!(cpu.bus.mem[0x5000],0xEE,"STA ,X no almacenó en dirección indexada");
 }
 
 #[test]

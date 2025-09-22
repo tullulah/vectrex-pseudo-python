@@ -6,7 +6,7 @@ fn load_real_bios(cpu: &mut CPU) {
     assert_eq!(data.len(), 8192, "BIOS size inesperado");
     for (i, b) in data.iter().enumerate() { 
         let addr = 0xE000 + i as u16; 
-        cpu.mem[addr as usize] = *b; 
+        cpu.bus.mem[addr as usize] = *b; 
         cpu.bus.mem[addr as usize] = *b; 
     }
     cpu.bios_present = true;
@@ -34,7 +34,7 @@ fn analyze_f19e_loop() {
     
     // Analyze what the loop is testing
     let test_addr = ((cpu.dp as u16) << 8) | 0x0D;
-    let test_value = cpu.mem[test_addr as usize];
+    let test_value = cpu.bus.mem[test_addr as usize];
     
     println!("Testing address: {:04X} (DP={:02X}, offset=0D)", test_addr, cpu.dp);
     println!("Current value at {:04X}: {:02X}", test_addr, test_value);
@@ -43,7 +43,7 @@ fn analyze_f19e_loop() {
     println!("\nMemory around test address:");
     for offset in 0x00..0x20 {
         let addr = ((cpu.dp as u16) << 8) | offset;
-        let value = cpu.mem[addr as usize];
+        let value = cpu.bus.mem[addr as usize];
         println!("  {:04X}: {:02X}", addr, value);
     }
     

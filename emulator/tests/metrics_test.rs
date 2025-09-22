@@ -5,12 +5,12 @@ fn opcode_metrics_collect() {
     let mut cpu = CPU::default();
     cpu.pc = 0x0100;
     // Program: LDA #$01 (0x86), NOP (0x12), UNIMPL via 0x10 prefix with invalid sub-op (0x10 0xFF), NOP (0x12)
-    cpu.mem[0x0100] = 0x86; cpu.bus.mem[0x0100] = 0x86; // implemented
-    cpu.mem[0x0101] = 0x01; cpu.bus.mem[0x0101] = 0x01; // operand
-    cpu.mem[0x0102] = 0x12; cpu.bus.mem[0x0102] = 0x12; // NOP
-    cpu.mem[0x0103] = 0x10; cpu.bus.mem[0x0103] = 0x10; // prefix
-    cpu.mem[0x0104] = 0xFF; cpu.bus.mem[0x0104] = 0xFF; // invalid sub-op -> should return false
-    cpu.mem[0x0105] = 0x12; cpu.bus.mem[0x0105] = 0x12; // not reached
+    cpu.bus.mem[0x0100] = 0x86; // implemented
+    cpu.bus.mem[0x0101] = 0x01; // operand
+    cpu.bus.mem[0x0102] = 0x12; // NOP
+    cpu.bus.mem[0x0103] = 0x10; // prefix
+    cpu.bus.mem[0x0104] = 0xFF; // invalid sub-op -> should return false
+    cpu.bus.mem[0x0105] = 0x12; // not reached
 
     assert!(cpu.step(), "LDA should execute");
     assert!(cpu.step(), "NOP should execute");

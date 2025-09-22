@@ -24,13 +24,12 @@ fn test_exact_bios_f4eb_loop() {
     println!("Estado inicial: B={:02X} ({}), Z={}", cpu.b, cpu.b, cpu.cc_z);
     
     let mut iterations = 0;
-    let mut last_pc = 0;
     let mut stuck_count = 0;
     
     while iterations < 1000 {  // Límite de seguridad
-        last_pc = cpu.pc;
+        let last_pc = cpu.pc;
         let last_b = cpu.b;
-        let last_z = cpu.cc_z;
+        let _last_z = cpu.cc_z;
         
         if !cpu.step() {
             println!("❌ CPU step failed at iteration {}", iterations);

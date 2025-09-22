@@ -23,7 +23,7 @@ fn test_cartridge_detection_routine() {
     emulator.cpu.trace = true;
     
     let mut found_ldu_0000 = false;
-    let mut found_ldx_copyright = false;
+    let found_ldx_copyright = false;
     let mut found_ldu_e000 = false;
     let mut in_detection_routine = false;
     

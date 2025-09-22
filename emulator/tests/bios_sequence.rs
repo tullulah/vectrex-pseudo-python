@@ -55,7 +55,7 @@ fn bios_sequence_integrity() {
     while safety_steps < max_steps {
         if let Some(&exp) = targets.get(&cpu.pc) {
             if !seen.contains_key(&cpu.pc) {
-                let op = cpu.mem[cpu.pc as usize];
+                let op = cpu.bus.mem[cpu.pc as usize];
                 assert_eq!(op, exp, "Opcode inesperado en PC {:04X}", cpu.pc);
                 let delta_s = if cpu.s > last_s { cpu.s - last_s } else { last_s - cpu.s };
                 assert!(delta_s < 0x0800, "S cambio brusco {:04X}->{:04X}", last_s, cpu.s);

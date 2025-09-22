@@ -194,7 +194,7 @@ fn opcode_stb_direct() {
     let r = run_with_cycles(|c| { c.pc=0x1000; c.dp=0x00; c.b=0x42; c.test_write8(0x1000,0xD7); c.test_write8(0x1001,0xFF); });
     let cpu = r.cpu;
     assert_eq!(r.cycles, 4, "STB directo ciclos 4 got {}", r.cycles);
-    assert_eq!(cpu.mem[0x00FF], 0x42); assert_eq!(cpu.pc, 0x1002);
+    assert_eq!(cpu.bus.mem[0x00FF], 0x42); assert_eq!(cpu.pc, 0x1002);
 }
 
 // PULS: 0x35 mask. Usamos máscara 0x06 (A y B). Orden hardware procesa bits ascendentes: bit1 (A) primero, luego bit2 (B).

@@ -17,7 +17,7 @@ fn bios_reset_vector_watch() {
     let limit: u32 = 50_000; // amplio pero defensivo; BIOS debería alcanzar vectores por interrupciones o lectura tardía
     let mut reached_vector=false;
     while steps < limit {
-        let pc = cpu.pc; let op = cpu.mem[pc as usize];
+        let pc = cpu.pc; let op = cpu.bus.mem[pc as usize];
         if pcs.len() < 256 { pcs.push((pc,op)); }
         if pc >= 0xFF80 { reached_vector=true; break; }
         if !cpu.step() { eprintln!("[HALT] opcode no implementado en {:04X}", pc); break; }
@@ -27,11 +27,11 @@ fn bios_reset_vector_watch() {
     // Dump vectores si estamos ya en zona
     for addr in (0xFF80u16..=0xFFFF).step_by(16) { 
         print!("{:04X}: ", addr);
-        for o in 0..16 { let a=addr+o; let b=cpu.mem[a as usize]; print!("{:02X} ", b); }
+        for o in 0..16 { let a=addr+o; let b=cpu.bus.mem[a as usize]; print!("{:02X} ", b); }
         println!();
     }
-    let vec_reset_lo = cpu.mem[0xFFFC];
-    let vec_reset_hi = cpu.mem[0xFFFD];
+    let vec_reset_lo = cpu.bus.mem[0xFFFC];
+    let vec_reset_hi = cpu.bus.mem[0xFFFD];
     println!("[VECTORS] RESET raw={:02X}{:02X} -> {:04X}", vec_reset_hi, vec_reset_lo, ((vec_reset_hi as u16)<<8)|vec_reset_lo as u16);
     println!("[PC TRACE <=256]");
     for (i,(pc,op)) in pcs.iter().enumerate() { println!("{:03} {:04X}:{:02X}", i, pc, op); }

@@ -21,7 +21,7 @@ mod extended_tests {
         }
         
         // Cargar ROM de prueba
-        let rom_path = r"C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\examples\triangle_aligned.bin";
+        let rom_path = r"C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\examples\hello.bin";
         match std::fs::read(rom_path) {
             Ok(rom_data) => {
                 emulator.load_cartridge(&rom_data);

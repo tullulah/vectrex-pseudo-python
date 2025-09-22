@@ -28,9 +28,9 @@ fn test_bios_cartridge_detection_logic() {
         // Detalle especial para el rango donde se queda atascado
         if pc_before >= 0xF4E0 && pc_before <= 0xF500 {
             // Leer contenido de memoria en PC para ver qué instrucciones son
-            let opcode = emulator.cpu.read8(pc_before);
-            let operand1 = emulator.cpu.read8(pc_before.wrapping_add(1));
-            let operand2 = emulator.cpu.read8(pc_before.wrapping_add(2));
+            let opcode = emulator.cpu.bus.read8(pc_before);
+            let operand1 = emulator.cpu.bus.read8(pc_before.wrapping_add(1));
+            let operand2 = emulator.cpu.bus.read8(pc_before.wrapping_add(2));
             
             println!("Step {}: PC=0x{:04X} → Opcode=0x{:02X} 0x{:02X} 0x{:02X}", 
                     step, pc_before, opcode, operand1, operand2);
@@ -55,7 +55,7 @@ fn test_bios_cartridge_detection_logic() {
         // Revisar direcciones de memoria críticas para detección de cartuchos
         // En Vectrex, típicamente se revisa 0x0000 para ver si hay cartucho
         if step % 5000 == 0 {
-            let cart_check = emulator.cpu.bus.read_byte(0x0000);
+            let cart_check = emulator.cpu.bus.read8(0x0000);
             println!("Step {}: Cartucho en 0x0000 = 0x{:02X}, PC = 0x{:04X}", 
                     step, cart_check, pc_after);
         }
@@ -79,12 +79,12 @@ fn test_bios_cartridge_detection_logic() {
     
     // Verificar el estado de memoria donde debería estar Mine Storm
     println!("=== ANÁLISIS DE MEMORIA ===");
-    println!("Contenido en 0x0000: 0x{:02X}", emulator.cpu.bus.read_byte(0x0000));
-    println!("Contenido en 0x8000: 0x{:02X}", emulator.cpu.bus.read_byte(0x8000));
+    println!("Contenido en 0x0000: 0x{:02X}", emulator.cpu.bus.read8(0x0000));
+    println!("Contenido en 0x8000: 0x{:02X}", emulator.cpu.bus.read8(0x8000));
     
     // Buscar patrones de instrucciones que podrían indicar detección de cartucho
     for addr in [0x0000, 0x8000, 0xC000] {
-        let val = emulator.cpu.bus.read_byte(addr);
+        let val = emulator.cpu.bus.read8(addr);
         println!("Dirección cartucho 0x{:04X}: 0x{:02X}", addr, val);
     }
 }

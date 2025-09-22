@@ -128,6 +128,7 @@ pub struct CPU {
     pub t2_expiries: u64,
     pub lines_per_frame_accum: u64,
     pub lines_per_frame_samples: u64,
+    pub audio_output: u8,       // Audio output value from MUX selector 3
     // Trace helpers
     pub bios_handoff_logged: bool, // evita duplicar [BIOS->CART]
     // Timing de frames: ciclos en los que retornó Wait_Recal (para medir duración entre frames reales)
@@ -221,6 +222,7 @@ impl Default for CPU {
         draw_vl_count: 0,
             cart_valid:false, cart_title:[0;16], cart_validation_done:false,
             firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
+            audio_output:0,
             temp_segments_c: Vec::new(),
             last_extended_unimplemented: Vec::new(),
             hot00: [(0,0);4], hotff: [(0,0);4],
@@ -280,19 +282,21 @@ impl CPU {
                     let y_dac = self.port_a_value as i8 as f32 * DAC_SCALE;
                     let old_y_val = self.current_y;
                     self.current_y = y_dac as i16;
-                    // debug_log!("🔧 Y-axis update: port_a=0x{:02X} -> y_dac={:.1} -> current_y={} (was {})", 
-                    //         self.port_a_value, y_dac, self.current_y, old_y_val);
                 }
                 1 => { // X,Y Axis integrator offset
-                    // TODO: offset handling if needed
+                    // Apply offset to current position based on port_a_value
+                    let offset_val = self.port_a_value as i8 as f32 * DAC_SCALE;
+                    self.current_x = (self.current_x as f32 + offset_val) as i16;
+                    self.current_y = (self.current_y as f32 + offset_val) as i16;
                 }
                 2 => { // Z Axis (Vector Brightness) level
                     self.last_intensity = self.port_a_value;
                     self.handle_intensity_change();
-                    // println!("🎯 MUX Brightness: intensity={} (port_a=0x{:02X})", self.last_intensity, self.port_a_value);  // SILENCED FOR SPEED TEST
                 }
                 3 => { // Connected to sound output line via divider network
-                    // TODO: audio output if needed
+                    // Store audio output value - placeholder for future audio implementation
+                    // In real Vectrex this would drive speakers through analog circuitry
+                    self.audio_output = self.port_a_value;
                 }
                 _ => {} // Invalid selector
             }
@@ -306,10 +310,6 @@ impl CPU {
             // Only generate line if there's actual movement
             if dx.abs() > 0.1 || dy.abs() > 0.1 {
                 self.integrator.line_to_rel(dx, dy, self.last_intensity, self.cycle_frame);
-                if dx.abs() > 10.0 || dy.abs() > 10.0 {
-                    // println!("📐 Vector: dx={:.1}, dy={:.1}, intensity={}, pos=({},{})",   // SILENCED FOR SPEED TEST
-                    //     dx, dy, self.last_intensity, self.current_x, self.current_y);
-                }
             }
         } 
     }
@@ -396,6 +396,7 @@ impl CPU {
             integrator: Integrator::new(), integrator_auto_drain:false, integrator_last_frame_segments:0, integrator_max_frame_segments:0, integrator_total_segments:0, draw_vl_count:0,
             cart_valid:false, cart_title:[0;16], cart_validation_done:false,
             firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
+            audio_output:0,
             temp_segments_c: Vec::new(),
             last_extended_unimplemented: Vec::new(),
             hot00: [(0,0);4], hotff: [(0,0);4], trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(), debug_autotrace_remaining:0,
@@ -773,7 +774,7 @@ impl CPU {
                  * Verificado: ✓ OK - Placeholder para futuras expansiones
                  */
                 0x6 => { // Timer 2 Low - May be used for frame timing
-                    // VIA handles Timer2 functionality - no additional CPU-side processing needed
+                    self.bus.via.write(0x6, val); // Delegate to VIA Timer2 Low register
                 }
                 /* VIA 6522 Auxiliary Control Register (0xB) - Timer Configuration
                  * Register: ACR (bits control timer modes y shift register)
@@ -786,13 +787,13 @@ impl CPU {
                  * Verificado: ✓ OK - Control modes para timing preciso
                  */
                 0xB => { // Auxiliary Control Register - Timer modes
-                    // VIA handles ACR functionality - no additional CPU-side processing needed
+                    self.bus.via.write(0xB, val); // Delegate to VIA ACR register
                 }
                 0xE => { // Interrupt Enable Register - Critical!
-                    // VIA handles IER functionality - no additional CPU-side processing needed
+                    self.bus.via.write(0xE, val); // Delegate to VIA IER register
                 }
                 0xD => { // Interrupt Flag Register - Critical!
-                    // VIA handles IFR functionality - no additional CPU-side processing needed
+                    self.bus.via.write(0xD, val); // Delegate to VIA IFR register
                 }
                 _ => {
                     // Other VIA registers don't need immediate integrator updates
@@ -998,7 +999,6 @@ impl CPU {
         }
     // Fetch standard IRQ vector (big-endian)
     let vec = self.read_vector(VEC_IRQ); self.pc = vec; 
-    // self.log_interrupt_enter("IRQ", prev_pc, sp_before, vec);
     #[cfg(test)] { 
         let hi=self.read8(VEC_IRQ); let lo=self.read8(VEC_IRQ+1);
         }
@@ -1042,7 +1042,6 @@ impl CPU {
             }
         // Standard FIRQ vector fetch (big-endian)
         let vec = self.read_vector(VEC_FIRQ); self.pc = vec; 
-        // self.log_interrupt_enter("FIRQ", prev_pc, sp_before, vec);
         #[cfg(test)] { let hi=self.read8(VEC_FIRQ); let lo=self.read8(VEC_FIRQ+1); println!("[FIRQ-VECTOR] fetched={:04X} (raw bytes HI={:02X} LO={:02X})", vec, hi, lo); }
         self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
         let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::FIRQ });
@@ -1056,7 +1055,6 @@ impl CPU {
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
         let cc = self.pack_cc(); self.push8(cc); self.cc_i = true;
         let vec = self.read_vector(VEC_NMI); self.pc = vec; 
-        // self.log_interrupt_enter("NMI", prev_pc, sp_before, vec);
         self.nmi_pending = false; self.wai_halt = false; self.in_irq_handler = true;
         let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::NMI });
     }
@@ -1068,7 +1066,6 @@ impl CPU {
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
         let cc = self.pack_cc(); self.push8(cc);
         let vec_val = self.read_vector(vec); self.pc = vec_val; 
-        // self.log_interrupt_enter(label, prev_pc, sp_before, vec_val);
         self.wai_halt = false; self.in_irq_handler = true;
         let kind = match label { "SWI" => ShadowKind::SWI, "SWI2" => ShadowKind::SWI2, "SWI3" => ShadowKind::SWI3, _ => ShadowKind::SWI };
         let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind });
@@ -1106,9 +1103,6 @@ impl CPU {
                 let irq_vec = self.read_vector(VEC_IRQ);
                 if any_enabled_and_pending && ier != 0 && (!self.bios_present || irq_vec >= 0xE000) {
                     self.irq_pending = true;
-                    if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") && !self.cc_i {
-                        // println!("[IRQ][PENDING] pc={:04X} IFR={:02X} IER={:02X} vec={:04X}", self.pc, ifr, ier, irq_vec);
-                    }
                 } else { self.irq_pending = false; }
             } else { self.irq_pending = false; }
         }
@@ -1120,9 +1114,6 @@ impl CPU {
                 // Timer1 expiró - generar IRQ y deshabilitar
                 self.timer1_enabled = false;
                 self.t1_expiries = self.t1_expiries.wrapping_add(1);
-                // if std::env::var("TIMER_TRACE").ok().as_deref()==Some("1") {
-                //     debug_log!("⏰ [TIMER1] Expired! t1_expiries={}, triggering IRQ", self.t1_expiries);
-                // }
                 // Triggear Timer1 IRQ vía Bus helper
                 self.bus.trigger_timer1_irq();
             }
@@ -1692,11 +1683,6 @@ impl CPU {
                 self.b = res;
                 self.update_nz8(res);
                 self.cc_v = res == 0x7F;
-                if cfg!(not(target_arch="wasm32")) {
-                    if std::env::var("LOOP_F4EB_TRACE").ok().as_deref()==Some("1") {
-                        if self.pc==0xF4EF || self.pc==0xF4EE || self.pc==0xF4ED || self.pc==0xF4EB { println!("[F4EB_LOOP][after DECB] PC={:04X} B={:02X} Z={} N={} V={}", self.pc, self.b, self.cc_z as u8, self.cc_n as u8, self.cc_v as u8); }
-                    }
-                }
             }
             /* INCB - Increment Accumulator B
              * Opcode: 5C | Cycles: 2 | Bytes: 1
@@ -1878,7 +1864,6 @@ impl CPU {
              */
             0x8D => { // BSR (relative 8)
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1); let ret=self.pc; let s_before=self.s; self.push16(ret);
-                if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[BSR] ret={:04X} S_before={:04X} S_after={:04X}", ret, s_before, self.s); }
                 // Unificar con JSR: también mantenemos call_stack para BSR para que la lógica de wait_recal_depth
                 // (que basa el incremento de bios_frame en la profundidad tras el pop) sea consistente.
                 self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect=Some(ret); }
@@ -3494,7 +3479,6 @@ impl CPU {
                 let addr=((hi as u16)<<8)|lo as u16;
                 let ret=self.pc; // after operand
                 let s_before=self.s; self.push16(ret);
-                if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[JSR] to={:04X} ret={:04X} S_before={:04X} S_after={:04X}", addr, ret, s_before, self.s); }
                 if addr>=0xF000 { 
                     if !self.bios_present { return false; }
                     self.record_bios_call(addr);
@@ -3521,7 +3505,11 @@ impl CPU {
                 self.update_nz8(val);
                 if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
                     if addr==0xD008 { self.t2_last_low=Some(val); }
-                    if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STA] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STA] high={:02X} (low missing)", val); } }
+                    if addr==0xD009 { 
+                        if let Some(lo)=self.t2_last_low {
+                         self.t2_last_low=None; 
+                        }
+                     }
                 }
             }
             /* ANDA - AND Accumulator A (direct addressing)
@@ -3589,9 +3577,14 @@ impl CPU {
                 let addr = ((self.dp as u16) << 8) | off as u16;
                 let val = self.b; self.write8(addr, val);
                 self.update_nz8(val);
-                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
+                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) 
+                {
                     if addr==0xD008 { self.t2_last_low=Some(val); }
-                    if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STB] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STB] high={:02X} (low missing)", val); } }
+                    if addr==0xD009 { 
+                        if let Some(lo)=self.t2_last_low {
+                              self.t2_last_low=None; 
+                         }
+                    }
                 }
             }
             /* ANDB - AND Accumulator B (direct addressing)
@@ -4019,8 +4012,6 @@ impl CPU {
                             0x26 => { 
                                 if !self.cc_z { 
                                     self.pc = target; 
-                                } else if self.trace { 
-                                    println!("LBNE not"); 
                                 } 
                             } 
                             0x27 => { 
@@ -4703,10 +4694,8 @@ impl CPU {
                 } 
             }
             0x18 => { // Treat undefined 6809 opcode as NOP (clears nothing)
-                // if self.trace { println!("(undefined 0x18 treated as NOP)"); } 
-                }
+                 }
             0x61 => { // Undefined / unimplemented in this subset -> NOP
-                // if self.trace { println!("(undefined 0x61 treated as NOP)"); }
                  }
             /* CMPA - Compare Accumulator A (direct addressing)
              * Opcode: 91 | Cycles: 4 | Bytes: 2
@@ -4749,7 +4738,6 @@ impl CPU {
                 let res = d0.wrapping_sub(val);
                 self.set_d(res); 
                 self.flags_sub16(d0, val, res); 
-                // if self.trace { println!("SUBD ${:04X} -> {:04X}", addr, res); } 
             }
             /* EORA - Exclusive OR with Accumulator A (direct addressing)
              * Opcode: 98 | Cycles: 4 | Bytes: 2
@@ -5496,9 +5484,6 @@ impl CPU {
             }
             _ => {
                 // Other extended modes - simplified fallback
-                if self.trace {
-                    println!("⚠️ Unimplemented indexed mode: post={:02X} reg_code={} mode={:02X}", post, reg_code, mode);
-                }
                 (base, 0)
             }
         }

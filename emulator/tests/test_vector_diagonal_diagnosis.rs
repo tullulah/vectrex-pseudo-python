@@ -78,7 +78,7 @@ fn diagnose_vector_coordinates() {
         let a_before = cpu.a;
         let b_before = cpu.b;
         let x_before = cpu.x;
-        let y_before = cpu.y;
+        let _y_before = cpu.y;
         
         cpu.step();
         step_count += 1;

@@ -18,10 +18,10 @@ fn test_debug_read_issue() {
     println!("🔍 Debug lectura detallada");
     
     // Verificar acceso directo a memoria
-    println!("Acceso directo cpu.mem:");
+    println!("Acceso directo cpu.bus.mem:");
     for addr in 0xF000..=0xF003 {
-        let byte = cpu.mem[addr as usize];
-        println!("  cpu.mem[0x{:04X}] = 0x{:02X}", addr, byte);
+        let byte = cpu.bus.mem[addr as usize];
+        println!("  cpu.bus.mem[0x{:04X}] = 0x{:02X}", addr, byte);
     }
     
     // Verificar acceso via bus.read8()

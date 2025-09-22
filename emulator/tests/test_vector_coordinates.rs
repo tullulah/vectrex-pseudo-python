@@ -116,8 +116,8 @@ fn test_coordinate_flags() {
     cpu.b = 0x00;
     let d_val = (cpu.a as u16) << 8 | (cpu.b as u16);
     // Simulate flag behavior for zero value
-    cpu.cc_z = (d_val == 0);
-    cpu.cc_n = ((d_val & 0x8000) != 0);
+    cpu.cc_z = d_val == 0;
+    cpu.cc_n = (d_val & 0x8000) != 0;
     
     println!("Zero coordinate: D={:04X}, N={}, Z={}", 
              d_val, cpu.cc_n, cpu.cc_z);
@@ -128,8 +128,8 @@ fn test_coordinate_flags() {
     cpu.a = 0x01;
     cpu.b = 0x00;
     let d_val = (cpu.a as u16) << 8 | (cpu.b as u16);
-    cpu.cc_z = (d_val == 0);
-    cpu.cc_n = ((d_val & 0x8000) != 0);
+    cpu.cc_z = d_val == 0;
+    cpu.cc_n = (d_val & 0x8000) != 0;
     
     println!("Positive coordinate: D={:04X}, N={}, Z={}", 
              d_val, cpu.cc_n, cpu.cc_z);
@@ -140,8 +140,8 @@ fn test_coordinate_flags() {
     cpu.a = 0x80;
     cpu.b = 0x00;
     let d_val = (cpu.a as u16) << 8 | (cpu.b as u16);
-    cpu.cc_z = (d_val == 0);
-    cpu.cc_n = ((d_val & 0x8000) != 0);
+    cpu.cc_z = d_val == 0;
+    cpu.cc_n = (d_val & 0x8000) != 0;
     
     println!("Negative coordinate: D={:04X}, N={}, Z={}", 
              d_val, cpu.cc_n, cpu.cc_z);

@@ -21,8 +21,8 @@ fn bios_frame_advances() {
     cpu.load_bios(&bios);
     // Leer vector RESET (0xFFFE/0xFFFF) si la BIOS cargada lo contiene (8K -> E000-FFFF incluye esos bytes).
     let reset_vec = {
-        let hi = cpu.mem[0xFFFE];
-        let lo = cpu.mem[0xFFFF];
+        let hi = cpu.bus.mem[0xFFFE];
+        let lo = cpu.bus.mem[0xFFFF];
         ((hi as u16) << 8) | lo as u16
     };
     if reset_vec != 0 { cpu.pc = reset_vec; }

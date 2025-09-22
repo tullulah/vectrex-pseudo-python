@@ -24,8 +24,8 @@ fn first_bsr_decrements_s_and_stores_return() {
     let expected_return = 0x0802u16; // dirección siguiente a bytes del BSR
     let high_addr = s_before - 1; // primera escritura (high)
     let low_addr  = s_before - 2; // segunda escritura (low)
-    let high_mem = cpu.mem[high_addr as usize];
-    let low_mem  = cpu.mem[low_addr as usize];
+    let high_mem = cpu.bus.mem[high_addr as usize];
+    let low_mem  = cpu.bus.mem[low_addr as usize];
     assert_eq!(high_mem, (expected_return >> 8) as u8, "Byte alto return addr incorrecto (posición high_addr)");
     assert_eq!(low_mem, (expected_return & 0xFF) as u8, "Byte bajo return addr incorrecto (posición low_addr)");
 

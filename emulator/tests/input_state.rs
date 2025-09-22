@@ -10,12 +10,12 @@ fn set_input_writes_ram_and_metrics() {
     let clamped_x = x.clamp(-128,127); let clamped_y = y.clamp(-128,127);
     let bx = (clamped_x as i32 + 128) as u8; let by = (clamped_y as i32 + 128) as u8;
     // Write to RAM area 0x00F0..0x00F2
-    cpu.mem[0x00F0] = bx; cpu.bus.mem[0x00F0] = bx;
-    cpu.mem[0x00F1] = by; cpu.bus.mem[0x00F1] = by;
-    cpu.mem[0x00F2] = buttons & 0x0F; cpu.bus.mem[0x00F2] = buttons & 0x0F;
-    assert_eq!(cpu.mem[0x00F0], ((-50 + 128) as u8));
-    assert_eq!(cpu.mem[0x00F1], ((100 + 128) as u8));
-    assert_eq!(cpu.mem[0x00F2], 0b0101); // masked to low 4 bits
+    cpu.bus.mem[0x00F0] = bx;
+    cpu.bus.mem[0x00F1] = by;
+    cpu.bus.mem[0x00F2] = buttons & 0x0F;
+    assert_eq!(cpu.bus.mem[0x00F0], ((-50i8 as u8).wrapping_add(128)));
+    assert_eq!(cpu.bus.mem[0x00F1], ((100 + 128) as u8));
+    assert_eq!(cpu.bus.mem[0x00F2], 0b0101); // masked to low 4 bits
     // Metrics JSON should include these fields
     let m = cpu.opcode_metrics(); assert_eq!(m.total, 0); // baseline sanity
 }
