@@ -18,8 +18,11 @@
 - Intensity handling simplified; no phosphor persistence or beam warmup.
 - Segment generation tied to register writes rather than analog thresholds.
 
-## Audio (PSG AY-3-8912)
-- Parcial (Fase 1 2025-09-21): tono 3 canales + ruido + mezcla lineal simple. Sin envolvente, curva log, ni temporización dedicada del reloj AY. No export de buffer todavía (sólo métricas básicas). BIOS que configure envolventes aún no obtiene variación.
+## Audio (PSG AY-3-8912) - COMPLETADO 2025-01-23
+- ✅ COMPLETAMENTE IMPLEMENTADO: Control BC1/BDIR via VIA Port B bits 3-4, estado máquina completa (INACTIVE/LATCH ADDRESS/LATCH DATA/READ DATA), generación audio con 3 canales tono + ruido + envolventes, curva logarítmica volumen, exports WASM funcionales.
+- ✅ Integración VIA completa: Port B controla PSG BC1/BDIR, Port A proporciona bus de datos.
+- ✅ Audio streaming: `psg_prepare_pcm()`, `psg_pcm_ptr()`, `psg_pcm_len()` exportados y funcionales.
+- Único pendiente menor: timestamp por bloque para sincronización video/audio perfecta (no afecta funcionalidad).
 
 ## Input
 - Estado mínimo: snapshot joystick analógico + 4 botones vía RAM fija ($00F0..$00F2). No integración aún con puertos VIA reales ni edge detection; BIOS que espere lectura por bit en puertos puede requerir adaptación futura.
@@ -39,7 +42,7 @@
 1. Full VIA port + handshake lines.
 2. Proper shift register modes & Timer2 pulse counting.
 3. Analog-like integrator (time-based DAC slopes, blank settle, jitter).
-4. PSG audio core + mixer + timing.
+4. ✅ ~~PSG audio core + mixer + timing~~ - COMPLETADO 2025-01-23.
 5. Input matrix / analog joystick scaling.
 6. Bank switching / external hardware (if required by target ROMs).
 7. Verified cycle timings per addressing mode (not just opcode). 

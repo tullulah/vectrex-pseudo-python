@@ -378,6 +378,14 @@ Long Term:
 
 ### (Nuevo) 2025-09-21: Audio Fase 3b (Estadísticas / Overflow / UI)
 - Añadido conteo de overflows en export incremental (`psg_delta_overflow` ya existía; ahora se acumula en `psgAudio` y se expone en UI).
+
+### (Nuevo) 2025-01-23: PSG AY-3-8912 COMPLETADO + Bug Crítico JSR Arreglado
+- **AY-3-8912 PSG COMPLETAMENTE IMPLEMENTADO**: Control BC1/BDIR completo via VIA Port B bits 3-4, máquina de estados (INACTIVE/LATCH ADDRESS/LATCH DATA/READ DATA), generación de audio con tonos/ruido/envolventes, integración completa VIA para control y bus de datos.
+- **BUG CRÍTICO JSR ARREGLADO**: JSR absoluto (0xBD) no consumía sus 7 ciclos debido a `return true` prematuro que saltaba `advance_cycles()`. Impacto: timing incorrecto para TODAS las llamadas JSR en BIOS y aplicaciones. Fix verificado con test que confirma JSR consume exactamente 7 ciclos como especifica 6809.
+- **Exports WASM audio**: `psg_prepare_pcm()`, `psg_pcm_ptr()`, `psg_pcm_len()` funcionales para frontend.
+- **Cleanup warnings**: Removidos campos `clock_hz` no usado del PSG y funciones helper integrator obsoletas.
+- **Verificación**: Tests confirman PSG genera 1297 samples con 2601 tone toggles, JSR metadata muestra size=3, base_cycles=7 correctos.
+- **Estado**: PSG y CPU timing ahora completamente funcionales para emulación precisa.
 - `psgAudio.ts`: métricas internas `pushedSamples`, `consumedSamples`, `bufferedSamples`, `bufferedMs` y `overflowCount`. Método público `getStats()` retorna snapshot.
 - Worklet (o ScriptProcessor fallback) envía eventos 'consumed' para mantener conteo de drenaje real sin heurísticas.
 - Panel `EmulatorPanel` ahora muestra caja "Audio PSG" (visible sólo con audio activado) con: sample rate, ms en buffer, pushed/consumed totals y overflows (resaltado en rojo si >0).
