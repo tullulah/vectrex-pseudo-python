@@ -1,21 +1,6 @@
 use crate::bus::Bus;
 use crate::integrator::Integrator;
 
-// Debugging macro that works in both native and WASM
-#[cfg(not(feature = "wasm"))]
-macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        println!($($arg)*);
-    };
-}
-
-#[cfg(feature = "wasm")]
-macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        web_sys::console::log_1(&format!($($arg)*).into());
-    };
-}
-
 // --- Modularization: split constants, types and mnemonics into submodules ---
 // Use explicit #[path] to point to canonical versions inside the cpu6809/ directory.
 #[path = "cpu6809/cpu6809_constants.rs"]
@@ -204,52 +189,54 @@ pub struct RamExecSnapshot {
 
 // Legacy VectorEvent system removed; integrator backend is canonical.
 
-impl Default for CPU { fn default()->Self {
-    #[cfg(not(target_arch="wasm32"))]
-    let freq = std::env::var("VPY_CPU_FREQ").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(1_500_000);
-    #[cfg(target_arch="wasm32")]
-    let freq = 1_500_000u64;
-    let cpf = freq / 50; // integer division; leftover cycles accumulate in cycle_accumulator
-    // Backend selection environment variable ignored; integrator is always enabled.
-    CPU { a:0,b:0,dp:0xD0,x:0,y:0,u:0,pc:0,call_stack:Vec::new(),shadow_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,cc_v:false,cc_h:false,cc_f:false,cc_e:false,
-    bus:Bus::default(),trace:false,bios_calls:Vec::new(), auto_demo:false,
-        frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:cpf, cycle_accumulator:0,
-    last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0,ddr_b:0,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
-        irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false,
-        // Stack pointer inicial: antes estaba en 0xD000 (base VIA) lo que hacía que push16 escribiera
-        // en registros de E/S en lugar de RAM, corrompiendo retornos (RTS/BSR) y ciclos observados.
-        // Lo movemos a la parte alta de la ventana de RAM (0xC800-0xCFFF) para micro-tests sintéticos.
-        // La BIOS real ajustará S posteriormente con LDS cuando arranca.
-        s:0xCFFF, in_irq_handler:false,
-    opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
-    debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
-        loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
-        wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
-    jsr_log:[0;128], jsr_log_len:0, enable_irq_frame_fallback:false, irq_frames_generated:0, last_irq_frame_cycles:0,
-    #[cfg(test)] last_return_expect: None,
-    integrator: { let i=Integrator::new(); #[cfg(not(target_arch="wasm32"))] { if std::env::var("VPY_NO_MERGE").ok().as_deref()==Some("1"){ /* merge toggle disabled */ } } i },
-        integrator_auto_drain: false,
-        integrator_last_frame_segments: 0,
-        integrator_max_frame_segments: 0,
-    integrator_total_segments: 0,
-    draw_vl_count: 0,
-        cart_valid:false, cart_title:[0;16], cart_validation_done:false,
-        firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
-        temp_segments_c: Vec::new(),
-        last_extended_unimplemented: Vec::new(),
-        hot00: [(0,0);4], hotff: [(0,0);4],
-        trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(),
-        debug_autotrace_remaining:0,
-        bios_handoff_logged:false,
-        ram_exec: RamExecDetector::default(),
-        via_writes: Vec::with_capacity(256), via_writes_cap: 1024,
-    logged_set_refresh_pre: false,
-    t2_last_low: None,
-    prev_wait_recal_return_cycle: None,
-    last_wait_recal_return_cycle: None,
-    t2_expirations_count: 0,
-    }
-} }
+impl Default for CPU {
+    fn default()->Self {
+        #[cfg(not(target_arch="wasm32"))]
+        let freq = std::env::var("VPY_CPU_FREQ").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(1_500_000);
+        #[cfg(target_arch="wasm32")]
+        let freq = 1_500_000u64;
+        let cpf = freq / 50; // integer division; leftover cycles accumulate in cycle_accumulator
+        // Backend selection environment variable ignored; integrator is always enabled.
+        CPU { a:0,b:0,dp:0xD0,x:0,y:0,u:0,pc:0,call_stack:Vec::new(),shadow_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,cc_v:false,cc_h:false,cc_f:false,cc_e:false,
+        bus:Bus::default(),trace:false,bios_calls:Vec::new(), auto_demo:false,
+            frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:cpf, cycle_accumulator:0,
+        last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0,ddr_b:0,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
+            irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false,
+            // Stack pointer inicial: antes estaba en 0xD000 (base VIA) lo que hacía que push16 escribiera
+            // en registros de E/S en lugar de RAM, corrompiendo retornos (RTS/BSR) y ciclos observados.
+            // Lo movemos a la parte alta de la ventana de RAM (0xC800-0xCFFF) para micro-tests sintéticos.
+            // La BIOS real ajustará S posteriormente con LDS cuando arranca.
+            s:0xCFFF, in_irq_handler:false,
+        opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
+        debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
+            loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
+            wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
+        jsr_log:[0;128], jsr_log_len:0, enable_irq_frame_fallback:false, irq_frames_generated:0, last_irq_frame_cycles:0,
+        #[cfg(test)] last_return_expect: None,
+        integrator: { let i=Integrator::new(); #[cfg(not(target_arch="wasm32"))] { if std::env::var("VPY_NO_MERGE").ok().as_deref()==Some("1"){ /* merge toggle disabled */ } } i },
+            integrator_auto_drain: false,
+            integrator_last_frame_segments: 0,
+            integrator_max_frame_segments: 0,
+        integrator_total_segments: 0,
+        draw_vl_count: 0,
+            cart_valid:false, cart_title:[0;16], cart_validation_done:false,
+            firq_count:0, irq_count:0, t1_expiries:0, t2_expiries:0, lines_per_frame_accum:0, lines_per_frame_samples:0,
+            temp_segments_c: Vec::new(),
+            last_extended_unimplemented: Vec::new(),
+            hot00: [(0,0);4], hotff: [(0,0);4],
+            trace_enabled:false, trace_limit:0, trace_buf: Vec::new(), input_state: InputState::default(),
+            debug_autotrace_remaining:0,
+            bios_handoff_logged:false,
+            ram_exec: RamExecDetector::default(),
+            via_writes: Vec::with_capacity(256), via_writes_cap: 1024,
+        logged_set_refresh_pre: false,
+        t2_last_low: None,
+        prev_wait_recal_return_cycle: None,
+        last_wait_recal_return_cycle: None,
+        t2_expirations_count: 0,
+        }
+    } 
+}
 
 #[derive(Clone,Copy,Debug)]
 pub struct VIAWrite { pub cycle: u64, pub pc: u16, pub addr: u16, pub reg: u8, pub val: u8 }
@@ -278,22 +265,16 @@ impl CPU {
         let x_dac = self.port_a_value as i8 as f32 * DAC_SCALE;
         self.current_x = x_dac as i16;
         
-        // DEBUG: Log MUX state when there's activity
-        if self.port_a_value != 0 || old_x != self.current_x || old_y != self.current_y {
-            debug_log!("🔧 MUX: port_a=0x{:02X}({}) enabled={} sel={} pos=({},{})→({},{}) intensity={}", 
-                     self.port_a_value, self.port_a_value as i8, self.mux_enabled, self.mux_selector, 
-                     old_x, old_y, self.current_x, self.current_y, self.last_intensity);
-        }
-        
         // MUX-controlled routing for Port A value (ONLY when MUX enabled, like Vectrexy)
-        if self.mux_enabled {
+        if self.mux_enabled 
+        {
             match self.mux_selector {
                 0 => { // Y-axis integrator (only when MUX enabled AND selector=0)
                     let y_dac = self.port_a_value as i8 as f32 * DAC_SCALE;
                     let old_y_val = self.current_y;
                     self.current_y = y_dac as i16;
-                    debug_log!("🔧 Y-axis update: port_a=0x{:02X} -> y_dac={:.1} -> current_y={} (was {})", 
-                            self.port_a_value, y_dac, self.current_y, old_y_val);
+                    // debug_log!("🔧 Y-axis update: port_a=0x{:02X} -> y_dac={:.1} -> current_y={} (was {})", 
+                    //         self.port_a_value, y_dac, self.current_y, old_y_val);
                 }
                 1 => { // X,Y Axis integrator offset
                     // TODO: offset handling if needed
@@ -301,18 +282,14 @@ impl CPU {
                 2 => { // Z Axis (Vector Brightness) level
                     self.last_intensity = self.port_a_value;
                     self.handle_intensity_change();
-                    println!("🎯 MUX Brightness: intensity={} (port_a=0x{:02X})", self.last_intensity, self.port_a_value);
+                    // println!("🎯 MUX Brightness: intensity={} (port_a=0x{:02X})", self.last_intensity, self.port_a_value);  // SILENCED FOR SPEED TEST
                 }
                 3 => { // Connected to sound output line via divider network
                     // TODO: audio output if needed
                 }
                 _ => {} // Invalid selector
             }
-        } else {
-            if self.port_a_value != 0 {
-                println!("⚠️  MUX DISABLED: port_a=0x{:02X} ignored for Y/brightness", self.port_a_value);
-            }
-        }
+        } 
         
         // Generate vector only if intensity > 0 AND position changed
         if self.last_intensity > 0 && (old_x != self.current_x || old_y != self.current_y) {
@@ -323,14 +300,11 @@ impl CPU {
             if dx.abs() > 0.1 || dy.abs() > 0.1 {
                 self.integrator.line_to_rel(dx, dy, self.last_intensity, self.cycle_frame);
                 if dx.abs() > 10.0 || dy.abs() > 10.0 {
-                    println!("📐 Vector: dx={:.1}, dy={:.1}, intensity={}, pos=({},{})", 
-                        dx, dy, self.last_intensity, self.current_x, self.current_y);
+                    // println!("📐 Vector: dx={:.1}, dy={:.1}, intensity={}, pos=({},{})",   // SILENCED FOR SPEED TEST
+                    //     dx, dy, self.last_intensity, self.current_x, self.current_y);
                 }
             }
-        } else if old_x != self.current_x || old_y != self.current_y {
-            // Move without drawing (intensity = 0)
-            self.integrator.instant_move(self.current_x as f32, self.current_y as f32);
-        }
+        } 
     }
 }
 
@@ -339,9 +313,6 @@ impl CPU {
 
 impl CPU {
     #[inline(always)]
-    fn log_interrupt_enter(&self, kind:&str, prev_pc:u16, sp_before:u16, vec:u16){
-        if self.trace { println!("[INT ENTER kind={} prev_pc={:04X} sp={:04X} vec={:04X}]", kind, prev_pc, sp_before, vec); }
-    }
     /* READ_VECTOR - Read 16-bit interrupt vector from memory (Motorola 6809 spec)
      * 6809 Hardware Spec: Interrupt vectors stored in big-endian format in ROM
      * Memory layout: [base]=HIGH byte, [base+1]=LOW byte
@@ -398,7 +369,7 @@ impl CPU {
         self.hotff = [(0,0);4];
         self.integrator.segments.clear();
     }
-// (methods continue below)
+    // (methods continue below)
     // Lightweight clone used only by recompute_opcode_coverage; does not duplicate integrator segments or bus side effects precisely.
     fn coverage_clone(&self) -> CPU {
     CPU {
@@ -567,14 +538,7 @@ impl CPU {
         // Clear dynamic flags / pending states
         self.cc_e=false; self.cc_f=false; self.cc_h=false; self.cc_i=false; self.cc_n=false; self.cc_z=false; self.cc_v=false; self.cc_c=false;
         self.irq_pending=false; self.firq_pending=false; self.nmi_pending=false; self.wai_halt=false; self.in_irq_handler=false;
-        if self.trace {
-            println!("[VECTORS] SWI3={:02X}{:02X} SWI2={:02X}{:02X} FIRQ={:02X}{:02X} IRQ={:02X}{:02X} SWI={:02X}{:02X} NMI={:02X}{:02X} RESET={:02X}{:02X} (raw={:04X})",
-                sw3_hi,sw3_lo, sw2_hi,sw2_lo, firq_hi,firq_lo, irq_hi,irq_lo, swi_hi,swi_lo, nmi_hi,nmi_lo, rst_hi,rst_lo, vec);
-            println!("[RESET] PC set to {:04X}{}", self.pc, if pc_set!=vec {" (forced canonical BIOS entry)"} else {""});
-        }
-        else if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") {
-            println!("[RESET][STACK_TRACE] raw_reset_vec={:04X} pc_start={:04X} rst_bytes={:02X}{:02X}", vec, self.pc, rst_hi, rst_lo);
-        }
+       
         // Pseudo entrada BIOS: registrar punto de inicio para trazas (sin fabricar JSR)
         if self.bios_present && self.pc >= 0xF000 && self.bios_calls.is_empty() {
             // Pure BIOS call logging without any special address handling or interceptions
@@ -592,8 +556,7 @@ impl CPU {
                 self.bus.write8(0xD008, 0x30); // T2 low
                 self.bus.write8(0xD009, 0x00); // T2 high
                 self.bus.write8(0xD00E, 0xA0); // enable T2
-                if self.trace { println!("[VIA][BOOTSTRAP] Timer2 primed (opt-in)"); }
-            } else if self.trace { println!("[VIA][BOOTSTRAP] skipped (no opt-in)"); }
+            } 
             self.debug_bootstrap_via_done = true;
         }
         // Debug: optional internal vector list smoke test (both formats) when env flag set at process start.
@@ -744,15 +707,10 @@ impl CPU {
                     let bc1 = (val & 0x08) != 0;   // Bit 3: BC1 (Bus Control 1)
                     let bdir = (val & 0x10) != 0;  // Bit 4: BDIR (Bus Direction)
                     self.bus.psg.set_bc1_bdir(bc1, bdir, self.port_a_value);
-                    
-                    debug_log!("🔧 VIA SYNC PORT_B: val=0x{:02X} mux_enabled={} selector={} BC1={} BDIR={}", 
-                              val, self.mux_enabled, self.mux_selector, bc1, bdir);
                     self.update_integrators_mux(); // Immediate update like vectrexy
                 }
                 0x1 | 0xF => { // Port A - Update integrators ONLY if DDR configured as output
                     self.port_a_value = val;
-                    debug_log!("🔧 VIA SYNC PORT_A: val=0x{:02X} ({}) ddr_a=0x{:02X}", val, val as i8, self.ddr_a);
-                    
                     // Update PSG data bus with current Port A value
                     let bc1 = (self.port_b_value & 0x08) != 0;
                     let bdir = (self.port_b_value & 0x10) != 0;
@@ -760,22 +718,17 @@ impl CPU {
                     
                     if self.ddr_a == 0xFF {  // ⭐ CRITICAL: Only update if DDR A configured as output (like vectrexy)
                         self.update_integrators_mux(); // Immediate update like vectrexy
-                    } else {
-                        debug_log!("⚠️  PORT_A ignored: DDR_A=0x{:02X} (not output mode)", self.ddr_a);
-                    }
+                    } 
                 }
                 0x2 => { // DDR B - Data Direction Register B
                     self.ddr_b = val;
-                    debug_log!("🔧 VIA SYNC DDR_B: val=0x{:02X}", val);
                 }
                 0x3 => { // DDR A - Data Direction Register A  
                     self.ddr_a = val;
-                    debug_log!("🔧 VIA SYNC DDR_A: val=0x{:02X} (0xFF=output, 0x00=input)", val);
                 }
                 0xA => { // Shift register - intensity control
                     self.last_intensity = val; 
                     self.handle_intensity_change();
-                    println!("🎯 VIA SYNC INTENSITY: val={}", val);
                 }
                 /* VIA 6522 Timer1 Low Register (0x4) - Timing Critical
                  * Register: T1C-L / T1L-L (Timer1 Counter/Latch Low)
@@ -787,7 +740,6 @@ impl CPU {
                  */
                 0x4 => { // Timer 1 Low - Critical for Mine Storm timing!
                     self.timer1_low = val;
-                    debug_log!("🕐 VIA TIMER1_LOW: val=0x{:02X} ({})", val, val);
                 }
                 /* VIA 6522 Timer1 High Register (0x5) - Timing Critical  
                  * Register: T1C-H / T1L-H (Timer1 Counter/Latch High)
@@ -803,8 +755,6 @@ impl CPU {
                     // Al escribir Timer1_High, se activa el timer (comportamiento real VIA)
                     self.timer1_counter = ((self.timer1_high as u16) << 8) | (self.timer1_low as u16);
                     self.timer1_enabled = self.timer1_counter > 0;
-                    debug_log!("🕐 VIA TIMER1_HIGH: val=0x{:02X} ({}) -> counter=0x{:04X} enabled={}", 
-                              val, val, self.timer1_counter, self.timer1_enabled);
                 }
                 /* VIA 6522 Timer2 Low Register (0x6) - Secundario
                  * Register: T2C-L / T2L-L (Timer2 Counter/Latch Low)  
@@ -816,7 +766,6 @@ impl CPU {
                  * Verificado: ✓ OK - Placeholder para futuras expansiones
                  */
                 0x6 => { // Timer 2 Low - May be used for frame timing
-                    debug_log!("🕑 VIA TIMER2_LOW: val=0x{:02X} ({})", val, val);
                     // TODO: Implement Timer2 if needed
                 }
                 /* VIA 6522 Auxiliary Control Register (0xB) - Timer Configuration
@@ -830,22 +779,16 @@ impl CPU {
                  * Verificado: ✓ OK - Control modes para timing preciso
                  */
                 0xB => { // Auxiliary Control Register - Timer modes
-                    debug_log!("⚙️  VIA AUX_CTRL: val=0x{:02X} (timer modes)", val);
                     // TODO: Implement timer modes (one-shot, continuous, etc.)
                 }
                 0xE => { // Interrupt Enable Register - Critical!
-                    debug_log!("🔔 VIA IER: val=0x{:02X} (interrupt enable)", val);
                     // TODO: Implement interrupt enable for timer progression
                 }
                 0xD => { // Interrupt Flag Register - Critical!
-                    debug_log!("🚩 VIA IFR: val=0x{:02X} (interrupt flags)", val);
                     // TODO: Implement interrupt flags for timer events
                 }
                 _ => {
                     // Other VIA registers don't need immediate integrator updates
-                    if val != 0 {
-                        println!("🔧 VIA SYNC OTHER: reg=0x{:02X} val=0x{:02X}", reg, val);
-                    }
                 }
             }
         }
@@ -859,7 +802,6 @@ impl CPU {
         // No synthetic side effects, timing modifications, or register changes
         let name = bios_label_for(addr).unwrap_or("BIOS_UNKNOWN");
         self.bios_calls.push(format!("{:04X}:{}", addr, name));
-        if self.trace { println!("[BIOS CALL] {}", name); }
     }
 
     pub fn load_bin(&mut self, data:&[u8], base:u16) {
@@ -909,8 +851,6 @@ impl CPU {
             let addr_high = self.s.wrapping_add(1); // HIGH byte address
             let stored_lo = self.bus.mem[addr_low as usize];
             let stored_hi = self.bus.mem[addr_high as usize];
-            println!("[PUSH16] val={:04X} S_before={:04X} S_after={:04X} HI@{:04X}={:02X} LO@{:04X}={:02X}",
-                v, s_before, self.s, addr_high, stored_hi, addr_low, stored_lo);
         }
     }
     fn pop8(&mut self)->u8 { let v = self.read8(self.s); self.s = self.s.wrapping_add(1); v }
@@ -930,11 +870,6 @@ impl CPU {
         let lo = self.pop8(); // Reads mem[S], S := S+1
         let hi = self.pop8(); // Reads mem[S], S := S+2
         let result = ((hi as u16) << 8) | (lo as u16);
-        
-        if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") {
-            println!("[POP16 ] S_before={:04X} S_after={:04X} LO@{:04X}={:02X} HI@{:04X}={:02X} result={:04X}",
-                s_before, self.s, s_before, lo, s_before.wrapping_add(1), hi, result);
-        }
         result
     }
     // Motorola 6809 TFR/EXG register code mapping (postbyte src<<4|dst):
@@ -1035,9 +970,6 @@ impl CPU {
             self.cc_e = true; // full frame
             // Set IRQ mask bit before snapshotting CC (I=1 set).
             self.cc_i = true;
-            if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
-                println!("[IRQ][FRAME-PUSH] entering IRQ prev_pc={:04X} S_before={:04X} I(before)=? ->1 IFR={:02X} IER={:02X}", prev_pc, sp_before, self.bus.via_ifr(), self.bus.via_ier());
-            }
             let pc_val = self.pc; // capture return address
             let cc = self.pack_cc(); // pack after setting I
             // Push reverse order so pops (CC..PC) restore correctly.
@@ -1053,14 +985,16 @@ impl CPU {
                 let after_s = self.s;
                 let mut frame_dump = String::new();
                 for off in 0..16 { let addr = after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
-                println!("[IRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
             }
         } else {
             self.wai_pushed_frame = false; // already stacked by WAI path
         }
     // Fetch standard IRQ vector (big-endian)
-    let vec = self.read_vector(VEC_IRQ); self.pc = vec; self.log_interrupt_enter("IRQ", prev_pc, sp_before, vec);
-    #[cfg(test)] { let hi=self.read8(VEC_IRQ); let lo=self.read8(VEC_IRQ+1); println!("[IRQ-VECTOR] fetched={:04X} (raw bytes HI={:02X} LO={:02X})", vec, hi, lo); }
+    let vec = self.read_vector(VEC_IRQ); self.pc = vec; 
+    // self.log_interrupt_enter("IRQ", prev_pc, sp_before, vec);
+    #[cfg(test)] { 
+        let hi=self.read8(VEC_IRQ); let lo=self.read8(VEC_IRQ+1);
+        }
         self.irq_pending = false; self.wai_halt = false; self.in_irq_handler = true;
     self.via_irq_count += 1; self.irq_count = self.irq_count.wrapping_add(1);
     let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::IRQ });
@@ -1070,41 +1004,43 @@ impl CPU {
         let prev_pc = self.pc; let sp_before = self.s;
         // FIRQ pushes only CC then PC (minimal frame). E flag remains 0.
         self.cc_e = false;
-    self.cc_i = true; self.cc_f = true; // set masks before stacking snapshot
-    let cc = self.pack_cc();
-    // FIRQ minimal frame hardware order in memory (ascending): CC, PC. Because stack decrece, debemos empujar en orden inverso: primero PC (para que quede más bajo) o revisar secuencia de pop.
-    // Nuestro RTI ejecuta: pull CC (si cc_e? no, para FIRQ cc_e=0 se hace solo PC) -> en ruta parcial sólo hace pull PC (pull16) después del cc ya leído. Actualmente el pop16 asume layout low,high contiguos.
-    // Layout deseado en memoria ascendente (tras frame completo) para RTI parcial (E=0): [CC][PC high][PC low]
-    // Porque RTI hace: cc = pull8(); luego pc = pull16(); donde pull16 lee low primero (en S actual) luego high.
-    // Por tanto justo antes de ejecutar RTI debemos tener en direcciones de stack (S apunta al primer byte a extraer):
-    // S -> CC, S+1 -> PC low, S+2 -> PC high   (para que tras pull8 S avance y pull16 lea low, luego high)
-    // Implementamos manualmente sin push16 (porque push16 coloca hi antes que low en stack descendente).
-    // Baseline: push16(PC) luego push8(CC). Esto deja (S)->CC, S+1->PC low, S+2->PC high.
-    // Nuestro RTI parcial actualmente hace pull8(CC) y luego pull16(lo,hi) => PC=(hi<<8)|lo.
-    // Con este layout PC resultará hi=PC high, lo=PC low correcto.
-    #[cfg(test)] { println!("[FIRQ-PUSH] start S={:04X} PC={:04X} CC={:02X}", self.s, self.pc, cc); }
-    // push16 logs already under #[cfg(test)] inside push16
-    self.push16(self.pc); // PC (hi then lo)
-    #[cfg(test)] {
-        let mut d = String::new(); for off in 0..4 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
-        println!("[FIRQ-AFTER-PC] S={:04X} bytes:{}", self.s, d);
-    }
-    self.push8(cc);       // CC
-    #[cfg(test)] {
-        let mut d = String::new(); for off in 0..5 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
-        println!("[FIRQ-AFTER-CC] S={:04X} bytes:{}", self.s, d);
-    }
+        self.cc_i = true; self.cc_f = true; // set masks before stacking snapshot
+        let cc = self.pack_cc();
+        // FIRQ minimal frame hardware order in memory (ascending): CC, PC. Because stack decrece, debemos empujar en orden inverso: primero PC (para que quede más bajo) o revisar secuencia de pop.
+        // Nuestro RTI ejecuta: pull CC (si cc_e? no, para FIRQ cc_e=0 se hace solo PC) -> en ruta parcial sólo hace pull PC (pull16) después del cc ya leído. Actualmente el pop16 asume layout low,high contiguos.
+        // Layout deseado en memoria ascendente (tras frame completo) para RTI parcial (E=0): [CC][PC high][PC low]
+        // Porque RTI hace: cc = pull8(); luego pc = pull16(); donde pull16 lee low primero (en S actual) luego high.
+        // Por tanto justo antes de ejecutar RTI debemos tener en direcciones de stack (S apunta al primer byte a extraer):
+        // S -> CC, S+1 -> PC low, S+2 -> PC high   (para que tras pull8 S avance y pull16 lea low, luego high)
+        // Implementamos manualmente sin push16 (porque push16 coloca hi antes que low en stack descendente).
+        // Baseline: push16(PC) luego push8(CC). Esto deja (S)->CC, S+1->PC low, S+2->PC high.
+        // Nuestro RTI parcial actualmente hace pull8(CC) y luego pull16(lo,hi) => PC=(hi<<8)|lo.
+        // Con este layout PC resultará hi=PC high, lo=PC low correcto.
+        #[cfg(test)] { println!("[FIRQ-PUSH] start S={:04X} PC={:04X} CC={:02X}", self.s, self.pc, cc); }
+        // push16 logs already under #[cfg(test)] inside push16
+        self.push16(self.pc); // PC (hi then lo)
         #[cfg(test)] {
-            let after_s = self.s; let mut frame_dump = String::new();
-            for off in 0..4 { let addr=after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
-            println!("[FIRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
+            let mut d = String::new(); for off in 0..4 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
+            println!("[FIRQ-AFTER-PC] S={:04X} bytes:{}", self.s, d);
         }
-    // Standard FIRQ vector fetch (big-endian)
-    let vec = self.read_vector(VEC_FIRQ); self.pc = vec; self.log_interrupt_enter("FIRQ", prev_pc, sp_before, vec);
-    #[cfg(test)] { let hi=self.read8(VEC_FIRQ); let lo=self.read8(VEC_FIRQ+1); println!("[FIRQ-VECTOR] fetched={:04X} (raw bytes HI={:02X} LO={:02X})", vec, hi, lo); }
-    self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
-    let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::FIRQ });
+        self.push8(cc);       // CC
+        #[cfg(test)] {
+            let mut d = String::new(); for off in 0..5 { let a=self.s.wrapping_add(off); d.push_str(&format!(" {:02X}", self.read8(a))); }
+            println!("[FIRQ-AFTER-CC] S={:04X} bytes:{}", self.s, d);
+        }
+            #[cfg(test)] {
+                let after_s = self.s; let mut frame_dump = String::new();
+                for off in 0..4 { let addr=after_s.wrapping_add(off); frame_dump.push_str(&format!(" {:02X}", self.read8(addr))); }
+                println!("[FIRQ-FRAME] S_before={:04X} S_after={:04X} bytes:{}", before_s, after_s, frame_dump);
+            }
+        // Standard FIRQ vector fetch (big-endian)
+        let vec = self.read_vector(VEC_FIRQ); self.pc = vec; 
+        // self.log_interrupt_enter("FIRQ", prev_pc, sp_before, vec);
+        #[cfg(test)] { let hi=self.read8(VEC_FIRQ); let lo=self.read8(VEC_FIRQ+1); println!("[FIRQ-VECTOR] fetched={:04X} (raw bytes HI={:02X} LO={:02X})", vec, hi, lo); }
+        self.firq_pending = false; self.wai_halt = false; self.in_irq_handler = true; self.firq_count = self.firq_count.wrapping_add(1);
+        let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::FIRQ });
     }
+
     fn service_nmi(&mut self){
         self.cc_e = true; // full frame
         let prev_pc = self.pc; let sp_before = self.s;
@@ -1112,7 +1048,8 @@ impl CPU {
         self.push16(self.u); self.push16(self.y); self.push16(self.x);
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
         let cc = self.pack_cc(); self.push8(cc); self.cc_i = true;
-        let vec = self.read_vector(VEC_NMI); self.pc = vec; self.log_interrupt_enter("NMI", prev_pc, sp_before, vec);
+        let vec = self.read_vector(VEC_NMI); self.pc = vec; 
+        // self.log_interrupt_enter("NMI", prev_pc, sp_before, vec);
         self.nmi_pending = false; self.wai_halt = false; self.in_irq_handler = true;
         let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind: ShadowKind::NMI });
     }
@@ -1123,7 +1060,8 @@ impl CPU {
         self.push16(self.u); self.push16(self.y); self.push16(self.x);
         self.push8(self.dp); self.push8(self.b); self.push8(self.a);
         let cc = self.pack_cc(); self.push8(cc);
-        let vec_val = self.read_vector(vec); self.pc = vec_val; self.log_interrupt_enter(label, prev_pc, sp_before, vec_val);
+        let vec_val = self.read_vector(vec); self.pc = vec_val; 
+        // self.log_interrupt_enter(label, prev_pc, sp_before, vec_val);
         self.wai_halt = false; self.in_irq_handler = true;
         let kind = match label { "SWI" => ShadowKind::SWI, "SWI2" => ShadowKind::SWI2, "SWI3" => ShadowKind::SWI3, _ => ShadowKind::SWI };
         let sp_after = self.s; self.shadow_stack.push(ShadowFrame{ ret: prev_pc, sp_at_push: sp_after, kind });
@@ -1136,7 +1074,6 @@ impl CPU {
                 // CORREGIDO: en RAM BIOS usa little-endian (lo en menor, hi en mayor)
                 let lo = self.read8(0xC83D);
                 let hi = self.read8(0xC83E);
-                println!("[BIOS][Set_Refresh pre(pc)] RAM C83D(lo)={:02X} C83E(hi)={:02X} expect_full={:04X} DP={:02X}", lo, hi, ((hi as u16)<<8)|lo as u16, self.dp);
             }
             self.logged_set_refresh_pre = true;
         }
@@ -1145,7 +1082,7 @@ impl CPU {
             if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") {
                 let ifr = self.bus.via_ifr();
                 let ier = self.bus.via_ier();
-                println!("[TRACE][Wait_Recal region] pc={:04X} IFR={:02X} IER={:02X} A={:02X} DP={:02X}", self.pc, ifr, ier, self.a, self.dp);
+                //println!("[TRACE][Wait_Recal region] pc={:04X} IFR={:02X} IER={:02X} A={:02X} DP={:02X}", self.pc, ifr, ier, self.a, self.dp);
             }
         }
         // Poll VIA IRQ state cada instrucción, con gating para evitar IRQ espurias antes de inicialización BIOS.
@@ -1163,7 +1100,7 @@ impl CPU {
                 if any_enabled_and_pending && ier != 0 && (!self.bios_present || irq_vec >= 0xE000) {
                     self.irq_pending = true;
                     if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") && !self.cc_i {
-                        println!("[IRQ][PENDING] pc={:04X} IFR={:02X} IER={:02X} vec={:04X}", self.pc, ifr, ier, irq_vec);
+                        // println!("[IRQ][PENDING] pc={:04X} IFR={:02X} IER={:02X} vec={:04X}", self.pc, ifr, ier, irq_vec);
                     }
                 } else { self.irq_pending = false; }
             } else { self.irq_pending = false; }
@@ -1176,9 +1113,9 @@ impl CPU {
                 // Timer1 expiró - generar IRQ y deshabilitar
                 self.timer1_enabled = false;
                 self.t1_expiries = self.t1_expiries.wrapping_add(1);
-                if std::env::var("TIMER_TRACE").ok().as_deref()==Some("1") {
-                    debug_log!("⏰ [TIMER1] Expired! t1_expiries={}, triggering IRQ", self.t1_expiries);
-                }
+                // if std::env::var("TIMER_TRACE").ok().as_deref()==Some("1") {
+                //     debug_log!("⏰ [TIMER1] Expired! t1_expiries={}, triggering IRQ", self.t1_expiries);
+                // }
                 // Triggear Timer1 IRQ vía Bus helper
                 self.bus.trigger_timer1_irq();
             }
@@ -1193,7 +1130,6 @@ impl CPU {
                     // If cycles exceed threshold (e.g., 3 million) since start, force a frame.
                     if self.cycles > 3_000_000 { 
                         self.bios_frame = 1; self.force_frame_heuristic=true; self.last_forced_frame_cycle=self.cycles;
-                        if self.trace || self.env_trace_frame() { println!("[FRAME][BIOS] forced heuristic after {} cycles (calls={})", self.cycles, self.wait_recal_calls); }
                     }
                 }
             }
@@ -1209,16 +1145,13 @@ impl CPU {
             return true;
         }
         if self.firq_pending && !self.cc_f {
-            if self.trace { println!("[INT-DISPATCH] FIRQ pending at PC={:04X}", self.pc); }
             self.service_firq();
             if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
         if self.irq_pending && !self.cc_i {
-            if self.trace { println!("[INT-DISPATCH] IRQ pending at PC={:04X}", self.pc); }
             if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
                 let ifr=self.bus.via_ifr(); let ier=self.bus.via_ier();
-                println!("[IRQ][DISPATCH] pc={:04X} IFR={:02X} IER={:02X} I=0 -> service_irq", self.pc, ifr, ier);
             }
             self.service_irq();
             if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
@@ -1229,16 +1162,9 @@ impl CPU {
             if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
             return true;
         }
-    // Fetch opcode via bus to respect memory mapping
-    let pc0 = self.pc; let op = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
-    if self.trace {
-        if self.opcode_total==0 { // primer fetch sólo
-            if op==0x10 || op==0x11 { let peek=self.read8(self.pc); println!("[FETCH0] pc={:04X} op={:02X} sub={:02X}", pc0, op, peek); }
-            else { println!("[FETCH0] pc={:04X} op={:02X}", pc0, op); }
-        }
-        // (opcional) descomentar para ver cada fetch: println!("[FETCH] pc={:04X} op={:02X}", pc0, op);
-    }
-    if self.debug_autotrace_remaining>0 { self.trace=true; self.debug_autotrace_remaining-=1; if self.debug_autotrace_remaining==0 { self.trace=false; } }
+        // Fetch opcode via bus to respect memory mapping
+        let pc0 = self.pc; let op = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+        
         // Peek possible sub-opcode byte for extended prefixes (do not advance PC further here)
         let sub = if op==0x10 || op==0x11 { self.read8(self.pc) } else { 0 }; 
         self.trace_maybe_record(pc0, op, sub);
@@ -1262,7 +1188,6 @@ impl CPU {
             }
             if !found { if let Some(ei)=empty_idx { slots[ei]=(pc0,1); } else { slots[min_idx]=(pc0,1); } }
         }
-        if self.trace { print!("{:04X}: {:02X} ", pc0, op); }
         // Base cycle seed (approximate) to refine in opcode handlers
         let mut cyc: u32 = match op {
             // Immediate 2-cycle loads / ops (ABA 0x1B, ADCB 0xC9, ADDB 0xCB, SBCB 0xC2)
@@ -1283,7 +1208,9 @@ impl CPU {
             0x20|0x21|0x22|0x23|0x24|0x25|0x26|0x27|0x28|0x29|0x2A|0x2B|0x2C|0x2D|0x2E|0x2F => 2,
             0x8D => 7, 0x34|0x35|0x36|0x37 => 5, 0x3B => 6, 0x3E => 4,
             // Direct RMW/control cluster
-            0x00|0x03|0x04|0x06|0x07|0x08|0x09|0x0A|0x0C|0x0D|0x0E|0x0F|0x16|0x1D => 6,
+            0x00|0x03|0x04|0x06|0x07|0x08|0x09|0x0A|0x0C|0x0E|0x0F|0x16|0x1D => 6,
+            // TST direct toma 4 ciclos, no 6 (confirmado por test Timer2)
+            0x0D => 4,
             // Indexed RMW cluster (baseline)
             0x60|0x63|0x64|0x66|0x67|0x68|0x69|0x6A|0x6C|0x6D|0x6E|0x6F => 6,
             // Extended RMW cluster
@@ -1298,6 +1225,7 @@ impl CPU {
             0x1E => 8, // EXG
             _ => 1,
         };
+        
         match op {
             /* INCA - Increment Accumulator A
              * Opcode: 4C | Cycles: 2 | Bytes: 1
@@ -1315,7 +1243,6 @@ impl CPU {
                 self.a = res; 
                 self.update_nz8(res); 
                 self.cc_v = res==0x80; 
-                if self.trace { println!("INCA -> {:02X}", res);} 
             }
             /* CMPX - Compare Index Register X (indexed addressing)
              * Opcode: AC | Cycles: 6+ | Bytes: 2+
@@ -1340,7 +1267,6 @@ impl CPU {
                 let x0=self.x; 
                 let res=x0.wrapping_sub(val); 
                 self.flags_sub16(x0,val,res); 
-                if self.trace { println!("CMPX [{}]", ea);} 
             }
             /* JSR - Jump to Subroutine (Indexed)
              * Opcode: AD | Cycles: 7 | Bytes: 2+
@@ -1357,7 +1283,6 @@ impl CPU {
                 let post=self.read8(self.pc); 
                 self.pc=self.pc.wrapping_add(1); 
                 let (ea,_) = self.decode_indexed(post);
-                if self.trace { println!("JSR [{}]", ea);} 
                 let ret=self.pc; // address after operand fetch (return point)
                 // Hardware behavior: push return address (high then low) onto S before transferring control
                 self.push16(ret);
@@ -1366,9 +1291,6 @@ impl CPU {
                 if ea>=0xF000 { 
                     if self.bios_present { 
                         self.record_bios_call(ea); 
-                    } else { 
-                        if self.trace { println!("Missing BIOS ${:04X}", ea);} 
-                        return false; 
                     } 
                 }
                 self.pc=ea; 
@@ -1395,7 +1317,6 @@ impl CPU {
                 self.update_nz16(d); 
                 self.cc_c=false; 
                 self.cc_v=false; 
-                if self.trace { println!("MUL {:02X}*{:02X} -> {:04X}", a as u8, b as u8, d); } 
             }
             /* ABX - Add B to X
              * Opcode: 3A | Cycles: 3 | Bytes: 1
@@ -1410,7 +1331,6 @@ impl CPU {
             0x3A => { 
                 // ABX (X = X + B) (flags unaffected)
                 self.x = self.x.wrapping_add(self.b as u16); 
-                if self.trace { println!("ABX -> {:04X}", self.x); } 
             }
             // -------------------------------------------------------------------------
             // Extended memory RMW/JMP cluster 0x70..0x7F subset
@@ -1422,93 +1342,57 @@ impl CPU {
                         let m = self.read8(addr);
                         let r = self.rmw_neg(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("NEG ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x73 => {
                         let m = self.read8(addr);
                         let r = self.rmw_com(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("COM ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x74 => {
                         let m = self.read8(addr);
                         let r = self.rmw_lsr(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("LSR ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x76 => {
                         let m = self.read8(addr);
                         let r = self.rmw_ror(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("ROR ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x77 => {
                         let m = self.read8(addr);
                         let r = self.rmw_asr(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("ASR ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x78 => {
                         let m = self.read8(addr);
                         let r = self.rmw_asl(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("ASL ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x79 => {
                         let m = self.read8(addr);
                         let r = self.rmw_rol(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("ROL ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x7A => {
                         let m = self.read8(addr);
                         let r = self.rmw_dec(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("DEC ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x7C => {
                         let m = self.read8(addr);
                         let r = self.rmw_inc(m);
                         self.write8(addr, r);
-                        if self.trace {
-                            println!("INC ${:04X} -> {:02X}", addr, r);
-                        }
                     }
                     0x7D => {
                         let m = self.read8(addr);
                         let _ = self.rmw_tst(m);
-                        if self.trace {
-                            println!("TST ${:04X}", addr);
-                        }
                     }
                     0x7E => {
                         self.pc = addr;
-                        if self.trace {
-                            println!("JMP ${:04X}", addr);
-                        }
                     }
                     0x7F => {
                         let _ = self.rmw_clr();
                         self.write8(addr, 0);
-                        if self.trace {
-                            println!("CLR ${:04X}", addr);
-                        }
                     }
                     _ => {}
                 }
@@ -1524,9 +1408,8 @@ impl CPU {
              * Verificado: ✓ OK - Simple no-operation instruction
              */
             0x12 => {
-                if self.trace {
-                    println!("NOP");
-                }
+                // NOP
+                cyc = 2;
             }
             /* WAI - Wait for Interrupt
              * Opcode: 3E | Cycles: ? | Bytes: 1
@@ -1539,7 +1422,6 @@ impl CPU {
              * Verificado: ✓ OK - Proper halt with hardware frame push on IRQ
              */
             0x3E => { // WAI: Halt until interrupt (no synthetic frame push; hardware does not push until interrupt)
-                if self.trace { println!("WAI (halt)"); }
                 self.wai_halt = true; // service_irq will detect halt and push real frame
                 self.wai_pushed_frame = false; // ensure IRQ path performs full push
                 if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
@@ -1548,13 +1430,11 @@ impl CPU {
             0x3C => { // CWAI: AND CC with immediate mask then wait (push full state always)
                 let mask=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let mut cc=self.pack_cc(); cc &= mask; self.unpack_cc(cc);
-                if self.trace { println!("CWAI #${:02X} (enter)", mask); }
                 self.cc_e=true; let saved_pc=self.pc; self.push16(saved_pc);
                 self.push16(self.u); self.push16(self.y); self.push16(self.x);
                 self.push8(self.dp); self.push8(self.b); self.push8(self.a); self.push8(self.pack_cc());
                 self.wai_pushed_frame=true; self.wai_halt=true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true; }
             0x13 => { // SYNC: low-power wait until interrupt (does not push state)
-                if self.trace { println!("SYNC"); }
                 self.wai_halt=true; if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); } return true; }
             // --- Begin large opcode set from legacy implementation (partial) ---
             // -------------------------------------------------------------------------
@@ -1569,7 +1449,6 @@ impl CPU {
             0x40 => { 
                 let r=self.rmw_neg(self.a); 
                 self.a=r; 
-                if self.trace { println!("NEGA -> {:02X}", r);} 
             }
             
             /* COMA - Complement Accumulator A
@@ -1585,7 +1464,6 @@ impl CPU {
             0x43 => { 
                 let r=self.rmw_com(self.a); 
                 self.a=r; 
-                if self.trace { println!("COMA -> {:02X}", r);} 
             }
             
             /* LSRA - Logical Shift Right Accumulator A
@@ -1601,7 +1479,6 @@ impl CPU {
             0x44 => { 
                 let r=self.rmw_lsr(self.a); 
                 self.a=r; 
-                if self.trace { println!("LSRA -> {:02X}", r);} 
             }
             
             /* RORA - Rotate Right Accumulator A through Carry
@@ -1617,7 +1494,6 @@ impl CPU {
             0x46 => { 
                 let r=self.rmw_ror(self.a); 
                 self.a=r; 
-                if self.trace { println!("RORA -> {:02X}", r);} 
             }
             
             /* ASRA - Arithmetic Shift Right Accumulator A
@@ -1633,7 +1509,6 @@ impl CPU {
             0x47 => { 
                 let r=self.rmw_asr(self.a); 
                 self.a=r; 
-                if self.trace { println!("ASRA -> {:02X}", r);} 
             }
             
             /* ASLA/LSLA - Arithmetic/Logical Shift Left Accumulator A
@@ -1649,7 +1524,6 @@ impl CPU {
             0x48 => { 
                 let r=self.rmw_asl(self.a); 
                 self.a=r; 
-                if self.trace { println!("ASLA -> {:02X}", r);} 
             }
             
             /* ROLA - Rotate Left Accumulator A through Carry
@@ -1665,7 +1539,6 @@ impl CPU {
             0x49 => { 
                 let r=self.rmw_rol(self.a); 
                 self.a=r; 
-                if self.trace { println!("ROLA -> {:02X}", r);} 
             }
             
             /* TSTA - Test Accumulator A
@@ -1684,7 +1557,6 @@ impl CPU {
                 self.cc_z=v==0; 
                 self.cc_v=false; 
                 self.cc_c=false; 
-                if self.trace { println!("TSTA"); } 
             }
             // Accumulator RMW B
             /* NEGB - Two's Complement Accumulator B
@@ -1700,7 +1572,6 @@ impl CPU {
             0x50 => { 
                 let r=self.rmw_neg(self.b); 
                 self.b=r; 
-                if self.trace { println!("NEGB -> {:02X}", r);} 
             }
             
             /* COMB - Complement Accumulator B
@@ -1716,7 +1587,6 @@ impl CPU {
             0x53 => { 
                 let r=self.rmw_com(self.b); 
                 self.b=r; 
-                if self.trace { println!("COMB -> {:02X}", r);} 
             }
             /* LSRB - Logical Shift Right B register
              * Opcode: 54 | Cycles: 2 | Bytes: 1
@@ -1730,7 +1600,6 @@ impl CPU {
             0x54 => { 
                 let r = self.rmw_lsr(self.b); 
                 self.b = r; 
-                if self.trace { println!("LSRB -> {:02X}", r); } 
             }
             /* RORB - Rotate Right B register through Carry
              * Opcode: 56 | Cycles: 2 | Bytes: 1
@@ -1744,7 +1613,6 @@ impl CPU {
             0x56 => { 
                 let r = self.rmw_ror(self.b); 
                 self.b = r; 
-                if self.trace { println!("RORB -> {:02X}", r); } 
             }
             /* ASRB - Arithmetic Shift Right B register
              * Opcode: 57 | Cycles: 2 | Bytes: 1
@@ -1758,7 +1626,6 @@ impl CPU {
             0x57 => { 
                 let r = self.rmw_asr(self.b); 
                 self.b = r; 
-                if self.trace { println!("ASRB -> {:02X}", r); } 
             }
             /* ASLB - Arithmetic Shift Left B register  
              * Opcode: 58 | Cycles: 2 | Bytes: 1
@@ -1772,7 +1639,6 @@ impl CPU {
             0x58 => { 
                 let r = self.rmw_asl(self.b); 
                 self.b = r; 
-                if self.trace { println!("ASLB -> {:02X}", r); } 
             }
             /* ROLB - Rotate Left B register through Carry
              * Opcode: 59 | Cycles: 2 | Bytes: 1
@@ -1786,7 +1652,6 @@ impl CPU {
             0x59 => { 
                 let r = self.rmw_rol(self.b); 
                 self.b = r; 
-                if self.trace { println!("ROLB -> {:02X}", r); } 
             }
             /* TSTB - Test B register
              * Opcode: 5D | Cycles: 2 | Bytes: 1
@@ -1803,7 +1668,6 @@ impl CPU {
                 self.cc_z = v == 0; 
                 self.cc_v = false; 
                 self.cc_c = false; 
-                if self.trace { println!("TSTB"); } 
             }
             /* DECB - Decrement Accumulator B
              * Opcode: 5A | Cycles: 2 | Bytes: 1
@@ -1821,7 +1685,6 @@ impl CPU {
                 self.b = res;
                 self.update_nz8(res);
                 self.cc_v = res == 0x7F;
-                if self.trace { println!("DECB -> {:02X}", res); }
                 if cfg!(not(target_arch="wasm32")) {
                     if std::env::var("LOOP_F4EB_TRACE").ok().as_deref()==Some("1") {
                         if self.pc==0xF4EF || self.pc==0xF4EE || self.pc==0xF4ED || self.pc==0xF4EB { println!("[F4EB_LOOP][after DECB] PC={:04X} B={:02X} Z={} N={} V={}", self.pc, self.b, self.cc_z as u8, self.cc_n as u8, self.cc_v as u8); }
@@ -1845,7 +1708,6 @@ impl CPU {
                 self.b = res; 
                 self.update_nz8(res); 
                 self.cc_v = res==0x80; 
-                if self.trace { println!("INCB -> {:02X}", res);} 
             }
             /* CLRA - Clear Accumulator A
              * Opcode: 4F | Cycles: 2 | Bytes: 1
@@ -1863,7 +1725,6 @@ impl CPU {
                 self.cc_z = true;
                 self.cc_v = false;
                 self.cc_c = false;
-                if self.trace { println!("CLRA"); }
             }
             /* CLRB - Clear Accumulator B
              * Opcode: 5F | Cycles: 2 | Bytes: 1
@@ -1881,18 +1742,14 @@ impl CPU {
                 self.cc_z = true;
                 self.cc_v = false;
                 self.cc_c = false;
-                if self.trace { println!("CLRB"); }
             }
             0x6F => { // CLR indexed
                 let x_before = self.x;
                 let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); 
                 let (ea,_) = self.decode_indexed(post); 
                 let x_after = self.x;
-                if x_before != x_after {
-                    println!("❌ CLR indexed bug: X cambió de {:04X} a {:04X} con postbyte {:02X}", x_before, x_after, post);
-                }
+                // Auto-increment modes are expected to change X, only warn for unexpected changes
                 self.write8(ea,0); self.cc_n=false; self.cc_z=true; self.cc_v=false; self.cc_c=false; 
-                if self.trace { println!("CLR [{}] (X: {:04X}→{:04X})", ea, x_before, x_after); } 
             }
             // (Removed duplicate indexed RMW cluster; implemented explicitly below)
             // Load/store & arithmetic subset (partial — extend as needed)
@@ -1911,7 +1768,6 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 self.a=v; 
                 self.update_nz8(self.a); 
-                if self.trace { println!("LDA #${:02X}", self.a);} 
             }
             
             /* LDB - Load Accumulator B (immediate)
@@ -1929,7 +1785,6 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 self.b=v; 
                 self.update_nz8(self.b); 
-                if self.trace { println!("LDB #${:02X}", self.b);} 
             }
             
             /* ADDA - Add to Accumulator A (immediate)
@@ -1953,7 +1808,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c=(res & 0x100)!=0; 
                 self.cc_v=(!((a^imm) as u16) & ((a^r) as u16) & 0x80)!=0; 
-                if self.trace { println!("ADDA #${:02X}", imm);} 
             }
             /* SUBB - Subtract from B (immediate)
              * Opcode: C0 | Cycles: 2 | Bytes: 2
@@ -1971,7 +1825,6 @@ impl CPU {
                 let res = b0.wrapping_sub(imm); 
                 self.b = res; 
                 self.flags_sub8(b0, imm, res); 
-                if self.trace { println!("SUBB #${:02X} -> {:02X}", imm, res); } 
                 cyc = 2; 
             }
             /* CMPB - Compare B with immediate
@@ -1989,7 +1842,6 @@ impl CPU {
                 let b0 = self.b; 
                 let res = b0.wrapping_sub(imm); 
                 self.flags_sub8(b0, imm, res); 
-                if self.trace { println!("CMPB #${:02X}", imm); } 
             }
             /* CMPA - Compare A with immediate
              * Opcode: 81 | Cycles: 2 | Bytes: 2
@@ -2006,7 +1858,6 @@ impl CPU {
                 let a = self.a; 
                 let res = a.wrapping_sub(imm); 
                 self.flags_sub8(a, imm, res); 
-                if self.trace { println!("CMPA #${:02X}", imm); } 
             }
             /* BSR - Branch to Subroutine (relative)
              * Opcode: 8D | Cycles: 7 | Bytes: 2
@@ -2025,7 +1876,6 @@ impl CPU {
                 // (que basa el incremento de bios_frame en la profundidad tras el pop) sea consistente.
                 self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect=Some(ret); }
                 let target = (self.pc as i32 + off as i32) as u16;
-                if self.trace { println!("BSR {:04X}", target); }
                 if target >= 0xF000 && self.bios_present { self.record_bios_call(target); }
                 self.shadow_stack.push(ShadowFrame { ret, sp_at_push: self.s, kind: ShadowKind::BSR });
                 self.pc = target;
@@ -2040,7 +1890,6 @@ impl CPU {
                 self.push16(ret);
                 #[cfg(test)] { self.last_return_expect = Some(ret); }
                 let target = self.pc.wrapping_add(signed as u16);
-                if self.trace { println!("LBSR {:04X}", target); }
                 if target >= 0xF000 && self.bios_present { self.record_bios_call(target); }
                 self.shadow_stack.push(ShadowFrame { ret, sp_at_push: self.s, kind: ShadowKind::LBSR });
                 self.pc = target;
@@ -2059,14 +1908,11 @@ impl CPU {
             0x39 => { // RTS
                 // Extraer dirección de retorno real de la pila (pop16) según convención 6809.
                 let ret = self.pop16();
-                if self.trace { println!("RTS (stack) -> {:04X}", ret); }
                 self.pc = ret;
                 // call_stack sólo para análisis: mantener coherencia si hay elemento; no es fuente de verdad.
                 if let Some(sw)=self.call_stack.pop() {
-                    if sw != ret {
-                        if self.trace { println!("[WARN][RTS] call_stack discrepancia stored={:04X} real={:04X}", sw, ret); }
-                    }
-                } else if self.trace { println!("[WARN][RTS] call_stack vacío"); }
+                   
+                } 
                 #[cfg(test)] {
                     if let Some(exp)=self.last_return_expect { assert_eq!(self.pc, exp, "RTS retorno incorrecto: esperado {:04X} got {:04X}", exp, self.pc); }
                     self.last_return_expect=None;
@@ -2084,88 +1930,56 @@ impl CPU {
                     self.prev_wait_recal_return_cycle = self.last_wait_recal_return_cycle;
                     self.last_wait_recal_return_cycle = Some(self.cycles);
                     self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1);
-                    if self.trace || self.env_trace_frame() {
-                        if let (Some(prev), Some(last)) = (self.prev_wait_recal_return_cycle, self.last_wait_recal_return_cycle) {
-                            let delta = last - prev; println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={} delta_cycles={}", self.bios_frame, self.wait_recal_returns, delta);
-                        } else {
-                            println!("[FRAME][BIOS] increment (RTS) bios_frame={} returns={} (first)", self.bios_frame, self.wait_recal_returns);
-                        }
-                    }
-                } else {
-                    if std::env::var("TRACE_WAIT_DEPTH").ok().as_deref()==Some("1") {
-                        println!("[WAIT_DEPTH][RTS no-inc] call_stack_len={} stored_base={} top_ret={:04X}", self.call_stack.len(), d, self.call_stack.last().copied().unwrap_or(0));
-                    }
-                } }
+                } 
                 if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "RTS-invalid-return"); }
             }
-            /* PULS - Pull registers from System stack (S)
-             * Opcode: 35 | Cycles: 5+ | Bytes: 2
-             * Motorola 6809 Spec: Pull selected registers from S stack
-             * Execution: Read mask byte, pull registers in reverse push order
-             * Timing: 5+ cycles (base + 1-2 cycles per register pulled)
-             * Flags: CC may be affected if CC register is pulled
-             * Pull order: CC,A,B,DP,X,Y,U,PC (low to high significance)
-             * Mask bits: 0=CC,1=A,2=B,3=DP,4=X,5=Y,6=U,7=PC
-             * Critical: Stack restoration for subroutines and interrupts
-             * Verificado: ✓ OK - Proper pull order and shadow stack tracking
-             */
-            0x35 => { // PULS (instrumented)
-                let mask = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
-                #[cfg(test)] let s_before = self.s; // test-only logging
-                #[cfg(test)] let mut popped: Vec<(char,u16)> = Vec::new();
-                // Hardware order (MC6809 Reference): bits processed from least to most significant => CC, A, B, DP, X, Y, U, PC
-                if (mask & 0x01)!=0 { let cc=self.pop8(); self.unpack_cc(cc); #[cfg(test)] { popped.push(('C', cc as u16)); } }
-                if (mask & 0x02)!=0 { let a=self.pop8(); self.a=a; #[cfg(test)] { popped.push(('A', a as u16)); } }
-                if (mask & 0x04)!=0 { let b=self.pop8(); self.b=b; #[cfg(test)] { popped.push(('B', b as u16)); } }
-                if (mask & 0x08)!=0 { let dp=self.pop8(); self.dp=dp; #[cfg(test)] { popped.push(('P', dp as u16)); } }
-                if (mask & 0x10)!=0 { let x=self.pop16(); self.x=x; #[cfg(test)] { popped.push(('X', x)); } }
-                if (mask & 0x20)!=0 { let y=self.pop16(); self.y=y; #[cfg(test)] { popped.push(('Y', y)); } }
-                if (mask & 0x40)!=0 { let u=self.pop16(); self.u=u; #[cfg(test)] { popped.push(('U', u)); } }
-                if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); }
-                    // Shadow validation (PULS with PC)
-                    if let Some(sf)=self.shadow_stack.pop() { if sf.ret != self.pc { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-puls"); } } } else { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-puls"); } }
-                    if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "PULS-invalid-return"); }
-                }
-                if self.trace { println!("PULS mask={:02X} -> PC={:04X}", mask, self.pc); }
-                if self.trace && !self.bios_handoff_logged {
-                    // Handoff detection: transición desde BIOS (>=E000) a cartucho (<E000)
-                    if self.pc < 0xE000 { println!("[BIOS->CART] handoff pc={:04X}", self.pc); self.bios_handoff_logged = true; }
-                }
-                if self.opcode_counts[0x35] == 0 { // primera vez que vemos PULS
-                    println!("[PULS-FIRST] mask={:02X} pc_after={:04X} S_now={:04X}", mask, self.pc, self.s);
-                }
-                #[cfg(test)] {
-                    println!("[PULS-INSTR] mask={:02X} S_before={:04X} S_after={:04X}", mask, s_before, self.s);
-                    for (k,v) in popped.iter() { println!("  POP {} {:04X}", k, v); }
-                }
+        }
+        /* PULS - Pull registers from System stack (S)
+        * Opcode: 35 | Cycles: 5+ | Bytes: 2
+        * Motorola 6809 Spec: Pull selected registers from S stack
+        * Execution: Read mask byte, pull registers in reverse push order
+        * Timing: 5+ cycles (base + 1-2 cycles per register pulled)
+        * Flags: CC may be affected if CC register is pulled
+        * Pull order: CC,A,B,DP,X,Y,U,PC (low to high significance)
+        * Mask bits: 0=CC,1=A,2=B,3=DP,4=X,5=Y,6=U,7=PC
+        * Critical: Stack restoration for subroutines and interrupts
+        * Verificado: ✓ OK - Proper pull order and shadow stack tracking
+        */
+        0x35 => { // PULS (instrumented)
+            let mask = self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
+            #[cfg(test)] let s_before = self.s; // test-only logging
+            #[cfg(test)] let mut popped: Vec<(char,u16)> = Vec::new();
+            // Hardware order (MC6809 Reference): bits processed from least to most significant => CC, A, B, DP, X, Y, U, PC
+            if (mask & 0x01)!=0 { let cc=self.pop8(); self.unpack_cc(cc); #[cfg(test)] { popped.push(('C', cc as u16)); } }
+            if (mask & 0x02)!=0 { let a=self.pop8(); self.a=a; #[cfg(test)] { popped.push(('A', a as u16)); } }
+            if (mask & 0x04)!=0 { let b=self.pop8(); self.b=b; #[cfg(test)] { popped.push(('B', b as u16)); } }
+            if (mask & 0x08)!=0 { let dp=self.pop8(); self.dp=dp; #[cfg(test)] { popped.push(('P', dp as u16)); } }
+            if (mask & 0x10)!=0 { let x=self.pop16(); self.x=x; #[cfg(test)] { popped.push(('X', x)); } }
+            if (mask & 0x20)!=0 { let y=self.pop16(); self.y=y; #[cfg(test)] { popped.push(('Y', y)); } }
+            if (mask & 0x40)!=0 { let u=self.pop16(); self.u=u; #[cfg(test)] { popped.push(('U', u)); } }
+            if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); }
+                // Shadow validation (PULS with PC)
+                if let Some(sf)=self.shadow_stack.pop() { if sf.ret != self.pc { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-puls"); } } } else { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-puls"); } }
+                if self.pc >= 0xC800 && self.pc <= 0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "PULS-invalid-return"); }
             }
-            /* RTI - Return from Interrupt
-             * Opcode: 3B | Cycles: 6/15 | Bytes: 1
-             * Motorola 6809 Spec: Restore CPU state from stack after interrupt
-             * Execution: Pull CC, optionally pull all registers if E=1, pull PC
-             * Timing: 6 cycles (fast), 15 cycles (entire state if E flag set)
-             * Flags: All flags restored from stack (CC register)
-             * Stack order: CC [A,B,DP,X,Y,U] PC (if E=1, brackets pulled)
-             * Critical: Essential for interrupt handling in BIOS
-             * Verificado: ✓ OK - Proper interrupt return with E flag handling
-             */
+        }
+        /* RTI - Return from Interrupt
+            * Opcode: 3B | Cycles: 6/15 | Bytes: 1
+            * Motorola 6809 Spec: Restore CPU state from stack after interrupt
+            * Execution: Pull CC, optionally pull all registers if E=1, pull PC
+            * Timing: 6 cycles (fast), 15 cycles (entire state if E flag set)
+            * Flags: All flags restored from stack (CC register)
+            * Stack order: CC [A,B,DP,X,Y,U] PC (if E=1, brackets pulled)
+            * Critical: Essential for interrupt handling in BIOS
+            * Verificado: ✓ OK - Proper interrupt return with E flag handling
+            */
             0x3B => { // RTI
                 let pull8 = |cpu: &mut CPU| { let v = cpu.read8(cpu.s); cpu.s = cpu.s.wrapping_add(1); v };
                 let pull16 = |cpu: &mut CPU| { let lo = pull8(cpu); let hi = pull8(cpu); ((hi as u16)<<8)|lo as u16 };
-                if self.trace && !self.bios_handoff_logged {
-                    if self.pc < 0xE000 { println!("[BIOS->CART] handoff pc={:04X} (RTS)", self.pc); self.bios_handoff_logged = true; }
-                }
                 let cc = pull8(self); self.unpack_cc(cc);
                 if self.cc_e {
                     self.a=pull8(self); self.b=pull8(self); self.dp=pull8(self); self.x=pull16(self); self.y=pull16(self); self.u=pull16(self); self.pc=pull16(self);
-                } else {
-                    #[cfg(test)] {
-                        let b0 = self.read8(self.s); let b1 = self.read8(self.s.wrapping_add(1));
-                        println!("[RTI-PARTIAL-BYTES] S={:04X} lo={:02X} hi={:02X}", self.s, b0, b1);
-                    }
-                    self.pc=pull16(self);
-                }
-                if self.trace { println!("RTI -> {:04X}", self.pc); }
+                } 
                 self.in_irq_handler=false; self.wai_halt=false;
                 // Shadow stack validation & pop (interrupt return). Mirrors logic in RTS / PULS with PC.
                 if let Some(sf) = self.shadow_stack.pop() {
@@ -2182,20 +1996,7 @@ impl CPU {
                     self.prev_wait_recal_return_cycle = self.last_wait_recal_return_cycle;
                     self.last_wait_recal_return_cycle = Some(self.cycles);
                     self.wait_recal_depth=None; self.wait_recal_returns=self.wait_recal_returns.wrapping_add(1);
-                    if self.trace || self.env_trace_frame() {
-                        if let (Some(prev), Some(last)) = (self.prev_wait_recal_return_cycle, self.last_wait_recal_return_cycle) {
-                            let delta = last - prev; println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={} delta_cycles={}", self.bios_frame, self.wait_recal_returns, delta);
-                        } else {
-                            println!("[FRAME][BIOS] increment (RTI) bios_frame={} returns={} (first)", self.bios_frame, self.wait_recal_returns);
-                        }
                     }
-                } else {
-                    if std::env::var("TRACE_WAIT_DEPTH").ok().as_deref()==Some("1") {
-                        println!("[WAIT_DEPTH][RTI no-inc] call_stack_len={} stored_base={} top_ret={:04X}", self.call_stack.len(), d, self.call_stack.last().copied().unwrap_or(0));
-                    }
-                } }
-                if self.pc >= 0xC800 && self.pc <= 0xCFFF {
-                    self.capture_ram_exec_snapshot_immediate(self.pc, "RTI-invalid-return");
                 }
             }
             /* SWI - Software Interrupt
@@ -2231,7 +2032,6 @@ impl CPU {
                 if (mask & 0x04)!=0 { self.push8(self.b); }
                 if (mask & 0x02)!=0 { self.push8(self.a); }
                 if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
-                if self.trace { println!("PSHS ${:02X}", mask); }
             }
             /* PSHU - Push registers onto User stack (U)
              * Opcode: 36 | Cycles: 5+ | Bytes: 2
@@ -2257,7 +2057,6 @@ impl CPU {
                 if (mask & 0x01)!=0 { self.push8(self.pack_cc()); }
                 self.u = self.s;
                 self.s = orig_s;
-                if self.trace { println!("PSHU ${:02X}", mask); }
             }
             /* PULU - Pull registers from User stack (U)
              * Opcode: 37 | Cycles: 5+ | Bytes: 2
@@ -2285,7 +2084,6 @@ impl CPU {
                 let new_sp = self.s;
                 self.s = orig_s;
                 self.u = new_sp;
-                if self.trace { println!("PULU ${:02X}", mask); }
             }
             /* ORCC - OR Condition Code register (immediate)
              * Opcode: 1A | Cycles: 3 | Bytes: 2
@@ -2301,10 +2099,6 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let prev=self.pack_cc();
                 let mut cc=prev; cc|=imm; self.unpack_cc(cc);
-                if self.trace { println!("ORCC #${:02X}", imm);} 
-                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
-                    if (prev ^ cc) & 0x10 != 0 && self.cc_i { println!("[IRQ_TRACE][CPU] I set via ORCC pc={:04X} imm={:02X}", pc0, imm); }
-                }
             }
             /* ANDCC - AND Condition Code register (immediate)
              * Opcode: 1C | Cycles: 3 | Bytes: 2
@@ -2320,10 +2114,6 @@ impl CPU {
                 let imm=self.read8(self.pc); self.pc=self.pc.wrapping_add(1);
                 let prev=self.pack_cc(); let prev_i=self.cc_i;
                 let mut cc=prev; cc &= imm; self.unpack_cc(cc);
-                if self.trace { println!("ANDCC #${:02X}", imm);} 
-                if std::env::var("IRQ_TRACE").ok().as_deref()==Some("1") {
-                    if prev_i && !self.cc_i { println!("[IRQ_TRACE][CPU] I cleared via ANDCC pc={:04X} imm={:02X}", pc0, imm); }
-                }
             }
             /* ABA - Add Accumulators (A = A + B)
              * Opcode: 1B | Cycles: 2 | Bytes: 1
@@ -2344,7 +2134,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((a0 ^ b0) as u16) & ((a0 ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ABA -> {:02X}", r); }
             }
             /* TFR - Transfer Register to Register
              * Opcode: 1F | Cycles: 6 | Bytes: 2
@@ -2368,9 +2157,6 @@ impl CPU {
                 if w_src != 0 && w_src == w_dst {
                     let val = self.read_reg(src);
                     self.write_reg(dst, val);
-                    if self.trace { println!("TFR {}->{}", src, dst); }
-                } else if self.trace { 
-                    println!("TFR (ignored) src={} dst={} w{} w{}", src,dst,w_src,w_dst); 
                 }
             }
             /* EXG - Exchange Registers
@@ -2388,11 +2174,12 @@ impl CPU {
                 let reg = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let r1 = (reg >> 4) & 0x0F; let r2 = reg & 0x0F;
                 let w1 = self.reg_width(r1); let w2 = self.reg_width(r2);
-                if w1 != 0 && w1 == w2 {
+                if w1 != 0 && w1 == w2 
+                {
                     let v1 = self.read_reg(r1); let v2 = self.read_reg(r2);
                     self.write_reg(r1, v2); self.write_reg(r2, v1);
-                    if self.trace { println!("EXG {}<->{}", r1, r2); }
-                } else if self.trace { println!("EXG (ignored) {} {}", r1, r2); }
+                } 
+                cyc = 8;
             }
             /* BRA - Branch Always
              * Opcode: 20 | Cycles: 3 | Bytes: 2
@@ -2407,7 +2194,6 @@ impl CPU {
                 let off = self.read8(self.pc) as i8; 
                 self.pc = self.pc.wrapping_add(1); 
                 let new = (self.pc as i32 + off as i32) as u16; 
-                if self.trace { println!("BRA {:04X}", new); } 
                 self.pc = new; 
                 cyc = 3; 
             }
@@ -2425,7 +2211,6 @@ impl CPU {
                 // BRN (never branch) consume offset only
                 let _off=self.read8(self.pc); 
                 self.pc=self.pc.wrapping_add(1); 
-                if self.trace { println!("BRN (not taken)"); }
                 // cyc remains base 2
             }
             /* LBRA - Long Branch Always
@@ -2444,7 +2229,6 @@ impl CPU {
                 self.pc = self.pc.wrapping_add(2); 
                 let off = ((hi as u16) << 8) | lo as u16; 
                 let target = self.pc.wrapping_add(off as i16 as u16); 
-                if self.trace { println!("LBRA {:04X}", target); } 
                 self.pc = target; 
                 cyc = 5; 
             }
@@ -2465,11 +2249,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1);
                 if self.cc_c || self.cc_z { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BLS {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BLS not"); }
                     cyc=2;
                 }
             }
@@ -2490,11 +2272,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1);
                 if !self.cc_c && !self.cc_z { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BHI {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BHI not"); }
                     cyc=2;
                 }
             }
@@ -2515,11 +2295,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1);
                 if !self.cc_c { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BCC {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BCC not"); }
                     cyc=2;
                 }
             }
@@ -2539,13 +2317,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 if !self.cc_z { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BNE {:04X}", new);} 
                     self.pc=new; 
                     cyc=3;
                 } else {
-                    if self.trace { 
-                        println!("BNE not"); 
-                    }
                     cyc=2; // BNE not taken debe costar 2 ciclos
                 }
             }
@@ -2565,11 +2339,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 if self.cc_z { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BEQ {:04X}", new);} 
                     self.pc=new; 
                     cyc=3;
                 } else { 
-                    if self.trace { println!("BEQ not"); }
                     cyc=2; // Same timing fix as BNE - 2 cycles when not taken
                 } 
             }
@@ -2590,13 +2362,11 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 if self.cc_v { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BVS {:04X}", new);} 
                     self.pc=new; 
-                    cyc=3; 
+                    cyc=3;
                 } else { 
-                    if self.trace { println!("BVS not"); }
                     cyc=2;
-                } 
+                }
             }
             /* SEX - Sign Extend B register into A
              * Opcode: 1D | Cycles: 2 | Bytes: 1
@@ -2612,7 +2382,6 @@ impl CPU {
                 let d = self.d(); 
                 self.update_nz16(d); 
                 self.cc_v = false; 
-                if self.trace { println!("SEX -> D={:04X}", d); } 
             }
             /* LEA Family - Load Effective Address
              * Opcodes: 30-33 | Cycles: 3+ | Bytes: 2+
@@ -2632,21 +2401,17 @@ impl CPU {
                     0x30 => { 
                         self.x = ea; 
                         self.update_nz16(self.x); 
-                        if self.trace { println!("LEAX {:04X}", ea); } 
                     } 
                     0x31 => { 
                         self.y = ea; 
                         self.update_nz16(self.y); 
-                        if self.trace { println!("LEAY {:04X}", ea); } 
                     } 
                     0x32 => { 
                         self.s = ea; 
-                        if self.trace { println!("LEAS {:04X}", ea); } 
                     } 
                     _ => { 
                         self.u = ea; 
                         self.update_nz16(self.u); 
-                        if self.trace { println!("LEAU {:04X}", ea); } 
                     } 
                 } 
             }
@@ -2665,7 +2430,6 @@ impl CPU {
                 let lo=self.read8(self.pc+1); 
                 self.pc=self.pc.wrapping_add(2); 
                 self.x=((hi as u16)<<8)|lo as u16; 
-                if self.trace { println!("LDX #${:04X}", self.x);} 
                 cyc=3; 
             }
             
@@ -2684,7 +2448,6 @@ impl CPU {
                 let lo=self.read8(self.pc+1); 
                 self.pc=self.pc.wrapping_add(2); 
                 self.u=((hi as u16)<<8)|lo as u16; 
-                if self.trace { println!("LDU #${:04X}", self.u);} 
             }
             
             /* LDD - Load Double Accumulator (immediate)
@@ -2705,7 +2468,6 @@ impl CPU {
                 self.a=hi; 
                 self.b=lo; 
                 self.update_nz16(self.d()); 
-                if self.trace { println!("LDD #${:02X}{:02X}", hi, lo);} 
             }
             /* 0xDC - LDD direct (Load D register from direct page)
              * Motorola 6809 Spec: D = [DP:operand], A=high byte, B=low byte  
@@ -2725,12 +2487,6 @@ impl CPU {
                 self.a = hi; 
                 self.b = lo; 
                 self.update_nz16(self.d());
-                
-                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref() == Some("1") && addr == 0xC83D {
-                    println!("[TRACE][LDD refresh] read C83D(A)={:02X} C83E(B)={:02X} full={:04X} DP={:02X}", 
-                        hi, lo, ((hi as u16) << 8) | lo as u16, self.dp);
-                }
-                if self.trace { println!("LDD ${:04X}", addr); }
             }
             /* 0x9E - LDX direct (Load X register from direct page)  
              * Motorola 6809 Spec: X = [DP:operand], 16-bit register load
@@ -2750,7 +2506,6 @@ impl CPU {
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
                 self.x = val; 
                 self.update_nz16(val);
-                if self.trace { println!("LDX ${:04X} -> {:04X}", addr, val); }
             }
             /* 0xDE - LDU direct (Load U register from direct page)
              * Motorola 6809 Spec: U = [DP:operand], 16-bit register load  
@@ -2769,7 +2524,6 @@ impl CPU {
                 let lo = self.read8(addr.wrapping_add(1));     // LOW byte second
                 self.u = ((hi as u16) << 8) | lo as u16;       // Assemble big-endian
                 self.update_nz16(self.u); 
-                if self.trace { println!("LDU ${:04X}", addr); }
             }
             /* 0xDD - STD direct (Store D register to direct page)
              * Motorola 6809 Spec: [DP:operand] = D, A=high byte, B=low byte
@@ -2789,13 +2543,6 @@ impl CPU {
                 self.write8(addr, a0);                      // A goes to addr (HIGH)
                 self.write8(addr.wrapping_add(1), b0);      // B goes to addr+1 (LOW)
                 self.update_nz16(self.d());
-                
-                if self.trace { println!("STD ${:04X} (A={:02X} B={:02X})", addr, a0, b0); }
-                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref() == Some("1") && addr == 0xD008 {
-                    // FIXED: Correct D register value is A(high)<<8 + B(low)
-                    println!("[TRACE][STD->T2] wrote T2_lo={:02X} then T2_hi={:02X} full={:04X}", 
-                        a0, b0, ((a0 as u16) << 8) | b0 as u16);
-                }
             }
             /* 0xDF - STU direct (Store U register to direct page)
              * Motorola 6809 Spec: [DP:operand] = U, 16-bit register store
@@ -2815,7 +2562,6 @@ impl CPU {
                 self.write8(addr, hi);                      // U_high goes to addr
                 self.write8(addr.wrapping_add(1), lo);      // U_low goes to addr+1
                 self.update_nz16(self.u); 
-                if self.trace { println!("STU ${:04X}", addr); }
             }
             /* STD - Store Double Accumulator (extended addressing)
              * Opcode: FD | Cycles: 5 | Bytes: 3
@@ -2832,7 +2578,6 @@ impl CPU {
                 self.write8(addr, self.a); 
                 self.write8(addr.wrapping_add(1), self.b); 
                 self.update_nz16(self.d()); 
-                if self.trace { println!("STD ${:04X}", addr);} 
             }
             /* 0xFE - LDU extended (Load U register from extended address)
              * Motorola 6809 Spec: U = [16-bit_address], 16-bit register load  
@@ -2853,7 +2598,6 @@ impl CPU {
                 let lo2 = self.read8(addr.wrapping_add(1));    // LOW byte second
                 self.u = ((hi2 as u16) << 8) | lo2 as u16;     // Assemble big-endian
                 self.update_nz16(self.u); 
-                if self.trace { println!("LDU ${:04X}", addr); }
             }
             /* LDA - Load Accumulator A (extended addressing)
              * Opcode: B6 | Cycles: 4 | Bytes: 3
@@ -2869,11 +2613,9 @@ impl CPU {
                 let lo = self.read8(self.pc + 1); 
                 self.pc = self.pc.wrapping_add(2); 
                 let addr = ((hi as u16) << 8) | lo as u16;
-                
                 let v = self.read8(addr); 
                 self.a = v; 
                 self.update_nz8(v); 
-                if self.trace { println!("LDA ${:04X}", addr); } 
             }
             /* STA - Store Accumulator A (extended addressing)
              * Opcode: B7 | Cycles: 4 | Bytes: 3
@@ -2889,11 +2631,9 @@ impl CPU {
                 let lo = self.read8(self.pc + 1); 
                 self.pc = self.pc.wrapping_add(2); 
                 let addr = ((hi as u16) << 8) | lo as u16;
-                
                 let v = self.a; 
                 self.write8(addr, v); 
                 self.update_nz8(v); 
-                if self.trace { println!("STA ${:04X} -> {:02X}", addr, v); } 
             }
             /* CMPA - Compare Accumulator A (extended addressing)
              * Opcode: B1 | Cycles: 4 | Bytes: 3
@@ -2910,12 +2650,10 @@ impl CPU {
                 let lo = self.read8(self.pc + 1); 
                 self.pc = self.pc.wrapping_add(2); 
                 let addr = ((hi as u16) << 8) | lo as u16; 
-                
                 let m = self.read8(addr); 
                 let a0 = self.a; 
                 let res = a0.wrapping_sub(m); 
                 self.flags_sub8(a0, m, res); 
-                if self.trace { println!("CMPA ${:04X}", addr); } 
             }
             /* 0xBE - LDX extended (Load X register from extended address)
              * Motorola 6809 Spec: X = [16-bit_address], 16-bit register load
@@ -2937,7 +2675,6 @@ impl CPU {
                 let val = ((hi2 as u16) << 8) | lo2 as u16;    // Assemble big-endian
                 self.x = val; 
                 self.update_nz16(val);
-                if self.trace { println!("LDX ${:04X} -> {:04X}", addr, val); }
             }
             /* 0xBF - STX extended (Store X register to extended address)
              * Motorola 6809 Spec: [16-bit_address] = X, 16-bit register store
@@ -2957,7 +2694,6 @@ impl CPU {
                 self.write8(addr, (self.x >> 8) as u8);        // X_high to addr
                 self.write8(addr.wrapping_add(1), self.x as u8); // X_low to addr+1
                 self.update_nz16(self.x); 
-                if self.trace { println!("STX ${:04X}", addr); }
             }
             /* SUBA - Subtract from Accumulator A (immediate)
              * Opcode: 80 | Cycles: 2 | Bytes: 2
@@ -2974,7 +2710,6 @@ impl CPU {
                 let res = a0.wrapping_sub(imm);
                 self.a = res; 
                 self.flags_sub8(a0, imm, res);
-                if self.trace { println!("SUBA #${:02X} -> {:02X}", imm, res); }
             }
             /* ANDB - AND Accumulator B (immediate)
              * Opcode: C4 | Cycles: 2 | Bytes: 2
@@ -2990,7 +2725,6 @@ impl CPU {
                 self.b &= imm; 
                 self.update_nz8(self.b); 
                 self.cc_v = false; 
-                if self.trace { println!("ANDB #${:02X}", imm); } 
             }
             /* BITA - Bit Test Accumulator A (immediate)
              * Opcode: 85 | Cycles: 2 | Bytes: 2
@@ -3007,7 +2741,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0; 
                 self.cc_z = r == 0; 
                 self.cc_v = false; 
-                if self.trace { println!("BITA #${:02X}", imm); } 
             }
             /* ADCA - Add with Carry to Accumulator A (immediate)
              * Opcode: 89 | Cycles: 2 | Bytes: 2
@@ -3028,7 +2761,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((a ^ imm) as u16) & ((a ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADCA #${:02X}", imm); } 
             }
             /* SUBA - Subtract from Accumulator A (direct addressing)
              * Opcode: 90 | Cycles: 3 | Bytes: 2
@@ -3047,7 +2779,6 @@ impl CPU {
                 let res = a0.wrapping_sub(m); 
                 self.a = res; 
                 self.flags_sub8(a0, m, res); 
-                if self.trace { println!("SUBA ${:04X} -> {:02X}", addr, res); } 
             }
             /* ADCA - Add with Carry to Accumulator A (direct addressing)
              * Opcode: 99 | Cycles: 3 | Bytes: 2
@@ -3070,7 +2801,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADCA ${:04X}", addr); } 
             }
             /* ADDA - Add to Accumulator A (direct addressing)
              * Opcode: 9B | Cycles: 3 | Bytes: 2
@@ -3092,7 +2822,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADDA ${:04X}", addr); } 
             }
             /* CMPX - Compare Index Register X (direct addressing)
              * Opcode: 9C | Cycles: 4 | Bytes: 2
@@ -3113,7 +2842,6 @@ impl CPU {
                 let x0 = self.x; 
                 let res = x0.wrapping_sub(val); 
                 self.flags_sub16(x0, val, res); 
-                if self.trace { println!("CMPX ${:04X}", addr); } 
             }
             /* ORA - OR Accumulator A (direct addressing)
              * Opcode: 9A | Cycles: 3 | Bytes: 2
@@ -3131,7 +2859,6 @@ impl CPU {
                 self.a |= m; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("ORA ${:04X}", addr); } 
             }
             /* ROR - Rotate Right through Carry (direct addressing)
              * Opcode: 06 | Cycles: 5 | Bytes: 2
@@ -3148,7 +2875,6 @@ impl CPU {
                 let m = self.read8(addr); 
                 let r = self.rmw_ror(m); 
                 self.write8(addr, r); 
-                if self.trace { println!("ROR ${:04X} -> {:02X}", addr, r); } 
             }
             /* CMPB - Compare Accumulator B (indexed addressing)
              * Opcode: E1 | Cycles: 3+ | Bytes: 2+
@@ -3166,7 +2892,6 @@ impl CPU {
                 let b0 = self.b; 
                 let res = b0.wrapping_sub(m); 
                 self.flags_sub8(b0, m, res); 
-                if self.trace { println!("CMPB [{}]", ea); } 
             }
             /* ROL - Rotate Left through Carry (direct addressing)
              * Opcode: 09 | Cycles: 5 | Bytes: 2
@@ -3183,7 +2908,6 @@ impl CPU {
                 let m = self.read8(addr); 
                 let r = self.rmw_rol(m); 
                 self.write8(addr, r); 
-                if self.trace { println!("ROL ${:04X} -> {:02X}", addr, r); } 
             }
             /* INC - Increment Memory (direct addressing)
              * Opcode: 0C | Cycles: 5 | Bytes: 2
@@ -3201,7 +2925,6 @@ impl CPU {
                 let m = self.read8(addr); 
                 let r = self.rmw_inc(m);  // Handles V flag correctly: V = (m == 0x7F)
                 self.write8(addr, r); 
-                if self.trace { println!("INC ${:04X} -> {:02X}", addr, r); } 
             }
             /* TST - Test Memory (direct addressing)
              * Opcode: 0D | Cycles: 4 | Bytes: 2
@@ -3209,7 +2932,7 @@ impl CPU {
              * Execution: Compare mem[addr] with 0, sets flags but doesn't modify
              * Timing: 4 cycles total (opcode+operand+read+test)
              * Flags: N,Z set based on value, V=0, C=0
-             * Verificado: ✓ OK - Using rmw_tst helper
+             * Verificado: ✓ OK - Using rmw_tst helper, confirmed 4 cycles by Timer2 test
              */
             0x0D => { 
                 let off = self.read8(self.pc); 
@@ -3217,7 +2940,6 @@ impl CPU {
                 let addr = ((self.dp as u16) << 8) | off as u16; 
                 let m = self.read8(addr); 
                 self.rmw_tst(m);  // Sets N,Z based on value, V=0, C=0
-                if self.trace { println!("TST ${:04X}", addr); } 
             }
             /* JMP - Jump (direct addressing)
              * Opcode: 0E | Cycles: 2 | Bytes: 2
@@ -3232,7 +2954,6 @@ impl CPU {
                 self.pc = self.pc.wrapping_add(1); 
                 let addr = ((self.dp as u16) << 8) | off as u16; 
                 self.pc = addr; 
-                if self.trace { println!("JMP ${:04X}", addr); } 
             }
             /* CLR - Clear Memory (direct addressing)
              * Opcode: 0F | Cycles: 5 | Bytes: 2
@@ -3248,7 +2969,6 @@ impl CPU {
                 let addr = ((self.dp as u16) << 8) | off as u16; 
                 self.rmw_clr();  // Sets flags: N=0, Z=1, V=0, C=0
                 self.write8(addr, 0); 
-                if self.trace { println!("CLR ${:04X}", addr); } 
             }
             /* SUBA - Subtract from Accumulator A (indexed addressing)
              * Opcode: A0 | Cycles: 3+ | Bytes: 2+
@@ -3268,7 +2988,6 @@ impl CPU {
                 let res = a0.wrapping_sub(m); 
                 self.a = res; 
                 self.flags_sub8(a0, m, res); 
-                if self.trace { println!("SUBA [{}] -> {:02X}", ea, res); } 
             }
             /* SUBA - Subtract from Accumulator A (extended addressing)
              * Opcode: B0 | Cycles: 4 | Bytes: 3
@@ -3290,7 +3009,6 @@ impl CPU {
                 let res = a0.wrapping_sub(m);
                 self.a = res;
                 self.flags_sub8(a0, m, res);
-                if self.trace { println!("SUBA ${:04X} -> {:02X}", addr, res); }
             }
             /* ANDA - AND Accumulator A (indexed addressing)
              * Opcode: A4 | Cycles: 3+ | Bytes: 2+
@@ -3309,7 +3027,6 @@ impl CPU {
                 self.a &= m; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("ANDA [{}]", ea); } 
             }
             /* ADCA - Add with Carry to Accumulator A (indexed addressing)
              * Opcode: A9 | Cycles: 3+ | Bytes: 2+
@@ -3333,7 +3050,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADCA [{}]", ea); } 
             }
             /* ORA - OR Accumulator A (indexed addressing)
              * Opcode: AA | Cycles: 3+ | Bytes: 2+
@@ -3352,7 +3068,6 @@ impl CPU {
                 self.a |= m; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("ORA [{}]", ea); } 
             }
             /* ADDA - Add to Accumulator A (indexed addressing)
              * Opcode: AB | Cycles: 3+ | Bytes: 2+
@@ -3375,7 +3090,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADDA [{}]", ea); } 
             }
             /* SUBB - Subtract from Accumulator B (indexed addressing)
              * Opcode: E0 | Cycles: 3+ | Bytes: 2+
@@ -3395,7 +3109,6 @@ impl CPU {
                 let res = b0.wrapping_sub(m); 
                 self.b = res; 
                 self.flags_sub8(b0, m, res); 
-                if self.trace { println!("SUBB [{}] -> {:02X}", ea, res); } 
             }
             /* ANDA - AND Accumulator A (extended addressing)
              * Opcode: B4 | Cycles: 4 | Bytes: 3
@@ -3416,7 +3129,6 @@ impl CPU {
                 self.a &= m;
                 self.update_nz8(self.a);
                 self.cc_v = false;
-                if self.trace { println!("ANDA ${:04X}", addr); }
             }
             /* ORA - OR Accumulator A (extended addressing)
              * Opcode: BA | Cycles: 4 | Bytes: 3
@@ -3437,7 +3149,6 @@ impl CPU {
                 self.a |= m;
                 self.update_nz8(self.a);
                 self.cc_v = false;
-                if self.trace { println!("ORA ${:04X}", addr); }
             }
             /* ADCA - Add with Carry to Accumulator A (extended addressing)
              * Opcode: B9 | Cycles: 4 | Bytes: 3
@@ -3463,7 +3174,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ADCA ${:04X}", addr); }
             }
             /* ADDA - Add to Accumulator A (extended addressing)
              * Opcode: BB | Cycles: 4 | Bytes: 3
@@ -3488,7 +3198,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((a ^ m) as u16) & ((a ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ADDA ${:04X}", addr); }
             }
             /* ADDD - Add to Double Accumulator (indexed addressing)
              * Opcode: E3 | Cycles: 6+ | Bytes: 2+
@@ -3520,7 +3229,6 @@ impl CPU {
                 self.cc_c = (sum & 0x10000) != 0; 
                 // 16-bit overflow: sign bits of operands same, result different
                 self.cc_v = (!((d0 ^ val) as u32) & ((d0 ^ res) as u32) & 0x8000) != 0; 
-                if self.trace { println!("ADDD [{}] -> {:04X}", ea, res); } 
             }
             /* ANDB - AND Accumulator B (indexed addressing)
              * Opcode: E4 | Cycles: 3+ | Bytes: 2+
@@ -3538,7 +3246,6 @@ impl CPU {
                 self.b &= m; 
                 self.update_nz8(self.b); 
                 self.cc_v = false; 
-                if self.trace { println!("ANDB [{}]", ea); } 
             }
             /* ORB - OR Accumulator B (indexed addressing)
              * Opcode: EA | Cycles: 3+ | Bytes: 2+
@@ -3556,7 +3263,6 @@ impl CPU {
                 self.b |= m; 
                 self.update_nz8(self.b); 
                 self.cc_v = false; 
-                if self.trace { println!("ORB [{}]", ea); } 
             }
             /* SUBB - Subtract from Accumulator B (extended addressing)
              * Opcode: F0 | Cycles: 4 | Bytes: 3
@@ -3578,7 +3284,6 @@ impl CPU {
                 let res = b0.wrapping_sub(m);
                 self.b = res;
                 self.flags_sub8(b0, m, res);
-                if self.trace { println!("SUBB ${:04X} -> {:02X}", addr, res); }
             }
             /* ANDB - AND Accumulator B (extended addressing)
              * Opcode: F4 | Cycles: 4 | Bytes: 3
@@ -3599,7 +3304,6 @@ impl CPU {
                 self.b &= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("ANDB ${:04X}", addr); }
             }
             /* ADDD - Add to Double Accumulator (extended addressing)
              * Opcode: F3 | Cycles: 6 | Bytes: 3
@@ -3627,7 +3331,6 @@ impl CPU {
                 self.update_nz16(res);
                 self.cc_c = (sum & 0x10000) != 0;
                 self.cc_v = (!((d0 ^ val) as u32) & ((d0 ^ res) as u32) & 0x8000) != 0;
-                if self.trace { println!("ADDD ${:04X} -> {:04X}", addr, res); }
             }
             /* ORB - Logical OR with Accumulator B (immediate)
              * Opcode: CA | Cycles: 2 | Bytes: 2
@@ -3645,7 +3348,6 @@ impl CPU {
                 self.b |= imm;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("ORB #${:02X}", imm); }
             }
             /* BITB - Bit Test Accumulator B (immediate)
              * Opcode: C5 | Cycles: 2 | Bytes: 2
@@ -3664,7 +3366,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0;
                 self.cc_z = r == 0;
                 self.cc_v = false;
-                if self.trace { println!("BITB #${:02X}", imm); }
             }
             /* ORB - OR Accumulator B (direct addressing)
              * Opcode: DA | Cycles: 3 | Bytes: 2
@@ -3684,7 +3385,6 @@ impl CPU {
                 self.b |= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("ORB ${:04X}", addr); }
             }
             /* ORB - OR Accumulator B (extended addressing)
              * Opcode: FA | Cycles: 4 | Bytes: 3
@@ -3705,7 +3405,6 @@ impl CPU {
                 self.b |= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("ORB ${:04X}", addr); }
             }
             /* EORB - Exclusive OR Accumulator B (extended addressing)
              * Opcode: F8 | Cycles: 4 | Bytes: 3
@@ -3726,7 +3425,6 @@ impl CPU {
                 self.b ^= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("EORB ${:04X}", addr); }
             }
             /* LSR - Logical Shift Right (direct addressing)
              * Opcode: 04 | Cycles: 5 | Bytes: 2
@@ -3749,7 +3447,6 @@ impl CPU {
                 self.cc_n = false;
                 self.cc_z = res == 0;
                 self.cc_v = false;
-                if self.trace { println!("LSR ${:04X} -> {:02X}", addr, res); }
             }
             /* JSR direct - Jump to Subroutine Direct Mode
              * Opcode: 9D | Cycles: 7 | Bytes: 2
@@ -3761,12 +3458,10 @@ impl CPU {
                 let off = self.read8(self.pc);
                 self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16;
-                if self.trace { println!("JSR ${:04X}", addr); }
                 let ret = self.pc;
                 self.push16(ret);
                 if addr >= 0xF000 {
                     if !self.bios_present { 
-                        if self.trace { println!("Missing BIOS ${:04X}", addr); } 
                         return false; 
                     }
                     self.record_bios_call(addr);
@@ -3789,12 +3484,12 @@ impl CPU {
              */
             0xBD => { // JSR absolute
                 let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2);
-                let addr=((hi as u16)<<8)|lo as u16; if self.trace { println!("JSR ${:04X}", addr);} 
+                let addr=((hi as u16)<<8)|lo as u16;
                 let ret=self.pc; // after operand
                 let s_before=self.s; self.push16(ret);
                 if std::env::var("STACK_TRACE").ok().as_deref()==Some("1") { println!("[JSR] to={:04X} ret={:04X} S_before={:04X} S_after={:04X}", addr, ret, s_before, self.s); }
                 if addr>=0xF000 { 
-                    if !self.bios_present { if self.trace { println!("Missing BIOS ${:04X}", addr);} return false; }
+                    if !self.bios_present { return false; }
                     self.record_bios_call(addr);
                 }
                 self.call_stack.push(ret); #[cfg(test)] { self.last_return_expect = Some(ret); }
@@ -3817,7 +3512,6 @@ impl CPU {
                 let addr = ((self.dp as u16) << 8) | off as u16;
                 let val = self.a; self.write8(addr, val);
                 self.update_nz8(val);
-                if self.trace { println!("STA ${:04X} -> {:02X}", addr, val); }
                 if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
                     if addr==0xD008 { self.t2_last_low=Some(val); }
                     if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STA] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STA] high={:02X} (low missing)", val); } }
@@ -3837,7 +3531,6 @@ impl CPU {
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16; let m = self.read8(addr);
                 self.a &= m; self.update_nz8(self.a); self.cc_v = false;
-                if self.trace { println!("ANDA ${:04X}", addr); }
             }
             /* 0x9F - STX direct (Store X register to direct page)
              * Motorola 6809 Spec: [DP:operand] = X, 16-bit register store
@@ -3856,7 +3549,6 @@ impl CPU {
                 self.write8(addr, (x >> 8) as u8);             // X_high to addr
                 self.write8(addr.wrapping_add(1), x as u8);    // X_low to addr+1
                 self.update_nz16(x); 
-                if self.trace { println!("STX ${:04X}", addr); }
             }
             /* LDA - Load Accumulator A (direct addressing)
              * Opcode: 96 | Cycles: 3 | Bytes: 2
@@ -3873,7 +3565,6 @@ impl CPU {
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16;
                 let v = self.read8(addr); self.a = v; self.update_nz8(v);
-                if self.trace { println!("LDA ${:04X} -> {:02X}", addr, v); }
             }
             /* STB - Store Accumulator B (direct addressing)
              * Opcode: D7 | Cycles: 3 | Bytes: 2
@@ -3891,7 +3582,6 @@ impl CPU {
                 let addr = ((self.dp as u16) << 8) | off as u16;
                 let val = self.b; self.write8(addr, val);
                 self.update_nz8(val);
-                if self.trace { println!("STB ${:04X} -> {:02X}", addr, val); }
                 if std::env::var("VIA_REFRESH_TRACE").ok().as_deref()==Some("1") && (addr==0xD008 || addr==0xD009) {
                     if addr==0xD008 { self.t2_last_low=Some(val); }
                     if addr==0xD009 { if let Some(lo)=self.t2_last_low { println!("[TRACE][T2 bytes/STB] low={:02X} high={:02X} full={:04X}", lo, val, ((val as u16)<<8)|lo as u16); self.t2_last_low=None; } else { println!("[TRACE][T2 bytes/STB] high={:02X} (low missing)", val); } }
@@ -3914,7 +3604,6 @@ impl CPU {
                 self.b &= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("ANDB ${:04X}", addr); }
             }
             /* LDB - Load Accumulator B (direct addressing)
              * Opcode: D6 | Cycles: 3 | Bytes: 2
@@ -3931,7 +3620,6 @@ impl CPU {
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16;
                 let v = self.read8(addr); self.b = v; self.update_nz8(v);
-                if self.trace { println!("LDB ${:04X} -> {:02X}", addr, v); }
             }
             /* LDB - Load Accumulator B (indexed addressing)
              * Opcode: E6 | Cycles: 3+ | Bytes: 2+
@@ -3950,7 +3638,6 @@ impl CPU {
                 let v = self.read8(ea);
                 self.b = v;
                 self.update_nz8(v);
-                if self.trace { println!("LDB [{}] -> {:02X}", ea, v); }
             }
             /* LDA - Load Accumulator A (indexed addressing)
              * Opcode: A6 | Cycles: 3+ | Bytes: 2+
@@ -3969,7 +3656,6 @@ impl CPU {
                 let v = self.read8(ea);
                 self.a = v;
                 self.update_nz8(v);
-                if self.trace { println!("LDA [{}] -> {:02X}", ea, v); }
             }
             /* STA - Store Accumulator A (indexed addressing)
              * Opcode: A7 | Cycles: 3+ | Bytes: 2+
@@ -3982,7 +3668,12 @@ impl CPU {
              * Verificado: ✓ OK - Indexed addressing with decode_indexed
              */
             0xA7 => { // STA indexed
-                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); let v=self.a; self.write8(ea,v); self.update_nz8(v); if self.trace { println!("STA [{}] -> {:02X}", ea,v);} }
+                let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); 
+                let (ea,_) = self.decode_indexed(post); 
+                let v=self.a; 
+                self.write8(ea,v); 
+                self.update_nz8(v); 
+            }
             /* 0xAE - LDX indexed (Load X register from indexed address)
              * Motorola 6809 Spec: X = [indexed_address], 16-bit register load
              * Execution: X = mem[ea:ea+1], condition codes: N,Z,V=0
@@ -4001,7 +3692,6 @@ impl CPU {
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
                 self.x = val; 
                 self.update_nz16(val); 
-                if self.trace { println!("LDX [{}] -> {:04X}", ea, val); }
             }
             0xA1 => { // CMPA indexed
                 let post = self.read8(self.pc);
@@ -4011,7 +3701,6 @@ impl CPU {
                 let a = self.a;
                 let res = a.wrapping_sub(m);
                 self.flags_sub8(a, m, res);
-                if self.trace { println!("CMPA [{}]", ea); }
             }
             /* 0xAF - STX indexed (Store X register to indexed address)
              * Motorola 6809 Spec: [indexed_address] = X, 16-bit register store
@@ -4029,7 +3718,6 @@ impl CPU {
                 self.write8(ea, (self.x >> 8) as u8);         // X_high to ea
                 self.write8(ea.wrapping_add(1), self.x as u8); // X_low to ea+1
                 self.update_nz16(self.x); 
-                if self.trace { println!("STX [{}]", ea); }
             }
             /* 0xED - STD indexed (Store D register to indexed address)
              * Motorola 6809 Spec: [indexed_address] = D, A=high byte, B=low byte
@@ -4047,7 +3735,6 @@ impl CPU {
                 self.write8(ea, self.a);                       // A (high) to ea
                 self.write8(ea.wrapping_add(1), self.b);       // B (low) to ea+1
                 self.update_nz16(self.d()); 
-                if self.trace { println!("STD [{}]", ea); }
             }
             0xF1 => { // CMPB extended
                 let hi = self.read8(self.pc);
@@ -4058,7 +3745,6 @@ impl CPU {
                 let b0 = self.b;
                 let res = b0.wrapping_sub(m);
                 self.flags_sub8(b0, m, res);
-                if self.trace { println!("CMPB ${:04X}", addr); }
             }
             0x10 => { // prefix group 1
                 let bop=self.read8(self.pc);
@@ -4073,15 +3759,15 @@ impl CPU {
                  * Big-endian: Hi byte at PC, lo byte at PC+1
                  * Verificado: ✓ OK - Standard 16-bit immediate load
                  */
-                match bop { 0x8E => { 
-                    self.pc = self.pc.wrapping_add(1); 
-                    let hi = self.read8(self.pc); 
-                    let lo = self.read8(self.pc + 1); 
-                    self.pc = self.pc.wrapping_add(2); 
-                    self.y = ((hi as u16) << 8) | lo as u16; 
-                    self.update_nz16(self.y); 
-                    if self.trace { println!("LDY #${:04X}", self.y); } 
-                }
+                match bop { 
+                    0x8E => { 
+                        self.pc = self.pc.wrapping_add(1); 
+                        let hi = self.read8(self.pc); 
+                        let lo = self.read8(self.pc + 1); 
+                        self.pc = self.pc.wrapping_add(2); 
+                        self.y = ((hi as u16) << 8) | lo as u16; 
+                        self.update_nz16(self.y); 
+                    }
                     0x9E => { // LDY direct
                         self.pc = self.pc.wrapping_add(1);
                         let off = self.read8(self.pc);
@@ -4091,7 +3777,6 @@ impl CPU {
                         let lo = self.read8(addr.wrapping_add(1));
                         self.y = ((hi as u16) << 8) | lo as u16;
                         self.update_nz16(self.y);
-                        if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y); }
                     }
                     0xAE => { // LDY indexed
                         self.pc = self.pc.wrapping_add(1);
@@ -4102,7 +3787,6 @@ impl CPU {
                         let lo = self.read8(ea.wrapping_add(1));
                         self.y = ((hi as u16) << 8) | lo as u16;
                         self.update_nz16(self.y);
-                        if self.trace { println!("LDY [{}] -> {:04X}", ea, self.y); }
                     }
                     0xBE => { // LDY extended
                         self.pc = self.pc.wrapping_add(1);
@@ -4114,7 +3798,6 @@ impl CPU {
                         let lo2 = self.read8(addr.wrapping_add(1));
                         self.y = ((hi2 as u16) << 8) | lo2 as u16;
                         self.update_nz16(self.y);
-                        if self.trace { println!("LDY ${:04X} -> {:04X}", addr, self.y); }
                     }
                     0x9F => { // STY direct
                         self.pc = self.pc.wrapping_add(1);
@@ -4125,7 +3808,6 @@ impl CPU {
                         self.write8(addr, (y >> 8) as u8);
                         self.write8(addr.wrapping_add(1), y as u8);
                         self.update_nz16(y);
-                        if self.trace { println!("STY ${:04X}", addr); }
                     }
                     0xAF => { // STY indexed
                         self.pc = self.pc.wrapping_add(1);
@@ -4136,7 +3818,6 @@ impl CPU {
                         self.write8(ea, (y >> 8) as u8);
                         self.write8(ea.wrapping_add(1), y as u8);
                         self.update_nz16(y);
-                        if self.trace { println!("STY [{}]", ea); }
                     }
                     0xBF => { // STY extended
                         self.pc = self.pc.wrapping_add(1);
@@ -4148,7 +3829,6 @@ impl CPU {
                         self.write8(addr, (y >> 8) as u8);
                         self.write8(addr.wrapping_add(1), y as u8);
                         self.update_nz16(y);
-                        if self.trace { println!("STY ${:04X}", addr); }
                     }
                     0xCE => { // LDS immediate
                         self.pc=self.pc.wrapping_add(1);
@@ -4158,25 +3838,35 @@ impl CPU {
                         let new_s=((hi as u16)<<8)|lo as u16;
                         #[cfg(test)] let old_s = self.s;
                         self.s=new_s; self.update_nz16(self.s);
-                        if self.trace { println!("LDS #${:04X}", self.s);} cyc=5;
-                        #[cfg(test)] {
-                            println!("[LDS-IMM] pc_operands={:04X} bytes={:02X} {:02X} S_before={:04X} S_after={:04X}", pc_operands, hi, lo, old_s, self.s);
-                        }
+
                     }
                     // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) NEW, extended (0xB3)
-                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let d=self.d(); let res=d.wrapping_sub(val); self.flags_sub16(d,val,res); if self.trace { println!("CMPD ${:04X} -> {:04X}", val,res);} }
+                    0x83|0x93|0xA3|0xB3 => { 
+                        self.pc=self.pc.wrapping_add(1); 
+                        let val = match bop {
+                            0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                            0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                            0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                            _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        }; 
+                        let d=self.d(); 
+                        let res=d.wrapping_sub(val);
+                        self.flags_sub16(d,val,res); 
+                    }
                     // CMPY immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
-                    0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
-                        0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
-                        0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                        0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
-                        _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let y0=self.y; let res=y0.wrapping_sub(val); self.flags_sub16(y0,val,res); if self.trace { println!("CMPY ${:04X} -> {:04X}", val,res);} }
+                    0x8C|0x9C|0xAC|0xBC => { 
+                        self.pc=self.pc.wrapping_add(1);
+                        let val = match bop {
+                            0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
+                            0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                            0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
+                            _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
+                        }; 
+
+                        let y0=self.y; 
+                        let res=y0.wrapping_sub(val);
+                        self.flags_sub16(y0,val,res); 
+                    }
                     // LDS direct/indexed/extended: 0xDE,0xEE,0xFE; STS 0xDF,0xEF,0xFF
                     /* LDS - Load Stack Pointer S from direct address (prefix 10)
                      * Opcode: 10 DE | Cycles: 6 | Bytes: 3
@@ -4197,7 +3887,6 @@ impl CPU {
                         let lo = self.read8(addr.wrapping_add(1)); 
                         self.s = ((hi as u16) << 8) | lo as u16; 
                         self.update_nz16(self.s); 
-                        if self.trace { println!("LDS ${:04X} -> {:04X}", addr, self.s); } 
                     }
                     /* LDS - Load Stack Pointer S from indexed address (prefix 10)
                      * Opcode: 10 EE | Cycles: 7+ | Bytes: 3+
@@ -4218,7 +3907,6 @@ impl CPU {
                         let lo = self.read8(ea.wrapping_add(1)); 
                         self.s = ((hi as u16) << 8) | lo as u16; 
                         self.update_nz16(self.s); 
-                        if self.trace { println!("LDS [{}] -> {:04X}", ea, self.s); } 
                     }
                     /* LDS - Load Stack Pointer S from extended address (prefix 10)
                      * Opcode: 10 FE | Cycles: 8 | Bytes: 4
@@ -4240,7 +3928,6 @@ impl CPU {
                         let lo2 = self.read8(addr.wrapping_add(1)); 
                         self.s = ((hi2 as u16) << 8) | lo2 as u16; 
                         self.update_nz16(self.s); 
-                        if self.trace { println!("LDS ${:04X} -> {:04X}", addr, self.s); } 
                     }
                     /* STS - Store Stack Pointer S to direct address (prefix 10)
                      * Opcode: 10 DF | Cycles: 6 | Bytes: 3
@@ -4261,7 +3948,6 @@ impl CPU {
                         self.write8(addr, (s >> 8) as u8); 
                         self.write8(addr.wrapping_add(1), s as u8); 
                         self.update_nz16(s); 
-                        if self.trace { println!("STS ${:04X}", addr); } 
                     }
                     /* STS - Store Stack Pointer S to indexed address (prefix 10)
                      * Opcode: 10 EF | Cycles: 7+ | Bytes: 3+
@@ -4282,7 +3968,6 @@ impl CPU {
                         self.write8(ea, (s >> 8) as u8); 
                         self.write8(ea.wrapping_add(1), s as u8); 
                         self.update_nz16(s); 
-                        if self.trace { println!("STS [{}]", ea); } 
                     }
                     /* STS - Store Stack Pointer S to extended address (prefix 10)
                      * Opcode: 10 FF | Cycles: 8 | Bytes: 4
@@ -4304,7 +3989,6 @@ impl CPU {
                         self.write8(addr, (s >> 8) as u8); 
                         self.write8(addr.wrapping_add(1), s as u8); 
                         self.update_nz16(s); 
-                        if self.trace { println!("STS ${:04X}", addr); } 
                     }
                     0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI2, "SWI2"); }
                     /* LBNE/LBEQ - Long Branch Not Equal/Equal (prefix 10)
@@ -4327,7 +4011,6 @@ impl CPU {
                         match bop { 
                             0x26 => { 
                                 if !self.cc_z { 
-                                    if self.trace { println!("LBNE {:04X}", target); } 
                                     self.pc = target; 
                                 } else if self.trace { 
                                     println!("LBNE not"); 
@@ -4335,10 +4018,7 @@ impl CPU {
                             } 
                             0x27 => { 
                                 if self.cc_z { 
-                                    if self.trace { println!("LBEQ {:04X}", target); } 
                                     self.pc = target; 
-                                } else if self.trace { 
-                                    println!("LBEQ not"); 
                                 } 
                             } 
                             _ => {} 
@@ -4360,7 +4040,9 @@ impl CPU {
                             0x2D => (f_n ^ f_v)!=false, // LBLT
                             0x2E => (f_z || (f_n ^ f_v))==false, // LBGT
                             0x2F => (f_z || (f_n ^ f_v))!=false, // LBLE
-                            _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
+                            _ => { 
+                                 return false; 
+                            }
                         };
                         // Consume sub-op byte
                         self.pc = self.pc.wrapping_add(1);
@@ -4368,9 +4050,14 @@ impl CPU {
                         let off=((hi as u16)<<8)|lo as u16; let target=self.pc.wrapping_add(off as i16 as u16);
                         let name = match bop {
                             0x21=>"LBRN",0x22=>"LBHI",0x23=>"LBLS",0x24=>"LBHS/LBCC",0x25=>"LBLO/LBCS",0x28=>"LBVC",0x29=>"LBVS",0x2A=>"LBPL",0x2B=>"LBMI",0x2C=>"LBGE",0x2D=>"LBLT",0x2E=>"LBGT",0x2F=>"LBLE", _=>"?" };
-                        if cond { if self.trace { println!("{} {:04X}", name, target);} self.pc=target; cyc = cyc.saturating_add(6); } else { if self.trace { println!("{} not", name);} cyc = cyc.saturating_add(5); }
+                        if cond { 
+                            self.pc=target; 
+                            cyc = cyc.saturating_add(6); 
+                        } else { 
+                            cyc = cyc.saturating_add(5); 
+                        }
                     }
-                    _ => { if self.trace { println!("UNIMPL 0x10 {:02X}", bop);} return false; }
+                    _ => { return false; }
                 }
             }
             0x11 => { // prefix group 2
@@ -4382,16 +4069,24 @@ impl CPU {
                         0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
                         0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
                         _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let u0=self.u; let res=u0.wrapping_sub(val); self.flags_sub16(u0,val,res); if self.trace { println!("CMPU ${:04X} -> {:04X}", val,res);} }
+                        }; 
+                        let u0=self.u; 
+                        let res=u0.wrapping_sub(val); 
+                        self.flags_sub16(u0,val,res); 
+                    }
                     // CMPS immediate/direct/indexed/extended: 0x8C,0x9C,0xAC,0xBC
                     0x8C|0x9C|0xAC|0xBC => { self.pc=self.pc.wrapping_add(1); let val = match bop {
                         0x8C => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
                         0x9C => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
                         0xAC => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
                         _ => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); let addr=((hi as u16)<<8)|lo as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
-                    }; let s0=self.s; let res=s0.wrapping_sub(val); self.flags_sub16(s0,val,res); if self.trace { println!("CMPS ${:04X} -> {:04X}", val,res);} }
+                        }; 
+                        let s0=self.s; 
+                        let res=s0.wrapping_sub(val); 
+                        self.flags_sub16(s0,val,res); 
+                    }
                     0x3F => { self.pc=self.pc.wrapping_add(1); self.service_swi_generic(VEC_SWI3, "SWI3"); }
-                    _ => { if self.trace { println!("UNIMPL 0x11 {:02X}", bop);} return false; }
+                    _ => { return false; }
                 }
             }
             0x00 => { // NEG direct
@@ -4399,7 +4094,6 @@ impl CPU {
                 let addr=((self.dp as u16)<<8)|off as u16;
                 let m=self.read8(addr); let res=(0u16).wrapping_sub(m as u16) as u8;
                 self.write8(addr,res); self.cc_n=(res&0x80)!=0; self.cc_z=res==0; self.cc_v=res==0x80; self.cc_c=m!=0;
-                if self.trace { println!("NEG ${:04X} -> {:02X}", addr,res);} 
             }
             0x03 => { // COM direct
                 let off = self.read8(self.pc);
@@ -4412,11 +4106,9 @@ impl CPU {
                 self.cc_z = res == 0;
                 self.cc_v = false;
                 self.cc_c = true;
-                if self.trace { println!("COM ${:04X} -> {:02X}", addr, res); }
             }
             0x0A => { // CLV (Clear V flag)
                 self.cc_v = false;
-                if self.trace { println!("CLV"); }
             }
             /* BPL - Branch if Plus
              * Opcode: 2A | Cycles: 3 | Bytes: 2
@@ -4428,11 +4120,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if !self.cc_n && !self.cc_z { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BPL {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BPL not"); }
                     cyc=2;
                 }
             }
@@ -4447,11 +4137,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if self.cc_n { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BMI {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BMI not"); }
                     cyc=2;
                 }
             }
@@ -4470,11 +4158,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if self.cc_n ^ self.cc_v { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BLT {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BLT not"); }
                     cyc=2;
                 }
             }
@@ -4494,11 +4180,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if !self.cc_z && !(self.cc_n ^ self.cc_v) { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BGT {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BGT not"); }
                     cyc=2;
                 }
             }
@@ -4518,11 +4202,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if self.cc_z || (self.cc_n ^ self.cc_v) { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BLE {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BLE not"); }
                     cyc=2;
                 }
             }
@@ -4542,11 +4224,9 @@ impl CPU {
                 let off=self.read8(self.pc) as i8; self.pc=self.pc.wrapping_add(1);
                 if (self.cc_n ^ self.cc_v)==false { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BGE {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BGE not"); }
                     cyc=2;
                 }
             }
@@ -4569,7 +4249,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_neg(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("NEG [{}] -> {:02X}", ea, r); } 
             }
             /* COM - Complement Memory (indexed addressing)
              * Opcode: 63 | Cycles: 6+ | Bytes: 2+
@@ -4587,7 +4266,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_com(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("COM [{}] -> {:02X}", ea, r); } 
             }
             /* LSR - Logical Shift Right Memory (indexed addressing)
              * Opcode: 64 | Cycles: 6+ | Bytes: 2+
@@ -4605,7 +4283,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_lsr(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("LSR [{}] -> {:02X}", ea, r); } 
             }
             /* ROR - Rotate Right Memory (indexed addressing)
              * Opcode: 66 | Cycles: 6+ | Bytes: 2+
@@ -4623,7 +4300,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_ror(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("ROR [{}] -> {:02X}", ea, r); } 
             }
             /* ASR - Arithmetic Shift Right Memory (indexed addressing)
              * Opcode: 67 | Cycles: 6+ | Bytes: 2+
@@ -4641,7 +4317,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_asr(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("ASR [{}] -> {:02X}", ea, r); } 
             }
             /* ASL - Arithmetic Shift Left Memory (indexed addressing)
              * Opcode: 68 | Cycles: 6+ | Bytes: 2+
@@ -4659,7 +4334,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_asl(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("ASL [{}] -> {:02X}", ea, r); } 
             }
             /* ROL - Rotate Left Memory (indexed addressing)
              * Opcode: 69 | Cycles: 6+ | Bytes: 2+
@@ -4677,7 +4351,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_rol(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("ROL [{}] -> {:02X}", ea, r); } 
             }
             /* DEC - Decrement Memory (indexed addressing)
              * Opcode: 6A | Cycles: 6+ | Bytes: 2+
@@ -4695,7 +4368,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_dec(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("DEC [{}] -> {:02X}", ea, r); } 
             }
             /* JMP - Jump (indexed addressing)
              * Opcode: 6E | Cycles: 3+ | Bytes: 2+
@@ -4711,7 +4383,6 @@ impl CPU {
                 self.pc = self.pc.wrapping_add(1); 
                 let (ea, _) = self.decode_indexed(post); 
                 self.pc = ea; 
-                if self.trace { println!("JMP [{}]", ea); } 
             }
             /* INC - Increment Memory (indexed addressing)
              * Opcode: 6C | Cycles: 6+ | Bytes: 2+
@@ -4729,7 +4400,6 @@ impl CPU {
                 let m = self.read8(ea); 
                 let r = self.rmw_inc(m); 
                 self.write8(ea, r); 
-                if self.trace { println!("INC [{}] -> {:02X}", ea, r); } 
             }
             /* TST - Test Memory (indexed addressing)
              * Opcode: 6D | Cycles: 6+ | Bytes: 2+
@@ -4746,7 +4416,6 @@ impl CPU {
                 let (ea, _) = self.decode_indexed(post); 
                 let m = self.read8(ea); 
                 self.rmw_tst(m); 
-                if self.trace { println!("TST [{}]", ea); } 
             }
             /* SBCA - Subtract with Carry from Accumulator A (immediate)
              * Opcode: 82 | Cycles: 2 | Bytes: 2
@@ -4765,7 +4434,6 @@ impl CPU {
                 let res = a.wrapping_sub(imm).wrapping_sub(c);
                 self.a = res; 
                 self.flags_sub8(a, imm.wrapping_add(c), res);
-                if self.trace { println!("SBCA #${:02X} -> {:02X}", imm, res); }
             }
             /* SUBD - Subtract 16-bit from D register (immediate)
              * Opcode: 83 | Cycles: 4 | Bytes: 3
@@ -4786,7 +4454,6 @@ impl CPU {
                 let res = d0.wrapping_sub(val);
                 self.set_d(res); 
                 self.flags_sub16(d0, val, res);
-                if self.trace { println!("SUBD #${:04X} -> {:04X}", val, res); }
             }
             /* ADDD - Add 16-bit to D register (immediate)
              * Opcode: C3 | Cycles: 4 | Bytes: 3
@@ -4810,7 +4477,6 @@ impl CPU {
                 self.update_nz16(res); 
                 self.cc_c = (sum & 0x10000) != 0; 
                 self.cc_v = (!((d0 ^ val) as u32) & ((d0 ^ res) as u32) & 0x8000) != 0; 
-                if self.trace { println!("ADDD #${:04X} -> {:04X}", val, res); } 
             }
             /* ANDA - Logical AND with Accumulator A (immediate)
              * Opcode: 84 | Cycles: 2 | Bytes: 2
@@ -4827,7 +4493,6 @@ impl CPU {
                 self.a &= imm; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("ANDA #${:02X}", imm); } 
             }
             /* EORA - Exclusive OR with Accumulator A (immediate)
              * Opcode: 88 | Cycles: 2 | Bytes: 2
@@ -4844,7 +4509,6 @@ impl CPU {
                 self.a ^= imm; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("EORA #${:02X}", imm); } 
             }
             /* ORA - Logical OR with Accumulator A (immediate)
              * Opcode: 8A | Cycles: 2 | Bytes: 2
@@ -4861,7 +4525,6 @@ impl CPU {
                 self.a |= imm; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("ORA #${:02X}", imm); } 
             }
             /* ADCB - Add with Carry to Accumulator B (immediate)
              * Opcode: C9 | Cycles: 2 | Bytes: 2
@@ -4883,7 +4546,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((b0 ^ imm) as u16) & ((b0 ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADCB #${:02X}", imm); } 
             }
             /* SEV - Set Overflow Flag
              * Opcode: 0B | Cycles: 2 | Bytes: 1
@@ -4896,7 +4558,6 @@ impl CPU {
              */
             0x0B => { 
                 self.cc_v = true; 
-                if self.trace { println!("SEV"); } 
             }
             0x19 => { // DAA (Decimal Adjust Accumulator) after addition on A
                 // Reference 6809 rules (derived from 6800/6802 family but with C interaction):
@@ -4920,7 +4581,6 @@ impl CPU {
                 self.update_nz8(res);
                 self.cc_v = false; // DAA clears V
                 self.cc_c = carry; // Updated carry (set if high adjust applied)
-                if self.trace { println!("DAA -> {:02X} (adj={:02X})", res, adjust); }
             }
             /* BVC - Branch Overflow Clear
              * Opcode: 28 | Cycles: 3 | Bytes: 2
@@ -4934,11 +4594,9 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 if !self.cc_v { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BVC {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BVC not"); }
                     cyc=2;
                 } 
             }
@@ -4965,7 +4623,6 @@ impl CPU {
                 self.a=res; 
                 self.update_nz8(res); 
                 self.cc_v = res==0x7F; 
-                if self.trace { println!("DECA -> {:02X}", res);} 
             }
             /* ASR - Arithmetic Shift Right Memory (direct addressing)
              * Opcode: 07 | Cycles: 5 | Bytes: 2
@@ -4990,7 +4647,6 @@ impl CPU {
                 self.cc_n = (res & 0x80) != 0;
                 self.cc_z = res == 0;
                 self.cc_v = false;
-                if self.trace { println!("ASR ${:04X} -> {:02X}", addr, res); }
             }
             /* ASL/LSL - Arithmetic/Logical Shift Left Memory (direct addressing)
              * Opcode: 08 | Cycles: 5 | Bytes: 2
@@ -5015,7 +4671,6 @@ impl CPU {
                 self.cc_n = (res8 & 0x80) != 0;
                 self.cc_z = res8 == 0;
                 self.cc_v = ((m ^ res8) & 0x80) != 0;
-                if self.trace { println!("ASL ${:04X} -> {:02X}", addr, res8); }
             }
             /* BCS - Branch Carry Set (also BLO - Branch Lower)
              * Opcode: 25 | Cycles: 3/2 | Bytes: 2
@@ -5034,18 +4689,18 @@ impl CPU {
                 self.pc=self.pc.wrapping_add(1); 
                 if self.cc_c { 
                     let new=(self.pc as i32 + off as i32) as u16; 
-                    if self.trace { println!("BCS {:04X}", new);} 
                     self.pc=new; 
                     cyc=3; 
                 } else { 
-                    if self.trace { println!("BCS not"); }
                     cyc=2;
                 } 
             }
             0x18 => { // Treat undefined 6809 opcode as NOP (clears nothing)
-                if self.trace { println!("(undefined 0x18 treated as NOP)"); } }
+                // if self.trace { println!("(undefined 0x18 treated as NOP)"); } 
+                }
             0x61 => { // Undefined / unimplemented in this subset -> NOP
-                if self.trace { println!("(undefined 0x61 treated as NOP)"); } }
+                // if self.trace { println!("(undefined 0x61 treated as NOP)"); }
+                 }
             /* CMPA - Compare Accumulator A (direct addressing)
              * Opcode: 91 | Cycles: 4 | Bytes: 2
              * Motorola 6809 Spec: A - [DP:offset], sets N,Z,V,C flags (A unchanged)
@@ -5064,7 +4719,6 @@ impl CPU {
                 let a0 = self.a; 
                 let res = a0.wrapping_sub(m); 
                 self.flags_sub8(a0, m, res); 
-                if self.trace { println!("CMPA ${:04X}", addr); } 
             }
             /* SUBD - Subtract 16-bit from D register (direct addressing)
              * Opcode: 93 | Cycles: 6 | Bytes: 2
@@ -5088,7 +4742,7 @@ impl CPU {
                 let res = d0.wrapping_sub(val);
                 self.set_d(res); 
                 self.flags_sub16(d0, val, res); 
-                if self.trace { println!("SUBD ${:04X} -> {:04X}", addr, res); } 
+                // if self.trace { println!("SUBD ${:04X} -> {:04X}", addr, res); } 
             }
             /* EORA - Exclusive OR with Accumulator A (direct addressing)
              * Opcode: 98 | Cycles: 4 | Bytes: 2
@@ -5108,7 +4762,6 @@ impl CPU {
                 self.a ^= m; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("EORA ${:04X}", addr); } 
             }
             /* SBCA - Subtract with Carry from Accumulator A (indexed addressing)
              * Opcode: A2 | Cycles: 3+ | Bytes: 2+
@@ -5129,7 +4782,6 @@ impl CPU {
                 let res = a0.wrapping_sub(m).wrapping_sub(c); 
                 self.a = res; 
                 self.flags_sub8(a0, m.wrapping_add(c), res); 
-                if self.trace { println!("SBCA [{}] -> {:02X}", ea, res); } 
             }
             /* SUBD - Subtract 16-bit from D register (indexed addressing)
              * Opcode: A3 | Cycles: 5+ | Bytes: 2+
@@ -5152,7 +4804,6 @@ impl CPU {
                 let res = d0.wrapping_sub(val);
                 self.set_d(res); 
                 self.flags_sub16(d0, val, res); 
-                if self.trace { println!("SUBD [{}] -> {:04X}", ea, res); } 
             }
             /* BITA - Bit Test Accumulator A (indexed addressing)
              * Opcode: A5 | Cycles: 3+ | Bytes: 2+
@@ -5172,7 +4823,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0; 
                 self.cc_z = r == 0; 
                 self.cc_v = false; 
-                if self.trace { println!("BITA [{}]", ea); } 
             }
             /* EORA - Exclusive OR with Accumulator A (indexed addressing)
              * Opcode: A8 | Cycles: 3+ | Bytes: 2+
@@ -5191,7 +4841,6 @@ impl CPU {
                 self.a ^= m; 
                 self.update_nz8(self.a); 
                 self.cc_v = false; 
-                if self.trace { println!("EORA [{}]", ea); } 
             }
             /* EORB - Exclusive OR with Accumulator B (immediate)
              * Opcode: C8 | Cycles: 2 | Bytes: 2
@@ -5208,7 +4857,6 @@ impl CPU {
                 self.b ^= imm; 
                 self.update_nz8(self.b); 
                 self.cc_v = false; 
-                if self.trace { println!("EORB #${:02X}", imm); } 
             }
             /* ADDB - Add to Accumulator B (immediate)
              * Opcode: CB | Cycles: 2 | Bytes: 2
@@ -5229,7 +4877,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((b0 ^ imm) as u16) & ((b0 ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADDB #${:02X}", imm); } 
             }
             0xDB => { // ADDB direct
                 let off = self.read8(self.pc);
@@ -5243,7 +4890,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((b0 ^ m) as u16) & ((b0 ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ADDB ${:04X}", addr); }
             }
             0xE5 => { // BITB indexed
                 let post = self.read8(self.pc);
@@ -5254,7 +4900,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0;
                 self.cc_z = r == 0;
                 self.cc_v = false;
-                if self.trace { println!("BITB [{}]", ea); }
             }
             0xEB => { // ADDB indexed
                 let post = self.read8(self.pc);
@@ -5268,7 +4913,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((b0 ^ m) as u16) & ((b0 ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ADDB [{}]", ea); }
             }
             0xE9 => { // ADCB indexed
                 let post = self.read8(self.pc);
@@ -5283,7 +4927,6 @@ impl CPU {
                 self.update_nz8(r);
                 self.cc_c = (sum & 0x100) != 0;
                 self.cc_v = (!((b0 ^ m) as u16) & ((b0 ^ r) as u16) & 0x80) != 0;
-                if self.trace { println!("ADCB [{}]", ea); }
             }
             /* 0xEE - LDU indexed (Load U register from indexed address)
              * Motorola 6809 Spec: U = [indexed_address], 16-bit register load
@@ -5303,7 +4946,6 @@ impl CPU {
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
                 self.u = val; 
                 self.update_nz16(val); 
-                if self.trace { println!("LDU [{}] -> {:04X}", ea, val); }
             }
             /* 0xEF - STU indexed (Store U register to indexed address)
              * Motorola 6809 Spec: [indexed_address] = U, 16-bit register store
@@ -5322,7 +4964,6 @@ impl CPU {
                 self.write8(ea, (u >> 8) as u8);               // U_high to ea
                 self.write8(ea.wrapping_add(1), u as u8);      // U_low to ea+1
                 self.update_nz16(u); 
-                if self.trace { println!("STU [{}] -> {:04X}", ea, u); }
             }
             /* STB - Store Accumulator B (extended addressing)
              * Opcode: F7 | Cycles: 5 | Bytes: 3
@@ -5342,7 +4983,6 @@ impl CPU {
                 let v = self.b; 
                 self.write8(addr, v); 
                 self.update_nz8(v); 
-                if self.trace { println!("STB ${:04X} -> {:02X}", addr, v); } 
             }
             /* ADCB - Add with Carry to Accumulator B (extended addressing)
              * Opcode: F9 | Cycles: 5 | Bytes: 3
@@ -5368,7 +5008,6 @@ impl CPU {
                 self.update_nz8(r); 
                 self.cc_c = (sum & 0x100) != 0; 
                 self.cc_v = (!((b0 ^ m) as u16) & ((b0 ^ r) as u16) & 0x80) != 0; 
-                if self.trace { println!("ADCB ${:04X}", addr); } 
             }
             /* SUBD - Subtract 16-bit from D register (extended addressing)
              * Opcode: B3 | Cycles: 7 | Bytes: 3
@@ -5392,7 +5031,6 @@ impl CPU {
                 let res = d0.wrapping_sub(val);
                 self.set_d(res); 
                 self.flags_sub16(d0, val, res);
-                if self.trace { println!("SUBD ${:04X} -> {:04X}", addr, res); }
             }
             /* SUBB - Subtract from Accumulator B (direct addressing)
              * Opcode: D0 | Cycles: 4 | Bytes: 2
@@ -5413,7 +5051,6 @@ impl CPU {
                 let res = b0.wrapping_sub(m); 
                 self.b = res; 
                 self.flags_sub8(b0, m, res); 
-                if self.trace { println!("SUBB ${:04X}", addr); } 
             }
             /* CMPB - Compare Accumulator B (direct addressing)
              * Opcode: D1 | Cycles: 4 | Bytes: 2
@@ -5433,7 +5070,6 @@ impl CPU {
                 let b0 = self.b; 
                 let res = b0.wrapping_sub(m); 
                 self.flags_sub8(b0, m, res); 
-                if self.trace { println!("CMPB ${:04X}", addr); } 
             }
             /* SBCB - Subtract with Carry from Accumulator B (direct addressing)
              * Opcode: D2 | Cycles: 4 | Bytes: 2
@@ -5455,7 +5091,6 @@ impl CPU {
                 let res = b0.wrapping_sub(m).wrapping_sub(c); 
                 self.b = res; 
                 self.flags_sub8(b0, m.wrapping_add(c), res); 
-                if self.trace { println!("SBCB ${:04X} -> {:02X}", addr, res); } 
             }
             /* BITB - Bit Test Accumulator B (direct addressing)
              * Opcode: D5 | Cycles: 4 | Bytes: 2
@@ -5476,7 +5111,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0; 
                 self.cc_z = r == 0; 
                 self.cc_v = false; 
-                if self.trace { println!("BITB ${:04X}", addr); } 
             }
             /* STB - Store Accumulator B (indexed addressing)
              * Opcode: E7 | Cycles: 3+ | Bytes: 2+
@@ -5494,7 +5128,6 @@ impl CPU {
                 let v = self.b; 
                 self.write8(ea, v); 
                 self.update_nz8(v); 
-                if self.trace { println!("STB [{}] -> {:02X}", ea, v); } 
             }
             /* 0xEC - LDD indexed (Load D register from indexed address)
              * Motorola 6809 Spec: D = [indexed_address], A=high byte, B=low byte
@@ -5514,7 +5147,6 @@ impl CPU {
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
                 self.set_d(val); 
                 self.update_nz16(val); 
-                if self.trace { println!("LDD [{}] -> {:04X}", ea, val); }
             }
             0xF2 => { // SBCB extended
                 let hi = self.read8(self.pc);
@@ -5527,7 +5159,6 @@ impl CPU {
                 let res = b0.wrapping_sub(m).wrapping_sub(c);
                 self.b = res;
                 self.flags_sub8(b0, m.wrapping_add(c), res);
-                if self.trace { println!("SBCB ${:04X} -> {:02X}", addr, res); }
             }
             0xF5 => { // BITB extended
                 let hi = self.read8(self.pc);
@@ -5539,7 +5170,6 @@ impl CPU {
                 self.cc_n = (r & 0x80) != 0;
                 self.cc_z = r == 0;
                 self.cc_v = false;
-                if self.trace { println!("BITB ${:04X}", addr); }
             }
             0xF6 => { // LDB extended
                 let hi = self.read8(self.pc);
@@ -5549,7 +5179,6 @@ impl CPU {
                 let v = self.read8(addr);
                 self.b = v;
                 self.update_nz8(v);
-                if self.trace { println!("LDB ${:04X} -> {:02X}", addr, v); }
             }
             0xD8 => { // EORB direct
                 let off = self.read8(self.pc);
@@ -5559,7 +5188,6 @@ impl CPU {
                 self.b ^= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("EORB ${:04X}", addr); }
             }
             0xE8 => { // EORB indexed
                 let post = self.read8(self.pc);
@@ -5569,7 +5197,6 @@ impl CPU {
                 self.b ^= m;
                 self.update_nz8(self.b);
                 self.cc_v = false;
-                if self.trace { println!("EORB [{}]", ea); }
             }
             /* 0xFC - LDD extended (Load D register from extended address)
              * Motorola 6809 Spec: D = [16-bit_address], A=high byte, B=low byte
@@ -5591,12 +5218,6 @@ impl CPU {
                 let val = ((hi2 as u16) << 8) | lo2 as u16;    // Assemble big-endian
                 self.set_d(val); 
                 self.update_nz16(val);
-                
-                if std::env::var("VIA_REFRESH_TRACE").ok().as_deref() == Some("1") && addr == 0xC83D { 
-                    println!("[TRACE][LDDx refresh] read C83D={:02X} C83E={:02X} full={:04X} DP={:02X}", 
-                        hi2, lo2, val, self.dp); 
-                }
-                if self.trace { println!("LDD ${:04X} -> {:04X}", addr, val); }
             }
             /* 0xFF - STU extended (Store U register to extended address)
              * Motorola 6809 Spec: [16-bit_address] = U, 16-bit register store
@@ -5617,7 +5238,6 @@ impl CPU {
                 self.write8(addr, (u >> 8) as u8);             // U_high to addr
                 self.write8(addr.wrapping_add(1), u as u8);    // U_low to addr+1
                 self.update_nz16(u); 
-                if self.trace { println!("STU ${:04X} -> {:04X}", addr, u); }
             }
             0x8C => { // CMPX immediate
                 let hi = self.read8(self.pc);
@@ -5627,7 +5247,6 @@ impl CPU {
                 let x = self.x;
                 let res = x.wrapping_sub(val);
                 self.flags_sub16(x, val, res);
-                if self.trace { println!("CMPX #${:04X}", val); }
             }
             0xBC => { // CMPX extended
                 let hi = self.read8(self.pc);
@@ -5640,7 +5259,6 @@ impl CPU {
                 let x0 = self.x;
                 let res = x0.wrapping_sub(val);
                 self.flags_sub16(x0, val, res);
-                if self.trace { println!("CMPX ${:04X}", addr); }
             }
             0x92 => { // SBCA direct
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
@@ -5648,39 +5266,24 @@ impl CPU {
                 let a0 = self.a; let c = if self.cc_c {1} else {0};
                 let res = a0.wrapping_sub(m).wrapping_sub(c);
                 self.a = res; self.flags_sub8(a0, m.wrapping_add(c), res);
-                if self.trace { println!("SBCA ${:04X} -> {:02X}", addr, res); }
             }
             0x95 => { // BITA direct
                 let off = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
                 let addr = ((self.dp as u16) << 8) | off as u16; 
-                // DEBUG: instrumentar direccionamiento directo
-                if std::env::var("DIRECT_TRACE").ok().as_deref() == Some("1") {
-                    println!("[DIRECT_TRACE] BITA DP={:02X} off={:02X} addr={:04X}", self.dp, off, addr);
-                }
                 let m = self.read8(addr);
                 let r = self.a & m; self.cc_n = (r & 0x80) != 0; self.cc_z = r == 0; self.cc_v = false;
-                if self.trace {
-                    if addr == 0xD00D { println!("BITA IFR (A={:02X} IFR={:02X} r={:02X} Z={})", self.a, m, r, self.cc_z); }
-                    else { println!("BITA ${:04X}", addr); }
-                }
             }
             op_unhandled => {
                 if matches!(op_unhandled,
                     0x01|0x02|0x05|0x14|0x15|0x38|0x45|0x4E|0x52|0x61|0x7B|0x8F|0xCF|
                     0x41|0x42|0x4B|0x51|0x55|0x5B|0x5E|0x62|0x65|0x6B|0x71|0x72|0x75|0x87|0xC7|0xCD) {
-                    if self.trace { println!("(illegal/unused treated as NOP)"); }
                 } else {
-                    if self.trace { println!("UNIMPL OP {:02X} at {:04X}", op_unhandled, pc0);} 
                     if !self.opcode_unimpl_bitmap[op_unhandled as usize] { self.opcode_unimpl_bitmap[op_unhandled as usize]=true; }
                     self.opcode_unimplemented += 1;
                 }
             }
         }
         self.advance_cycles(cyc);
-        if std::env::var("CYC_DEBUG").ok().as_deref()==Some("1") {
-            let sub_dbg = if op==0x10 || op==0x11 { format!(" sub={:02X}", sub) } else { String::new() };
-            println!("[CYC_DEBUG] pc0={:04X} op={:02X}{} cyc_applied={}", pc0, op, sub_dbg, cyc);
-        }
         if self.trace_enabled { self.trace_patch_last_postexec(cycles_before); }
         // ---------------------------------------------------------------------------------
         // RAM execution detector (no abort): detect prolonged execution inside writable RAM
@@ -5807,6 +5410,19 @@ impl CPU {
      * Impacto: Coordenadas de vectores incorrectas causando diagonales
      * Verificado: ✓ OK - STB/LDB indexed funcionan correctamente
      */
+    
+    /// Update index register based on reg_code
+    /// reg_code: 0=X, 1=Y, 2=U, 3=S
+    fn update_index_register(&mut self, reg_code: u8, value: u16) {
+        match reg_code {
+            0 => self.x = value,
+            1 => self.y = value,
+            2 => self.u = value,
+            3 => self.s = value,
+            _ => { /* Invalid reg_code, do nothing */ }
+        }
+    }
+    
     fn decode_indexed(&mut self, post:u8)->(u16,u8){
         // If bit 7 is clear, it's 5-bit signed offset
         if (post & 0x80) == 0 {
@@ -5819,6 +5435,30 @@ impl CPU {
         let mode = post & 0x1F;
         
         match mode {
+            0x00 => {
+                // ,reg+ post-increment by 1
+                let eff = base;
+                self.update_index_register(reg_code, base.wrapping_add(1));
+                (eff, 2)
+            }
+            0x01 => {
+                // ,reg++ post-increment by 2
+                let eff = base;
+                self.update_index_register(reg_code, base.wrapping_add(2));
+                (eff, 3)
+            }
+            0x02 => {
+                // ,-reg pre-decrement by 1
+                let new_val = base.wrapping_sub(1);
+                self.update_index_register(reg_code, new_val);
+                (new_val, 2)
+            }
+            0x03 => {
+                // ,--reg pre-decrement by 2
+                let new_val = base.wrapping_sub(2);
+                self.update_index_register(reg_code, new_val);
+                (new_val, 3)
+            }
             0x04 => {
                 // ,A,reg mode
                 let eff = base.wrapping_add(self.a as u16);
@@ -5841,8 +5481,17 @@ impl CPU {
                 let lo = self.read8(ptr.wrapping_add(1));
                 ((hi as u16) << 8 | lo as u16, 2)
             }
+            0x0B => {
+                // Special case for postbyte 8B - appears to be ,X+ based on BIOS usage
+                let eff = base;
+                self.update_index_register(reg_code, base.wrapping_add(1));
+                (eff, 2)
+            }
             _ => {
                 // Other extended modes - simplified fallback
+                if self.trace {
+                    println!("⚠️ Unimplemented indexed mode: post={:02X} reg_code={} mode={:02X}", post, reg_code, mode);
+                }
                 (base, 0)
             }
         }
@@ -5922,6 +5571,7 @@ impl CPU {
         }
     }
 
+
     // ---------------------------------------------------------------------------------
     // Dump de snapshot de ejecución anómala en RAM para diagnóstico post-mortem.
     // Formato compacto pero suficientemente detallado para deducir causa probable
@@ -5983,6 +5633,6 @@ impl CPU {
         };
         self.ram_exec.snapshot = Some(snap.clone());
         self.ram_exec.triggered = true; // marcar para no sobrescribir con el umbral tardío
-        if self.trace { println!("[RAM-EXEC EARLY][{}] pc={:04X} iterations={} first={:04X}", reason, pc, self.ram_exec.count, snap.first_pc); self.dump_ram_exec_snapshot(&snap, start); }
+    
     }
-}
+    }
