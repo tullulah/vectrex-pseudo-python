@@ -27,6 +27,13 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Si un test necesita un escenario concreto, manipular RAM/cart, nunca la ROM.
 - Mantener tests resilientes ante timing: usar umbrales (máx pasos) y verificar aparición de símbolos, luego endurecer cuando el etiquetado sea completo.
 
+## 3.1. BIOS Arranque Automático (Minestorm)
+- La BIOS arranca AUTOMÁTICAMENTE Minestorm sin interacción del usuario.
+- NO es necesaria entrada de botón o cartucho para que la BIOS progrese al copyright y luego al juego.
+- La BIOS detecta ausencia de cartucho y procede automáticamente a mostrar copyright y después Minestorm.
+- Tests que esperan Print_Str (0xF373) deben esperar suficientes ciclos (~2.5M) para el delay natural de la BIOS.
+- No simular entradas de botón innecesariamente - la BIOS progresa sola.
+
 ## 4. Opcode / CPU Core
  Lista ilegal consolidada en `ILLEGAL_BASE_OPCODES` + helper `is_illegal_base_opcode()` (ver `cpu6809.rs`). Cualquier cambio debe reflejarse en SUPER_SUMMARY sección 24 y tests unificados.
 ## 5. WASM API

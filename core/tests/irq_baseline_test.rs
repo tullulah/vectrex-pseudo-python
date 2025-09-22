@@ -31,11 +31,11 @@ fn irq_baseline_registers_unchanged_after_simple_handler() {
         0x97,0x0E,      // STA $D00E
         0x3E            // WAI
     ];
-    for (i,b) in prog.iter().enumerate(){ cpu.mem[i]=*b; cpu.bus.mem[i]=*b; }
+    for (i,b) in prog.iter().enumerate(){ cpu.bus.mem[i]=*b; cpu.bus.mem[i]=*b; }
     // IRQ vector (standard post-migration FFF8/FFF9 big-endian) -> 0x0200
-    cpu.mem[0xFFF8]=0x02; cpu.mem[0xFFF9]=0x00; cpu.bus.mem[0xFFF8]=0x02; cpu.bus.mem[0xFFF9]=0x00;
+    cpu.bus.mem[0xFFF8]=0x02; cpu.bus.mem[0xFFF9]=0x00; cpu.bus.mem[0xFFF8]=0x02; cpu.bus.mem[0xFFF9]=0x00;
     // Handler at 0x0200: RTI only (proper full frame restore)
-    cpu.mem[0x0200]=0x3B; cpu.bus.mem[0x0200]=0x3B;
+    cpu.bus.mem[0x0200]=0x3B; cpu.bus.mem[0x0200]=0x3B;
     cpu.pc = 0x0000;
     // Ensure IRQs unmasked prior to running (I flag false)
     cpu.cc_i = false;

@@ -147,7 +147,7 @@ export const EmulatorPanel: React.FC = () => {
   let segs = emuCore.getSegmentsShared();
     if (!segs.length) {
       // try drain JSON once per frame
-  segs = emuCore.drainSegmentsJson ? emuCore.drainSegmentsJson() : segs;
+  segs = emuCore.peekSegmentsJson ? emuCore.peekSegmentsJson() : segs;
     }
     if (segs.length) {
       setSegmentsCount(segs.length);

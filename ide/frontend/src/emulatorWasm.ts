@@ -45,6 +45,14 @@ export class EmulatorService {
     try {
       await initWasm(wasmUrl as any);
       this.emu = new (WasmEmu as any)();
+      
+      // 🔧 CONFIGURACIÓN CRUCIAL: Deshabilitar auto-drain para acumular segmentos
+      const emuAny: any = this.emu as any;
+      if (typeof emuAny.set_integrator_auto_drain === 'function') {
+        emuAny.set_integrator_auto_drain(false);
+        if (this.trace) console.debug('[emu] integrator_auto_drain disabled para acumular segmentos');
+      }
+      
       // Expose for debugging / demo fallback
       (window as any).emu = this.emu;
     } catch (e:any) {
@@ -242,6 +250,21 @@ export class EmulatorService {
       }
     }
     return [];
+  }
+
+  /** Debug function to get comprehensive emulator state */
+  debugState(): any {
+    if (!this.emu) return null;
+    const emuAny: any = this.emu as any;
+    if (typeof emuAny.debug_state_json === 'function') {
+      try {
+        return JSON.parse(emuAny.debug_state_json());
+      } catch (e) {
+        console.warn('debug_state_json failed', e);
+        return null;
+      }
+    }
+    return null;
   }
 
   /** Returns a full 64K snapshot (Uint8Array copy) of emulated memory. */

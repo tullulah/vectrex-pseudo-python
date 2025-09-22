@@ -98,7 +98,7 @@ fn opcode_coma(){ let r=run_with_cycles(|c|{c.pc=0x0E00; c.a=0x55; c.test_write8
 #[test]
 fn opcode_subb_immediate(){ let r=run_with_cycles(|c|{c.pc=0x0F00; c.b=0x30; c.test_write8(0x0F00,0xC0); c.test_write8(0x0F01,0x10);}); assert_eq!(r.cycles,2); assert_eq!(r.cpu.b,0x20); }
 #[test]
-fn opcode_stb_direct(){ let r=run_with_cycles(|c|{c.pc=0x1000; c.dp=0x00; c.b=0x42; c.test_write8(0x1000,0xD7); c.test_write8(0x1001,0xFF);}); assert_eq!(r.cycles,4); assert_eq!(r.cpu.mem[0x00FF],0x42); }
+fn opcode_stb_direct(){ let r=run_with_cycles(|c|{c.pc=0x1000; c.dp=0x00; c.b=0x42; c.test_write8(0x1000,0xD7); c.test_write8(0x1001,0xFF);}); assert_eq!(r.cycles,4); assert_eq!(r.cpu.bus.mem[0x00FF],0x42); }
 #[test]
 fn opcode_puls_ab(){ let r=run_with_cycles(|c|{c.pc=0x1100; c.test_write8(0x1100,0x35); c.test_write8(0x1101,0x06); c.s=0x2000; // stack bytes for A then B (A first at lowest address)
     c.test_write8(0x2000,0xBB); c.test_write8(0x2001,0xAA);}); assert_eq!(r.cycles,5); assert_eq!(r.cpu.a,0xBB); assert_eq!(r.cpu.b,0xAA); }
@@ -354,8 +354,8 @@ fn bsr_and_lbsr_push_on_s(){
     assert_eq!(cpu.pc,0x600+2+0x04); // PC destino
     assert_eq!(cpu.s, before_s-2, "S debe decrementar 2");
     // return address = 0x602; en stack orden: [high] en before_s-1, [low] en before_s-2
-    assert_eq!(cpu.mem[(before_s as usize)-1], 0x06);
-    assert_eq!(cpu.mem[(before_s as usize)-2], 0x02);
+    assert_eq!(cpu.bus.mem[(before_s as usize)-1], 0x06);
+    assert_eq!(cpu.bus.mem[(before_s as usize)-2], 0x02);
 
     // LBSR (0x17) similar pero offset 16-bit y más ciclos
     let mut cpu2=CPU::default(); cpu2.pc=0x0620; cpu2.test_write8(0x0620,0x17); cpu2.test_write8(0x0621,0x00); cpu2.test_write8(0x0622,0x05); cpu2.s=0x0900;
@@ -363,8 +363,8 @@ fn bsr_and_lbsr_push_on_s(){
     let cyc=(cpu2.cycles-c_before) as u32; assert_eq!(cyc,9,"LBSR ciclos");
     assert_eq!(cpu2.pc,0x620+3+0x0005, "PC destino LBSR"); // PC after fetching (0x623) + offset 0x0005 = 0x628
     assert_eq!(cpu2.s, s_start-2);
-    assert_eq!(cpu2.mem[(s_start as usize)-1], 0x06); // return 0x623
-    assert_eq!(cpu2.mem[(s_start as usize)-2], 0x23);
+    assert_eq!(cpu2.bus.mem[(s_start as usize)-1], 0x06); // return 0x623
+    assert_eq!(cpu2.bus.mem[(s_start as usize)-2], 0x23);
 }
 
 #[test]
@@ -387,23 +387,23 @@ fn pshs_full_mask_and_puls_restore(){
     // Recorremos desde 0x03FF hacia abajo validando el orden descrito.
     let mut addr=0x0400-1; // primer byte almacenado (PC high)
     // PC 0x0702
-    assert_eq!(cpu.mem[addr as usize], 0x07, "PC high en stack"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], 0x02, "PC low en stack"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], 0x07, "PC high en stack"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], 0x02, "PC low en stack"); addr-=1;
     // U
-    assert_eq!(cpu.mem[addr as usize], (cpu.u>>8) as u8, "U high"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.u & 0xFF) as u8, "U low"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.u>>8) as u8, "U high"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.u & 0xFF) as u8, "U low"); addr-=1;
     // Y
-    assert_eq!(cpu.mem[addr as usize], (cpu.y>>8) as u8, "Y high"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.y & 0xFF) as u8, "Y low"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.y>>8) as u8, "Y high"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.y & 0xFF) as u8, "Y low"); addr-=1;
     // X
-    assert_eq!(cpu.mem[addr as usize], (cpu.x>>8) as u8, "X high"); addr-=1;
-    assert_eq!(cpu.mem[addr as usize], (cpu.x & 0xFF) as u8, "X low"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.x>>8) as u8, "X high"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], (cpu.x & 0xFF) as u8, "X low"); addr-=1;
     // DP
-    assert_eq!(cpu.mem[addr as usize], cpu.dp, "DP byte"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], cpu.dp, "DP byte"); addr-=1;
     // B
-    assert_eq!(cpu.mem[addr as usize], cpu.b, "B byte"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], cpu.b, "B byte"); addr-=1;
     // A
-    assert_eq!(cpu.mem[addr as usize], cpu.a, "A byte"); addr-=1;
+    assert_eq!(cpu.bus.mem[addr as usize], cpu.a, "A byte"); addr-=1;
     // CC (último, menor dirección)
     let cc_expected =
         (if cpu.cc_e {0x80} else {0}) |
@@ -414,7 +414,7 @@ fn pshs_full_mask_and_puls_restore(){
         (if cpu.cc_z {0x04} else {0}) |
         (if cpu.cc_v {0x02} else {0}) |
         (if cpu.cc_c {0x01} else {0});
-    assert_eq!(cpu.mem[addr as usize], cc_expected, "CC byte");
+    assert_eq!(cpu.bus.mem[addr as usize], cc_expected, "CC byte");
 
     // Ejecuta PULS restaurando todo
     let ok2=cpu.step(); assert!(ok2);
@@ -516,13 +516,13 @@ mod unified_audit {
 // --- scan ---
 mod unified_scan {
     use vectrex_emulator::cpu6809::{CPU,is_illegal_base_opcode}; fn is_illegal(op:u8)->bool { is_illegal_base_opcode(op) }
-    #[test] fn scan_unimplemented_valids(){ let mut unimpl=Vec::new(); for op in 0u8..=255 { if is_illegal(op){continue;} let mut cpu=CPU::default(); cpu.mem[0]=op; cpu.step(); if cpu.opcode_unimpl_bitmap[op as usize]{ unimpl.push(op);} } println!("UNIMPL VALID COUNT: {}", unimpl.len()); for chunk in unimpl.chunks(16){ print!("   "); for op in chunk { print!("{:02X} ", op);} println!(""); } }
+    #[test] fn scan_unimplemented_valids(){ let mut unimpl=Vec::new(); for op in 0u8..=255 { if is_illegal(op){continue;} let mut cpu=CPU::default(); cpu.bus.mem[0]=op; cpu.step(); if cpu.opcode_unimpl_bitmap[op as usize]{ unimpl.push(op);} } println!("UNIMPL VALID COUNT: {}", unimpl.len()); for chunk in unimpl.chunks(16){ print!("   "); for op in chunk { print!("{:02X} ", op);} println!(""); } }
 }
 
 // --- validity ---
 mod unified_validity {
     use vectrex_emulator::cpu6809::{CPU,is_illegal_base_opcode}; fn is_illegal(op:u8)->bool { is_illegal_base_opcode(op) }
-    fn run_single(op:u8)->(u64,bool,bool){ let mut cpu=CPU::default(); cpu.mem[cpu.pc as usize]=op; cpu.step(); let cyc=cpu.cycles; let unimpl=cpu.opcode_unimpl_bitmap[op as usize]; let ill=is_illegal(op); (cyc,unimpl,ill) }
+    fn run_single(op:u8)->(u64,bool,bool){ let mut cpu=CPU::default(); cpu.bus.mem[cpu.pc as usize]=op; cpu.step(); let cyc=cpu.cycles; let unimpl=cpu.opcode_unimpl_bitmap[op as usize]; let ill=is_illegal(op); (cyc,unimpl,ill) }
     #[test] fn illegal_opcodes_are_1_cycle_and_not_unimpl(){ for op in 0u8..=255 { if is_illegal(op){ let (cyc,unimpl,_)=run_single(op); assert_eq!(cyc,1,"Illegal opcode {:02X} should consume 1 cycle (got {cyc})",op); assert!(!unimpl,"Illegal opcode {:02X} should not mark as unimplemented",op); } } }
     #[test] fn unimplemented_valid_opcodes_marked(){ for op in 0u8..=255 { if !is_illegal(op){ let _=run_single(op); } } }
 }
@@ -560,10 +560,10 @@ mod unified_coverage {
 // --- nuevas operaciones / direct/indexed / shifts ---
 mod unified_new_ops {
     use vectrex_emulator::CPU; fn step_single(mut cpu:CPU)->CPU{ cpu.step(); cpu }
-    #[test] fn ror_direct(){ let mut cpu=CPU::default(); cpu.dp=0x20; cpu.pc=0x0100; cpu.test_write8(0x0100,0x06); cpu.test_write8(0x0101,0x10); cpu.test_write8(0x2010,0b0000_0011); cpu.cc_c=false; cpu=step_single(cpu); assert_eq!(cpu.mem[0x2010],0b0000_0001); assert!(cpu.cc_c); assert!(!cpu.cc_n); assert!(!cpu.cc_z); }
-    #[test] fn rol_direct(){ let mut cpu=CPU::default(); cpu.dp=0x21; cpu.pc=0x0200; cpu.test_write8(0x0200,0x09); cpu.test_write8(0x0201,0x05); cpu.test_write8(0x2105,0b1000_0000); cpu.cc_c=true; cpu.step(); assert_eq!(cpu.mem[0x2105],0b0000_0001); assert!(cpu.cc_c); assert!(!cpu.cc_n); }
-    #[test] fn inc_direct_overflow(){ let mut cpu=CPU::default(); cpu.dp=0x30; cpu.pc=0x0300; cpu.test_write8(0x0300,0x0C); cpu.test_write8(0x0301,0x40); cpu.test_write8(0x3040,0x7F); cpu.step(); assert_eq!(cpu.mem[0x3040],0x80); assert!(cpu.cc_v && cpu.cc_n); }
-    #[test] fn clr_direct_flags(){ let mut cpu=CPU::default(); cpu.dp=0x22; cpu.pc=0x0400; cpu.test_write8(0x0400,0x0F); cpu.test_write8(0x0401,0x02); cpu.test_write8(0x2202,0xAA); cpu.cc_n=true; cpu.cc_v=true; cpu.cc_c=true; cpu.cc_z=false; cpu.step(); assert_eq!(cpu.mem[0x2202],0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v && !cpu.cc_c); }
+    #[test] fn ror_direct(){ let mut cpu=CPU::default(); cpu.dp=0x20; cpu.pc=0x0100; cpu.test_write8(0x0100,0x06); cpu.test_write8(0x0101,0x10); cpu.test_write8(0x2010,0b0000_0011); cpu.cc_c=false; cpu=step_single(cpu); assert_eq!(cpu.bus.mem[0x2010],0b0000_0001); assert!(cpu.cc_c); assert!(!cpu.cc_n); assert!(!cpu.cc_z); }
+    #[test] fn rol_direct(){ let mut cpu=CPU::default(); cpu.dp=0x21; cpu.pc=0x0200; cpu.test_write8(0x0200,0x09); cpu.test_write8(0x0201,0x05); cpu.test_write8(0x2105,0b1000_0000); cpu.cc_c=true; cpu.step(); assert_eq!(cpu.bus.mem[0x2105],0b0000_0001); assert!(cpu.cc_c); assert!(!cpu.cc_n); }
+    #[test] fn inc_direct_overflow(){ let mut cpu=CPU::default(); cpu.dp=0x30; cpu.pc=0x0300; cpu.test_write8(0x0300,0x0C); cpu.test_write8(0x0301,0x40); cpu.test_write8(0x3040,0x7F); cpu.step(); assert_eq!(cpu.bus.mem[0x3040],0x80); assert!(cpu.cc_v && cpu.cc_n); }
+    #[test] fn clr_direct_flags(){ let mut cpu=CPU::default(); cpu.dp=0x22; cpu.pc=0x0400; cpu.test_write8(0x0400,0x0F); cpu.test_write8(0x0401,0x02); cpu.test_write8(0x2202,0xAA); cpu.cc_n=true; cpu.cc_v=true; cpu.cc_c=true; cpu.cc_z=false; cpu.step(); assert_eq!(cpu.bus.mem[0x2202],0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v && !cpu.cc_c); }
     #[test] fn ora_indexed(){ let mut cpu=CPU::default(); cpu.pc=0x0500; cpu.x=0x4000; cpu.a=0x55; cpu.test_write8(0x0500,0xAA); cpu.test_write8(0x0501,0x84); cpu.test_write8(0x4000,0x0F); cpu.step(); assert_eq!(cpu.a,0x5F); assert!(!cpu.cc_v && cpu.cc_n==(cpu.a & 0x80 !=0)); }
     #[test] fn addd_extended(){ let mut cpu=CPU::default(); cpu.pc=0x0600; cpu.a=0x12; cpu.b=0x34; cpu.test_write8(0x0600,0xF3); cpu.test_write8(0x0601,0x90); cpu.test_write8(0x0602,0x00); cpu.test_write8(0x9000,0x00); cpu.test_write8(0x9001,0x02); cpu.step(); assert_eq!(cpu.a,0x12); assert_eq!(cpu.b,0x36); assert!(!cpu.cc_v); }
     #[test] fn eorb_extended(){ let mut cpu=CPU::default(); cpu.pc=0x0700; cpu.b=0xF0; cpu.test_write8(0x0700,0xF8); cpu.test_write8(0x0701,0x88); cpu.test_write8(0x0702,0x00); cpu.test_write8(0x8800,0x0F); cpu.step(); assert_eq!(cpu.b,0xFF); assert!(cpu.cc_n && !cpu.cc_z); }
@@ -575,16 +575,16 @@ mod unified_new_ops {
 }
 
 // --- INC A casos adicionales ---
-mod unified_inca { use vectrex_emulator::CPU; #[test] fn inca_basic(){ let mut cpu=CPU::default(); cpu.a=0x00; cpu.pc=0x0100; cpu.bus.mem[0x0100]=0x4C; cpu.step(); assert_eq!(cpu.a,0x01); assert!(!cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_sets_zero(){ let mut cpu=CPU::default(); cpu.a=0xFF; cpu.pc=0x0200; cpu.mem[0x0200]=0x4C; cpu.step(); assert_eq!(cpu.a,0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_overflow_flag(){ let mut cpu=CPU::default(); cpu.a=0x7F; cpu.pc=0x0300; cpu.mem[0x0300]=0x4C; cpu.step(); assert_eq!(cpu.a,0x80); assert!(cpu.cc_n && cpu.cc_v && !cpu.cc_z); } }
+mod unified_inca { use vectrex_emulator::CPU; #[test] fn inca_basic(){ let mut cpu=CPU::default(); cpu.a=0x00; cpu.pc=0x0100; cpu.bus.mem[0x0100]=0x4C; cpu.step(); assert_eq!(cpu.a,0x01); assert!(!cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_sets_zero(){ let mut cpu=CPU::default(); cpu.a=0xFF; cpu.pc=0x0200; cpu.bus.mem[0x0200]=0x4C; cpu.step(); assert_eq!(cpu.a,0x00); assert!(cpu.cc_z && !cpu.cc_n && !cpu.cc_v); } #[test] fn inca_overflow_flag(){ let mut cpu=CPU::default(); cpu.a=0x7F; cpu.pc=0x0300; cpu.bus.mem[0x0300]=0x4C; cpu.step(); assert_eq!(cpu.a,0x80); assert!(cpu.cc_n && cpu.cc_v && !cpu.cc_z); } }
 
 // --- RMW / adicionales ---
 mod unified_rmw_added { use vectrex_emulator::CPU; fn run(mut cpu:CPU)->CPU{ cpu.step(); cpu }
     #[test] fn tst_direct(){ let mut cpu=CPU::default(); cpu.dp=0x24; cpu.pc=0x0100; cpu.test_write8(0x0100,0x0D); cpu.test_write8(0x0101,0x10); cpu.test_write8(0x2410,0x80); cpu=run(cpu); assert!(cpu.cc_n); assert!(!cpu.cc_z); assert!(!cpu.cc_v && !cpu.cc_c); }
     #[test] fn jmp_direct(){ let mut cpu=CPU::default(); cpu.dp=0x25; cpu.pc=0x0200; cpu.test_write8(0x0200,0x0E); cpu.test_write8(0x0201,0x40); cpu.test_write8(0x2540,0x12); cpu.step(); assert_eq!(cpu.pc,0x2540); }
     #[test] fn jmp_indexed(){ let mut cpu=CPU::default(); cpu.pc=0x0300; cpu.x=0x6000; cpu.test_write8(0x0300,0x6E); cpu.test_write8(0x0301,0x84); cpu.test_write8(0x6000,0xFF); cpu.step(); assert_eq!(cpu.pc,0x6000); }
-    #[test] fn asl_indexed_flags(){ let mut cpu=CPU::default(); cpu.pc=0x0400; cpu.x=0x7000; cpu.test_write8(0x0400,0x68); cpu.test_write8(0x0401,0x84); cpu.test_write8(0x7000,0xC0); cpu.step(); assert_eq!(cpu.mem[0x7000],0x80); assert!(cpu.cc_n); assert!(!cpu.cc_z); assert!(cpu.cc_c); }
-    #[test] fn dec_indexed_overflow_v(){ let mut cpu=CPU::default(); cpu.pc=0x0500; cpu.x=0x7100; cpu.test_write8(0x0500,0x6A); cpu.test_write8(0x0501,0x84); cpu.test_write8(0x7100,0x80); cpu.step(); assert_eq!(cpu.mem[0x7100],0x7F); assert!(cpu.cc_v); }
-    #[test] fn ror_indexed_carry_rotate_in(){ let mut cpu=CPU::default(); cpu.pc=0x0600; cpu.x=0x7200; cpu.cc_c=true; cpu.test_write8(0x0600,0x66); cpu.test_write8(0x0601,0x84); cpu.test_write8(0x7200,0x01); cpu.step(); assert_eq!(cpu.mem[0x7200],0x80); assert!(cpu.cc_c); assert!(cpu.cc_n); }
+    #[test] fn asl_indexed_flags(){ let mut cpu=CPU::default(); cpu.pc=0x0400; cpu.x=0x7000; cpu.test_write8(0x0400,0x68); cpu.test_write8(0x0401,0x84); cpu.test_write8(0x7000,0xC0); cpu.step(); assert_eq!(cpu.bus.mem[0x7000],0x80); assert!(cpu.cc_n); assert!(!cpu.cc_z); assert!(cpu.cc_c); }
+    #[test] fn dec_indexed_overflow_v(){ let mut cpu=CPU::default(); cpu.pc=0x0500; cpu.x=0x7100; cpu.test_write8(0x0500,0x6A); cpu.test_write8(0x0501,0x84); cpu.test_write8(0x7100,0x80); cpu.step(); assert_eq!(cpu.bus.mem[0x7100],0x7F); assert!(cpu.cc_v); }
+    #[test] fn ror_indexed_carry_rotate_in(){ let mut cpu=CPU::default(); cpu.pc=0x0600; cpu.x=0x7200; cpu.cc_c=true; cpu.test_write8(0x0600,0x66); cpu.test_write8(0x0601,0x84); cpu.test_write8(0x7200,0x01); cpu.step(); assert_eq!(cpu.bus.mem[0x7200],0x80); assert!(cpu.cc_c); assert!(cpu.cc_n); }
 }
 
 // --- SUBD ---

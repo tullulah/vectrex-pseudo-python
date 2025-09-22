@@ -30,6 +30,13 @@ export const EmulatorPanel: React.FC = () => {
   const [audioEnabled, setAudioEnabled] = useState(() => { try { return localStorage.getItem('emu_audio_enabled')!=='0'; } catch { return true; } });
   // Audio stats (opcional Fase 3b): se refrescan periódicamente cuando audio está activo
   const [audioStats, setAudioStats] = useState<{ sampleRate:number; pushed:number; consumed:number; bufferedSamples:number; bufferedMs:number; overflowCount:number }|null>(null);
+  
+  // Estados para Debug de renderizado
+  const [debugRender, setDebugRender] = useState<{
+    lastCanvasClear: string;
+    vectorsDrawn: Array<{x0:number,y0:number,x1:number,y1:number,intensity:number,color:string}>;
+    summary: {rojos:number,verdes:number,total:number};
+  } | null>(null);
 
   const [baseAddrHex, setBaseAddrHex] = useState('0000');
   const [lastBinInfo, setLastBinInfo] = useState<{ path?:string; size?:number; base:number; bytes?:Uint8Array }|null>(null);
@@ -60,6 +67,10 @@ export const EmulatorPanel: React.FC = () => {
     const dpr = window.devicePixelRatio || 1; ctx.save(); ctx.scale(dpr,dpr);
     const WIDTH = canvas.width / dpr; const HEIGHT = canvas.height / dpr;
     ctx.fillStyle = 'black'; ctx.fillRect(0,0,WIDTH,HEIGHT);
+    
+    // Inicializar info de debug para este frame
+    const debugVectors: Array<{x0:number,y0:number,x1:number,y1:number,intensity:number,color:string,colorName:string}> = [];
+    const now = new Date().toLocaleTimeString();
     
     // LOG VECTORES: Mostrar coordenadas recibidas + FRAME INFO
     if (segments.length > 0) {
@@ -132,7 +143,23 @@ export const EmulatorPanel: React.FC = () => {
       const dx = (WIDTH - spanX2 * scale) * 0.5;
       const dy = (HEIGHT - spanY2 * scale) * 0.5;
       const i = Math.max(0, Math.min(255, s.intensity|0));
-      ctx.strokeStyle = `rgba(0,255,120,${(i/255).toFixed(3)})`;
+      // Special handling for intensity=0 (positioning moves) to make them visible
+      const alpha = i === 0 ? 0.4 : (i/255); // Show intensity=0 with 40% opacity
+      const color = i === 0 ? '255,100,100' : '0,255,120'; // Red for positioning, green for drawing
+      const colorName = i === 0 ? 'ROJO' : 'VERDE';
+      ctx.strokeStyle = `rgba(${color},${alpha.toFixed(3)})`;
+      
+      // Añadir al array de debug
+      debugVectors.push({
+        x0: s.x0,
+        y0: s.y0,
+        x1: s.x1,
+        y1: s.y1,
+        intensity: i,
+        color: `rgba(${color},${alpha.toFixed(3)})`,
+        colorName: colorName
+      });
+      
       ctx.beginPath(); ctx.moveTo(dx + x0, HEIGHT - (dy + y0)); ctx.lineTo(dx + x1, HEIGHT - (dy + y1)); ctx.stroke();
       if (traceVectors && (window as any).console) {
         // Log formato compacto: frame idx; coords originales y transformadas
@@ -140,6 +167,24 @@ export const EmulatorPanel: React.FC = () => {
         try { console.debug('[draw] seg', {frame:s.frame, raw:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1,i:s.intensity}, bb:{minX,maxX,minY,maxY}, canvas:{x0:dx+x0,y0:HEIGHT-(dy+y0),x1:dx+x1,y1:HEIGHT-(dy+y1)}, scale}); } catch {}
       }
     }
+    
+    // RESUMEN DE RENDERIZADO
+    const rojosCount = segments.filter(s => {
+      const seg = normalizeSeg(s);
+      return (seg.intensity || 0) === 0;
+    }).length;
+    const verdesCount = segments.length - rojosCount;
+    
+    // Enviar información de debug al DebugPanel
+    const debugInfo = {
+      lastCanvasClear: `Canvas ${WIDTH}x${HEIGHT} limpiado a las ${now}`,
+      vectorsDrawn: debugVectors,
+      summary: { rojos: rojosCount, verdes: verdesCount, total: segments.length }
+    };
+    
+    // Disparar evento personalizado para el DebugPanel
+    window.dispatchEvent(new CustomEvent('debugRenderUpdate', { detail: debugInfo }));
+    
     ctx.restore();
   };
 

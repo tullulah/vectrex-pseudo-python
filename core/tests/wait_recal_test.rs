@@ -9,15 +9,15 @@ use vectrex_emulator::CPU;
 fn wait_recal_like_wai_resumes_on_t1_irq() {
     let mut cpu = CPU::default();
     // IRQ vector (standard post-migration FFF8/FFF9 big-endian) -> 0x0100
-    cpu.mem[0xFFF8]=0x01; cpu.mem[0xFFF9]=0x00; cpu.bus.mem[0xFFF8]=0x01; cpu.bus.mem[0xFFF9]=0x00;
+    cpu.bus.mem[0xFFF8]=0x01; cpu.bus.mem[0xFFF9]=0x00; cpu.bus.mem[0xFFF8]=0x01; cpu.bus.mem[0xFFF9]=0x00;
     // Handler: CLRA; RTI
-    cpu.mem[0x0100]=0x4F; cpu.bus.mem[0x0100]=0x4F;
-    cpu.mem[0x0101]=0x3B; cpu.bus.mem[0x0101]=0x3B;
+    cpu.bus.mem[0x0100]=0x4F; cpu.bus.mem[0x0100]=0x4F;
+    cpu.bus.mem[0x0101]=0x3B; cpu.bus.mem[0x0101]=0x3B;
     // Program to arm Timer1 (8), enable T1 interrupt (need 0x80|0x40=0xC0 to SET bit6), then WAI
     // Program: load D with 0x0008 then store B and A into VIA T1 low/high via indexed stores we will manually emulate.
     // Simpler: just write timer & IER directly through bus then execute WAI.
     let prog=[0x3E]; // WAI only; we pre-arm timer
-    for (i,b) in prog.iter().enumerate(){ cpu.mem[i]=*b; cpu.bus.mem[i]=*b; }
+    for (i,b) in prog.iter().enumerate(){ cpu.bus.mem[i]=*b; cpu.bus.mem[i]=*b; }
     // Arm Timer1 = 0x0008 via direct bus writes so VIA logic sees it
     cpu.bus.via.write(0x04, 0x08); // low
     cpu.bus.via.write(0x05, 0x00); // high -> latch/load

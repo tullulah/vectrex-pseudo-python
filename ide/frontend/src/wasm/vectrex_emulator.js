@@ -475,6 +475,26 @@ export class WasmEmu {
     set_input_state(x, y, buttons) {
         wasm.wasmemu_set_input_state(this.__wbg_ptr, x, y, buttons);
     }
+    /**
+     * Debug function to get detailed emulator state including vector info
+     * @returns {string}
+     */
+    debug_state_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmemu_debug_state_json(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export_1(deferred1_0, deferred1_1, 1);
+        }
+    }
 }
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);

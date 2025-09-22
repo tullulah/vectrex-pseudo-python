@@ -17,7 +17,7 @@ fn main(){
         }
     }
     cpu.run(max_steps);
-    if let Some((s,e))=dump_range { println!("DUMP {:04X}-{:04X}", s,e); let mut addr=s; while addr<=e { print!("{:04X}:", addr); for i in 0..16 { let a=addr.wrapping_add(i); if a>e { break; } print!(" {:02X}", cpu.mem[a as usize]); } println!(); addr = addr.wrapping_add(16);} }
+    if let Some((s,e))=dump_range { println!("DUMP {:04X}-{:04X}", s,e); let mut addr=s; while addr<=e { print!("{:04X}:", addr); for i in 0..16 { let a=addr.wrapping_add(i); if a>e { break; } print!(" {:02X}", cpu.bus.mem[a as usize]); } println!(); addr = addr.wrapping_add(16);} }
     println!("BIOS calls:");
     for c in cpu.bios_calls { println!("{}", c); }
     let avg_draws = if cpu.frame_count>0 { cpu.draw_vl_count as f64 / cpu.frame_count as f64 } else { 0.0 };

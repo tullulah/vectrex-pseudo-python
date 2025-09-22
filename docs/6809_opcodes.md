@@ -12,7 +12,8 @@ Para opcodes que el hardware real define pero que aquí se tratan como NOP (plac
 - Primarios implementados: 256 / 256 (incluyendo ilegales tratados como NOP controlado)
 - Prefijo 0x10 implementados (válidos): 31 / 31
 - Prefijo 0x11 implementados (válidos): 16 / 16
-- No implementados (válidos): 0
+- **VIA 6522 registros implementados: 8 / 16** (solo timers, SR, IFR/IER con handlers específicos)
+- No implementados (válidos): 0 (CPU); 8 (VIA registros)
 
 ## 2. Opcodes Primarios (00–FF)
 
@@ -269,22 +270,22 @@ Listado completo de sub‑opcodes válidos (cualquier otro se trata como ilegal 
 
 | Dirección | Nombre | Descripción | Implementado |
 |-----------|--------|------------|--------------|
-| 0xD000 | ORB/IRB | Puerto B / Entrada | ✅ |
-| 0xD001 | ORA/IRA | Puerto A / Entrada | ✅ |
-| 0xD002 | DDRB | Data Direction B | ✅ |
-| 0xD003 | DDRA | Data Direction A | ✅ |
+| 0xD000 | ORB/IRB | Puerto B / Entrada | ❌ |
+| 0xD001 | ORA/IRA | Puerto A / Entrada | ❌ |
+| 0xD002 | DDRB | Data Direction B | ❌ |
+| 0xD003 | DDRA | Data Direction A | ❌ |
 | 0xD004 | T1CL | Timer1 Counter Low | ✅ |
 | 0xD005 | T1CH | Timer1 Counter High | ✅ |
-| 0xD006 | T1LL | Timer1 Latch Low | ✅ |
-| 0xD007 | T1LH | Timer1 Latch High | ✅ |
+| 0xD006 | T1LL | Timer1 Latch Low | ❌ |
+| 0xD007 | T1LH | Timer1 Latch High | ❌ |
 | 0xD008 | T2CL | Timer2 Counter Low | ✅ |
 | 0xD009 | T2CH | Timer2 Counter High | ✅ |
 | 0xD00A | SR | Shift Register | ✅ |
 | 0xD00B | ACR | Aux Control Reg | ✅ |
-| 0xD00C | PCR | Peripheral Control | ✅ |
+| 0xD00C | PCR | Peripheral Control | ❌ |
 | 0xD00D | IFR | Interrupt Flag | ✅ |
 | 0xD00E | IER | Interrupt Enable | ✅ |
-| 0xD00F | ORA2 | Registro espejo / handshake | ✅ |
+| 0xD00F | ORA2 | Registro espejo / handshake | ❌ |
 
 ## 4. Pendientes / Notas
 - Ciclos: varias instrucciones aún usan tiempos agrupados aproximados; pendiente tabla exacta por modo.
@@ -341,10 +342,28 @@ cargo run -p vectrex_emulator --bin gen_cycles_compare > cycles_compare.csv
 Esta sección debe actualizarse cuando cambie la lógica de determinación de `cyc` en `step()`.
 
 ## 5. Próximos Pasos Sugeridos
-1. Implementar CWAI si alguna ROM lo necesita.  
-2. Ajustar tabla con conteos reales (script que recorra 0x00-0xFF y cruce con switch) y actualizar cabecera.  
-3. Añadir columna de ciclos nominales y ciclos actuales emulados para auditoría.  
-4. Exportar cobertura a JSON automáticamente en cada build (generar diff histórico).
+1. **Implementar registros VIA faltantes**: ORB/ORA (0xD000/0xD001), DDR A/B (0xD002/0xD003), T1 Latches (0xD006/0xD007), PCR (0xD00C), ORA2 (0xD00F) necesitan handlers específicos más allá del almacenamiento genérico.
+2. Implementar CWAI si alguna ROM lo necesita.  
+3. Ajustar tabla con conteos reales (script que recorra 0x00-0xFF y cruce con switch) y actualizar cabecera.  
+4. Añadir columna de ciclos nominales y ciclos actuales emulados para auditoría.  
+5. Exportar cobertura a JSON automáticamente en cada build (generar diff histórico).
+
+## 6. Notas sobre Implementación VIA
+
+**Registros con handlers específicos implementados:**
+- Timers (0xD004/0xD005, 0xD008/0xD009): Lógica completa de contador, latch, IFR clear
+- IFR/IER (0xD00D/0xD00E): Síntesis master bit, set/clear semantics, recompute_irq
+- ACR (0xD00B): Control modes para timers/PB7
+- SR (0xD00A): Shift register con modo 4
+
+**Registros solo con almacenamiento genérico (funcionalidad limitada):**
+- Puertos A/B (0xD000/0xD001): Solo `regs[r] = val` sin lógica de dirección
+- DDR A/B (0xD002/0xD003): Solo almacenamiento, **la lógica DDR real está en CPU**
+- T1 Latches (0xD006/0xD007): Solo almacenamiento, sin diferenciación vs counter
+- PCR (0xD00C): Solo almacenamiento sin control de líneas CA1/CA2/CB1/CB2
+- ORA2 (0xD00F): Solo almacenamiento sin handshake
+
+**Implicación para vectores de texto:** Como se descubrió, los DDR A/B están manejados en el CPU (`cpu.ddr_a`/`cpu.ddr_b`) y afectan directamente si el integrator se actualiza. La inicialización a 0xFF (output mode) fue crítica para que los vectores de texto aparezcan.
 
 ---
 _Generado automáticamente (versión inicial). Actualizar manualmente o automatizar script según se agreguen cambios._

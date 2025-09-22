@@ -23,21 +23,21 @@ fn test_capture_startup_trace() {
     let reset_vector = ((cpu.bus.read8(0xFFFE) as u16) << 8) | (cpu.bus.read8(0xFFFF) as u16);
     cpu.pc = reset_vector;
     
-    // Habilitar trace con límite amplio
+    // Habilitar trace con límite muy amplio para capturar progreso real
     cpu.trace_enabled = true;
-    cpu.trace_limit = 15_000;
+    cpu.trace_limit = 100_000;  // Aumentar para capturar más progreso
     cpu.trace_buf.clear();
     
     println!("BIOS cargada, PC inicial: {:04X}, iniciando captura de trace...", cpu.pc);
     
     // Ejecutar suficientes instrucciones para capturar el inicio completo y VER DÓNDE SE QUEDA ATASCADO
     let mut total_instructions = 0;
-    let max_instructions = 5_000_000;  // 5 millones para ver si llega a Mine Storm
+    let max_instructions = 25_000_000;  // 25 millones para ver si llega a Mine Storm
     let mut stuck_counter = 0;
     let mut pc_history = std::collections::VecDeque::new();
     
     // Ejecutar hasta que encontremos el verdadero punto donde se atasca
-    while total_instructions < max_instructions && cpu.trace_buf.len() < cpu.trace_limit {
+    while total_instructions < max_instructions {
         let step_ok = cpu.step();
         if step_ok {
             total_instructions += 1;

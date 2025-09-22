@@ -5,11 +5,11 @@ use vectrex_emulator::CPU;
 fn irq_mask_prevents_and_then_allows_irq() {
     let mut cpu = CPU::default();
     // Install IRQ vector at FFF6/FFF7 -> 0x0200
-    cpu.mem[0xFFF6] = 0x00; cpu.mem[0xFFF7] = 0x02;
+    cpu.bus.mem[0xFFF6] = 0x00; cpu.bus.mem[0xFFF7] = 0x02;
     cpu.bus.mem[0xFFF6] = 0x00; cpu.bus.mem[0xFFF7] = 0x02;
     // IRQ handler at 0x0200: CLRA ; RTI
-    cpu.mem[0x0200] = 0x4F; cpu.bus.mem[0x0200] = 0x4F;
-    cpu.mem[0x0201] = 0x3B; cpu.bus.mem[0x0201] = 0x3B;
+    cpu.bus.mem[0x0200] = 0x4F; cpu.bus.mem[0x0200] = 0x4F;
+    cpu.bus.mem[0x0201] = 0x3B; cpu.bus.mem[0x0201] = 0x3B;
 
     // Program layout:
     // 0100: ORCC #$10 (set I)
@@ -21,14 +21,14 @@ fn irq_mask_prevents_and_then_allows_irq() {
     // 0106: NOP placeholder if not serviced (won't execute)
 
     cpu.pc = 0x0100;
-    cpu.mem[0x0100] = 0x1A; cpu.bus.mem[0x0100] = 0x1A; // ORCC
-    cpu.mem[0x0101] = 0x10; cpu.bus.mem[0x0101] = 0x10; // set I
-    cpu.mem[0x0102] = 0x86; cpu.bus.mem[0x0102] = 0x86; // LDA #$01
-    cpu.mem[0x0103] = 0x01; cpu.bus.mem[0x0103] = 0x01;
-    cpu.mem[0x0104] = 0x1C; cpu.bus.mem[0x0104] = 0x1C; // ANDCC
-    cpu.mem[0x0105] = 0xEF; cpu.bus.mem[0x0105] = 0xEF; // clear I bit (mask retains others)
-    cpu.mem[0x0106] = 0x86; cpu.bus.mem[0x0106] = 0x86; // LDA #$02 (should not run until after IRQ service)
-    cpu.mem[0x0107] = 0x02; cpu.bus.mem[0x0107] = 0x02;
+    cpu.bus.mem[0x0100] = 0x1A; cpu.bus.mem[0x0100] = 0x1A; // ORCC
+    cpu.bus.mem[0x0101] = 0x10; cpu.bus.mem[0x0101] = 0x10; // set I
+    cpu.bus.mem[0x0102] = 0x86; cpu.bus.mem[0x0102] = 0x86; // LDA #$01
+    cpu.bus.mem[0x0103] = 0x01; cpu.bus.mem[0x0103] = 0x01;
+    cpu.bus.mem[0x0104] = 0x1C; cpu.bus.mem[0x0104] = 0x1C; // ANDCC
+    cpu.bus.mem[0x0105] = 0xEF; cpu.bus.mem[0x0105] = 0xEF; // clear I bit (mask retains others)
+    cpu.bus.mem[0x0106] = 0x86; cpu.bus.mem[0x0106] = 0x86; // LDA #$02 (should not run until after IRQ service)
+    cpu.bus.mem[0x0107] = 0x02; cpu.bus.mem[0x0107] = 0x02;
 
     // Step ORCC -> I set
     cpu.step();

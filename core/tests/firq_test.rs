@@ -17,11 +17,11 @@ fn firq_partial_frame_registers_persist() {
     //  LDB #$55
     //  RTI
     let handler = [0x86,0xAA, 0xC6,0x55, 0x3B];
-    for (i,b) in handler.iter().enumerate(){ cpu.mem[0x0300+i]=*b; cpu.bus.mem[0x0300+i]=*b; }
+    for (i,b) in handler.iter().enumerate(){ cpu.bus.mem[0x0300+i]=*b; cpu.bus.mem[0x0300+i]=*b; }
     // Main code: just a couple NOP-like stand-ins (we'll use CLRA / CLRB) then we trigger FIRQ
-    cpu.mem[0x0000]=0x4F; cpu.bus.mem[0x0000]=0x4F; // CLRA
-    cpu.mem[0x0001]=0x5F; cpu.bus.mem[0x0001]=0x5F; // CLRB
-    cpu.mem[0x0002]=0x4F; cpu.bus.mem[0x0002]=0x4F; // CLRA again
+    cpu.bus.mem[0x0000]=0x4F; cpu.bus.mem[0x0000]=0x4F; // CLRA
+    cpu.bus.mem[0x0001]=0x5F; cpu.bus.mem[0x0001]=0x5F; // CLRB
+    cpu.bus.mem[0x0002]=0x4F; cpu.bus.mem[0x0002]=0x4F; // CLRA again
     cpu.pc=0x0000;
     // Run a couple steps
     cpu.step(); cpu.step();

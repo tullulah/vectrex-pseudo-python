@@ -181,17 +181,33 @@ impl Via6522 {
         // Shift register update: cycle-accurate (shift every 8 cycles like vectrexy)
         if self.shifting {
             for _ in 0..cycles {
-                // Simplificado: advance shift register cada 8 VIA cycles
-                // TODO: sincronizar con Timer2 cuando mode=4 (shift out under T2 control)  
-                if (self.cycles_since_shift + 1) % 8 == 0 && self.sr_bits_remaining > 0 {
-                    self.regs[0x0A] = (self.regs[0x0A] << 1) | 0x01;
-                    self.sr_bits_remaining -= 1;
-                    if self.sr_bits_remaining == 0 {
-                        self.regs[0x0D] |= 0x10; // IFR bit 4 (Shift Register)
-                        self.recompute_irq();
-                        let acr = self.regs[0x0B];
-                        let mode = (acr >> 2) & 0x07;
-                        if mode == 0b100 { self.sr_bits_remaining = 8; } else { self.shifting = false; }
+                // Shift register timing: mode 4 uses Timer2 rate for shift clock
+                let acr = self.regs[0x0B];
+                let sr_mode = (acr >> 2) & 0x07;
+                
+                if sr_mode == 0b100 {
+                    // Mode 4: Shift out under Timer2 control
+                    // In this mode, shift rate is tied to Timer2 frequency
+                    // Each Timer2 underflow triggers one bit shift
+                    if self.t2_counter == 0 && self.sr_bits_remaining > 0 {
+                        self.regs[0x0A] = (self.regs[0x0A] << 1) | 0x01;
+                        self.sr_bits_remaining -= 1;
+                        if self.sr_bits_remaining == 0 {
+                            self.regs[0x0D] |= 0x10; // IFR bit 4 (Shift Register)
+                            self.recompute_irq();
+                            self.sr_bits_remaining = 8; // Auto-reload in continuous mode
+                        }
+                    }
+                } else {
+                    // Other modes: use fixed 8-cycle rate (original logic)
+                    if (self.cycles_since_shift + 1) % 8 == 0 && self.sr_bits_remaining > 0 {
+                        self.regs[0x0A] = (self.regs[0x0A] << 1) | 0x01;
+                        self.sr_bits_remaining -= 1;
+                        if self.sr_bits_remaining == 0 {
+                            self.regs[0x0D] |= 0x10; // IFR bit 4 (Shift Register)
+                            self.recompute_irq();
+                            if sr_mode == 0b100 { self.sr_bits_remaining = 8; } else { self.shifting = false; }
+                        }
                     }
                 }
                 self.cycles_since_shift = (self.cycles_since_shift + 1) % 8;
