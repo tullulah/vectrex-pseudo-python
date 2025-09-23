@@ -33,8 +33,9 @@ export interface IEmulatorCore {
   audioPrepareDelta?(): Int16Array; // retorna nuevas muestras (puede longitud 0)
   audioSampleRate?(): number;       // Hz (ej. 44100)
   audioHasOverflow?(): boolean;     // true si último delta fue snapshot completo por overflow
-  // Debug state (opcional): devuelve estado completo del emulador en JSON para debugging
-  debugState?(): string;
+
+  /** Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer). */
+  psgEnvJustFinished?(): boolean;
 }
 
 // Tipo del identificador de backend.

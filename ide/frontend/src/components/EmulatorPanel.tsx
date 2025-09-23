@@ -6,6 +6,24 @@ type VectorEvent = { kind:string; pc:number };
 import { useEmulatorStore } from '../state/emulatorStore';
 
 export const EmulatorPanel: React.FC = () => {
+  // Estado visual del icono PSG (verde si suena, gris si apagado)
+  const [psgActive, setPsgActive] = useState(false);
+
+  // Poll PSG envelope state en cada frame
+  useEffect(() => {
+    let raf: number;
+    function poll() {
+      // Si el core expone el método, úsalo
+      if (typeof emuCore.psgEnvJustFinished === 'function') {
+        // Si acaba de finalizar, apagamos; si no, mantenemos el estado
+        if (emuCore.psgEnvJustFinished()) setPsgActive(false);
+        else if (!psgActive) setPsgActive(true); // Se activa al sonar
+      }
+      raf = requestAnimationFrame(poll);
+    }
+    poll();
+    return () => cancelAnimationFrame(raf);
+  }, [psgActive]);
   const status = useEmulatorStore(s => s.status);
   const setStatus = useEmulatorStore(s => s.setStatus);
   const [frameCount, setFrameCount] = useState(0);
@@ -209,6 +227,10 @@ export const EmulatorPanel: React.FC = () => {
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', padding:8, boxSizing:'border-box', fontFamily:'monospace', fontSize:12}}>
+      {/* Icono PSG: bola verde si suena, gris si apagado */}
+      <span title={psgActive ? 'PSG activo (sonando)' : 'PSG inactivo'} style={{
+        display:'inline-block', width:16, height:16, borderRadius:'50%', marginRight:8,
+        background: psgActive ? '#0f0' : '#888', border:'1.5px solid #222', verticalAlign:'middle', boxShadow: psgActive ? '0 0 6px #0f0' : 'none', transition:'background 0.2s'}} />
       <div style={{display:'flex', alignItems:'center', gap:12}}>
         <span>Status: {status}</span>
         <span>Frames: {frameCount}</span>

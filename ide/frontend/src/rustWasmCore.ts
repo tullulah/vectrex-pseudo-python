@@ -4,6 +4,8 @@ import { IEmulatorCore, MetricsSnapshot, RegistersSnapshot, Segment } from './em
 import { EmulatorService } from './emulatorWasm';
 
 export class RustWasmEmulatorCore implements IEmulatorCore {
+  /** Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer). */
+  psgEnvJustFinished(): boolean { return this.svc.psgEnvJustFinished(); }
   private svc = new EmulatorService();
   init(wasmUrl?: string){ return this.svc.init(wasmUrl); }
   ensureBios(opts?: { bytes?: Uint8Array; urlCandidates?: string[] }){ return (this.svc as any).ensureBios?.(opts); }

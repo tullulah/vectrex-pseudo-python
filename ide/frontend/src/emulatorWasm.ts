@@ -30,6 +30,15 @@ export interface RegistersSnapshot { a:number;b:number;dp:number;x:number;y:numb
 export interface Segment { x0:number; y0:number; x1:number; y1:number; intensity:number; frame:number; }
 
 export class EmulatorService {
+  /** Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer). */
+  psgEnvJustFinished(): boolean {
+    const anyEmu: any = this.emu;
+    if (!anyEmu) return false;
+    if (typeof anyEmu.psg_env_just_finished === 'function') {
+      try { return !!anyEmu.psg_env_just_finished(); } catch { return false; }
+    }
+    return false;
+  }
   private emu: WasmEmu | null = null;
   private memory: Uint8Array | null = null;
   private biosLoaded = false;
@@ -250,21 +259,6 @@ export class EmulatorService {
       }
     }
     return [];
-  }
-
-  /** Debug function to get comprehensive emulator state */
-  debugState(): any {
-    if (!this.emu) return null;
-    const emuAny: any = this.emu as any;
-    if (typeof emuAny.debug_state_json === 'function') {
-      try {
-        return JSON.parse(emuAny.debug_state_json());
-      } catch (e) {
-        console.warn('debug_state_json failed', e);
-        return null;
-      }
-    }
-    return null;
   }
 
   /** Returns a full 64K snapshot (Uint8Array copy) of emulated memory. */
