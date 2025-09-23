@@ -91,7 +91,7 @@ fn test_bios_calls_detail() {
     // Buscar llamadas específicas a Print_Str y capturar texto
     println!("\n--- Ejecutando hasta rutinas de dibujo y texto ---");
     
-    let max_total_steps = 2500000; // Delay real de Vectrex antes del copyright
+    let max_total_steps = 35_000_000; // Aumentado para asegurar llegada a Draw_VL
     let mut last_segment_check = cpu.integrator.segments.len();
     let mut button_simulated = false;
 
@@ -101,33 +101,46 @@ fn test_bios_calls_detail() {
             println!("❌ CPU se detuvo en step {}", step_count + 1);
             break;
         }
-        
+
         step_count += 1;
-        
+
+        // Volcar X y memoria si estamos en Draw_VL
+        if cpu.pc == 0xF3DD {
+            let x = cpu.x;
+            println!("\n🟢 PC=F3DD (Draw_VL): X=0x{:04X}", x);
+            print!("Mem[X..X+32]: ");
+            for i in 0..32 {
+                let b = cpu.bus.read8(x + i);
+                print!("{:02X} ", b);
+            }
+            println!("");
+        }
+
         // Simular entrada de botón después de algunos frames para continuar (solo una vez)
         if cpu.frame_count == 50 && !button_simulated {
             println!("⚡ Simulando presión de botón en frame 50");
             // Simular botón presionado (bit 0)
             cpu.input_state.buttons = 0x01;
             button_simulated = true;
-        }        // Verificar segmentos cada 100k pasos (menos spam)
+        }
+        // Verificar segmentos cada 100k pasos (menos spam)
         if step_count % 100000 == 0 {
             let current_segments = cpu.integrator.segments.len();
-            let segment_diff = if current_segments >= last_segment_check { 
-                current_segments - last_segment_check 
-            } else { 
-                0 
+            let segment_diff = if current_segments >= last_segment_check {
+                current_segments - last_segment_check
+            } else {
+                0
             };
-            println!("Step {}: PC=0x{:04X}, Segments={} (+{}), Frames={}, Print_Str calls={}", 
-                     step_count, cpu.pc, current_segments, 
+            println!("Step {}: PC=0x{:04X}, Segments={} (+{}), Frames={}, Print_Str calls={}",
+                     step_count, cpu.pc, current_segments,
                      segment_diff, cpu.frame_count, print_str_calls);
             last_segment_check = current_segments;
-            
+
             // Si estamos en el bucle de delay conocido, mostrar registro B
             if cpu.pc >= 0xF4EB && cpu.pc <= 0xF4EF {
                 println!("  🔄 DELAY LOOP detectado: B=0x{:02X}, A=0x{:02X}", cpu.b, cpu.a);
             }
-            
+
             // Continuar hasta encontrar texto o límite
             if print_str_calls > 0 && current_segments > 10 {
                 println!("✅ ¡Texto y segmentos encontrados!");

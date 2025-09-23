@@ -42,6 +42,8 @@ pub struct AyPsg {
     env_dir_up: bool,     // dirección actual (true ascendente)
     env_hold: bool,       // congelado (no más pasos)
     env_shape: u8,        // copia reg 13 (bits shape)
+    /// Flag one-shot: true si la envolvente acaba de terminar (env_hold activado en este tick)
+    pub env_just_finished: bool,
     // Mixing / sample gen
     sample_rate: u32,
     cycle_accum: u64,
@@ -90,6 +92,7 @@ impl AyPsg {
             env_dir_up: true,
             env_hold: false,
             env_shape: 0,
+            env_just_finished: false,
             sample_rate,
             cycle_accum: 0,
             cycles_per_sample: cycles_per_sample.max(1),
@@ -229,10 +232,14 @@ impl AyPsg {
                     let cont = (self.env_shape & 0b1000)!=0;     // bit3 Continue (C)
                     let alt  = (self.env_shape & 0b0010)!=0;     // bit1 Alternate
                     let hold = (self.env_shape & 0b0001)!=0;     // bit0 Hold
-                    if !cont { // one-shot: mantener extremo (0 o 15)
+                    if !cont {
                         self.env_hold = true;
+                        self.env_just_finished = true;
                     } else {
-                        if hold { self.env_hold = true; }
+                        if hold {
+                            self.env_hold = true;
+                            self.env_just_finished = true;
+                        }
                         if alt && !self.env_hold { self.env_dir_up = !self.env_dir_up; }
                         if !hold && !alt { // repetir mismo patrón (reiniciar dirección basada en attack)
                             let attack = (self.env_shape & 0b0100)!=0;
@@ -244,6 +251,13 @@ impl AyPsg {
                 self.metric_env_steps +=1;
             }
         }
+    }
+
+    /// Devuelve true si la envolvente acaba de terminar (env_hold activado en este tick). One-shot: limpia el flag tras consultarlo.
+    pub fn take_env_just_finished(&mut self) -> bool {
+        let v = self.env_just_finished;
+        self.env_just_finished = false;
+        v
     }
 
     fn mix_sample(&self) -> i16 {

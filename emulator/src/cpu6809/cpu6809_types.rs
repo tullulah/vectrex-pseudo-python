@@ -9,7 +9,7 @@ pub struct LoopSample {
 #[derive(Clone,Debug)]
 pub struct TraceEntry {
     pub pc:u16, pub opcode:u8, pub sub:u8, pub a:u8, pub b:u8, pub x:u16, pub y:u16, pub u:u16, pub s:u16, pub dp:u8,
-    pub op_str: Option<String>, pub loop_count:u32, pub flags:u8, pub cycles:u32, pub illegal: bool, pub call_depth: u16
+    pub op_str: Option<String>, pub loop_count:u32, pub flags:u8, pub flags_post: u8, pub cycles:u32, pub illegal: bool, pub call_depth: u16
 }
 
 #[derive(Clone,Copy,Default,Debug)]

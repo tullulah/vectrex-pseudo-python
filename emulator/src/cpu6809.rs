@@ -79,7 +79,6 @@ pub struct CPU {
     pub opcode_counts: [u64;256],
     pub opcode_unimpl_bitmap: [bool;256],
     pub via_irq_count: u64,
-    pub via_write_count: u64,  // Count of VIA writes for debugging
     // Debug helper: ensure we only bootstrap VIA once
     pub debug_bootstrap_via_done: bool,
     // Track if a WAI instruction already pushed the full frame so IRQ shouldn't push again
@@ -202,14 +201,14 @@ impl Default for CPU {
         CPU { a:0,b:0,dp:0xD0,x:0,y:0,u:0,pc:0,call_stack:Vec::new(),shadow_stack:Vec::new(),cc_z:false,cc_n:false,cc_c:false,cc_v:false,cc_h:false,cc_f:false,cc_e:false,
         bus:Bus::default(),trace:false,bios_calls:Vec::new(), auto_demo:false,
             frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:cpf, cycle_accumulator:0,
-        last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0xFF,ddr_b:0xFF,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
+        last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0,ddr_b:0,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
             irq_pending:false, firq_pending:false, nmi_pending:false, wai_halt:false, cc_i:false,
             // Stack pointer inicial: antes estaba en 0xD000 (base VIA) lo que hacía que push16 escribiera
             // en registros de E/S en lugar de RAM, corrompiendo retornos (RTS/BSR) y ciclos observados.
             // Lo movemos a la parte alta de la ventana de RAM (0xC800-0xCFFF) para micro-tests sintéticos.
             // La BIOS real ajustará S posteriormente con LDS cuando arranca.
             s:0xCFFF, in_irq_handler:false,
-        opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0, via_write_count:0,
+        opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
         debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
             loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
             wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
@@ -245,10 +244,18 @@ impl Default for CPU {
 pub struct VIAWrite { pub cycle: u64, pub pc: u16, pub addr: u16, pub reg: u8, pub val: u8 }
 
 impl CPU {
+    // 🚨 TRACE: X register modification helper
+    fn trace_x_change(&self, old_x: u16, new_x: u16, opcode: u8, context: &str) {
+        if old_x != new_x {
+            println!("🔍 X TRACE: PC=0x{:04X} Op=0x{:02X} {} X: 0x{:04X} → 0x{:04X} (Δ={:+})", 
+                     self.pc, opcode, context, old_x, new_x, 
+                     (new_x as i32) - (old_x as i32));
+        }
+    }
+
     fn record_via_write(&mut self, addr:u16, val:u8){
         // VIA base 0xD000, mirror every 0x10 within 0xD000-0xD7FF (handled by bus). Log only base window 0xD000-0xD00F logical register.
         let reg = (addr & 0x000F) as u8;
-        self.via_write_count += 1;  // Increment debug counter
         if self.via_writes.len() == self.via_writes_cap { // circular pop front (cheap rotate manual)
             // Remove first 64 to amortize
             self.via_writes.drain(0..64);
@@ -314,13 +321,12 @@ impl CPU {
             }
         } 
         
-        // Generate vector for ALL movements, regardless of intensity
-        // Note: intensity=0 means "blank" (move without drawing), but we still track position
-        if old_x != self.current_x || old_y != self.current_y {
+        // Generate vector only if intensity > 0 AND position changed
+        if self.last_intensity > 0 && (old_x != self.current_x || old_y != self.current_y) {
             let dx = self.current_x as f32 - old_x as f32;
             let dy = self.current_y as f32 - old_y as f32;
             
-            // Generate line for any movement (use current intensity, even if 0)
+            // Only generate line if there's actual movement
             if dx.abs() > 0.1 || dy.abs() > 0.1 {
                 self.integrator.line_to_rel(dx, dy, self.last_intensity, self.cycle_frame);
             }
@@ -366,7 +372,6 @@ impl CPU {
         self.opcode_unimpl_bitmap = [false;256];
         self.last_extended_unimplemented.clear();
         self.via_irq_count = 0;
-        self.via_write_count = 0;
         self.wait_recal_calls = 0;
         self.wait_recal_returns = 0;
         self.jsr_log_len = 0;
@@ -399,9 +404,9 @@ impl CPU {
             bus: Bus::default(), // fresh bus (safe for isolated opcode exec)
             trace:false,bios_calls:Vec::new(), auto_demo:false,
             frame_count:0, cycle_frame:0, bios_frame:0, cycles_per_frame:self.cycles_per_frame, cycle_accumulator:0,
-            last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0xFF,ddr_b:0xFF,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
+            last_intensity:0,reset0ref_count:0,print_str_count:0,print_list_count:0,mux_enabled:true,mux_selector:0,port_a_value:0,port_b_value:0,ddr_a:0,ddr_b:0,timer1_low:0,timer1_high:0,timer1_counter:0,timer1_enabled:false,bios_present:false,cycles:0,
             irq_pending:false,firq_pending:false,nmi_pending:false,wai_halt:false,cc_i:false,s:self.s,in_irq_handler:false,
-            opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0, via_write_count:0,
+            opcode_total:0, opcode_unimplemented:0, opcode_counts:[0;256], opcode_unimpl_bitmap:[false;256], via_irq_count:0,
             debug_bootstrap_via_done:false, wai_pushed_frame:false, forced_irq_vector:false,
             loop_watch_slots:[LoopSample::default();16], loop_watch_idx:0, loop_watch_count:0, wait_recal_depth:None, current_x:0, current_y:0, beam_on:false,
             wait_recal_calls:0, wait_recal_returns:0, force_frame_heuristic:false, last_forced_frame_cycle:0, cart_loaded:false,
@@ -628,8 +633,11 @@ impl CPU {
             }
         }
         let flags_pre = self.pack_cc();
-        // Insert with placeholder cycles=0; we'll patch cycles + post flags after execution in step().
-    self.trace_buf.push(TraceEntry { pc, opcode, sub, a:self.a, b:self.b, x:self.x, y:self.y, u:self.u, s:self.s, dp:self.dp, op_str, loop_count:0, flags:flags_pre, cycles:0, illegal:false, call_depth: self.call_stack.len() as u16 });
+        // Insert with placeholder cycles=0 and flags_post=flags_pre; we'll patch cycles + post flags after execution in step().
+        self.trace_buf.push(TraceEntry {
+            pc, opcode, sub, a:self.a, b:self.b, x:self.x, y:self.y, u:self.u, s:self.s, dp:self.dp, op_str, loop_count:0,
+            flags:flags_pre, flags_post:flags_pre, cycles:0, illegal:false, call_depth: self.call_stack.len() as u16
+        });
     }
 
     fn trace_patch_last_postexec(&mut self, start_cycles:u64){
@@ -637,7 +645,7 @@ impl CPU {
         let len = self.trace_buf.len(); if len==0 { return; }
         // Copy post state first
         let delta = (self.cycles - start_cycles) as u32;
-        let a=self.a; let b=self.b; let x=self.x; let y=self.y; let u=self.u; let s=self.s; let dp=self.dp; let flags=self.pack_cc();
+    let a=self.a; let b=self.b; let x=self.x; let y=self.y; let u=self.u; let s=self.s; let dp=self.dp; let flags=self.pack_cc();
         // Need opcode/sub for mnemonic fallback (immutable read before mutable borrow)
         let (opcode, sub, needs_mnemonic) = {
             let last_ref = &self.trace_buf[len-1];
@@ -648,7 +656,15 @@ impl CPU {
             if let Some(last_mut) = self.trace_buf.last_mut(){ if last_mut.op_str.is_none(){ last_mut.op_str = Some(mn); } }
         }
         if let Some(last_mut) = self.trace_buf.last_mut(){
-            last_mut.cycles = delta; last_mut.a=a; last_mut.b=b; last_mut.x=x; last_mut.y=y; last_mut.u=u; last_mut.s=s; last_mut.dp=dp; last_mut.flags=flags;
+            last_mut.cycles = delta;
+            last_mut.a = a;
+            last_mut.b = b;
+            last_mut.x = x;
+            last_mut.y = y;
+            last_mut.u = u;
+            last_mut.s = s;
+            last_mut.dp = dp;
+            last_mut.flags_post = flags;
         }
     }
 
@@ -707,7 +723,7 @@ impl CPU {
             // Synchronous integrator updates like vectrexy/jsvecx
             let reg = addr & 0x0F;
             match reg {
-                0x0 => { // Port B (0xD000) - X DAC control
+                0x0 => { // Port B - Update MUX control immediately
                     self.port_b_value = val;
                     self.mux_enabled = (val & 0x01) != 0;  // Bit 0: 1=enabled, 0=disabled (FIXED LOGIC)
                     self.mux_selector = (val >> 1) & 0x03; // Bits 1-2: selector
@@ -716,20 +732,18 @@ impl CPU {
                     let bc1 = (val & 0x08) != 0;   // Bit 3: BC1 (Bus Control 1)
                     let bdir = (val & 0x10) != 0;  // Bit 4: BDIR (Bus Direction)
                     self.bus.psg.set_bc1_bdir(bc1, bdir, self.port_a_value);
-                    if (self.ddr_b & 0x9F) == 0x9F {  // Accept real BIOS DDR B config: 0x9F (bit 5 = input)
-                        self.update_integrators_mux(); // Immediate update like vectrexy
-                    }
+                    self.update_integrators_mux(); // Immediate update like vectrexy
                 }
-                0x1 | 0xF => { // Port A (0xD001) - Y DAC control
+                0x1 | 0xF => { // Port A - Update integrators ONLY if DDR configured as output
                     self.port_a_value = val;
                     // Update PSG data bus with current Port A value
                     let bc1 = (self.port_b_value & 0x08) != 0;
                     let bdir = (self.port_b_value & 0x10) != 0;
                     self.bus.psg.set_bc1_bdir(bc1, bdir, val);
                     
-                    if (self.ddr_a & 0xFF) == 0xFF {  // ⭐ CRITICAL: Check actual DDR A pattern (might also be different)
+                    if self.ddr_a == 0xFF {  // ⭐ CRITICAL: Only update if DDR A configured as output (like vectrexy)
                         self.update_integrators_mux(); // Immediate update like vectrexy
-                    }
+                    } 
                 }
                 0x2 => { // DDR B - Data Direction Register B
                     self.ddr_b = val;
@@ -880,7 +894,36 @@ impl CPU {
     // 0=X,1=Y,2=U,3=S,4=PC,5=DP,6=CC,7=D (A:B), 8=A, 9=B
     fn reg_width(&self, code:u8)->u8 { match code { 0|1|2|3|4|7 => 2, 5|6|8|9|0xB => 1, _ => 0 } }
     fn read_reg(&self, code:u8)->u16 { match code { 0=>self.x,1=>self.y,2=>self.u,3=>self.s,4=>self.pc,5|0xB=>self.dp as u16,6=>self.pack_cc() as u16,7=>self.d(),8=>self.a as u16,9=>self.b as u16,_=>0 } }
-    fn write_reg(&mut self, code:u8, val:u16){ match code { 0=>self.x=val,1=>self.y=val,2=>self.u=val,3=>self.s=val,4=>self.pc=val,5|0xB=>self.dp=val as u8,6=>self.unpack_cc(val as u8),7=>self.set_d(val),8=>self.a=val as u8,9=>self.b=val as u8,_=>{} } }
+    fn write_reg(&mut self, code:u8, val:u16, opcode: u8){ 
+        // 🚨 DEBUG: Capturar llamadas incorrectas a write_reg durante SUBD
+        if self.pc >= 0xF4E3 && self.pc <= 0xF4E6 && code == 0 && opcode != 0x1E && opcode != 0x1F {
+            println!("⚠️  SUSPICIOUS write_reg: PC=0x{:04X} code={} val=0x{:04X} opcode=0x{:02X}", 
+                     self.pc, code, val, opcode);
+            println!("   This should probably be code=7 (D register) not code=0 (X register)");
+        }
+        
+        match code { 
+            0=>{
+                let context = match opcode {
+                    0x1E => "EXG→X",
+                    0x1F => "TFR→X",
+                    _ => "REG→X"
+                };
+                self.trace_x_change(self.x, val, opcode, context);
+                self.x=val;
+            },
+            1=>self.y=val,
+            2=>self.u=val,
+            3=>self.s=val,
+            4=>self.pc=val,
+            5|0xB=>self.dp=val as u8,
+            6=>self.unpack_cc(val as u8),
+            7=>self.set_d(val),
+            8=>self.a=val as u8,
+            9=>self.b=val as u8,
+            _=>{} 
+        } 
+    }
     fn pack_cc(&self) -> u8 {
         // 6809 CC bits: EFHINZVC (bit7=E ... bit0=C)
         (if self.cc_e {0x80} else {0}) |
@@ -1094,6 +1137,18 @@ impl CPU {
                 } else { self.irq_pending = false; }
             } else { self.irq_pending = false; }
         }
+
+        // --- PSG envelope completion notification: clear music flag in RAM (0xC83D) if envelope just finished ---
+        // BIOS expects this flag to be cleared when music ends (Minestorm, etc). See .github/copilot-instructions.md.
+        if self.bus.psg_env_just_finished() {
+            // 0xC83D is the canonical music flag location in Vectrex BIOS RAM
+            // Only clear if nonzero (avoid unnecessary writes)
+            let music_flag_addr = 0xC83D;
+            let val = self.bus.read8(music_flag_addr);
+            if val != 0 {
+                self.bus.write8(music_flag_addr, 0);
+            }
+        }
         
         // Timer1 update: countdown cada ciclo si está habilitado
         if self.timer1_enabled && self.timer1_counter > 0 {
@@ -1136,6 +1191,11 @@ impl CPU {
         }
         // Fetch opcode via bus to respect memory mapping
         let pc0 = self.pc; let op = self.read8(self.pc); self.pc = self.pc.wrapping_add(1);
+        
+        // 🚨 DEBUG: Capturar decodificado de opcodes en F4E3 para investigar X corruption
+        if pc0 == 0xF4E3 {
+            // println!("🔍 STEP DECODE: PC=0x{:04X} opcode=0x{:02X}", pc0, op);
+        }
         
         // Peek possible sub-opcode byte for extended prefixes (do not advance PC further here)
         let sub = if op==0x10 || op==0x11 { self.read8(self.pc) } else { 0 }; 
@@ -1302,7 +1362,9 @@ impl CPU {
              */
             0x3A => { 
                 // ABX (X = X + B) (flags unaffected)
-                self.x = self.x.wrapping_add(self.b as u16); 
+                let old_x = self.x;
+                self.x = self.x.wrapping_add(self.b as u16);
+                self.trace_x_change(old_x, self.x, 0x3A, "ABX");
             }
             // -------------------------------------------------------------------------
             // Extended memory RMW/JMP cluster 0x70..0x7F subset
@@ -1925,7 +1987,13 @@ impl CPU {
             if (mask & 0x02)!=0 { let a=self.pop8(); self.a=a; #[cfg(test)] { popped.push(('A', a as u16)); } }
             if (mask & 0x04)!=0 { let b=self.pop8(); self.b=b; #[cfg(test)] { popped.push(('B', b as u16)); } }
             if (mask & 0x08)!=0 { let dp=self.pop8(); self.dp=dp; #[cfg(test)] { popped.push(('P', dp as u16)); } }
-            if (mask & 0x10)!=0 { let x=self.pop16(); self.x=x; #[cfg(test)] { popped.push(('X', x)); } }
+            if (mask & 0x10)!=0 { 
+                let old_x = self.x;
+                let x=self.pop16(); 
+                self.trace_x_change(old_x, x, 0x35, "PULS X");
+                self.x=x; 
+                #[cfg(test)] { popped.push(('X', x)); } 
+            }
             if (mask & 0x20)!=0 { let y=self.pop16(); self.y=y; #[cfg(test)] { popped.push(('Y', y)); } }
             if (mask & 0x40)!=0 { let u=self.pop16(); self.u=u; #[cfg(test)] { popped.push(('U', u)); } }
             if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; #[cfg(test)] { popped.push(('R', pc)); }
@@ -1949,7 +2017,15 @@ impl CPU {
                 let pull16 = |cpu: &mut CPU| { let lo = pull8(cpu); let hi = pull8(cpu); ((hi as u16)<<8)|lo as u16 };
                 let cc = pull8(self); self.unpack_cc(cc);
                 if self.cc_e {
-                    self.a=pull8(self); self.b=pull8(self); self.dp=pull8(self); self.x=pull16(self); self.y=pull16(self); self.u=pull16(self); self.pc=pull16(self);
+                    self.a=pull8(self); 
+                    self.b=pull8(self); 
+                    self.dp=pull8(self); 
+                    let old_x = self.x;
+                    self.x=pull16(self); 
+                    self.trace_x_change(old_x, self.x, 0x3B, "RTI X");
+                    self.y=pull16(self); 
+                    self.u=pull16(self); 
+                    self.pc=pull16(self);
                 } 
                 self.in_irq_handler=false; self.wai_halt=false;
                 // Shadow stack validation & pop (interrupt return). Mirrors logic in RTS / PULS with PC.
@@ -2048,7 +2124,11 @@ impl CPU {
                 if (mask & 0x02)!=0 { self.a=self.pop8(); }
                 if (mask & 0x04)!=0 { self.b=self.pop8(); }
                 if (mask & 0x08)!=0 { self.dp=self.pop8(); }
-                if (mask & 0x10)!=0 { self.x=self.pop16(); }
+                if (mask & 0x10)!=0 { 
+                    let old_x = self.x;
+                    self.x=self.pop16(); 
+                    self.trace_x_change(old_x, self.x, 0x37, "PULU X");
+                }
                 if (mask & 0x20)!=0 { self.y=self.pop16(); }
                 if (mask & 0x40)!=0 { self.s=self.pop16(); } // recupera S anterior
                 if (mask & 0x80)!=0 { let pc=self.pop16(); self.pc=pc; if let Some(sf)=self.shadow_stack.pop() { if sf.ret!=self.pc { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-mismatch-pulu"); } } } else { if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "shadow-underflow-pulu"); } } if self.pc>=0xC800 && self.pc<=0xCFFF { self.capture_ram_exec_snapshot_immediate(self.pc, "PULU-invalid-return"); } }
@@ -2127,7 +2207,7 @@ impl CPU {
                 let w_dst = self.reg_width(dst);
                 if w_src != 0 && w_src == w_dst {
                     let val = self.read_reg(src);
-                    self.write_reg(dst, val);
+                    self.write_reg(dst, val, 0x1F);
                 }
             }
             /* EXG - Exchange Registers
@@ -2148,7 +2228,7 @@ impl CPU {
                 if w1 != 0 && w1 == w2 
                 {
                     let v1 = self.read_reg(r1); let v2 = self.read_reg(r2);
-                    self.write_reg(r1, v2); self.write_reg(r2, v1);
+                    self.write_reg(r1, v2, 0x1E); self.write_reg(r2, v1, 0x1E);
                 } 
                 cyc = 8;
             }
@@ -2370,7 +2450,9 @@ impl CPU {
                 let (ea, _) = self.decode_indexed(post); 
                 match op { 
                     0x30 => { 
-                        self.x = ea; 
+                        let old_x = self.x;
+                        self.x = ea;
+                        self.trace_x_change(old_x, self.x, 0x30, "LEAX");
                         self.update_nz16(self.x); 
                     } 
                     0x31 => { 
@@ -2399,8 +2481,10 @@ impl CPU {
             0x8E => { 
                 let hi=self.read8(self.pc); 
                 let lo=self.read8(self.pc+1); 
-                self.pc=self.pc.wrapping_add(2); 
-                self.x=((hi as u16)<<8)|lo as u16; 
+                self.pc=self.pc.wrapping_add(2);
+                let old_x = self.x;
+                self.x=((hi as u16)<<8)|lo as u16;
+                self.trace_x_change(old_x, self.x, 0x8E, "LDX #immediate");
                 cyc=3; 
             }
             
@@ -2475,7 +2559,9 @@ impl CPU {
                 let hi = self.read8(addr);                     // HIGH byte first
                 let lo = self.read8(addr.wrapping_add(1));     // LOW byte second
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
-                self.x = val; 
+                let old_x = self.x;
+                self.x = val;
+                self.trace_x_change(old_x, self.x, 0x9E, "LDX direct"); 
                 self.update_nz16(val);
             }
             /* 0xDE - LDU direct (Load U register from direct page)
@@ -2644,7 +2730,9 @@ impl CPU {
                 let hi2 = self.read8(addr);                    // HIGH byte first
                 let lo2 = self.read8(addr.wrapping_add(1));    // LOW byte second
                 let val = ((hi2 as u16) << 8) | lo2 as u16;    // Assemble big-endian
-                self.x = val; 
+                let old_x = self.x;
+                self.x = val;
+                self.trace_x_change(old_x, self.x, 0xBE, "LDX extended");
                 self.update_nz16(val);
             }
             /* 0xBF - STX extended (Store X register to extended address)
@@ -3667,6 +3755,7 @@ impl CPU {
                 let hi = self.read8(ea);                       // HIGH byte first
                 let lo = self.read8(ea.wrapping_add(1));       // LOW byte second
                 let val = ((hi as u16) << 8) | lo as u16;      // Assemble big-endian
+                self.trace_x_change(self.x, val, 0xAE, "LDX indexed");
                 self.x = val; 
                 self.update_nz16(val); 
             }
@@ -3814,8 +3903,8 @@ impl CPU {
                         let new_s=((hi as u16)<<8)|lo as u16;
                         self.s=new_s; self.update_nz16(self.s);
                     }
-                    // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) NEW, extended (0xB3)
-                    0x83|0x93|0xA3|0xB3 => { 
+                    // CMPD family: immediate (0x83), direct (0x93), indexed (0xA3) - 0xB3 is SUBD, not CMPD!
+                    0x83|0x93|0xA3 => { 
                         self.pc=self.pc.wrapping_add(1); 
                         let val = match bop {
                             0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
@@ -4033,8 +4122,8 @@ impl CPU {
             0x11 => { // prefix group 2
                 let bop=self.read8(self.pc);
                 match bop {
-                    // CMPU immediate/direct/indexed/extended: 0x83,0x93,0xA3,0xB3
-                    0x83|0x93|0xA3|0xB3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
+                    // CMPU immediate/direct/indexed/extended: 0x83,0x93,0xA3
+                    0x83|0x93|0xA3 => { self.pc=self.pc.wrapping_add(1); let val = match bop {
                         0x83 => { let hi=self.read8(self.pc); let lo=self.read8(self.pc+1); self.pc=self.pc.wrapping_add(2); ((hi as u16)<<8)|lo as u16 }
                         0x93 => { let off=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let addr=((self.dp as u16)<<8)|off as u16; ((self.read8(addr) as u16)<<8)|self.read8(addr.wrapping_add(1)) as u16 }
                         0xA3 => { let post=self.read8(self.pc); self.pc=self.pc.wrapping_add(1); let (ea,_) = self.decode_indexed(post); ((self.read8(ea) as u16)<<8)|self.read8(ea.wrapping_add(1)) as u16 }
@@ -4989,6 +5078,16 @@ impl CPU {
              * Verificado: ✓ OK - Big-endian extended + 16-bit subtraction flags
              */
             0xB3 => { 
+                // 🚨 SUBD EXTENDED DEBUGGING: Detailed trace for F4E3 corruption investigation
+                let pc_entry = self.pc.wrapping_sub(1); // PC antes de read operands
+                
+                if pc_entry == 0xF4E3 {
+                    // println!("🔍 ENTERING 0xB3 SUBD handler at PC=0x{:04X}", pc_entry);
+                }
+                
+                // let x_before = self.x;
+                // let d_before = self.d();
+                
                 let hi = self.read8(self.pc); 
                 let lo = self.read8(self.pc + 1); 
                 self.pc = self.pc.wrapping_add(2); 
@@ -4998,7 +5097,28 @@ impl CPU {
                 let val = ((mhi as u16) << 8) | mlo as u16; 
                 let d0 = self.d(); 
                 let res = d0.wrapping_sub(val);
+                
+                // 🔍 TRACE: SUBD antes de set_d()
+                if pc_entry == 0xF4E3 {
+                    // println!("🔍 SUBD TRACE: PC=0x{:04X} BEFORE set_d()", pc_entry);
+                    // println!("   X before: 0x{:04X}", x_before);
+                    // println!("   D before: 0x{:04X}", d_before);
+                    // println!("   Address: 0x{:04X}, Value: 0x{:04X}", addr, val);
+                    // println!("   Result: 0x{:04X}", res);
+                }
+                
                 self.set_d(res); 
+                
+                // 🔍 TRACE: SUBD después de set_d()
+                if pc_entry == 0xF4E3 {
+                    // println!("🔍 SUBD TRACE: PC=0x{:04X} AFTER set_d()", pc_entry);
+                    // println!("   X after: 0x{:04X}", self.x);
+                    // println!("   D after: 0x{:04X}", self.d());
+                    // if self.x != x_before {
+                        // println!("⚠️  X CORRUPTION DETECTED! X changed from 0x{:04X} to 0x{:04X}", x_before, self.x);
+                    // }
+                }
+                
                 self.flags_sub16(d0, val, res);
             }
             /* SUBB - Subtract from Accumulator B (direct addressing)
@@ -5323,7 +5443,14 @@ impl CPU {
      */
     fn advance_cycles(&mut self, cyc: u32) {
         if cyc == 0 { return; }
-        self.bus.tick(cyc);
+        
+        // 🎯 CYCLE-BY-CYCLE TIMING FIX: Like JavaScript vecx_emu()
+        // JavaScript: for(c = 0; c < icycles; c++) { /* tick timers individually */ }
+        // This ensures Timer1/Timer2 countdown exactly as in the reference emulator
+        for _ in 0..cyc {
+            self.bus.tick(1);  // Tick VIA cycle-by-cycle like JavaScript
+        }
+        
         self.cycles += cyc as u64;
         self.cycle_accumulator += cyc as u64;
         // Update experimental integrator with current frame (cycle-based authoritative frame number)
@@ -5384,7 +5511,10 @@ impl CPU {
     /// reg_code: 0=X, 1=Y, 2=U, 3=S
     fn update_index_register(&mut self, reg_code: u8, value: u16) {
         match reg_code {
-            0 => self.x = value,
+            0 => {
+                self.trace_x_change(self.x, value, 0x30, "LEAX(helper)");
+                self.x = value;
+            },
             1 => self.y = value,
             2 => self.u = value,
             3 => self.s = value,

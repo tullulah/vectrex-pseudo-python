@@ -175,8 +175,7 @@ impl Integrator {
         let mut x1 = x0 + dx; let mut y1 = y0 + dy;
         x1 = x1.clamp(self.coord_min, self.coord_max);
         y1 = y1.clamp(self.coord_min, self.coord_max);
-        // Create segment for ALL movements - intensity=0 represents positioning moves that are still part of text formation
-        self.push_segment(x0,y0,x1,y1,intensity,frame);
+        if intensity>0 { self.push_segment(x0,y0,x1,y1,intensity,frame); }
         self.state.x = x1; self.state.y = y1;
     }
     // Pure movement relative without emitting a segment (used for first vector in Draw_VL family = reposition).

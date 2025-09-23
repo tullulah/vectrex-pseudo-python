@@ -38,6 +38,10 @@ impl Bus {
             if allow_bios_write || !(self.bios_read_only && bios_region){ self.mem[addr_u]=*b; }
         }
     }
+    /// Devuelve true si la envolvente PSG acaba de terminar (one-shot; limpia el flag interno).
+    pub fn psg_env_just_finished(&mut self) -> bool {
+        self.psg.take_env_just_finished()
+    }
     pub fn load_bios_image(&mut self, data:&[u8]){
         let base = memory_map::bios_load_base(data.len());
         self.bios_base = base; // record actual start for read-only gating

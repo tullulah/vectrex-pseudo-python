@@ -1,9 +1,35 @@
 # Vectrex Pseudo-Python Project – Super Summary (Context Recovery Document)
 
 > Purpose: Single authoritative, regularly updated high‑signal document to restore full project context after a lost session. Includes architecture, design decisions, build/runtime flows, IPC, emulator core specifics, frontend panels, conventions, troubleshooting, and short/medium backlog.
->
-> Keep this file updated when making structural changes. Prefer additive updates with dated CHANGE NOTES at bottom.
+## 2025-09-22/23 - Diagnóstico crítico discrepancia vectores UI/WASM
 
+### Contexto y síntesis
+- Se detectó que la UI muestra únicamente vectores diagonales repetidos (-192,-192)→(192,192) intensidad=255 VERDE, mientras que los tests del emulador generan 86 segmentos variados con coordenadas e intensidades correctas.
+- Se implementó un DebugPanel en React para mostrar en tiempo real los vectores recibidos por la UI, y se instrumentó EmulatorPanel.tsx para despachar eventos con los datos de vectores.
+- Se confirmó que la UI llama a las funciones WASM: `getSegmentsShared()`, `drainSegmentsJson()`, `peekSegmentsJson()` para obtener los vectores.
+- Se compiló y desplegó correctamente el WASM (`wasm-pack build --target web --out-dir pkg`).
+>
+### Diagnóstico y test crítico
+- Se identificó la necesidad de aislar si el problema está en la generación de vectores en WASM o en el procesamiento en la UI.
+- Se propuso y redactó un test Rust (`emulator/tests/test_wasm_ui_vector_functions.rs`) que:
+      - Carga la BIOS real
+      - Ejecuta varios frames
+      - Llama exactamente a las funciones WASM que usa la UI (`integrator_segments_shared`, `integrator_drain_segments_json`, `integrator_peek_segments_json`)
+      - Imprime los primeros segmentos y patrones detectados para comparar con la UI
+- El objetivo es comparar la salida de este test con la que recibe la UI para aislar el origen de la discrepancia.
+> Keep this file updated when making structural changes. Prefer additive updates with dated CHANGE NOTES at bottom.
+### Estado de archivos y acciones
+- 13 archivos modificados en staging, incluyendo DebugPanel.tsx, EmulatorPanel.tsx y varios tests.
+- El test crítico debe ejecutarse con:
+   ```powershell
+   cargo test --test test_wasm_ui_vector_functions -- --nocapture
+   ```
+- Si el test devuelve vectores correctos, el problema está en la UI; si devuelve diagonales repetidas, el problema está en la generación/exportación WASM.
+
+### Próximos pasos
+- Ejecutar el test y comparar la salida con la UI.
+- Documentar el resultado y ajustar la emulación o el frontend según corresponda.
+---
 ---
 ## 1. High-Level Goal
 Provide a modern toolchain + IDE for authoring Vectrex programs in a higher-level pseudo-Python / DSL that compiles to 6809 assembly/binaries, with a Rust/WASM 6809 + VIA + integrator emulator embedded in an Electron/React IDE. Real-time visualization of vector beam output plus introspection panels.
@@ -529,8 +555,6 @@ Acciones futuras (opcionales):
 |-----|-----|-------|
 |00|ORB|Experimental horizontal velocity|
 |01|ORA|Experimental vertical velocity|
-|02|DDRB|Data Direction B (CPU-level, init 0xFF)|
-|03|DDRA|Data Direction A (CPU-level, init 0xFF)|
 |04|T1C-L|Read clears IFR6|
 |05|T1C-H|No clear (counter high)|
 |08|T2C-L|Read clears IFR5 (updated semantics)|
@@ -540,10 +564,7 @@ Acciones futuras (opcionales):
 |0C|PCR|Control lines (pass-through)|
 |0D|IFR|Bit7 master pending synthesized|
 |0E|IER|Bit7 set/clear semantics|
-
 Timers: T1 supports free-run (ACR bit6) with PB7 toggle (bit7). T2 one-shot. IRQ line when (IFR&IER&0x7F)!=0.
-
-**DDR Integration Fix (2025-01-28)**: DDR A/B registers are handled at CPU level (`cpu.ddr_a`/`cpu.ddr_b`) and initialized to 0xFF (output mode) by default. Integrator only updates coordinates when `ddr_a == 0xFF`, which was the root cause of text vectors appearing with intensity 0. VIA register writes to 0xD002/0xD003 update CPU DDR fields but don't have dedicated VIA-level handlers.
 ### 21.4 Integrator Algorithm
 Integrates position: x += vx*cycles, y += vy*cycles; clamps to [-512,512]. If beam_on && intensity>0 emits segment (splitting > max_seg_len, merging collinear). Optional blank slews & intensity decay hooks.
 ### 21.5 Memory Map
@@ -1195,26 +1216,6 @@ A continuación te dejo:
 - Reapareció para `.gitignore` pero luego se comprobó que el archivo no contenía patrones tras patch (similar patrón a fase anterior).
 - Reinicio de máquina resolvió el caso de `SUPER_SUMMARY`; eso sugiere caching del lado herramienta/editor y/o hook local.
 - Para continuidad: en la nueva sesión validar siempre con `git diff` inmediatamente tras patch crítico; si no aparece, intentar rename/recreate.
-
-## CHANGE NOTE: Solución del Problema de Vectores de Texto BIOS (2025-01-03)
-
-**Problema identificado:** La función Print_Str de la BIOS generaba 464 escrituras VIA pero solo producía 1 vector diagonal en lugar del texto completo "VECTREX".
-
-**Análisis técnico:**
-- BIOS Print_Str utiliza intensidad=0 para movimientos de posicionamiento ("blank" moves) entre trazos de caracteres
-- La lógica de generación de vectores en CPU y integrator filtraba estos movimientos por intensidad > 0
-- Resultado: solo se capturaba el primer movimiento con intensidad > 0, perdiendo toda la formación de caracteres
-
-**Cambios implementados:**
-1. **CPU (cpu6809.rs:318-324):** Modificado `update_integrators_mux()` para generar vectores en TODOS los movimientos independientemente de intensidad
-2. **Integrator (integrator.rs:176-182):** Eliminado filtro `if intensity>0` en `line_to_rel()` para capturar movimientos de posicionamiento
-
-**Resultados verificados:**
-- Test `debug_print_str_vectors` ahora genera 86 segmentos nuevos vs 1 anterior 
-- Captura tanto líneas de trazado (intensidad > 0) como movimientos de posicionamiento (intensidad = 0)
-- Arquitectura VIA→CPU→integrator funcional para formación completa de texto
-
-**Impacto:** Resuelve la visualización correcta del copyright "VECTREX" en la pantalla de inicio de la BIOS, permitiendo la correcta formación de texto vectorial.
 
 Checklist rápido para la nueva sesión (ejecutar al retomar):
 1. `git pull --rebase` (por si se suben commits entre sesiones).

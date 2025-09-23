@@ -76,6 +76,12 @@ impl WasmEmu {
     pub fn new() -> WasmEmu { 
         WasmEmu { emulator: Emulator::new() } 
     }
+
+    /// Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer).
+    #[wasm_bindgen]
+    pub fn psg_env_just_finished(&mut self) -> bool {
+        self.emulator.cpu.bus.psg_env_just_finished()
+    }
     
     #[wasm_bindgen] 
     pub fn load_bios(&mut self, data:&[u8])->bool { 
@@ -532,26 +538,5 @@ impl WasmEmu {
         self.emulator.cpu.bus.mem[base as usize] = bx;
         self.emulator.cpu.bus.mem[(base+1) as usize] = by;
         self.emulator.cpu.bus.mem[(base+2) as usize] = self.emulator.cpu.input_state.buttons;
-    }
-
-    /// Debug function to get detailed emulator state including vector info
-    #[wasm_bindgen] 
-    pub fn debug_state_json(&self) -> String {
-        use serde_json::json;
-        let segs = self.emulator.cpu.integrator.segments_slice();
-        json!({
-            "pc": format!("0x{:04X}", self.emulator.cpu.pc),
-            "cycles": self.emulator.cpu.cycles,
-            "bios_frame": self.emulator.cpu.bios_frame,
-            "cycle_frame": self.emulator.cpu.cycle_frame,
-            "segments_count": segs.len(),
-            "last_intensity": self.emulator.cpu.last_intensity,
-            "bios_loaded": self.emulator.cpu.bus.test_bios_base() != 0,
-            "bios_base": format!("0x{:04X}", self.emulator.cpu.bus.test_bios_base()),
-            "via_writes": self.emulator.cpu.via_write_count,
-            "recent_segments": segs.iter().rev().take(5).map(|s| 
-                format!("({:.1},{:.1})->({:.1},{:.1}) i={} f={}", s.x0, s.y0, s.x1, s.y1, s.intensity, s.frame)
-            ).collect::<Vec<_>>()
-        }).to_string()
     }
 }
