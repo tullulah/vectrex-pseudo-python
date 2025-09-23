@@ -1,5 +1,4 @@
-// C++ Original: vectrexy/libs/emulator/include/emulator/MemoryMap.h
-
+﻿// Simple memory map
 pub struct Mapping {
     pub range: (u16, u16),
     pub physical_size: usize,
@@ -19,11 +18,15 @@ impl Mapping {
 
     pub fn map_address(&self, address: u16) -> usize {
         assert!(
-            address >= self.range.0 && address <= self.range.1,
-            "Mapping address out of range! Value: ${:04X}, Range: [${:04X}, ${:04X}]",
-            address, self.range.0, self.range.1
+            self.is_in_range(address),
+            "Address out of range: {:04X}",
+            address
         );
         ((address - self.range.0) % self.logical_size as u16) as usize
+    }
+
+    pub fn is_in_range(&self, address: u16) -> bool {
+        address >= self.range.0 && address <= self.range.1
     }
 }
 
