@@ -13,6 +13,11 @@
 //     void Init(); };
 
 use crate::types::Cycles;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
+use std::rc::Rc;
+use std::cell::RefCell;
+use crate::core::memory_bus::MemoryBus;
 
 pub struct Ram {
     memory: [u8; Self::SIZE_BYTES],
@@ -45,9 +50,6 @@ impl Ram {
 
     // C++ Original: void Randomize(unsigned int seed)
     pub fn randomize(&mut self, seed: u32) {
-        use rand::{Rng, SeedableRng};
-        use rand::rngs::StdRng;
-        
         let mut rng = StdRng::seed_from_u64(seed as u64);
         for i in 0..Self::SIZE_BYTES {
             self.memory[i] = rng.gen_range(0..=255);
@@ -58,6 +60,14 @@ impl Ram {
         // C++ Original: void Ram::Init() { Randomize(); }
         // Note: In C++ this would use a default/random seed, we use 0 for deterministic behavior
         self.randomize(0);
+    }
+
+    // C++ Original: void Init(MemoryBus& memoryBus) {
+    //     memoryBus.ConnectDevice(*this, MemoryMap::Ram.range, EnableSync::False);
+    // }
+    pub fn init_memory_bus(self_ref: Rc<RefCell<Self>>, memory_bus: &mut MemoryBus) {
+        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+        memory_bus.connect_device(self_ref, MemoryMap::RAM.range, EnableSync::False);
     }
 }
 

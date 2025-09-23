@@ -38,6 +38,16 @@ impl MemoryBusDevice for UnmappedMemoryDevice {
     }
 }
 
+// C++ Original: void UnmappedMemoryDevice::Init(MemoryBus& memoryBus) {
+//     memoryBus.ConnectDevice(*this, MemoryMap::Unmapped.range, EnableSync::False);
+// }
+impl UnmappedMemoryDevice {
+    pub fn init_memory_bus(self_ref: std::rc::Rc<std::cell::RefCell<Self>>, memory_bus: &mut crate::core::memory_bus::MemoryBus) {
+        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+        memory_bus.connect_device(self_ref, MemoryMap::UNMAPPED.range, EnableSync::False);
+    }
+}
+
 impl Default for UnmappedMemoryDevice {
     fn default() -> Self {
         Self::new()

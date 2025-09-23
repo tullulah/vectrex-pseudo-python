@@ -2,7 +2,8 @@
 //! Port of vectrexy/libs/emulator/include/emulator/MemoryBus.h
 
 use crate::types::Cycles;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 // C++ Original: using MemoryRange = std::pair<uint16_t, uint16_t>;
 pub type MemoryRange = (u16, u16);
@@ -34,7 +35,7 @@ pub enum EnableSync {
 // C++ Original: struct DeviceInfo in MemoryBus private section
 struct DeviceInfo {
     // C++ Original: IMemoryBusDevice* device = nullptr;
-    device_id: usize, // We'll use indices instead of pointers
+    device: Rc<RefCell<dyn MemoryBusDevice>>, // Use shared reference like C++ pointer
     
     // C++ Original: MemoryRange memoryRange;
     memory_range: MemoryRange,
@@ -60,8 +61,7 @@ public:
 };
 */
 pub struct MemoryBus {
-    // We store devices separately and use indices for safety
-    devices: Vec<Box<dyn MemoryBusDevice>>,
+    // C++ Original: std::vector<DeviceInfo> m_devices;
     device_infos: Vec<DeviceInfo>,
     
     // C++ Original: OnReadCallback m_onReadCallback; OnWriteCallback m_onWriteCallback;
@@ -72,7 +72,6 @@ pub struct MemoryBus {
 impl MemoryBus {
     pub fn new() -> Self {
         Self {
-            devices: Vec::new(),
             device_infos: Vec::new(),
             on_read_callback: None,
             on_write_callback: None,
@@ -89,12 +88,9 @@ impl MemoryBus {
                   });
     }
     */
-    pub fn connect_device(&mut self, device: Box<dyn MemoryBusDevice>, range: MemoryRange, enable_sync: EnableSync) {
-        let device_id = self.devices.len();
-        self.devices.push(device);
-        
+    pub fn connect_device(&mut self, device: Rc<RefCell<dyn MemoryBusDevice>>, range: MemoryRange, enable_sync: EnableSync) {
         self.device_infos.push(DeviceInfo {
-            device_id,
+            device,
             memory_range: range,
             sync_enabled: matches!(enable_sync, EnableSync::True),
             sync_cycles: Cell::new(0),
@@ -135,7 +131,7 @@ impl MemoryBus {
         let device_info = self.find_device_info(address);
         self.sync_device(device_info);
 
-        let value = self.devices[device_info.device_id].read(address);
+        let value = device_info.device.borrow().read(address);
 
         if let Some(callback) = &self.on_read_callback {
             callback(address, value);
@@ -160,10 +156,10 @@ impl MemoryBus {
             callback(address, value);
         }
 
-        let device_info_index = self.find_device_info_index(address);
-        self.sync_device_by_index(device_info_index);
+        let device_info = self.find_device_info(address);
+        self.sync_device(device_info);
         
-        self.devices[self.device_infos[device_info_index].device_id].write(address, value);
+        device_info.device.borrow_mut().write(address, value);
     }
 
     /* C++ Original:
@@ -174,7 +170,7 @@ impl MemoryBus {
     */
     pub fn read_raw(&self, address: u16) -> u8 {
         let device_info = self.find_device_info(address);
-        self.devices[device_info.device_id].read(address)
+        device_info.device.borrow().read(address)
     }
 
     /* C++ Original:
@@ -217,8 +213,13 @@ impl MemoryBus {
     }
     */
     pub fn sync(&mut self) {
-        for i in 0..self.device_infos.len() {
-            self.sync_device_by_index(i);
+        // We need to sync all devices. Since we're using RefCell, we can access them mutably
+        for device_info in &self.device_infos {
+            let cycles = device_info.sync_cycles.get();
+            if cycles > 0 {
+                device_info.device.borrow_mut().sync(cycles);
+                device_info.sync_cycles.set(0);
+            }
         }
     }
 
@@ -249,18 +250,6 @@ impl MemoryBus {
         panic!("Unmapped address: ${:04X}", address);
     }
 
-    fn find_device_info_index(&self, address: u16) -> usize {
-        if !self.device_infos.is_empty() && address >= self.device_infos[0].memory_range.0 {
-            for (index, info) in self.device_infos.iter().enumerate() {
-                if address <= info.memory_range.1 {
-                    return index;
-                }
-            }
-        }
-        
-        panic!("Unmapped address: ${:04X}", address);
-    }
-
     /* C++ Original:
     void SyncDevice(const DeviceInfo& deviceInfo) const {
         if (deviceInfo.syncCycles > 0) {
@@ -272,18 +261,8 @@ impl MemoryBus {
     fn sync_device(&self, device_info: &DeviceInfo) {
         let cycles = device_info.sync_cycles.get();
         if cycles > 0 {
-            // Note: This is tricky - we need mutable access to device but only have &self
-            // We'll need to refactor this when we implement it properly
+            device_info.device.borrow_mut().sync(cycles);
             device_info.sync_cycles.set(0);
-        }
-    }
-
-    fn sync_device_by_index(&mut self, index: usize) {
-        let cycles = self.device_infos[index].sync_cycles.get();
-        if cycles > 0 {
-            let device_id = self.device_infos[index].device_id;
-            self.devices[device_id].sync(cycles);
-            self.device_infos[index].sync_cycles.set(0);
         }
     }
 }

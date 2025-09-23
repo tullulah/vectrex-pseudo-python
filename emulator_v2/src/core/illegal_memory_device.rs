@@ -49,6 +49,14 @@ impl MemoryBusDevice for IllegalMemoryDevice {
     }
 }
 
+// C++ Original: No explicit Init method found - illegal device is inline simple
+impl IllegalMemoryDevice {
+    pub fn init_memory_bus(self_ref: std::rc::Rc<std::cell::RefCell<Self>>, memory_bus: &mut crate::core::memory_bus::MemoryBus) {
+        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+        memory_bus.connect_device(self_ref, MemoryMap::ILLEGAL.range, EnableSync::False);
+    }
+}
+
 impl Default for IllegalMemoryDevice {
     fn default() -> Self {
         Self::new()

@@ -99,6 +99,20 @@ impl MemoryBusDevice for Cartridge {
     }
 }
 
+// C++ Original: void Cartridge::Init(MemoryBus& memoryBus) {
+//     memoryBus.ConnectDevice(*this, MemoryMap::Cartridge.range, EnableSync::False);
+//     m_data.resize(MemoryMap::Cartridge.physicalSize, 0);
+// }
+impl Cartridge {
+    pub fn init_memory_bus(self_ref: std::rc::Rc<std::cell::RefCell<Self>>, memory_bus: &mut crate::core::memory_bus::MemoryBus) {
+        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+        memory_bus.connect_device(self_ref.clone(), MemoryMap::CARTRIDGE.range, EnableSync::False);
+        
+        // C++ Original: m_data.resize(MemoryMap::Cartridge.physicalSize, 0);
+        self_ref.borrow_mut().data.resize(MemoryMap::CARTRIDGE.physical_size, 0);
+    }
+}
+
 impl Default for Cartridge {
     fn default() -> Self {
         Self::new()
