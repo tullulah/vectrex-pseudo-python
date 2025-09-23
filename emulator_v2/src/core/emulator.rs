@@ -36,7 +36,7 @@
 //     Cartridge m_cartridge;
 // };
 
-use crate::core::{MemoryBus, Cpu6809, Via6522, Ram, BiosRom};
+use crate::core::{MemoryBus, Cpu6809, Via6522, Ram, BiosRom, Cartridge, UnmappedMemoryDevice, IllegalMemoryDevice, DevMemoryDevice, MemoryMap, EnableSync};
 use crate::types::{Cycles, Input, RenderContext, AudioContext};
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -57,18 +57,17 @@ pub struct Emulator {
     // C++ Original: BiosRom m_biosRom;
     bios_rom: BiosRom,
     
-    // TODO: Implement missing devices following 1:1 verification
     // C++ Original: IllegalMemoryDevice m_illegal;
-    // illegal: IllegalMemoryDevice,
+    illegal: IllegalMemoryDevice,
     
     // C++ Original: UnmappedMemoryDevice m_unmapped;
-    // unmapped: UnmappedMemoryDevice,
+    unmapped: UnmappedMemoryDevice,
     
     // C++ Original: DevMemoryDevice m_dev;
-    // dev: DevMemoryDevice,
+    dev: DevMemoryDevice,
     
     // C++ Original: Cartridge m_cartridge;
-    // cartridge: Cartridge,
+    cartridge: Cartridge,
 }
 
 impl Emulator {
@@ -80,6 +79,10 @@ impl Emulator {
             via: Via6522::new(),
             ram: Ram::new(),
             bios_rom: BiosRom::new(),
+            illegal: IllegalMemoryDevice::new(),
+            unmapped: UnmappedMemoryDevice::new(),
+            dev: DevMemoryDevice::new(),
+            cartridge: Cartridge::new(),
             memory_bus,
         }
     }
@@ -89,16 +92,14 @@ impl Emulator {
         // C++ Original: const bool DeveloperMode = true;
         const DEVELOPER_MODE: bool = true;
         
+        // TODO: Implement proper Init following exact C++ pattern once MemoryBus is fixed to use references like C++
         // C++ Original: m_cpu.Init(m_memoryBus); - Already done in constructor
-        // C++ Original: m_via.Init(m_memoryBus); - TODO: implement Init for Via
-        // C++ Original: m_ram.Init(m_memoryBus); - TODO: implement Init for Ram  
-        // C++ Original: m_biosRom.Init(m_memoryBus); - TODO: implement Init for BiosRom
-        // C++ Original: m_illegal.Init(m_memoryBus); - TODO: implement IllegalMemoryDevice
-        
+        // C++ Original: m_via.Init(m_memoryBus);
+        // C++ Original: m_ram.Init(m_memoryBus);
+        // C++ Original: m_biosRom.Init(m_memoryBus);
+        // C++ Original: m_illegal.Init(m_memoryBus);
         // C++ Original: if (DeveloperMode) { m_dev.Init(m_memoryBus); } else { m_unmapped.Init(m_memoryBus); }
-        // TODO: implement DevMemoryDevice and UnmappedMemoryDevice
-        
-        // C++ Original: m_cartridge.Init(m_memoryBus); - TODO: implement Cartridge
+        // C++ Original: m_cartridge.Init(m_memoryBus);
         
         // C++ Original: LoadBios(biosRomFile);
         self.load_bios(bios_rom_file);
