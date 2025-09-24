@@ -1687,11 +1687,16 @@ impl Cpu6809 {
     /* C++ Original: case 0x34: OpPSH<0, 0x34>(S); - PSHS (Push to system stack)
     Push registers in order: PC, U, Y, X, DP, B, A, CC based on bit mask
     */
+    /* C++ Original: template <int page, uint8_t opCode> void OpPSH(uint16_t& stackReg)
+    Push16: Write(--stackPointer, Low); Write(--stackPointer, High) - Low first, High second
+    Push order: PC(bit7), U(bit6), Y(bit5), X(bit4), DP(bit3), B(bit2), A(bit1), CC(bit0)
+    */
     fn op_pshs(&mut self, mask: u8) {
-        // Push registers in order: PC, U, Y, X, DP, B, A, CC
+        // Push registers in C++ bit order: PC, U, Y, X, DP, B, A, CC
+        
         if mask & 0x80 != 0 { // Bit 7: PC
             let pc_val = self.registers.pc;
-            // Push PC as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, (pc_val & 0xFF) as u8); // Low
             self.registers.s = self.registers.s.wrapping_sub(1);
@@ -1699,7 +1704,7 @@ impl Cpu6809 {
         }
         if mask & 0x40 != 0 { // Bit 6: U (other stack register)
             let u_val = self.registers.u;
-            // Push U as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, (u_val & 0xFF) as u8); // Low
             self.registers.s = self.registers.s.wrapping_sub(1);
@@ -1707,7 +1712,7 @@ impl Cpu6809 {
         }
         if mask & 0x20 != 0 { // Bit 5: Y
             let y_val = self.registers.y;
-            // Push Y as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, (y_val & 0xFF) as u8); // Low
             self.registers.s = self.registers.s.wrapping_sub(1);
@@ -1715,7 +1720,7 @@ impl Cpu6809 {
         }
         if mask & 0x10 != 0 { // Bit 4: X
             let x_val = self.registers.x;
-            // Push X as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, (x_val & 0xFF) as u8); // Low
             self.registers.s = self.registers.s.wrapping_sub(1);
@@ -1723,58 +1728,62 @@ impl Cpu6809 {
         }
         if mask & 0x08 != 0 { // Bit 3: DP
             let dp_val = self.registers.dp;
-            // Push DP as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, dp_val);
         }
         if mask & 0x04 != 0 { // Bit 2: B
             let b_val = self.registers.b;
-            // Push B as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, b_val);
         }
         if mask & 0x02 != 0 { // Bit 1: A
             let a_val = self.registers.a;
-            // Push A as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, a_val);
         }
         if mask & 0x01 != 0 { // Bit 0: CC
             let cc_val = self.registers.cc.to_u8();
-            // Push CC as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, cc_val);
         }
     }
 
-    /* C++ Original: case 0x35: OpPUL<0, 0x35>(S); - PULS (Pull from system stack)
-    Pull registers in reverse order: CC, A, B, DP, X, Y, U, PC based on bit mask
+    /* C++ Original: template <int page, uint8_t opCode> void OpPUL(uint16_t& stackReg)
+    Pop16: high = Read(stackPointer++); low = Read(stackPointer++); return (high<<8)|low
+    Pull order: CC(bit0), A(bit1), B(bit2), DP(bit3), X(bit4), Y(bit5), U(bit6), PC(bit7)
     */
     fn op_puls(&mut self, mask: u8) {
-        // Pull registers in reverse order: CC, A, B, DP, X, Y, U, PC
-        if mask & 0x01 != 0 { // Bit 0: CC
-            // Pop CC as 8-bit
+        // C++ Original: PULS reads in REVERSE order compared to PSHS writes
+        // PSHS writes: PC, U, Y, X, DP, B, A, CC (high to low bit)
+        // PULS reads:  CC, A, B, DP, X, Y, U, PC (low to high bit)
+        // 
+        // Stack layout after PSHS PC+A+CC:
+        // stack+0: PC_HIGH, stack+1: PC_LOW, stack+2: A, stack+3: CC
+        // PULS reads: CC(from highest addr), A(from middle), PC(from lowest addr)
+        
+        if mask & 0x01 != 0 { // Bit 0: CC - read from highest address first
             let cc_val = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             self.registers.cc.from_u8(cc_val);
         }
         if mask & 0x02 != 0 { // Bit 1: A
-            // Pop A as 8-bit
             self.registers.a = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
         if mask & 0x04 != 0 { // Bit 2: B
-            // Pop B as 8-bit
             self.registers.b = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
         if mask & 0x08 != 0 { // Bit 3: DP
-            // Pop DP as 8-bit
             self.registers.dp = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
         if mask & 0x10 != 0 { // Bit 4: X
-            // Pop X as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND (exactly like C++ original)
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
@@ -1782,7 +1791,7 @@ impl Cpu6809 {
             self.registers.x = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x20 != 0 { // Bit 5: Y
-            // Pop Y as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
@@ -1790,7 +1799,7 @@ impl Cpu6809 {
             self.registers.y = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x40 != 0 { // Bit 6: U (other stack register)
-            // Pop U as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
@@ -1798,7 +1807,7 @@ impl Cpu6809 {
             self.registers.u = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x80 != 0 { // Bit 7: PC
-            // Pop PC as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND (exactly like C++ original)
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
@@ -1807,14 +1816,16 @@ impl Cpu6809 {
         }
     }
 
-    /* C++ Original: case 0x36: OpPSH<0, 0x36>(U); - PSHU (Push to user stack)
-    Push registers in order: PC, S, Y, X, DP, B, A, CC based on bit mask
+    /* C++ Original: template <int page, uint8_t opCode> void OpPSH(uint16_t& stackReg) - U stack version
+    Push16: Write(--stackPointer, Low); Write(--stackPointer, High) - Low first, High second
+    Push order: PC(bit7), S(bit6), Y(bit5), X(bit4), DP(bit3), B(bit2), A(bit1), CC(bit0)
     */
     fn op_pshu(&mut self, mask: u8) {
-        // Push registers in order: PC, S, Y, X, DP, B, A, CC
+        // Push registers to U stack in C++ bit order: PC, S, Y, X, DP, B, A, CC
+        
         if mask & 0x80 != 0 { // Bit 7: PC
             let pc_val = self.registers.pc;
-            // Push PC as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, (pc_val & 0xFF) as u8); // Low
             self.registers.u = self.registers.u.wrapping_sub(1);
@@ -1822,7 +1833,7 @@ impl Cpu6809 {
         }
         if mask & 0x40 != 0 { // Bit 6: S (other stack register)
             let s_val = self.registers.s;
-            // Push S as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, (s_val & 0xFF) as u8); // Low
             self.registers.u = self.registers.u.wrapping_sub(1);
@@ -1830,7 +1841,7 @@ impl Cpu6809 {
         }
         if mask & 0x20 != 0 { // Bit 5: Y
             let y_val = self.registers.y;
-            // Push Y as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, (y_val & 0xFF) as u8); // Low
             self.registers.u = self.registers.u.wrapping_sub(1);
@@ -1838,7 +1849,7 @@ impl Cpu6809 {
         }
         if mask & 0x10 != 0 { // Bit 4: X
             let x_val = self.registers.x;
-            // Push X as 16-bit (low byte first, then high)
+            // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, (x_val & 0xFF) as u8); // Low
             self.registers.u = self.registers.u.wrapping_sub(1);
@@ -1846,58 +1857,57 @@ impl Cpu6809 {
         }
         if mask & 0x08 != 0 { // Bit 3: DP
             let dp_val = self.registers.dp;
-            // Push DP as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, dp_val);
         }
         if mask & 0x04 != 0 { // Bit 2: B
             let b_val = self.registers.b;
-            // Push B as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, b_val);
         }
         if mask & 0x02 != 0 { // Bit 1: A
             let a_val = self.registers.a;
-            // Push A as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, a_val);
         }
         if mask & 0x01 != 0 { // Bit 0: CC
             let cc_val = self.registers.cc.to_u8();
-            // Push CC as 8-bit
+            // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, cc_val);
         }
     }
 
-    /* C++ Original: case 0x37: OpPUL<0, 0x37>(U); - PULU (Pull from user stack)
-    Pull registers in reverse order: CC, A, B, DP, X, Y, S, PC based on bit mask
+    /* C++ Original: template <int page, uint8_t opCode> void OpPUL(uint16_t& stackReg) - U stack version
+    Pop16: high = Read(stackPointer++); low = Read(stackPointer++); return (high<<8)|low
+    Pull order: CC(bit0), A(bit1), B(bit2), DP(bit3), X(bit4), Y(bit5), S(bit6), PC(bit7)
     */
     fn op_pulu(&mut self, mask: u8) {
-        // Pull registers in reverse order: CC, A, B, DP, X, Y, S, PC
+        // Pull registers from U stack in C++ bit order: CC, A, B, DP, X, Y, S, PC
+        
         if mask & 0x01 != 0 { // Bit 0: CC
-            // Pop CC as 8-bit
+            // C++ Pop8: value = Read(stackPointer++);
             let cc_val = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.cc.from_u8(cc_val);
         }
         if mask & 0x02 != 0 { // Bit 1: A
-            // Pop A as 8-bit
             self.registers.a = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
         if mask & 0x04 != 0 { // Bit 2: B
-            // Pop B as 8-bit
             self.registers.b = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
         if mask & 0x08 != 0 { // Bit 3: DP
-            // Pop DP as 8-bit
             self.registers.dp = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
         if mask & 0x10 != 0 { // Bit 4: X
-            // Pop X as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
@@ -1905,7 +1915,7 @@ impl Cpu6809 {
             self.registers.x = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x20 != 0 { // Bit 5: Y
-            // Pop Y as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
@@ -1913,7 +1923,7 @@ impl Cpu6809 {
             self.registers.y = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x40 != 0 { // Bit 6: S (other stack register)
-            // Pop S as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
@@ -1921,7 +1931,7 @@ impl Cpu6809 {
             self.registers.s = ((high as u16) << 8) | (low as u16);
         }
         if mask & 0x80 != 0 { // Bit 7: PC
-            // Pop PC as 16-bit (high byte first, then low)
+            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
