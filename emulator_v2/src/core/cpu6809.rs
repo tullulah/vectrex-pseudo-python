@@ -886,6 +886,17 @@ impl Cpu6809 {
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, 0);
                     },
 
+                    // C++ Original: OpAND<0, 0x94>(A); - ANDA direct
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0x94 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.registers.a & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                    },
+
                     // C++ Original: OpCMP<0, 0x9C>(X); - CMPX direct
                     // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
                     0x9C => {
