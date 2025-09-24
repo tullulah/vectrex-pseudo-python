@@ -1069,6 +1069,134 @@ impl Cpu6809 {
                         // Z flag NOT affected by LEAS/LEAU
                     },
 
+                    // Branch opcodes - C++ Original: case 0x20-0x2F in CPU switch statement
+                    // C++ Original: OpBranch(condFunc) - Branch opcodes with 8-bit relative offset
+
+                    // C++ Original: case 0x20: OpBranch([] { return true; }); - BRA (branch always)
+                    0x20 => {
+                        let offset = self.read_relative_offset8();
+                        // Always branch
+                        self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                    },
+
+                    // C++ Original: case 0x21: OpBranch([] { return false; }); - BRN (branch never)
+                    0x21 => {
+                        let _offset = self.read_relative_offset8();
+                        // Never branch - just consume the offset byte
+                    },
+
+                    // C++ Original: case 0x22: OpBranch([this] { return (CC.Carry | CC.Zero) == 0; }); - BHI (branch if higher)
+                    0x22 => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.c && !self.registers.cc.z {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x23: OpBranch([this] { return (CC.Carry | CC.Zero) != 0; }); - BLS (branch if lower or same)  
+                    0x23 => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.c || self.registers.cc.z {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x24: OpBranch([this] { return CC.Carry == 0; }); - BCC (branch if carry clear)
+                    0x24 => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.c {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x25: OpBranch([this] { return CC.Carry != 0; }); - BCS (branch if carry set)
+                    0x25 => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.c {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x26: OpBranch([this] { return CC.Zero == 0; }); - BNE (branch if not equal)
+                    0x26 => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.z {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x27: OpBranch([this] { return CC.Zero != 0; }); - BEQ (branch if equal)
+                    0x27 => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.z {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x28: OpBranch([this] { return CC.Overflow == 0; }); - BVC (branch if overflow clear)
+                    0x28 => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.v {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x29: OpBranch([this] { return CC.Overflow != 0; }); - BVS (branch if overflow set)
+                    0x29 => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.v {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2A: OpBranch([this] { return CC.Negative == 0; }); - BPL (branch if plus)
+                    0x2A => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.n {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2B: OpBranch([this] { return CC.Negative != 0; }); - BMI (branch if minus)
+                    0x2B => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.n {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2C: OpBranch([this] { return (CC.Negative ^ CC.Overflow) == 0; }); - BGE (branch if greater or equal)
+                    0x2C => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.n == self.registers.cc.v {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2D: OpBranch([this] { return (CC.Negative ^ CC.Overflow) != 0; }); - BLT (branch if less than)
+                    0x2D => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.n != self.registers.cc.v {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2E: OpBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) == 0; }); - BGT (branch if greater)
+                    0x2E => {
+                        let offset = self.read_relative_offset8();
+                        if !self.registers.cc.z && (self.registers.cc.n == self.registers.cc.v) {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
+                    // C++ Original: case 0x2F: OpBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) != 0; }); - BLE (branch if less or equal)
+                    0x2F => {
+                        let offset = self.read_relative_offset8();
+                        if self.registers.cc.z || (self.registers.cc.n != self.registers.cc.v) {
+                            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+                        }
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }
