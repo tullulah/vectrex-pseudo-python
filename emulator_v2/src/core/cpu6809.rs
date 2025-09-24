@@ -157,13 +157,19 @@ pub struct Cpu6809 {
     firq_interrupt: Option<InterruptCallback>,
 }
 
-// C++ Original: Interrupt vector constants
+// C++ Original: Interrupt vector constants from Vectrexy Cpu.cpp
 const RESET_VECTOR: u16 = 0xFFFE;
+#[allow(dead_code)]
 const NMI_VECTOR: u16   = 0xFFFC;
+#[allow(dead_code)]
 const SWI_VECTOR: u16   = 0xFFFA;
+#[allow(dead_code)]
 const IRQ_VECTOR: u16   = 0xFFF8;
+#[allow(dead_code)]
 const FIRQ_VECTOR: u16  = 0xFFF6;
+#[allow(dead_code)]
 const SWI2_VECTOR: u16  = 0xFFF4;
+#[allow(dead_code)]
 const SWI3_VECTOR: u16  = 0xFFF2;
 
 impl Cpu6809 {
@@ -1041,7 +1047,7 @@ impl Cpu6809 {
                         let ea = self.read_indexed_ea();
                         self.registers.x = ea;
                         // Z flag affected by LEAX/LEAY only
-                        self.registers.cc.z = (ea == 0);
+                        self.registers.cc.z = ea == 0;
                     },
 
                     // C++ Original: OpLEA<0, 0x31>(Y); - LEAY indexed  
@@ -1050,7 +1056,7 @@ impl Cpu6809 {
                         let ea = self.read_indexed_ea();
                         self.registers.y = ea;
                         // Z flag affected by LEAX/LEAY only
-                        self.registers.cc.z = (ea == 0);
+                        self.registers.cc.z = ea == 0;
                     },
 
                     // C++ Original: OpLEA<0, 0x32>(S); - LEAS indexed
@@ -1435,6 +1441,7 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, value); 
     }
     */
+    #[allow(dead_code)]
     fn push8(&mut self, stack_pointer: &mut u16, value: u8) {
         *stack_pointer = stack_pointer.wrapping_sub(1);
         self.write8(*stack_pointer, value);
@@ -1446,6 +1453,7 @@ impl Cpu6809 {
         return value;
     }
     */
+    #[allow(dead_code)]
     fn pop8(&mut self, stack_pointer: &mut u16) -> u8 {
         let value = self.read8(*stack_pointer);
         *stack_pointer = stack_pointer.wrapping_add(1);
@@ -1458,6 +1466,7 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
     }
     */
+    #[allow(dead_code)]
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
         self.push8(stack_pointer, u8(value & 0xFF)); // Low
         self.push8(stack_pointer, u8(value >> 8));   // High
@@ -1470,6 +1479,7 @@ impl Cpu6809 {
         return CombineToU16(high, low);
     }
     */
+    #[allow(dead_code)]
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);
@@ -1632,10 +1642,12 @@ impl Cpu6809 {
     int8_t ReadRelativeOffset8() { return static_cast<int8_t>(ReadPC8()); }
     int16_t ReadRelativeOffset16() { return static_cast<int16_t>(ReadPC16()); }
     */
+    #[allow(dead_code)]
     fn read_relative_offset8(&mut self) -> i8 {
         self.read_pc8() as i8
     }
 
+    #[allow(dead_code)]
     fn read_relative_offset16(&mut self) -> i16 {
         self.read_pc16() as i16
     }
