@@ -936,6 +936,28 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpEOR<0, 0xA8>(A); - EORA indexed
+                    // C++ Original: reg ^= value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xA8 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a ^= operand;
+                        self.registers.cc.n = (self.registers.a & 0x80) != 0;
+                        self.registers.cc.z = self.registers.a == 0;
+                        self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
+                    // C++ Original: OpOR<0, 0xAA>(A); - ORA indexed
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xAA => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a |= operand;
+                        self.registers.cc.n = (self.registers.a & 0x80) != 0;
+                        self.registers.cc.z = self.registers.a == 0;
+                        self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
                     // C++ Original: OpCMP<0, 0xAC>(X); - CMPX indexed
                     // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
                     0xAC => {
@@ -952,6 +974,55 @@ impl Cpu6809 {
                         let operand = self.read16(ea);
                         let _discard = self.subtract_impl_u16(self.registers.x, operand, 0);
                         // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpSUB<0, 0xB0>(A); - SUBA extended
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC);
+                    0xB0 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea); 
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, 0);
+                    },
+
+                    // C++ Original: OpAND<0, 0xB4>(A); - ANDA extended  
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xB4 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a &= operand;
+                        self.registers.cc.n = (self.registers.a & 0x80) != 0;
+                        self.registers.cc.z = self.registers.a == 0;
+                        self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
+                    // C++ Original: OpEOR<0, 0xB8>(A); - EORA extended
+                    // C++ Original: reg ^= value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xB8 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a ^= operand;
+                        self.registers.cc.n = (self.registers.a & 0x80) != 0;
+                        self.registers.cc.z = self.registers.a == 0;
+                        self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
+                    // C++ Original: OpOR<0, 0xBA>(A); - ORA extended
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xBA => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a |= operand;
+                        self.registers.cc.n = (self.registers.a & 0x80) != 0;
+                        self.registers.cc.z = self.registers.a == 0;
+                        self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
+                    // C++ Original: OpADD<0, 0xBB>(A); - ADDA extended
+                    // C++ Original: reg = AddImpl(reg, value, 0, CC);
+                    0xBB => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
                     _ => {
