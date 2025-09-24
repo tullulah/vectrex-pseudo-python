@@ -270,6 +270,31 @@ impl Cpu6809 {
             0 => {
                 // C++ Original: switch (cpuOp.opCode) - Page 0 instructions
                 match opcode_byte {
+                    // C++ Original: OpLSR<0, 0x04>();
+                    0x04 => {
+                        self.op_lsr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROR<0, 0x06>();
+                    0x06 => {
+                        self.op_ror_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASR<0, 0x07>();
+                    0x07 => {
+                        self.op_asr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASL<0, 0x08>();
+                    0x08 => {
+                        self.op_asl_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROL<0, 0x09>();
+                    0x09 => {
+                        self.op_rol_memory(opcode_byte);
+                    },
+
                     // NOP
                     0x12 => {
                         // No operation - cycles already added
@@ -535,20 +560,132 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // ======== COMPARE OPERATIONS ========
+
+                    // C++ Original: OpCMP<0, 0x81>(A); - CMPA immediate
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0x81 => {
+                        let operand = self.read_pc8();
+                        let _discard = self.subtract_impl_u8(self.registers.a, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0x91>(A); - CMPA direct
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0x91 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.a, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xA1>(A); - CMPA indexed
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xA1 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.a, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xB1>(A); - CMPA extended  
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xB1 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.a, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xC1>(B); - CMPB immediate
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xC1 => {
+                        let operand = self.read_pc8();
+                        let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xD1>(B); - CMPB direct
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xD1 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xE1>(B); - CMPB indexed
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xE1 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<0, 0xF1>(B); - CMPB extended  
+                    // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
+                    0xF1 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
                     // ======== SINGLE REGISTER OPERATIONS ========
-                    
+
                     // C++ Original: void OpNEG(uint8_t& value) { value = SubtractImpl(0, value, 0, CC); }
                     0x40 => {
                         self.registers.a = self.subtract_impl_u8(0, self.registers.a, 0);
-                    },
-
-                    // C++ Original: void OpCOM(uint8_t& value) { value = ~value; CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; CC.Carry = 1; }
+                    },                    // C++ Original: void OpCOM(uint8_t& value) { value = ~value; CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; CC.Carry = 1; }
                     0x43 => {
                         self.registers.a = !self.registers.a;
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
                         self.registers.cc.v = false;
                         self.registers.cc.c = true;
+                    },
+
+                    // C++ Original: OpLSR<0, 0x44>(A);
+                    0x44 => {
+                        let orig_value = self.registers.a;
+                        self.registers.a = self.registers.a >> 1;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.n = false; // Bit 7 always shifted out
+                        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+                    },
+
+                    // C++ Original: OpROR<0, 0x46>(A);
+                    0x46 => {
+                        let result = ((self.registers.cc.c as u8) << 7) | (self.registers.a >> 1);
+                        self.registers.cc.c = (self.registers.a & 0b0000_0001) != 0;
+                        self.registers.cc.n = Self::calc_negative_u8(result);
+                        self.registers.cc.z = Self::calc_zero_u8(result);
+                        self.registers.a = result;
+                    },
+
+                    // C++ Original: OpASR<0, 0x47>(A);
+                    0x47 => {
+                        let orig_value = self.registers.a;
+                        self.registers.a = (orig_value & 0b1000_0000) | (self.registers.a >> 1);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+                    },
+
+                    // C++ Original: OpASL<0, 0x48>(A);
+                    0x48 => {
+                        self.registers.a = self.add_impl_u8(self.registers.a, self.registers.a, 0);
+                    },
+
+                    // C++ Original: OpROL<0, 0x49>(A);
+                    0x49 => {
+                        let result = (self.registers.a << 1) | (self.registers.cc.c as u8);
+                        self.registers.cc.c = (self.registers.a & 0b1000_0000) != 0;
+                        self.registers.cc.v = ((self.registers.a & 0b1000_0000) ^ ((self.registers.a & 0b0100_0000) << 1)) != 0;
+                        self.registers.cc.n = Self::calc_negative_u8(result);
+                        self.registers.cc.z = Self::calc_zero_u8(result);
+                        self.registers.a = result;
                     },
 
                     // C++ Original: void OpDEC(uint8_t& value) { uint8_t origValue = value; --value; CC.Overflow = origValue == 0b1000'0000; CC.Zero = CalcZero(value); CC.Negative = CalcNegative(value); }
@@ -588,6 +725,90 @@ impl Cpu6809 {
                         self.registers.cc.c = false;
                     },
 
+                    // C++ Original: OpNEG<0, 0x50>(B);
+                    0x50 => {
+                        self.registers.b = self.subtract_impl_u8(0, self.registers.b, 0);
+                    },
+
+                    // C++ Original: OpCOM<0, 0x53>(B);
+                    0x53 => {
+                        self.registers.b = !self.registers.b;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                        self.registers.cc.c = true;
+                    },
+
+                    // C++ Original: OpLSR<0, 0x54>(B);
+                    0x54 => {
+                        let orig_value = self.registers.b;
+                        self.registers.b = self.registers.b >> 1;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.n = false; // Bit 7 always shifted out
+                        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+                    },
+
+                    // C++ Original: OpROR<0, 0x56>(B);
+                    0x56 => {
+                        let result = ((self.registers.cc.c as u8) << 7) | (self.registers.b >> 1);
+                        self.registers.cc.c = (self.registers.b & 0b0000_0001) != 0;
+                        self.registers.cc.n = Self::calc_negative_u8(result);
+                        self.registers.cc.z = Self::calc_zero_u8(result);
+                        self.registers.b = result;
+                    },
+
+                    // C++ Original: OpASR<0, 0x57>(B);
+                    0x57 => {
+                        let orig_value = self.registers.b;
+                        self.registers.b = (orig_value & 0b1000_0000) | (self.registers.b >> 1);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+                    },
+
+                    // C++ Original: OpASL<0, 0x58>(B);
+                    0x58 => {
+                        self.registers.b = self.add_impl_u8(self.registers.b, self.registers.b, 0);
+                    },
+
+                    // C++ Original: OpROL<0, 0x59>(B);
+                    0x59 => {
+                        let result = (self.registers.b << 1) | (self.registers.cc.c as u8);
+                        self.registers.cc.c = (self.registers.b & 0b1000_0000) != 0;
+                        self.registers.cc.v = ((self.registers.b & 0b1000_0000) ^ ((self.registers.b & 0b0100_0000) << 1)) != 0;
+                        self.registers.cc.n = Self::calc_negative_u8(result);
+                        self.registers.cc.z = Self::calc_zero_u8(result);
+                        self.registers.b = result;
+                    },
+
+                    // C++ Original: OpDEC<0, 0x5A>(B);
+                    0x5A => {
+                        let orig_value = self.registers.b;
+                        self.registers.b = self.registers.b.wrapping_sub(1);
+                        self.registers.cc.v = orig_value == 0b1000_0000;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        // Note: DEC does NOT modify Carry flag in 6809
+                    },
+
+                    // C++ Original: OpINC<0, 0x5C>(B);
+                    0x5C => {
+                        let orig_value = self.registers.b;
+                        self.registers.b = self.registers.b.wrapping_add(1);
+                        self.registers.cc.v = orig_value == 0b0111_1111;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        // Note: INC does NOT modify Carry flag in 6809
+                    },
+
+                    // C++ Original: OpTST<0, 0x5D>(B);
+                    0x5D => {
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                        // Note: TST does NOT modify Carry flag in 6809
+                    },
+
                     // C++ Original: void OpCLR(uint8_t& reg) { reg = 0; CC.Negative = 0; CC.Zero = 1; CC.Overflow = 0; CC.Carry = 0; }
                     0x5F => {
                         self.registers.b = 0;
@@ -597,6 +818,58 @@ impl Cpu6809 {
                         self.registers.cc.c = false;
                     },
 
+                    // Indexed addressing mode shift/rotate operations
+                    // C++ Original: OpLSR<0, 0x64>();
+                    0x64 => {
+                        self.op_lsr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROR<0, 0x66>();
+                    0x66 => {
+                        self.op_ror_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASR<0, 0x67>();
+                    0x67 => {
+                        self.op_asr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASL<0, 0x68>();
+                    0x68 => {
+                        self.op_asl_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROL<0, 0x69>();
+                    0x69 => {
+                        self.op_rol_memory(opcode_byte);
+                    },
+
+                    // Extended addressing mode shift/rotate operations
+                    // C++ Original: OpLSR<0, 0x74>();
+                    0x74 => {
+                        self.op_lsr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROR<0, 0x76>();
+                    0x76 => {
+                        self.op_ror_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASR<0, 0x77>();
+                    0x77 => {
+                        self.op_asr_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpASL<0, 0x78>();
+                    0x78 => {
+                        self.op_asl_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpROL<0, 0x79>();
+                    0x79 => {
+                        self.op_rol_memory(opcode_byte);
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }
@@ -604,7 +877,51 @@ impl Cpu6809 {
             },
             1 => {
                 // Page 1 instructions (0x10xx)
-                panic!("Page 1 instructions not implemented yet");
+                // C++ Original: switch (cpuOp.opCode) - Page 1 instructions
+                match opcode_byte {
+                    // C++ Original: OpCMP<1, 0x83>(D); - CMPD immediate
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x83 => {
+                        let operand = self.read_pc16();
+                        let d_reg = combine_to_u16(self.registers.a, self.registers.b);
+                        let _discard = self.subtract_impl_u16(d_reg, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<1, 0x93>(D); - CMPD direct
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x93 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        let d_reg = combine_to_u16(self.registers.a, self.registers.b);
+                        let _discard = self.subtract_impl_u16(d_reg, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<1, 0xA3>(D); - CMPD indexed
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xA3 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        let d_reg = combine_to_u16(self.registers.a, self.registers.b);
+                        let _discard = self.subtract_impl_u16(d_reg, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<1, 0xB3>(D); - CMPD extended  
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xB3 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        let d_reg = combine_to_u16(self.registers.a, self.registers.b);
+                        let _discard = self.subtract_impl_u16(d_reg, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    _ => {
+                        panic!("Unhandled Page 1 opcode: {:02X}", opcode_byte);
+                    }
+                }
             },
             2 => {
                 // Page 2 instructions (0x11xx)
@@ -1164,5 +1481,69 @@ impl Cpu6809 {
             0x02 => &mut self.registers.u,
             _ => &mut self.registers.s, // 0x03
         }
+    }
+
+
+
+    // C++ Original: template <int page, uint8_t opCode> void OpLSR() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); uint8_t value = m_memoryBus->Read(EA); OpLSR<page, opCode>(value); m_memoryBus->Write(EA, value); }
+    fn op_lsr_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let mut value = self.read8(ea);
+        // C++ Original: OpLSR - inline implementation
+        let orig_value = value;
+        value = value >> 1;
+        self.registers.cc.z = Self::calc_zero_u8(value);
+        self.registers.cc.n = false; // Bit 7 always shifted out
+        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+        self.write8(ea, value);
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpASR() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); uint8_t value = m_memoryBus->Read(EA); OpASR<page, opCode>(value); m_memoryBus->Write(EA, value); }
+    fn op_asr_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let mut value = self.read8(ea);
+        // C++ Original: OpASR - inline implementation
+        let orig_value = value;
+        value = (orig_value & 0b1000_0000) | (value >> 1);
+        self.registers.cc.z = Self::calc_zero_u8(value);
+        self.registers.cc.n = Self::calc_negative_u8(value);
+        self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
+        self.write8(ea, value);
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpROR() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); uint8_t value = m_memoryBus->Read(EA); OpROR<page, opCode>(value); m_memoryBus->Write(EA, value); }
+    fn op_ror_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let mut value = self.read8(ea);
+        // C++ Original: OpROR - inline implementation
+        let result = ((self.registers.cc.c as u8) << 7) | (value >> 1);
+        self.registers.cc.c = (value & 0b0000_0001) != 0;
+        self.registers.cc.n = Self::calc_negative_u8(result);
+        self.registers.cc.z = Self::calc_zero_u8(result);
+        value = result;
+        self.write8(ea, value);
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpASL() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); uint8_t value = m_memoryBus->Read(EA); OpASL<page, opCode>(value); m_memoryBus->Write(EA, value); }
+    fn op_asl_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let mut value = self.read8(ea);
+        // C++ Original: OpASL - inline implementation (Shifting left is same as adding value + value)
+        value = self.add_impl_u8(value, value, 0);
+        self.write8(ea, value);
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpROL() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); uint8_t value = m_memoryBus->Read(EA); OpROL<page, opCode>(value); m_memoryBus->Write(EA, value); }
+    fn op_rol_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let mut value = self.read8(ea);
+        // C++ Original: OpROL - inline implementation
+        let result = (value << 1) | (self.registers.cc.c as u8);
+        self.registers.cc.c = (value & 0b1000_0000) != 0;
+        self.registers.cc.v = ((value & 0b1000_0000) ^ ((value & 0b0100_0000) << 1)) != 0;
+        self.registers.cc.n = Self::calc_negative_u8(result);
+        self.registers.cc.z = Self::calc_zero_u8(result);
+        value = result;
+        self.write8(ea, value);
     }
 }

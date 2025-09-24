@@ -1,6 +1,7 @@
 # Rust / Cargo build artifacts
 /target/
 **/*.rs.bk
+emulator_v2/target/
 
 # Generated assembly outputs (use redirection to keep if needed)
 /*.asm
