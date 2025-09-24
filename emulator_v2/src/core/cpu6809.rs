@@ -158,19 +158,13 @@ pub struct Cpu6809 {
 }
 
 // C++ Original: Interrupt vector constants from Vectrexy Cpu.cpp
-const RESET_VECTOR: u16 = 0xFFFE;
-#[allow(dead_code)]
-const NMI_VECTOR: u16   = 0xFFFC;
-#[allow(dead_code)]
-const SWI_VECTOR: u16   = 0xFFFA;
-#[allow(dead_code)]
-const IRQ_VECTOR: u16   = 0xFFF8;
-#[allow(dead_code)]
-const FIRQ_VECTOR: u16  = 0xFFF6;
-#[allow(dead_code)]
-const SWI2_VECTOR: u16  = 0xFFF4;
-#[allow(dead_code)]
-const SWI3_VECTOR: u16  = 0xFFF2;
+const RESET_VECTOR: u16 = 0xFFFE; // Used in reset()
+const NMI_VECTOR: u16   = 0xFFFC; // TODO: Non-maskable interrupt - not implemented
+const SWI_VECTOR: u16   = 0xFFFA; // TODO: Will be used when SWI opcode is implemented
+const IRQ_VECTOR: u16   = 0xFFF8; // TODO: Will be used when interrupt handling is implemented
+const FIRQ_VECTOR: u16  = 0xFFF6; // TODO: Fast interrupt - not implemented
+const SWI2_VECTOR: u16  = 0xFFF4; // TODO: Will be used when SWI2 opcode is implemented
+const SWI3_VECTOR: u16  = 0xFFF2; // TODO: Will be used when SWI3 opcode is implemented
 
 impl Cpu6809 {
     pub fn new(memory_bus: Rc<RefCell<MemoryBus>>) -> Self {
@@ -1440,8 +1434,8 @@ impl Cpu6809 {
     void Push8(uint16_t& stackPointer, uint8_t value) { 
         m_memoryBus->Write(--stackPointer, value); 
     }
+    TODO: Will be used in PSHS/PSHU opcodes, SWI/SWI2/SWI3 interrupts
     */
-    #[allow(dead_code)]
     fn push8(&mut self, stack_pointer: &mut u16, value: u8) {
         *stack_pointer = stack_pointer.wrapping_sub(1);
         self.write8(*stack_pointer, value);
@@ -1452,8 +1446,8 @@ impl Cpu6809 {
         auto value = m_memoryBus->Read(stackPointer++);
         return value;
     }
+    TODO: Will be used in PULS/PULU opcodes, interrupt handling
     */
-    #[allow(dead_code)]
     fn pop8(&mut self, stack_pointer: &mut u16) -> u8 {
         let value = self.read8(*stack_pointer);
         *stack_pointer = stack_pointer.wrapping_add(1);
@@ -1465,8 +1459,8 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, U8(value & 0xFF)); // Low
         m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
     }
+    TODO: Will be used in PSHS/PSHU opcodes, SWI/SWI2/SWI3 interrupts
     */
-    #[allow(dead_code)]
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
         self.push8(stack_pointer, u8(value & 0xFF)); // Low
         self.push8(stack_pointer, u8(value >> 8));   // High
@@ -1478,8 +1472,8 @@ impl Cpu6809 {
         auto low = m_memoryBus->Read(stackPointer++);
         return CombineToU16(high, low);
     }
+    TODO: Will be used in PULS/PULU opcodes, interrupt handling
     */
-    #[allow(dead_code)]
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);
@@ -1642,12 +1636,12 @@ impl Cpu6809 {
     int8_t ReadRelativeOffset8() { return static_cast<int8_t>(ReadPC8()); }
     int16_t ReadRelativeOffset16() { return static_cast<int16_t>(ReadPC16()); }
     */
-    #[allow(dead_code)]
+    // C++ Original: int8_t ReadRelativeOffset8() - TODO: Used in branch opcodes (BEQ, BNE, BSR, etc.)
     fn read_relative_offset8(&mut self) -> i8 {
         self.read_pc8() as i8
     }
 
-    #[allow(dead_code)]
+    // C++ Original: int16_t ReadRelativeOffset16() - TODO: Used in long branch opcodes (LBEQ, LBSR, etc.)
     fn read_relative_offset16(&mut self) -> i16 {
         self.read_pc16() as i16
     }

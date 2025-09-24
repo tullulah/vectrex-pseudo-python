@@ -4,8 +4,8 @@
 use std::cmp;
 
 /// C++ Original: enum class AmplitudeMode { Fixed, Envelope };
+/// TODO: Used in PSG amplitude control
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 enum AmplitudeMode {
     Fixed,
     Envelope,
@@ -20,40 +20,27 @@ mod register {
     pub const TONE_GENERATOR_C_LOW: usize = 4;
     pub const TONE_GENERATOR_C_HIGH: usize = 5;
     pub const NOISE_GENERATOR: usize = 6;
-    #[allow(dead_code)]
-    pub const MIXER_CONTROL: usize = 7;
-    #[allow(dead_code)]
-    pub const AMPLITUDE_A: usize = 8;
-    #[allow(dead_code)]
-    pub const AMPLITUDE_B: usize = 9;
-    #[allow(dead_code)]
-    pub const AMPLITUDE_C: usize = 10;
+    pub const MIXER_CONTROL: usize = 7; // TODO: Used in PSG mixer configuration
+    pub const AMPLITUDE_A: usize = 8; // TODO: Used in PSG channel A amplitude
+    pub const AMPLITUDE_B: usize = 9; // TODO: Used in PSG channel B amplitude
+    pub const AMPLITUDE_C: usize = 10; // TODO: Used in PSG channel C amplitude
     pub const ENVELOPE_PERIOD_LOW: usize = 11;
     pub const ENVELOPE_PERIOD_HIGH: usize = 12;
     pub const ENVELOPE_SHAPE: usize = 13;
-    #[allow(dead_code)]
-    pub const IO_PORT_A_DATA_STORE: usize = 14;
-    #[allow(dead_code)]
-    pub const IO_PORT_B_DATA_STORE: usize = 15;
+    pub const IO_PORT_A_DATA_STORE: usize = 14; // TODO: Used in PSG I/O port A
+    pub const IO_PORT_B_DATA_STORE: usize = 15; // TODO: Used in PSG I/O port B
 }
 
 /// C++ Original: namespace MixerControlRegister
 mod mixer_control_register {
-    #[allow(dead_code)]
-    pub const TONE_A: u8 = 0x01; // BITS(0)
-    #[allow(dead_code)]
-    pub const TONE_B: u8 = 0x02; // BITS(1)
-    #[allow(dead_code)]
-    pub const TONE_C: u8 = 0x04; // BITS(2)
-    #[allow(dead_code)]
-    pub const NOISE_A: u8 = 0x08; // BITS(3)
-    #[allow(dead_code)]
-    pub const NOISE_B: u8 = 0x10; // BITS(4)
-    #[allow(dead_code)]
-    pub const NOISE_C: u8 = 0x20; // BITS(5)
+    pub const TONE_A: u8 = 0x01; // TODO: Used in PSG tone A mixer control
+    pub const TONE_B: u8 = 0x02; // TODO: Used in PSG tone B mixer control  
+    pub const TONE_C: u8 = 0x04; // TODO: Used in PSG tone C mixer control
+    pub const NOISE_A: u8 = 0x08; // TODO: Used in PSG noise A mixer control
+    pub const NOISE_B: u8 = 0x10; // TODO: Used in PSG noise B mixer control
+    pub const NOISE_C: u8 = 0x20; // TODO: Used in PSG noise C mixer control
 
     /// C++ Original: bool IsEnabled(uint8_t reg, uint8_t type)
-    #[allow(dead_code)]
     pub fn is_enabled(reg: u8, type_mask: u8) -> bool {
         // Enabled when bit is 0
         (reg & type_mask) == 0
@@ -64,13 +51,10 @@ mod mixer_control_register {
 mod amplitude_control_register {
     use super::AmplitudeMode;
 
-    #[allow(dead_code)]
-    pub const FIXED_VOLUME: u8 = 0x0F; // BITS(0, 1, 2, 3)
-    #[allow(dead_code)]
-    pub const ENVELOPE_MODE: u8 = 0x10; // BITS(4)
+    pub const FIXED_VOLUME: u8 = 0x0F; // TODO: Used in PSG fixed volume control
+    pub const ENVELOPE_MODE: u8 = 0x10; // TODO: Used in PSG envelope mode control
 
     /// C++ Original: AmplitudeMode GetMode(uint8_t reg)
-    #[allow(dead_code)]
     pub fn get_mode(reg: u8) -> AmplitudeMode {
         if (reg & ENVELOPE_MODE) != 0 {
             AmplitudeMode::Envelope
@@ -80,7 +64,6 @@ mod amplitude_control_register {
     }
 
     /// C++ Original: uint32_t GetFixedVolume(uint8_t reg)
-    #[allow(dead_code)]
     pub fn get_fixed_volume(reg: u8) -> u32 {
         (reg & FIXED_VOLUME) as u32
     }
