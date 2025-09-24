@@ -1210,6 +1210,33 @@ A continuación te dejo:
    - Diferencias en sonido (si mixer implementado distinto).
    - Posible ausencia de algunas instrucciones o quirks no emulados igual (mapear lista tras primeras pruebas).
 
+## 26. Emulator V2 Status (2025-01-20)
+
+**REGLA CRÍTICA**: Port 1:1 desde Vectrexy original
+- **Referencia**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy_backup\libs\emulator\`
+- **Verificación obligatoria**: Leer .cpp/.h correspondiente ANTES de implementar
+- **Comentarios mandatorios**: `// C++ Original:` con código fuente real
+
+**Estado Actual**:
+- ✅ Estructura básica creada (111 tests iniciales)
+- ✅ Todos los módulos compilando sin errores
+- ✅ **VIA6522 corregido**: Firmas de métodos ahora 1:1 con Vectrexy original
+- ✅ **set_sync_context()**: Usa Input/RenderContext/AudioContext parameters correctos
+- ✅ **irq_enabled()**: Implementa GetInterruptFlagValue() logic original  
+- ✅ **firq_enabled()**: Retorna m_firq_enabled field como en original
+- ✅ **frame_update()**: Llama screen.frame_update() y psg.frame_update() correctamente
+- ✅ **SyncContext**: Rediseñado para ownership de Rust manteniendo semántica original
+- ✅ **engine_types.rs**: Debug traits añadidos para Input, RenderContext, AudioContext
+
+**Correcciones Realizadas (2025-01-20)**:
+1. ✅ Investigadas firmas correctas en Vectrexy original
+2. ✅ Corregidas todas las firmas de métodos VIA6522 a 1:1  
+3. ✅ Actualizadas llamadas en emulator.rs con parámetros correctos
+4. ✅ Verificado que todos los 111 tests pasen con implementaciones correctas
+
+**Tests Status**: 111 tests passing ✅ (con implementaciones 1:1 correctas)
+**Commit**: `d0db5023` - VIA6522 method signatures corrected to match Vectrexy 1:1
+
 ## Notas sobre la anomalía de la sesión
 
 - Síntoma previo: `apply_patch` reportaba éxito pero contenido no visible o Git ignoraba cambios; flag H (assume-unchanged) persistía.
