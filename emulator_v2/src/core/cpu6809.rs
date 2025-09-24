@@ -1025,6 +1025,40 @@ impl Cpu6809 {
                         self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
+                    // C++ Original: OpLEA<0, 0x30>(X); - LEAX indexed
+                    // C++ Original: reg = EA; if (&reg == &X || &reg == &Y) { CC.Zero = (reg == 0); }
+                    0x30 => {
+                        let ea = self.read_indexed_ea();
+                        self.registers.x = ea;
+                        // Z flag affected by LEAX/LEAY only
+                        self.registers.cc.z = (ea == 0);
+                    },
+
+                    // C++ Original: OpLEA<0, 0x31>(Y); - LEAY indexed  
+                    // C++ Original: reg = EA; if (&reg == &X || &reg == &Y) { CC.Zero = (reg == 0); }
+                    0x31 => {
+                        let ea = self.read_indexed_ea();
+                        self.registers.y = ea;
+                        // Z flag affected by LEAX/LEAY only
+                        self.registers.cc.z = (ea == 0);
+                    },
+
+                    // C++ Original: OpLEA<0, 0x32>(S); - LEAS indexed
+                    // C++ Original: reg = EA; Zero flag not affected by LEAU/LEAS
+                    0x32 => {
+                        let ea = self.read_indexed_ea();
+                        self.registers.s = ea;
+                        // Z flag NOT affected by LEAS/LEAU
+                    },
+
+                    // C++ Original: OpLEA<0, 0x33>(U); - LEAU indexed
+                    // C++ Original: reg = EA; Zero flag not affected by LEAU/LEAS  
+                    0x33 => {
+                        let ea = self.read_indexed_ea();
+                        self.registers.u = ea;
+                        // Z flag NOT affected by LEAS/LEAU
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }

@@ -177,5 +177,5 @@ fn test_leax_indexed_with_offset() {
     assert!(!cpu.registers().cc.z);
     
     assert_eq!(cpu.registers().pc, 0xC803); // 3 bytes total
-    assert_eq!(cycles, 4);
+    assert_eq!(cycles, 5); // C++ Original: base 4 cycles + 1 for 8-bit offset indexed (0x08 case)
 }
