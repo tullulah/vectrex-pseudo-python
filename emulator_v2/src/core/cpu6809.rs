@@ -878,6 +878,14 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSUB<0, 0x90>(A); - SUBA direct
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC);
+                    0x90 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, 0);
+                    },
+
                     // C++ Original: OpCMP<0, 0x9C>(X); - CMPX direct
                     // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
                     0x9C => {
