@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- SECURITY NOTE:
+       Electron warning about missing / insecure CSP was observed at runtime.
+       For production we should set a strict CSP via headers in BrowserWindow creation, e.g.:
+         contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws:;"
+       During development we sometimes rely on eval / source maps so we avoid breaking the dev build here.
+       The meta tag below is intentionally commented; enable & adjust once preload/isolated world audited.
+       <meta http="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws:;" />
+  -->
+    <title>VPy IDE</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+[package]
+name = "vectrex_emulator_v2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8"
+
+[lib]
+name = "vectrex_emulator_v2"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "sdl_frontend"
+path = "frontends/sdl2/main.rs"
+required-features = ["sdl2"]
+
+[features]
+default = []
+sdl2 = ["dep:sdl2"]
+wasm = ["wasm-bindgen"]
+
+[dependencies.sdl2]
+version = "0.35"
+optional = true
+
+[dependencies.wasm-bindgen] 
+version = "0.2"
+optional = true
+
+[workspace]
+members = []

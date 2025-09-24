@@ -1,0 +1,42 @@
+// Abstracción de núcleo de emulador para permitir alternar implementaciones (Rust WASM vs jsvecx u otras).
+// Política: interfaz mínima estable consumida por paneles; métodos extra opcionales deben ser verificados con guards.
+
+export interface RegistersSnapshot { a:number;b:number;dp:number;x:number;y:number;u:number;s:number;pc:number;cycles:number;frame_count:number;cycle_frame?:number;bios_frame?:number;last_intensity:number;draw_vl_count?:number; }
+export interface MetricsSnapshot { total:number;unimplemented:number;frames:number;cycle_frame?:number;bios_frame?:number;draw_vl:number;last_intensity:number;unique_unimplemented:number[];cycles:number;avg_cycles_per_frame?:number;top_opcodes:[number,number][];first_unimpl?:number;via_t1?:number;via_irq_count?:number;via_irq_line?:boolean;via_ifr?:number;via_ier?:number; }
+export interface Segment { x0:number;y0:number;x1:number;y1:number;intensity:number;frame:number; }
+
+export interface IEmulatorCore {
+  init(wasmUrl?: string): Promise<void> | void;
+  ensureBios?(opts?: { bytes?: Uint8Array; urlCandidates?: string[] }): Promise<boolean>;
+  loadBios(bytes: Uint8Array): void;
+  isBiosLoaded(): boolean;
+  reset(): void;
+  resetStats?(): void;
+  loadProgram(bytes: Uint8Array, base?: number): void;
+  runFrame(maxInstr?: number): void;
+  metrics(): MetricsSnapshot | null;
+  registers(): RegistersSnapshot | null;
+  biosCalls?(): string[];
+  clearBiosCalls?(): void;
+  enableTraceCapture?(on:boolean, limit?:number): void;
+  clearTrace?(): void;
+  traceLog?(): any[];
+  loopWatch?(): any[];
+  getSegmentsShared(): Segment[];
+  drainSegmentsJson?(): Segment[];
+  peekSegmentsJson?(): Segment[];
+  demoTriangle?(): Segment[];
+  snapshotMemory?(): Uint8Array;
+  invalidateMemoryView?(): void;
+  setInput?(x:number,y:number,buttons:number): void;
+  // Audio (opcional): devuelve delta de muestras i16 (copiadas) y sample rate fijo.
+  audioPrepareDelta?(): Int16Array; // retorna nuevas muestras (puede longitud 0)
+  audioSampleRate?(): number;       // Hz (ej. 44100)
+  audioHasOverflow?(): boolean;     // true si último delta fue snapshot completo por overflow
+
+  /** Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer). */
+  psgEnvJustFinished?(): boolean;
+}
+
+// Tipo del identificador de backend.
+export type EmulatorBackend = 'rust' | 'jsvecx';

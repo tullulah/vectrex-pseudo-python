@@ -1,0 +1,18 @@
+{
+  "name": "pseudo-python",
+  "version": "1.0.0",
+  "description": "Rust prototype compiler turning a constrained Python-like subset into assembly for multiple vector platforms:",
+  "main": "index.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+  "headless": "npm --prefix ide/electron run headless"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

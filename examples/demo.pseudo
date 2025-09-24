@@ -1,0 +1,7 @@
+def main():
+    FRAME_BEGIN(95)
+    PRINT_TEXT(-40,50,"HELLO")
+    DRAW_LINE(0,0,40,0,95)
+    DRAW_LINE(40,0,20,40,95)
+    DRAW_LINE(20,40,0,0,95)
+    return
