@@ -1,0 +1,5 @@
+stobin.exe : stobin.c
+	gcc -O2 stobin.c -o stobin
+	strip stobin
+	coff2exe stobin
+	del stobin

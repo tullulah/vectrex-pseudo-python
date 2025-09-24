@@ -1,0 +1,31 @@
+In both texts in this directory the registers of the PSG
+chips are numbered in OCTAL.
+
+so the numbering is:
+
+octal:             decimal:
+   R0  which should  R0
+   R1  be read as:   R1
+   R2                R2
+   R3                R3
+   R4                R4
+   R5                R5
+   R6                R6
+   R7                R7
+   R10               R8
+   R11               R9
+   R12               R10
+   R13               R11
+   R14               R12
+   R15               R13
+   R16               R14
+   R17               R15
+
+Since this might be pretty confusing I changed the registers index's
+in my 'VECTREX.TXT' to only use decimals.
+
+HERE they are left as octals, as this is a copy (sort of) of
+the original spec sheet of the PSG.
+
+Chris
+

@@ -1,0 +1,38 @@
+{
+  "name": "vpy-ide-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "wasm:build": "npm run wasm:cargo && npm run wasm:bindgen",
+    "wasm:cargo": "cargo build -p vectrex_emulator --features wasm --target wasm32-unknown-unknown --release",
+    "wasm:bindgen": "wasm-bindgen --target web --out-dir src/wasm --no-typescript ../../target/wasm32-unknown-unknown/release/vectrex_emulator.wasm",
+    "sync:jsvecx": "powershell -NoLogo -NoProfile -Command \"$src='../../jsvecx/src/preprocess'; $dst='public/jsvecx/src/preprocess'; New-Item -ItemType Directory -Force -Path $dst | Out-Null; Copy-Item $src/*.js $dst -Force\""
+    ,"jsvecx:bundle": "node tools/bundle_jsvecx.cjs"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "4.7.0",
+    "flexlayout-react": "^0.8.17",
+    "i18next": "25.5.2",
+    "monaco-editor": "0.53.0",
+    "pseudo-python": "file:../..",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "react-i18next": "15.7.3",
+    "zustand": "5.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
+    "@vitejs/plugin-react": "5.0.2",
+    "typescript": "5.9.2",
+    "vite": "7.1.5"
+  }
+}

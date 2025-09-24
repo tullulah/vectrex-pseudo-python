@@ -1,0 +1,15 @@
+[submodule "linenoise"]
+	path = external/linenoise/linenoise
+	url = https://github.com/amaiorano/linenoise.git
+[submodule "noc"]
+	path = external/noc/noc
+	url = https://github.com/amaiorano/noc.git
+[submodule "external/cppdap"]
+	path = external/cppdap
+	url = https://github.com/google/cppdap.git
+[submodule "external/subprocess/subprocess"]
+	path = external/subprocess/subprocess
+	url = https://github.com/sheredom/subprocess.h.git
+[submodule "external/vcpkg"]
+	path = external/vcpkg
+	url = https://github.com/Microsoft/vcpkg
