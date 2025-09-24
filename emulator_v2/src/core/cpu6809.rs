@@ -1227,6 +1227,38 @@ impl Cpu6809 {
                         self.op_pulu(mask);
                     },
 
+                    // Jump/Subroutine operations - C++ Original: case 0x8D/0x9D/0xAD/0xBD/0x17 in CPU switch statement
+
+                    // C++ Original: case 0x17: OpLBSR(); - LBSR (Long Branch to Subroutine)
+                    // C++ Original: int16_t offset = ReadRelativeOffset16(); Push16(S, PC); PC += offset;
+                    0x17 => {
+                        self.op_lbsr();
+                    },
+
+                    // C++ Original: case 0x8D: OpBSR(); - BSR (Branch to Subroutine)  
+                    // C++ Original: int8_t offset = ReadRelativeOffset8(); Push16(S, PC); PC += offset;
+                    0x8D => {
+                        self.op_bsr();
+                    },
+
+                    // C++ Original: case 0x9D: OpJSR<0, 0x9D>(); - JSR Direct
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Direct>(); Push16(S, PC); PC = EA;
+                    0x9D => {
+                        self.op_jsr(opcode_byte);
+                    },
+
+                    // C++ Original: case 0xAD: OpJSR<0, 0xAD>(); - JSR Indexed
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Indexed>(); Push16(S, PC); PC = EA;
+                    0xAD => {
+                        self.op_jsr(opcode_byte);
+                    },
+
+                    // C++ Original: case 0xBD: OpJSR<0, 0xBD>(); - JSR Extended
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Extended>(); Push16(S, PC); PC = EA;
+                    0xBD => {
+                        self.op_jsr(opcode_byte);
+                    },
+
                     // Transfer/Exchange operations - C++ Original: case 0x1E/0x1F in CPU switch statement
 
                     // C++ Original: case 0x1E: OpEXG(); - EXG (Exchange registers)
@@ -2013,6 +2045,50 @@ impl Cpu6809 {
     // C++ Original: void OpTFR() { ExchangeOrTransfer(false); }
     fn op_tfr(&mut self) {
         self.exchange_or_transfer(false);
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpJSR()
+    // C++ Original: uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); Push16(S, PC); PC = EA;
+    fn op_jsr(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let pc_value = self.registers.pc;
+        // Push return address to system stack - inline Push16(S, PC)
+        // C++ Original: m_memoryBus->Write(--stackPointer, U8(value & 0xFF)); // Low
+        // C++ Original: m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value & 0xFF) as u8); // Low byte first
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value >> 8) as u8);   // High byte second
+        // Jump to effective address
+        self.registers.pc = ea;
+    }
+
+    // C++ Original: void OpBSR()
+    // C++ Original: int8_t offset = ReadRelativeOffset8(); Push16(S, PC); PC += offset;
+    fn op_bsr(&mut self) {
+        let offset = self.read_relative_offset8();
+        let pc_value = self.registers.pc;
+        // Push return address to system stack - inline Push16(S, PC)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value & 0xFF) as u8); // Low byte first
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value >> 8) as u8);   // High byte second
+        // Branch by adding offset to PC
+        self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+    }
+
+    // C++ Original: void OpLBSR()
+    // C++ Original: int16_t offset = ReadRelativeOffset16(); Push16(S, PC); PC += offset;
+    fn op_lbsr(&mut self) {
+        let offset = self.read_relative_offset16();
+        let pc_value = self.registers.pc;
+        // Push return address to system stack - inline Push16(S, PC)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value & 0xFF) as u8); // Low byte first
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (pc_value >> 8) as u8);   // High byte second
+        // Branch by adding 16-bit offset to PC
+        self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
     }
 
     // C++ Original: static uint8_t AddImpl(uint8_t a, uint8_t b, uint8_t carry, ConditionCode& CC)

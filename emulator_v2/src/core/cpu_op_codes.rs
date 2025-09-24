@@ -119,6 +119,7 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0x6E => CpuOp { op_code: 0x6E, name: "JMP", addr_mode: AddressingMode::Indexed, cycles: 3, size: 2, description: "Jump indexed" },
         0x7E => CpuOp { op_code: 0x7E, name: "JMP", addr_mode: AddressingMode::Extended, cycles: 4, size: 3, description: "Jump extended" },
         
+        0x17 => CpuOp { op_code: 0x17, name: "LBSR", addr_mode: AddressingMode::Relative, cycles: 9, size: 3, description: "Long Branch to Subroutine" },
         0x8D => CpuOp { op_code: 0x8D, name: "BSR", addr_mode: AddressingMode::Relative, cycles: 7, size: 2, description: "Branch to Subroutine" },
         0x9D => CpuOp { op_code: 0x9D, name: "JSR", addr_mode: AddressingMode::Direct, cycles: 7, size: 2, description: "Jump to Subroutine direct" },
         0xAD => CpuOp { op_code: 0xAD, name: "JSR", addr_mode: AddressingMode::Indexed, cycles: 7, size: 2, description: "Jump to Subroutine indexed" },
