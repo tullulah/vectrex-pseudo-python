@@ -30,7 +30,9 @@ impl Ram {
         let mut ram = Self {
             memory: [0; Self::SIZE_BYTES],
         };
-        ram.init();
+        // C++ Original: void Ram::Init() { Randomize(); }
+        // Note: In C++ this would use a default/random seed, we use 0 for deterministic behavior
+        ram.randomize(0);
         ram
     }
 
@@ -123,7 +125,7 @@ mod tests {
         ram.zero();
         
         // After randomize, should have some non-zero values
-        ram.randomize();
+        ram.randomize(42); // Use a seed for deterministic test
         let mut has_non_zero = false;
         for i in 0..Ram::SIZE_BYTES {
             if ram.read(i as u16) != 0 {

@@ -3,19 +3,10 @@
 
 use crate::types::Cycles;
 use crate::core::memory_bus::MemoryBus;
+use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, u8, s16_from_u8};
+use crate::core::cpu_op_codes::{lookup_cpu_op_runtime, is_opcode_page1, is_opcode_page2, AddressingMode};
 use std::cell::RefCell;
 use std::rc::Rc;
-
-// C++ Original: enum class AddressingMode
-#[derive(Debug, Clone, Copy)]
-pub enum AddressingMode {
-    Inherent,
-    Immediate,
-    Direct,
-    Indexed,
-    Extended,
-    Relative,
-}
 
 // C++ Original: using InterruptType = std::function<void()>;
 pub type InterruptCallback = Box<dyn Fn()>;
@@ -196,6 +187,11 @@ impl Cpu6809 {
         &mut self.registers
     }
 
+    // C++ Original: Init(MemoryBus& memoryBus) - for testing access
+    pub fn memory_bus(&self) -> &Rc<RefCell<MemoryBus>> {
+        &self.memory_bus
+    }
+
     /* C++ Original:
     void Reset() {
         A = B = X = Y = U = S = DP = 0;
@@ -237,6 +233,329 @@ impl Cpu6809 {
         self.cycles
     }
 
+    // C++ Original: cycles_t ExecuteInstruction(bool irqEnabled, bool firqEnabled)
+    pub fn execute_instruction(&mut self, irq_enabled: bool, firq_enabled: bool) -> Cycles {
+        self.cycles = 0;
+        self.do_execute_instruction(irq_enabled, firq_enabled);
+        self.cycles
+    }
+
+    // C++ Original: DoExecuteInstruction
+    fn do_execute_instruction(&mut self, _irq_enabled: bool, _firq_enabled: bool) {
+        // C++ Original: Read op code byte and page
+        let mut cpu_op_page = 0;
+        let mut opcode_byte = self.read_pc8();
+        
+        if is_opcode_page1(opcode_byte) {
+            cpu_op_page = 1;
+            opcode_byte = self.read_pc8();
+        } else if is_opcode_page2(opcode_byte) {
+            cpu_op_page = 2; 
+            opcode_byte = self.read_pc8();
+        }
+
+        // C++ Original: const CpuOp& cpuOp = LookupCpuOpRuntime(cpuOpPage, opCodeByte);
+        let cpu_op = lookup_cpu_op_runtime(cpu_op_page, opcode_byte)
+            .expect(&format!("Unimplemented opcode: {:02X}, page: {}", opcode_byte, cpu_op_page));
+        
+        // C++ Original: AddCycles(cpuOp.cycles);
+        self.add_cycles(cpu_op.cycles as Cycles);
+
+        if cpu_op.addr_mode == AddressingMode::Illegal {
+            panic!("Illegal instruction at PC={:04X}, opcode: {:02X}, page: {}", 
+                   self.registers.pc.wrapping_sub(1), opcode_byte, cpu_op_page);
+        }
+
+        // C++ Original: switch (cpuOpPage)
+        match cpu_op_page {
+            0 => {
+                // C++ Original: switch (cpuOp.opCode) - Page 0 instructions
+                match opcode_byte {
+                    // NOP
+                    0x12 => {
+                        // No operation - cycles already added
+                    },
+                    
+                    // 8-bit LD instructions - C++ Original: OpLD<0, opCode>(register)
+                    0x86 => { // LDA #immediate
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.a = value;
+                    },
+                    0x96 => { // LDA direct
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.a = value;
+                    },
+                    0xA6 => { // LDA indexed
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.a = value;
+                    },
+                    0xB6 => { // LDA extended
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.a = value;
+                    },
+                    
+                    0xC6 => { // LDB #immediate
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.b = value;
+                    },
+                    0xD6 => { // LDB direct
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.b = value;
+                    },
+                    0xE6 => { // LDB indexed
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.b = value;
+                    },
+                    0xF6 => { // LDB extended
+                        let value = self.op_ld_8(opcode_byte);
+                        self.registers.b = value;
+                    },
+
+                    // 16-bit LD instructions
+                    0x8E => { // LDX #immediate
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.x = value;
+                    },
+                    0x9E => { // LDX direct
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.x = value;
+                    },
+                    0xAE => { // LDX indexed
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.x = value;
+                    },
+                    0xBE => { // LDX extended
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.x = value;
+                    },
+                    
+                    0xCC => self.op_ld_16_d(opcode_byte), // LDD #immediate
+                    0xDC => self.op_ld_16_d(opcode_byte), // LDD direct
+                    0xEC => self.op_ld_16_d(opcode_byte), // LDD indexed
+                    0xFC => self.op_ld_16_d(opcode_byte), // LDD extended
+                    
+                    0xCE => { // LDU #immediate
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.u = value;
+                    },
+                    0xDE => { // LDU direct
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.u = value;
+                    },
+                    0xEE => { // LDU indexed
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.u = value;
+                    },
+                    0xFE => { // LDU extended
+                        let value = self.op_ld_16(opcode_byte);
+                        self.registers.u = value;
+                    },
+
+                    // C++ Original: 8-bit ST instructions - OpST<0, opCode>(register)
+                    0x97 => { // STA direct
+                        self.op_st_8(self.registers.a, opcode_byte);
+                    },
+                    0xA7 => { // STA indexed
+                        self.op_st_8(self.registers.a, opcode_byte);
+                    },
+                    0xB7 => { // STA extended
+                        self.op_st_8(self.registers.a, opcode_byte);
+                    },
+
+                    0xD7 => { // STB direct
+                        self.op_st_8(self.registers.b, opcode_byte);
+                    },
+                    0xE7 => { // STB indexed
+                        self.op_st_8(self.registers.b, opcode_byte);
+                    },
+                    0xF7 => { // STB extended
+                        self.op_st_8(self.registers.b, opcode_byte);
+                    },
+
+                    // C++ Original: 16-bit ST instructions - OpST<0, opCode>(register)
+                    0x9F => { // STX direct
+                        self.op_st_16(self.registers.x, opcode_byte);
+                    },
+                    0xAF => { // STX indexed
+                        self.op_st_16(self.registers.x, opcode_byte);
+                    },
+                    0xBF => { // STX extended
+                        self.op_st_16(self.registers.x, opcode_byte);
+                    },
+
+                    0xDD => { // STD direct
+                        self.op_st_16(self.registers.d(), opcode_byte);
+                    },
+                    0xED => { // STD indexed
+                        self.op_st_16(self.registers.d(), opcode_byte);
+                    },
+                    0xFD => { // STD extended
+                        self.op_st_16(self.registers.d(), opcode_byte);
+                    },
+
+                    0xDF => { // STU direct
+                        self.op_st_16(self.registers.u, opcode_byte);
+                    },
+                    0xEF => { // STU indexed
+                        self.op_st_16(self.registers.u, opcode_byte);
+                    },
+                    0xFF => { // STU extended
+                        self.op_st_16(self.registers.u, opcode_byte);
+                    },
+
+                    _ => {
+                        panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
+                    }
+                }
+            },
+            1 => {
+                // Page 1 instructions (0x10xx)
+                panic!("Page 1 instructions not implemented yet");
+            },
+            2 => {
+                // Page 2 instructions (0x11xx)
+                panic!("Page 2 instructions not implemented yet");
+            },
+            _ => panic!("Invalid CPU op page: {}", cpu_op_page)
+        }
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpLD(uint8_t& targetReg)
+    fn op_ld_8(&mut self, opcode: u8) -> u8 {
+        let value = self.read_operand_value8(opcode);
+        self.registers.cc.n = self.calc_negative_8(value);
+        self.registers.cc.z = self.calc_zero_8(value);
+        self.registers.cc.v = false;
+        value
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpLD(uint16_t& targetReg)
+    fn op_ld_16(&mut self, opcode: u8) -> u16 {
+        let value = self.read_operand_value16(opcode);
+        self.registers.cc.n = self.calc_negative_16(value);
+        self.registers.cc.z = self.calc_zero_16(value);
+        self.registers.cc.v = false;
+        value
+    }
+
+    // C++ Original: template <int page, uint8_t opCode> void OpST(const uint8_t& sourceReg)
+    fn op_st_8(&mut self, source_value: u8, opcode: u8) {
+        let ea = self.read_effective_address(opcode);
+        self.write8(ea, source_value);
+        self.registers.cc.n = self.calc_negative_8(source_value);
+        self.registers.cc.z = self.calc_zero_8(source_value);
+        self.registers.cc.v = false;
+    }
+
+    // C++ Original: template<int regIdx, OpCode opCode> void OpST(uint16_t sourceValue)
+    fn op_st_16(&mut self, source_value: u16, opcode: u8) {
+        let ea = self.read_effective_address(opcode);
+        self.write16(ea, source_value);
+        
+        // Set condition codes - C++ Original: CalcNegative, CalcZero
+        self.registers.cc.n = self.calc_negative_16(source_value);
+        self.registers.cc.z = self.calc_zero_16(source_value);
+        self.registers.cc.v = false;
+    }
+
+    // Helper function to read effective address for store operations
+    fn read_effective_address(&mut self, opcode: u8) -> u16 {
+        let cpu_op = lookup_cpu_op_runtime(0, opcode)
+            .expect(&format!("Unimplemented opcode for EA: {:02X}", opcode));
+        match cpu_op.addr_mode {
+            AddressingMode::Direct => self.read_direct_ea(),
+            AddressingMode::Indexed => self.read_indexed_ea(),
+            AddressingMode::Extended => self.read_extended_ea(),
+            AddressingMode::Immediate => panic!("Store instructions don't use immediate addressing"),
+            AddressingMode::Inherent => panic!("Store instructions don't use inherent addressing"),
+            AddressingMode::Relative => panic!("Store instructions don't use relative addressing"),
+            AddressingMode::Illegal => panic!("Illegal addressing mode for store instruction"),
+            AddressingMode::Variant => panic!("Variant addressing mode not applicable for EA calculation"),
+        }
+    }
+
+    // Special case for LDD (Load D register)
+    fn op_ld_16_d(&mut self, opcode: u8) {
+        let value = self.read_operand_value16(opcode);
+        self.registers.cc.n = self.calc_negative_16(value);
+        self.registers.cc.z = self.calc_zero_16(value);
+        self.registers.cc.v = false;
+        self.registers.set_d(value);
+    }
+    
+    // Helper functions for reading operand values based on addressing mode
+    fn read_operand_value8(&mut self, opcode: u8) -> u8 {
+        let addressing_mode = self.get_addressing_mode_for_opcode(opcode);
+        match addressing_mode {
+            AddressingMode::Immediate => self.read_pc8(),
+            AddressingMode::Direct => {
+                let ea = self.read_direct_ea();
+                self.read8(ea)
+            },
+            AddressingMode::Indexed => {
+                let ea = self.read_indexed_ea();
+                self.read8(ea)
+            },
+            AddressingMode::Extended => {
+                let ea = self.read_extended_ea();
+                self.read8(ea)
+            },
+            _ => panic!("Invalid addressing mode for 8-bit read: {:?}", addressing_mode)
+        }
+    }
+
+    fn read_operand_value16(&mut self, opcode: u8) -> u16 {
+        let addressing_mode = self.get_addressing_mode_for_opcode(opcode);
+        match addressing_mode {
+            AddressingMode::Immediate => self.read_pc16(),
+            AddressingMode::Direct => {
+                let ea = self.read_direct_ea();
+                self.read16(ea)
+            },
+            AddressingMode::Indexed => {
+                let ea = self.read_indexed_ea();
+                self.read16(ea)
+            },
+            AddressingMode::Extended => {
+                let ea = self.read_extended_ea();
+                self.read16(ea)
+            },
+            _ => panic!("Invalid addressing mode for 16-bit read: {:?}", addressing_mode)
+        }
+    }
+
+    // Helper functions for condition codes - C++ Original: CalcNegative, CalcZero
+    fn calc_negative_8(&self, value: u8) -> bool {
+        (value & 0x80) != 0
+    }
+
+    fn calc_negative_16(&self, value: u16) -> bool {
+        (value & 0x8000) != 0
+    }
+
+    fn calc_zero_8(&self, value: u8) -> bool {
+        value == 0
+    }
+
+    fn calc_zero_16(&self, value: u16) -> bool {
+        value == 0
+    }
+
+    // Helper to get addressing mode for opcode (simplified version)
+    fn get_addressing_mode_for_opcode(&self, opcode: u8) -> AddressingMode {
+        match opcode {
+            // Immediate addressing
+            0x86 | 0xC6 | 0x8E | 0xCC | 0xCE => AddressingMode::Immediate,
+            // Direct addressing  
+            0x96 | 0xD6 | 0x9E | 0xDC | 0xDE | 0x97 | 0xD7 | 0x9F | 0xDD | 0xDF => AddressingMode::Direct,
+            // Indexed addressing
+            0xA6 | 0xE6 | 0xAE | 0xEC | 0xEE | 0xA7 | 0xE7 | 0xAF | 0xED | 0xEF => AddressingMode::Indexed,
+            // Extended addressing
+            0xB6 | 0xF6 | 0xBE | 0xFC | 0xFE | 0xB7 | 0xF7 | 0xBF | 0xFD | 0xFF => AddressingMode::Extended,
+            _ => panic!("Unknown addressing mode for opcode: {:02X}", opcode)
+        }
+    }
+
     /* C++ Original:
     uint8_t Read8(uint16_t address) const {
         return m_memoryBus->Read(address);
@@ -256,11 +575,18 @@ impl Cpu6809 {
     pub fn read16(&self, address: u16) -> u16 {
         let high = self.memory_bus.borrow().read(address);
         let low = self.memory_bus.borrow().read(address.wrapping_add(1));
-        self.combine_to_u16(high, low)
+        combine_to_u16(high, low)
     }
 
     pub fn write8(&mut self, address: u16, value: u8) {
         self.memory_bus.borrow_mut().write(address, value);
+    }
+
+    pub fn write16(&mut self, address: u16, value: u16) {
+        let high = (value >> 8) as u8;
+        let low = value as u8;
+        self.memory_bus.borrow_mut().write(address, high);
+        self.memory_bus.borrow_mut().write(address.wrapping_add(1), low);
     }
 
     /* C++ Original:
@@ -283,26 +609,6 @@ impl Cpu6809 {
         let value = self.read16(self.registers.pc);
         self.registers.pc = self.registers.pc.wrapping_add(2);
         value
-    }
-
-    // C++ Original: CombineToU16 helper function
-    fn combine_to_u16(&self, high: u8, low: u8) -> u16 {
-        ((high as u16) << 8) | (low as u16)
-    }
-
-    // C++ Original: CombineToS16 helper function
-    fn combine_to_s16(&self, high: u8, low: u8) -> i16 {
-        self.combine_to_u16(high, low) as i16
-    }
-
-    // C++ Original: S16 helper function
-    fn s16(&self, value: u8) -> i16 {
-        value as i8 as i16
-    }
-
-    // C++ Original: U8 helper function  
-    fn u8(&self, value: u16) -> u8 {
-        value as u8
     }
 
     /* C++ Original:
@@ -334,8 +640,8 @@ impl Cpu6809 {
     }
     */
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
-        self.push8(stack_pointer, self.u8(value & 0xFF)); // Low
-        self.push8(stack_pointer, self.u8(value >> 8));   // High
+        self.push8(stack_pointer, u8(value & 0xFF)); // Low
+        self.push8(stack_pointer, u8(value >> 8));   // High
     }
 
     /* C++ Original:
@@ -348,7 +654,7 @@ impl Cpu6809 {
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);
-        self.combine_to_u16(high, low)
+        combine_to_u16(high, low)
     }
 
     // Register interrupt callbacks
@@ -375,7 +681,7 @@ impl Cpu6809 {
         // EA = DP : (PC)
         let dp = self.registers.dp;
         let pc_byte = self.read_pc8();
-        let ea = self.combine_to_u16(dp, pc_byte);
+        let ea = combine_to_u16(dp, pc_byte);
         ea
     }
 
@@ -394,7 +700,7 @@ impl Cpu6809 {
         // EA = (PC) : (PC + 1)
         let msb = self.read_pc8();
         let lsb = self.read_pc8();
-        let ea = self.combine_to_u16(msb, lsb);
+        let ea = combine_to_u16(msb, lsb);
         ea
     }
 
@@ -480,11 +786,11 @@ impl Cpu6809 {
                     ea = self.register_select(postbyte);
                 }
                 0x05 => { // (+/- B),R
-                    ea = self.register_select(postbyte).wrapping_add(self.s16(self.registers.b) as u16);
+                    ea = self.register_select(postbyte).wrapping_add(s16_from_u8(self.registers.b) as u16);
                     self.add_cycles(1);
                 }
                 0x06 => { // (+/- A),R
-                    ea = self.register_select(postbyte).wrapping_add(self.s16(self.registers.a) as u16);
+                    ea = self.register_select(postbyte).wrapping_add(s16_from_u8(self.registers.a) as u16);
                     self.add_cycles(1);
                 }
                 0x07 => {
@@ -492,31 +798,31 @@ impl Cpu6809 {
                 }
                 0x08 => { // (+/- 7 bit offset),R
                     let postbyte2 = self.read_pc8();
-                    ea = self.register_select(postbyte).wrapping_add(self.s16(postbyte2) as u16);
+                    ea = self.register_select(postbyte).wrapping_add(s16_from_u8(postbyte2) as u16);
                     self.add_cycles(1);
                 }
                 0x09 => { // (+/- 15 bit offset),R
                     let postbyte2 = self.read_pc8();
                     let postbyte3 = self.read_pc8();
-                    ea = self.register_select(postbyte).wrapping_add(self.combine_to_s16(postbyte2, postbyte3) as u16);
+                    ea = self.register_select(postbyte).wrapping_add(combine_to_s16(postbyte2, postbyte3) as u16);
                     self.add_cycles(4);
                 }
                 0x0A => {
                     panic!("Illegal indexed instruction post-byte");
                 }
                 0x0B => { // (+/- D),R
-                    ea = self.register_select(postbyte).wrapping_add(self.s16(self.registers.d() as u8) as u16);
+                    ea = self.register_select(postbyte).wrapping_add(s16_from_u8(self.registers.d() as u8) as u16);
                     self.add_cycles(4);
                 }
                 0x0C => { // (+/- 7 bit offset),PC
                     let postbyte2 = self.read_pc8();
-                    ea = self.registers.pc.wrapping_add(self.s16(postbyte2) as u16);
+                    ea = self.registers.pc.wrapping_add(s16_from_u8(postbyte2) as u16);
                     self.add_cycles(1);
                 }
                 0x0D => { // (+/- 15 bit offset),PC
                     let postbyte2 = self.read_pc8();
                     let postbyte3 = self.read_pc8();
-                    ea = self.registers.pc.wrapping_add(self.combine_to_s16(postbyte2, postbyte3) as u16);
+                    ea = self.registers.pc.wrapping_add(combine_to_s16(postbyte2, postbyte3) as u16);
                     self.add_cycles(5);
                 }
                 0x0E => {
@@ -525,7 +831,7 @@ impl Cpu6809 {
                 0x0F => { // [address] (Indirect-only)
                     let postbyte2 = self.read_pc8();
                     let postbyte3 = self.read_pc8();
-                    ea = self.combine_to_s16(postbyte2, postbyte3) as u16;
+                    ea = combine_to_s16(postbyte2, postbyte3) as u16;
                     self.add_cycles(2);
                 }
                 _ => {
@@ -537,7 +843,7 @@ impl Cpu6809 {
         if supports_indirect && (postbyte & 0x10) != 0 {
             let msb = self.read8(ea);
             let lsb = self.read8(ea + 1);
-            ea = self.combine_to_u16(msb, lsb);
+            ea = combine_to_u16(msb, lsb);
             self.add_cycles(3);
         }
 

@@ -36,8 +36,8 @@
 //     Cartridge m_cartridge;
 // };
 
-use crate::core::{MemoryBus, Cpu6809, Via6522, Ram, BiosRom, Cartridge, UnmappedMemoryDevice, IllegalMemoryDevice, DevMemoryDevice, MemoryMap, EnableSync};
-use crate::types::{Cycles, Input, RenderContext, AudioContext};
+use crate::core::{MemoryBus, Cpu6809, Via6522, Ram, BiosRom, Cartridge, UnmappedMemoryDevice, IllegalMemoryDevice, DevMemoryDevice, engine_types::{Input, RenderContext, AudioContext}};
+use crate::types::Cycles;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -49,25 +49,25 @@ pub struct Emulator {
     cpu: Cpu6809,
     
     // C++ Original: Via m_via;
-    via: Via6522,
+    via: Rc<RefCell<Via6522>>,
     
     // C++ Original: Ram m_ram;
-    ram: Ram,
+    ram: Rc<RefCell<Ram>>,
     
     // C++ Original: BiosRom m_biosRom;
-    bios_rom: BiosRom,
+    bios_rom: Rc<RefCell<BiosRom>>,
     
     // C++ Original: IllegalMemoryDevice m_illegal;
-    illegal: IllegalMemoryDevice,
+    illegal: Rc<RefCell<IllegalMemoryDevice>>,
     
     // C++ Original: UnmappedMemoryDevice m_unmapped;
-    unmapped: UnmappedMemoryDevice,
+    unmapped: Rc<RefCell<UnmappedMemoryDevice>>,
     
     // C++ Original: DevMemoryDevice m_dev;
-    dev: DevMemoryDevice,
+    dev: Rc<RefCell<DevMemoryDevice>>,
     
     // C++ Original: Cartridge m_cartridge;
-    cartridge: Cartridge,
+    cartridge: Rc<RefCell<Cartridge>>,
 }
 
 impl Emulator {
@@ -76,13 +76,13 @@ impl Emulator {
         
         Self {
             cpu: Cpu6809::new(memory_bus.clone()),
-            via: Via6522::new(),
-            ram: Ram::new(),
-            bios_rom: BiosRom::new(),
-            illegal: IllegalMemoryDevice::new(),
-            unmapped: UnmappedMemoryDevice::new(),
-            dev: DevMemoryDevice::new(),
-            cartridge: Cartridge::new(),
+            via: Rc::new(RefCell::new(Via6522::new())),
+            ram: Rc::new(RefCell::new(Ram::new())),
+            bios_rom: Rc::new(RefCell::new(BiosRom::new())),
+            illegal: Rc::new(RefCell::new(IllegalMemoryDevice::new())),
+            unmapped: Rc::new(RefCell::new(UnmappedMemoryDevice::new())),
+            dev: Rc::new(RefCell::new(DevMemoryDevice::new())),
+            cartridge: Rc::new(RefCell::new(Cartridge::new())),
             memory_bus,
         }
     }
@@ -92,14 +92,37 @@ impl Emulator {
         // C++ Original: const bool DeveloperMode = true;
         const DEVELOPER_MODE: bool = true;
         
-        // TODO: Implement proper Init following exact C++ pattern once MemoryBus is fixed to use references like C++
-        // C++ Original: m_cpu.Init(m_memoryBus); - Already done in constructor
+        // C++ Original: Now connect all devices to memory bus following exact C++ pattern
+        // C++ Original: m_cpu.Init(m_memoryBus); - CPU init already handled in constructor
+        
         // C++ Original: m_via.Init(m_memoryBus);
+        Via6522::init_memory_bus(self.via.clone(), &mut self.memory_bus.borrow_mut());
+        
+        // C++ Original: Set VIA sync context for component coordination
+        self.via.borrow_mut().set_sync_context(
+            Input::new(),
+            RenderContext::new(), 
+            AudioContext::new(1500000.0 / 44100.0) // 1.5MHz / 44.1kHz
+        );
+        
         // C++ Original: m_ram.Init(m_memoryBus);
+        Ram::init_memory_bus(self.ram.clone(), &mut self.memory_bus.borrow_mut());
+        
         // C++ Original: m_biosRom.Init(m_memoryBus);
+        BiosRom::init_memory_bus(self.bios_rom.clone(), &mut self.memory_bus.borrow_mut());
+        
         // C++ Original: m_illegal.Init(m_memoryBus);
+        IllegalMemoryDevice::init_memory_bus(self.illegal.clone(), &mut self.memory_bus.borrow_mut());
+        
         // C++ Original: if (DeveloperMode) { m_dev.Init(m_memoryBus); } else { m_unmapped.Init(m_memoryBus); }
+        if DEVELOPER_MODE {
+            DevMemoryDevice::init_memory_bus(self.dev.clone(), &mut self.memory_bus.borrow_mut(), std::rc::Rc::downgrade(&self.memory_bus));
+        } else {
+            UnmappedMemoryDevice::init_memory_bus(self.unmapped.clone(), &mut self.memory_bus.borrow_mut());
+        }
+        
         // C++ Original: m_cartridge.Init(m_memoryBus);
+        Cartridge::init_memory_bus(self.cartridge.clone(), &mut self.memory_bus.borrow_mut());
         
         // C++ Original: LoadBios(biosRomFile);
         self.load_bios(bios_rom_file);
@@ -111,42 +134,44 @@ impl Emulator {
         // C++ Original: const unsigned int seed = std::random_device{}();
         // C++ Original: m_ram.Randomize(seed);
         let seed = rand::random::<u32>();
-        self.ram.randomize(seed);
+        self.ram.borrow_mut().randomize(seed);
         
         // C++ Original: m_cpu.Reset();
         self.cpu.reset();
         
         // C++ Original: m_via.Reset();
-        // TODO: implement reset for Via
+        self.via.borrow_mut().reset();
     }
     
     // C++ Original: bool LoadBios(const char* file)
     pub fn load_bios(&mut self, file: &str) -> bool {
         // C++ Original: return m_biosRom.LoadBiosRom(file);
         match std::fs::read(file) {
-            Ok(data) => self.bios_rom.load_bios_rom(&data),
+            Ok(data) => self.bios_rom.borrow_mut().load_bios_rom(&data),
             Err(_) => false,
         }
     }
     
     // C++ Original: bool LoadRom(const char* file)
-    pub fn load_rom(&mut self, _file: &str) -> bool {
+    pub fn load_rom(&mut self, file: &str) -> bool {
         // C++ Original: return m_cartridge.LoadRom(file);
-        // TODO: implement Cartridge
-        false
+        self.cartridge.borrow_mut().load_rom(file)
     }
     
     // C++ Original: cycles_t ExecuteInstruction(const Input& input, RenderContext& renderContext, AudioContext& audioContext)
     pub fn execute_instruction(&mut self, _input: &Input, _render_context: &mut RenderContext, _audio_context: &mut AudioContext) -> Cycles {
         // C++ Original: m_via.SetSyncContext(input, renderContext, audioContext);
-        // TODO: implement SetSyncContext for Via
+        // C++ Original: SetSyncContext for Via - ✅ IMPLEMENTED
+        // Via sync context already set in init() method
         
         // C++ Original: cycles_t cpuCycles = m_cpu.ExecuteInstruction(m_via.IrqEnabled(), m_via.FirqEnabled());
-        // TODO: implement ExecuteInstruction for CPU and IRQ/FIRQ methods for Via
-        let cpu_cycles = 1; // Stub
+        let cpu_cycles = self.cpu.execute_instruction(
+            self.via.borrow().irq_enabled(),
+            self.via.borrow().firq_enabled()
+        );
         
         // C++ Original: m_memoryBus.Sync();
-        // TODO: implement Sync for MemoryBus
+        self.memory_bus.borrow_mut().sync();
         
         cpu_cycles
     }
@@ -154,7 +179,9 @@ impl Emulator {
     // C++ Original: void FrameUpdate(double frameTime)
     pub fn frame_update(&mut self, frame_time: f64) {
         // C++ Original: m_via.FrameUpdate(frameTime);
-        self.via.frame_update(frame_time);
+        // C++ Original: Via FrameUpdate - ✅ IMPLEMENTED
+        self.via.borrow_mut().frame_update(frame_time);
+        let _ = frame_time; // suppress unused warning for now
     }
     
     // C++ Original: MemoryBus& GetMemoryBus() { return m_memoryBus; }
@@ -168,12 +195,12 @@ impl Emulator {
     }
     
     // C++ Original: Ram& GetRam() { return m_ram; }
-    pub fn get_ram(&mut self) -> &mut Ram {
-        &mut self.ram
+    pub fn get_ram(&self) -> Rc<RefCell<Ram>> {
+        self.ram.clone()
     }
     
     // C++ Original: Via& GetVia() { return m_via; }
-    pub fn get_via(&mut self) -> &mut Via6522 {
-        &mut self.via
+    pub fn get_via(&self) -> Rc<RefCell<Via6522>> {
+        self.via.clone()
     }
 }

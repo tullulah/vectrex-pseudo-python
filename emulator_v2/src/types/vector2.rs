@@ -32,19 +32,6 @@ impl Vector2 {
     pub fn zero() -> Self {
         Self { x: 0.0, y: 0.0 }
     }
-
-    pub fn magnitude(self) -> f32 {
-        (self.x * self.x + self.y * self.y).sqrt()
-    }
-
-    pub fn normalized(self) -> Self {
-        let mag = self.magnitude();
-        if mag > 0.0 {
-            self / mag
-        } else {
-            Self::zero()
-        }
-    }
 }
 
 // C++ Original: inline Vector2 operator+(const Vector2& lhs, const Vector2& rhs)
@@ -100,5 +87,20 @@ impl std::ops::Div<f32> for Vector2 {
             x: self.x / scalar,
             y: self.y / scalar,
         }
+    }
+}
+
+// C++ Original: inline float Magnitude(const Vector2& v)
+pub fn magnitude(v: Vector2) -> f32 {
+    (v.x * v.x + v.y * v.y).sqrt()
+}
+
+// C++ Original: inline Vector2 Normalized(const Vector2& v)
+pub fn normalized(v: Vector2) -> Vector2 {
+    let mag = magnitude(v);
+    if mag > 0.0 {
+        v / mag
+    } else {
+        Vector2::zero()
     }
 }

@@ -1,22 +1,24 @@
 //! VIA 6522 Versatile Interface Adapter implementation
 //! Port of vectrexy/libs/emulator/include/emulator/Via.h and src/Via.cpp
 
-use crate::types::{Cycles, Vector2, Line, RenderContext};
-use crate::core::MemoryBusDevice;
+use crate::types::Cycles;
+use crate::core::engine_types::{RenderContext, Input, AudioContext};
+use crate::core::{MemoryBusDevice, screen::Screen, psg::Psg, shift_register::{ShiftRegister, ShiftRegisterMode}};
 
-// C++ Original: enum class TimerMode
+// C++ Original: struct SyncContext (simplified for Rust ownership)
+#[derive(Debug)]
+pub struct SyncContext {
+    // Stored as owned values for Rust compatibility
+    pub input_data: Input,
+    pub render_context_data: RenderContext,  
+    pub audio_context_data: AudioContext,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimerMode {
     FreeRunning,
     OneShot,
     PulseCounting,
-}
-
-// C++ Original: enum class ShiftRegisterMode
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ShiftRegisterMode {
-    Disabled,
-    ShiftOutUnder02,
 }
 
 /* C++ Original from Via.h:
@@ -269,404 +271,7 @@ impl Timer2 {
     }
 }
 
-// Placeholder for complex components that need more implementation
-#[derive(Debug)]
-pub struct DelayedValueStore<T> {
-    // C++ Original: DelayedValueStore from DelayedValueStore.h
-    cycles_to_update_value: Cycles,
-    cycles_left: Cycles,
-    next_value: T,
-    value: T,
-}
 
-impl<T: Copy + Default> DelayedValueStore<T> {
-    pub fn new(delay: Cycles) -> Self {
-        Self {
-            cycles_to_update_value: delay,
-            cycles_left: 0,
-            next_value: T::default(),
-            value: T::default(),
-        }
-    }
-
-    pub fn set(&mut self, next_value: T) {
-        self.next_value = next_value;
-        self.cycles_left = self.cycles_to_update_value;
-        if self.cycles_left == 0 {
-            self.value = self.next_value;
-        }
-    }
-
-    /* C++ Original:
-    void Update(cycles_t cycles) {
-        (void)cycles;
-        assert(cycles == 1);
-        if (m_cyclesLeft > 0 && --m_cyclesLeft == 0) {
-            m_value = m_nextValue;
-        }
-    }
-    */
-    pub fn update(&mut self, cycles: Cycles) {
-        // C++ Original: assert(cycles == 1);
-        assert_eq!(cycles, 1, "DelayedValueStore expects 1 cycle updates");
-        if self.cycles_left > 0 {
-            self.cycles_left -= 1;
-            if self.cycles_left == 0 {
-                self.value = self.next_value;
-            }
-        }
-    }
-
-    pub fn value(&self) -> T {
-        self.value
-    }
-
-    pub fn set_delay(&mut self, delay: Cycles) {
-        self.cycles_to_update_value = delay;
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum RampPhase {
-    RampOff,
-    RampUp,
-    RampOn,
-    RampDown,
-}
-
-/* C++ Original from Screen.h:
-class Screen {
-public:
-    void Init();
-    void Update(cycles_t cycles, RenderContext& renderContext);
-    void FrameUpdate(double frameTime);
-    void ZeroBeam();
-    void SetBlankEnabled(bool enabled) { m_blank = enabled; }
-    void SetIntegratorsEnabled(bool enabled) { m_integratorsEnabled = enabled; }
-    void SetIntegratorX(int8_t value) { m_velocityX = value; }
-    void SetIntegratorY(int8_t value) { m_velocityY = value; }
-    void SetIntegratorXYOffset(int8_t value) { m_xyOffset = value; }
-    void SetBrightness(uint8_t value) { m_brightness = value; }
-private:
-    bool m_integratorsEnabled{};
-    Vector2 m_pos;
-    bool m_lastDrawingEnabled{};
-    Vector2 m_lastDir;
-    DelayedValueStore<float> m_velocityX;
-    DelayedValueStore<float> m_velocityY;
-    float m_xyOffset = 0.f;
-    float m_brightness = 0.f;
-    bool m_blank = false;
-    enum class RampPhase { RampOff, RampUp, RampOn, RampDown } m_rampPhase = RampPhase::RampOff;
-    int32_t m_rampDelay = 0;
-    float m_brightnessCurve = 0.f;
-};
-*/
-#[derive(Debug)]
-pub struct VectrexScreen {
-    // C++ Original: Screen implementation with hardware delays
-    integrators_enabled: bool,
-    pos: Vector2,
-    last_drawing_enabled: bool,
-    last_dir: Vector2,
-    
-    // C++ Original: DelayedValueStore for velocity with hardware delays
-    velocity_x: DelayedValueStore<f32>,
-    velocity_y: DelayedValueStore<f32>,
-    
-    xy_offset: f32,
-    brightness: f32,
-    blank: bool,
-    ramp_phase: RampPhase,
-    ramp_delay: i32,
-    brightness_curve: f32,
-    
-    // C++ Original: constants from Screen.cpp
-    ramp_up_delay: i32,
-    ramp_down_delay: i32,
-    line_draw_scale: f32,
-}
-
-impl VectrexScreen {
-    /* C++ Original:
-    void Screen::Init() {
-        m_velocityX.CyclesToUpdateValue = VelocityXDelay;
-    }
-    */
-    pub fn new() -> Self {
-        let mut screen = Self {
-            integrators_enabled: false,
-            pos: Vector2::zero(),
-            last_drawing_enabled: false,
-            last_dir: Vector2::zero(),
-            velocity_x: DelayedValueStore::new(6), // C++ Original: VelocityXDelay = 6
-            velocity_y: DelayedValueStore::new(0),
-            xy_offset: 0.0,
-            brightness: 0.0,
-            blank: false,
-            ramp_phase: RampPhase::RampOff,
-            ramp_delay: 0,
-            brightness_curve: 0.0,
-            ramp_up_delay: 5,    // C++ Original: RampUpDelay = 5
-            ramp_down_delay: 10, // C++ Original: RampDownDelay = 10
-            line_draw_scale: 0.85, // C++ Original: LineDrawScale = 0.85f
-        };
-        screen.init();
-        screen
-    }
-
-    fn init(&mut self) {
-        // C++ Original: Init() sets velocity delays
-        self.velocity_x.set_delay(6);
-    }
-
-    pub fn set_blank_enabled(&mut self, enabled: bool) {
-        self.blank = enabled;
-    }
-
-    pub fn set_integrators_enabled(&mut self, enabled: bool) {
-        self.integrators_enabled = enabled;
-    }
-
-    pub fn set_integrator_x(&mut self, value: i8) {
-        self.velocity_x.set(value as f32);
-    }
-
-    pub fn set_integrator_y(&mut self, value: i8) {
-        self.velocity_y.set(value as f32);
-    }
-
-    pub fn set_integrator_xy_offset(&mut self, value: i8) {
-        self.xy_offset = value as f32;
-    }
-
-    pub fn set_brightness(&mut self, value: u8) {
-        self.brightness = value as f32;
-    }
-
-    /* C++ Original:
-    void Screen::ZeroBeam() {
-        m_pos = {0.f, 0.f};
-        m_lastDrawingEnabled = false;
-    }
-    */
-    pub fn zero_beam(&mut self) {
-        // @TODO: move beam towards 0,0 over time
-        self.pos = Vector2::zero();
-        self.last_drawing_enabled = false;
-    }
-
-    /* C++ Original:
-    void Screen::Update(cycles_t cycles, RenderContext& renderContext) {
-        m_velocityX.Update(cycles);
-        m_velocityY.Update(cycles);
-        // Handle ramp phase transitions
-        // Move beam and generate lines
-    }
-    */
-    pub fn update(&mut self, cycles: Cycles, render_context: &mut RenderContext) {
-        self.velocity_x.update(cycles);
-        self.velocity_y.update(cycles);
-
-        // Handle switching to RampUp/RampDown
-        match self.ramp_phase {
-            RampPhase::RampOff | RampPhase::RampDown => {
-                if self.integrators_enabled {
-                    self.ramp_phase = RampPhase::RampUp;
-                    self.ramp_delay = self.ramp_up_delay;
-                }
-            }
-            RampPhase::RampOn | RampPhase::RampUp => {
-                if !self.integrators_enabled {
-                    self.ramp_phase = RampPhase::RampDown;
-                    self.ramp_delay = self.ramp_down_delay;
-                }
-            }
-        }
-
-        // Handle switching to RampOn/RampOff
-        match self.ramp_phase {
-            RampPhase::RampUp => {
-                // C++ Original: if (--m_rampDelay <= 0) - Wait some cycles, then go to RampOn
-                self.ramp_delay -= 1;
-                if self.ramp_delay <= 0 {
-                    self.ramp_phase = RampPhase::RampOn;
-                }
-            }
-            RampPhase::RampDown => {
-                // C++ Original: if (--m_rampDelay <= 0) - Wait some cycles, then go to RampOff  
-                self.ramp_delay -= 1;
-                if self.ramp_delay <= 0 {
-                    self.ramp_phase = RampPhase::RampOff;
-                }
-            }
-            RampPhase::RampOff | RampPhase::RampOn => {}
-        }
-
-        let last_pos = self.pos;
-        let curr_dir = Vector2::normalized(Vector2::new(self.velocity_x.value(), self.velocity_y.value()));
-
-        // Move beam while ramp is on or its way down
-        match self.ramp_phase {
-            RampPhase::RampDown | RampPhase::RampOn => {
-                let offset = Vector2::new(self.xy_offset, self.xy_offset);
-                let velocity = Vector2::new(self.velocity_x.value(), self.velocity_y.value());
-                let delta = (velocity + offset) / 128.0 * (cycles as f32) * self.line_draw_scale;
-                self.pos = self.pos + delta;
-            }
-            RampPhase::RampOff | RampPhase::RampUp => {}
-        }
-
-        // We might draw even when integrators are disabled (e.g. drawing dots)
-        let drawing_enabled = !self.blank && (self.brightness > 0.0 && self.brightness <= 128.0);
-        
-        if drawing_enabled {
-            if self.last_drawing_enabled 
-                && Vector2::magnitude(self.last_dir) > 0.0 
-                && self.last_dir == curr_dir 
-                && !render_context.lines.is_empty() 
-            {
-                // Extend the last line
-                if let Some(last_line) = render_context.lines.last_mut() {
-                    last_line.p1 = self.pos;
-                }
-            } else {
-                // Create new line
-                let lerp = |a: f32, b: f32, t: f32| a + t * (b - a);
-                let ease_out = |v: f32| 1.0 - (1.0 - v).powf(5.0);
-
-                // Lerp between linear brightness and ease out curve
-                let mut b = self.brightness / 128.0;
-                b = lerp(b, ease_out(b), self.brightness_curve);
-                
-                render_context.lines.push(Line {
-                    p0: last_pos,
-                    p1: self.pos,
-                    brightness: b,
-                });
-            }
-        }
-
-        self.last_drawing_enabled = drawing_enabled;
-        self.last_dir = curr_dir;
-    }
-
-    pub fn frame_update(&mut self, _frame_time: f64) {
-        // C++ Original: ImGui debug controls - simplified for now
-    }
-
-    pub fn set_brightness_curve(&mut self, curve: f32) {
-        self.brightness_curve = curve;
-    }
-}
-
-// Keep SimpleScreen as alias for compatibility
-pub type SimpleScreen = VectrexScreen;
-
-#[derive(Debug)]
-pub struct SimplePsg {
-    // Simplified PSG implementation
-    bc1: bool,
-    bdir: bool,
-}
-
-impl SimplePsg {
-    pub fn new() -> Self {
-        Self {
-            bc1: false,
-            bdir: false,
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.bc1 = false;
-        self.bdir = false;
-    }
-
-    pub fn set_bc1(&mut self, value: bool) {
-        self.bc1 = value;
-    }
-
-    pub fn set_bdir(&mut self, value: bool) {
-        self.bdir = value;
-    }
-
-    pub fn bc1(&self) -> bool {
-        self.bc1
-    }
-
-    pub fn bdir(&self) -> bool {
-        self.bdir
-    }
-
-    pub fn write_da(&mut self, _value: u8) {
-        // Simplified implementation
-    }
-
-    pub fn update(&mut self, _cycles: Cycles) {
-        // Simplified implementation
-    }
-
-    pub fn sample(&self) -> f32 {
-        0.0 // Simplified implementation
-    }
-
-    pub fn frame_update(&mut self, _frame_time: f64) {
-        // Simplified implementation
-    }
-}
-
-#[derive(Debug)]
-pub struct SimpleShiftRegister {
-    // Simplified shift register implementation
-    value: u8,
-    mode: ShiftRegisterMode,
-    interrupt_flag: bool,
-    cb2_active: bool,
-}
-
-impl SimpleShiftRegister {
-    pub fn new() -> Self {
-        Self {
-            value: 0,
-            mode: ShiftRegisterMode::Disabled,
-            interrupt_flag: false,
-            cb2_active: false,
-        }
-    }
-
-    pub fn read_value(&self) -> u8 {
-        self.value
-    }
-
-    pub fn set_value(&mut self, value: u8) {
-        self.value = value;
-    }
-
-    pub fn set_mode(&mut self, mode: ShiftRegisterMode) {
-        self.mode = mode;
-    }
-
-    pub fn mode(&self) -> ShiftRegisterMode {
-        self.mode
-    }
-
-    pub fn set_interrupt_flag(&mut self, flag: bool) {
-        self.interrupt_flag = flag;
-    }
-
-    pub fn interrupt_flag(&self) -> bool {
-        self.interrupt_flag
-    }
-
-    pub fn cb2_active(&self) -> bool {
-        self.cb2_active
-    }
-
-    pub fn update(&mut self, _cycles: Cycles) {
-        // Simplified implementation
-    }
-}
 
 // C++ Original: VIA register addresses from Via.cpp
 const PORT_B: u16 = 0x0;
@@ -743,11 +348,11 @@ pub struct Via6522 {
     interrupt_enable: u8,
 
     // C++ Original: Components
-    screen: VectrexScreen,
-    psg: SimplePsg,
+    screen: Screen,
+    psg: Psg,
     timer1: Timer1,
     timer2: Timer2,
-    shift_register: SimpleShiftRegister,
+    shift_register: ShiftRegister,
 
     // C++ Original: Input state
     joystick_button_state: u8,
@@ -758,6 +363,9 @@ pub struct Via6522 {
 
     // Audio related (simplified)
     elapsed_audio_cycles: f32,
+
+    // C++ Original: SyncContext m_syncContext;
+    sync_context: Option<SyncContext>,
 }
 
 impl Via6522 {
@@ -769,17 +377,18 @@ impl Via6522 {
             data_dir_a: 0,
             periph_cntl: 0,
             interrupt_enable: 0,
-            screen: VectrexScreen::new(),
-            psg: SimplePsg::new(),
+            screen: Screen::new(),
+            psg: Psg::new(),
             timer1: Timer1::new(),
             timer2: Timer2::new(),
-            shift_register: SimpleShiftRegister::new(),
+            shift_register: ShiftRegister::new(),
             joystick_button_state: 0,
             joystick_pot: 0,
             ca1_enabled: false,
             ca1_interrupt_flag: false,
             firq_enabled: false,
             elapsed_audio_cycles: 0.0,
+            sync_context: None,
         }
     }
 
@@ -793,45 +402,11 @@ impl Via6522 {
         SetBits(m_portB, PortB::RampDisabled, true);
     }
     */
-    pub fn reset(&mut self) {
-        self.port_b = 0;
-        self.port_a = 0;
-        self.data_dir_b = 0;
-        self.data_dir_a = 0;
-        self.periph_cntl = 0;
-        self.interrupt_enable = 0;
-
-        self.screen = VectrexScreen::new();
-        self.psg.reset();
-        self.timer1 = Timer1::new();
-        self.timer2 = Timer2::new();
-        self.shift_register = SimpleShiftRegister::new();
-        self.joystick_button_state = 0;
-        self.ca1_enabled = false;
-        self.ca1_interrupt_flag = false;
-        self.firq_enabled = false;
-        self.elapsed_audio_cycles = 0.0;
-
-        // C++ Original: SetBits(m_portB, PortB::RampDisabled, true);
-        self.port_b |= PORT_B_RAMP_DISABLED;
-    }
-
-    pub fn frame_update(&mut self, frame_time: f64) {
-        self.screen.frame_update(frame_time);
-        self.psg.frame_update(frame_time);
-    }
 
     /* C++ Original:
     bool IrqEnabled() const;
     bool FirqEnabled() const;
     */
-    pub fn irq_enabled(&self) -> bool {
-        (self.get_interrupt_flag_value() & IF_IRQ_ENABLED) != 0
-    }
-
-    pub fn firq_enabled(&self) -> bool {
-        self.firq_enabled
-    }
 
     // C++ Original: GetInterruptFlagValue helper
     fn get_interrupt_flag_value(&self) -> u8 {
@@ -931,7 +506,7 @@ impl MemoryBusDevice for Via6522 {
                 (self.timer2.counter & 0xFF) as u8
             }
             TIMER2_HIGH => self.timer2.read_counter_high(),
-            SHIFT => self.shift_register.read_value(),
+            SHIFT => self.shift_register.value(),
             AUX_CNTL => {
                 let mut aux_cntl = 0u8;
                 // C++ Original: SetBits(auxCntl, 0b110 << AuxCntl::ShiftRegisterModeShift, true); //@HACK
@@ -1224,8 +799,70 @@ impl Via6522 {
         }
     }
 
+    // C++ Original: void Via::Init(MemoryBus& memoryBus)
+    pub fn init_memory_bus(
+        via: std::rc::Rc<std::cell::RefCell<Via6522>>,
+        memory_bus: &mut crate::core::memory_bus::MemoryBus,
+    ) {
+        // C++ Original: memoryBus.ConnectDevice(*this, MemoryMap::Via.range, EnableSync::True);
+        memory_bus.connect_device(
+            via.clone(),
+            (crate::core::memory_map::VIA_RANGE_START, crate::core::memory_map::VIA_RANGE_END),
+            crate::core::EnableSync::True,
+        );
+    }
+
+    // C++ Original: void SetSyncContext(const Input& input, RenderContext& renderContext, AudioContext& audioContext)  
+    pub fn set_sync_context(&mut self, input: Input, render_context: RenderContext, audio_context: AudioContext) {
+        self.sync_context = Some(SyncContext {
+            input_data: input,
+            render_context_data: render_context,
+            audio_context_data: audio_context,
+        });
+    }
+
+    // C++ Original: bool Via::IrqEnabled() const { return TestBits(GetInterruptFlagValue(), InterruptFlag::IrqEnabled); }
+    pub fn irq_enabled(&self) -> bool {
+        let interrupt_flag_value = self.get_interrupt_flag_value();
+        (interrupt_flag_value & IF_IRQ_ENABLED) != 0
+    }
+
+    // C++ Original: bool Via::FirqEnabled() const { return m_firqEnabled; }
+    pub fn firq_enabled(&self) -> bool {
+        self.firq_enabled
+    }
+
+    // C++ Original: void Via::FrameUpdate(double frameTime) { m_screen.FrameUpdate(frameTime); m_psg.FrameUpdate(frameTime); }
+    pub fn frame_update(&mut self, frame_time: f64) {
+        self.screen.frame_update(frame_time);
+        self.psg.frame_update(frame_time);
+    }
+
+    // C++ Original: void Via::Reset()
+    pub fn reset(&mut self) {
+        // C++ Original: m_portB = m_portA = 0;
+        self.port_b = 0;
+        self.port_a = 0;
+        
+        // C++ Original: m_dataDirB = m_dataDirA = 0;
+        self.data_dir_b = 0;
+        self.data_dir_a = 0;
+        
+        // C++ Original: m_periphCntl = 0;
+        self.periph_cntl = 0;
+        
+        // C++ Original: m_interruptEnable = 0;
+        self.interrupt_enable = 0;
+        
+        // Reset components
+        self.ca1_enabled = false;
+        self.ca1_interrupt_flag = false;
+        self.firq_enabled = false;
+        self.elapsed_audio_cycles = 0.0;
+    }
+
     // Public getters for accessing components
-    pub fn screen(&mut self) -> &mut VectrexScreen {
+    pub fn screen(&mut self) -> &mut Screen {
         &mut self.screen
     }
 

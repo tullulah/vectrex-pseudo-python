@@ -40,3 +40,7 @@ impl MemoryMap {
     pub const ILLEGAL: Mapping = Mapping::new(0xD800, 0xDFFF, 1);
     pub const BIOS: Mapping = Mapping::new(0xE000, 0xFFFF, 1);
 }
+
+// Constants for device initialization
+pub const VIA_RANGE_START: u16 = 0xD000;
+pub const VIA_RANGE_END: u16 = 0xD7FF;

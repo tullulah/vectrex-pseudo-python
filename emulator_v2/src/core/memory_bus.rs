@@ -265,4 +265,15 @@ impl MemoryBus {
             device_info.sync_cycles.set(0);
         }
     }
+
+    // Public methods for testing
+    #[cfg(test)]
+    pub fn device_count(&self) -> usize {
+        self.device_infos.len()
+    }
+
+    #[cfg(test)]
+    pub fn device_info(&self, index: usize) -> Option<(u16, u16)> {
+        self.device_infos.get(index).map(|info| info.memory_range)
+    }
 }
