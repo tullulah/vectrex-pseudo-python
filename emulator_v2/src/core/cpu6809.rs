@@ -925,7 +925,82 @@ impl Cpu6809 {
             },
             2 => {
                 // Page 2 instructions (0x11xx)
-                panic!("Page 2 instructions not implemented yet");
+                // C++ Original: switch (cpuOp.opCode) - Page 2 instructions
+                match opcode_byte {
+                    // C++ Original: OpCMP<2, 0x8C>(S); - CMPS immediate
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x8C => {
+                        let operand = self.read_pc16();
+                        let _discard = self.subtract_impl_u16(self.registers.s, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0x9C>(S); - CMPS direct
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x9C => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.s, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0xAC>(S); - CMPS indexed
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xAC => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.s, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0xBC>(S); - CMPS extended
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xBC => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.s, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0x83>(U); - CMPU immediate
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x83 => {
+                        let operand = self.read_pc16();
+                        let _discard = self.subtract_impl_u16(self.registers.u, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0x93>(U); - CMPU direct
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0x93 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.u, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0xA3>(U); - CMPU indexed
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xA3 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.u, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpCMP<2, 0xB3>(U); - CMPU extended
+                    // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
+                    0xB3 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        let _discard = self.subtract_impl_u16(self.registers.u, operand, 0);
+                        // Note: CMP only updates flags, result is discarded
+                    },
+
+                    _ => {
+                        panic!("Unhandled Page 2 opcode: {:02X}", opcode_byte);
+                    }
+                }
             },
             _ => panic!("Invalid CPU op page: {}", cpu_op_page)
         }
