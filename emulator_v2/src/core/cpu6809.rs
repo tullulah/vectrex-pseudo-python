@@ -919,6 +919,14 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // C++ Original: OpADD<0, 0x9B>(A); - ADDA direct
+                    // C++ Original: reg = AddImpl(reg, value, 0, CC);
+                    0x9B => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
+                    },
+
                     // C++ Original: OpCMP<0, 0x9C>(X); - CMPX direct
                     // C++ Original: uint16_t discard = SubtractImpl(reg, ReadOperandValue16<...>(), 0, CC); (void)discard;
                     0x9C => {
