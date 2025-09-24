@@ -1227,6 +1227,20 @@ impl Cpu6809 {
                         self.op_pulu(mask);
                     },
 
+                    // Transfer/Exchange operations - C++ Original: case 0x1E/0x1F in CPU switch statement
+
+                    // C++ Original: case 0x1E: OpEXG(); - EXG (Exchange registers)
+                    // C++ Original: ExchangeOrTransfer(true) - swap register contents
+                    0x1E => {
+                        self.op_exg();
+                    },
+
+                    // C++ Original: case 0x1F: OpTFR(); - TFR (Transfer registers)  
+                    // C++ Original: ExchangeOrTransfer(false) - copy src to dst register
+                    0x1F => {
+                        self.op_tfr();
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }
@@ -1882,6 +1896,123 @@ impl Cpu6809 {
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.pc = ((high as u16) << 8) | (low as u16);
         }
+    }
+
+    // C++ Original: void ExchangeOrTransfer(bool exchange)
+    fn exchange_or_transfer(&mut self, exchange: bool) {
+        let postbyte = self.read_pc8();
+        
+        // C++ Original: ASSERT(!!(postbyte & BITS(3)) == !!(postbyte & BITS(7)));
+        // 8-bit to 8-bit or 16-bit to 16-bit only
+        let bit3_set = (postbyte & 0x08) != 0;
+        let bit7_set = (postbyte & 0x80) != 0;
+        assert_eq!(bit3_set, bit7_set, "TFR/EXG: 8-bit to 8-bit or 16-bit to 16-bit only");
+
+        let src = (postbyte >> 4) & 0b111;
+        let dst = postbyte & 0b111;
+
+        if postbyte & 0x08 != 0 {
+            // 8-bit transfer
+            // C++ Original: ASSERT(src < 4 && dst < 4); // Only first 4 are valid 8-bit register indices
+            assert!(src < 4 && dst < 4, "TFR/EXG: Invalid 8-bit register index");
+            
+            // C++ Original: uint8_t* const reg[]{&A, &B, &CC.Value, &DP};
+            let src_val = match src {
+                0 => self.registers.a,
+                1 => self.registers.b,
+                2 => self.registers.cc.to_u8(),
+                3 => self.registers.dp,
+                _ => unreachable!()
+            };
+            
+            let dst_val = match dst {
+                0 => self.registers.a,
+                1 => self.registers.b,
+                2 => self.registers.cc.to_u8(),
+                3 => self.registers.dp,
+                _ => unreachable!()
+            };
+
+            if exchange {
+                // Swap values
+                match src {
+                    0 => self.registers.a = dst_val,
+                    1 => self.registers.b = dst_val,
+                    2 => self.registers.cc.from_u8(dst_val),
+                    3 => self.registers.dp = dst_val,
+                    _ => unreachable!()
+                }
+            }
+
+            // Set destination
+            match dst {
+                0 => self.registers.a = src_val,
+                1 => self.registers.b = src_val,
+                2 => self.registers.cc.from_u8(src_val),
+                3 => self.registers.dp = src_val,
+                _ => unreachable!()
+            }
+
+        } else {
+            // 16-bit transfer
+            // C++ Original: ASSERT(src < 6 && dst < 6); // Only first 6 are valid 16-bit register indices
+            assert!(src < 6 && dst < 6, "TFR/EXG: Invalid 16-bit register index");
+            
+            // C++ Original: uint16_t* const reg[]{&D, &X, &Y, &U, &S, &PC};
+            let src_val = match src {
+                0 => self.registers.d(), // D = A:B
+                1 => self.registers.x,
+                2 => self.registers.y,
+                3 => self.registers.u,
+                4 => self.registers.s,
+                5 => self.registers.pc,
+                _ => unreachable!()
+            };
+            
+            let dst_val = match dst {
+                0 => self.registers.d(), // D = A:B
+                1 => self.registers.x,
+                2 => self.registers.y,
+                3 => self.registers.u,
+                4 => self.registers.s,
+                5 => self.registers.pc,
+                _ => unreachable!()
+            };
+
+            if exchange {
+                // Swap values
+                match src {
+                    0 => self.registers.set_d(dst_val), // D = A:B
+                    1 => self.registers.x = dst_val,
+                    2 => self.registers.y = dst_val,
+                    3 => self.registers.u = dst_val,
+                    4 => self.registers.s = dst_val,
+                    5 => self.registers.pc = dst_val,
+                    _ => unreachable!()
+                }
+            }
+
+            // Set destination
+            match dst {
+                0 => self.registers.set_d(src_val), // D = A:B
+                1 => self.registers.x = src_val,
+                2 => self.registers.y = src_val,
+                3 => self.registers.u = src_val,
+                4 => self.registers.s = src_val,
+                5 => self.registers.pc = src_val,
+                _ => unreachable!()
+            }
+        }
+    }
+
+    // C++ Original: void OpEXG() { ExchangeOrTransfer(true); }
+    fn op_exg(&mut self) {
+        self.exchange_or_transfer(true);
+    }
+
+    // C++ Original: void OpTFR() { ExchangeOrTransfer(false); }
+    fn op_tfr(&mut self) {
+        self.exchange_or_transfer(false);
     }
 
     // C++ Original: static uint8_t AddImpl(uint8_t a, uint8_t b, uint8_t carry, ConditionCode& CC)
