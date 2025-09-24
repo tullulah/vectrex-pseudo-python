@@ -475,6 +475,16 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // C++ Original: OpOR<0, 0x8A>(A); - ORA immediate
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0x8A => {
+                        let operand = self.read_pc8();
+                        self.registers.a = self.registers.a | operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                    },
+
                     // C++ Original: OpAND<0, 0xC4>(B); - ANDB immediate
                     // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
                     0xC4 => {
