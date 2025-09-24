@@ -1227,6 +1227,12 @@ impl Cpu6809 {
                         self.op_pulu(mask);
                     },
 
+                    // C++ Original: case 0x39: OpRTS(); - RTS (Return from Subroutine)
+                    // C++ Original: PC = Pop16(S);
+                    0x39 => {
+                        self.op_rts();
+                    },
+
                     // Jump/Subroutine operations - C++ Original: case 0x8D/0x9D/0xAD/0xBD/0x17 in CPU switch statement
 
                     // C++ Original: case 0x17: OpLBSR(); - LBSR (Long Branch to Subroutine)
@@ -2099,6 +2105,18 @@ impl Cpu6809 {
         self.write8(self.registers.s, (pc_value >> 8) as u8);   // High byte second
         // Branch by adding 16-bit offset to PC
         self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+    }
+
+    // C++ Original: void OpRTS()
+    // C++ Original: PC = Pop16(S);
+    fn op_rts(&mut self) {
+        // Pop return address from system stack - inline Pop16(S)
+        let high_byte = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        let low_byte = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        // Combine bytes and set PC
+        self.registers.pc = (high_byte << 8) | low_byte;
     }
 
     // C++ Original: static uint8_t AddImpl(uint8_t a, uint8_t b, uint8_t carry, ConditionCode& CC)
