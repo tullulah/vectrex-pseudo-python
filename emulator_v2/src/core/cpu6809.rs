@@ -255,8 +255,7 @@ impl Cpu6809 {
         }
 
         // C++ Original: const CpuOp& cpuOp = LookupCpuOpRuntime(cpuOpPage, opCodeByte);
-        let cpu_op = lookup_cpu_op_runtime(cpu_op_page, opcode_byte)
-            .expect(&format!("Unimplemented opcode: {:02X}, page: {}", opcode_byte, cpu_op_page));
+        let cpu_op = lookup_cpu_op_runtime(cpu_op_page, opcode_byte);
         
         // C++ Original: AddCycles(cpuOp.cycles);
         self.add_cycles(cpu_op.cycles as Cycles);
@@ -403,6 +402,201 @@ impl Cpu6809 {
                         self.op_st_16(self.registers.u, opcode_byte);
                     },
 
+                    // C++ Original: OpSUB<0, 0x80>(A); - SUBA immediate
+                    // C++ Original for immediate mode: ReadOperandValue8<AddressingMode::Immediate>() { return ReadPC8(); }
+                    0x80 => {
+                        let operand = self.read_pc8();
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, 0);
+                    },
+
+                    // C++ Original: OpADD<0, 0x8B>(A); - ADDA immediate  
+                    // C++ Original for immediate mode: ReadOperandValue8<AddressingMode::Immediate>() { return ReadPC8(); }
+                    0x8B => {
+                        let operand = self.read_pc8();
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
+                    },
+
+                    // C++ Original: OpSUB<0, 0xC0>(B); - SUBB immediate
+                    // C++ Original for immediate mode: ReadOperandValue8<AddressingMode::Immediate>() { return ReadPC8(); }
+                    0xC0 => {
+                        let operand = self.read_pc8();
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
+                    },
+
+                    // C++ Original: OpADD<0, 0xCB>(B); - ADDB immediate
+                    // C++ Original for immediate mode: ReadOperandValue8<AddressingMode::Immediate>() { return ReadPC8(); }
+                    0xCB => {
+                        let operand = self.read_pc8();
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, 0);
+                    },
+
+                    // C++ Original: OpAND<0, 0x84>(A); - ANDA immediate
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0x84 => {
+                        let operand = self.read_pc8();
+                        self.registers.a = self.registers.a & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpEOR<0, 0x88>(A); - EORA immediate  
+                    // C++ Original: reg ^= value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0x88 => {
+                        let operand = self.read_pc8();
+                        self.registers.a = self.registers.a ^ operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpAND<0, 0xC4>(B); - ANDB immediate
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xC4 => {
+                        let operand = self.read_pc8();
+                        self.registers.b = self.registers.b & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpEOR<0, 0xC8>(B); - EORB immediate  
+                    // C++ Original: reg ^= value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xC8 => {
+                        let operand = self.read_pc8();
+                        self.registers.b = self.registers.b ^ operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpOR<0, 0xCA>(B); - ORB immediate
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xCA => {
+                        let operand = self.read_pc8();
+                        self.registers.b = self.registers.b | operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpOR<0, 0xDA>(B); - ORB direct
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xDA => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.registers.b | operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpAND<0, 0xD4>(B); - ANDB direct
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xD4 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.registers.b & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpEOR<0, 0xD8>(B); - EORB direct
+                    // C++ Original: reg ^= value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xD8 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.registers.b ^ operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpAND<0, 0xF4>(B); - ANDB extended
+                    // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xF4 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.registers.b & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpOR<0, 0xFA>(B); - ORB extended
+                    // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
+                    0xFA => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.registers.b | operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
+                    },
+
+                    // ======== SINGLE REGISTER OPERATIONS ========
+                    
+                    // C++ Original: void OpNEG(uint8_t& value) { value = SubtractImpl(0, value, 0, CC); }
+                    0x40 => {
+                        self.registers.a = self.subtract_impl_u8(0, self.registers.a, 0);
+                    },
+
+                    // C++ Original: void OpCOM(uint8_t& value) { value = ~value; CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; CC.Carry = 1; }
+                    0x43 => {
+                        self.registers.a = !self.registers.a;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                        self.registers.cc.c = true;
+                    },
+
+                    // C++ Original: void OpDEC(uint8_t& value) { uint8_t origValue = value; --value; CC.Overflow = origValue == 0b1000'0000; CC.Zero = CalcZero(value); CC.Negative = CalcNegative(value); }
+                    0x4A => {
+                        let orig_value = self.registers.a;
+                        self.registers.a = self.registers.a.wrapping_sub(1);
+                        self.registers.cc.v = orig_value == 0b1000_0000;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        // Note: DEC does NOT modify Carry flag in 6809
+                    },
+
+                    // C++ Original: void OpINC(uint8_t& value) { uint8_t origValue = value; ++value; CC.Overflow = origValue == 0b0111'1111; CC.Zero = CalcZero(value); CC.Negative = CalcNegative(value); }
+                    0x4C => {
+                        let orig_value = self.registers.a;
+                        self.registers.a = self.registers.a.wrapping_add(1);
+                        self.registers.cc.v = orig_value == 0b0111_1111;
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        // Note: INC does NOT modify Carry flag in 6809
+                    },
+
+                    // C++ Original: void OpTST(const uint8_t& value) { CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; }
+                    0x4D => {
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                        // Note: TST does NOT modify Carry flag in 6809
+                    },
+
+                    // C++ Original: void OpCLR(uint8_t& reg) { reg = 0; CC.Negative = 0; CC.Zero = 1; CC.Overflow = 0; CC.Carry = 0; }
+                    0x4F => {
+                        self.registers.a = 0;
+                        self.registers.cc.n = false;
+                        self.registers.cc.z = true;
+                        self.registers.cc.v = false;
+                        self.registers.cc.c = false;
+                    },
+
+                    // C++ Original: void OpCLR(uint8_t& reg) { reg = 0; CC.Negative = 0; CC.Zero = 1; CC.Overflow = 0; CC.Carry = 0; }
+                    0x5F => {
+                        self.registers.b = 0;
+                        self.registers.cc.n = false;
+                        self.registers.cc.z = true;
+                        self.registers.cc.v = false;
+                        self.registers.cc.c = false;
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }
@@ -460,8 +654,7 @@ impl Cpu6809 {
 
     // Helper function to read effective address for store operations
     fn read_effective_address(&mut self, opcode: u8) -> u16 {
-        let cpu_op = lookup_cpu_op_runtime(0, opcode)
-            .expect(&format!("Unimplemented opcode for EA: {:02X}", opcode));
+        let cpu_op = lookup_cpu_op_runtime(0, opcode);
         match cpu_op.addr_mode {
             AddressingMode::Direct => self.read_direct_ea(),
             AddressingMode::Indexed => self.read_indexed_ea(),
@@ -655,6 +848,110 @@ impl Cpu6809 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);
         combine_to_u16(high, low)
+    }
+
+    // C++ Original: static uint8_t AddImpl(uint8_t a, uint8_t b, uint8_t carry, ConditionCode& CC)
+    fn add_impl_u8(&mut self, a: u8, b: u8, carry: u8) -> u8 {
+        let r16 = (a as u16) + (b as u16) + (carry as u16);
+        
+        // CC.HalfCarry = CalcHalfCarryFromAdd(a, b, carry);
+        self.registers.cc.h = Self::calc_half_carry_from_add(a, b, carry);
+        
+        // CC.Carry = CalcCarry(r16);
+        self.registers.cc.c = Self::calc_carry_u16(r16);
+        
+        // CC.Overflow = CalcOverflow(a, b, r16);
+        self.registers.cc.v = Self::calc_overflow_u8(a, b, r16);
+        
+        let r8 = r16 as u8;
+        
+        // CC.Zero = CalcZero(r8);
+        self.registers.cc.z = Self::calc_zero_u8(r8);
+        
+        // CC.Negative = CalcNegative(r8);
+        self.registers.cc.n = Self::calc_negative_u8(r8);
+        
+        r8
+    }
+
+    // C++ Original: static uint16_t AddImpl(uint16_t a, uint16_t b, uint16_t carry, ConditionCode& CC)
+    fn add_impl_u16(&mut self, a: u16, b: u16, carry: u16) -> u16 {
+        let r32 = (a as u32) + (b as u32) + (carry as u32);
+        
+        // No HalfCarry for 16-bit operations in Vectrexy
+        
+        // CC.Carry = CalcCarry(r32);
+        self.registers.cc.c = Self::calc_carry_u32(r32);
+        
+        // CC.Overflow = CalcOverflow(a, b, r32);
+        self.registers.cc.v = Self::calc_overflow_u16(a, b, r32);
+        
+        let r16 = r32 as u16;
+        
+        // CC.Zero = CalcZero(r16);
+        self.registers.cc.z = Self::calc_zero_u16(r16);
+        
+        // CC.Negative = CalcNegative(r16);
+        self.registers.cc.n = Self::calc_negative_u16(r16);
+        
+        r16
+    }
+
+    // C++ Original: static uint8_t SubtractImpl(uint8_t a, uint8_t b, uint8_t carry, ConditionCode& CC)
+    fn subtract_impl_u8(&mut self, a: u8, b: u8, carry: u8) -> u8 {
+        let result = self.add_impl_u8(a, !b, 1 - carry);
+        // CC.Carry = !CC.Carry; // Carry is set if no borrow occurs
+        self.registers.cc.c = !self.registers.cc.c;
+        result
+    }
+
+    // C++ Original: static uint16_t SubtractImpl(uint16_t a, uint16_t b, uint16_t carry, ConditionCode& CC)
+    fn subtract_impl_u16(&mut self, a: u16, b: u16, carry: u16) -> u16 {
+        let result = self.add_impl_u16(a, !b, 1 - carry);
+        // CC.Carry = !CC.Carry; // Carry is set if no borrow occurs
+        self.registers.cc.c = !self.registers.cc.c;
+        result
+    }
+
+    // C++ Original: constexpr uint8_t CalcHalfCarryFromAdd(uint8_t a, uint8_t b, uint8_t carry) { return (((a & 0x0F) + (b & 0x0F) + carry) & 0x10) != 0; }
+    fn calc_half_carry_from_add(a: u8, b: u8, carry: u8) -> bool {
+        (((a & 0x0F) + (b & 0x0F) + carry) & 0x10) != 0
+    }
+
+    // C++ Original: constexpr uint8_t CalcCarry(uint16_t r) { return (r & 0xFF00) != 0; }
+    fn calc_carry_u16(value: u16) -> bool {
+        (value & 0xFF00) != 0
+    }
+
+    // C++ Original: constexpr uint8_t CalcCarry(uint32_t r) { return (r & 0xFFFF'0000) != 0; }
+    fn calc_carry_u32(value: u32) -> bool {
+        (value & 0xFFFF0000) != 0
+    }
+
+    // C++ Original: constexpr uint8_t CalcOverflow(uint8_t a, uint8_t b, uint16_t r) { return (((uint16_t)a ^ r) & ((uint16_t)b ^ r) & BITS(7)) != 0; }
+    fn calc_overflow_u8(a: u8, b: u8, result: u16) -> bool {
+        (((a as u16) ^ result) & ((b as u16) ^ result) & 0x80) != 0
+    }
+
+    // C++ Original: constexpr uint8_t CalcOverflow(uint16_t a, uint16_t b, uint32_t r) { return (((uint32_t)a ^ r) & ((uint32_t)b ^ r) & BITS(15)) != 0; }
+    fn calc_overflow_u16(a: u16, b: u16, result: u32) -> bool {
+        (((a as u32) ^ result) & ((b as u32) ^ result) & 0x8000) != 0
+    }
+
+    fn calc_zero_u8(value: u8) -> bool {
+        value == 0
+    }
+
+    fn calc_zero_u16(value: u16) -> bool {
+        value == 0
+    }
+
+    fn calc_negative_u8(value: u8) -> bool {
+        (value & 0x80) != 0
+    }
+
+    fn calc_negative_u16(value: u16) -> bool {
+        (value & 0x8000) != 0
     }
 
     // Register interrupt callbacks
