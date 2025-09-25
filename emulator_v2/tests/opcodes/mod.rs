@@ -13,7 +13,13 @@ pub mod test_ldu;
 pub mod test_sta;
 pub mod test_stb;
 
-// Organized test modules by category
+// CMP (Compare) family - Individual opcodes segregated
+pub mod test_cmpa_immediate_0x81;
+pub mod test_cmpa_direct_0x91;
+pub mod test_cmpa_indexed_0xa1;
+pub mod test_cmpa_extended_0xb1;
+
+// Organized test modules by category (TEMPORARY - will be segregated)
 pub mod comparison {
     //! Comparison instruction tests (CMP family)
     pub mod test_cmpa_opcodes;
