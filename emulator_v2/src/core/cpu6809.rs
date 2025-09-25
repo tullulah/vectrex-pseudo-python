@@ -1235,6 +1235,12 @@ impl Cpu6809 {
 
                     // Jump/Subroutine operations - C++ Original: case 0x8D/0x9D/0xAD/0xBD/0x17 in CPU switch statement
 
+                    // C++ Original: case 0x16: OpLBRA(); - LBRA (Long Branch Always)
+                    // C++ Original: int16_t offset = ReadRelativeOffset16(); PC += offset;
+                    0x16 => {
+                        self.op_lbra();
+                    },
+
                     // C++ Original: case 0x17: OpLBSR(); - LBSR (Long Branch to Subroutine)
                     // C++ Original: int16_t offset = ReadRelativeOffset16(); Push16(S, PC); PC += offset;
                     0x17 => {
@@ -1406,6 +1412,82 @@ impl Cpu6809 {
                     // C++ Original: PushCCState(true); PC = Read16(InterruptVector::Swi2); (no interrupt mask change)
                     0x3F => {
                         self.op_swi2();
+                    },
+
+                    // Long Branch Operations - C++ Original: OpLongBranch(condFunc)
+                    // C++ Original: case 0x21: OpLongBranch([] { return false; }); - LBRN (Long Branch Never)
+                    0x21 => {
+                        self.op_long_branch_never();
+                    },
+
+                    // C++ Original: case 0x22: OpLongBranch([this] { return (CC.Carry | CC.Zero) == 0; }); - LBHI (Long Branch if Higher)
+                    0x22 => {
+                        self.op_long_branch_if_higher();
+                    },
+
+                    // C++ Original: case 0x23: OpLongBranch([this] { return (CC.Carry | CC.Zero) != 0; }); - LBLS (Long Branch if Lower or Same)
+                    0x23 => {
+                        self.op_long_branch_if_lower_or_same();
+                    },
+
+                    // C++ Original: case 0x24: OpLongBranch([this] { return CC.Carry == 0; }); - LBCC (Long Branch if Carry Clear)
+                    0x24 => {
+                        self.op_long_branch_if_carry_clear();
+                    },
+
+                    // C++ Original: case 0x25: OpLongBranch([this] { return CC.Carry != 0; }); - LBCS (Long Branch if Carry Set)
+                    0x25 => {
+                        self.op_long_branch_if_carry_set();
+                    },
+
+                    // C++ Original: case 0x26: OpLongBranch([this] { return CC.Zero == 0; }); - LBNE (Long Branch if Not Equal)
+                    0x26 => {
+                        self.op_long_branch_if_not_equal();
+                    },
+
+                    // C++ Original: case 0x27: OpLongBranch([this] { return CC.Zero != 0; }); - LBEQ (Long Branch if Equal)
+                    0x27 => {
+                        self.op_long_branch_if_equal();
+                    },
+
+                    // C++ Original: case 0x28: OpLongBranch([this] { return CC.Overflow == 0; }); - LBVC (Long Branch if Overflow Clear)
+                    0x28 => {
+                        self.op_long_branch_if_overflow_clear();
+                    },
+
+                    // C++ Original: case 0x29: OpLongBranch([this] { return CC.Overflow != 0; }); - LBVS (Long Branch if Overflow Set)
+                    0x29 => {
+                        self.op_long_branch_if_overflow_set();
+                    },
+
+                    // C++ Original: case 0x2A: OpLongBranch([this] { return CC.Negative == 0; }); - LBPL (Long Branch if Plus)
+                    0x2A => {
+                        self.op_long_branch_if_plus();
+                    },
+
+                    // C++ Original: case 0x2B: OpLongBranch([this] { return CC.Negative != 0; }); - LBMI (Long Branch if Minus)
+                    0x2B => {
+                        self.op_long_branch_if_minus();
+                    },
+
+                    // C++ Original: case 0x2C: OpLongBranch([this] { return (CC.Negative ^ CC.Overflow) == 0; }); - LBGE (Long Branch if Greater or Equal)
+                    0x2C => {
+                        self.op_long_branch_if_greater_or_equal();
+                    },
+
+                    // C++ Original: case 0x2D: OpLongBranch([this] { return (CC.Negative ^ CC.Overflow) != 0; }); - LBLT (Long Branch if Less Than)
+                    0x2D => {
+                        self.op_long_branch_if_less_than();
+                    },
+
+                    // C++ Original: case 0x2E: OpLongBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) == 0; }); - LBGT (Long Branch if Greater)
+                    0x2E => {
+                        self.op_long_branch_if_greater();
+                    },
+
+                    // C++ Original: case 0x2F: OpLongBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) != 0; }); - LBLE (Long Branch if Less or Equal)
+                    0x2F => {
+                        self.op_long_branch_if_less_or_equal();
                     },
 
                     _ => {
@@ -2732,5 +2814,115 @@ impl Cpu6809 {
         self.registers.pc = (pc_high << 8) | pc_low;
         
         popped_entire
+    }
+
+    // ======== LONG BRANCH OPERATIONS IMPLEMENTATION ========
+
+    // C++ Original: void OpLBRA() { int16_t offset = ReadRelativeOffset16(); PC += offset; }
+    fn op_lbra(&mut self) {
+        let offset = self.read_relative_offset16();
+        // C++ Original: PC += offset;
+        self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+        // LBRA always takes exactly 5 cycles (no extra cycle like conditional branches)
+    }
+
+    // Helper function for long branch operations
+    // C++ Original: void OpLongBranch(CondFunc condFunc) { int16_t offset = ReadRelativeOffset16(); if (condFunc()) { PC += offset; AddCycles(1); } }
+    fn op_long_branch(&mut self, condition: bool) {
+        let offset = self.read_relative_offset16();
+        if condition {
+            // C++ Original: PC += offset; AddCycles(1);
+            self.registers.pc = ((self.registers.pc as i32) + (offset as i32)) as u16;
+            self.add_cycles(1); // Extra cycle if branch is taken
+        }
+    }
+
+    // C++ Original: case 0x21: OpLongBranch([] { return false; }); - LBRN (Long Branch Never)
+    fn op_long_branch_never(&mut self) {
+        self.op_long_branch(false) // Always false - never branch
+    }
+
+    // C++ Original: case 0x22: OpLongBranch([this] { return (CC.Carry | CC.Zero) == 0; }); - LBHI (Long Branch if Higher)
+    fn op_long_branch_if_higher(&mut self) {
+        let condition = !self.registers.cc.c && !self.registers.cc.z;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x23: OpLongBranch([this] { return (CC.Carry | CC.Zero) != 0; }); - LBLS (Long Branch if Lower or Same)
+    fn op_long_branch_if_lower_or_same(&mut self) {
+        let condition = self.registers.cc.c || self.registers.cc.z;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x24: OpLongBranch([this] { return CC.Carry == 0; }); - LBCC (Long Branch if Carry Clear)
+    fn op_long_branch_if_carry_clear(&mut self) {
+        let condition = !self.registers.cc.c;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x25: OpLongBranch([this] { return CC.Carry != 0; }); - LBCS (Long Branch if Carry Set)
+    fn op_long_branch_if_carry_set(&mut self) {
+        let condition = self.registers.cc.c;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x26: OpLongBranch([this] { return CC.Zero == 0; }); - LBNE (Long Branch if Not Equal)
+    fn op_long_branch_if_not_equal(&mut self) {
+        let condition = !self.registers.cc.z;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x27: OpLongBranch([this] { return CC.Zero != 0; }); - LBEQ (Long Branch if Equal)
+    fn op_long_branch_if_equal(&mut self) {
+        let condition = self.registers.cc.z;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x28: OpLongBranch([this] { return CC.Overflow == 0; }); - LBVC (Long Branch if Overflow Clear)
+    fn op_long_branch_if_overflow_clear(&mut self) {
+        let condition = !self.registers.cc.v;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x29: OpLongBranch([this] { return CC.Overflow != 0; }); - LBVS (Long Branch if Overflow Set)
+    fn op_long_branch_if_overflow_set(&mut self) {
+        let condition = self.registers.cc.v;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2A: OpLongBranch([this] { return CC.Negative == 0; }); - LBPL (Long Branch if Plus)
+    fn op_long_branch_if_plus(&mut self) {
+        let condition = !self.registers.cc.n;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2B: OpLongBranch([this] { return CC.Negative != 0; }); - LBMI (Long Branch if Minus)
+    fn op_long_branch_if_minus(&mut self) {
+        let condition = self.registers.cc.n;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2C: OpLongBranch([this] { return (CC.Negative ^ CC.Overflow) == 0; }); - LBGE (Long Branch if Greater or Equal)
+    fn op_long_branch_if_greater_or_equal(&mut self) {
+        let condition = self.registers.cc.n == self.registers.cc.v;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2D: OpLongBranch([this] { return (CC.Negative ^ CC.Overflow) != 0; }); - LBLT (Long Branch if Less Than)
+    fn op_long_branch_if_less_than(&mut self) {
+        let condition = self.registers.cc.n != self.registers.cc.v;
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2E: OpLongBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) == 0; }); - LBGT (Long Branch if Greater)
+    fn op_long_branch_if_greater(&mut self) {
+        let condition = !self.registers.cc.z && (self.registers.cc.n == self.registers.cc.v);
+        self.op_long_branch(condition)
+    }
+
+    // C++ Original: case 0x2F: OpLongBranch([this] { return (CC.Zero | (CC.Negative ^ CC.Overflow)) != 0; }); - LBLE (Long Branch if Less or Equal)
+    fn op_long_branch_if_less_or_equal(&mut self) {
+        let condition = self.registers.cc.z || (self.registers.cc.n != self.registers.cc.v);
+        self.op_long_branch(condition)
     }
 }

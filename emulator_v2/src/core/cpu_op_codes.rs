@@ -114,6 +114,9 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0x69 => CpuOp { op_code: 0x69, name: "ROL", addr_mode: AddressingMode::Indexed, cycles: 6, size: 2, description: "Rotate Left indexed" },
         0x79 => CpuOp { op_code: 0x79, name: "ROL", addr_mode: AddressingMode::Extended, cycles: 7, size: 3, description: "Rotate Left extended" },
 
+        // Long Branch Always - C++ Original: OpLBRA()
+        0x16 => CpuOp { op_code: 0x16, name: "LBRA", addr_mode: AddressingMode::Relative, cycles: 5, size: 3, description: "Long Branch Always" },
+
         // Jump and Subroutine instructions - C++ Original: OpJmp/OpJsr
         0x0E => CpuOp { op_code: 0x0E, name: "JMP", addr_mode: AddressingMode::Direct, cycles: 3, size: 2, description: "Jump direct" },
         0x6E => CpuOp { op_code: 0x6E, name: "JMP", addr_mode: AddressingMode::Indexed, cycles: 3, size: 2, description: "Jump indexed" },
