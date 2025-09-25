@@ -315,22 +315,23 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
 
         // System operations
         0x39 => CpuOp { op_code: 0x39, name: "RTS", addr_mode: AddressingMode::Inherent, cycles: 5, size: 1, description: "Return from Subroutine" },
+        0x3A => CpuOp { op_code: 0x3A, name: "ABX", addr_mode: AddressingMode::Inherent, cycles: 3, size: 1, description: "Add B into X" },
         0x3B => CpuOp { op_code: 0x3B, name: "RTI", addr_mode: AddressingMode::Inherent, cycles: 0, size: 1, description: "Return from Interrupt - cycles handled dynamically" },
         0x3C => CpuOp { op_code: 0x3C, name: "CWAI", addr_mode: AddressingMode::Immediate, cycles: 20, size: 2, description: "Clear and Wait for Interrupt" },
         0x3D => CpuOp { op_code: 0x3D, name: "MUL", addr_mode: AddressingMode::Inherent, cycles: 11, size: 1, description: "Multiply A by B" },
         0x3F => CpuOp { op_code: 0x3F, name: "SWI", addr_mode: AddressingMode::Inherent, cycles: 19, size: 1, description: "Software Interrupt" },
 
         // Register operations
-        0x1E => CpuOp { op_code: 0x1E, name: "EXG", addr_mode: AddressingMode::Immediate, cycles: 8, size: 2, description: "Exchange Registers" },
-        0x1F => CpuOp { op_code: 0x1F, name: "TFR", addr_mode: AddressingMode::Immediate, cycles: 6, size: 2, description: "Transfer Registers" },
+        0x1E => CpuOp { op_code: 0x1E, name: "EXG", addr_mode: AddressingMode::Inherent, cycles: 8, size: 2, description: "Exchange Registers" },
+        0x1F => CpuOp { op_code: 0x1F, name: "TFR", addr_mode: AddressingMode::Inherent, cycles: 6, size: 2, description: "Transfer Registers" },
 
-        // Condition code operations
-        0x1A => CpuOp { op_code: 0x1A, name: "ORCC", addr_mode: AddressingMode::Immediate, cycles: 3, size: 2, description: "OR Condition Code" },
-        0x1C => CpuOp { op_code: 0x1C, name: "ANDCC", addr_mode: AddressingMode::Immediate, cycles: 3, size: 2, description: "AND Condition Code" },
+        // Condition code operations  
+        0x1A => CpuOp { op_code: 0x1A, name: "ORCC", addr_mode: AddressingMode::Immediate, cycles: 3, size: 2, description: "Inclusive OR CCR" },
+        0x1C => CpuOp { op_code: 0x1C, name: "ANDCC", addr_mode: AddressingMode::Immediate, cycles: 3, size: 2, description: "Logical AND with CCR" },
 
         // Miscellaneous
         0x19 => CpuOp { op_code: 0x19, name: "DAA", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "Decimal Adjust A" },
-        0x1D => CpuOp { op_code: 0x1D, name: "SEX", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "Sign Extend B to D" },
+        0x1D => CpuOp { op_code: 0x1D, name: "SEX", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "Sign Extend" },
 
         // Page prefix opcodes
         0x10 => CpuOp { op_code: 0x10, name: "PAGE1", addr_mode: AddressingMode::Variant, cycles: 0, size: 0, description: "Page 1 prefix" },
