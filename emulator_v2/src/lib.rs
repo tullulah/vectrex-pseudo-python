@@ -7,6 +7,9 @@
 pub mod types;
 pub mod core;
 
+#[cfg(test)]
+pub mod tests;
+
 // Re-export commonly used types
 pub use types::*;
 pub use core::*;

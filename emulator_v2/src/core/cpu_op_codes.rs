@@ -337,8 +337,10 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0x10 => CpuOp { op_code: 0x10, name: "PAGE1", addr_mode: AddressingMode::Variant, cycles: 0, size: 0, description: "Page 1 prefix" },
         0x11 => CpuOp { op_code: 0x11, name: "PAGE2", addr_mode: AddressingMode::Variant, cycles: 0, size: 0, description: "Page 2 prefix" },
 
-        // NOP
+        // System control instructions
         0x12 => CpuOp { op_code: 0x12, name: "NOP", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "No Operation" },
+        0x13 => CpuOp { op_code: 0x13, name: "SYNC", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "Synchronize with interrupts" },
+        0x3E => CpuOp { op_code: 0x3E, name: "RESET", addr_mode: AddressingMode::Inherent, cycles: 0, size: 1, description: "Reset system" },
 
         // LD family - 8-bit
         0x86 => CpuOp { op_code: 0x86, name: "LDA", addr_mode: AddressingMode::Immediate, cycles: 2, size: 2, description: "Load Accumulator A" },
