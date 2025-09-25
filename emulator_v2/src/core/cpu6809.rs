@@ -1279,6 +1279,46 @@ impl Cpu6809 {
                         self.op_tfr();
                     },
 
+                    // Jump operations - C++ Original: OpJMP<0, opCode>()
+                    
+                    // C++ Original: case 0x0E: OpJMP<0, 0x0E>(); - JMP Direct
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Direct>(); PC = EA;
+                    0x0E => {
+                        self.op_jmp(opcode_byte);
+                    },
+
+                    // C++ Original: case 0x6E: OpJMP<0, 0x6E>(); - JMP Indexed  
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Indexed>(); PC = EA;
+                    0x6E => {
+                        self.op_jmp(opcode_byte);
+                    },
+
+                    // C++ Original: case 0x7E: OpJMP<0, 0x7E>(); - JMP Extended
+                    // C++ Original: uint16_t EA = ReadEA16<AddressingMode::Extended>(); PC = EA;
+                    0x7E => {
+                        self.op_jmp(opcode_byte);
+                    },
+
+                    // System operations
+                    
+                    // C++ Original: case 0x3D: OpMUL<0, 0x3D>(); - MUL (Multiply A * B -> D)
+                    // C++ Original: uint16_t result = A * B; CC.Zero = CalcZero(result); CC.Carry = TestBits01(result, BITS(7)); D = result;
+                    0x3D => {
+                        self.op_mul();
+                    },
+
+                    // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi); - SWI (Software Interrupt)
+                    // C++ Original: PushCCState(true); CC.InterruptMask = 1; CC.FastInterruptMask = 1; PC = Read16(InterruptVector::Swi);
+                    0x3F => {
+                        self.op_swi();
+                    },
+
+                    // C++ Original: case 0x3B: OpRTI<0, 0x3B>(); - RTI (Return from Interrupt)
+                    // C++ Original: bool poppedEntire{}; PopCCState(poppedEntire); AddCycles(poppedEntire ? 15 : 6);
+                    0x3B => {
+                        self.op_rti();
+                    },
+
                     _ => {
                         panic!("Unhandled opcode: {:02X} on page {}", opcode_byte, cpu_op_page);
                     }
@@ -1362,6 +1402,12 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi2); - SWI2 (Software Interrupt 2)
+                    // C++ Original: PushCCState(true); PC = Read16(InterruptVector::Swi2); (no interrupt mask change)
+                    0x3F => {
+                        self.op_swi2();
+                    },
+
                     _ => {
                         panic!("Unhandled Page 1 opcode: {:02X}", opcode_byte);
                     }
@@ -1439,6 +1485,12 @@ impl Cpu6809 {
                         let operand = self.read16(ea);
                         let _discard = self.subtract_impl_u16(self.registers.u, operand, 0);
                         // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi3); - SWI3 (Software Interrupt 3)
+                    // C++ Original: PushCCState(true); PC = Read16(InterruptVector::Swi3); (no interrupt mask change)
+                    0x3F => {
+                        self.op_swi3();
                     },
 
                     _ => {
@@ -2499,5 +2551,186 @@ impl Cpu6809 {
         self.registers.cc.z = Self::calc_zero_u8(result);
         value = result;
         self.write8(ea, value);
+    }
+
+    // ======== IMMEDIATE PRIORITY OPCODES IMPLEMENTATION ========
+
+    // C++ Original: template <int page, uint8_t opCode> void OpJMP() { uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); PC = EA; }
+    fn op_jmp(&mut self, opcode_byte: u8) -> Cycles {
+        let ea = self.read_effective_address(opcode_byte);
+        // C++ Original: PC = EA;
+        self.registers.pc = ea;
+        // JMP doesn't return cycles - they're already added by CPU infrastructure
+        0
+    }
+
+    // C++ Original: void OpMUL() { uint16_t result = A * B; CC.Zero = CalcZero(result); CC.Carry = TestBits01(result, BITS(7)); D = result; }
+    fn op_mul(&mut self) -> Cycles {
+        // C++ Original: uint16_t result = A * B;
+        let result = (self.registers.a as u16) * (self.registers.b as u16);
+        
+        // C++ Original: CC.Zero = CalcZero(result);
+        self.registers.cc.z = Self::calc_zero_u16(result);
+        
+        // C++ Original: CC.Carry = TestBits01(result, BITS(7)); // Test bit 7 of low byte (B register)
+        self.registers.cc.c = (result & 0x0080) != 0; // Test bit 7 of low byte (B position in result)
+        
+        // C++ Original: D = result;
+        self.registers.set_d(result);
+        
+        11 // MUL takes exactly 11 cycles
+    }
+
+    // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI (0x3F)
+    fn op_swi(&mut self) -> Cycles {
+        // C++ Original: PushCCState(true);
+        self.push_cc_state(true);
+        
+        // C++ Original: CC.InterruptMask = 1; CC.FastInterruptMask = 1;
+        self.registers.cc.i = true;  // Interrupt mask
+        self.registers.cc.f = true;  // Fast interrupt mask
+        
+        // C++ Original: PC = Read16(InterruptVector::Swi); (0xFFFA)
+        self.registers.pc = self.read16(0xFFFA);
+        
+        19 // SWI takes 19 cycles
+    }
+
+    // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI2 (0x103F)  
+    fn op_swi2(&mut self) -> Cycles {
+        // C++ Original: PushCCState(true);
+        self.push_cc_state(true);
+        
+        // C++ Original: PC = Read16(InterruptVector::Swi2); (0xFFF2) - no interrupt mask change for SWI2
+        self.registers.pc = self.read16(0xFFF2);
+        
+        20 // SWI2 takes 20 cycles
+    }
+
+    // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI3 (0x113F)
+    fn op_swi3(&mut self) -> Cycles {
+        // C++ Original: PushCCState(true);
+        self.push_cc_state(true);
+        
+        // C++ Original: PC = Read16(InterruptVector::Swi3); (0xFFF4) - no interrupt mask change for SWI3
+        self.registers.pc = self.read16(0xFFF4);
+        
+        20 // SWI3 takes 20 cycles
+    }
+
+    // C++ Original: void OpRTI() { bool poppedEntire{}; PopCCState(poppedEntire); AddCycles(poppedEntire ? 15 : 6); }
+    fn op_rti(&mut self) -> Cycles {
+        // C++ Original: bool poppedEntire{}; PopCCState(poppedEntire);
+        let popped_entire = self.pop_cc_state();
+        
+        // C++ Original: AddCycles(poppedEntire ? 15 : 6);
+        if popped_entire { 15 } else { 6 }
+    }
+
+    // C++ Original: void PushCCState(bool entire)
+    fn push_cc_state(&mut self, entire: bool) {
+        // C++ Original: CC.Entire = entire ? 1 : 0;
+        self.registers.cc.e = entire;
+
+        // C++ Original stack push order: PC, U, Y, X, DP, B, A, CC
+        // C++ Original: Push16(S, PC); Push16(S, U); Push16(S, Y); Push16(S, X); Push8(S, DP); Push8(S, B); Push8(S, A); Push8(S, CC.Value);
+        
+        // Inline stack push operations to avoid borrow checker issues
+        // Push PC (16-bit, big endian)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8);
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);
+        
+        // Push U (16-bit, big endian)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.u & 0xFF) as u8);
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.u >> 8) as u8);
+        
+        // Push Y (16-bit, big endian)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.y & 0xFF) as u8);
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.y >> 8) as u8);
+        
+        // Push X (16-bit, big endian)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.x & 0xFF) as u8);
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.x >> 8) as u8);
+        
+        // Push DP (8-bit)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, self.registers.dp);
+        
+        // Push B (8-bit)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, self.registers.b);
+        
+        // Push A (8-bit)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, self.registers.a);
+        
+        // Push CC (8-bit)
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, self.registers.cc.to_u8());
+    }
+
+    // C++ Original: void PopCCState(bool& poppedEntire)
+    fn pop_cc_state(&mut self) -> bool {
+        // C++ Original pop order (reverse of push): CC, A, B, DP, X, Y, U, PC
+        // C++ Original: CC.Value = Pop8(S); A = Pop8(S); B = Pop8(S); DP = Pop8(S); X = Pop16(S); Y = Pop16(S); U = Pop16(S); PC = Pop16(S);
+        
+        // Inline stack pop operations to avoid borrow checker issues
+        // Pop CC (8-bit)
+        let cc_value = self.read8(self.registers.s);
+        self.registers.s = self.registers.s.wrapping_add(1);
+        self.registers.cc.from_u8(cc_value);
+        
+        // C++ Original: bool poppedEntire = CC.Entire != 0;
+        let popped_entire = self.registers.cc.e;
+        
+        // Pop A (8-bit)
+        self.registers.a = self.read8(self.registers.s);
+        self.registers.s = self.registers.s.wrapping_add(1);
+        
+        // Pop B (8-bit)
+        self.registers.b = self.read8(self.registers.s);
+        self.registers.s = self.registers.s.wrapping_add(1);
+        
+        // Pop DP (8-bit)
+        self.registers.dp = self.read8(self.registers.s);
+        self.registers.s = self.registers.s.wrapping_add(1);
+        
+        // Pop X (16-bit, big endian)
+        let x_high = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        let x_low = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        self.registers.x = (x_high << 8) | x_low;
+        
+        // Pop Y (16-bit, big endian)
+        let y_high = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        let y_low = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        self.registers.y = (y_high << 8) | y_low;
+        
+        // Pop U (16-bit, big endian)
+        let u_high = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        let u_low = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        self.registers.u = (u_high << 8) | u_low;
+        
+        // Pop PC (16-bit, big endian)
+        let pc_high = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        let pc_low = self.read8(self.registers.s) as u16;
+        self.registers.s = self.registers.s.wrapping_add(1);
+        self.registers.pc = (pc_high << 8) | pc_low;
+        
+        popped_entire
     }
 }
