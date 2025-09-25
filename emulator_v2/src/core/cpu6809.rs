@@ -1,5 +1,11 @@
-//! MC6809 CPU implementation
-//! Port of vectrexy/libs/emulator/include/emulator/Cpu.h and src/Cpu.cpp
+// MC6809 CPU implementation
+// Port of vectrexy/libs/emulator/include/emulator/Cpu.h and src/Cpu.cpp
+
+impl PartialEq<u8> for ConditionCode {
+    fn eq(&self, other: &u8) -> bool {
+        self.to_u8() == *other
+    }
+}
 
 use crate::types::Cycles;
 use crate::core::memory_bus::MemoryBus;
@@ -151,6 +157,9 @@ pub struct Cpu6809 {
     // C++ Original: Interrupt vectors as static constexpr
     cycles: Cycles,
     
+    // C++ Original: bool m_waitingForInterrupts;
+    pub waiting_for_interrupts: bool,
+    
     // C++ Original: InterruptType callbacks
     nmi_interrupt: Option<InterruptCallback>,
     irq_interrupt: Option<InterruptCallback>,
@@ -172,6 +181,7 @@ impl Cpu6809 {
             registers: CpuRegisters::new(),
             memory_bus,
             cycles: 0,
+            waiting_for_interrupts: false,
             nmi_interrupt: None,
             irq_interrupt: None,
             firq_interrupt: None,
@@ -215,6 +225,7 @@ impl Cpu6809 {
         self.registers.pc = self.read16(RESET_VECTOR);
 
         self.cycles = 0;
+        self.waiting_for_interrupts = false; // C++ Original: m_waitingForInterrupts = false
         self.add_cycles(1); // The reset itself takes 1 cycle
     }
 
@@ -241,7 +252,24 @@ impl Cpu6809 {
     }
 
     // C++ Original: DoExecuteInstruction
-    fn do_execute_instruction(&mut self, _irq_enabled: bool, _firq_enabled: bool) {
+    fn do_execute_instruction(&mut self, irq_enabled: bool, firq_enabled: bool) {
+        // Check if CPU is waiting for interrupts (SYNC instruction)
+        if self.waiting_for_interrupts {
+            // First, check if the next instruction is RESET* (0x3E) - it should execute even during SYNC
+            let next_opcode = self.read8(self.registers.pc);
+            if next_opcode == 0x3E {
+                // RESET* always executes, even during SYNC - continue with normal execution
+                self.waiting_for_interrupts = false;
+            } else if irq_enabled || firq_enabled {
+                // If an interrupt occurs, clear the waiting state
+                self.waiting_for_interrupts = false;
+            } else {
+                // Still waiting for interrupt - add minimal cycles
+                self.add_cycles(1);
+                return;
+            }
+        }
+
         // C++ Original: Read op code byte and page
         let mut cpu_op_page = 0;
         let mut opcode_byte = self.read_pc8();
@@ -298,6 +326,11 @@ impl Cpu6809 {
                     // NOP
                     0x12 => {
                         // No operation - cycles already added
+                    },
+
+                    // SYNC - C++ Original: Synchronize with interrupt
+                    0x13 => {
+                        self.op_sync();
                     },
                     
                     // 8-bit LD instructions - C++ Original: OpLD<0, opCode>(register)
@@ -1348,6 +1381,11 @@ impl Cpu6809 {
                     // C++ Original: uint16_t result = A * B; CC.Zero = CalcZero(result); CC.Carry = TestBits01(result, BITS(7)); D = result;
                     0x3D => {
                         self.op_mul();
+                    },
+
+                    // RESET* - System reset instruction (undocumented)
+                    0x3E => {
+                        self.op_reset();
                     },
 
                     // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi); - SWI (Software Interrupt)
@@ -2801,6 +2839,34 @@ impl Cpu6809 {
         self.registers.pc = self.read16(SWI3_VECTOR);
         
         // Cycles (20) already counted by lookup table
+    }
+
+    // SYNC - Synchronize with interrupt (Opcode 0x13)
+    // 6809 Original: The SYNC instruction causes the CPU to wait for an interrupt to occur
+    fn op_sync(&mut self) {
+        // C++ Original: SYNC instruction waits for interrupts
+        // Set flag to indicate CPU is waiting for interrupts
+        self.waiting_for_interrupts = true;
+        // Cycles (2) already counted by lookup table
+    }
+
+    // RESET* - System reset instruction (Opcode 0x3E, undocumented)
+    // 6809 Original: Forces a system reset (undocumented behavior)
+    fn op_reset(&mut self) {
+        // C++ Original: Reset instruction causes system reset
+        // Reset CPU state but don't add the cycle that reset() normally adds
+        // since the instruction itself takes 0 cycles according to the table
+        self.registers.a = 0;
+        self.registers.b = 0;
+        self.registers.x = 0;
+        self.registers.y = 0;
+        self.registers.u = 0;
+        self.registers.s = 0;
+        self.registers.dp = 0;
+        self.registers.cc = ConditionCode::new();
+        self.registers.pc = self.read16(RESET_VECTOR);
+        self.waiting_for_interrupts = false;
+        // Don't add extra cycles - the lookup table already specifies 0 cycles
     }
 
     // C++ Original: void OpRTI() { bool poppedEntire{}; PopCCState(poppedEntire); AddCycles(poppedEntire ? 15 : 6); }
