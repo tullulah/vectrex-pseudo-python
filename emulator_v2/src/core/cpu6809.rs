@@ -428,11 +428,6 @@ impl Cpu6809 {
                         self.registers.x = value;
                     },
                     
-                    0xCC => self.op_ld_16_d(opcode_byte), // LDD #immediate
-                    0xDC => self.op_ld_16_d(opcode_byte), // LDD direct
-                    0xEC => self.op_ld_16_d(opcode_byte), // LDD indexed
-                    0xFC => self.op_ld_16_d(opcode_byte), // LDD extended
-                    
                     0xCE => { // LDU #immediate
                         let value = self.op_ld_16(opcode_byte);
                         self.registers.u = value;
@@ -617,6 +612,16 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // C++ Original: OpLD<0, 0xCC>(D); - LDD immediate
+                    // C++ Original: CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; targetReg = value;
+                    0xCC => {
+                        let operand = self.read_pc16();
+                        self.registers.cc.n = Self::calc_negative_u16(operand);
+                        self.registers.cc.z = Self::calc_zero_u16(operand);
+                        self.registers.cc.v = false;
+                        self.registers.set_d(operand);
+                    },
+
                     // C++ Original: OpOR<0, 0xDA>(B); - ORB direct
                     // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
                     0xDA => {
@@ -626,6 +631,17 @@ impl Cpu6809 {
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
                         self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<0, 0xDC>(D); - LDD direct
+                    // C++ Original: CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; targetReg = value;
+                    0xDC => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        self.registers.cc.n = Self::calc_negative_u16(operand);
+                        self.registers.cc.z = Self::calc_zero_u16(operand);
+                        self.registers.cc.v = false;
+                        self.registers.set_d(operand);
                     },
 
                     // C++ Original: OpADD<0, 0xDB>(A); - ADDA direct
@@ -716,6 +732,17 @@ impl Cpu6809 {
                         let ea = self.read_extended_ea();
                         let operand = self.read8(ea);
                         self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
+                    },
+
+                    // C++ Original: OpLD<0, 0xFC>(D); - LDD extended
+                    // C++ Original: CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; targetReg = value;
+                    0xFC => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        self.registers.cc.n = Self::calc_negative_u16(operand);
+                        self.registers.cc.z = Self::calc_zero_u16(operand);
+                        self.registers.cc.v = false;
+                        self.registers.set_d(operand);
                     },
 
                     // C++ Original: OpOR<0, 0xFA>(B); - ORB extended
@@ -977,6 +1004,17 @@ impl Cpu6809 {
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
                         self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<0, 0xEC>(D); - LDD indexed
+                    // C++ Original: CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; targetReg = value;
+                    0xEC => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        self.registers.cc.n = Self::calc_negative_u16(operand);
+                        self.registers.cc.z = Self::calc_zero_u16(operand);
+                        self.registers.cc.v = false;
+                        self.registers.set_d(operand);
                     },
 
                     // C++ Original: OpADD<0, 0xEB>(A); - ADDA indexed
