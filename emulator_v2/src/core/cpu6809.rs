@@ -298,6 +298,18 @@ impl Cpu6809 {
             0 => {
                 // C++ Original: switch (cpuOp.opCode) - Page 0 instructions
                 match opcode_byte {
+                    // C++ Original: OpNEG<0, 0x00>(); - NEG direct
+                    // C++ Original: uint8_t value = m_memoryBus->Read(EA); value = SubtractImpl(0, value, 0, CC); m_memoryBus->Write(EA, value);
+                    0x00 => {
+                        self.op_neg_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCOM<0, 0x03>(); - COM direct  
+                    // C++ Original: value = ~value; CC.Carry = 1; CC.Overflow = 0;
+                    0x03 => {
+                        self.op_com_memory(opcode_byte);
+                    },
+
                     // C++ Original: OpLSR<0, 0x04>();
                     0x04 => {
                         self.op_lsr_memory(opcode_byte);
@@ -323,6 +335,30 @@ impl Cpu6809 {
                         self.op_rol_memory(opcode_byte);
                     },
 
+                    // C++ Original: OpDEC<0, 0x0A>(); - DEC direct
+                    // C++ Original: uint8_t origValue = value; --value; CC.Overflow = (origValue == 0x80) ? 1 : 0;
+                    0x0A => {
+                        self.op_dec_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpINC<0, 0x0C>(); - INC direct
+                    // C++ Original: uint8_t origValue = value; ++value; CC.Overflow = (origValue == 0x7F) ? 1 : 0;
+                    0x0C => {
+                        self.op_inc_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpTST<0, 0x0D>(); - TST direct
+                    // C++ Original: CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; CC.Carry = 0;
+                    0x0D => {
+                        self.op_tst_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCLR<0, 0x0F>(); - CLR direct  
+                    // C++ Original: value = 0; CC.Negative = 0; CC.Zero = 1; CC.Overflow = 0; CC.Carry = 0;
+                    0x0F => {
+                        self.op_clr_memory(opcode_byte);
+                    },
+
                     // NOP
                     0x12 => {
                         // No operation - cycles already added
@@ -331,6 +367,12 @@ impl Cpu6809 {
                     // SYNC - C++ Original: Synchronize with interrupt
                     0x13 => {
                         self.op_sync();
+                    },
+
+                    // C++ Original: OpDAA(); - DAA (Decimal Adjust A)
+                    // C++ Original: uint8_t cfLsn = ((CC.HalfCarry == 1) || (lsn > 9)) ? 6 : 0; uint8_t cfMsn = ((CC.Carry == 1) || (msn > 9) || (msn > 8 && lsn > 9)) ? 6 : 0;
+                    0x19 => {
+                        self.op_daa();
                     },
                     
                     // 8-bit LD instructions - C++ Original: OpLD<0, opCode>(register)
@@ -861,7 +903,18 @@ impl Cpu6809 {
                         self.registers.cc.c = false;
                     },
 
-                    // Indexed addressing mode shift/rotate operations
+                    // ======== INDEXED ADDRESSING MODE OPERATIONS ========
+
+                    // C++ Original: OpNEG<0, 0x60>(); - NEG indexed
+                    0x60 => {
+                        self.op_neg_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCOM<0, 0x63>(); - COM indexed
+                    0x63 => {
+                        self.op_com_memory(opcode_byte);
+                    },
+
                     // C++ Original: OpLSR<0, 0x64>();
                     0x64 => {
                         self.op_lsr_memory(opcode_byte);
@@ -887,7 +940,38 @@ impl Cpu6809 {
                         self.op_rol_memory(opcode_byte);
                     },
 
-                    // Extended addressing mode shift/rotate operations
+                    // C++ Original: OpDEC<0, 0x6A>(); - DEC indexed
+                    0x6A => {
+                        self.op_dec_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpINC<0, 0x6C>(); - INC indexed
+                    0x6C => {
+                        self.op_inc_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpTST<0, 0x6D>(); - TST indexed
+                    0x6D => {
+                        self.op_tst_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCLR<0, 0x6F>(); - CLR indexed
+                    0x6F => {
+                        self.op_clr_memory(opcode_byte);
+                    },
+
+                    // ======== EXTENDED ADDRESSING MODE OPERATIONS ========
+
+                    // C++ Original: OpNEG<0, 0x70>(); - NEG extended
+                    0x70 => {
+                        self.op_neg_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCOM<0, 0x73>(); - COM extended
+                    0x73 => {
+                        self.op_com_memory(opcode_byte);
+                    },
+
                     // C++ Original: OpLSR<0, 0x74>();
                     0x74 => {
                         self.op_lsr_memory(opcode_byte);
@@ -911,6 +995,26 @@ impl Cpu6809 {
                     // C++ Original: OpROL<0, 0x79>();
                     0x79 => {
                         self.op_rol_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpDEC<0, 0x7A>(); - DEC extended
+                    0x7A => {
+                        self.op_dec_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpINC<0, 0x7C>(); - INC extended
+                    0x7C => {
+                        self.op_inc_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpTST<0, 0x7D>(); - TST extended
+                    0x7D => {
+                        self.op_tst_memory(opcode_byte);
+                    },
+
+                    // C++ Original: OpCLR<0, 0x7F>(); - CLR extended
+                    0x7F => {
+                        self.op_clr_memory(opcode_byte);
                     },
 
                     // C++ Original: OpCMP<0, 0x8C>(X); - CMPX immediate
@@ -1907,58 +2011,64 @@ impl Cpu6809 {
     Push order: PC(bit7), U(bit6), Y(bit5), X(bit4), DP(bit3), B(bit2), A(bit1), CC(bit0)
     */
     fn op_pshs(&mut self, mask: u8) {
-        // Push registers in C++ bit order: PC, U, Y, X, DP, B, A, CC
-        
+        // C++ Original 1:1: if (value & BITS(7)) Push16(stackReg, PC);
         if mask & 0x80 != 0 { // Bit 7: PC
             let pc_val = self.registers.pc;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (pc_val & 0xFF) as u8); // Low
+            self.write8(self.registers.s, (pc_val & 0xFF) as u8);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (pc_val >> 8) as u8);   // High
+            self.write8(self.registers.s, (pc_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(6)) Push16(stackReg, otherStackReg);
         if mask & 0x40 != 0 { // Bit 6: U (other stack register)
             let u_val = self.registers.u;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (u_val & 0xFF) as u8); // Low
+            self.write8(self.registers.s, (u_val & 0xFF) as u8);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (u_val >> 8) as u8);   // High
+            self.write8(self.registers.s, (u_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(5)) Push16(stackReg, Y);
         if mask & 0x20 != 0 { // Bit 5: Y
             let y_val = self.registers.y;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (y_val & 0xFF) as u8); // Low
+            self.write8(self.registers.s, (y_val & 0xFF) as u8);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (y_val >> 8) as u8);   // High
+            self.write8(self.registers.s, (y_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(4)) Push16(stackReg, X);
         if mask & 0x10 != 0 { // Bit 4: X
             let x_val = self.registers.x;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (x_val & 0xFF) as u8); // Low
+            self.write8(self.registers.s, (x_val & 0xFF) as u8);
             self.registers.s = self.registers.s.wrapping_sub(1);
-            self.write8(self.registers.s, (x_val >> 8) as u8);   // High
+            self.write8(self.registers.s, (x_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(3)) Push8(stackReg, DP);
         if mask & 0x08 != 0 { // Bit 3: DP
             let dp_val = self.registers.dp;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, dp_val);
         }
+        // C++ Original 1:1: if (value & BITS(2)) Push8(stackReg, B);
         if mask & 0x04 != 0 { // Bit 2: B
             let b_val = self.registers.b;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, b_val);
         }
+        // C++ Original 1:1: if (value & BITS(1)) Push8(stackReg, A);
         if mask & 0x02 != 0 { // Bit 1: A
             let a_val = self.registers.a;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.s = self.registers.s.wrapping_sub(1);
             self.write8(self.registers.s, a_val);
         }
+        // C++ Original 1:1: if (value & BITS(0)) Push8(stackReg, CC.Value);
         if mask & 0x01 != 0 { // Bit 0: CC
             let cc_val = self.registers.cc.to_u8();
             // C++ Push8: Write(--stackPointer, value);
@@ -1972,57 +2082,58 @@ impl Cpu6809 {
     Pull order: CC(bit0), A(bit1), B(bit2), DP(bit3), X(bit4), Y(bit5), U(bit6), PC(bit7)
     */
     fn op_puls(&mut self, mask: u8) {
-        // C++ Original: PULS reads in REVERSE order compared to PSHS writes
-        // PSHS writes: PC, U, Y, X, DP, B, A, CC (high to low bit)
-        // PULS reads:  CC, A, B, DP, X, Y, U, PC (low to high bit)
-        // 
-        // Stack layout after PSHS PC+A+CC:
-        // stack+0: PC_HIGH, stack+1: PC_LOW, stack+2: A, stack+3: CC
-        // PULS reads: CC(from highest addr), A(from middle), PC(from lowest addr)
-        
-        if mask & 0x01 != 0 { // Bit 0: CC - read from highest address first
+        // C++ Original 1:1: if (value & BITS(0)) CC.Value = Pop8(stackReg);
+        if mask & 0x01 != 0 { // Bit 0: CC
+            // C++ Pop8: value = Read(stackPointer++);
             let cc_val = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             self.registers.cc.from_u8(cc_val);
         }
+        // C++ Original 1:1: if (value & BITS(1)) A = Pop8(stackReg);
         if mask & 0x02 != 0 { // Bit 1: A
             self.registers.a = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(2)) B = Pop8(stackReg);
         if mask & 0x04 != 0 { // Bit 2: B
             self.registers.b = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(3)) DP = Pop8(stackReg);
         if mask & 0x08 != 0 { // Bit 3: DP
             self.registers.dp = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(4)) X = Pop16(stackReg);
         if mask & 0x10 != 0 { // Bit 4: X
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND (exactly like C++ original)
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             self.registers.x = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(5)) Y = Pop16(stackReg);
         if mask & 0x20 != 0 { // Bit 5: Y
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             self.registers.y = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(6)) otherStackReg = Pop16(stackReg);
         if mask & 0x40 != 0 { // Bit 6: U (other stack register)
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             self.registers.u = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(7)) PC = Pop16(stackReg);
         if mask & 0x80 != 0 { // Bit 7: PC
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND (exactly like C++ original)
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.s);
             self.registers.s = self.registers.s.wrapping_add(1);
             let low = self.read8(self.registers.s);
@@ -2036,58 +2147,64 @@ impl Cpu6809 {
     Push order: PC(bit7), S(bit6), Y(bit5), X(bit4), DP(bit3), B(bit2), A(bit1), CC(bit0)
     */
     fn op_pshu(&mut self, mask: u8) {
-        // Push registers to U stack in C++ bit order: PC, S, Y, X, DP, B, A, CC
-        
+        // C++ Original 1:1: if (value & BITS(7)) Push16(stackReg, PC);
         if mask & 0x80 != 0 { // Bit 7: PC
             let pc_val = self.registers.pc;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (pc_val & 0xFF) as u8); // Low
+            self.write8(self.registers.u, (pc_val & 0xFF) as u8);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (pc_val >> 8) as u8);   // High
+            self.write8(self.registers.u, (pc_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(6)) Push16(stackReg, otherStackReg); (S for PSHU)  
         if mask & 0x40 != 0 { // Bit 6: S (other stack register)
             let s_val = self.registers.s;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (s_val & 0xFF) as u8); // Low
+            self.write8(self.registers.u, (s_val & 0xFF) as u8);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (s_val >> 8) as u8);   // High
+            self.write8(self.registers.u, (s_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(5)) Push16(stackReg, Y);
         if mask & 0x20 != 0 { // Bit 5: Y
             let y_val = self.registers.y;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (y_val & 0xFF) as u8); // Low
+            self.write8(self.registers.u, (y_val & 0xFF) as u8);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (y_val >> 8) as u8);   // High
+            self.write8(self.registers.u, (y_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(4)) Push16(stackReg, X);
         if mask & 0x10 != 0 { // Bit 4: X
             let x_val = self.registers.x;
             // C++ Push16: Write(--stackPointer, Low); Write(--stackPointer, High);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (x_val & 0xFF) as u8); // Low
+            self.write8(self.registers.u, (x_val & 0xFF) as u8);
             self.registers.u = self.registers.u.wrapping_sub(1);
-            self.write8(self.registers.u, (x_val >> 8) as u8);   // High
+            self.write8(self.registers.u, (x_val >> 8) as u8);
         }
+        // C++ Original 1:1: if (value & BITS(3)) Push8(stackReg, DP);
         if mask & 0x08 != 0 { // Bit 3: DP
             let dp_val = self.registers.dp;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, dp_val);
         }
+        // C++ Original 1:1: if (value & BITS(2)) Push8(stackReg, B);
         if mask & 0x04 != 0 { // Bit 2: B
             let b_val = self.registers.b;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, b_val);
         }
+        // C++ Original 1:1: if (value & BITS(1)) Push8(stackReg, A);
         if mask & 0x02 != 0 { // Bit 1: A
             let a_val = self.registers.a;
             // C++ Push8: Write(--stackPointer, value);
             self.registers.u = self.registers.u.wrapping_sub(1);
             self.write8(self.registers.u, a_val);
         }
+        // C++ Original 1:1: if (value & BITS(0)) Push8(stackReg, CC.Value);
         if mask & 0x01 != 0 { // Bit 0: CC
             let cc_val = self.registers.cc.to_u8();
             // C++ Push8: Write(--stackPointer, value);
@@ -2101,52 +2218,58 @@ impl Cpu6809 {
     Pull order: CC(bit0), A(bit1), B(bit2), DP(bit3), X(bit4), Y(bit5), S(bit6), PC(bit7)
     */
     fn op_pulu(&mut self, mask: u8) {
-        // Pull registers from U stack in C++ bit order: CC, A, B, DP, X, Y, S, PC
-        
+        // C++ Original 1:1: if (value & BITS(0)) CC.Value = Pop8(stackReg);
         if mask & 0x01 != 0 { // Bit 0: CC
             // C++ Pop8: value = Read(stackPointer++);
             let cc_val = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.cc.from_u8(cc_val);
         }
+        // C++ Original 1:1: if (value & BITS(1)) A = Pop8(stackReg);
         if mask & 0x02 != 0 { // Bit 1: A
             self.registers.a = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(2)) B = Pop8(stackReg);
         if mask & 0x04 != 0 { // Bit 2: B
             self.registers.b = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(3)) DP = Pop8(stackReg);
         if mask & 0x08 != 0 { // Bit 3: DP
             self.registers.dp = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
         }
+        // C++ Original 1:1: if (value & BITS(4)) X = Pop16(stackReg);
         if mask & 0x10 != 0 { // Bit 4: X
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.x = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(5)) Y = Pop16(stackReg);
         if mask & 0x20 != 0 { // Bit 5: Y
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.y = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(6)) otherStackReg = Pop16(stackReg); (S for PULU)
         if mask & 0x40 != 0 { // Bit 6: S (other stack register)
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             self.registers.s = ((high as u16) << 8) | (low as u16);
         }
+        // C++ Original 1:1: if (value & BITS(7)) PC = Pop16(stackReg);
         if mask & 0x80 != 0 { // Bit 7: PC
-            // C++ Pop16: HIGH byte FIRST, LOW byte SECOND
+            // C++ Pop16: high = Read(stackPointer++); low = Read(stackPointer++);
             let high = self.read8(self.registers.u);
             self.registers.u = self.registers.u.wrapping_add(1);
             let low = self.read8(self.registers.u);
@@ -3106,5 +3229,92 @@ impl Cpu6809 {
     fn op_long_branch_if_less_or_equal(&mut self) {
         let condition = self.registers.cc.z || (self.registers.cc.n != self.registers.cc.v);
         self.op_long_branch(condition)
+    }
+
+    // ======== MEMORY OPERATION HELPER FUNCTIONS ========
+
+    // C++ Original: void OpNEG(uint8_t& value) { value = SubtractImpl(0, value, 0, CC); }
+    fn op_neg_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let value = self.read8(ea);
+        // C++ Original: Negating is 0 - value
+        let result = self.subtract_impl_u8(0, value, 0);
+        self.write8(ea, result);
+    }
+
+    // C++ Original: void OpCOM(uint8_t& value) { value = ~value; CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; CC.Carry = 1; }
+    fn op_com_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let value = self.read8(ea);
+        // C++ Original: value = ~value;
+        let result = !value;
+        // C++ Original: CC flags
+        self.registers.cc.n = Self::calc_negative_u8(result);
+        self.registers.cc.z = Self::calc_zero_u8(result);
+        self.registers.cc.v = false;
+        self.registers.cc.c = true;
+        self.write8(ea, result);
+    }
+
+    // C++ Original: void OpINC(uint8_t& value) { uint8_t origValue = value; ++value; CC.Overflow = origValue == 0b0111'1111; CC.Zero = CalcZero(value); CC.Negative = CalcNegative(value); }
+    fn op_inc_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let orig_value = self.read8(ea);
+        let result = orig_value.wrapping_add(1);
+        // C++ Original: CC.Overflow = origValue == 0b0111'1111;
+        self.registers.cc.v = orig_value == 0b0111_1111;
+        self.registers.cc.z = Self::calc_zero_u8(result);
+        self.registers.cc.n = Self::calc_negative_u8(result);
+        self.write8(ea, result);
+    }
+
+    // C++ Original: void OpDEC(uint8_t& value) { uint8_t origValue = value; --value; CC.Overflow = origValue == 0b1000'0000; CC.Zero = CalcZero(value); CC.Negative = CalcNegative(value); }
+    fn op_dec_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let orig_value = self.read8(ea);
+        let result = orig_value.wrapping_sub(1);
+        // C++ Original: CC.Overflow = origValue == 0b1000'0000;
+        self.registers.cc.v = orig_value == 0b1000_0000;
+        self.registers.cc.z = Self::calc_zero_u8(result);
+        self.registers.cc.n = Self::calc_negative_u8(result);
+        self.write8(ea, result);
+    }
+
+    // C++ Original: void OpTST(const uint8_t& value) { CC.Negative = CalcNegative(value); CC.Zero = CalcZero(value); CC.Overflow = 0; }
+    fn op_tst_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        let value = self.read8(ea);
+        // C++ Original: CC flags only, no value change
+        self.registers.cc.n = Self::calc_negative_u8(value);
+        self.registers.cc.z = Self::calc_zero_u8(value);
+        self.registers.cc.v = false;
+    }
+
+    // C++ Original: void OpCLR() { uint16_t EA = ReadEA16<...>(); m_memoryBus->Write(EA, 0); CC.Negative = 0; CC.Zero = 1; CC.Overflow = 0; CC.Carry = 0; }
+    fn op_clr_memory(&mut self, opcode_byte: u8) {
+        let ea = self.read_effective_address(opcode_byte);
+        // C++ Original: Write 0 and set CC flags
+        self.write8(ea, 0);
+        self.registers.cc.n = false;
+        self.registers.cc.z = true;
+        self.registers.cc.v = false;
+        self.registers.cc.c = false;
+    }
+
+    // C++ Original: void OpDAA() { ... complex BCD adjust implementation }
+    fn op_daa(&mut self) {
+        // C++ Original: Extract least and most significant nibbles
+        let lsn = self.registers.a & 0b0000_1111;
+        let msn = (self.registers.a & 0b1111_0000) >> 4;
+
+        // C++ Original: Compute correction factors
+        let cf_lsn = if self.registers.cc.h || lsn > 9 { 6 } else { 0 };
+        let cf_msn = if self.registers.cc.c || msn > 9 || (msn > 8 && lsn > 9) { 6 } else { 0 };
+        let adjust = (cf_msn << 4) | cf_lsn;
+        let r16 = (self.registers.a as u16) + (adjust as u16);
+        self.registers.a = r16 as u8;
+        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+        self.registers.cc.c = self.registers.cc.c || Self::calc_carry_u16(r16);
     }
 }
