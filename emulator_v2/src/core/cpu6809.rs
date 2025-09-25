@@ -773,6 +773,14 @@ impl Cpu6809 {
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, self.registers.cc.c as u8);
                     },
 
+                    // C++ Original: OpSUB<0, 0x83>(D); - SUBD immediate
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue16<AddressingMode::Immediate>(), 0, CC);
+                    0x83 => {
+                        let operand = self.read_pc16();
+                        let result = self.subtract_impl_u16(self.registers.d(), operand, 0);
+                        self.registers.set_d(result);
+                    },
+
                     // C++ Original: OpCMP<0, 0x91>(A); - CMPA direct
                     // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
                     0x91 => {
@@ -788,6 +796,15 @@ impl Cpu6809 {
                         let ea = self.read_direct_ea();
                         let operand = self.read8(ea);
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, if self.registers.cc.c { 1 } else { 0 });
+                    },
+
+                    // C++ Original: OpSUB<0, 0x93>(D); - SUBD direct
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue16<AddressingMode::Direct>(), 0, CC);
+                    0x93 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        let result = self.subtract_impl_u16(self.registers.d(), operand, 0);
+                        self.registers.set_d(result);
                     },
 
                     // C++ Original: OpSUB<0, 0xA0>(A); - SUBA indexed
@@ -811,6 +828,15 @@ impl Cpu6809 {
                         let ea = self.read_indexed_ea();
                         let operand = self.read8(ea);
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, if self.registers.cc.c { 1 } else { 0 });
+                    },
+
+                    // C++ Original: OpSUB<0, 0xA3>(D); - SUBD indexed
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue16<AddressingMode::Indexed>(), 0, CC);
+                    0xA3 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        let result = self.subtract_impl_u16(self.registers.d(), operand, 0);
+                        self.registers.set_d(result);
                     },
 
                     // C++ Original: OpAND<0, 0xA4>(A); - ANDA indexed
@@ -859,6 +885,15 @@ impl Cpu6809 {
                         let operand = self.read8(ea);
                         let borrow = if self.registers.cc.c { 1 } else { 0 };
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, borrow);
+                    },
+
+                    // C++ Original: OpSUB<0, 0xB3>(D); - SUBD extended
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue16<AddressingMode::Extended>(), 0, CC);
+                    0xB3 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        let result = self.subtract_impl_u16(self.registers.d(), operand, 0);
+                        self.registers.set_d(result);
                     },
 
                     // C++ Original: OpCMP<0, 0xC1>(B); - CMPB immediate
