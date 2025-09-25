@@ -8,7 +8,7 @@ use vectrex_emulator_v2::core::ram::Ram;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const RAM_START: u16 = 0x8000;
+const RAM_START: u16 = 0xC800;
 
 fn create_test_cpu() -> Cpu6809 {
     let memory_bus = Rc::new(RefCell::new(MemoryBus::new()));
@@ -42,25 +42,25 @@ fn test_bita_immediate_0x85() {
     assert!(!cpu.registers().cc.v); // BIT always clears overflow
     
     // Test case 2: A=$80, operand=$80 -> result=$80 (NZ=11)
-    cpu.registers.a = 0x80;
-    cpu.write8(0x8002, 0x85); // BITA immediate
-    cpu.write8(0x8003, 0x80); // operand
-    cpu.registers.pc = 0x8002;
+    cpu.registers.a = 0xC8;
+    cpu.write8(RAM_START + 2, 0x85); // BITA immediate
+    cpu.write8(RAM_START + 3, 0xC8); // operand
+    cpu.registers.pc = RAM_START + 2;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
-    assert_eq!(cpu.registers.a, 0x80); // Register A should not change
+    assert_eq!(cpu.registers.a, 0xC8); // Register A should not change
     assert!(!cpu.registers.cc.z); // $80 & $80 = $80 -> not zero
     assert!(cpu.registers.cc.n); // $80 has bit 7 set -> negative
     assert!(!cpu.registers.cc.v); // BIT always clears overflow
     
     // Test case 3: A=$55, operand=$AA -> result=$00 (NZ=01)
     cpu.registers.a = 0x55;
-    cpu.write8(0x8004, 0x85); // BITA immediate
-    cpu.write8(0x8005, 0xAA); // operand
-    cpu.registers.pc = 0x8004;
+    cpu.write8(RAM_START + 4, 0x85); // BITA immediate
+    cpu.write8(RAM_START + 5, 0xAA); // operand
+    cpu.registers.pc = RAM_START + 4;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     assert_eq!(cpu.registers.a, 0x55); // Register A should not change
     assert!(cpu.registers.cc.z); // $55 & $AA = $00 -> zero
@@ -75,13 +75,13 @@ fn test_bita_direct_0x95() {
     
     // Test with A=$F0, memory[$10]=$0F -> result=$00
     cpu.registers.a = 0xF0;
-    cpu.registers.dp = 0x80; // Set direct page to $80xx
-    cpu.write8(0x8010, 0x0F); // Store operand in memory
-    cpu.write8(0x8000, 0x95); // BITA direct
-    cpu.write8(0x8001, 0x10); // direct address offset
-    cpu.registers.pc = 0x8000;
+    cpu.registers.dp = 0xC8; // Set direct page to $C8xx
+    cpu.write8(RAM_START + 0x10, 0x0F); // Store operand in memory
+    cpu.write8(RAM_START, 0x95); // BITA direct
+    cpu.write8(RAM_START + 1, 0x10); // direct address offset
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.a, 0xF0); // Register A should not change
@@ -95,15 +95,15 @@ fn test_bita_indexed_0xa5() {
     // C++ Original: OpBIT<0, 0xA5>(A); - BITA indexed
     let mut cpu = create_test_cpu();
     
-    // Test with A=$33, X=$8010, memory[$8010]=$30 -> result=$30
+    // Test with A=$33, X=$C810, memory[$C810]=$30 -> result=$30
     cpu.registers.a = 0x33;
-    cpu.registers.x = 0x8010;
-    cpu.write8(0x8010, 0x30); // Store operand in memory
-    cpu.write8(0x8000, 0xA5); // BITA indexed
-    cpu.write8(0x8001, 0x00); // indexed postbyte (no offset)
-    cpu.registers.pc = 0x8000;
+    cpu.registers.x = RAM_START + 0x10;
+    cpu.write8(RAM_START + 0x10, 0x30); // Store operand in memory
+    cpu.write8(RAM_START, 0xA5); // BITA indexed
+    cpu.write8(RAM_START + 1, 0x00); // indexed postbyte (no offset)
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.a, 0x33); // Register A should not change
@@ -117,15 +117,15 @@ fn test_bita_extended_0xb5() {
     // C++ Original: OpBIT<0, 0xB5>(A); - BITA extended
     let mut cpu = create_test_cpu();
     
-    // Test with A=$C0, memory[$8020]=$C0 -> result=$C0
+    // Test with A=$C0, memory[$C820]=$C0 -> result=$C0
     cpu.registers.a = 0xC0;
-    cpu.write8(0x8020, 0xC0); // Store operand in memory
-    cpu.write8(0x8000, 0xB5); // BITA extended
-    cpu.write8(0x8001, 0x80); // extended address high byte
-    cpu.write8(0x8002, 0x20); // extended address low byte
-    cpu.registers.pc = 0x8000;
+    cpu.write8(RAM_START + 0x20, 0xC0); // Store operand in memory
+    cpu.write8(RAM_START, 0xB5); // BITA extended
+    cpu.write8(RAM_START + 1, 0xC8); // extended address high byte
+    cpu.write8(RAM_START + 2, 0x20); // extended address low byte
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.a, 0xC0); // Register A should not change
@@ -141,11 +141,11 @@ fn test_bitb_immediate_0xc5() {
     
     // Test case 1: B=$7F, operand=$7F -> result=$7F (NZ=10)
     cpu.registers.b = 0x7F;
-    cpu.write8(0x8000, 0xC5); // BITB immediate
-    cpu.write8(0x8001, 0x7F); // operand
-    cpu.registers.pc = 0x8000;
+    cpu.write8(RAM_START, 0xC5); // BITB immediate
+    cpu.write8(RAM_START + 1, 0x7F); // operand
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.b, 0x7F); // Register B should not change
@@ -155,11 +155,11 @@ fn test_bitb_immediate_0xc5() {
     
     // Test case 2: B=$01, operand=$FE -> result=$00 (NZ=01)
     cpu.registers.b = 0x01;
-    cpu.write8(0x8002, 0xC5); // BITB immediate
-    cpu.write8(0x8003, 0xFE); // operand
-    cpu.registers.pc = 0x8002;
+    cpu.write8(RAM_START + 2, 0xC5); // BITB immediate
+    cpu.write8(RAM_START + 3, 0xFE); // operand
+    cpu.registers.pc = RAM_START + 2;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     assert_eq!(cpu.registers.b, 0x01); // Register B should not change
     assert!(cpu.registers.cc.z); // $01 & $FE = $00 -> zero
@@ -174,13 +174,13 @@ fn test_bitb_direct_0xd5() {
     
     // Test with B=$88, memory[$8015]=$08 -> result=$08
     cpu.registers.b = 0x88;
-    cpu.registers.dp = 0x80; // Set direct page to $80xx
-    cpu.write8(0x8015, 0x08); // Store operand in memory
-    cpu.write8(0x8000, 0xD5); // BITB direct
-    cpu.write8(0x8001, 0x15); // direct address offset
-    cpu.registers.pc = 0x8000;
+    cpu.registers.dp = 0xC8; // Set direct page to $80xx
+    cpu.write8(RAM_START + 0x15, 0x08); // Store operand in memory
+    cpu.write8(RAM_START, 0xD5); // BITB direct
+    cpu.write8(RAM_START + 1, 0x15); // direct address offset
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.b, 0x88); // Register B should not change
@@ -196,13 +196,13 @@ fn test_bitb_indexed_0xe5() {
     
     // Test with B=$AA, Y=$8025, memory[$8025]=$55 -> result=$00
     cpu.registers.b = 0xAA;
-    cpu.registers.y = 0x8025;
-    cpu.write8(0x8025, 0x55); // Store operand in memory
-    cpu.write8(0x8000, 0xE5); // BITB indexed
-    cpu.write8(0x8001, 0x20); // indexed postbyte (Y register, no offset)
-    cpu.registers.pc = 0x8000;
+    cpu.registers.y = RAM_START + 0x25;
+    cpu.write8(RAM_START + 0x25, 0x55); // Store operand in memory
+    cpu.write8(RAM_START, 0xE5); // BITB indexed
+    cpu.write8(RAM_START + 1, 0x20); // indexed postbyte (Y register, no offset)
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.b, 0xAA); // Register B should not change
@@ -218,13 +218,13 @@ fn test_bitb_extended_0xf5() {
     
     // Test with B=$FF, memory[$8030]=$80 -> result=$80
     cpu.registers.b = 0xFF;
-    cpu.write8(0x8030, 0x80); // Store operand in memory
-    cpu.write8(0x8000, 0xF5); // BITB extended
-    cpu.write8(0x8001, 0x80); // extended address high byte
-    cpu.write8(0x8002, 0x30); // extended address low byte
-    cpu.registers.pc = 0x8000;
+    cpu.write8(RAM_START + 0x30, 0xC8); // Store operand in memory
+    cpu.write8(RAM_START, 0xF5); // BITB extended
+    cpu.write8(RAM_START + 1, 0xC8); // extended address high byte
+    cpu.write8(RAM_START + 2, 0x30); // extended address low byte
+    cpu.registers.pc = RAM_START;
     
-    cpu.step();
+    cpu.execute_instruction(false, false);
     
     // C++ Original: CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
     assert_eq!(cpu.registers.b, 0xFF); // Register B should not change
@@ -245,16 +245,16 @@ fn test_bit_operations_comprehensive() {
         (0x00, 0xFF, true, false, "zero & anything -> zero"),
         (0xFF, 0x00, true, false, "anything & zero -> zero"),
         (0x7F, 0x7F, false, false, "positive & positive -> positive"),
-        (0x80, 0x80, false, true, "negative & negative -> negative"),
+        (0xC8, 0xC8, false, true, "negative & negative -> negative"),
         (0xFF, 0x7F, false, false, "mixed high bits -> positive"),
-        (0xFF, 0x80, false, true, "mixed high bits -> negative"),
+        (0xFF, 0xC8, false, true, "mixed high bits -> negative"),
         (0x55, 0xAA, true, false, "alternating bits -> zero"),
         (0xAA, 0x55, true, false, "alternating bits -> zero"),
         (0x01, 0x01, false, false, "single bit -> positive"),
     ];
     
     for (i, (reg_val, operand, expected_z, expected_n, description)) in test_cases.iter().enumerate() {
-        let base_addr = 0x8000 + (i as u16 * 4);
+        let base_addr = RAM_START + (i as u16 * 4);
         
         // Test BITA immediate
         cpu.registers.a = *reg_val;
@@ -262,7 +262,7 @@ fn test_bit_operations_comprehensive() {
         cpu.write8(base_addr + 1, *operand);
         cpu.registers.pc = base_addr;
         
-        cpu.step();
+        cpu.execute_instruction(false, false);
         
         assert_eq!(cpu.registers.cc.z, *expected_z, "BITA {}: Zero flag mismatch", description);
         assert_eq!(cpu.registers.cc.n, *expected_n, "BITA {}: Negative flag mismatch", description);
@@ -275,7 +275,7 @@ fn test_bit_operations_comprehensive() {
         cpu.write8(base_addr + 3, *operand);
         cpu.registers.pc = base_addr + 2;
         
-        cpu.step();
+        cpu.execute_instruction(false, false);
         
         assert_eq!(cpu.registers.cc.z, *expected_z, "BITB {}: Zero flag mismatch", description);
         assert_eq!(cpu.registers.cc.n, *expected_n, "BITB {}: Negative flag mismatch", description);
