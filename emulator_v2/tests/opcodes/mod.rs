@@ -12,3 +12,51 @@ pub mod test_ldu;
 // ST (Store) family - IN PROGRESS
 pub mod test_sta;
 pub mod test_stb;
+
+// Organized test modules by category
+pub mod comparison {
+    //! Comparison instruction tests (CMP family)
+    pub mod test_cmpa_opcodes;
+    pub mod test_cmpb_opcodes;
+    pub mod test_cmpd_opcodes;
+    pub mod test_cmps_opcodes;
+    pub mod test_cmpu_opcodes;
+    pub mod test_cmpx_opcodes;
+    pub mod test_cmpy_opcodes;
+}
+
+pub mod arithmetic {
+    //! Arithmetic instruction tests (ADD, SUB, etc.)
+    pub mod test_arith_logic_direct_a_final;
+}
+
+pub mod logic {
+    //! Logic instruction tests (AND, EOR, OR, BIT, etc.)
+    pub mod test_and_eor_opcodes;
+    pub mod test_bit_opcodes;
+    pub mod test_bit_simple;
+    pub mod test_or_opcodes;
+}
+
+pub mod memory {
+    //! Memory operation tests (LD, ST, LEA, etc.)
+    pub mod test_lea_opcodes;
+    pub mod test_memory_operation_opcodes;
+}
+
+pub mod branch {
+    //! Branch and jump instruction tests
+    pub mod test_branch_extended_opcodes;
+    pub mod test_branch_opcodes;
+    pub mod test_jsr_bsr_opcodes;
+    pub mod test_long_branch_final;
+    pub mod test_long_branch_operations;
+}
+
+pub mod stack {
+    //! Stack and interrupt instruction tests
+    pub mod test_interrupt_stack_compliance;
+    pub mod test_interrupt_stack_compliance_simple;
+    pub mod test_stack_compliance_comprehensive;
+    pub mod test_swi_rti_stack_compliance;
+}
