@@ -1273,16 +1273,39 @@ impl Cpu6809 {
 
                     // Transfer/Exchange operations - C++ Original: case 0x1E/0x1F in CPU switch statement
 
+                    // C++ Original: case 0x1A: OpOR<0, 0x1A>(CC.Value); - ORCC (OR with Condition Codes)
+                    // C++ Original: OR immediate value with CC register
+                    0x1A => {
+                        self.op_orcc();
+                        // Cycles already counted by lookup table
+                    },
+
+                    // C++ Original: case 0x1C: OpAND<0, 0x1C>(CC.Value); - ANDCC (AND with Condition Codes)
+                    // C++ Original: AND immediate value with CC register
+                    0x1C => {
+                        self.op_andcc();
+                        // Cycles already counted by lookup table
+                    },
+
+                    // C++ Original: case 0x1D: OpSEX(); - SEX (Sign Extend)
+                    // C++ Original: A = TestBits(B, BITS(7)) ? 0xFF : 0; CC.Negative = CalcNegative(D); CC.Zero = CalcZero(D);
+                    0x1D => {
+                        self.op_sex();
+                        // Cycles already counted by lookup table
+                    },
+
                     // C++ Original: case 0x1E: OpEXG(); - EXG (Exchange registers)
                     // C++ Original: ExchangeOrTransfer(true) - swap register contents
                     0x1E => {
                         self.op_exg();
+                        // Cycles already counted by lookup table
                     },
 
                     // C++ Original: case 0x1F: OpTFR(); - TFR (Transfer registers)  
                     // C++ Original: ExchangeOrTransfer(false) - copy src to dst register
                     0x1F => {
                         self.op_tfr();
+                        // Cycles already counted by lookup table
                     },
 
                     // Jump operations - C++ Original: OpJMP<0, opCode>()
@@ -1307,6 +1330,20 @@ impl Cpu6809 {
 
                     // System operations
                     
+                    // C++ Original: case 0x3A: OpABX(); - ABX (Add B to X)
+                    // C++ Original: X += B; - Simple unsigned addition, no flags affected
+                    0x3A => {
+                        self.op_abx();
+                        // Cycles already counted by lookup table
+                    },
+
+                    // C++ Original: case 0x3C: OpCWAI<0, 0x3C>(); - CWAI (Clear and Wait for Interrupt)
+                    // C++ Original: CC.Value = CC.Value & value; PushCCState(true); m_waitingForInterrupts = true;
+                    0x3C => {
+                        self.op_cwai();
+                        // Cycles already counted by lookup table (20 cycles)
+                    },
+
                     // C++ Original: case 0x3D: OpMUL<0, 0x3D>(); - MUL (Multiply A * B -> D)
                     // C++ Original: uint16_t result = A * B; CC.Zero = CalcZero(result); CC.Carry = TestBits01(result, BITS(7)); D = result;
                     0x3D => {
@@ -1316,7 +1353,7 @@ impl Cpu6809 {
                     // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi); - SWI (Software Interrupt)
                     // C++ Original: PushCCState(true); CC.InterruptMask = 1; CC.FastInterruptMask = 1; PC = Read16(InterruptVector::Swi);
                     0x3F => {
-                        self.op_swi();
+                        self.op_swi(); // Cycles already counted by lookup table
                     },
 
                     // C++ Original: case 0x3B: OpRTI<0, 0x3B>(); - RTI (Return from Interrupt)
@@ -1411,7 +1448,7 @@ impl Cpu6809 {
                     // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi2); - SWI2 (Software Interrupt 2)
                     // C++ Original: PushCCState(true); PC = Read16(InterruptVector::Swi2); (no interrupt mask change)
                     0x3F => {
-                        self.op_swi2();
+                        self.op_swi2(); // Cycles already counted by lookup table
                     },
 
                     // Long Branch Operations - C++ Original: OpLongBranch(condFunc)
@@ -1572,7 +1609,7 @@ impl Cpu6809 {
                     // C++ Original: case 0x3F: OpSWI(InterruptVector::Swi3); - SWI3 (Software Interrupt 3)
                     // C++ Original: PushCCState(true); PC = Read16(InterruptVector::Swi3); (no interrupt mask change)
                     0x3F => {
-                        self.op_swi3();
+                        self.op_swi3(); // Cycles already counted by lookup table
                     },
 
                     _ => {
@@ -2197,6 +2234,23 @@ impl Cpu6809 {
         self.exchange_or_transfer(false);
     }
 
+    // C++ Original: void OpSEX() { A = TestBits(B, BITS(7)) ? 0xFF : 0; CC.Negative = CalcNegative(D); CC.Zero = CalcZero(D); }
+    fn op_sex(&mut self) {
+        // C++ Original: A = TestBits(B, BITS(7)) ? 0xFF : 0;
+        self.registers.a = if (self.registers.b & 0x80) != 0 { 0xFF } else { 0x00 };
+        
+        // C++ Original: CC.Negative = CalcNegative(D); CC.Zero = CalcZero(D);
+        let d_value = self.registers.d();
+        self.registers.cc.n = Self::calc_negative_u16(d_value);
+        self.registers.cc.z = Self::calc_zero_u16(d_value);
+    }
+
+    // C++ Original: void OpABX() { X += B; }
+    fn op_abx(&mut self) {
+        // C++ Original: X += B; - Simple unsigned addition, no flags affected
+        self.registers.x = self.registers.x.wrapping_add(self.registers.b as u16);
+    }
+
     // C++ Original: template <int page, uint8_t opCode> void OpJSR()
     // C++ Original: uint16_t EA = ReadEA16<LookupCpuOp(page, opCode).addrMode>(); Push16(S, PC); PC = EA;
     fn op_jsr(&mut self, opcode_byte: u8) {
@@ -2663,8 +2717,57 @@ impl Cpu6809 {
         11 // MUL takes exactly 11 cycles
     }
 
+
+
+    // C++ Original: ANDCC is implemented as OpOR/OpAND template
+    fn op_andcc(&mut self) {
+        // C++ Original: uint8_t value = ReadOperandValue8<AddressingMode::Immediate>();
+        let value = self.read_pc8();
+        
+        // C++ Original: CC.Value = CC.Value & value; (For ANDCC, we don't update CC itself)
+        let current_cc = self.registers.cc.to_u8();
+        let new_cc = current_cc & value;
+        self.registers.cc.from_u8(new_cc);
+        
+        // Cycles already counted by lookup table
+    }
+
+    // C++ Original: ORCC is implemented as OpOR/OpAND template
+    fn op_orcc(&mut self) {
+        // C++ Original: uint8_t value = ReadOperandValue8<AddressingMode::Immediate>();
+        let value = self.read_pc8();
+        
+        // C++ Original: CC.Value = CC.Value | value; (For ORCC, we don't update CC itself)
+        let current_cc = self.registers.cc.to_u8();
+        let new_cc = current_cc | value;
+        self.registers.cc.from_u8(new_cc);
+        
+        // Cycles already counted by lookup table
+    }
+
+    // C++ Original: void OpCWAI() { uint8_t value = ReadOperandValue8<...>(); CC.Value = CC.Value & value; PushCCState(true); m_waitingForInterrupts = true; }
+    fn op_cwai(&mut self) {
+        // C++ Original: uint8_t value = ReadOperandValue8<LookupCpuOp(page, opCode).addrMode>();
+        let value = self.read_pc8(); // CWAI uses immediate addressing
+        
+        // C++ Original: CC.Value = CC.Value & value;
+        let current_cc = self.registers.cc.to_u8();
+        let masked_cc = current_cc & value;
+        self.registers.cc.from_u8(masked_cc);
+        
+        // C++ Original: PushCCState(true);
+        // NOTE: push_cc_state modifies CC.Entire, so we must preserve the masked value
+        let final_masked_cc = masked_cc | 0x80; // Set Entire bit for push 
+        self.push_cc_state_with_value(final_masked_cc);
+        
+        // C++ Original: ASSERT(!m_waitingForInterrupts); m_waitingForInterrupts = true;
+        // TODO: Implement interrupt waiting state - for now just do the CC and stack operations
+        
+        // Cycles (20) already counted by lookup table
+    }
+
     // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI (0x3F)
-    fn op_swi(&mut self) -> Cycles {
+    fn op_swi(&mut self) {
         // C++ Original: PushCCState(true);
         self.push_cc_state(true);
         
@@ -2675,29 +2778,29 @@ impl Cpu6809 {
         // C++ Original: PC = Read16(InterruptVector::Swi); (0xFFFA)
         self.registers.pc = self.read16(0xFFFA);
         
-        19 // SWI takes 19 cycles
+        // Cycles (19) already counted by lookup table
     }
 
     // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI2 (0x103F)  
-    fn op_swi2(&mut self) -> Cycles {
+    fn op_swi2(&mut self) {
         // C++ Original: PushCCState(true);
         self.push_cc_state(true);
         
         // C++ Original: PC = Read16(InterruptVector::Swi2); (0xFFF2) - SWI2 uses 0xFFF2 vector
         self.registers.pc = self.read16(SWI2_VECTOR);
         
-        20 // SWI2 takes 20 cycles
+        // Cycles (20) already counted by lookup table
     }
 
     // C++ Original: void OpSWI(InterruptVector::Type type) - for SWI3 (0x113F)
-    fn op_swi3(&mut self) -> Cycles {
+    fn op_swi3(&mut self) {
         // C++ Original: PushCCState(true);
         self.push_cc_state(true);
         
         // C++ Original: PC = Read16(InterruptVector::Swi3); (0xFFF4) - SWI3 uses 0xFFF4 vector
         self.registers.pc = self.read16(SWI3_VECTOR);
         
-        20 // SWI3 takes 20 cycles
+        // Cycles (20) already counted by lookup table
     }
 
     // C++ Original: void OpRTI() { bool poppedEntire{}; PopCCState(poppedEntire); AddCycles(poppedEntire ? 15 : 6); }
@@ -2714,7 +2817,11 @@ impl Cpu6809 {
     fn push_cc_state(&mut self, entire: bool) {
         // C++ Original: CC.Entire = entire ? 1 : 0;
         self.registers.cc.e = entire;
+        let cc_value = self.registers.cc.to_u8();
+        self.push_cc_state_with_value(cc_value);
+    }
 
+    fn push_cc_state_with_value(&mut self, cc_value: u8) {
         // C++ Original stack push order: PC, U, Y, X, DP, B, A, CC
         // C++ Original: Push16(S, PC); Push16(S, U); Push16(S, Y); Push16(S, X); Push8(S, DP); Push8(S, B); Push8(S, A); Push8(S, CC.Value);
         
@@ -2755,9 +2862,9 @@ impl Cpu6809 {
         self.registers.s = self.registers.s.wrapping_sub(1);
         self.write8(self.registers.s, self.registers.a);
         
-        // Push CC (8-bit)
+        // Push CC (8-bit) - use provided value instead of reading from register
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, self.registers.cc.to_u8());
+        self.write8(self.registers.s, cc_value);
     }
 
     // C++ Original: void PopCCState(bool& poppedEntire)
