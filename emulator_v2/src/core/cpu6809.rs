@@ -133,8 +133,8 @@ private:
     static constexpr uint16_t SWI_VECTOR = 0xFFFA;
     static constexpr uint16_t IRQ_VECTOR = 0xFFF8;
     static constexpr uint16_t FIRQ_VECTOR = 0xFFF6;
-    static constexpr uint16_t SWI2_VECTOR = 0xFFF4;
-    static constexpr uint16_t SWI3_VECTOR = 0xFFF2;
+    static constexpr uint16_t SWI2_VECTOR = 0xFFF2;
+    static constexpr uint16_t SWI3_VECTOR = 0xFFF4;
 
     cycles_t m_cycles = 0;
     
@@ -163,8 +163,8 @@ const NMI_VECTOR: u16   = 0xFFFC; // TODO: Non-maskable interrupt - not implemen
 const SWI_VECTOR: u16   = 0xFFFA; // TODO: Will be used when SWI opcode is implemented
 const IRQ_VECTOR: u16   = 0xFFF8; // TODO: Will be used when interrupt handling is implemented
 const FIRQ_VECTOR: u16  = 0xFFF6; // TODO: Fast interrupt - not implemented
-const SWI2_VECTOR: u16  = 0xFFF4; // TODO: Will be used when SWI2 opcode is implemented
-const SWI3_VECTOR: u16  = 0xFFF2; // TODO: Will be used when SWI3 opcode is implemented
+const SWI2_VECTOR: u16  = 0xFFF2; // C++ Original: InterruptVector::Swi2 = 0xFFF2
+const SWI3_VECTOR: u16  = 0xFFF4; // C++ Original: InterruptVector::Swi3 = 0xFFF4
 
 impl Cpu6809 {
     pub fn new(memory_bus: Rc<RefCell<MemoryBus>>) -> Self {
@@ -2683,8 +2683,8 @@ impl Cpu6809 {
         // C++ Original: PushCCState(true);
         self.push_cc_state(true);
         
-        // C++ Original: PC = Read16(InterruptVector::Swi2); (0xFFF2) - no interrupt mask change for SWI2
-        self.registers.pc = self.read16(0xFFF2);
+        // C++ Original: PC = Read16(InterruptVector::Swi2); (0xFFF2) - SWI2 uses 0xFFF2 vector
+        self.registers.pc = self.read16(SWI2_VECTOR);
         
         20 // SWI2 takes 20 cycles
     }
@@ -2694,19 +2694,20 @@ impl Cpu6809 {
         // C++ Original: PushCCState(true);
         self.push_cc_state(true);
         
-        // C++ Original: PC = Read16(InterruptVector::Swi3); (0xFFF4) - no interrupt mask change for SWI3
-        self.registers.pc = self.read16(0xFFF4);
+        // C++ Original: PC = Read16(InterruptVector::Swi3); (0xFFF4) - SWI3 uses 0xFFF4 vector
+        self.registers.pc = self.read16(SWI3_VECTOR);
         
         20 // SWI3 takes 20 cycles
     }
 
     // C++ Original: void OpRTI() { bool poppedEntire{}; PopCCState(poppedEntire); AddCycles(poppedEntire ? 15 : 6); }
-    fn op_rti(&mut self) -> Cycles {
+    fn op_rti(&mut self) {
         // C++ Original: bool poppedEntire{}; PopCCState(poppedEntire);
         let popped_entire = self.pop_cc_state();
         
         // C++ Original: AddCycles(poppedEntire ? 15 : 6);
-        if popped_entire { 15 } else { 6 }
+        let cycles = if popped_entire { 15 } else { 6 };
+        self.add_cycles(cycles);
     }
 
     // C++ Original: void PushCCState(bool entire)
@@ -2718,29 +2719,29 @@ impl Cpu6809 {
         // C++ Original: Push16(S, PC); Push16(S, U); Push16(S, Y); Push16(S, X); Push8(S, DP); Push8(S, B); Push8(S, A); Push8(S, CC.Value);
         
         // Inline stack push operations to avoid borrow checker issues
-        // Push PC (16-bit, big endian)
+        // Push PC (16-bit) - C++ Original: Push16(S, PC) writes low byte first, then high byte
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8);
+        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low byte first
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);
+        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);   // High byte second
         
-        // Push U (16-bit, big endian)
+        // Push U (16-bit) - C++ Original: Push16(S, U) writes low byte first, then high byte
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.u & 0xFF) as u8);
+        self.write8(self.registers.s, (self.registers.u & 0xFF) as u8); // Low byte first
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.u >> 8) as u8);
+        self.write8(self.registers.s, (self.registers.u >> 8) as u8);   // High byte second
         
-        // Push Y (16-bit, big endian)
+        // Push Y (16-bit) - C++ Original: Push16(S, Y) writes low byte first, then high byte
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.y & 0xFF) as u8);
+        self.write8(self.registers.s, (self.registers.y & 0xFF) as u8); // Low byte first
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.y >> 8) as u8);
+        self.write8(self.registers.s, (self.registers.y >> 8) as u8);   // High byte second
         
-        // Push X (16-bit, big endian)
+        // Push X (16-bit) - C++ Original: Push16(S, X) writes low byte first, then high byte
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.x & 0xFF) as u8);
+        self.write8(self.registers.s, (self.registers.x & 0xFF) as u8); // Low byte first
         self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.x >> 8) as u8);
+        self.write8(self.registers.s, (self.registers.x >> 8) as u8);   // High byte second
         
         // Push DP (8-bit)
         self.registers.s = self.registers.s.wrapping_sub(1);
@@ -2761,57 +2762,65 @@ impl Cpu6809 {
 
     // C++ Original: void PopCCState(bool& poppedEntire)
     fn pop_cc_state(&mut self) -> bool {
-        // C++ Original pop order (reverse of push): CC, A, B, DP, X, Y, U, PC
-        // C++ Original: CC.Value = Pop8(S); A = Pop8(S); B = Pop8(S); DP = Pop8(S); X = Pop16(S); Y = Pop16(S); U = Pop16(S); PC = Pop16(S);
-        
-        // Inline stack pop operations to avoid borrow checker issues
-        // Pop CC (8-bit)
+        // C++ Original: CC.Value = Pop8(S); poppedEntire = CC.Entire != 0;
         let cc_value = self.read8(self.registers.s);
         self.registers.s = self.registers.s.wrapping_add(1);
         self.registers.cc.from_u8(cc_value);
         
-        // C++ Original: bool poppedEntire = CC.Entire != 0;
         let popped_entire = self.registers.cc.e;
         
-        // Pop A (8-bit)
-        self.registers.a = self.read8(self.registers.s);
-        self.registers.s = self.registers.s.wrapping_add(1);
-        
-        // Pop B (8-bit)
-        self.registers.b = self.read8(self.registers.s);
-        self.registers.s = self.registers.s.wrapping_add(1);
-        
-        // Pop DP (8-bit)
-        self.registers.dp = self.read8(self.registers.s);
-        self.registers.s = self.registers.s.wrapping_add(1);
-        
-        // Pop X (16-bit, big endian)
-        let x_high = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        let x_low = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        self.registers.x = (x_high << 8) | x_low;
-        
-        // Pop Y (16-bit, big endian)
-        let y_high = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        let y_low = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        self.registers.y = (y_high << 8) | y_low;
-        
-        // Pop U (16-bit, big endian)
-        let u_high = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        let u_low = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        self.registers.u = (u_high << 8) | u_low;
-        
-        // Pop PC (16-bit, big endian)
-        let pc_high = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        let pc_low = self.read8(self.registers.s) as u16;
-        self.registers.s = self.registers.s.wrapping_add(1);
-        self.registers.pc = (pc_high << 8) | pc_low;
+        if popped_entire {
+            // C++ Original: if (CC.Entire) { A = Pop8(S); B = Pop8(S); ... }
+            // Only pop all registers if Entire flag is set
+            
+            // Pop A (8-bit)
+            self.registers.a = self.read8(self.registers.s);
+            self.registers.s = self.registers.s.wrapping_add(1);
+            
+            // Pop B (8-bit)
+            self.registers.b = self.read8(self.registers.s);
+            self.registers.s = self.registers.s.wrapping_add(1);
+            
+            // Pop DP (8-bit)
+            self.registers.dp = self.read8(self.registers.s);
+            self.registers.s = self.registers.s.wrapping_add(1);
+            
+            // Pop X (16-bit) - C++ Original: Pop16(S) reads high byte first, then low byte
+            let x_high = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            let x_low = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            self.registers.x = (x_high << 8) | x_low;
+            
+            // Pop Y (16-bit) - C++ Original: Pop16(S) reads high byte first, then low byte
+            let y_high = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            let y_low = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            self.registers.y = (y_high << 8) | y_low;
+            
+            // Pop U (16-bit) - C++ Original: Pop16(S) reads high byte first, then low byte
+            let u_high = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            let u_low = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            self.registers.u = (u_high << 8) | u_low;
+            
+            // Pop PC (16-bit) - C++ Original: Pop16(S) reads high byte first, then low byte
+            let pc_high = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            let pc_low = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            self.registers.pc = (pc_high << 8) | pc_low;
+        } else {
+            // C++ Original: } else { PC = Pop16(S); }
+            // Fast interrupt context: only pop PC - C++ Original: Pop16(S) reads high byte first
+            let pc_high = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            let pc_low = self.read8(self.registers.s) as u16;
+            self.registers.s = self.registers.s.wrapping_add(1);
+            self.registers.pc = (pc_high << 8) | pc_low;
+        }
         
         popped_entire
     }
