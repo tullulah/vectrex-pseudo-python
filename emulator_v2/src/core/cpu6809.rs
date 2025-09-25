@@ -599,6 +599,14 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // C++ Original: OpADC<0, 0xC9>(B); - ADCB immediate
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), carry, CC);
+                    0xC9 => {
+                        let operand = self.read_pc8();
+                        let carry = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, carry);
+                    },
+
                     // C++ Original: OpOR<0, 0xCA>(B); - ORB immediate
                     // C++ Original: reg = reg | value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
                     0xCA => {
@@ -618,6 +626,14 @@ impl Cpu6809 {
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
                         self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpADD<0, 0xDB>(A); - ADDA direct
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), 0, CC);
+                    0xDB => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
                     // C++ Original: OpAND<0, 0xD4>(B); - ANDB direct
@@ -648,6 +664,15 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                     },
 
+                    // C++ Original: OpADC<0, 0xD9>(B); - ADCB direct
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), carry, CC);
+                    0xD9 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        let carry = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, carry);
+                    },
+
                     // C++ Original: OpAND<0, 0xF4>(B); - ANDB extended
                     // C++ Original: reg = reg & value; CC.Negative = CalcNegative(reg); CC.Zero = CalcZero(reg); CC.Overflow = 0;
                     0xF4 => {
@@ -663,6 +688,23 @@ impl Cpu6809 {
                     // C++ Original: uint8_t andResult = reg & ReadOperandValue8<cpuOp, opCode>(); CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
                     0xF5 => {
                         self.op_bitb_extended();
+                    },
+
+                    // C++ Original: OpADC<0, 0xF9>(B); - ADCB extended
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), carry, CC);
+                    0xF9 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let carry = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, carry);
+                    },
+
+                    // C++ Original: OpADD<0, 0xFB>(A); - ADDA extended
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), 0, CC);
+                    0xFB => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
                     // C++ Original: OpOR<0, 0xFA>(B); - ORB extended
@@ -710,6 +752,13 @@ impl Cpu6809 {
                         self.registers.a = self.subtract_impl_u8(self.registers.a, operand, if self.registers.cc.c { 1 } else { 0 });
                     },
 
+                    // C++ Original: OpSUB<0, 0xA0>(A); - SUBA indexed
+                    0xA0 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, 0);
+                    },
+
                     // C++ Original: OpCMP<0, 0xA1>(A); - CMPA indexed
                     // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
                     0xA1 => {
@@ -719,10 +768,41 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSBC<0, 0xA2>(A); - SBCA indexed
+                    0xA2 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, if self.registers.cc.c { 1 } else { 0 });
+                    },
+
+                    // C++ Original: OpAND<0, 0xA4>(A); - ANDA indexed
+                    0xA4 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.registers.a & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.a);
+                        self.registers.cc.v = false;
+                    },
+
                     // C++ Original: OpBIT<0, 0xA5>(A); - BITA indexed
                     // C++ Original: uint8_t andResult = reg & ReadOperandValue8<cpuOp, opCode>(); CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
                     0xA5 => {
                         self.op_bita_indexed();
+                    },
+
+                    // C++ Original: OpADC<0, 0xA9>(A); - ADCA indexed
+                    0xA9 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, if self.registers.cc.c { 1 } else { 0 });
+                    },
+
+                    // C++ Original: OpADD<0, 0xAB>(A); - ADDA indexed
+                    0xAB => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
                     // C++ Original: OpCMP<0, 0xB1>(A); - CMPA extended  
@@ -734,12 +814,38 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSBC<0, 0xB2>(A); - SBCA extended
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), borrow, CC);
+                    0xB2 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let borrow = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.a = self.subtract_impl_u8(self.registers.a, operand, borrow);
+                    },
+
                     // C++ Original: OpCMP<0, 0xC1>(B); - CMPB immediate
                     // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
                     0xC1 => {
                         let operand = self.read_pc8();
                         let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
                         // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpSBC<0, 0xC2>(B); - SBCB immediate
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), borrow, CC);
+                    0xC2 => {
+                        let operand = self.read_pc8();
+                        let borrow = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, borrow);
+                    },
+
+                    // C++ Original: OpADD<1, 0xC3>(D); - ADDD immediate
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue16<...>(), 0, CC);
+                    0xC3 => {
+                        let operand = self.read_pc16();
+                        let current_d = self.registers.d();
+                        let result = self.add_impl_u16(current_d, operand, 0);
+                        self.registers.set_d(result);
                     },
 
                     // C++ Original: OpSUB<0, 0xD0>(B); - SUBB direct
@@ -759,6 +865,25 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSBC<0, 0xD2>(B); - SBCB direct
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), borrow, CC);
+                    0xD2 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        let borrow = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, borrow);
+                    },
+
+                    // C++ Original: OpADD<1, 0xD3>(D); - ADDD direct
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue16<...>(), 0, CC);
+                    0xD3 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read16(ea);
+                        let current_d = self.registers.d();
+                        let result = self.add_impl_u16(current_d, operand, 0);
+                        self.registers.set_d(result);
+                    },
+
                     // C++ Original: OpSUB<0, 0xE0>(B); - SUBB indexed
                     // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<cpuOp, opCode>(), 0, CC);
                     0xE0 => {
@@ -776,10 +901,46 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSBC<0, 0xE2>(B); - SBCB indexed
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), borrow, CC);
+                    0xE2 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        let borrow = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, borrow);
+                    },
+
+                    // C++ Original: OpADD<1, 0xE3>(D); - ADDD indexed
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue16<...>(), 0, CC);
+                    0xE3 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read16(ea);
+                        let current_d = self.registers.d();
+                        let result = self.add_impl_u16(current_d, operand, 0);
+                        self.registers.set_d(result);
+                    },
+
                     // C++ Original: OpBIT<0, 0xE5>(B); - BITB indexed
                     // C++ Original: uint8_t andResult = reg & ReadOperandValue8<cpuOp, opCode>(); CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
                     0xE5 => {
                         self.op_bitb_indexed();
+                    },
+
+                    // C++ Original: OpADC<0, 0xE9>(B); - ADCB indexed
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), carry, CC);
+                    0xE9 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        let carry = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, carry);
+                    },
+
+                    // C++ Original: OpADD<0, 0xEB>(A); - ADDA indexed
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), 0, CC);
+                    0xEB => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, 0);
                     },
 
                     // C++ Original: OpSUB<0, 0xF0>(B); - SUBB extended
@@ -797,6 +958,25 @@ impl Cpu6809 {
                         let operand = self.read8(ea);
                         let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
                         // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpSBC<0, 0xF2>(B); - SBCB extended
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<...>(), borrow, CC);
+                    0xF2 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let borrow = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, borrow);
+                    },
+
+                    // C++ Original: OpADD<1, 0xF3>(D); - ADDD extended
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue16<...>(), 0, CC);
+                    0xF3 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read16(ea);
+                        let current_d = self.registers.d();
+                        let result = self.add_impl_u16(current_d, operand, 0);
+                        self.registers.set_d(result);
                     },
 
                     // ======== SINGLE REGISTER OPERATIONS ========
@@ -1253,6 +1433,15 @@ impl Cpu6809 {
                         self.registers.cc.n = (self.registers.a & 0x80) != 0;
                         self.registers.cc.z = self.registers.a == 0;
                         self.registers.cc.v = false; // Always cleared for logical operations
+                    },
+
+                    // C++ Original: OpADC<0, 0xB9>(A); - ADCA extended
+                    // C++ Original: reg = AddImpl(reg, ReadOperandValue8<...>(), carry, CC);
+                    0xB9 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        let carry = if self.registers.cc.c { 1 } else { 0 };
+                        self.registers.a = self.add_impl_u8(self.registers.a, operand, carry);
                     },
 
                     // C++ Original: OpOR<0, 0xBA>(A); - ORA extended
