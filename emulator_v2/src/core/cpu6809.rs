@@ -742,6 +742,14 @@ impl Cpu6809 {
                         // Note: CMP only updates flags, result is discarded
                     },
 
+                    // C++ Original: OpSUB<0, 0xD0>(B); - SUBB direct
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<cpuOp, opCode>(), 0, CC);
+                    0xD0 => {
+                        let ea = self.read_direct_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
+                    },
+
                     // C++ Original: OpCMP<0, 0xD1>(B); - CMPB direct
                     // C++ Original: uint8_t discard = SubtractImpl(reg, ReadOperandValue8<...>(), 0, CC); (void)discard;
                     0xD1 => {
@@ -749,6 +757,14 @@ impl Cpu6809 {
                         let operand = self.read8(ea);
                         let _discard = self.subtract_impl_u8(self.registers.b, operand, 0);
                         // Note: CMP only updates flags, result is discarded
+                    },
+
+                    // C++ Original: OpSUB<0, 0xE0>(B); - SUBB indexed
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<cpuOp, opCode>(), 0, CC);
+                    0xE0 => {
+                        let ea = self.read_indexed_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
                     },
 
                     // C++ Original: OpCMP<0, 0xE1>(B); - CMPB indexed
@@ -764,6 +780,14 @@ impl Cpu6809 {
                     // C++ Original: uint8_t andResult = reg & ReadOperandValue8<cpuOp, opCode>(); CC.Zero = CalcZero(andResult); CC.Negative = CalcNegative(andResult); CC.Overflow = 0;
                     0xE5 => {
                         self.op_bitb_indexed();
+                    },
+
+                    // C++ Original: OpSUB<0, 0xF0>(B); - SUBB extended
+                    // C++ Original: reg = SubtractImpl(reg, ReadOperandValue8<cpuOp, opCode>(), 0, CC);
+                    0xF0 => {
+                        let ea = self.read_extended_ea();
+                        let operand = self.read8(ea);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
                     },
 
                     // C++ Original: OpCMP<0, 0xF1>(B); - CMPB extended  
