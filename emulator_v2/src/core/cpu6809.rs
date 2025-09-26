@@ -412,36 +412,36 @@ impl Cpu6809 {
 
                     // 16-bit LD instructions
                     0x8E => { // LDX #immediate
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.x = value;
                     },
                     0x9E => { // LDX direct
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.x = value;
                     },
                     0xAE => { // LDX indexed
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.x = value;
                     },
                     0xBE => { // LDX extended
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.x = value;
                     },
                     
                     0xCE => { // LDU #immediate
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.u = value;
                     },
                     0xDE => { // LDU direct
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.u = value;
                     },
                     0xEE => { // LDU indexed
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.u = value;
                     },
                     0xFE => { // LDU extended
-                        let value = self.op_ld_16(opcode_byte);
+                        let value = self.op_ld_16(0, opcode_byte);
                         self.registers.u = value;
                     },
 
@@ -468,33 +468,33 @@ impl Cpu6809 {
 
                     // C++ Original: 16-bit ST instructions - OpST<0, opCode>(register)
                     0x9F => { // STX direct
-                        self.op_st_16(self.registers.x, opcode_byte);
+                        self.op_st_16(self.registers.x, 0, opcode_byte);
                     },
                     0xAF => { // STX indexed
-                        self.op_st_16(self.registers.x, opcode_byte);
+                        self.op_st_16(self.registers.x, 0, opcode_byte);
                     },
                     0xBF => { // STX extended
-                        self.op_st_16(self.registers.x, opcode_byte);
+                        self.op_st_16(self.registers.x, 0, opcode_byte);
                     },
 
                     0xDD => { // STD direct
-                        self.op_st_16(self.registers.d(), opcode_byte);
+                        self.op_st_16(self.registers.d(), 0, opcode_byte);
                     },
                     0xED => { // STD indexed
-                        self.op_st_16(self.registers.d(), opcode_byte);
+                        self.op_st_16(self.registers.d(), 0, opcode_byte);
                     },
                     0xFD => { // STD extended
-                        self.op_st_16(self.registers.d(), opcode_byte);
+                        self.op_st_16(self.registers.d(), 0, opcode_byte);
                     },
 
                     0xDF => { // STU direct
-                        self.op_st_16(self.registers.u, opcode_byte);
+                        self.op_st_16(self.registers.u, 0, opcode_byte);
                     },
-                    0xEF => { // STU indexed
-                        self.op_st_16(self.registers.u, opcode_byte);
+                    0xEF => { // STS indexed - C++ Original: OpST<0, 0xEF>(S)
+                        self.op_st_16(self.registers.s, 0, opcode_byte);
                     },
-                    0xFF => { // STU extended
-                        self.op_st_16(self.registers.u, opcode_byte);
+                    0xFF => { // STS extended - C++ Original: OpST<1, 0xFF>(S)
+                        self.op_st_16(self.registers.s, 1, opcode_byte);
                     },
 
                     // C++ Original: OpSUB<0, 0x80>(A); - SUBA immediate
@@ -2077,6 +2077,84 @@ impl Cpu6809 {
                         self.op_long_branch_if_less_or_equal();
                     },
 
+                    // C++ Original: case 0x8E: OpLD<1, 0x8E>(Y); - LDY immediate
+                    0x8E => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.y = value;
+                    },
+
+                    // C++ Original: case 0x9E: OpLD<1, 0x9E>(Y); - LDY direct
+                    0x9E => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.y = value;
+                    },
+
+                    // C++ Original: case 0x9F: OpST<1, 0x9F>(Y); - STY direct
+                    0x9F => {
+                        self.op_st_16(self.registers.y, 1, opcode_byte);
+                    },
+
+                    // C++ Original: case 0xAE: OpLD<1, 0xAE>(Y); - LDY indexed
+                    0xAE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.y = value;
+                    },
+
+                    // C++ Original: case 0xAF: OpST<1, 0xAF>(Y); - STY indexed
+                    0xAF => {
+                        self.op_st_16(self.registers.y, 1, opcode_byte);
+                    },
+
+                    // C++ Original: case 0xBE: OpLD<1, 0xBE>(Y); - LDY extended
+                    0xBE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.y = value;
+                    },
+
+                    // C++ Original: case 0xBF: OpST<1, 0xBF>(Y); - STY extended
+                    0xBF => {
+                        self.op_st_16(self.registers.y, 1, opcode_byte);
+                    },
+
+                    // C++ Original: case 0xCE: OpLD<1, 0xCE>(S); - LDS immediate
+                    0xCE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.s = value;
+                    },
+
+                    // C++ Original: case 0xDE: OpLD<1, 0xDE>(S); - LDS direct
+                    0xDE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.s = value;
+                    },
+
+                    // C++ Original: case 0xDF: OpST<1, 0xDF>(S); - STS direct
+                    0xDF => {
+                        self.op_st_16(self.registers.s, 1, opcode_byte);
+                    },
+
+                    // C++ Original: case 0xEE: OpLD<1, 0xEE>(S); - LDS indexed
+                    0xEE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.s = value;
+                    },
+
+                    // C++ Original: case 0xEF: OpST<1, 0xEF>(S); - STS indexed
+                    0xEF => {
+                        self.op_st_16(self.registers.s, 1, opcode_byte);
+                    },
+
+                    // C++ Original: case 0xFE: OpLD<1, 0xFE>(S); - LDS extended
+                    0xFE => {
+                        let value = self.op_ld_16(1, opcode_byte);
+                        self.registers.s = value;
+                    },
+
+                    // C++ Original: case 0xFF: OpST<1, 0xFF>(S); - STS extended
+                    0xFF => {
+                        self.op_st_16(self.registers.s, 1, opcode_byte);
+                    },
+
                     _ => {
                         panic!("Unhandled Page 1 opcode: {:02X}", opcode_byte);
                     }
@@ -2181,8 +2259,8 @@ impl Cpu6809 {
     }
 
     // C++ Original: template <int page, uint8_t opCode> void OpLD(uint16_t& targetReg)
-    fn op_ld_16(&mut self, opcode: u8) -> u16 {
-        let value = self.read_operand_value16(opcode);
+    fn op_ld_16(&mut self, page: u8, opcode: u8) -> u16 {
+        let value = self.read_operand_value16_with_page(page, opcode);
         self.registers.cc.n = self.calc_negative_16(value);
         self.registers.cc.z = self.calc_zero_16(value);
         self.registers.cc.v = false;
@@ -2199,8 +2277,8 @@ impl Cpu6809 {
     }
 
     // C++ Original: template<int regIdx, OpCode opCode> void OpST(uint16_t sourceValue)
-    fn op_st_16(&mut self, source_value: u16, opcode: u8) {
-        let ea = self.read_effective_address(opcode);
+    fn op_st_16(&mut self, source_value: u16, page: u8, opcode: u8) {
+        let ea = self.read_effective_address_with_page(page, opcode);
         self.write16(ea, source_value);
         
         // Set condition codes - C++ Original: CalcNegative, CalcZero
@@ -2211,7 +2289,12 @@ impl Cpu6809 {
 
     // Helper function to read effective address for store operations
     fn read_effective_address(&mut self, opcode: u8) -> u16 {
-        let cpu_op = lookup_cpu_op_runtime(0, opcode);
+        self.read_effective_address_with_page(0, opcode)
+    }
+
+    // Helper function to read effective address for store operations with page support
+    fn read_effective_address_with_page(&mut self, page: u8, opcode: u8) -> u16 {
+        let cpu_op = lookup_cpu_op_runtime(page, opcode);
         match cpu_op.addr_mode {
             AddressingMode::Direct => self.read_direct_ea(),
             AddressingMode::Indexed => self.read_indexed_ea(),
@@ -2255,8 +2338,12 @@ impl Cpu6809 {
     }
 
     fn read_operand_value16(&mut self, opcode: u8) -> u16 {
-        let addressing_mode = self.get_addressing_mode_for_opcode(opcode);
-        match addressing_mode {
+        self.read_operand_value16_with_page(0, opcode)
+    }
+
+    fn read_operand_value16_with_page(&mut self, page: u8, opcode: u8) -> u16 {
+        let cpu_op = lookup_cpu_op_runtime(page, opcode);
+        match cpu_op.addr_mode {
             AddressingMode::Immediate => self.read_pc16(),
             AddressingMode::Direct => {
                 let ea = self.read_direct_ea();
@@ -2270,7 +2357,7 @@ impl Cpu6809 {
                 let ea = self.read_extended_ea();
                 self.read16(ea)
             },
-            _ => panic!("Invalid addressing mode for 16-bit read: {:?}", addressing_mode)
+            _ => panic!("Invalid addressing mode for 16-bit read: {:?}", cpu_op.addr_mode)
         }
     }
 

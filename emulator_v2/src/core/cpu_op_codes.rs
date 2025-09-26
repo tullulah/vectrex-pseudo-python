@@ -388,7 +388,7 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0xFD => CpuOp { op_code: 0xFD, name: "STD", addr_mode: AddressingMode::Extended, cycles: 6, size: 3, description: "Store Double Accumulator" },
 
         0xDF => CpuOp { op_code: 0xDF, name: "STU", addr_mode: AddressingMode::Direct, cycles: 5, size: 2, description: "Store User Stack Pointer" },
-        0xEF => CpuOp { op_code: 0xEF, name: "STU", addr_mode: AddressingMode::Indexed, cycles: 5, size: 2, description: "Store User Stack Pointer" },
+        0xEF => CpuOp { op_code: 0xEF, name: "STS", addr_mode: AddressingMode::Indexed, cycles: 6, size: 2, description: "Store System Stack Pointer" },
         0xFF => CpuOp { op_code: 0xFF, name: "STU", addr_mode: AddressingMode::Extended, cycles: 6, size: 3, description: "Store User Stack Pointer" },
 
         // Default case - illegal instruction

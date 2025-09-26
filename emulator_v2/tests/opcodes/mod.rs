@@ -43,6 +43,8 @@ pub mod data_transfer;
 
 pub mod system;
 
+pub mod test_all_new_opcodes;
+
 pub mod stack {
     //! Stack and interrupt instruction tests
     pub mod test_interrupt_stack_compliance;
