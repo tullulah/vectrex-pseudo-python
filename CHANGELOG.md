@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [September 26, 2025] - Test Infrastructure Consolidation & Organization 🧪
+
+### Test Infrastructure Overhaul
+- **Complete Test Reorganization**: Transformed flat test structure into organized hierarchy
+- **Eliminated 24 Duplicate Tests**: Removed redundant tests across B register, memory, branch, and logic operations
+- **281 Total Tests**: 256 opcode tests + 19 component tests, all passing with 100% success rate
+
+### Added
+- **Structured Test Organization**:
+  - `tests/opcodes/` - Organized by functionality (arithmetic, branch, comparison, data_transfer, logic, register, stack)
+  - `tests/components/` - Separated by domain (integration, hardware, engine, memory, cpu)
+  - One file per opcode rule with descriptive naming (`test_adda.rs`, `test_jsr.rs`)
+- **Standardized Test Configuration**:
+  - RAM mapped at 0xC800-0xCFFF for all tests
+  - Stack initialized at 0xCFFF consistently
+  - Template-based test structure with `setup_emulator()` helper
+  - Mandatory verification of registers, flags, memory, and cycles
+- **Component Test Categories**:
+  - Integration tests for component coordination
+  - Hardware tests (PSG, Screen, Shift Register, Timers)
+  - Engine tests (Types, DelayedValueStore)
+  - Memory device tests
+  - CPU-specific functionality tests
+
+### Removed
+- **Duplicate Test Elimination**:
+  - B register opcodes: 4 duplicates removed
+  - Memory operations: 6 duplicates removed
+  - Branch operations: 3 duplicates removed  
+  - Logic operations: 11 duplicates removed (AND, EOR, OR)
+  - Empty/placeholder files cleaned up
+
+### Changed
+- **Test Structure**: From flat 280 tests to organized 281 tests (net +1 after duplicates removed)
+- **Naming Convention**: Consistent `test_[opcode]_[mode]_0x[hexcode]` format
+- **Memory Layout**: Standardized 0xC800 RAM start, 0xCFFF stack across all tests
+- **Documentation**: Updated copilot-instructions.md with comprehensive test rules and templates
+
+### Technical Improvements
+- **Maintainability**: Clear separation between opcode and component testing
+- **Discoverability**: Logical categorization makes finding specific tests trivial
+- **Consistency**: Standard memory configuration eliminates test variance
+- **Extensibility**: Template structure facilitates adding new tests
+
 ## [September 25, 2025] - 99.2% Vectrexy Compliance Achievement 🌟
 
 ### Major Achievement

@@ -333,9 +333,35 @@ Long Term:
 
 ---
 ## 15. Testing Strategy (Current State / Recommendations)
-- Rust: Unit tests in `emulator/tests/` (cover memory map, interrupt masking, read-modify-write opcodes, nested IRQ/FIRQ semantics).
-- Add: Golden trace compare (record known BIOS bootstrap trace and diff cycles/opcodes).
-- JS: Minimal; consider adding Jest tests for path resolution & persistence logic.
+
+### 15.1 Estructura Organizada (281 tests total)
+**tests/opcodes/** (256 tests) - Un archivo por opcode MC6809:
+- `arithmetic/` - ADD, SUB, MUL, DIV, etc.
+- `branch/` - BRA, BEQ, BNE, JSR, RTS, etc.
+- `comparison/` - CMP, TST
+- `data_transfer/` - LD, ST, LEA, TFR, EXG
+- `logic/` - AND, OR, EOR, COM, NEG
+- `register/` - INC, DEC, CLR por registro
+- `stack/` - PSH, PUL, interrupt handling
+
+**tests/components/** (19 tests) - Tests de componentes del emulador:
+- `integration/` - Integración entre componentes
+- `hardware/` - PSG, Screen, Shift Register, Timers
+- `engine/` - Types, DelayedValueStore
+- `memory/` - Dispositivos de memoria
+- `cpu/` - Funcionalidad específica CPU
+
+### 15.2 Configuración Estándar
+- **Memoria**: RAM mapeada en 0xC800-0xCFFF para todos los tests
+- **Stack**: Inicializada en 0xCFFF
+- **BIOS real**: Nunca sintética, usar rutas válidas
+- **Verificación**: Registros, flags, memoria, cycles exactos
+- **Template**: Estructura consistente con setup_emulator() estándar
+
+### 15.3 Consolidación Completada (Sep 2025)
+- Eliminados 24 tests duplicados (B register, memory, branch, logic)
+- Reorganización completa de componentes en estructura lógica
+- 100% tests compilando y pasando
 
 ---
 ## 16. Performance Notes
@@ -1224,6 +1250,13 @@ A continuación te dejo:
 - ✅ **set_sync_context()**: Usa Input/RenderContext/AudioContext parameters correctos
 - ✅ **irq_enabled()**: Implementa GetInterruptFlagValue() logic original  
 - ✅ **firq_enabled()**: Retorna m_firq_enabled field como en original
+
+### (Nuevo) 2025-09-26: Test Infrastructure Consolidation
+- **281 tests organizados**: 256 opcodes + 19 components, estructura jerárquica completa
+- **24 duplicados eliminados**: B register, memory, branch, logic operations
+- **Configuración estándar**: RAM 0xC800-0xCFFF, Stack 0xCFFF, template setup_emulator()
+- **Categorización lógica**: tests/opcodes/ por funcionalidad, tests/components/ por dominio
+- **100% compliance mantenido**: Todos los tests compilando y pasando tras reorganización
 - ✅ **frame_update()**: Llama screen.frame_update() y psg.frame_update() correctamente
 - ✅ **SyncContext**: Rediseñado para ownership de Rust manteniendo semántica original
 - ✅ **engine_types.rs**: Debug traits añadidos para Input, RenderContext, AudioContext

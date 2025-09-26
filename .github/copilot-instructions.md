@@ -44,10 +44,87 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Próximo paso pendiente: mapear direcciones desconocidas como 0xF18B a etiquetas reales revisando `bios.asm` y actualizar `record_bios_call`.
 - Añadir export WASM: `bios_calls_json()` (pendiente: TODO id 13).
 
-## 3. Tests
-- Tests deben usar la BIOS real (ver ruta arriba) y no escribir versiones sintéticas.
-- Si un test necesita un escenario concreto, manipular RAM/cart, nunca la ROM.
-- Mantener tests resilientes ante timing: usar umbrales (máx pasos) y verificar aparición de símbolos, luego endurecer cuando el etiquetado sea completo.
+## 3. Tests - Estructura y Reglas Obligatorias
+
+### 3.1 Estructura de Directorios
+```
+tests/
+├── opcodes/           # Tests de opcodes MC6809 (256 tests)
+│   ├── arithmetic/    # ADD, SUB, MUL, DIV, etc.
+│   ├── branch/        # BRA, BEQ, BNE, JSR, RTS, etc.
+│   ├── comparison/    # CMP, TST
+│   ├── data_transfer/ # LD, ST, LEA, TFR, EXG
+│   ├── logic/         # AND, OR, EOR, COM, NEG
+│   ├── register/      # INC, DEC, CLR por registro (A/B/D/X/Y)
+│   └── stack/         # PSH, PUL, interrupt handling
+└── components/        # Tests de componentes del emulador (19 tests)
+    ├── integration/   # Tests de integración entre componentes
+    ├── hardware/      # PSG, Screen, Shift Register, Timers
+    ├── engine/        # Types, DelayedValueStore
+    ├── memory/        # Dispositivos de memoria
+    └── cpu/           # Funcionalidad específica CPU
+```
+
+### 3.2 Reglas de Naming y Organización
+- **UN ARCHIVO POR OPCODE**: Cada opcode tiene su propio archivo `test_[opcode].rs`
+- **Nombres descriptivos**: `test_adda.rs`, `test_jsr.rs`, `test_clr_indexed.rs`
+- **NO duplicados**: Verificar que no existe test similar antes de crear
+- **Categorización lógica**: Agrupar por funcionalidad, no por modo de direccionamiento
+
+### 3.3 Configuración de Memoria Estándar
+```rust
+// CONFIGURACIÓN OBLIGATORIA en todos los tests de opcodes:
+const RAM_START: u16 = 0xC800;  // Inicio de RAM de trabajo para tests
+const STACK_START: u16 = 0xCFFF; // Pila inicializada al final de RAM
+
+fn setup_emulator() -> (Emulator, Box<dyn MemoryDevice>) {
+    let mut emulator = Emulator::new();
+    let memory = Box::new(RamDevice::new()); // RAM mapeada en 0xC800-0xCFFF
+    emulator.memory().add_device(RAM_START, memory.clone()).unwrap();
+    emulator.cpu_mut().set_stack_pointer(STACK_START);
+    (emulator, memory)
+}
+```
+
+### 3.4 Estructura de Test por Opcode
+```rust
+// TEMPLATE OBLIGATORIO para tests de opcodes:
+#[test]
+fn test_[opcode]_[mode]_0x[hexcode]() {  // Nombre con código hex
+    let (mut emulator, memory) = setup_emulator();
+    
+    // 1. Setup inicial - registros y memoria
+    emulator.cpu_mut().set_register_a(0x42);
+    memory.write(RAM_START, 0x33).unwrap();
+    
+    // 2. Escribir opcode y operandos en memoria
+    memory.write(RAM_START + 0x100, 0x8B).unwrap(); // Opcode
+    memory.write(RAM_START + 0x101, 0x42).unwrap(); // Operando si aplica
+    
+    // 3. Configurar PC y ejecutar
+    emulator.cpu_mut().set_program_counter(RAM_START + 0x100);
+    emulator.step().unwrap();
+    
+    // 4. Verificar resultados - registros, flags, memoria
+    assert_eq!(emulator.cpu().register_a(), expected_value);
+    assert_eq!(emulator.cpu().condition_codes().zero(), expected_flag);
+}
+```
+
+### 3.5 Reglas de Contenido
+- **BIOS real únicamente**: Usar rutas válidas de BIOS, nunca generar sintética
+- **Memoria mapeada**: RAM en 0xC800-0xCFFF para todos los tests
+- **Stack en 0xCFFF**: Pila siempre inicializada al final de RAM  
+- **Verificación completa**: Registros, flags, memoria afectada, cycles
+- **Casos edge**: Incluir casos límite (overflow, underflow, zero, negative)
+- **NO side effects sintéticos**: Solo efectos reales de la instrucción
+- **Timing preciso**: Verificar cycles exactos según documentación MC6809
+
+### 3.6 Tests de Componentes
+- **Separados de opcodes**: No mezclar tests de CPU con tests de hardware
+- **Integración real**: Tests de integración usan componentes reales, no mocks
+- **Hardware específico**: Tests de PSG, Screen, VIA separados por funcionalidad
+- **Engine interno**: Tests de tipos y sistemas internos del emulador
 
 ## 3.1. BIOS Arranque Automático (Minestorm)
 - La BIOS arranca AUTOMÁTICAMENTE Minestorm sin interacción del usuario.
