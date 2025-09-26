@@ -7,6 +7,7 @@ pub mod load;
 
 // ST (Store) family - IN PROGRESS
 pub mod store;
+pub mod shift;
 
 // Organized test modules by category (TEMPORARY - will be segregated)
 pub mod comparison {
@@ -27,25 +28,20 @@ pub mod arithmetic {
 
 pub mod logic {
     //! Logic instruction tests (AND, EOR, OR, BIT, etc.)
-    pub mod test_and_eor_opcodes;
     pub mod test_bit_opcodes;
     pub mod test_bit_simple;
-    pub mod test_or_opcodes;
 }
 
 pub mod memory {
     //! Memory operation tests (LD, ST, LEA, etc.)
     pub mod test_lea_opcodes;
-    pub mod test_memory_operation_opcodes;
 }
 
 pub mod branch {
     //! Branch and jump instruction tests
-    pub mod test_branch_extended_opcodes;
     pub mod test_branch_opcodes;
     pub mod test_jsr_bsr_opcodes;
     pub mod test_long_branch_final;
-    pub mod test_long_branch_operations;
 }
 
 pub mod stack {
