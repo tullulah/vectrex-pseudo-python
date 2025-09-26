@@ -4,6 +4,7 @@
 use vectrex_emulator_v2::core::cpu6809::Cpu6809;
 use vectrex_emulator_v2::core::memory_bus::MemoryBus;
 use vectrex_emulator_v2::core::ram::Ram;
+use crate::interrupt_vector_rom::InterruptVectorRom;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -13,6 +14,10 @@ fn create_test_cpu() -> Cpu6809 {
     // Add RAM for test memory using the configured memory map
     let ram = Rc::new(RefCell::new(Ram::new()));
     Ram::init_memory_bus(ram.clone(), &mut memory_bus.borrow_mut());
+    
+    // C++ Original: Map interrupt vectors (0xFFF0-0xFFFF) for SWI/CWAI tests
+    let vector_rom = Rc::new(RefCell::new(InterruptVectorRom::new()));
+    memory_bus.borrow_mut().connect_device(vector_rom, (0xFFF0, 0xFFFF), vectrex_emulator_v2::core::memory_bus::EnableSync::False);
     
     Cpu6809::new(memory_bus)
 }
@@ -72,22 +77,26 @@ fn test_swi_stack_contents() {
     let _cycles = cpu.execute_instruction(false, false);
     
     // C++ Original: SWI pushes registers in specific order: CC, A, B, DP, X, Y, U, PC
-    // Stack grows downward, so first pushed = highest address
-    let mut stack_addr = old_s - 1;
+    // Stack grows downward, Vectrexy push order: PC, U, Y, X, DP, B, A, CC
+    // CC is pushed LAST and is at the current stack pointer (lowest address)
     
-    // Verify stack contents (pushed in reverse order)
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0xAA, "CC should be pushed first"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x11, "A should be pushed second"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x22, "B should be pushed third"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x99, "DP should be pushed fourth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x33, "X high should be pushed fifth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x44, "X low should be pushed sixth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x55, "Y high should be pushed seventh"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x66, "Y low should be pushed eighth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x77, "U high should be pushed ninth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x88, "U low should be pushed tenth"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0xC8, "PC high should be pushed eleventh"); stack_addr -= 1;
-    assert_eq!(memory_bus.borrow().read(stack_addr), 0x01, "PC low should be pushed last (PC+1 due to increment)");
+    // Verify stack contents in correct positions according to Vectrexy order
+    // PC was 0xC801 after reading opcode (incremented from 0xC800)
+    assert_eq!(memory_bus.borrow().read(old_s - 1), 0x01, "PC low byte should be at old_s-1"); // PC low = 0x01
+    assert_eq!(memory_bus.borrow().read(old_s - 2), 0xC8, "PC high byte should be at old_s-2"); // PC high = 0xC8
+    assert_eq!(memory_bus.borrow().read(old_s - 3), 0x88, "U low byte should be at old_s-3"); // U low = 0x88
+    assert_eq!(memory_bus.borrow().read(old_s - 4), 0x77, "U high byte should be at old_s-4"); // U high = 0x77
+    assert_eq!(memory_bus.borrow().read(old_s - 5), 0x66, "Y low byte should be at old_s-5"); // Y low = 0x66
+    assert_eq!(memory_bus.borrow().read(old_s - 6), 0x55, "Y high byte should be at old_s-6"); // Y high = 0x55
+    assert_eq!(memory_bus.borrow().read(old_s - 7), 0x44, "X low byte should be at old_s-7"); // X low = 0x44
+    assert_eq!(memory_bus.borrow().read(old_s - 8), 0x33, "X high byte should be at old_s-8"); // X high = 0x33
+    assert_eq!(memory_bus.borrow().read(old_s - 9), 0x99, "DP should be at old_s-9"); // DP = 0x99
+    assert_eq!(memory_bus.borrow().read(old_s - 10), 0x22, "B should be at old_s-10"); // B = 0x22
+    assert_eq!(memory_bus.borrow().read(old_s - 11), 0x11, "A should be at old_s-11"); // A = 0x11
+    assert_eq!(memory_bus.borrow().read(old_s - 12), 0xAA, "CC should be at old_s-12 (pushed last)"); // CC = 0xAA with E=1
+    
+    // Stack pointer should have decremented by 12 bytes for entire register set
+    assert_eq!(cpu.registers().s, old_s - 12, "Stack pointer should have decremented by 12 bytes");
 }
 
 #[test] 

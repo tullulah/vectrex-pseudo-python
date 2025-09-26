@@ -3325,9 +3325,10 @@ impl Cpu6809 {
         self.registers.cc.from_u8(masked_cc);
         
         // C++ Original: PushCCState(true);
-        // NOTE: push_cc_state modifies CC.Entire, so we must preserve the masked value
-        let final_masked_cc = masked_cc | 0x80; // Set Entire bit for push 
-        self.push_cc_state_with_value(final_masked_cc);
+        // C++ Original: CC.Entire = entire ? 1 : 0; (inside PushCCState)
+        self.registers.cc.e = true;  // Set Entire flag as per Vectrexy
+        let cc_value = self.registers.cc.to_u8();
+        self.push_cc_state_with_value(cc_value);
         
         // C++ Original: ASSERT(!m_waitingForInterrupts); m_waitingForInterrupts = true;
         // TODO: Implement interrupt waiting state - for now just do the CC and stack operations
