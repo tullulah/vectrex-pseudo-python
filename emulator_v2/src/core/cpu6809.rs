@@ -9,7 +9,7 @@ impl PartialEq<u8> for ConditionCode {
 
 use crate::types::Cycles;
 use crate::core::memory_bus::MemoryBus;
-use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, u8, s16_from_u8};
+use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, s16_from_u8};
 use crate::core::cpu_op_codes::{lookup_cpu_op_runtime, is_opcode_page1, is_opcode_page2, AddressingMode};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -168,10 +168,10 @@ pub struct Cpu6809 {
 
 // C++ Original: Interrupt vector constants from Vectrexy Cpu.cpp
 const RESET_VECTOR: u16 = 0xFFFE; // Used in reset()
-const NMI_VECTOR: u16   = 0xFFFC; // TODO: Non-maskable interrupt - not implemented
-const SWI_VECTOR: u16   = 0xFFFA; // TODO: Will be used when SWI opcode is implemented
-const IRQ_VECTOR: u16   = 0xFFF8; // TODO: Will be used when interrupt handling is implemented
-const FIRQ_VECTOR: u16  = 0xFFF6; // TODO: Fast interrupt - not implemented
+pub const NMI_VECTOR: u16   = 0xFFFC; // C++ Original: InterruptVector::Nmi = 0xFFFC
+pub const SWI_VECTOR: u16   = 0xFFFA; // C++ Original: InterruptVector::Swi = 0xFFFA
+pub const IRQ_VECTOR: u16   = 0xFFF8; // C++ Original: InterruptVector::Irq = 0xFFF8
+pub const FIRQ_VECTOR: u16  = 0xFFF6; // C++ Original: InterruptVector::Firq = 0xFFF6
 const SWI2_VECTOR: u16  = 0xFFF2; // C++ Original: InterruptVector::Swi2 = 0xFFF2
 const SWI3_VECTOR: u16  = 0xFFF4; // C++ Original: InterruptVector::Swi3 = 0xFFF4
 
@@ -2307,14 +2307,8 @@ impl Cpu6809 {
         }
     }
 
-    // Special case for LDD (Load D register)
-    fn op_ld_16_d(&mut self, opcode: u8) {
-        let value = self.read_operand_value16(opcode);
-        self.registers.cc.n = self.calc_negative_16(value);
-        self.registers.cc.z = self.calc_zero_16(value);
-        self.registers.cc.v = false;
-        self.registers.set_d(value);
-    }
+    // Note: LDD (Load D register) is already implemented in op_ld operations above
+    // This function was a duplicate and has been removed to clean up unused code warnings
     
     // Helper functions for reading operand values based on addressing mode
     fn read_operand_value8(&mut self, opcode: u8) -> u8 {
@@ -2480,8 +2474,12 @@ impl Cpu6809 {
     TODO: Will be used in PSHS/PSHU opcodes, SWI/SWI2/SWI3 interrupts
     */
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
-        self.push8(stack_pointer, u8(value & 0xFF)); // Low
-        self.push8(stack_pointer, u8(value >> 8));   // High
+        // C++ Original: m_memoryBus->Write(--stackPointer, U8(value & 0xFF)); // Low
+        // C++ Original: m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
+        *stack_pointer = stack_pointer.wrapping_sub(1);
+        self.write8(*stack_pointer, (value & 0xFF) as u8); // Low
+        *stack_pointer = stack_pointer.wrapping_sub(1);
+        self.write8(*stack_pointer, (value >> 8) as u8);   // High
     }
 
     /* C++ Original:
@@ -2493,8 +2491,12 @@ impl Cpu6809 {
     TODO: Will be used in PULS/PULU opcodes, interrupt handling
     */
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
-        let high = self.pop8(stack_pointer);
-        let low = self.pop8(stack_pointer);
+        // C++ Original: auto high = m_memoryBus->Read(stackPointer++);
+        // C++ Original: auto low = m_memoryBus->Read(stackPointer++);  
+        let high = self.read8(*stack_pointer);
+        *stack_pointer = stack_pointer.wrapping_add(1);
+        let low = self.read8(*stack_pointer);
+        *stack_pointer = stack_pointer.wrapping_add(1);
         combine_to_u16(high, low)
     }
 
@@ -3433,7 +3435,7 @@ impl Cpu6809 {
         self.registers.cc.f = true;  // Fast interrupt mask
         
         // C++ Original: PC = Read16(InterruptVector::Swi); (0xFFFA)
-        self.registers.pc = self.read16(0xFFFA);
+        self.registers.pc = self.read16(SWI_VECTOR);
         
         // Cycles (19) already counted by lookup table
     }
@@ -3458,6 +3460,52 @@ impl Cpu6809 {
         self.registers.pc = self.read16(SWI3_VECTOR);
         
         // Cycles (20) already counted by lookup table
+    }
+
+    // C++ Original: Interrupt handling functions (not fully implemented but vectors connected)
+    
+    /// Non-maskable interrupt handler
+    /// C++ Original: Uses InterruptVector::Nmi (0xFFFC)
+    pub fn handle_nmi(&mut self) {
+        // C++ Original: Similar to SWI but non-maskable
+        self.push_cc_state(true);
+        self.registers.cc.i = true;  // Set interrupt mask
+        self.registers.cc.f = true;  // Set fast interrupt mask
+        self.registers.pc = self.read16(NMI_VECTOR);
+    }
+
+    /// Interrupt request handler  
+    /// C++ Original: Uses InterruptVector::Irq (0xFFF8)
+    pub fn handle_irq(&mut self) {
+        // C++ Original: Maskable interrupt, only if I flag is clear
+        if !self.registers.cc.i {
+            self.push_cc_state(true);
+            self.registers.cc.i = true;  // Set interrupt mask
+            self.registers.pc = self.read16(IRQ_VECTOR);
+        }
+    }
+
+    /// Fast interrupt request handler
+    /// C++ Original: Uses InterruptVector::Firq (0xFFF6)  
+    pub fn handle_firq(&mut self) {
+        // C++ Original: Fast interrupt, only if F flag is clear
+        if !self.registers.cc.f {
+            // C++ Original: FIRQ only pushes PC and CC (not entire state)
+            let cc_value = self.registers.cc.to_u8();
+            self.registers.cc.e = false; // Entire flag = 0 for FIRQ
+            
+            // Push only PC and CC for FIRQ (not full state)
+            self.registers.s = self.registers.s.wrapping_sub(1);
+            self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8);
+            self.registers.s = self.registers.s.wrapping_sub(1);
+            self.write8(self.registers.s, (self.registers.pc >> 8) as u8);
+            self.registers.s = self.registers.s.wrapping_sub(1);
+            self.write8(self.registers.s, cc_value);
+            
+            self.registers.cc.i = true;  // Set interrupt mask
+            self.registers.cc.f = true;  // Set fast interrupt mask
+            self.registers.pc = self.read16(FIRQ_VECTOR);
+        }
     }
 
     // SYNC - Synchronize with interrupt (Opcode 0x13)

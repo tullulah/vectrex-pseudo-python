@@ -1,0 +1,2496 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comparación Opcodes: Vectrexy vs Emulator_v2</title>
+    <style>
+        body { font-family: monospace; font-size: 12px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .implemented { background-color: #d4edda; }
+        .missing { background-color: #f8d7da; }
+        .illegal { background-color: #e2e3e5; }
+        .page-header { background-color: #007bff; color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Comparación Opcodes: Vectrexy vs Emulator_v2</h1>
+    <p>✅ = Implementado | ❌ = Faltante | ⚫ = Ilegal/No aplicable</p>
+    
+    <table>
+        <tr>
+            <th>Opcode</th>
+            <th>Nombre</th>
+            <th>Modo Dirección</th>
+            <th>Ciclos</th>
+            <th>Tamaño</th>
+            <th>Estado</th>
+            <th>Descripción</th>
+        </tr>
+        <tr class="page-header"><td colspan="7">PAGE 0 (0x00-0xFF)</td></tr>
+        <tr class="implemented">
+            <td>0x00</td>
+            <td>NEG</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Negate memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x03</td>
+            <td>COM</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Complement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x04</td>
+            <td>LSR</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x06</td>
+            <td>ROR</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Rotate Right acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x07</td>
+            <td>ASR</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Arithmetic Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x08</td>
+            <td>LSL/ASL</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Shift Left</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x09</td>
+            <td>ROL</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Rotate Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x0A</td>
+            <td>DEC</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Decrement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x0C</td>
+            <td>INC</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Increment memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x0D</td>
+            <td>TST</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Test memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x0E</td>
+            <td>JMP</td>
+            <td>Direct</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Jump</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x0F</td>
+            <td>CLR</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Clear memory location</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10</td>
+            <td>PAGE1+</td>
+            <td>Variant</td>
+            <td>1</td>
+            <td>1</td>
+            <td>❌</td>
+            <td>N/A</td>
+        </tr>
+        <tr class="missing">
+            <td>0x11</td>
+            <td>PAGE2+</td>
+            <td>Variant</td>
+            <td>1</td>
+            <td>1</td>
+            <td>❌</td>
+            <td>N/A</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x12</td>
+            <td>NOP</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>No Operation</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x13</td>
+            <td>SYNC</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Sync. to interrupt</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x16</td>
+            <td>LBRA</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Long Branch Always</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x17</td>
+            <td>LBSR</td>
+            <td>Relative</td>
+            <td>9</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Long Branch Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x19</td>
+            <td>DAA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Decimal Addition Adjust</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1A</td>
+            <td>ORCC</td>
+            <td>Immediate</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Inclusive OR CCR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1C</td>
+            <td>ANDCC</td>
+            <td>Immediate</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND with CCR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1D</td>
+            <td>SEX</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Sign Extend</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1E</td>
+            <td>EXG</td>
+            <td>Inherent</td>
+            <td>8</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Exchange (r1 size=r2)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1F</td>
+            <td>TFR</td>
+            <td>Inherent</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Transfer (r1 size<=r2)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x20</td>
+            <td>BRA</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch Always</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x21</td>
+            <td>BRN</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch Never</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x22</td>
+            <td>BHI</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Higher</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x23</td>
+            <td>BLS</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Lower/Same</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x24</td>
+            <td>BHS/BCC</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Higher/Same</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x25</td>
+            <td>BLO/BCS</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Lower</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x26</td>
+            <td>BNE</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Not Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x27</td>
+            <td>BEQ</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x28</td>
+            <td>BVC</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Overflow Clr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x29</td>
+            <td>BVS</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Overflow Set</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2A</td>
+            <td>BPL</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Plus</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2B</td>
+            <td>BMI</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Minus</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2C</td>
+            <td>BGE</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Great/Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2D</td>
+            <td>BLT</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Less Than</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2E</td>
+            <td>BGT</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Greater Than</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x2F</td>
+            <td>BLE</td>
+            <td>Relative</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch if Less/Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x30</td>
+            <td>LEAX</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Effective Address</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x31</td>
+            <td>LEAY</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Effective Address</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x32</td>
+            <td>LEAS</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Effective Address</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x33</td>
+            <td>LEAU</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Effective Address</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x34</td>
+            <td>PSHS</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Push reg(s) (not S)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x35</td>
+            <td>PULS</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Pull reg(s) (not S)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x36</td>
+            <td>PSHU</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Push reg(s) (not U)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x37</td>
+            <td>PULU</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Pull reg(s) (not U)</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x39</td>
+            <td>RTS</td>
+            <td>Inherent</td>
+            <td>5</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Return from Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3A</td>
+            <td>ABX</td>
+            <td>Inherent</td>
+            <td>3</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Add B into X</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3B</td>
+            <td>RTI</td>
+            <td>Inherent</td>
+            <td>0</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Return from Interrupt</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3C</td>
+            <td>CWAI</td>
+            <td>Immediate</td>
+            <td>20</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>AND CCR, Wait for int.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3D</td>
+            <td>MUL</td>
+            <td>Inherent</td>
+            <td>11</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Multiply</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3E</td>
+            <td>RESET*</td>
+            <td>Inherent</td>
+            <td>0</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>N/A</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x3F</td>
+            <td>SWI</td>
+            <td>Inherent</td>
+            <td>19</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Software Interrupt 1</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x40</td>
+            <td>NEGA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Negate accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x43</td>
+            <td>COMA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Complement accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x44</td>
+            <td>LSRA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Logical Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x46</td>
+            <td>RORA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Rotate Right acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x47</td>
+            <td>ASRA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Arithmetic Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x48</td>
+            <td>LSLA/ASLA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Logical Shift Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x49</td>
+            <td>ROLA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Rotate Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x4A</td>
+            <td>DECA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Decrement accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x4C</td>
+            <td>INCA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Increment accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x4D</td>
+            <td>TSTA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x4F</td>
+            <td>CLRA</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Clear accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x50</td>
+            <td>NEGB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Negate accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x53</td>
+            <td>COMB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Complement accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x54</td>
+            <td>LSRB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Logical Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x56</td>
+            <td>RORB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Rotate Right acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x57</td>
+            <td>ASRB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Arithmetic Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x58</td>
+            <td>LSLB/ASLB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Logical Shift Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x59</td>
+            <td>ROLB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Rotate Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x5A</td>
+            <td>DECB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Decrement accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x5C</td>
+            <td>INCB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Increment accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x5D</td>
+            <td>TSTB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x5F</td>
+            <td>CLRB</td>
+            <td>Inherent</td>
+            <td>2</td>
+            <td>1</td>
+            <td>✅</td>
+            <td>Clear accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x60</td>
+            <td>NEG</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Negate memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x63</td>
+            <td>COM</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Complement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x64</td>
+            <td>LSR</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x66</td>
+            <td>ROR</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Rotate Right acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x67</td>
+            <td>ASR</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Arithmetic Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x68</td>
+            <td>LSL/ASL</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Shift Left</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x69</td>
+            <td>ROL</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Rotate Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x6A</td>
+            <td>DEC</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Decrement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x6C</td>
+            <td>INC</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Increment memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x6D</td>
+            <td>TST</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Test memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x6E</td>
+            <td>JMP</td>
+            <td>Indexed</td>
+            <td>3</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Jump</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x6F</td>
+            <td>CLR</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Clear memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x70</td>
+            <td>NEG</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Negate memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x73</td>
+            <td>COM</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Complement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x74</td>
+            <td>LSR</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x76</td>
+            <td>ROR</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Rotate Right acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x77</td>
+            <td>ASR</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Arithmetic Shift Right</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x78</td>
+            <td>LSL/ASL</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical Shift Left</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x79</td>
+            <td>ROL</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Rotate Left acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x7A</td>
+            <td>DEC</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Decrement memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x7C</td>
+            <td>INC</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Increment memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x7D</td>
+            <td>TST</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Test memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x7E</td>
+            <td>JMP</td>
+            <td>Extended</td>
+            <td>4</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Jump</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x7F</td>
+            <td>CLR</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Clear memory location</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x80</td>
+            <td>SUBA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x81</td>
+            <td>CMPA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x82</td>
+            <td>SBCA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x83</td>
+            <td>SUBD</td>
+            <td>Immediate</td>
+            <td>4</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x84</td>
+            <td>ANDA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x85</td>
+            <td>BITA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x86</td>
+            <td>LDA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x88</td>
+            <td>EORA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x89</td>
+            <td>ADCA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x8A</td>
+            <td>ORA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x8B</td>
+            <td>ADDA</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x8C</td>
+            <td>CMPX</td>
+            <td>Immediate</td>
+            <td>4</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x8D</td>
+            <td>BSR</td>
+            <td>Relative</td>
+            <td>7</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Branch to Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x8E</td>
+            <td>LDX</td>
+            <td>Immediate</td>
+            <td>3</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x90</td>
+            <td>SUBA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x91</td>
+            <td>CMPA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x92</td>
+            <td>SBCA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x93</td>
+            <td>SUBD</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x94</td>
+            <td>ANDA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x95</td>
+            <td>BITA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x96</td>
+            <td>LDA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x97</td>
+            <td>STA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x98</td>
+            <td>EORA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x99</td>
+            <td>ADCA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9A</td>
+            <td>ORA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9B</td>
+            <td>ADDA</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9C</td>
+            <td>CMPX</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9D</td>
+            <td>JSR</td>
+            <td>Direct</td>
+            <td>7</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Jump to Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9E</td>
+            <td>LDX</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x9F</td>
+            <td>STX</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA0</td>
+            <td>SUBA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA1</td>
+            <td>CMPA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA2</td>
+            <td>SBCA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA3</td>
+            <td>SUBD</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA4</td>
+            <td>ANDA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA5</td>
+            <td>BITA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA6</td>
+            <td>LDA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA7</td>
+            <td>STA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA8</td>
+            <td>EORA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xA9</td>
+            <td>ADCA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAA</td>
+            <td>ORA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAB</td>
+            <td>ADDA</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAC</td>
+            <td>CMPX</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAD</td>
+            <td>JSR</td>
+            <td>Indexed</td>
+            <td>7</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Jump to Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAE</td>
+            <td>LDX</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xAF</td>
+            <td>STX</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB0</td>
+            <td>SUBA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB1</td>
+            <td>CMPA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB2</td>
+            <td>SBCA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB3</td>
+            <td>SUBD</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB4</td>
+            <td>ANDA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB5</td>
+            <td>BITA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB6</td>
+            <td>LDA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB7</td>
+            <td>STA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB8</td>
+            <td>EORA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xB9</td>
+            <td>ADCA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBA</td>
+            <td>ORA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBB</td>
+            <td>ADDA</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBC</td>
+            <td>CMPX</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBD</td>
+            <td>JSR</td>
+            <td>Extended</td>
+            <td>8</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Jump to Subroutine</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBE</td>
+            <td>LDX</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xBF</td>
+            <td>STX</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC0</td>
+            <td>SUBB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC1</td>
+            <td>CMPB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC2</td>
+            <td>SBCB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC3</td>
+            <td>ADDD</td>
+            <td>Immediate</td>
+            <td>4</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add to Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC4</td>
+            <td>ANDB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC5</td>
+            <td>BITB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC6</td>
+            <td>LDB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC8</td>
+            <td>EORB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xC9</td>
+            <td>ADCB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xCA</td>
+            <td>ORB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xCB</td>
+            <td>ADDB</td>
+            <td>Immediate</td>
+            <td>2</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xCC</td>
+            <td>LDD</td>
+            <td>Immediate</td>
+            <td>3</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xCE</td>
+            <td>LDU</td>
+            <td>Immediate</td>
+            <td>3</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD0</td>
+            <td>SUBB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD1</td>
+            <td>CMPB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD2</td>
+            <td>SBCB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD3</td>
+            <td>ADDD</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add to Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD4</td>
+            <td>ANDB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD5</td>
+            <td>BITB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD6</td>
+            <td>LDB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD7</td>
+            <td>STB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD8</td>
+            <td>EORB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xD9</td>
+            <td>ADCB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDA</td>
+            <td>ORB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDB</td>
+            <td>ADDB</td>
+            <td>Direct</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDC</td>
+            <td>LDD</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDD</td>
+            <td>STD</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDE</td>
+            <td>LDU</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xDF</td>
+            <td>STU</td>
+            <td>Direct</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE0</td>
+            <td>SUBB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE1</td>
+            <td>CMPB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE2</td>
+            <td>SBCB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE3</td>
+            <td>ADDD</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add to Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE4</td>
+            <td>ANDB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE5</td>
+            <td>BITB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE6</td>
+            <td>LDB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE7</td>
+            <td>STB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE8</td>
+            <td>EORB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xE9</td>
+            <td>ADCB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xEA</td>
+            <td>ORB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xEB</td>
+            <td>ADDB</td>
+            <td>Indexed</td>
+            <td>4</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xEC</td>
+            <td>LDD</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xED</td>
+            <td>STD</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xEE</td>
+            <td>LDU</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Load User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xEF</td>
+            <td>STU</td>
+            <td>Indexed</td>
+            <td>5</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Store User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF0</td>
+            <td>SUBB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF1</td>
+            <td>CMPB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF2</td>
+            <td>SBCB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Subtract with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF3</td>
+            <td>ADDD</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add to Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF4</td>
+            <td>ANDB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical AND</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF5</td>
+            <td>BITB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Bit Test accumulator</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF6</td>
+            <td>LDB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF7</td>
+            <td>STB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF8</td>
+            <td>EORB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical Exclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xF9</td>
+            <td>ADCB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add with Carry</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFA</td>
+            <td>ORB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Logical inclusive OR</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFB</td>
+            <td>ADDB</td>
+            <td>Extended</td>
+            <td>5</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Add</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFC</td>
+            <td>LDD</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFD</td>
+            <td>STD</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Store Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFE</td>
+            <td>LDU</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Load User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0xFF</td>
+            <td>STU</td>
+            <td>Extended</td>
+            <td>6</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Store User stack ptr</td>
+        </tr>
+        <tr class="page-header"><td colspan="7">PAGE 1 (0x10xx)</td></tr>
+        <tr class="implemented">
+            <td>0x1021</td>
+            <td>LBRN</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch Never</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1022</td>
+            <td>LBHI</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Higher</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1023</td>
+            <td>LBLS</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Lower/Same</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1024</td>
+            <td>LBHS/LBCC</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Higher/Same</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1025</td>
+            <td>LBLO/LBCS</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Lower</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1026</td>
+            <td>LBNE</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Not Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1027</td>
+            <td>LBEQ</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1028</td>
+            <td>LBVC</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Overflow Clr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1029</td>
+            <td>LBVS</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Overflow Set</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102A</td>
+            <td>LBPL</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Plus</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102B</td>
+            <td>LBMI</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Minus</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102C</td>
+            <td>LBGE</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Great/Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102D</td>
+            <td>LBLT</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Less Than</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102E</td>
+            <td>LBGT</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Greater Than</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x102F</td>
+            <td>LBLE</td>
+            <td>Relative</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Branch if Less/Equal</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x103F</td>
+            <td>SWI2</td>
+            <td>Inherent</td>
+            <td>20</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Software Interrupt 2</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1083</td>
+            <td>CMPD</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x108C</td>
+            <td>CMPY</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="missing">
+            <td>0x108E</td>
+            <td>LDY</td>
+            <td>Immediate</td>
+            <td>4</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1093</td>
+            <td>CMPD</td>
+            <td>Direct</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x109C</td>
+            <td>CMPY</td>
+            <td>Direct</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="missing">
+            <td>0x109E</td>
+            <td>LDY</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="missing">
+            <td>0x109F</td>
+            <td>STY</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x10A3</td>
+            <td>CMPD</td>
+            <td>Indexed</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x10AC</td>
+            <td>CMPY</td>
+            <td>Indexed</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10AE</td>
+            <td>LDY</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10AF</td>
+            <td>STY</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x10B3</td>
+            <td>CMPD</td>
+            <td>Extended</td>
+            <td>8</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare Double acc.</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x10BC</td>
+            <td>CMPY</td>
+            <td>Extended</td>
+            <td>8</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10BE</td>
+            <td>LDY</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Load index register</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10BF</td>
+            <td>STY</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Store index register</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10CE</td>
+            <td>LDS</td>
+            <td>Immediate</td>
+            <td>4</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Load Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10DE</td>
+            <td>LDS</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Load Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10DF</td>
+            <td>STS</td>
+            <td>Direct</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Store Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10EE</td>
+            <td>LDS</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Load Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10EF</td>
+            <td>STS</td>
+            <td>Indexed</td>
+            <td>6</td>
+            <td>3</td>
+            <td>❌</td>
+            <td>Store Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10FE</td>
+            <td>LDS</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Load Stack pointer</td>
+        </tr>
+        <tr class="missing">
+            <td>0x10FF</td>
+            <td>STS</td>
+            <td>Extended</td>
+            <td>7</td>
+            <td>4</td>
+            <td>❌</td>
+            <td>Store Stack pointer</td>
+        </tr>
+        <tr class="page-header"><td colspan="7">PAGE 2 (0x11xx)</td></tr>
+        <tr class="implemented">
+            <td>0x113F</td>
+            <td>SWI3</td>
+            <td>Inherent</td>
+            <td>20</td>
+            <td>2</td>
+            <td>✅</td>
+            <td>Software Interrupt 3</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1183</td>
+            <td>CMPU</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x118C</td>
+            <td>CMPS</td>
+            <td>Immediate</td>
+            <td>5</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare Stack pointer</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x1193</td>
+            <td>CMPU</td>
+            <td>Direct</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x119C</td>
+            <td>CMPS</td>
+            <td>Direct</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare Stack pointer</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x11A3</td>
+            <td>CMPU</td>
+            <td>Indexed</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x11AC</td>
+            <td>CMPS</td>
+            <td>Indexed</td>
+            <td>7</td>
+            <td>3</td>
+            <td>✅</td>
+            <td>Compare Stack pointer</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x11B3</td>
+            <td>CMPU</td>
+            <td>Extended</td>
+            <td>8</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare User stack ptr</td>
+        </tr>
+        <tr class="implemented">
+            <td>0x11BC</td>
+            <td>CMPS</td>
+            <td>Extended</td>
+            <td>8</td>
+            <td>4</td>
+            <td>✅</td>
+            <td>Compare Stack pointer</td>
+        </tr>
+    </table>
+    
+    <h2>Resumen</h2>
+    <ul>
+        <li>Vectrexy Page 0: 224 opcodes válidos</li>
+        <li>Implementados Page 0: 222 opcodes</li>
+        <li>Vectrexy Page 1: 38 opcodes válidos</li>
+        <li>Implementados Page 1: 24 opcodes</li>
+        <li>Vectrexy Page 2: 9 opcodes válidos</li>
+        <li>Implementados Page 2: 9 opcodes</li>
+    </ul>
+    
+    <h3>Análisis de Diferencias</h3>
+<p><strong>Page 0 faltantes:</strong> 0x10, 0x11</p>
+<p><strong>Page 1 faltantes:</strong> 0x108E, 0x109E, 0x109F, 0x10AE, 0x10AF, 0x10BE, 0x10BF, 0x10CE, 0x10DE, 0x10DF, 0x10EE, 0x10EF, 0x10FE, 0x10FF</p>
+
+    <h3>Cobertura</h3>
+    <ul>
+        <li>Page 0: 99.1% (222/224)</li>
+        <li>Page 1: 63.2% (24/38)</li>
+        <li>Page 2: 100.0% (9/9)</li>
+    </ul>
+    
+</body>
+</html>

@@ -300,25 +300,25 @@ const PORT_B_SOUND_BDIR: u8 = 0x10;
 const PORT_B_COMPARATOR: u8 = 0x20;
 const PORT_B_RAMP_DISABLED: u8 = 0x80;
 
-// C++ Original: InterruptFlag bit definitions from Vectrexy Via.cpp
-const IF_CA2: u8 = 0x01; // TODO: Control line A2 interrupt flag
-const IF_CA1: u8 = 0x02;
-const IF_SHIFT: u8 = 0x04;
-const IF_CB2: u8 = 0x08; // TODO: Control line B2 interrupt flag
-const IF_CB1: u8 = 0x10; // TODO: Control line B1 interrupt flag
-const IF_TIMER2: u8 = 0x20;
-const IF_TIMER1: u8 = 0x40;
-const IF_IRQ_ENABLED: u8 = 0x80;
+// C++ Original: namespace InterruptFlag - Via.cpp lines 108-115
+pub const IF_CA2: u8 = 0x01; // C++ Original: const uint8_t CA2 = BITS(0);
+pub const IF_CA1: u8 = 0x02; // C++ Original: const uint8_t CA1 = BITS(1);
+pub const IF_SHIFT: u8 = 0x04; // C++ Original: const uint8_t Shift = BITS(2);
+pub const IF_CB2: u8 = 0x08; // C++ Original: const uint8_t CB2 = BITS(3);
+pub const IF_CB1: u8 = 0x10; // C++ Original: const uint8_t CB1 = BITS(4);
+pub const IF_TIMER2: u8 = 0x20; // C++ Original: const uint8_t Timer2 = BITS(5);
+pub const IF_TIMER1: u8 = 0x40; // C++ Original: const uint8_t Timer1 = BITS(6);
+pub const IF_IRQ_ENABLED: u8 = 0x80; // C++ Original: const uint8_t IrqEnabled = BITS(7);
 
-// C++ Original: InterruptEnable bit definitions from Vectrexy Via.cpp
-const IE_CA2: u8 = 0x01; // TODO: Control line A2 interrupt enable
-const IE_CA1: u8 = 0x02; // TODO: Control line A1 interrupt enable
-const IE_SHIFT: u8 = 0x04; // TODO: Shift register interrupt enable
-const IE_CB2: u8 = 0x08; // TODO: Control line B2 interrupt enable
-const IE_CB1: u8 = 0x10; // TODO: Control line B1 interrupt enable
-const IE_TIMER2: u8 = 0x20; // TODO: Timer2 interrupt enable
-const IE_TIMER1: u8 = 0x40; // TODO: Timer1 interrupt enable
-const IE_SET_CLEAR_CONTROL: u8 = 0x80;
+// C++ Original: namespace InterruptEnable - Via.cpp lines 120-127
+pub const IE_CA2: u8 = 0x01; // C++ Original: const uint8_t CA2 = BITS(0);
+pub const IE_CA1: u8 = 0x02; // C++ Original: const uint8_t CA1 = BITS(1);
+pub const IE_SHIFT: u8 = 0x04; // C++ Original: const uint8_t Shift = BITS(2);
+pub const IE_CB2: u8 = 0x08; // C++ Original: const uint8_t CB2 = BITS(3);
+pub const IE_CB1: u8 = 0x10; // C++ Original: const uint8_t CB1 = BITS(4);
+pub const IE_TIMER2: u8 = 0x20; // C++ Original: const uint8_t Timer2 = BITS(5);
+pub const IE_TIMER1: u8 = 0x40; // C++ Original: const uint8_t Timer1 = BITS(6);
+pub const IE_SET_CLEAR_CONTROL: u8 = 0x80; // C++ Original: const uint8_t SetClearControl = BITS(7);
 
 /* C++ Original from Via.h:
 class Via : public IMemoryBusDevice {

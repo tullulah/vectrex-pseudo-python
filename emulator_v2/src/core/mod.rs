@@ -6,6 +6,8 @@ pub mod cpu6809;
 pub mod cpu_helpers;
 pub mod cpu_op_codes;
 pub mod via6522;
+#[cfg(test)]
+mod via6522_test;
 pub mod memory_map;
 pub mod ram;
 pub mod bios_rom;
