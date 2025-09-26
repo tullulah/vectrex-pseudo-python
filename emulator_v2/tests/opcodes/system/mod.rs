@@ -8,4 +8,5 @@ pub mod test_sex;
 pub mod test_abx;
 pub mod test_andcc;
 pub mod test_orcc;
+pub mod test_nop_fixed;
 pub mod test_cwai;

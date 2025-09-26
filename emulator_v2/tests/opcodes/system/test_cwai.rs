@@ -5,6 +5,7 @@
 use vectrex_emulator_v2::core::cpu6809::Cpu6809;
 use vectrex_emulator_v2::core::memory_bus::MemoryBus;
 use vectrex_emulator_v2::core::ram::Ram;
+use crate::interrupt_vector_rom::InterruptVectorRom;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -14,6 +15,11 @@ fn create_test_cpu() -> Cpu6809 {
     let memory_bus = Rc::new(RefCell::new(MemoryBus::new()));
     let ram = Rc::new(RefCell::new(Ram::new()));
     Ram::init_memory_bus(ram.clone(), &mut memory_bus.borrow_mut());
+    
+    // C++ Original: Map interrupt vectors (0xFFF0-0xFFFF) for SWI/CWAI tests
+    let vector_rom = Rc::new(RefCell::new(InterruptVectorRom::new()));
+    memory_bus.borrow_mut().connect_device(vector_rom, (0xFFF0, 0xFFFF), vectrex_emulator_v2::core::memory_bus::EnableSync::False);
+    
     let mut cpu = Cpu6809::new(memory_bus.clone());
     cpu.registers_mut().pc = RAM_START;
     cpu

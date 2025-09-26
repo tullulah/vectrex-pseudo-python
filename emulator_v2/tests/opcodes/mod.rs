@@ -9,6 +9,12 @@ pub mod load;
 pub mod store;
 pub mod shift;
 
+// Branch instructions - NEW
+pub mod branch;
+
+// Register operations - NEW  
+pub mod register;
+
 // Organized test modules by category (TEMPORARY - will be segregated)
 pub mod comparison {
     //! Comparison instruction tests (CMP family)
@@ -26,23 +32,16 @@ pub mod arithmetic {
     pub mod test_arith_logic_direct_a_final;
 }
 
-pub mod logic {
-    //! Logic instruction tests (AND, EOR, OR, BIT, etc.)
-    pub mod test_bit_opcodes;
-    pub mod test_bit_simple;
-}
+pub mod logic;
 
 pub mod memory {
     //! Memory operation tests (LD, ST, LEA, etc.)
     pub mod test_lea_opcodes;
 }
 
-pub mod branch {
-    //! Branch and jump instruction tests
-    pub mod test_branch_opcodes;
-    pub mod test_jsr_bsr_opcodes;
-    pub mod test_long_branch_final;
-}
+pub mod data_transfer;
+
+pub mod system;
 
 pub mod stack {
     //! Stack and interrupt instruction tests

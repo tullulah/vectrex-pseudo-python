@@ -3,3 +3,5 @@
 
 pub mod opcodes;
 pub mod components;
+pub mod test_opcodes_basic;
+pub mod interrupt_vector_rom;
