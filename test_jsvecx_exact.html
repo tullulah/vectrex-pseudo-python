@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>JSVecX Test - Exact Working Version</title>
+    
+    <!-- JSVecX Scripts in the exact order that worked -->
+    <script src="ide/frontend/public/jsvecx_deploy/jquery-min.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/utils.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/globals.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/fastromdata.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/e6809.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/e8910.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/osint.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/vector_t.js" type="text/javascript"></script>
+    <script src="ide/frontend/public/jsvecx_deploy/vecx.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+        var vecx = new VecX();
+        console.log('[JSVecX Test] Global vecx instance created:', vecx);
+        
+        function testJSVecX() {
+            console.log('[JSVecX Test] Testing JSVecX functionality...');
+            
+            // Test basic functionality
+            if (typeof vecx !== 'undefined' && vecx.constructor === VecX) {
+                console.log('[JSVecX Test] ✓ vecx instance is valid');
+                
+                // Test reset functionality
+                try {
+                    vecx.reset();
+                    console.log('[JSVecX Test] ✓ vecx.reset() successful');
+                } catch (e) {
+                    console.error('[JSVecX Test] ✗ vecx.reset() failed:', e);
+                }
+                
+                // Test BIOS loading
+                if (vecx.rom && vecx.rom.length > 0) {
+                    console.log('[JSVecX Test] ✓ ROM loaded, length:', vecx.rom.length);
+                } else {
+                    console.log('[JSVecX Test] ⚠ ROM not loaded');
+                }
+                
+                // Test main initialization
+                try {
+                    vecx.main();
+                    console.log('[JSVecX Test] ✓ vecx.main() called successfully');
+                } catch (e) {
+                    console.error('[JSVecX Test] ✗ vecx.main() failed:', e);
+                }
+                
+            } else {
+                console.error('[JSVecX Test] ✗ vecx instance is invalid');
+            }
+        }
+        
+        // Test when page loads
+        $(document).ready(function() {
+            console.log('[JSVecX Test] Document ready, running tests...');
+            testJSVecX();
+        });
+    </script>
+</head>
+<body>
+    <h1>JSVecX Test - Exact Working Version</h1>
+    <p>Check console for test results.</p>
+    
+    <div id="vectrex" style="margin: 20px;">
+        <canvas id="screen" width="330" height="410" style="border: 1px solid #ccc;"></canvas>
+    </div>
+    
+    <div>
+        <button onclick="vecx.reset()">Reset</button>
+        <button onclick="vecx.start()">Start</button>
+        <button onclick="vecx.stop()">Stop</button>
+    </div>
+</body>
+</html>

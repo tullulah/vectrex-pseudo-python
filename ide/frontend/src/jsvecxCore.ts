@@ -13,25 +13,37 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   async init(){
     if (this.mod) return;
     try {
-      // Simplificado: sólo intentamos cargar el bundle estático servido desde /public -> /jsvecx/vecx_full.js
-      // Razón: Vite emite warning si se importan directamente assets crudos dentro de /public (no pasan por transform).
-      // El script jsvecx:bundle garantiza que el archivo exporte VecX y Globals.
-      let bundle: any = null;
-      try {
-        // Nueva ubicación: bundle generado en src/generated/jsvecx/vecx_full.js (incluido en pipeline de TS/Vite)
-        // Usamos import relativo explícito para permitir tree-shaking futuro si se particiona.
-        const bundlePath = './generated/jsvecx/vecx_full.js';
-        bundle = await import(/* @vite-ignore */ bundlePath);
-      } catch (e){
-        console.warn('[JsVecxCore] no se pudo importar bundle interno generated/jsvecx/vecx_full.js; backend jsvecx inerte', e);
+      // Usar la instancia global de JSVecX creada en index.html (igual que test_jsvecx_exact.html)
+      console.log('[JsVecxCore] Using global vecx instance...');
+      
+      // Verificar que las clases globales existen
+      const VecX = (window as any).VecX;
+      const vecx = (window as any).vecx;
+      const Globals = (window as any).Globals;
+      
+      if (!VecX) {
+        console.error('[JsVecxCore] VecX class not found in global scope - JSVecX scripts not loaded?');
         return;
       }
       
-      const VecX = (bundle as any).VecX || (bundle as any).default?.VecX;
-      const Globals = (bundle as any).Globals || (bundle as any).default?.Globals;
-      if (!VecX) throw new Error('VecX constructor not found');
-      this.mod = { VecX, Globals } as any;
-      this.inst = new VecX();
+      if (!vecx) {
+        console.error('[JsVecxCore] Global vecx instance not found - creation failed?');
+        return;
+      }
+      
+      console.log('[JsVecxCore] Found global VecX class and vecx instance');
+      this.mod = { VecX, Globals };
+      this.inst = vecx;
+      
+      // Verificar que la instancia tiene los componentes necesarios
+      if (!this.inst.rom) {
+        console.warn('[JsVecxCore] vecx.rom not initialized - this may cause issues');
+      }
+      if (!this.inst.cart) {
+        console.warn('[JsVecxCore] vecx.cart not initialized - this may cause issues');  
+      }
+      
+      console.log('[JsVecxCore] JSVecX core initialized successfully');
       
       // INICIO DE BLOQUE TRY PARA INICIALIZACIÓN JSVECX
       try {
