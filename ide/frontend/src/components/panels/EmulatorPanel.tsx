@@ -195,8 +195,33 @@ export const EmulatorPanel: React.FC = () => {
     </label>
   );
 
-  // Init
-  useEffect(()=>{ let cancelled=false; (async()=>{ try { await emuCore.init(); await emuCore.ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); } catch(e){ console.error('Emulator init/BIOS load failed', e); } if (!cancelled){ setStatus('stopped'); } })(); return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []); // eslint-disable-line
+  // Init with autostart like test_jsvecx_exact.html
+  useEffect(()=>{ 
+    let cancelled=false; 
+    (async()=>{ 
+      try { 
+        await emuCore.init(); 
+        await emuCore.ensureBios?.({ urlCandidates:[biosUrl,'bios.bin','/bios.bin','/core/src/bios/bios.bin'] }); 
+        
+        // Initialize JSVecX exactly like test_jsvecx_exact.html
+        const vecx = (window as any).vecx;
+        if (vecx && !cancelled) {
+          console.log('[EmulatorPanel] Initializing JSVecX exactly like working test...');
+          try {
+            vecx.main();
+            console.log('[EmulatorPanel] ✓ vecx.main() called successfully');
+            setStatus('running');
+          } catch (e) {
+            console.error('[EmulatorPanel] ✗ vecx.main() failed:', e);
+          }
+        }
+      } catch(e){ 
+        console.error('Emulator init/BIOS load failed', e); 
+      } 
+      if (!cancelled){ setStatus('stopped'); } 
+    })(); 
+    return ()=>{ cancelled=true; if (rafRef.current) cancelAnimationFrame(rafRef.current); }; 
+  }, []); // eslint-disable-line
 
   // (listener moved below utility declarations)
 
@@ -269,13 +294,55 @@ export const EmulatorPanel: React.FC = () => {
   emuCore.reset();
     setFrameCount(0); setBiosFrame(0); setCycleFrame(0); setVecEvents([]); lastVecEventsRef.current=[]; setViaMetrics(null); setLoopSamples([]); setSegmentsCount(0); setLastSegments([]);
   };
-  const onPlay = () => setStatus('running');
-  const onPause = () => setStatus('paused');
-  const onStop = () => { // Stop: full reset & remain stopped
-    performFullReset();
-    setStatus('stopped');
+  const onPlay = () => {
+    // Use direct JSVecX control like in test_jsvecx_exact.html
+    const vecx = (window as any).vecx;
+    if (vecx) {
+      vecx.start();
+      setStatus('running');
+      console.log('[EmulatorPanel] JSVecX started via vecx.start()');
+    } else {
+      console.error('[EmulatorPanel] Global vecx instance not found');
+    }
   };
-  const onReset = () => { performFullReset(); if (status==='running') setStatus('running'); };
+  
+  const onPause = () => {
+    const vecx = (window as any).vecx;
+    if (vecx) {
+      vecx.stop();
+      setStatus('paused');
+      console.log('[EmulatorPanel] JSVecX paused via vecx.stop()');
+    } else {
+      console.error('[EmulatorPanel] Global vecx instance not found');
+    }
+  };
+  
+  const onStop = () => {
+    const vecx = (window as any).vecx;
+    if (vecx) {
+      vecx.stop();
+      setStatus('stopped');
+      console.log('[EmulatorPanel] JSVecX stopped via vecx.stop()');
+    } else {
+      console.error('[EmulatorPanel] Global vecx instance not found');
+    }
+    performFullReset();
+  };
+  
+  const onReset = () => {
+    const vecx = (window as any).vecx;
+    if (vecx) {
+      vecx.reset();
+      console.log('[EmulatorPanel] JSVecX reset via vecx.reset()');
+      if (status === 'running') {
+        vecx.start();
+        console.log('[EmulatorPanel] JSVecX restarted after reset');
+      }
+    } else {
+      console.error('[EmulatorPanel] Global vecx instance not found');
+    }
+    performFullReset();
+  };
 
   // Toast helper
   const pushToast = (msg:string, kind:'info'|'error'='info') => {
@@ -551,7 +618,7 @@ export const EmulatorPanel: React.FC = () => {
       <div style={{flex:1, display:'flex', flexDirection:'column', marginTop:8}}>
         <div style={{display:'flex', justifyContent:'center'}}>
           <div style={{position:'relative'}}>
-            <canvas ref={canvasRef} style={{border:'1px solid #333', background:'#000', borderRadius:4, width:300, height:400}} />
+            <canvas ref={canvasRef} id="screen" width="330" height="410" style={{border:'1px solid #333', background:'#000', borderRadius:4, width:300, height:400}} />
             {demoMode && demoStatus!=='ok' && lastSegments.length===0 && (
               <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#68f', fontSize:12, textAlign:'center', padding:8, background:'rgba(0,0,0,0.4)'}}>
                 {demoStatus==='waiting' && 'Preparing demo… (building wasm or awaiting segments)'}
