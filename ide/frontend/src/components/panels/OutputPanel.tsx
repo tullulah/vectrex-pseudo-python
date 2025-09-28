@@ -1,22 +1,47 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { emuCore } from '../../emulatorCoreSingleton';
-import type { MetricsSnapshot, EmulatorBackend } from '../../emulatorCore';
-import { persistPreference, readPreference } from '../../emulatorFactory';
+
+// Tipos simples para JSVecX
+interface VecxMetrics {
+  totalCycles: number;
+  instructionCount: number;
+  frameCount: number;
+  running: boolean;
+}
+
+interface VecxRegs {
+  PC: number;
+  A: number; B: number;
+  X: number; Y: number; U: number; S: number;
+  DP: number; CC: number;
+}
 
 export const OutputPanel: React.FC = () => {
-  const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
-  const [regs, setRegs] = useState<any>(null);
+  const [metrics, setMetrics] = useState<VecxMetrics | null>(null);
+  const [regs, setRegs] = useState<VecxRegs | null>(null);
   const [auto, setAuto] = useState(true);
-  const [backend, setBackend] = useState<EmulatorBackend>(()=>readPreference());
   const timerRef = useRef<number|null>(null);
 
   const fetchStats = () => {
     try {
-  const m = emuCore.metrics();
-  const r = emuCore.registers();
-      if (m) setMetrics(m);
-      if (r) setRegs(r);
-    } catch {/* ignore until wasm loaded */}
+      const vecx = (window as any).vecx;
+      if (!vecx) {
+        console.warn('[OutputPanel] JSVecX instance not found');
+        setMetrics(null);
+        setRegs(null);
+        return;
+      }
+      
+      // Usar las nuevas funciones añadidas a JSVecX
+      const fetchedMetrics = vecx.getMetrics && vecx.getMetrics();
+      const fetchedRegs = vecx.getRegisters && vecx.getRegisters();
+      
+      setMetrics(fetchedMetrics || null);
+      setRegs(fetchedRegs || null);
+    } catch (e) {
+      console.warn('[OutputPanel] Error fetching JSVecX stats:', e);
+      setMetrics(null);
+      setRegs(null);
+    }
   };
 
   useEffect(() => { fetchStats(); }, []);
@@ -29,72 +54,36 @@ export const OutputPanel: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [auto]);
 
-  const unknownList = metrics?.unique_unimplemented || [];
-  const topOpcodes = metrics?.top_opcodes || [];
+  const avgCyclesPerFrame = (metrics && metrics.frameCount > 0) ? 
+    Math.round(metrics.totalCycles / metrics.frameCount) : 0;
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', fontSize:12}}>
       <div style={{padding:'4px 8px', borderBottom:'1px solid #333', display:'flex', alignItems:'center', gap:12}}>
-        <strong>Emulator Metrics</strong>
+        <strong>JSVecX Emulator Metrics</strong>
         <button onClick={fetchStats} style={btnStyle}>Refresh</button>
-        <label style={{display:'flex', alignItems:'center', gap:4}} title='Backend del núcleo emulador (requiere recarga)'>Backend
-          <select value={backend} onChange={e=>{
-            const b = e.target.value as EmulatorBackend; setBackend(b); persistPreference(b);
-            // Forzar recarga tras cambio para reinstanciar singleton con nuevo backend
-            setTimeout(()=>{ location.reload(); }, 120);
-          }} style={{background:'#111', color:'#ddd', border:'1px solid #333', fontSize:11}}>
-            <option value='jsvecx'>jsvecx</option>
-          </select>
-        </label>
         <label style={{display:'flex', alignItems:'center', gap:4}}>
           <input type='checkbox' checked={auto} onChange={e=>setAuto(e.target.checked)} /> Auto
         </label>
-        <span style={{marginLeft:'auto', opacity:0.7}}>Frames: {metrics?.frames ?? 0}</span>
+        <span style={{marginLeft:'auto', opacity:0.7}}>
+          Status: {metrics?.running ? 'Running' : 'Stopped'}
+        </span>
       </div>
       <div style={{padding:'6px 10px', borderBottom:'1px solid #222', display:'flex', flexWrap:'wrap', gap:20}}>
-        <div>PC: {hex16(regs?.pc)}</div>
-        <div>A: {hex8(regs?.a)} B: {hex8(regs?.b)} X: {hex16(regs?.x)} Y: {hex16(regs?.y)} U: {hex16(regs?.u)} S: {hex16(regs?.s)} DP: {hex8(regs?.dp)}</div>
-        <div>Cycles: {metrics?.cycles ?? 0}</div>
-        <div>Avg Cycles/frame: {metrics?.avg_cycles_per_frame ? metrics!.avg_cycles_per_frame.toFixed(0) : '--'}</div>
-  <div>Draw VL: {metrics?.draw_vl ?? (regs?.draw_vl_count ?? 0)}</div>
-  <div>BIOS Frames: {metrics?.bios_frame ?? (regs?.bios_frame ?? 0)}</div>
-        <div>Last Intensity: {hex8(metrics?.last_intensity)}</div>
-        <div>Unimpl Count: {metrics?.unimplemented ?? 0}</div>
-        <div>Unique Unimpl: {unknownList.length}</div>
-      </div>
-      <div style={{display:'flex', flex:1, overflow:'hidden'}}>
-        <div style={{flex:1, overflow:'auto', borderRight:'1px solid #222'}}>
-          <div style={{padding:'4px 8px', fontWeight:600, background:'#181818'}}>Top Opcodes</div>
-          {topOpcodes.length===0 && <div style={{padding:8, color:'#555'}}>No executions yet.</div>}
-          {topOpcodes.length>0 && (
-            <table style={{width:'100%', borderCollapse:'collapse'}}>
-              <thead>
-                <tr style={{textAlign:'left', background:'#222'}}>
-                  <th style={th}>Opcode</th>
-                  <th style={th}>Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topOpcodes.map(([op, cnt]) => (
-                  <tr key={op} style={{background:'#1e1e1e'}}>
-                    <td style={td}>{hex8(op)}</td>
-                    <td style={td}>{cnt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div>PC: {hex16(regs?.PC)}</div>
+        <div>
+          A: {hex8(regs?.A)} B: {hex8(regs?.B)} X: {hex16(regs?.X)} Y: {hex16(regs?.Y)} 
+          U: {hex16(regs?.U)} S: {hex16(regs?.S)} DP: {hex8(regs?.DP)} CC: {hex8(regs?.CC)}
         </div>
-        <div style={{flex:1, overflow:'auto'}}>
-          <div style={{padding:'4px 8px', fontWeight:600, background:'#181818'}}>Unique Unimplemented</div>
-          {unknownList.length===0 && <div style={{padding:8, color:'#555'}}>None</div>}
-          {unknownList.length>0 && (
-            <div style={{display:'flex', flexWrap:'wrap', gap:6, padding:8}}>
-              {unknownList.map(op => (
-                <span key={op} style={{background:'#3a1e1e', color:'#ff9f9f', padding:'2px 6px', borderRadius:4, fontFamily:'monospace'}}>{hex8(op)}</span>
-              ))}
-            </div>
-          )}
+        <div>Total Cycles: {metrics?.totalCycles ?? 0}</div>
+        <div>Instructions: {metrics?.instructionCount ?? 0}</div>
+        <div>Frames: {metrics?.frameCount ?? 0}</div>
+        <div>Avg Cycles/frame: {avgCyclesPerFrame > 0 ? avgCyclesPerFrame : '--'}</div>
+      </div>
+      <div style={{padding:20, color:'#888', textAlign:'center'}}>
+        <div>JSVecX Simple Output Panel</div>
+        <div style={{fontSize:11, marginTop:8}}>
+          Basic CPU register and emulator metrics display.
         </div>
       </div>
     </div>

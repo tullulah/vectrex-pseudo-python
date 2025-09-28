@@ -26,6 +26,7 @@ export const EmulatorPanel: React.FC = () => {
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
+  const defaultOverlayLoaded = useRef<boolean>(false); // Flag para evitar recargar overlay por defecto
   
   // Hook editor store para documentos activos
   const editorActive = useEditorStore(s => s.active);
@@ -280,17 +281,20 @@ export const EmulatorPanel: React.FC = () => {
     }
   }, []); // sin dependencias
 
-  // Cargar overlay de Minestorm al arrancar (default BIOS game)
+  // Cargar overlay de Minestorm al arrancar (default BIOS game) - SOLO UNA VEZ
   useEffect(() => {
     const loadDefaultOverlay = async () => {
+      if (defaultOverlayLoaded.current) return; // Ya se cargó, no volver a cargar
+      
       // Esperar un poco para que JSVecX esté completamente inicializado
       setTimeout(async () => {
         await loadOverlay('minestorm.bin');
         setLoadedROM('BIOS - Minestorm');
+        defaultOverlayLoaded.current = true; // Marcar como cargado
       }, 1500);
     };
     loadDefaultOverlay();
-  }, [loadOverlay]);
+  }, []); // Sin dependencias - solo se ejecuta al montar el componente
 
   // Responsive canvas sizing
   useEffect(() => {
@@ -550,33 +554,56 @@ export const EmulatorPanel: React.FC = () => {
               background: '#000', 
               width: canvasSize.width, 
               height: canvasSize.height,
-              display: 'block'
+              display: 'block',
+              position: 'relative',
+              zIndex: 1
             }} 
           />
           
-          {/* Overlay image responsive */}
+          {/* Sistema dual-overlay: mezcla de colores + visibilidad */}
           {currentOverlay && overlayEnabled && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: canvasSize.width,
-                height: canvasSize.height,
-                pointerEvents: 'none',
-                zIndex: 10,
-                backgroundImage: `url(${currentOverlay})`,
-                backgroundSize: `${canvasSize.width}px ${canvasSize.height}px`,
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-                mixBlendMode: 'screen',
-                opacity: 0.8
-              }}
-              onError={(e) => {
-                console.warn(`[EmulatorPanel] Failed to load overlay: ${currentOverlay}`);
-                setCurrentOverlay(null);
-              }}
-            />
+            <>
+              {/* Overlay 1: Multiply - mezcla colores con los vectores */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: canvasSize.width,
+                  height: canvasSize.height,
+                  pointerEvents: 'none',
+                  zIndex: 2,
+                  backgroundImage: `url(${currentOverlay})`,
+                  backgroundSize: `${canvasSize.width}px ${canvasSize.height}px`,
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat',
+                  mixBlendMode: 'multiply',
+                  opacity: 0.7
+                }}
+                onError={(e) => {
+                  console.warn(`[EmulatorPanel] Failed to load overlay (multiply): ${currentOverlay}`);
+                  setCurrentOverlay(null);
+                }}
+              />
+              {/* Overlay 2: Screen - hace visible el overlay sin afectar vectores */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: canvasSize.width,
+                  height: canvasSize.height,
+                  pointerEvents: 'none',
+                  zIndex: 3,
+                  backgroundImage: `url(${currentOverlay})`,
+                  backgroundSize: `${canvasSize.width}px ${canvasSize.height}px`,
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat',
+                  mixBlendMode: 'screen',
+                  opacity: 0.5
+                }}
+              />
+            </>
           )}
         </div>
       </div>

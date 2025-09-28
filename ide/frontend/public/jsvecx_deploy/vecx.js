@@ -519,6 +519,8 @@ function VecX()
             }
         }
         this.fcycles = Globals.FCYCLES_INIT;
+        this.totalCycles = 0; // Reset contadores
+        this.instructionCount = 0;
         this.e6809.e6809_reset();
     }
     this.t2shift = 0;
@@ -580,6 +582,8 @@ function VecX()
         while( cycles > 0 )
         {
             icycles = e6809.e6809_sstep(this.via_ifr & 0x80, 0);
+            this.instructionCount++; // Contar instrucciones ejecutadas
+            this.totalCycles += icycles; // Contar cycles totales
             for( c = 0; c < icycles; c++ )
             {
                 this.t2shift = 0;
@@ -1023,5 +1027,41 @@ function VecX()
         {
             event.preventDefault();
         }
+    }
+    
+    // === EXTENSIONES PARA OUTPUT PANEL ===
+    // Añadido para compatibilidad con OutputPanel.tsx
+    this.totalCycles = 0;
+    this.instructionCount = 0;
+    
+    // Wrapper para métricas del emulador
+    this.getMetrics = function() {
+        return {
+            totalCycles: this.totalCycles,
+            instructionCount: this.instructionCount,
+            frameCount: this.count || 0,
+            running: this.running
+        };
+    }
+    
+    // Wrapper para acceso a registros CPU
+    this.getRegisters = function() {
+        if (!this.e6809) {
+            return {
+                PC: 0, A: 0, B: 0, X: 0, Y: 0, U: 0, S: 0, DP: 0, CC: 0
+            };
+        }
+        
+        return {
+            PC: this.e6809.reg_pc || 0,
+            A: this.e6809.reg_a || 0,
+            B: this.e6809.reg_b || 0,
+            X: (this.e6809.reg_x && this.e6809.reg_x.value) || 0,
+            Y: (this.e6809.reg_y && this.e6809.reg_y.value) || 0,
+            U: (this.e6809.reg_u && this.e6809.reg_u.value) || 0,
+            S: (this.e6809.reg_s && this.e6809.reg_s.value) || 0,
+            DP: this.e6809.reg_dp || 0,
+            CC: this.e6809.reg_cc || 0
+        };
     }
 }
