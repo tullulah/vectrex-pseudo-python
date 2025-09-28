@@ -52,15 +52,13 @@ function Install-NodeModulesIfMissing($dir){
 Install-NodeModulesIfMissing (Join-Path $root 'ide/frontend')
 Install-NodeModulesIfMissing (Join-Path $root 'ide/electron')
 
-# WASM build removed - using JSVecx emulator instead
-
 # Build Rust (LSP + core) salvo -NoRustBuild
 if(-not $NoRustBuild){
   if(-not (Get-Command cargo -ErrorAction SilentlyContinue)){
     Write-Host '[WARN] cargo no encontrado; se omite build Rust' -ForegroundColor Yellow
   } else {
-    Write-Host '[INFO] cargo build (workspace)' -ForegroundColor Cyan
-    cargo build --workspace
+    Write-Host '[INFO] cargo build (LSP + core only, no emulator)' -ForegroundColor Cyan
+    cargo build -p vectrex_lang --bin vpy_lsp
     if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] cargo build falló' -ForegroundColor Red; exit 1 }
   }
 }

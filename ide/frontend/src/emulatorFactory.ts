@@ -2,15 +2,26 @@ import { EmulatorBackend, IEmulatorCore } from './emulatorCore';
 import { JsVecxEmulatorCore } from './jsvecxCore';
 
 export function createEmulatorCore(preferred?: EmulatorBackend): IEmulatorCore {
-  // Always use JSVecx - Rust WASM removed
+  const backend = preferred || readPreference();
+  // Solo JSVecx disponible ahora que se eliminó el emulador Rust
   return new JsVecxEmulatorCore();
 }
 
 export function readPreference(): EmulatorBackend {
-  // Always return JSVecx - Rust backend removed
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const v = localStorage.getItem('emu_backend');
+      if (v === 'jsvecx') return v;
+    } catch { /* ignore */ }
+  }
+  // Query param override ?emu_backend=jsvecx
+  if (typeof location !== 'undefined') {
+    const p = new URLSearchParams(location.search).get('emu_backend');
+    if (p === 'jsvecx') return p;
+  }
   return 'jsvecx';
 }
 
 export function persistPreference(backend: EmulatorBackend){
-  // No-op - only JSVecx available
+  try { localStorage.setItem('emu_backend', backend); } catch {}
 }

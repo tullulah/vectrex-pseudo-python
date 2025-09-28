@@ -43,7 +43,6 @@ export const OutputPanel: React.FC = () => {
             // Forzar recarga tras cambio para reinstanciar singleton con nuevo backend
             setTimeout(()=>{ location.reload(); }, 120);
           }} style={{background:'#111', color:'#ddd', border:'1px solid #333', fontSize:11}}>
-            <option value='rust'>rust</option>
             <option value='jsvecx'>jsvecx</option>
           </select>
         </label>

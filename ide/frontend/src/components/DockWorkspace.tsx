@@ -18,7 +18,6 @@ import { BuildOutputPanel } from './panels/BuildOutputPanel';
 import { MemoryPanel } from './panels/MemoryPanel';
 import { TracePanel } from './panels/TracePanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
-import { DualEmulatorPanel } from './panels/DualEmulatorPanel';
 
 // Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
 const STORAGE_KEY = 'vpy_dock_model_v2';
@@ -38,7 +37,7 @@ const defaultJson = {
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
   // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
   { type: 'tabset', id: 'editor-host', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
-    { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' }, { type: 'tab', name: 'Dual Test', component: 'dual-emulator' } ] },
+    { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
   { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Output', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
     ]
   }
@@ -87,7 +86,6 @@ export const DockWorkspace: React.FC = () => {
       case 'editor-host': return <EditorSurface />;
       case 'editor-placeholder': return <div className="vpy-welcome-host" style={{position:'relative',height:'100%',width:'100%'}}><EditorSurface /></div>;
       case 'emulator': return <EmulatorPanel />;
-  case 'dual-emulator': return <DualEmulatorPanel />;
   case 'debug': return <DebugPanel />;
   case 'errors': return <ErrorsPanel />;
   case 'memory': return <MemoryPanel />;

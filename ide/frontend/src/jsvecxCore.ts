@@ -458,18 +458,43 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       // Extraer vectores del frame actual
       const vectors: Segment[] = [];
       if (this.inst.vectors_draw && Array.isArray(this.inst.vectors_draw)) {
+        console.log(`[JsVecxCore] Processing ${this.inst.vectors_draw.length} raw vectors from JSVecX`);
+        
+        // Log los primeros vectores para diagnóstico
+        this.inst.vectors_draw.slice(0, 3).forEach((v: any, i: number) => {
+          console.log(`  Raw Vector ${i}:`, {
+            type: typeof v,
+            keys: v ? Object.keys(v) : 'null',
+            x0: v?.x0, y0: v?.y0, x1: v?.x1, y1: v?.y1, 
+            intensity: v?.intensity, color: v?.color,
+            hasProps: { x0: 'x0' in v, y0: 'y0' in v, x1: 'x1' in v, y1: 'y1' in v, intensity: 'intensity' in v, color: 'color' in v }
+          });
+        });
+        
         for (const v of this.inst.vectors_draw) {
           if (v && typeof v === 'object') {
-            vectors.push({
-              x0: v.x0 || 0,
-              y0: v.y0 || 0,
-              x1: v.x1 || 0,
-              y1: v.y1 || 0,
-              intensity: v.intensity || 0,
+            const segment = {
+              x0: v.x0 ?? 0,
+              y0: v.y0 ?? 0,
+              x1: v.x1 ?? 0,
+              y1: v.y1 ?? 0,
+              intensity: v.color ?? v.intensity ?? 0, // JSVecX usa 'color', no 'intensity'
               frame: this.frameCounter
-            });
+            };
+            vectors.push(segment);
           }
         }
+        
+        console.log(`[JsVecxCore] Converted ${vectors.length} valid segments`);
+        if (vectors.length > 0) {
+          console.log(`  First converted segment:`, vectors[0]);
+        }
+      } else {
+        console.log(`[JsVecxCore] No vectors_draw available:`, {
+          exists: !!this.inst.vectors_draw,
+          isArray: Array.isArray(this.inst.vectors_draw),
+          length: this.inst.vectors_draw?.length
+        });
       }
       
       this.lastFrameSegments = vectors;
