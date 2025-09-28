@@ -94,12 +94,72 @@ function App() {
     setOpenMenu(null);
   };
 
-  // --- Command / Action layer (placeholder implementations) ---
+  // --- Command / Action layer ---
   const activeDoc = documents.find(d => d.uri === useEditorStore.getState().active);
   const activeUri = activeDoc?.uri;
   const activeBinName = activeUri ? deriveBinaryName(activeUri) : 'output.bin';
 
-  const commandExec = useCallback((id: string) => {
+  // Función para manejar build y run
+  const handleBuild = useCallback(async (autoRun: boolean = false) => {
+    const electronAPI: any = (window as any).electronAPI;
+    if (!electronAPI?.runCompile) {
+      console.warn('[Build] electronAPI.runCompile not available');
+      return;
+    }
+
+    const editorState = useEditorStore.getState();
+    const activeDoc = documents.find(d => d.uri === editorState.active);
+    if (!activeDoc) {
+      console.warn('[Build] No active document to build');
+      return;
+    }
+
+    if (!activeDoc.uri.endsWith('.vpy')) {
+      console.warn('[Build] Active document is not a .vpy file:', activeDoc.uri);
+      return;
+    }
+
+    console.log(`[Build] ${autoRun ? 'Build & Run' : 'Build'} starting:`, activeDoc.uri);
+
+    try {
+      // Preparar argumentos para runCompile
+      const args: any = {
+        path: activeDoc.uri,
+        autoStart: autoRun
+      };
+
+      // Si el documento está sucio, enviarlo para que se guarde antes de compilar
+      if (activeDoc.dirty) {
+        args.saveIfDirty = {
+          content: activeDoc.content,
+          expectedMTime: activeDoc.mtime
+        };
+      }
+
+      // Ejecutar compilación
+      const result = await electronAPI.runCompile(args);
+      
+      if (result.error) {
+        console.error('[Build] Compilation failed:', result.error, result.detail || '');
+        return;
+      }
+
+      if (result.conflict) {
+        console.warn('[Build] File was modified externally, mtime:', result.currentMTime);
+        return;
+      }
+
+      console.log('[Build] Compilation successful:', result.binPath, `(${result.size} bytes)`);
+      
+      if (autoRun) {
+        console.log('[Build] Auto-run enabled - emulator should load the binary automatically');
+      }
+    } catch (error) {
+      console.error('[Build] Build process failed:', error);
+    }
+  }, [documents]);
+
+  const commandExec = useCallback(async (id: string) => {
     const apiFiles: any = (window as any).files;
     switch (id) {
       case 'file.new': {
@@ -169,10 +229,10 @@ function App() {
         if (st.active) st.closeDocument(st.active);
         break; }
       case 'build.build':
-  console.log('[command] build (pending implementation) ->', activeBinName);
+        await handleBuild(false); // Solo compilar
         break;
       case 'build.run':
-  console.log('[command] build & run (pending implementation) ->', activeBinName);
+        await handleBuild(true); // Compilar y ejecutar
         break;
       case 'build.clean':
   console.log('[command] clean build artifacts (pending implementation)');

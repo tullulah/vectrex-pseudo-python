@@ -404,6 +404,58 @@ export const EmulatorPanel: React.FC = () => {
     }
   }, [status, loadOverlay]); // dependencias: status, loadOverlay
 
+  // Listener para cargar binarios compilados automáticamente
+  useEffect(() => {
+    const electronAPI: any = (window as any).electronAPI;
+    if (!electronAPI?.onCompiledBin) return;
+
+    const handleCompiledBin = (payload: { base64: string; size: number; binPath: string }) => {
+      console.log(`[EmulatorPanel] Loading compiled binary: ${payload.binPath} (${payload.size} bytes)`);
+      
+      try {
+        // Convertir base64 a bytes y cargar en JSVecX
+        const binaryData = atob(payload.base64);
+        const vecx = (window as any).vecx;
+        
+        if (!vecx) {
+          console.error('[EmulatorPanel] JSVecX instance not available for loading binary');
+          return;
+        }
+
+        // Detener emulador antes de cargar
+        vecx.stop();
+        
+        // Cargar el binario en la instancia global Globals.cartdata
+        const Globals = (window as any).Globals;
+        if (Globals) {
+          Globals.cartdata = binaryData;
+          console.log('[EmulatorPanel] ✓ Binary loaded into Globals.cartdata');
+        }
+        
+        // Reset y reiniciar
+        vecx.reset();
+        vecx.start();
+        
+        // Actualizar ROM cargada y buscar overlay
+        const romName = payload.binPath.split(/[/\\]/).pop()?.replace(/\.(bin|BIN)$/, '') || 'compiled';
+        setLoadedROM(`Compiled - ${romName}`);
+        
+        // Intentar cargar overlay si existe
+        loadOverlay(romName + '.bin');
+        
+        console.log('[EmulatorPanel] ✓ Compiled binary loaded and emulator restarted');
+        
+      } catch (error) {
+        console.error('[EmulatorPanel] Failed to load compiled binary:', error);
+      }
+    };
+
+    electronAPI.onCompiledBin(handleCompiledBin);
+    console.log('[EmulatorPanel] ✓ Registered onCompiledBin listener');
+    
+    // No cleanup function needed - onCompiledBin typically doesn't return one
+  }, [loadOverlay, setLoadedROM]);
+
   // Manejar cambio de ROM en dropdown
   const handleROMChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const romName = e.target.value;
