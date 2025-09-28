@@ -369,12 +369,12 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   
   isBiosLoaded(){ return this.biosOk; }
   
-  reset(){
+  reset(coldReset: boolean = true){
     if (!this.inst) return;
     
     try { 
       this.inst.vecx_reset(); 
-      console.log('[JsVecxCore] Reset successful');
+      console.log(`[JsVecxCore] Reset successful (${coldReset ? 'cold' : 'warm'} reset)`);
     } catch(e) { 
       console.warn('[JsVecxCore] Reset failed, doing manual reset:', e);
       // Reset manual básico
@@ -386,29 +386,46 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       this.assignMemoryFunctionsToAllContexts();
     } 
     
-    // CONFIGURAR PC CORRECTAMENTE DESPUÉS DEL RESET
-    // Leer reset vector de la BIOS y configurar PC
-    if (this.inst.rom && this.inst.rom.length >= 0x2000 && this.inst.e6809) {
-      // Reset vector está en 0xFFFE-0xFFFF (últimos 2 bytes de ROM)
-      const resetVectorLow = this.inst.rom[0x1FFE];   // 0xFFFE - 0xE000 = 0x1FFE 
-      const resetVectorHigh = this.inst.rom[0x1FFF];  // 0xFFFF - 0xE000 = 0x1FFF
-      const resetVector = (resetVectorHigh << 8) | resetVectorLow;
-      
-      console.log(`[JsVecxCore] Reset vector bytes: High=0x${resetVectorHigh.toString(16).toUpperCase()}, Low=0x${resetVectorLow.toString(16).toUpperCase()}`);
-      console.log(`[JsVecxCore] Reset vector calculated: 0x${resetVector.toString(16).toUpperCase()}`);
-      
-      if (resetVector !== 0 && resetVector >= 0x1000) {
-        this.inst.e6809.reg_pc = resetVector;
-        console.log(`[JsVecxCore] Reset: PC set to BIOS reset vector: 0x${resetVector.toString(16).toUpperCase()}`);
-      } else {
-        // Fallback si el reset vector es sospechoso
-        this.inst.e6809.reg_pc = 0xF000;
-        console.log(`[JsVecxCore] Reset: Suspicious reset vector 0x${resetVector.toString(16)}, using fallback 0xF000`);
+    // CONFIGURAR PC Y MEMORIA SEGÚN TIPO DE RESET
+    if (coldReset) {
+      // COLD RESET: Limpiar Vec_Cold_Flag y ir al inicio de BIOS
+      if (this.inst.ram) {
+        // Clear Vec_Cold_Flag to force cold start with VECTREX screen and music
+        // Vec_Cold_Flag is at $CBFE, which maps to RAM index 0x3FE (0xCBFE & 0x3FF)
+        this.inst.ram[0x3FE] = 0x00;  // Clear cold start flag
+        this.inst.ram[0x3FF] = 0x00;  // Clear both bytes to ensure it's not $7321
+        console.log('[JsVecxCore] Cold reset: Vec_Cold_Flag cleared');
       }
-    } else if (this.inst.e6809) {
-      // Fallback básico
-      this.inst.e6809.reg_pc = 0xF000;
-      console.log('[JsVecxCore] Reset: PC set to default BIOS address: 0xF000');
+      
+      // Set PC to BIOS start for cold start sequence
+      if (this.inst.e6809) {
+        this.inst.e6809.reg_pc = 0xF000;  // BIOS start address
+        console.log('[JsVecxCore] Cold reset: PC set to BIOS start 0xF000');
+      }
+    } else {
+      // WARM RESET: Usar reset vector normal (conserva memoria)
+      if (this.inst.rom && this.inst.rom.length >= 0x2000 && this.inst.e6809) {
+        // Reset vector está en 0xFFFE-0xFFFF (últimos 2 bytes de ROM)
+        const resetVectorLow = this.inst.rom[0x1FFE];   // 0xFFFE - 0xE000 = 0x1FFE 
+        const resetVectorHigh = this.inst.rom[0x1FFF];  // 0xFFFF - 0xE000 = 0x1FFF
+        const resetVector = (resetVectorHigh << 8) | resetVectorLow;
+        
+        console.log(`[JsVecxCore] Reset vector bytes: High=0x${resetVectorHigh.toString(16).toUpperCase()}, Low=0x${resetVectorLow.toString(16).toUpperCase()}`);
+        console.log(`[JsVecxCore] Reset vector calculated: 0x${resetVector.toString(16).toUpperCase()}`);
+        
+        if (resetVector !== 0 && resetVector >= 0x1000) {
+          this.inst.e6809.reg_pc = resetVector;
+          console.log(`[JsVecxCore] Warm reset: PC set to BIOS reset vector: 0x${resetVector.toString(16).toUpperCase()}`);
+        } else {
+          // Fallback si el reset vector es sospechoso
+          this.inst.e6809.reg_pc = 0xF000;
+          console.log(`[JsVecxCore] Warm reset: Suspicious reset vector 0x${resetVector.toString(16)}, using fallback 0xF000`);
+        }
+      } else if (this.inst.e6809) {
+        // Fallback básico
+        this.inst.e6809.reg_pc = 0xF000;
+        console.log('[JsVecxCore] Warm reset: PC set to default BIOS address: 0xF000');
+      }
     }
     
     this.frameCounter = 0; 

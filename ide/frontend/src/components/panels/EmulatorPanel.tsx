@@ -512,22 +512,53 @@ export const EmulatorPanel: React.FC = () => {
           {loadedROM && <span style={{ opacity: 0.8 }}>ROM: {loadedROM}</span>}
           {currentOverlay && <span style={{ opacity: 0.6 }}>Overlay: {overlayEnabled ? 'On' : 'Off'}</span>}
           
-          {/* Control de audio compacto */}
-          <label style={{display:'flex', alignItems:'center', gap:4}}>
-            <input 
-              type='checkbox' 
-              checked={audioEnabled} 
-              onChange={e => {
-                const v = e.target.checked; 
-                setAudioEnabled(v); 
-                try { 
-                  localStorage.setItem('emu_audio_enabled', v ? '1' : '0'); 
-                } catch{} 
-                if(!v) psgAudio.stop(); 
-              }} 
-            /> 
-            audio
-          </label>
+          {/* Botón de control de audio */}
+          <button 
+            style={{
+              ...btn, 
+              background: audioEnabled ? '#2a4a2a' : '#4a2a2a',
+              color: audioEnabled ? '#afa' : '#faa',
+              fontSize: '10px',
+              padding: '4px 8px'
+            }} 
+            onClick={() => {
+              const newState = !audioEnabled;
+              setAudioEnabled(newState); 
+              try { 
+                localStorage.setItem('emu_audio_enabled', newState ? '1' : '0'); 
+              } catch{} 
+              
+              // Control JSVecX audio directamente
+              const vecx = (window as any).vecx;
+              if (vecx) {
+                console.log('[EmulatorPanel] JSVecX audio methods:', Object.keys(vecx).filter(k => k.toLowerCase().includes('snd') || k.toLowerCase().includes('audio') || k.toLowerCase().includes('sound')));
+                
+                try {
+                  if (newState) {
+                    // HABILITAR AUDIO
+                    if (vecx.toggleSoundEnabled) vecx.toggleSoundEnabled(true);
+                    if (vecx.enableSound) vecx.enableSound();
+                    if (vecx.volume !== undefined) vecx.volume = 1.0;
+                    if (vecx.soundEnabled !== undefined) vecx.soundEnabled = true;
+                    psgAudio.start(); // También iniciar PSG Audio
+                    console.log('[EmulatorPanel] ✓ Audio HABILITADO');
+                  } else {
+                    // MUTEAR AUDIO
+                    if (vecx.toggleSoundEnabled) vecx.toggleSoundEnabled(false);
+                    if (vecx.disableSound) vecx.disableSound();
+                    if (vecx.volume !== undefined) vecx.volume = 0.0;
+                    if (vecx.soundEnabled !== undefined) vecx.soundEnabled = false;
+                    psgAudio.stop(); // También parar PSG Audio
+                    console.log('[EmulatorPanel] ✓ Audio MUTEADO');
+                  }
+                } catch (e) {
+                  console.warn('[EmulatorPanel] Could not control JSVecX audio:', e);
+                }
+              }
+            }}
+          >
+            {audioEnabled ? '🔊' : '🔇'} {audioEnabled ? 'Mute' : 'Audio'}
+          </button>
         </div>
         
         {/* Fila 2: Controles principales */}
@@ -660,26 +691,7 @@ export const EmulatorPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Estadísticas de audio si está habilitado */}
-      {audioEnabled && audioStats && (
-        <div style={{
-          marginTop: 12,
-          padding: 8,
-          background: '#111',
-          border: '1px solid #333',
-          borderRadius: 4,
-          fontSize: 11,
-          fontFamily: 'monospace'
-        }}>
-          <div style={{ fontWeight: 'bold', color: '#8cf', marginBottom: 4 }}>Audio PSG</div>
-          <div>Rate: {audioStats.sampleRate} Hz</div>
-          <div>Buffered: {audioStats.bufferedMs.toFixed(1)} ms ({audioStats.bufferedSamples} smp)</div>
-          <div>Pushed/Consumed: {audioStats.pushed}/{audioStats.consumed}</div>
-          <div style={{color: audioStats.overflowCount > 0 ? '#f66' : '#6c6'}}>
-            Overflows: {audioStats.overflowCount}{audioStats.overflowCount > 0 && ' (!!)'}
-          </div>
-        </div>
-      )}
+
 
       <div style={{
         marginTop: 12, 

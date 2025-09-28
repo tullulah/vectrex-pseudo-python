@@ -10,7 +10,7 @@ export interface IEmulatorCore {
   ensureBios?(opts?: { bytes?: Uint8Array; urlCandidates?: string[] }): Promise<boolean>;
   loadBios(bytes: Uint8Array): void;
   isBiosLoaded(): boolean;
-  reset(): void;
+  reset(coldReset?: boolean): void;
   resetStats?(): void;
   loadProgram(bytes: Uint8Array, base?: number): void;
   runFrame(maxInstr?: number): void;
