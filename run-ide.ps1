@@ -52,14 +52,7 @@ function Install-NodeModulesIfMissing($dir){
 Install-NodeModulesIfMissing (Join-Path $root 'ide/frontend')
 Install-NodeModulesIfMissing (Join-Path $root 'ide/electron')
 
-# Build WASM (frontend) unless skipped; artifacts remain in src/wasm for static import
-if(-not $NoWasmBuild){
-  Push-Location (Join-Path $root 'ide/frontend')
-  Write-Host '[INFO] wasm: build (vectrex_emulator)' -ForegroundColor Cyan
-  npm run wasm:build | Write-Host
-  if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] wasm build falló' -ForegroundColor Red; exit 1 }
-  Pop-Location
-}
+# WASM build removed - using JSVecx emulator instead
 
 # Build Rust (LSP + core) salvo -NoRustBuild
 if(-not $NoRustBuild){

@@ -39,4 +39,4 @@ export interface IEmulatorCore {
 }
 
 // Tipo del identificador de backend.
-export type EmulatorBackend = 'rust' | 'jsvecx';
+export type EmulatorBackend = 'jsvecx';
