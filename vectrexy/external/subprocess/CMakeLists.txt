@@ -1,2 +1,0 @@
-add_library(subprocess INTERFACE)
-target_include_directories(subprocess INTERFACE .)
