@@ -3220,7 +3220,7 @@ const EADIRECT = () => (((this.reg_dp<<8)|this.vecx.read8(this.reg_pc++)));
 ***************************************************************************/
 
 // --- Former #define constants converted to const (mantener semántica) ---
-const SOUND_FREQ   = 22050;
+const SOUND_FREQ   = 44100; // Fixed: was 22050, causing audio to be too low-pitched
 const SOUND_SAMPLE = 512;
 const MAX_OUTPUT   = 0x0fff;
 const STEP3        = 1;
