@@ -2,13 +2,19 @@
 
 These guidelines are critical for ongoing work in this repository. Keep them in mind for every future change.
 
-## 0. PowerShell Usage
+## 0. Git Branch Strategy
+- **RAMA PRINCIPAL**: `master` (NO `main`)
+- Todos los merges y commits principales van a `master`
+- Feature branches salen de `master` y vuelven a `master`
+- NUNCA crear ramas `main` locales accidentalmente
+
+## 0.1. PowerShell Usage
 - Usuario usa Windows PowerShell v5.1 (NO PowerShell 7+).
 - NUNCA usar `&&` para concatenar comandos - usar `;` en su lugar.
 - Sintaxis correcta: `cd emulator; cargo build` (NO `cd emulator && cargo build`).
 - PowerShell v5.1 no soporta `&&` como separador de comandos.
 
-## 0.1. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
+## 0.2. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
 **ANTES DE CREAR CUALQUIER ARCHIVO O API**:
 1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy_backup/libs/emulator/src/` y `vectrexy_backup/libs/emulator/include/emulator/`
 2. **LEER CÓDIGO ORIGINAL**: Examinar el .cpp/.h correspondiente LÍNEA POR LÍNEA
