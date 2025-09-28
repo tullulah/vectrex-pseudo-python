@@ -96,7 +96,17 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [setStatus, canvasSize]); // Dependencia en canvasSize para re-inicializar cuando cambie
+  }, [setStatus]); // Solo re-inicializar cuando cambie setStatus, no canvasSize
+
+  // Actualizar dimensiones del canvas sin re-inicializar JSVecX
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.style.width = `${canvasSize.width}px`;
+      canvas.style.height = `${canvasSize.height}px`;
+      console.log(`[EmulatorPanel] Canvas resized to: ${canvasSize.width}x${canvasSize.height}`);
+    }
+  }, [canvasSize]);
 
   // Audio lifecycle: init worklet on enable; start/stop with status
   useEffect(() => {

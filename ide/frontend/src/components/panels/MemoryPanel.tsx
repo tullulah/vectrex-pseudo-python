@@ -43,21 +43,55 @@ export const MemoryPanel: React.FC = () => {
       return;
     }
     
-    // Crear snapshot de memoria 64K desde JSVecX
-    const snap = new Uint8Array(65536);
-    try {
-      for (let addr = 0; addr < 65536; addr++) {
-        snap[addr] = vecx.read8(addr);
-      }
-    } catch (e) {
-      setText('[memory] Failed to read memory from JSVecX: ' + e);
-      return;
+    console.log('[MemoryPanel] Starting memory snapshot...');
+    
+    // Pausar emulador temporalmente para evitar conflictos
+    const wasRunning = vecx.isRunning && vecx.isRunning();
+    if (wasRunning) {
+      vecx.stop();
     }
     
-    const parts: string[] = [];
-    REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
-    setText(parts.join('\n\n'));
-    setTs(Date.now());
+    try {
+      // Crear snapshot de memoria de regiones importantes solamente
+      const snap = new Uint8Array(65536);
+      
+      // Leer solo las regiones que realmente importan (no todo el espacio de direcciones)
+      const importantRegions = [
+        { start: 0xC800, end: 0xCFFF }, // RAM
+        { start: 0xD000, end: 0xD07F }, // VIA registers
+        { start: 0xE000, end: 0xFFFF }  // BIOS
+      ];
+      
+      for (const region of importantRegions) {
+        for (let addr = region.start; addr <= region.end; addr++) {
+          snap[addr] = vecx.read8(addr);
+        }
+      }
+      
+      // Para cartridge, leer solo las primeras páginas si hay ROM cargada
+      const Globals = (window as any).Globals;
+      if (Globals && Globals.cartdata && Globals.cartdata.length > 0) {
+        const maxCartRead = Math.min(0x2000, Globals.cartdata.length); // Primeras 8K máximo
+        for (let addr = 0; addr < maxCartRead; addr++) {
+          snap[addr] = vecx.read8(addr);
+        }
+      }
+      
+      const parts: string[] = [];
+      REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
+      setText(parts.join('\n\n'));
+      setTs(Date.now());
+      
+      console.log('[MemoryPanel] ✓ Memory snapshot completed');
+    } catch (e) {
+      setText('[memory] Failed to read memory from JSVecX: ' + e);
+      console.error('[MemoryPanel] Memory read error:', e);
+    } finally {
+      // Reanudar emulador si estaba corriendo
+      if (wasRunning) {
+        setTimeout(() => vecx.start(), 100);
+      }
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -71,31 +105,56 @@ export const MemoryPanel: React.FC = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
-  const saveBin = () => {
+  const saveBin = async () => {
     const vecx = (window as any).vecx;
     if (!vecx) {
       alert('JSVecX not available');
       return;
     }
     
-    // Crear snapshot de memoria 64K desde JSVecX
-    const data = new Uint8Array(65536);
-    try {
-      for (let addr = 0; addr < 65536; addr++) {
-        data[addr] = vecx.read8(addr);
-      }
-    } catch (e) {
-      alert('Failed to read memory from JSVecX: ' + e);
-      return;
+    console.log('[MemoryPanel] Starting binary dump...');
+    
+    // Pausar emulador temporalmente
+    const wasRunning = vecx.isRunning && vecx.isRunning();
+    if (wasRunning) {
+      vecx.stop();
     }
     
-    const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `memory_dump_${ts}.bin`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      // Crear snapshot de memoria completa para dump binario
+      const data = new Uint8Array(65536);
+      
+      // Leer en chunks más grandes para mejor performance
+      const chunkSize = 1024;
+      for (let start = 0; start < 65536; start += chunkSize) {
+        const end = Math.min(start + chunkSize, 65536);
+        for (let addr = start; addr < end; addr++) {
+          data[addr] = vecx.read8(addr);
+        }
+        // Pequeña pausa cada chunk para no bloquear UI
+        if (start % (chunkSize * 10) === 0) {
+          await new Promise(resolve => setTimeout(resolve, 1));
+        }
+      }
+      
+      const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `memory_dump_${ts}.bin`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      console.log('[MemoryPanel] ✓ Binary dump completed');
+    } catch (e) {
+      alert('Failed to read memory from JSVecX: ' + e);
+      console.error('[MemoryPanel] Binary dump error:', e);
+    } finally {
+      // Reanudar emulador
+      if (wasRunning) {
+        setTimeout(() => vecx.start(), 100);
+      }
+    }
   };
 
   return (
