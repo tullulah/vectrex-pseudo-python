@@ -24,6 +24,8 @@ export const EmulatorPanel: React.FC = () => {
   const [overlayEnabled, setOverlayEnabled] = useState<boolean>(true);
   const [currentOverlay, setCurrentOverlay] = useState<string | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
   
   // Hook editor store para documentos activos
   const editorActive = useEditorStore(s => s.active);
@@ -45,7 +47,7 @@ export const EmulatorPanel: React.FC = () => {
     console.log('[EmulatorPanel] Loaded ROM list:', knownROMs.length, 'ROMs');
   }, []); // Sin auto-carga de ROM
 
-  // Inicialización JSVecX exactamente como el test que funciona
+  // Inicialización JSVecX con dimensiones responsive
   useEffect(() => {
     let cancelled = false;
     
@@ -53,12 +55,12 @@ export const EmulatorPanel: React.FC = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       
-      // Configurar canvas igual que el test HTML
+      // Configurar canvas con dimensiones responsive
       canvas.id = 'screen';
-      canvas.width = 330;
+      canvas.width = 330;  // Resolución interna fija para JSVecX
       canvas.height = 410;
-      canvas.style.width = '300px';
-      canvas.style.height = '400px';
+      canvas.style.width = `${canvasSize.width}px`;
+      canvas.style.height = `${canvasSize.height}px`;
       canvas.style.border = '1px solid #333';
       canvas.style.background = '#000';
       
@@ -68,7 +70,7 @@ export const EmulatorPanel: React.FC = () => {
         return;
       }
       
-      console.log('[EmulatorPanel] Initializing JSVecX exactly like working test...');
+      console.log(`[EmulatorPanel] Initializing JSVecX with canvas size: ${canvasSize.width}x${canvasSize.height}`);
       
       try {
         vecx.reset();
@@ -94,7 +96,7 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [setStatus]);
+  }, [setStatus, canvasSize]); // Dependencia en canvasSize para re-inicializar cuando cambie
 
   // Audio lifecycle: init worklet on enable; start/stop with status
   useEffect(() => {
@@ -280,6 +282,55 @@ export const EmulatorPanel: React.FC = () => {
     loadDefaultOverlay();
   }, [loadOverlay]);
 
+  // Responsive canvas sizing
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (!containerRef.current) return;
+      
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      
+      // Aspect ratio Vectrex: 330x410 (aprox 4:5)
+      const aspectRatio = 330 / 410;
+      
+      // Calcular tamaño máximo que cabe en el contenedor
+      const maxWidth = rect.width - 40; // padding
+      const maxHeight = rect.height - 40;
+      
+      let width = maxWidth;
+      let height = width / aspectRatio;
+      
+      // Si la altura calculada es muy grande, ajustar por altura
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * aspectRatio;
+      }
+      
+      // Mínimo tamaño
+      width = Math.max(200, width);
+      height = Math.max(250, height);
+      
+      // Máximo tamaño (mantener buena calidad)
+      width = Math.min(500, width);
+      height = Math.min(625, height);
+      
+      setCanvasSize({ width: Math.round(width), height: Math.round(height) });
+    };
+    
+    // Ejecutar al inicio
+    updateCanvasSize();
+    
+    // Observer para cambios de tamaño
+    const resizeObserver = new ResizeObserver(updateCanvasSize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   // Función para cargar ROM desde dropdown
   const loadROMFromDropdown = useCallback(async (romName: string) => {
     if (!romName) return;
@@ -373,46 +424,54 @@ export const EmulatorPanel: React.FC = () => {
       fontFamily: 'monospace', 
       fontSize: 12
     }}>
-      {/* Controles expandidos */}
+      {/* Controles responsive */}
       <div style={{
         display: 'flex', 
-        alignItems: 'center', 
-        gap: 12, 
-        marginBottom: 12,
-        flexWrap: 'wrap'
+        flexDirection: 'column',
+        gap: 8, 
+        marginBottom: 12
       }}>
-        <span>Status: <span style={{
-          color: status === 'running' ? '#0f0' : status === 'paused' ? '#fa0' : '#f55'
-        }}>{status}</span></span>
+        {/* Fila 1: Info y status */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+          fontSize: '11px'
+        }}>
+          <span>Status: <span style={{
+            color: status === 'running' ? '#0f0' : status === 'paused' ? '#fa0' : '#f55'
+          }}>{status}</span></span>
+          
+          {loadedROM && <span style={{ opacity: 0.8 }}>ROM: {loadedROM}</span>}
+          {currentOverlay && <span style={{ opacity: 0.6 }}>Overlay: {overlayEnabled ? 'On' : 'Off'}</span>}
+          
+          {/* Control de audio compacto */}
+          <label style={{display:'flex', alignItems:'center', gap:4}}>
+            <input 
+              type='checkbox' 
+              checked={audioEnabled} 
+              onChange={e => {
+                const v = e.target.checked; 
+                setAudioEnabled(v); 
+                try { 
+                  localStorage.setItem('emu_audio_enabled', v ? '1' : '0'); 
+                } catch{} 
+                if(!v) psgAudio.stop(); 
+              }} 
+            /> 
+            audio
+          </label>
+        </div>
         
-        {loadedROM && <span style={{ fontSize: '11px', opacity: 0.8 }}>ROM: {loadedROM}</span>}
-        {currentOverlay && <span style={{ fontSize: '11px', opacity: 0.6 }}>Overlay: {overlayEnabled ? 'On' : 'Off'}</span>}
-        
-        {/* Control de audio */}
-        <label style={{display:'flex', alignItems:'center', gap:4}}>
-          <input 
-            type='checkbox' 
-            checked={audioEnabled} 
-            onChange={e => {
-              const v = e.target.checked; 
-              setAudioEnabled(v); 
-              try { 
-                localStorage.setItem('emu_audio_enabled', v ? '1' : '0'); 
-              } catch{} 
-              if(!v) psgAudio.stop(); 
-            }} 
-          /> 
-          audio
-        </label>
-        
-        {/* Información del documento activo */}
-        {editorActive && (
-          <span style={{opacity: 0.6}}>
-            Active: {editorDocuments.find(d => d.uri === editorActive)?.diskPath || editorActive}
-          </span>
-        )}
-        
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+        {/* Fila 2: Controles principales */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          flexWrap: 'wrap'
+        }}>
+          {/* Controles de reproducción */}
           {status !== 'running' && <button style={btn} onClick={onPlay}>
             {status === 'paused' ? 'Resume' : 'Play'}
           </button>}
@@ -427,7 +486,8 @@ export const EmulatorPanel: React.FC = () => {
             style={{
               ...btn,
               background: '#2a4a2a',
-              minWidth: '120px'
+              minWidth: '100px',
+              maxWidth: '150px'
             }}
           >
             <option value="">Select ROM...</option>
@@ -442,26 +502,33 @@ export const EmulatorPanel: React.FC = () => {
               style={{
                 ...btn, 
                 background: overlayEnabled ? '#2a4a2a' : '#4a2a2a',
-                color: overlayEnabled ? '#afa' : '#faa'
+                color: overlayEnabled ? '#afa' : '#faa',
+                fontSize: '10px'
               }} 
               onClick={toggleOverlay}
             >
-              {overlayEnabled ? 'Hide Overlay' : 'Show Overlay'}
+              {overlayEnabled ? 'Hide' : 'Show'} Overlay
             </button>
           )}
           
           {/* Botón Load ROM manual (como fallback) */}
-          <button style={{...btn, background: '#3a3a3a', fontSize: '10px'}} onClick={onLoadROM}>Load File...</button>
+          <button style={{...btn, background: '#3a3a3a', fontSize: '10px'}} onClick={onLoadROM}>
+            Load File...
+          </button>
         </div>
       </div>
 
-      {/* Canvas para JSVecX con overlay */}
-      <div style={{
-        flex: 1, 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center'
-      }}>
+      {/* Canvas para JSVecX con overlay responsive */}
+      <div 
+        ref={containerRef}
+        style={{
+          flex: 1, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          minHeight: '300px'
+        }}
+      >
         <div style={{ position: 'relative', display: 'inline-block' }}>
           <canvas 
             ref={canvasRef} 
@@ -471,25 +538,25 @@ export const EmulatorPanel: React.FC = () => {
             style={{
               border: '1px solid #333', 
               background: '#000', 
-              width: 300, 
-              height: 400,
+              width: canvasSize.width, 
+              height: canvasSize.height,
               display: 'block'
             }} 
           />
           
-          {/* Overlay image - approach similar to JSVecX original */}
+          {/* Overlay image responsive */}
           {currentOverlay && overlayEnabled && (
             <div
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: 300,
-                height: 400,
+                width: canvasSize.width,
+                height: canvasSize.height,
                 pointerEvents: 'none',
                 zIndex: 10,
                 backgroundImage: `url(${currentOverlay})`,
-                backgroundSize: '300px 400px',
+                backgroundSize: `${canvasSize.width}px ${canvasSize.height}px`,
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 mixBlendMode: 'screen',
