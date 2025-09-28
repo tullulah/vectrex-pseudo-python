@@ -221,6 +221,12 @@ export const EmulatorPanel: React.FC = () => {
         // Actualizar estado del ROM cargado
         setLoadedROM(`${file.name} (${romData.length} bytes)`);
         
+        // Resetear combo selector (carga manual no debe seleccionar combo)
+        setSelectedROM('');
+        
+        // Recalcular overlay basado en nombre del archivo
+        await loadOverlay(file.name);
+        
         // Reset después de cargar - esto copiará cartdata al array cart[]
         vecx.reset();
         console.log('[EmulatorPanel] ✓ Reset after ROM load');
@@ -251,14 +257,28 @@ export const EmulatorPanel: React.FC = () => {
         setCurrentOverlay(overlayPath);
         console.log(`[EmulatorPanel] ✓ Overlay found: ${overlayPath}`);
       } else {
+        // No se encontró overlay - quitarlo
         setCurrentOverlay(null);
-        console.log(`[EmulatorPanel] No overlay found for: ${baseName}`);
+        console.log(`[EmulatorPanel] No overlay found for: ${baseName} - removing overlay`);
       }
     } catch (e) {
+      // Error al buscar overlay - quitarlo
       setCurrentOverlay(null);
-      console.log(`[EmulatorPanel] No overlay found for: ${baseName}`);
+      console.log(`[EmulatorPanel] Error loading overlay for: ${baseName} - removing overlay`);
     }
   }, []); // sin dependencias
+
+  // Cargar overlay de Minestorm al arrancar (default BIOS game)
+  useEffect(() => {
+    const loadDefaultOverlay = async () => {
+      // Esperar un poco para que JSVecX esté completamente inicializado
+      setTimeout(async () => {
+        await loadOverlay('minestorm.bin');
+        setLoadedROM('BIOS - Minestorm');
+      }, 1500);
+    };
+    loadDefaultOverlay();
+  }, [loadOverlay]);
 
   // Función para cargar ROM desde dropdown
   const loadROMFromDropdown = useCallback(async (romName: string) => {
