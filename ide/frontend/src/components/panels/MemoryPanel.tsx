@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { emuCore } from '../../emulatorCoreSingleton';
 
 interface Region { name:string; start:number; end:number; }
 
@@ -38,11 +37,23 @@ export const MemoryPanel: React.FC = () => {
   const [ts, setTs] = useState<number>(0);
 
   const refresh = useCallback(() => {
-  const snap = emuCore.snapshotMemory ? emuCore.snapshotMemory() : new Uint8Array();
-    if (snap.length !== 65536) {
-      setText('[memory] Snapshot failed or emulator not initialized.');
+    const vecx = (window as any).vecx;
+    if (!vecx) {
+      setText('[memory] JSVecX not available');
       return;
     }
+    
+    // Crear snapshot de memoria 64K desde JSVecX
+    const snap = new Uint8Array(65536);
+    try {
+      for (let addr = 0; addr < 65536; addr++) {
+        snap[addr] = vecx.read8(addr);
+      }
+    } catch (e) {
+      setText('[memory] Failed to read memory from JSVecX: ' + e);
+      return;
+    }
+    
     const parts: string[] = [];
     REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
     setText(parts.join('\n\n'));
@@ -61,11 +72,24 @@ export const MemoryPanel: React.FC = () => {
     URL.revokeObjectURL(url);
   };
   const saveBin = () => {
-  const data = emuCore.snapshotMemory ? emuCore.snapshotMemory() : new Uint8Array();
-    // Use a copy of the underlying ArrayBuffer to satisfy BlobPart typing across environments
-  const copy = new Uint8Array(data.length);
-  copy.set(data);
-  const blob = new Blob([copy.buffer], { type: 'application/octet-stream' });
+    const vecx = (window as any).vecx;
+    if (!vecx) {
+      alert('JSVecX not available');
+      return;
+    }
+    
+    // Crear snapshot de memoria 64K desde JSVecX
+    const data = new Uint8Array(65536);
+    try {
+      for (let addr = 0; addr < 65536; addr++) {
+        data[addr] = vecx.read8(addr);
+      }
+    } catch (e) {
+      alert('Failed to read memory from JSVecX: ' + e);
+      return;
+    }
+    
+    const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
