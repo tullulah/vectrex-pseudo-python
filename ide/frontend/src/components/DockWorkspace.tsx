@@ -41,7 +41,7 @@ const defaultJson = {
   { type: 'tabset', id: 'editor-host', weight: 50, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
     { type: 'tabset', weight: 20, children: [ 
       { type: 'tab', name: 'Emulator', component: 'emulator' },
-      { type: 'tab', name: '🤖 AI Assistant', component: 'ai-assistant' }
+      { type: 'tab', name: 'PyPilot', component: 'ai-assistant' }
     ] },
   { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Stats', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
     ]
