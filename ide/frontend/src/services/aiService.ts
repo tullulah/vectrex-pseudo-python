@@ -1,476 +1,155 @@
-import type { AiProvider, AiRequest, AiResponse, VectrexCommandInfo } from '../types/ai';
+import { AiProviderFactory } from './AiProviderFactory';
+import type { 
+  IAiProvider, 
+  AiProviderType, 
+  AiProviderConfig, 
+  AiRequest, 
+  AiResponse 
+} from '../types/aiProvider';
 import { logger } from '../utils/logger';
 
-// Base de conocimiento de comandos Vectrex
-const VECTREX_COMMANDS: VectrexCommandInfo[] = [
-  {
-    name: 'MOVE',
-    syntax: 'MOVE(x, y)',
-    description: 'Mueve el haz electrónico a coordenadas absolutas',
-    example: 'MOVE(0, 0)  # Mueve al centro de la pantalla',
-    category: 'movement'
-  },
-  {
-    name: 'DRAW_LINE',
-    syntax: 'DRAW_LINE(dx, dy)',
-    description: 'Dibuja una línea desde la posición actual',
-    example: 'DRAW_LINE(50, 50)  # Línea diagonal',
-    category: 'drawing'
-  },
-  {
-    name: 'INTENSITY',
-    syntax: 'INTENSITY(value)',
-    description: 'Establece la intensidad del haz (0-255)',
-    example: 'INTENSITY(255)  # Máxima intensidad',
-    category: 'intensity'
-  },
-  {
-    name: 'PRINT_TEXT',
-    syntax: 'PRINT_TEXT(x, y, text)',
-    description: 'Muestra texto en pantalla usando la fuente del Vectrex',
-    example: 'PRINT_TEXT(-50, 60, "HELLO WORLD")',
-    category: 'text'
-  },
-  {
-    name: 'DRAW_CIRCLE',
-    syntax: 'DRAW_CIRCLE(radius)',
-    description: 'Dibuja un círculo centrado en la posición actual',
-    example: 'DRAW_CIRCLE(30)  # Círculo de radio 30',
-    category: 'drawing'
-  },
-  {
-    name: 'RECT',
-    syntax: 'RECT(x, y, width, height)',
-    description: 'Dibuja un rectángulo',
-    example: 'RECT(-25, -25, 50, 50)  # Cuadrado centrado',
-    category: 'drawing'
-  },
-  {
-    name: 'POLYGON',
-    syntax: 'POLYGON(count, x1, y1, x2, y2, ...)',
-    description: 'Dibuja un polígono con los puntos especificados',
-    example: 'POLYGON(3, 0, 50, -50, -50, 50, -50)  # Triángulo',
-    category: 'drawing'
-  },
-  {
-    name: 'ORIGIN',
-    syntax: 'ORIGIN()',
-    description: 'Resetea la posición de referencia al centro (0,0)',
-    example: 'ORIGIN()  # Reset al centro',
-    category: 'control'
-  }
-];
+export class AiService {
+  private currentProvider: IAiProvider | null = null;
+  private currentProviderType: AiProviderType = 'mock';
+  private currentConfig: AiProviderConfig = {};
 
-class AiService {
-  private provider: AiProvider = {
-    name: 'Mock',
-    enabled: false
-  };
-
-  setProvider(provider: AiProvider) {
-    this.provider = provider;
-    logger.info('AI', 'Provider updated:', provider.name);
+  constructor() {
+    // Inicializar con Mock provider por defecto
+    this.switchProvider('mock');
   }
 
-  async sendRequest(request: AiRequest): Promise<AiResponse> {
-    logger.debug('AI', 'Sending request:', { command: request.command, messageLength: request.message.length });
+  /**
+   * Cambia el proveedor de IA activo
+   */
+  public switchProvider(type: AiProviderType, config?: AiProviderConfig): void {
+    try {
+      this.currentProviderType = type;
+      this.currentConfig = config || {};
+      this.currentProvider = AiProviderFactory.getProvider(type, config);
+      
+      logger.info('AI', `Provider switched to: ${this.currentProvider.name}`);
+    } catch (error) {
+      logger.error('AI', 'Failed to switch AI provider:', error);
+      // Fallback a Mock provider
+      this.currentProviderType = 'mock';
+      this.currentConfig = {};
+      this.currentProvider = AiProviderFactory.getProvider('mock');
+    }
+  }
 
-    // Si no hay provider configurado, usar mock
-    if (!this.provider.enabled || this.provider.name === 'Mock') {
-      return this.getMockResponse(request);
+  /**
+   * Obtiene el proveedor actual
+   */
+  public getCurrentProvider(): IAiProvider | null {
+    return this.currentProvider;
+  }
+
+  /**
+   * Obtiene el tipo de proveedor actual
+   */
+  public getCurrentProviderType(): AiProviderType {
+    return this.currentProviderType;
+  }
+
+  /**
+   * Verifica si el proveedor actual está configurado
+   */
+  public isConfigured(): boolean {
+    return this.currentProvider?.isConfigured() ?? false;
+  }
+
+  /**
+   * Envía una solicitud al proveedor de IA actual
+   */
+  public async sendRequest(request: AiRequest): Promise<AiResponse> {
+    if (!this.currentProvider) {
+      throw new Error('No AI provider configured');
     }
 
     try {
-      switch (this.provider.name) {
-        case 'OpenAI':
-          return await this.sendToOpenAI(request);
-        case 'Anthropic':
-          return await this.sendToAnthropic(request);
-        case 'Local':
-          return await this.sendToLocal(request);
-        default:
-          return this.getMockResponse(request);
-      }
-    } catch (error) {
-      logger.error('AI', 'AI request failed:', error);
-      return {
-        content: `❌ Error comunicándose con ${this.provider.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  private async sendToOpenAI(request: AiRequest): Promise<AiResponse> {
-    if (!this.provider.apiKey) {
-      throw new Error('API Key de OpenAI no configurada');
-    }
-
-    const systemPrompt = this.buildSystemPrompt();
-    const userPrompt = this.buildUserPrompt(request);
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.provider.apiKey}`
-      },
-      body: JSON.stringify({
-        model: this.provider.model || 'gpt-4',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || 'No response from OpenAI';
-
-    return {
-      content,
-      suggestions: this.extractSuggestions(content)
-    };
-  }
-
-  private async sendToAnthropic(request: AiRequest): Promise<AiResponse> {
-    if (!this.provider.apiKey) {
-      throw new Error('API Key de Anthropic no configurada');
-    }
-
-    const systemPrompt = this.buildSystemPrompt();
-    const userPrompt = this.buildUserPrompt(request);
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.provider.apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: this.provider.model || 'claude-3-sonnet-20240229',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: userPrompt }
-        ]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.content?.[0]?.text || 'No response from Anthropic';
-
-    return {
-      content,
-      suggestions: this.extractSuggestions(content)
-    };
-  }
-
-  private async sendToLocal(request: AiRequest): Promise<AiResponse> {
-    const endpoint = this.provider.endpoint || 'http://localhost:11434/api/generate';
-    
-    const systemPrompt = this.buildSystemPrompt();
-    const userPrompt = this.buildUserPrompt(request);
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: this.provider.model || 'llama2',
-        prompt: systemPrompt + '\n\n' + userPrompt,
-        stream: false
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Local LLM error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.response || 'No response from local LLM';
-
-    return {
-      content,
-      suggestions: this.extractSuggestions(content)
-    };
-  }
-
-  private getMockResponse(request: AiRequest): AiResponse {
-    // Mock responses inteligentes basadas en el tipo de request
-    if (request.command === '/explain') {
-      const codeToExplain = request.context.selectedCode || (request.context as any).documentContent;
-      const isFullDocument = !request.context.selectedCode && (request.context as any).documentContent;
-      
-      if (codeToExplain) {
-        return {
-          content: `📖 **Explicación del código VPy:**
-
-\`\`\`vpy
-${isFullDocument && codeToExplain.length > 500 ? 
-  codeToExplain.substring(0, 500) + '\n...[código completo disponible]' : 
-  codeToExplain}
-\`\`\`
-
-🔍 **Análisis (Mock Response):**
-
-Este código utiliza la sintaxis VPy (Vectrex Python) que se compila a ensamblador 6809 para la consola Vectrex.
-
-**Fuente:** ${isFullDocument ? 'Documento completo' : 'Código seleccionado'} (${codeToExplain.length} caracteres)
-
-**Elementos identificados:**
-• Comandos de dibujo vectorial típicos del Vectrex
-• Coordenadas en el sistema Vectrex (-127 a +127 en ambos ejes)
-• Posible uso de intensidad para controlar el brillo del haz
-
-**Para análisis real:** Configura tu API key en Settings.
-
-💡 **Sugerencia:** Los comandos Vectrex son optimizados para gráficos vectoriales - evita usar demasiados puntos en polígonos complejos.`
-        };
-      } else {
-        return {
-          content: `📖 **Sin código para explicar**
-
-Para usar \`/explain\`:
-• **Opción 1:** Selecciona código en el editor y usa \`/explain\`
-• **Opción 2:** Activa "Auto-contexto" para analizar el archivo completo
-• **Opción 3:** Adjunta contexto manual con código específico
-
-**Estado actual:**
-• Código seleccionado: No
-• Auto-contexto: ${(request.context as any).documentContent ? 'Sí, pero sin contenido' : 'No'}
-• Archivo activo: ${request.context.fileName || 'Ninguno'}`
-        };
-      }
-    }
-
-    if (request.command === '/generate') {
-      const description = request.message.replace('/generate ', '');
-      return {
-        content: `🔧 **Código VPy generado para:** "${description}"
-
-\`\`\`vpy
-# Generado por IA Mock para: ${description}
-def main():
-    # Configuración inicial
-    INTENSITY(255)
-    ORIGIN()
-    
-    # Código específico para: ${description}
-    # TODO: Reemplazar con lógica real de IA
-    
-    # Ejemplo básico
-    MOVE(-50, 50)
-    PRINT_TEXT(0, 0, "${description.toUpperCase()}")
-    
-    return 0
-\`\`\`
-
-💡 **Mock Response:** Para generación real de código, configura una API de IA en Settings.
-
-**Próximos pasos:**
-• Ajusta las coordenadas según tu diseño
-• Añade lógica de game loop si es necesario
-• Usa los comandos específicos de Vectrex según el objetivo`
-      };
-    }
-
-    if (request.command === '/fix' && request.context.errors?.length) {
-      return {
-        content: `🔧 **Análisis de errores (Mock):**
-
-**Errores detectados:**
-${request.context.errors.map(e => `• Línea ${e.line}: ${e.message}`).join('\n')}
-
-**Sugerencias de corrección:**
-• Verifica la sintaxis VPy
-• Revisa que los paréntesis estén balanceados
-• Comprueba la aridad de las funciones Vectrex
-• Asegúrate de usar la indentación correcta
-
-**Para análisis real:** Configura IA en Settings para obtener sugerencias específicas.`,
-        suggestions: [
-          {
-            type: 'fix',
-            title: 'Revisar sintaxis',
-            description: 'Verificar paréntesis y comas en llamadas a funciones'
-          }
-        ]
-      };
-    }
-
-    if (request.command?.startsWith('/vectrex')) {
-      const cmdName = request.command.split(' ')[1]?.toUpperCase();
-      const cmd = VECTREX_COMMANDS.find(c => c.name === cmdName);
-      
-      if (cmd) {
-        return {
-          content: `📚 **Comando Vectrex: ${cmd.name}**
-
-**Sintaxis:** \`${cmd.syntax}\`
-
-**Descripción:** ${cmd.description}
-
-**Ejemplo:**
-\`\`\`vpy
-${cmd.example}
-\`\`\`
-
-**Categoría:** ${cmd.category}
-
-💡 **Tip:** Los comandos de dibujo del Vectrex usan coordenadas relativas al centro de la pantalla (0,0).`
-        };
-      }
-    }
-
-    // Respuesta genérica mock
-    return {
-      content: `🤖 **PyPilot (Mock Mode)**
-
-Has enviado: "${request.message}"
-
-**Contexto detectado:**
-• Archivo: ${request.context.fileName || 'ninguno'}
-• Código seleccionado: ${request.context.selectedCode ? 'Sí (' + request.context.selectedCode.length + ' chars)' : 'No'}
-• Documento completo: ${(request.context as any).documentContent ? 'Sí (' + ((request.context as any).documentLength || 0) + ' chars)' : 'No'}
-• Contexto manual: ${(request.context as any).manualContext ? 'Sí (' + (request.context as any).manualContext.length + ' chars)' : 'No'}
-• Errores: ${request.context.errors?.length || 0}
-
-**Esta es una respuesta simulada.** Para obtener asistencia real de IA:
-
-1. Ve a ⚙️ **Settings**
-2. Selecciona un proveedor (OpenAI, Anthropic, Local)
-3. Configura tu API Key
-4. ¡Disfruta de asistencia IA real!
-
-**💡 Contexto mejorado:**
-• ✅ Auto-contexto incluye el archivo completo activo
-• ✅ Puedes adjuntar contexto manual adicional
-• ✅ Código seleccionado tiene prioridad sobre documento completo
-
-**Comandos disponibles:**
-• \`/help\` - Ver todos los comandos
-• \`/generate [descripción]\` - Generar código VPy
-• \`/explain\` - Explicar código seleccionado
-• \`/fix\` - Sugerir correcciones
-• \`/vectrex [comando]\` - Info sobre comandos Vectrex`,
-      suggestions: [
-        {
-          type: 'code',
-          title: 'Ejemplo básico VPy',
-          code: 'def main():\n    INTENSITY(255)\n    PRINT_TEXT(0, 0, "Hello Vectrex!")',
-          description: 'Estructura básica de un programa VPy'
-        }
-      ]
-    };
-  }
-
-  private buildSystemPrompt(): string {
-    return `Eres un asistente especializado en VPy (Vectrex Python), un lenguaje que compila a ensamblador 6809 para la consola retro Vectrex.
-
-CONOCIMIENTO BASE:
-• Vectrex usa gráficos vectoriales con coordenadas (-127, +127)
-• Comandos principales: MOVE(x,y), DRAW_LINE(dx,dy), INTENSITY(0-255), PRINT_TEXT(x,y,text)
-• Sintaxis VPy: Python-like con funciones específicas de Vectrex
-• El sistema de coordenadas tiene (0,0) en el centro de la pantalla
-• Intensidad controla el brillo del haz electrónico
-
-COMANDOS DISPONIBLES:
-${VECTREX_COMMANDS.map(cmd => `• ${cmd.syntax} - ${cmd.description}`).join('\n')}
-
-RESPUESTA ESPERADA:
-• Usa markdown para formatear código (\`\`\`vpy)
-• Incluye explicaciones técnicas específicas de Vectrex
-• Proporciona ejemplos prácticos y funcionales
-• Menciona consideraciones de performance cuando sea relevante
-• Usa emojis para hacer las respuestas más amigables
-
-Responde siempre en español y enfócate en ayudar con desarrollo para Vectrex.`;
-  }
-
-  private buildUserPrompt(request: AiRequest): string {
-    let prompt = `CONSULTA: ${request.message}\n\n`;
-
-    if (request.context.fileName) {
-      prompt += `ARCHIVO ACTUAL: ${request.context.fileName}\n`;
-    }
-
-    if (request.context.selectedCode) {
-      prompt += `CÓDIGO SELECCIONADO:\n\`\`\`vpy\n${request.context.selectedCode}\n\`\`\`\n`;
-    }
-
-    // Add document content if available (auto-context)
-    if ((request.context as any).documentContent) {
-      const content = (request.context as any).documentContent;
-      const length = (request.context as any).documentLength || content.length;
-      
-      if (length > 2000) {
-        // Truncate large documents
-        const truncated = content.substring(0, 2000);
-        prompt += `CONTENIDO DEL DOCUMENTO (${length} chars, mostrando primeros 2000):\n\`\`\`vpy\n${truncated}\n...[truncado]\n\`\`\`\n`;
-      } else {
-        prompt += `CONTENIDO DEL DOCUMENTO:\n\`\`\`vpy\n${content}\n\`\`\`\n`;
-      }
-    }
-
-    // Add manual context if provided
-    if ((request.context as any).manualContext) {
-      prompt += `CONTEXTO ADICIONAL:\n${(request.context as any).manualContext}\n`;
-    }
-
-    if (request.context.errors?.length) {
-      prompt += `ERRORES DETECTADOS:\n${request.context.errors.map(e => `Línea ${e.line}: ${e.message}`).join('\n')}\n`;
-    }
-
-    if (request.command) {
-      prompt += `COMANDO: ${request.command}\n`;
-    }
-
-    return prompt;
-  }
-
-  private extractSuggestions(content: string): Array<{type: 'code' | 'fix' | 'optimization' | 'explanation', title: string, code?: string, description?: string}> {
-    const suggestions: Array<{type: 'code' | 'fix' | 'optimization' | 'explanation', title: string, code?: string, description?: string}> = [];
-    
-    // Buscar bloques de código
-    const codeBlocks = content.match(/```vpy\n([\s\S]*?)\n```/g);
-    if (codeBlocks) {
-      codeBlocks.forEach((block, index) => {
-        const code = block.replace(/```vpy\n/, '').replace(/\n```/, '');
-        suggestions.push({
-          type: 'code',
-          title: `Código generado ${index + 1}`,
-          code,
-          description: 'Código VPy generado por IA'
-        });
+      logger.debug('AI', 'Sending request:', {
+        command: request.command,
+        messageLength: request.message.length,
+        hasContext: !!request.context.selectedCode || !!request.context.documentContent
       });
+
+      const response = await this.currentProvider.sendRequest(request);
+      
+      logger.debug('AI', 'Response received:', {
+        contentLength: response.content.length,
+        hasSuggestions: !!response.suggestions?.length,
+        hasUsage: !!response.usage
+      });
+
+      return response;
+    } catch (error) {
+      logger.error('AI', `AI request failed (${this.currentProvider.name}):`, error);
+      
+      // Retornar respuesta de error
+      return {
+        content: `❌ Error al procesar la solicitud con ${this.currentProvider.name}:\n\n${error instanceof Error ? error.message : String(error)}`,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
-
-    return suggestions;
   }
 
-  // Obtener información de comandos Vectrex
-  getVectrexCommands(): VectrexCommandInfo[] {
-    return VECTREX_COMMANDS;
+  /**
+   * Obtiene los proveedores disponibles
+   */
+  public getAvailableProviders() {
+    return AiProviderFactory.getAvailableProviders();
   }
 
-  getVectrexCommand(name: string): VectrexCommandInfo | undefined {
-    return VECTREX_COMMANDS.find(cmd => 
-      cmd.name.toLowerCase() === name.toLowerCase()
-    );
+  /**
+   * Prueba la conexión con un proveedor específico
+   */
+  public async testProviderConnection(type: AiProviderType, config?: AiProviderConfig): Promise<boolean> {
+    try {
+      return await AiProviderFactory.testProviderConnection(type, config);
+    } catch (error) {
+      logger.error('AI', `Connection test failed for ${type}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene los modelos disponibles para un proveedor
+   */
+  public async getProviderModels(type: AiProviderType, config?: AiProviderConfig): Promise<string[]> {
+    try {
+      return await AiProviderFactory.getProviderModels(type, config);
+    } catch (error) {
+      logger.error('AI', `Failed to get models for ${type}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Configura el proveedor actual
+   */
+  public configureCurrentProvider(config: AiProviderConfig): void {
+    if (this.currentProvider) {
+      this.currentProvider.configure(config);
+      this.currentConfig = { ...this.currentConfig, ...config };
+    }
+  }
+
+  /**
+   * Obtiene la configuración actual del proveedor
+   */
+  public getCurrentConfig(): AiProviderConfig {
+    return this.currentConfig;
+  }
+
+  /**
+   * Limpia la caché de proveedores (útil cuando cambian configs)
+   */
+  public clearProvidersCache(): void {
+    AiProviderFactory.clearCache();
+    // Recrear provider actual
+    this.switchProvider(this.currentProviderType, this.currentConfig);
   }
 }
 
+// Instancia singleton del servicio
 export const aiService = new AiService();
-export default aiService;

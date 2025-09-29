@@ -1,23 +1,71 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../../state/editorStore';
-import type { AiMessage, AiProvider, AiCommand, VectrexCommandInfo } from '../../types/ai';
+import type { AiMessage } from '../../types/ai';
+import type { AiProviderType, AiProviderConfig } from '../../types/aiProvider';
 import { aiService } from '../../services/aiService';
 import { logger } from '../../utils/logger';
+
+// Base de conocimiento de comandos Vectrex
+const VECTREX_COMMANDS = [
+  {
+    name: 'MOVE',
+    syntax: 'MOVE(x, y)',
+    description: 'Mueve el haz electrónico a coordenadas absolutas',
+    example: 'MOVE(0, 0)  # Mueve al centro de la pantalla',
+    category: 'movement'
+  },
+  {
+    name: 'DRAW_LINE',
+    syntax: 'DRAW_LINE(dx, dy)',
+    description: 'Dibuja una línea desde la posición actual',
+    example: 'DRAW_LINE(50, 50)  # Línea diagonal',
+    category: 'drawing'
+  },
+  {
+    name: 'INTENSITY',
+    syntax: 'INTENSITY(value)',
+    description: 'Establece la intensidad del haz (0-255)',
+    example: 'INTENSITY(255)  # Máxima intensidad',
+    category: 'intensity'
+  },
+  {
+    name: 'PRINT_TEXT',
+    syntax: 'PRINT_TEXT(x, y, text)',
+    description: 'Muestra texto en pantalla usando la fuente del Vectrex',
+    example: 'PRINT_TEXT(-50, 60, "HELLO WORLD")',
+    category: 'text'
+  },
+  {
+    name: 'ORIGIN',
+    syntax: 'ORIGIN()',
+    description: 'Resetea la posición de referencia al centro (0,0)',
+    example: 'ORIGIN()  # Reset al centro',
+    category: 'control'
+  }
+];
 
 export const AiAssistantPanel: React.FC = () => {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [aiProvider, setAiProvider] = useState<AiProvider>({
-    name: 'Mock',
-    enabled: false,
-    apiKey: ''
+  
+  // Load persisted settings
+  const [currentProviderType, setCurrentProviderType] = useState<AiProviderType>(() => {
+    const saved = localStorage.getItem('pypilot_provider');
+    return (saved as AiProviderType) || 'mock';
   });
+  
+  const [providerConfig, setProviderConfig] = useState<AiProviderConfig>(() => {
+    const saved = localStorage.getItem(`pypilot_config_${currentProviderType}`);
+    return saved ? JSON.parse(saved) : {};
+  });
+  
   const [showSettings, setShowSettings] = useState(false);
-  const [autoContext, setAutoContext] = useState(true);
   const [manualContext, setManualContext] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -29,10 +77,85 @@ export const AiAssistantPanel: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Persist settings
+  useEffect(() => {
+    localStorage.setItem('pypilot_provider', currentProviderType);
+  }, [currentProviderType]);
+
+  // Load provider-specific config when provider changes
+  useEffect(() => {
+    const saved = localStorage.getItem(`pypilot_config_${currentProviderType}`);
+    const loadedConfig = saved ? JSON.parse(saved) : {};
+    console.log('📂 Loading config for provider:', currentProviderType, loadedConfig);
+    setProviderConfig(loadedConfig);
+  }, [currentProviderType]);
+
+  // Persist provider-specific config
+  useEffect(() => {
+    localStorage.setItem(`pypilot_config_${currentProviderType}`, JSON.stringify(providerConfig));
+  }, [providerConfig, currentProviderType]);
+
   // Sync provider with AI service
   useEffect(() => {
-    aiService.setProvider(aiProvider);
-  }, [aiProvider]);
+    console.log('Syncing provider:', currentProviderType, 'with config:', providerConfig);
+    aiService.switchProvider(currentProviderType, providerConfig);
+  }, [currentProviderType, providerConfig]);
+
+  // Load available models when provider or config changes
+  useEffect(() => {
+    const loadModels = async () => {
+      console.log('🔄 Loading models for provider:', currentProviderType, 'with config:', {
+        hasApiKey: !!providerConfig.apiKey,
+        apiKeyLength: providerConfig.apiKey?.length
+      });
+      
+      if (currentProviderType === 'mock') {
+        setAvailableModels([]);
+        return;
+      }
+
+      setIsLoadingModels(true);
+      try {
+        const models = await aiService.getProviderModels(currentProviderType, providerConfig);
+        console.log('✅ Models loaded:', models);
+        setAvailableModels(models);
+        
+        // Set default model if none selected
+        if (!providerConfig.model && models.length > 0) {
+          const defaultModel = getDefaultModelForProvider(currentProviderType, models);
+          console.log('🎯 Setting default model:', defaultModel);
+          setProviderConfig(prev => ({ ...prev, model: defaultModel }));
+        }
+      } catch (error) {
+        console.error('❌ Failed to load models:', error);
+        logger.error('AI', 'Failed to load models:', error);
+        setAvailableModels([]);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    loadModels();
+  }, [currentProviderType, providerConfig.apiKey]);
+
+  // Helper function to get default model for each provider
+  const getDefaultModelForProvider = (type: AiProviderType, models: string[]): string => {
+    const defaults: Record<AiProviderType, string[]> = {
+      'mock': [],
+      'github': ['gpt-4o', 'claude-3-5-sonnet', 'gpt-4o-mini'],
+      'openai': ['gpt-4o', 'gpt-4o-mini'],
+      'anthropic': ['claude-3-5-sonnet', 'claude-3-haiku'],
+      'deepseek': ['deepseek-chat', 'deepseek-coder'],
+      'groq': ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+    };
+
+    const preferred = defaults[type] || [];
+    for (const pref of preferred) {
+      if (models.includes(pref)) return pref;
+    }
+    
+    return models[0] || '';
+  };
 
   // Get current editor context
   const getCurrentContext = () => {
@@ -57,8 +180,8 @@ export const AiAssistantPanel: React.FC = () => {
       context.selectedCode = selectedCode;
     }
     
-    // Auto-attach document content as context if enabled
-    if (autoContext && doc.content) {
+    // Auto-attach document content as context (always enabled)
+    if (doc.content) {
       context.documentContent = doc.content;
       context.documentLength = doc.content.length;
     }
@@ -82,10 +205,6 @@ export const AiAssistantPanel: React.FC = () => {
     
     if (context.selectedCode) {
       items.push(`✂️ Selección (${context.selectedCode.length} chars)`);
-    }
-    
-    if (autoContext && context.documentContent) {
-      items.push(`📋 Documento (${context.documentLength} chars)`);
     }
     
     if (context.manualContext) {
@@ -334,8 +453,8 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
   const getVectrexHelp = async (command: string) => {
     if (!command) {
       // Show all available commands
-      const commands = aiService.getVectrexCommands();
-      const commandsList = commands.map(cmd => `• **${cmd.name}** - ${cmd.description}`).join('\n');
+      const commands = VECTREX_COMMANDS;
+      const commandsList = commands.map((cmd: any) => `• **${cmd.name}** - ${cmd.description}`).join('\n');
       
       addMessage('assistant', `📚 **Comandos Vectrex disponibles:**
 
@@ -348,7 +467,7 @@ ${commandsList}
       return;
     }
 
-    const cmdInfo = aiService.getVectrexCommand(command);
+    const cmdInfo = VECTREX_COMMANDS.find(cmd => cmd.name.toUpperCase() === command.toUpperCase());
     
     if (cmdInfo) {
       addMessage('assistant', `📚 **Comando Vectrex: ${cmdInfo.name}**
@@ -366,8 +485,8 @@ ${cmdInfo.example}
 
 💡 **Tip:** Los comandos de dibujo del Vectrex usan coordenadas relativas al centro de la pantalla (0,0).`);
     } else {
-      const commands = aiService.getVectrexCommands();
-      const commandNames = commands.map(cmd => cmd.name).join(', ');
+      const commands = VECTREX_COMMANDS;
+      const commandNames = commands.map((cmd: any) => cmd.name).join(', ');
       
       addMessage('assistant', `❓ Comando "${command.toUpperCase()}" no encontrado.
 
@@ -443,12 +562,12 @@ def main():
           <span style={{ fontWeight: '600' }}>PyPilot</span>
           <span style={{ 
             fontSize: '11px', 
-            background: aiProvider.enabled ? '#10b981' : '#6b7280',
+            background: aiService.isConfigured() ? '#10b981' : '#6b7280',
             color: 'white',
             padding: '2px 6px',
             borderRadius: '10px'
           }}>
-            {aiProvider.enabled ? 'Activo' : 'Mock'}
+            {aiService.isConfigured() ? aiService.getCurrentProvider()?.name : 'Mock'}
           </span>
         </div>
         
@@ -471,67 +590,224 @@ def main():
       {/* Settings Panel */}
       {showSettings && (
         <div style={{ 
-          padding: '16px', 
+          padding: '12px', 
           borderBottom: '1px solid #3c3c3c',
-          background: '#252526'
+          background: '#252526',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflow: 'hidden'
         }}>
           <div style={{ marginBottom: '12px', fontWeight: '600' }}>⚙️ Configuración IA</div>
           
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '8px',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
               Proveedor:
             </label>
             <select 
-              value={aiProvider.name}
-              onChange={(e) => setAiProvider(prev => ({ 
-                ...prev, 
-                name: e.target.value as AiProvider['name']
-              }))}
+              value={currentProviderType}
+              onChange={(e) => {
+                const newProvider = e.target.value as AiProviderType;
+                console.log('Provider changed from', currentProviderType, 'to', newProvider);
+                console.log('Current config before change:', providerConfig);
+                setCurrentProviderType(newProvider);
+              }}
               style={{
                 background: '#1e1e1e',
                 border: '1px solid #3c3c3c',
                 color: '#cccccc',
                 padding: '4px 8px',
                 borderRadius: '4px',
-                width: '100%'
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                fontSize: '12px'
               }}
             >
-              <option value="OpenAI">OpenAI GPT</option>
-              <option value="Anthropic">Anthropic Claude</option>
-              <option value="Local">Local LLM</option>
-              <option value="Mock">Mock (Testing)</option>
+              <option value="mock">Mock (Testing)</option>
+              <option value="deepseek">DeepSeek (Free)</option>
+              <option value="groq">Groq (Free & Fast)</option>
+              <option value="github">GitHub Models (Copilot)</option>
+              <option value="openai">OpenAI GPT</option>
+              <option value="anthropic">Anthropic Claude</option>
             </select>
           </div>
           
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
-              API Key:
-            </label>
-            <input
-              type="password"
-              value={aiProvider.apiKey}
-              onChange={(e) => setAiProvider(prev => ({ ...prev, apiKey: e.target.value }))}
-              placeholder="sk-..."
-              style={{
-                background: '#1e1e1e',
-                border: '1px solid #3c3c3c',
-                color: '#cccccc',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                width: '100%'
-              }}
-            />
-          </div>
+          {currentProviderType !== 'mock' && (
+            <>
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+                  API Key:
+                </label>
+                <input
+                  type="password"
+                  value={providerConfig.apiKey || ''}
+                  onChange={(e) => {
+                    const newApiKey = e.target.value;
+                    console.log('🔑 API Key input changed:', {
+                      newValue: newApiKey.substring(0, 10) + '...',
+                      length: newApiKey.length,
+                      currentProvider: currentProviderType
+                    });
+                    
+                    setProviderConfig(prev => {
+                      const newConfig = { ...prev, apiKey: newApiKey };
+                      console.log('🔄 Setting new config:', {
+                        ...newConfig,
+                        apiKey: newConfig.apiKey?.substring(0, 10) + '...'
+                      });
+                      return newConfig;
+                    });
+                  }}
+                  placeholder={currentProviderType === 'groq' ? 'gsk_...' : currentProviderType === 'github' ? 'github_pat_...' : 'sk-...'}
+                  style={{
+                    background: '#1e1e1e',
+                    border: '1px solid #3c3c3c',
+                    color: '#cccccc',
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    width: '100%',
+                    maxWidth: '100%',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                  onFocus={(e) => {
+                    console.log('🔑 API Key field focused');
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    console.log('🔑 API Key field clicked');
+                    e.stopPropagation();
+                    e.currentTarget.focus();
+                  }}
+                />
+              </div>
+              
+              {availableModels.length > 0 && (
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+                    Modelo:
+                    {isLoadingModels && <span style={{ color: '#6b7280', marginLeft: '8px' }}>Cargando...</span>}
+                  </label>
+                  <select
+                    value={providerConfig.model || ''}
+                    onChange={(e) => setProviderConfig(prev => ({ ...prev, model: e.target.value }))}
+                    disabled={isLoadingModels}
+                    style={{
+                      background: '#1e1e1e',
+                      border: '1px solid #3c3c3c',
+                      color: '#cccccc',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      width: '100%',
+                      opacity: isLoadingModels ? 0.6 : 1
+                    }}
+                  >
+                    <option value="">Seleccionar modelo...</option>
+                    {availableModels.map(model => (
+                      <option key={model} value={model}>
+                        {model}
+                        {model.includes('gpt-5') && ' ⭐ (Nuevo)'}
+                        {model.includes('claude-4') && ' ⭐ (Nuevo)'}
+                        {model.includes('gpt-4o') && !model.includes('mini') && ' 🚀 (Recomendado)'}
+                        {model.includes('mini') && ' ⚡ (Rápido)'}
+                        {model.includes('free') && ' 🆓 (Gratis)'}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {providerConfig.model && (
+                    <div style={{ 
+                      fontSize: '10px', 
+                      color: '#6b7280', 
+                      marginTop: '4px',
+                      fontStyle: 'italic'
+                    }}>
+                      Modelo seleccionado: {providerConfig.model}
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={async () => {
+                      setIsLoadingModels(true);
+                      try {
+                        const models = await aiService.getProviderModels(currentProviderType, providerConfig);
+                        setAvailableModels(models);
+                      } catch (error) {
+                        logger.error('AI', 'Failed to reload models:', error);
+                      } finally {
+                        setIsLoadingModels(false);
+                      }
+                    }}
+                    disabled={isLoadingModels || !providerConfig.apiKey}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid #3c3c3c',
+                      color: '#cccccc',
+                      padding: '2px 8px',
+                      borderRadius: '3px',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      marginTop: '4px',
+                      opacity: isLoadingModels || !providerConfig.apiKey ? 0.5 : 1
+                    }}
+                  >
+                    🔄 {isLoadingModels ? 'Cargando...' : 'Recargar modelos'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button
-              onClick={() => {
-                setAiProvider(prev => ({ 
-                  ...prev, 
-                  enabled: (prev.apiKey || '').length > 0 
-                }));
+              onClick={async () => {
+                // Test connection for non-mock providers
+                if (currentProviderType !== 'mock') {
+                  console.log('Testing connection for provider:', currentProviderType);
+                  console.log('Provider config:', {
+                    hasApiKey: !!providerConfig.apiKey,
+                    apiKeyStart: providerConfig.apiKey?.substring(0, 10) + '...',
+                    model: providerConfig.model,
+                    endpoint: providerConfig.endpoint
+                  });
+                  
+                  try {
+                    const isConnected = await aiService.testProviderConnection(currentProviderType, providerConfig);
+                    console.log('Connection test result:', isConnected);
+                    
+                    if (!isConnected) {
+                      alert(`❌ Failed to connect to ${currentProviderType}.
+
+Possible issues:
+• Check your API key is correct
+• Verify you have access to the service
+• For GitHub Models: may be in limited beta
+• For Groq: get free API key at console.groq.com
+• Try a different provider (Groq/DeepSeek are free)
+
+Check browser console for detailed error messages.`);
+                      return;
+                    } else {
+                      alert(`✅ Successfully connected to ${currentProviderType}!`);
+                    }
+                  } catch (error) {
+                    console.error('Connection test error:', error);
+                    alert(`❌ Error testing connection: ${error}`);
+                    return;
+                  }
+                }
                 setShowSettings(false);
-                logger.info('AI', 'AI provider configured:', aiProvider.name);
+                logger.info('AI', 'AI provider configured:', currentProviderType);
               }}
               style={{
                 background: '#0e639c',
@@ -559,6 +835,7 @@ def main():
             >
               Cancelar
             </button>
+          </div>
           </div>
         </div>
       )}
@@ -684,15 +961,6 @@ def main():
         }}>
           <span>📎 Contexto: {getContextPreview()}</span>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={autoContext}
-                onChange={(e) => setAutoContext(e.target.checked)}
-                style={{ margin: 0 }}
-              />
-              <span>Auto-contexto</span>
-            </label>
             <button
               onClick={() => {
                 const context = prompt('Añadir contexto manual:', manualContext);
@@ -764,10 +1032,6 @@ def main():
           color: '#6b7280',
           marginTop: '8px'
         }}>
-          <div>⌨️ Enter para enviar • Shift+Enter para nueva línea • /help para comandos</div>
-          <div style={{ marginTop: '2px' }}>
-            📎 Auto-contexto incluye archivo activo • 📎 Adjuntar para contexto manual
-          </div>
         </div>
       </div>
     </div>
