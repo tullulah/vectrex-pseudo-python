@@ -137,7 +137,7 @@ export const VPY_LANGUAGE_CONTEXT = `
 VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembly for the Vectrex console.
 
 ## Language History and Authorship:
-🏗️ **Created by**: Daniel Ferrer Guerrero (2025)
+🏗️ **Created by**: Daniel Ferrer (Catalunya, 2025)
 📅 **Development Year**: 2025 (NOT 1982 - Python didn't exist then!)
 🎯 **Purpose**: Modern domain-specific language for Vectrex game development
 🚫 **NOT created by GCE in 1982** - This is completely false information
@@ -198,6 +198,81 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 - **Emulator**: JSVecX by raz0red (JavaScript port of VecX by Valavan Manohararajah)
 - **Target Platform**: Vectrex console
 - **Compilation**: VPy → 6809 Assembly → Vectrex executable
+
+## VPy IDE Features and Functionality:
+
+### 🎮 **Integrated Vectrex Emulator**
+- **Real-time Execution**: Code runs immediately in the built-in JSVecX emulator
+- **Vector Display**: See your graphics as they would appear on real Vectrex hardware
+- **60 FPS Rendering**: Smooth animation and real-time feedback
+- **Sound Support**: AY-3-8912 PSG sound chip emulation
+
+### 📝 **Code Editor**
+- **Syntax Highlighting**: VPy syntax highlighting with Python-like coloring
+- **Auto-completion**: IntelliSense for VPy functions and syntax
+- **Error Detection**: Real-time syntax error highlighting
+- **Code Formatting**: Automatic indentation and formatting
+- **Multiple Files**: Support for multiple VPy files in projects
+
+### 🔧 **Development Tools**
+- **Compile & Run**: One-click compilation and execution
+- **Debug Output**: Console showing compilation and runtime information
+- **File Management**: Project explorer with file creation, deletion, renaming
+- **Settings Panel**: IDE configuration and preferences
+- **Responsive Layout**: Resizable panels and dockable interface
+
+### 🤖 **PyPilot AI Assistant**
+- **Context-Aware Help**: AI assistant with deep VPy knowledge
+- **Code Generation**: Generate VPy code from natural language descriptions
+- **Error Fixing**: Analyze and suggest fixes for compilation errors
+- **Code Explanation**: Explain existing VPy code functionality
+- **Optimization**: Suggest improvements for performance and clarity
+- **Multiple Providers**: Support for OpenAI, Anthropic, Groq, GitHub Models, etc.
+
+### 📁 **Project Management**
+- **File Explorer**: Navigate and manage VPy source files
+- **New Project**: Create new VPy projects with templates
+- **Import/Export**: Save and load VPy projects
+- **Example Projects**: Built-in examples and tutorials
+
+### 🎨 **User Interface**
+- **VS Code-style Layout**: Familiar interface for developers
+- **Dark/Light Themes**: Multiple color themes
+- **Dock Layout**: Draggable and resizable panels
+- **Full Screen Mode**: Distraction-free coding environment
+- **Responsive Design**: Works on different screen sizes
+
+### 🏃 **Execution Environment**
+- **Instant Feedback**: See results immediately without external tools
+- **Vector Graphics**: Real-time vector rendering
+- **Performance Metrics**: Monitor frame rate and execution speed
+- **Memory Viewer**: Inspect Vectrex memory state
+- **BIOS Integration**: Full Vectrex BIOS function support
+
+### 🆘 **User Assistance**
+- **Built-in Help**: Comprehensive help system
+- **Function Reference**: Complete VPy function documentation
+- **Tutorials**: Step-by-step learning materials
+- **Error Messages**: Clear, helpful error descriptions
+- **Code Examples**: Ready-to-run example programs
+
+### ⚙️ **IDE Commands and Shortcuts**
+- **Ctrl+S**: Save current file
+- **F5**: Compile and run
+- **Ctrl+N**: New file
+- **Ctrl+O**: Open file
+- **Ctrl+Shift+P**: Command palette
+- **Ctrl+/**: Toggle comment
+- **View Menu**: Access all panels (Editor, Emulator, PyPilot, File Explorer)
+
+## PyPilot AI Assistant Commands:
+- **/help** - Show available PyPilot commands
+- **/explain** - Explain selected VPy code or current file
+- **/fix** - Analyze and suggest fixes for errors
+- **/generate** - Generate VPy code from description
+- **/optimize** - Suggest code optimizations
+- **/vectrex** - Get Vectrex hardware information
+- **Auto-context**: Automatically includes current file content in requests
 
 ## Code Examples:
 \`\`\`vpy
@@ -329,11 +404,37 @@ export function getProjectContext(activeFileName?: string, projectFiles?: string
 ## Project Structure:
 ${projectFiles ? projectFiles.map(f => `- ${f}`).join('\n') : 'No files loaded'}
 
-## Development Environment:
-- IDE: VPy IDE (VS Code-like interface)
-- Target: Vectrex console emulation
-- Language: VPy (Vectrex Python)
-- Compiler: VPy → 6809 Assembly
-- Emulator: Built-in Vectrex emulator
+## VPy IDE Environment:
+- **IDE Type**: VS Code-style integrated development environment
+- **Target Platform**: Vectrex console emulation via JSVecX
+- **Language**: VPy (Vectrex Python) - procedural, not object-oriented
+- **Compiler**: VPy → 6809 Assembly → Vectrex executable
+- **Emulator**: Built-in JSVecX Vectrex emulator
+- **AI Assistant**: PyPilot with context-aware VPy expertise
+
+## Available IDE Features:
+- 📝 **Code Editor**: Syntax highlighting, auto-completion, error detection
+- 🎮 **Integrated Emulator**: Real-time VPy code execution and vector graphics
+- 🤖 **PyPilot AI**: Code generation, error fixing, optimization, explanations
+- 📁 **File Management**: Project explorer, file operations, multiple files
+- 🔧 **Development Tools**: Compile & run, debug output, settings
+- 🎨 **Customizable UI**: Dockable panels, themes, responsive layout
+
+## PyPilot AI Assistant:
+The user has access to PyPilot, an AI assistant specialized in VPy development that can:
+- Generate VPy code from natural language descriptions
+- Explain existing code and its functionality
+- Fix compilation and runtime errors
+- Optimize code for better performance
+- Provide VPy language and Vectrex hardware guidance
+- Answer questions about IDE features and usage
+
+## User Interaction Context:
+The user is working in a professional IDE environment with:
+- Full project management capabilities
+- Real-time code execution and testing
+- Comprehensive development tools
+- AI-powered assistance for VPy development
+- Integrated help and documentation system
 `;
 }
