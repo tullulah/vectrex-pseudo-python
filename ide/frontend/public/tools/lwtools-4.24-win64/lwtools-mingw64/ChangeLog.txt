@@ -1,0 +1,3072 @@
+changeset:   600:65829633d3c2
+user:        William Astle <lost@l-w.ca>
+date:        Fri Apr 18 00:09:51 2025 -0600
+summary:     Added tag lwtools-4.24 for changeset 0baeffe2747f
+
+changeset:   599:0baeffe2747f
+tag:         lwtools-4.24
+user:        William Astle <lost@l-w.ca>
+date:        Fri Apr 18 00:07:54 2025 -0600
+summary:     Mark for version 4.24 release
+
+changeset:   598:03dc4517c8af
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 07 20:15:28 2025 -0700
+summary:     Fix leak of potential errors and warnings in temporary line structures
+
+changeset:   597:89aa4c003a13
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 07 20:03:08 2025 -0700
+summary:     Fix memory leak parsing link scripts
+
+changeset:   596:81e8ce66869c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 07 19:57:13 2025 -0700
+summary:     Do some proper cleanup when generating the map
+
+changeset:   595:bffdf797bddc
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 07 19:55:49 2025 -0700
+summary:     Add missing destructor call in indexed instruction handler
+
+changeset:   594:ba4cd12b8bc0
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 03 10:37:48 2025 -0700
+summary:     Add updated gcc6809 patch for building on Debian Trixie
+
+changeset:   593:065a40e1aca0
+user:        William Astle <lost@l-w.ca>
+date:        Tue Dec 31 15:21:20 2024 -0700
+summary:     Add relational operators to lwasm and lwlink
+
+changeset:   592:2e428b121874
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 05 14:13:42 2024 -0700
+summary:     Allow commas between flags in flag list instructions
+
+changeset:   591:c5915238987b
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 04 23:27:18 2024 -0700
+summary:     Add flag letter based variant for ANDCC/ORCC/CWAI
+
+changeset:   590:b99365647308
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 29 16:37:44 2024 -0700
+summary:     Initial implementation of PHASE/DEPHASE
+
+changeset:   589:e8f1d126cf0b
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 29 15:53:33 2024 -0700
+summary:     Mention the basic output target in the manual
+
+changeset:   588:4dfbd8dd1f5e
+user:        William Astle <lost@l-w.ca>
+date:        Wed Nov 27 16:15:52 2024 -0700
+summary:     Allow relative ORG to work
+
+changeset:   587:287bdb362a3a
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 22 00:04:00 2024 -0700
+summary:     Fix out of bounds access in raw output handler
+
+changeset:   586:4b8481a126aa
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 22 00:00:19 2024 -0700
+summary:     Fix memory leak handling constant sections
+
+changeset:   585:075e4102f7eb
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 21 23:54:33 2024 -0700
+summary:     Actually free filename in includebin
+
+changeset:   584:1d3b2f80e2c2
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 19 00:08:59 2024 -0700
+summary:     Correct several indexed cycle counts
+
+changeset:   583:000381ee2d5c
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 04 23:48:23 2024 -0700
+summary:     Guard against single operand multiplication when detecting like terms
+
+changeset:   582:1ede8f8621cf
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 08 13:46:19 2024 -0600
+summary:     Actually treat "0b" as 0 since it matches the "b" suffix for binary numbers
+
+changeset:   581:10f8fc64481d
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 08 13:40:00 2024 -0600
+summary:     Fix a slight error in cases where 0b is present but not followed by 0 or 1
+
+changeset:   580:27f4ec60a52d
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 08 13:38:11 2024 -0600
+summary:     Add version tag for ongoing development
+
+changeset:   579:6c98b5654eb7
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 03 22:22:27 2024 -0600
+summary:     Added tag lwtools-4.23 for changeset ff5a5ce952f1
+
+changeset:   578:ff5a5ce952f1
+tag:         lwtools-4.23
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 03 22:22:07 2024 -0600
+summary:     Bump version in preparation for release
+
+changeset:   577:e49d24f4a9a5
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 03 14:30:06 2024 -0600
+summary:     Correct bug in the object file output code leading to stack corruption
+
+changeset:   576:40edb7de3857
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jul 12 23:02:57 2024 -0600
+summary:     Add 0b and 0B as a prefix for binary constants
+
+changeset:   575:d562ecd3ffd8
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jun 05 11:40:38 2024 -0600
+summary:     Fix typo in manual
+
+changeset:   574:a0c9433dc0d4
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 04 10:10:38 2024 -0700
+summary:     Updated submission guidelines including notes about evangelism. TLDR: Don't.
+
+changeset:   573:0ae10ecfba1e
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 02 14:39:27 2024 -0700
+summary:     Make filename in listing left truncate so file name isn't hidden
+
+changeset:   572:de527b99d881
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 22 21:59:41 2023 -0700
+summary:     Mark development version.
+
+changeset:   571:2ac2d447a2fa
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 22 21:59:18 2023 -0700
+summary:     Remove unused variable definition.
+
+changeset:   570:799501f3fd66
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 22 21:03:38 2023 -0700
+summary:     Added tag lwtools-4.22 for changeset 37014b2935bf
+
+changeset:   569:37014b2935bf
+tag:         lwtools-4.22
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 22 21:03:18 2023 -0700
+summary:     Bump version in preparation for release
+
+changeset:   568:b549a3a417a9
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 21 22:31:53 2023 -0700
+summary:     Fix some additional glitches in implementation of includebin offset/length
+
+changeset:   567:71ba873a0ec6
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 21 22:23:39 2023 -0700
+summary:     Allow non-quoted file names to have offset/length for includebin
+
+changeset:   566:d746a52e00db
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 21 22:20:05 2023 -0700
+summary:     Correct typo in previous commit for includebin
+
+changeset:   565:fc072f6cde09
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 21 22:16:12 2023 -0700
+summary:     Update documentation to reflect includebin offset/length feature
+
+changeset:   564:87f904e2b304
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 21 22:14:25 2023 -0700
+summary:     Add offset and length operands (optional) to includebin
+
+changeset:   563:8c6c3363e18e
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 01 21:16:54 2023 -0700
+summary:     Update manual to reflect pragma nolistcode and correct nolist semantics
+
+changeset:   562:6237505ee1dc
+user:        William Astle <lost@l-w.ca>
+date:        Fri Dec 01 21:11:56 2023 -0700
+summary:     Add pragma nolistcode which works like nolist but also suppresses code lines
+
+changeset:   561:a6a9d46f071f
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 30 16:54:12 2023 -0700
+summary:     Make ifdef and ifndef complain if they aren't given a symbol
+
+changeset:   560:dba08c7dff96
+user:        William Astle <lost@l-w.ca>
+date:        Fri Sep 22 12:15:09 2023 -0600
+summary:     Fix off by one handling MOD directive optional arguments
+
+changeset:   559:ddc7b05a5675
+user:        William Astle <lost@l-w.ca>
+date:        Thu Sep 21 13:13:23 2023 -0600
+summary:     Add --no-warn=ifp1 flag to suppress warnings about ifp1 and ipf2
+
+changeset:   558:7fb2047ccdee
+user:        William Astle <lost@l-w.ca>
+date:        Fri Sep 08 00:35:43 2023 -0600
+summary:     Flag version number to indicate ongoing development
+
+changeset:   557:b2ee86298516
+user:        William Astle <lost@l-w.ca>
+date:        Fri Sep 08 00:35:11 2023 -0600
+summary:     Reduce default optimization level to -O2
+
+changeset:   556:928c033c0cd0
+user:        William Astle <lost@l-w.ca>
+date:        Fri Sep 08 00:32:40 2023 -0600
+summary:     Allow MOD directive to accept only the standard base header parameters
+
+changeset:   555:bbc600db5016
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 23 17:07:58 2023 -0600
+summary:     Add \Ln and {Ln} standing for the length of the specified argument in macros
+
+changeset:   554:7627d2b3b81f
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 23 16:42:29 2023 -0600
+summary:     Allow using - to refer to standard input for file names
+
+changeset:   553:3a173cefc814
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jul 06 12:06:22 2023 -0600
+summary:     Fix missing NULL guard found by gcc static analysis
+
+changeset:   552:f9ffd1935cee
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jun 30 09:40:17 2023 -0600
+summary:     Add explicit immediate mode to register list instructions (PSHS, etc.)
+
+changeset:   551:4ec5c94ade71
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 23 10:23:43 2023 -0600
+summary:     Added tag lwtools-4.21 for changeset c71c80a3b280
+
+changeset:   550:c71c80a3b280
+tag:         lwtools-4.21
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 23 10:22:40 2023 -0600
+summary:     Bump version in preparation for release
+
+changeset:   549:ee3e52ab2288
+user:        William Astle <lost@l-w.ca>
+date:        Tue Mar 21 14:26:00 2023 -0600
+summary:     Remove unneeded variable reference lexing string literals (lwcc)
+
+changeset:   548:cde1a5a48636
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 16 16:59:50 2023 -0600
+summary:     Add IHEX output format to lwlink
+
+changeset:   547:33e37b3d98cf
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 16 16:18:13 2023 -0600
+summary:     Don't build snprintf() emulation on modern enough MSVC
+
+changeset:   546:80b21c6b4a6b
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 16 16:03:20 2023 -0600
+summary:     Disable building all the lwcc binaries except lwcpp by default
+
+changeset:   545:1fa6eca684e5
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 16 16:02:01 2023 -0600
+summary:     Silence spurious warning in lwcpp build
+
+changeset:   544:f12c767c363e
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 14 18:01:32 2022 -0700
+summary:     Fix typo in manual.
+
+changeset:   543:e10618b48e68
+user:        William Astle <lost@l-w.ca>
+date:        Thu Sep 29 13:59:42 2022 -0600
+summary:     Implement support for dragon format binaries
+
+changeset:   542:f3018ed5e30e
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 17:06:30 2022 -0600
+summary:     Fix listing to not rely on undefined memory before the start of instab
+
+changeset:   541:5fb1110c043f
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 17:05:01 2022 -0600
+summary:     Update version number to reflect ongoing development
+
+changeset:   540:98d68c27f610
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 16:50:53 2022 -0600
+summary:     Added tag lwtools-4.20 for changeset 0b0f4d5339f9
+
+changeset:   539:0b0f4d5339f9
+tag:         lwtools-4.20
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 16:49:37 2022 -0600
+summary:     Bump version in preparation for release
+
+changeset:   538:5f10e1913d1a
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 16:35:13 2022 -0600
+summary:     Fix syntax in ignore file
+
+changeset:   537:3f81d8b11e5b
+user:        William Astle <lost@l-w.ca>
+date:        Wed Aug 17 16:34:28 2022 -0600
+summary:     Improve debug instrumentation for symbol registration
+
+changeset:   536:33a59e232a5b
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jun 16 13:55:34 2022 -0600
+summary:     Fix basic output target to keep lines below 249 characters
+
+changeset:   535:a584b9ddffc4
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 14 21:30:59 2022 -0600
+summary:     Update raw output to work with RMB only definitions at the start
+
+changeset:   534:558ee362437e
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 14 13:05:43 2022 -0600
+summary:     Explicitly check for number (leading digit) for entry symbols (lwlink)
+
+changeset:   533:543b5d1341d2
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 14 12:57:50 2022 -0600
+summary:     Add note to manual about numeric entry addresses in scripts
+
+changeset:   532:b8e9ac01deda
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 14 12:28:44 2022 -0600
+summary:     Fix base for entry directive in link scripts to use base 16
+
+changeset:   531:a812bb4d3a51
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 18 16:58:40 2022 -0600
+summary:     Correct raw output target in lwasm to NUL pad RMBs
+
+changeset:   530:65c2085e0398
+user:        William Astle <lost@l-w.ca>
+date:        Wed Mar 09 15:56:03 2022 -0700
+summary:     Don't rely on undefined memory before start of instab
+
+changeset:   529:428039e88a0b
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 09 21:44:28 2022 -0700
+summary:     Fix macro definition to include all lines
+
+changeset:   528:4536f0e61425
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jan 30 14:13:34 2022 -0700
+summary:     Add \# macro expansion which expands to the number of arguments
+
+changeset:   527:2c4d11da2afe
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jan 30 14:12:40 2022 -0700
+summary:     Tag version number to mark ongoing development
+
+changeset:   526:2d15c94fbcfa
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 25 21:36:31 2022 -0700
+summary:     Added tag lwtools-4.19 for changeset 28633fd513c4
+
+changeset:   525:28633fd513c4
+tag:         lwtools-4.19
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 25 21:31:38 2022 -0700
+summary:     Bump version number in preparation for release
+
+changeset:   524:a4a58c4c7a41
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 25 21:25:12 2022 -0700
+summary:     Fix parsing {} macro argument expansion sequences
+
+changeset:   523:1744f2d1a821
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jan 24 13:55:40 2022 -0700
+summary:     Change behaviour of --format=raw; old behaviour kept for --format=raw2
+
+changeset:   522:01bdad2118aa
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jan 02 00:59:21 2022 -0700
+summary:     Fix instruction length calculation for TFM compatibility operations
+
+changeset:   521:56c32bc798f8
+user:        William Astle <lost@l-w.ca>
+date:        Sun Dec 19 17:46:02 2021 -0700
+summary:     Fix argument parsing problems with IFSTR
+
+changeset:   520:63450eb68f45
+user:        William Astle <lost@l-w.ca>
+date:        Sun Dec 19 17:09:15 2021 -0700
+summary:     Update version string to reflect ongoing development
+
+changeset:   519:724bcc4508bc
+user:        William Astle <lost@l-w.ca>
+date:        Sun Dec 19 17:01:42 2021 -0700
+summary:     Add SETSTR/INCLUDESTR for some basic code building
+
+changeset:   518:b530ff19f7c0
+user:        William Astle <lost@l-w.ca>
+date:        Tue Apr 13 15:41:23 2021 -0600
+summary:     Update copyright years for manual
+
+changeset:   517:1faf14de9d04
+user:        William Astle <lost@l-w.ca>
+date:        Tue Apr 13 15:38:12 2021 -0600
+summary:     Update manual to correctly reflect forwardrefmax behaviour
+
+changeset:   516:c33b4abff860
+user:        William Astle <lost@l-w.ca>
+date:        Thu Feb 11 09:25:16 2021 -0700
+summary:     Fix bug related to parsing \x sequences under pragma cstrings
+
+changeset:   515:39b75a25044b
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 19 19:07:19 2021 -0700
+summary:     Added tag lwtools-4.18 for changeset 1c26076891e3
+
+changeset:   514:1c26076891e3
+tag:         lwtools-4.18
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jan 19 19:06:20 2021 -0700
+summary:     Bump version in preparation for release
+
+changeset:   513:1260b4eec5a5
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 24 23:52:23 2020 -0600
+summary:     Add **pragma which always suppresses listing itself
+
+changeset:   512:7e41d6123175
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jul 04 16:21:08 2020 -0600
+summary:     Make conditional suppression actually hide comments and blank lines
+
+changeset:   511:4f6b2c615818
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jun 02 21:54:10 2020 -0600
+summary:     Remove stray debugging message.
+
+changeset:   510:3425005b9980
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jun 02 21:28:47 2020 -0600
+summary:     Fix segfault if no instances of a section are in the final result
+
+changeset:   509:bab891d85a53
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 16 17:27:42 2020 -0600
+summary:     Allow dot at start of symbol per documentation
+
+changeset:   508:10f62dc61a75
+user:        William Astle <lost@l-w.ca>
+date:        Sun May 10 22:38:24 2020 -0600
+summary:     Fix bad usage of sprintf()
+
+changeset:   507:dd9c5cef2e80
+user:        William Astle <lost@l-w.ca>
+date:        Thu Feb 06 15:04:05 2020 -0700
+summary:     Fix missing extern declaration
+
+changeset:   506:7e8298f7bc0a
+user:        William Astle <lost@l-w.ca>
+date:        Sun Oct 27 12:06:01 2019 -0600
+summary:     Add basic syntax for typecasting
+
+changeset:   505:59b8c8b15bd4
+user:        William Astle <lost@l-w.ca>
+date:        Sat Oct 26 22:01:55 2019 -0600
+summary:     Add integer shifts and fix code template errors for mul/div/mod
+
+changeset:   504:16bd8effb2f6
+user:        William Astle <lost@l-w.ca>
+date:        Thu Oct 24 22:41:04 2019 -0600
+summary:     Update lwcc driver to actually do something useful sometimes
+
+changeset:   503:17fa03d69df3
+user:        William Astle <lost@l-w.ca>
+date:        Thu Sep 26 21:37:49 2019 -0600
+summary:     Unbork "make install"
+
+changeset:   502:14a40f8bb4eb
+user:        William Astle <lost@l-w.ca>
+date:        Wed Sep 25 20:23:49 2019 -0600
+summary:     Add various operators to lwcc
+
+changeset:   501:f3e9732973f1
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 24 22:07:56 2019 -0600
+summary:     Add basic integer operations to lwcc
+
+changeset:   500:733fd05ca2a8
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 29 17:00:17 2019 -0600
+summary:     Initialize temporary line structures properly
+
+changeset:   499:c3099c5d9d3e
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 08 23:48:18 2019 -0600
+summary:     Add very simple code generator
+
+changeset:   498:1bd2d590d734
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 08 23:32:23 2019 -0600
+summary:     Rejig parser to eliminate lemon
+
+changeset:   497:4b865c9d4371
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 05 21:38:23 2019 -0600
+summary:     Bump version to indicate development version
+
+changeset:   496:a38542cf4cc6
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 05 21:30:50 2019 -0600
+summary:     Make lwcc stuff compile (on Linux anyway)
+
+changeset:   495:5b8871fd7503
+parent:      493:6073f4a33475
+parent:      494:836dc5371980
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 05 21:27:09 2019 -0600
+summary:     Merged previous lwcc development branch into mainline.
+
+changeset:   494:836dc5371980
+branch:      ccdev
+parent:      314:a3e277c58df9
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 05 21:07:14 2019 -0600
+summary:     Remove stray semicolon that almost certainly was causing a bug of some kind.
+
+changeset:   493:6073f4a33475
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 29 21:54:43 2019 -0600
+summary:     Add FCZ as an alias for FCN
+
+changeset:   492:41ecd436f1aa
+user:        William Astle <lost@l-w.ca>
+date:        Sun May 05 09:25:30 2019 -0600
+summary:     Added tag lwtools-4.17 for changeset a83d1cdeeb61
+
+changeset:   491:a83d1cdeeb61
+tag:         lwtools-4.17
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 04 09:06:30 2019 -0600
+summary:     Bump version number for release
+
+changeset:   490:1c3220ed87a8
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 03 21:48:01 2019 -0600
+summary:     Fix missing hex sigil in symbol dump
+
+changeset:   489:52af0aa54fe5
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 03 20:06:17 2019 -0600
+summary:     Update html and pdf documentation in preparation for release
+
+changeset:   488:94bbdb2890b7
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 03 20:03:46 2019 -0600
+summary:     Update documentation for new options
+
+changeset:   487:7fbf3171ca15
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 03 19:44:02 2019 -0600
+summary:     Add symbol table dump in assembly format
+
+changeset:   486:e545196bf14f
+user:        William Astle <lost@l-w.ca>
+date:        Wed Apr 24 19:54:51 2019 -0600
+summary:     Fix cycle count for TIM
+
+changeset:   485:bf24b8c856d1
+user:        William Astle <lost@l-w.ca>
+date:        Wed Apr 24 19:53:08 2019 -0600
+summary:     Update "clrq" convenience instruction to be slightly faster
+
+changeset:   484:469a130e7029
+user:        William Astle <lost@l-w.ca>
+date:        Tue Mar 19 14:45:53 2019 -0600
+summary:     Add option to suppress output file
+
+changeset:   483:40c32a0af8c8
+user:        William Astle <lost@l-w.ca>
+date:        Tue Mar 19 14:37:56 2019 -0600
+summary:     Fix crash when --symbols specified without --list
+
+changeset:   482:9c24336fa76c
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 24 18:24:03 2019 -0700
+summary:     Correct cycle counts for W relative indexing modes
+
+changeset:   481:62720ac9e28d
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 21:18:20 2018 -0700
+summary:     Exclude extended indirect from operandsizewarning pragma
+
+changeset:   480:ceed9fb3a362
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 21:17:21 2018 -0700
+summary:     Mark version number for continued development
+
+changeset:   479:2c78ed1dd3af
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 20:01:48 2018 -0700
+summary:     Added tag lwtools-4.16 for changeset a71206ed966c
+
+changeset:   478:a71206ed966c
+tag:         lwtools-4.16
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 20:00:59 2018 -0700
+summary:     Update manual in preparation for release
+
+changeset:   477:221b8964662a
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 19:58:36 2018 -0700
+summary:     Version 4.16
+
+changeset:   476:eac8f5f0867d
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 12 19:40:16 2018 -0700
+summary:     Update operandsizewarning to detect JMP and JSR that could use BRA or BSR
+
+changeset:   475:b9917c4dc6cf
+user:        Doug Masten <doug@dougmasten.com>
+date:        Mon Dec 10 21:27:08 2018 -0700
+summary:     Fix cycle counts for asr, cmpe, cmpf and cmpw.
+
+changeset:   474:74d0c394666e
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 02 21:07:50 2018 -0600
+summary:     Add "noexpandcond" pragma (cleans up listings)
+
+changeset:   473:8181ddd707f1
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 01 23:07:03 2018 -0600
+summary:     Add "nooutput" pragma
+
+changeset:   472:e97f9a302c6a
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 01 23:00:00 2018 -0600
+summary:     Add emuext pragma and associated instructions.
+
+changeset:   471:ad0efd5835c3
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 24 17:41:04 2018 -0600
+summary:     Cause "make install" to trigger builds for the binaries if needed
+
+changeset:   470:2c1c5dd84024
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 23 17:45:18 2018 -0600
+summary:     Add << prefix to force 5 bit offsets in indexed modes
+
+changeset:   469:9393a6b8886c
+user:        William Astle <lost@l-w.ca>
+date:        Sun Mar 04 10:24:58 2018 -0700
+summary:     Fix PCR size guessing
+
+changeset:   468:7577bfee48bb
+parent:      466:51bed8c8dc53
+parent:      467:a6c9129e5948
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 01 21:31:50 2018 -0700
+summary:     Merge changeset a6c9129e5948 from lwasm5 development branch
+
+changeset:   467:a6c9129e5948
+parent:      458:3948c874901b
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 01 21:25:51 2018 -0700
+summary:     Move version header into a common direction to better reflect what it is.
+
+changeset:   466:51bed8c8dc53
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 23:35:12 2018 -0700
+summary:     Actually check if we resolved a PCR reference before assuming 8 bits
+
+changeset:   465:7370a67caf7e
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 23:31:17 2018 -0700
+summary:     Fix really dumb code generation error
+
+changeset:   464:9134f6426c57
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 23:15:35 2018 -0700
+summary:     Fix think-o in PCR optimization fix from previous commit
+
+changeset:   463:42be9eec7935
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 23:00:59 2018 -0700
+summary:     Make pcr relative forward references better able to select 8 bit offsets
+
+changeset:   462:da72c084e0ac
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 22:40:07 2018 -0700
+summary:     Add some more debugging junk.
+
+changeset:   461:c8d4f3486ad7
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 20:54:53 2018 -0700
+summary:     Make 6309/6809 warnings work again.
+
+changeset:   460:3d53f2e8d0e0
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 20:43:14 2018 -0700
+summary:     Allow macros to shadow instructions that are not supported by current CPU.
+
+changeset:   459:ed7b8f74087d
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 28 18:41:26 2018 -0700
+summary:     Fix error handling sections for lwmod target.
+
+changeset:   458:3948c874901b
+user:        William Astle <lost@l-w.ca>
+date:        Sat Feb 17 00:13:46 2018 -0700
+summary:     Make offset,R operand size warning work properly
+
+changeset:   457:7d6eacd87370
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 16 23:40:53 2018 -0700
+summary:     Make warnings still show when listings are not enabled.
+
+changeset:   456:83a124428f44
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 16 23:24:18 2018 -0700
+summary:     Cause warnings to show up in the listing output.
+
+changeset:   455:cad5937314cb
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 16 22:53:46 2018 -0700
+summary:     Add operandsizewarning pragma
+
+changeset:   454:ffdef8994f13
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 16 22:52:44 2018 -0700
+summary:     Mark version to indicate further development
+
+changeset:   453:de15d152f55f
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jan 07 12:55:26 2018 -0700
+summary:     Added tag lwtools-4.15 for changeset 40516fb9af07
+
+changeset:   452:40516fb9af07
+tag:         lwtools-4.15
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jan 07 12:54:54 2018 -0700
+summary:     Version 4.15
+
+changeset:   451:566660ef3b4d
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 27 13:57:55 2017 -0700
+summary:     Rebuild manual
+
+changeset:   450:6b19418c465c
+user:        William Astle <lost@l-w.ca>
+date:        Wed Dec 27 13:52:23 2017 -0700
+summary:     Correct documentation of FILL pseudo op
+
+changeset:   449:96a05e89ab03
+user:        William Astle <lost@l-w.ca>
+date:        Sat Dec 02 22:28:31 2017 -0700
+summary:     Fix command line bug in lwar
+
+changeset:   448:3cd8aa013b88
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 30 17:38:24 2017 -0700
+summary:     Change the perl invocations for the test bits to use /usr/bin/env
+
+changeset:   447:639d19f5fb8e
+user:        William Astle <lost@l-w.ca>
+date:        Wed Nov 29 17:24:19 2017 -0700
+summary:     Source cleanups and "prototype" target for gcc6809
+
+changeset:   446:818b096ac128
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 28 21:29:05 2017 -0700
+summary:     Add a fix and an improvement to gcc6809 patch
+
+changeset:   445:9c6204534ab8
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 23:12:30 2017 -0700
+summary:     Improve diagnostic message from lwlink when an object isn't needed
+
+changeset:   444:141a1beb98ae
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 23:11:27 2017 -0700
+summary:     Improve usage for --format for lwasm
+
+changeset:   443:999ae00d0919
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 23:10:19 2017 -0700
+summary:     Fix up execution address handling for ihex and srec output (lwasm)
+
+changeset:   442:61580fc48f98
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 22:52:17 2017 -0700
+summary:     Add option to omit file names from lwasm listings
+
+changeset:   441:b138b4005125
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 22:35:53 2017 -0700
+summary:     Make missing command line arguments fail properly
+
+changeset:   440:fda62f676ed4
+user:        William Astle <lost@l-w.ca>
+date:        Mon Nov 27 22:21:42 2017 -0700
+summary:     Allow specifying exact filenames for -l in lwlink
+
+changeset:   439:ff4b6095ee72
+user:        William Astle <lost@l-w.ca>
+date:        Tue Aug 15 20:49:58 2017 -0600
+summary:     Bump patch number on gcc6809 patch.
+
+changeset:   438:f18cc0c87a7e
+user:        Brett Gordon <beretta42@gmail.com>
+date:        Tue Aug 15 20:48:40 2017 -0600
+summary:     Make 32 bit compares work better in gcc6809.
+
+changeset:   437:c84dd1265376
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 09 00:15:25 2017 -0600
+summary:     Added tag lwtools-4.14 for changeset 9f49f0966c1e
+
+changeset:   436:9f49f0966c1e
+tag:         lwtools-4.14
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 09 00:14:00 2017 -0600
+summary:     Version 4.14
+
+changeset:   435:5524649f4784
+user:        William Astle <lost@l-w.ca>
+date:        Sat Apr 08 21:44:39 2017 -0600
+summary:     Prevent parse errors when a macro definition is inside a conditional
+
+changeset:   434:052c5f335a92
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jan 23 22:58:36 2017 -0700
+summary:     Fix bug in like terms collection in expression simplification
+
+changeset:   433:b1adf549d181
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jan 23 22:54:19 2017 -0700
+summary:     Add some debugging instrumentation for tracking an expression bug
+
+changeset:   432:58cafa61ab40
+user:        William Astle <lost@l-w.ca>
+date:        Fri Nov 18 21:25:43 2016 -0700
+summary:     Add support for undocumented custom module format (for LW)
+
+changeset:   431:6df8d62302e2
+user:        David Flamand <dlflamand@gmail.com>
+date:        Wed Nov 16 19:36:16 2016 -0700
+summary:     Fix error in --nopaths lwar option when replacing members
+
+changeset:   430:e34c8bd6ea29
+user:        William Astle <lost@l-w.ca>
+date:        Wed Nov 16 10:14:06 2016 -0700
+summary:     Actually handle "-n" argument to lwar correctly
+
+changeset:   429:92cabf300986
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 15 22:04:42 2016 -0700
+summary:     Make the "ar" wrapper use the new --nopaths option
+
+changeset:   428:c5841e2c745d
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 15 21:47:38 2016 -0700
+summary:     Change "filename" option in lwar to "nopaths"
+
+changeset:   427:45df37e81741
+user:        David Flamand <dlflamand@gmail.com>
+date:        Tue Nov 15 21:43:33 2016 -0700
+summary:     Add option to ignore paths when extracting or adding files with lwar
+
+changeset:   426:b4825b42c151
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 03 21:44:32 2016 -0600
+summary:     Change to engage forwardrefmax pragma by default
+
+changeset:   425:9f0448022f1f
+user:        William Astle <lost@l-w.ca>
+date:        Thu Nov 03 21:36:17 2016 -0600
+summary:     Fix address overflows in SREC and IHEX file formats
+
+changeset:   424:3aad0ff3c3be
+user:        David Flamand <dflamand@gmail.com>
+date:        Thu Sep 22 19:26:04 2016 -0600
+summary:     Add support for assembler listings in the as wrapper script.
+
+changeset:   423:a3711f5ac569
+user:        Tormod Volden <debian.tormod@gmail.com>
+date:        Sat May 21 22:06:10 2016 +0200
+summary:     ld wrapper: Add --oformat option
+
+changeset:   422:675bc226ea7e
+user:        William Astle <lost@l-w.ca>
+date:        Sun May 08 19:25:55 2016 -0600
+summary:     Mark version for ongoing development (4.13+)
+
+changeset:   421:c41d72a58ef6
+user:        Tormod Volden <debian.tormod@gmail.com>
+date:        Sun May 08 22:07:29 2016 +0200
+summary:     Add --defsym support to 'as' wrapper
+
+changeset:   420:d15399d94386
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 17 09:13:53 2016 -0600
+summary:     Added tag lwtools-4.13 for changeset 6d48a45609e5
+
+changeset:   419:6d48a45609e5
+tag:         lwtools-4.13
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 17 09:11:40 2016 -0600
+summary:     Version 4.13
+
+changeset:   418:3832a68d83ef
+user:        William Astle <lost@l-w.ca>
+date:        Tue Mar 29 21:21:49 2016 -0600
+summary:     Fix internal compiler error on "var2 = var1 + 1" patterns
+
+changeset:   417:d7b7004b0883
+user:        William Astle <lost@l-w.ca>
+date:        Sun Mar 27 21:46:18 2016 -0600
+summary:     Update gcc6809 patch to fix an ICE.
+
+changeset:   416:b4d0eafc5bfe
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 24 20:07:20 2016 -0600
+summary:     Fix code generation error in gcc6809
+
+changeset:   415:8222f30a0781
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 24 19:25:14 2016 -0600
+summary:     Commit the *correct* note about the gcc6809 code generation bug.
+
+changeset:   414:40de99bde5e0
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 24 19:08:25 2016 -0600
+summary:     Add note about known code generate error in gcc6809 patches
+
+changeset:   413:5dc9f9d47064
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 21 09:13:45 2016 -0600
+summary:     Add error string for "user error"
+
+changeset:   412:f8e56377a32a
+user:        Tormod Volden <debian.tormod@gmail.com>
+date:        Mon Mar 21 09:06:55 2016 -0600
+summary:     lwasm: Add missing "Undefined symbol" error string
+
+changeset:   411:9f796134d6f4
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 21 09:02:23 2016 -0600
+summary:     Fix wrong sense in strcasecmp()
+
+changeset:   410:7f538053492c
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 22:59:36 2016 -0700
+summary:     Fix a possible uninitialized variable reference
+
+changeset:   409:c8ae69cdb5a9
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 22:33:40 2016 -0700
+summary:     Update gcc6809 patch to work with pragma=newsource
+
+changeset:   408:0af33282b518
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 21:38:21 2016 -0700
+summary:     Fix cycle counting for relative branches.
+
+changeset:   407:c501b3ce39c8
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 21:17:48 2016 -0700
+summary:     Make "pragma" and "*pragma/opt" fully equivalent
+
+changeset:   406:4411a6123716
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 21:04:39 2016 -0700
+summary:     Add "basic" output format
+
+changeset:   405:4c8925f97eb5
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 03 20:52:15 2016 -0700
+summary:     Fix bug identifying long branches in cycle counting code
+
+changeset:   404:f6e03c2cebfb
+user:        William Astle <lost@l-w.ca>
+date:        Thu Oct 15 23:21:26 2015 -0600
+summary:     Fix "rlist" to recognize comments as end of operand
+
+changeset:   403:f5a88f147fae
+user:        William Astle <lost@l-w.ca>
+date:        Thu Oct 15 20:20:20 2015 -0600
+summary:     Update "as" wrapper for gcc6809 to use new source format
+
+changeset:   402:b20f14edda5a
+user:        William Astle <lost@l-w.ca>
+date:        Wed Oct 14 20:49:41 2015 -0600
+summary:     Completed initial conversion to new parser allowing spaces in operands
+
+changeset:   401:bbe5401a9bf3
+parent:      400:d44c0ebab007
+parent:      399:6153cb49403c
+user:        William Astle <lost@l-w.ca>
+date:        Wed Oct 14 19:15:41 2015 -0600
+summary:     Fix inadvertent branch
+
+changeset:   400:d44c0ebab007
+parent:      398:4cf907aa634c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Oct 13 23:41:19 2015 -0600
+summary:     Mark version number for ongoing development
+
+changeset:   399:6153cb49403c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Oct 13 23:38:02 2015 -0600
+summary:     Initial commit of pragma newsource
+
+changeset:   398:4cf907aa634c
+user:        William Astle <lost@l-w.ca>
+date:        Sun Oct 11 09:31:06 2015 -0600
+summary:     Added tag lwtools-4.12 for changeset d7870f1e9121
+
+changeset:   397:d7870f1e9121
+tag:         lwtools-4.12
+user:        William Astle <lost@l-w.ca>
+date:        Sun Oct 11 09:30:51 2015 -0600
+summary:     Version 4.12
+
+changeset:   396:d0c0fede5021
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 20 22:32:41 2015 -0600
+summary:     Update to gcc6809lw patch which may help compilation of some sources
+
+changeset:   395:26d2791672b1
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 20 17:48:51 2015 -0600
+summary:     Update the "ld" wrapper
+
+changeset:   394:fc166b3bbae3
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jul 15 19:54:57 2015 -0600
+summary:     Update manual for recent additions.
+
+changeset:   393:f2decd9b276d
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 14 23:12:24 2015 -0600
+summary:     Fix minor error in string parsing
+
+changeset:   392:4c5d3b990a3f
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 14 23:01:57 2015 -0600
+summary:     Remove duplicate typedef in lw_expr.h
+
+changeset:   391:15d1628180e7
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:53:33 2015 -0600
+summary:     Add missing files to 221b5f58d8ad
+
+changeset:   390:1ebb5a0b2874
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:52:43 2015 -0600
+summary:     Add option to specify tab width in listing
+
+changeset:   389:2d9b7ae6c329
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:37:49 2015 -0600
+summary:     Throw error if address overflows in extended mode
+
+changeset:   388:f813a56178c0
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:34:50 2015 -0600
+summary:     Make error output more friendly to IDEs
+
+changeset:   387:2abcd82b455f
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:33:54 2015 -0600
+summary:     Make TFM complain if invalid registers are used
+
+changeset:   386:221b5f58d8ad
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:32:39 2015 -0600
+summary:     Port remainder of tools to Windows
+
+changeset:   385:4fd16faa4d93
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:26:34 2015 -0600
+summary:     Add various "convenience" ops
+
+changeset:   384:6ee9c67a0f8d
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:20:30 2015 -0600
+summary:     Add conditional for testing if a pragma is in effect
+
+changeset:   383:04e11f6faead
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:19:38 2015 -0600
+summary:     Make OPT a synonym for *PRAGMA
+
+changeset:   382:80d615a6642c
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:18:02 2015 -0600
+summary:     Add REORG pseudo op
+
+changeset:   381:e3f4aaa2a4e8
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:11:12 2015 -0600
+summary:     Allow FCB-like syntax after constant in FCC under m80ext
+
+changeset:   380:17fcd0c3ee45
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 21:04:39 2015 -0600
+summary:     Allow multibyte ascii constants in m80ext mode
+
+changeset:   379:d791d47afc48
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:59:02 2015 -0600
+summary:     Add m80ext pragma for Macro-80C compatibility and ignore END in includes
+
+changeset:   378:b0ec15f95563
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:56:48 2015 -0600
+summary:     Add missed file in 35d4213e6657
+
+changeset:   377:67373a053c49
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:50:02 2015 -0600
+summary:     Add ?rts target for branch instructions
+
+changeset:   376:35d4213e6657
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:47:30 2015 -0600
+summary:     Add cycle counting to listing
+
+changeset:   375:71f507f404f1
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:35:16 2015 -0600
+summary:     Add "testmode" pragma
+
+changeset:   374:8e25147c2aa8
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jul 13 20:31:56 2015 -0600
+summary:     Clean up various "externs"
+
+changeset:   373:00fced888c5d
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jun 24 19:39:13 2015 -0600
+summary:     Fix psh/pul to not accept the stack pointer as a valid argument
+
+changeset:   372:39490cf2d1c2
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 22 19:23:11 2015 -0600
+summary:     Make macro names case insensitive
+
+changeset:   371:2593fd529be5
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 22 19:16:13 2015 -0600
+summary:     Change PRAGMA_SHADOW to behave more as expected
+
+changeset:   370:8764142b3192
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 22 18:49:38 2015 -0600
+summary:     Convert internal error/warning handling framework to a new unified system
+
+changeset:   369:682524a1f32f
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 22 18:38:30 2015 -0600
+summary:     Updated documentation for --symbols-nolocals and --map
+
+changeset:   368:362f8fb0695b
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 15 21:26:33 2015 -0600
+summary:     Make psh/pul error out if no registers given
+
+changeset:   367:c6d2a1f54e0c
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 15 21:21:58 2015 -0600
+summary:     Change processor target variations to pragmas.
+
+changeset:   366:433dbc18fb41
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jun 02 20:58:14 2015 -0600
+summary:     Make byte overflow detection for 8 bit immediate not fail with COM operator
+
+changeset:   365:3f8abaac214c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jun 02 20:08:58 2015 -0600
+summary:     Add map file output and option to suppress local symbols in listings
+
+changeset:   364:44270b66df3c
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 01 19:55:11 2015 -0600
+summary:     Add some compatibility ops
+
+changeset:   363:f90c9b044220
+user:        William Astle <lost@l-w.ca>
+date:        Mon Jun 01 19:53:51 2015 -0600
+summary:     Add some windows related files to the ignore list for hg
+
+changeset:   362:d149e2b56981
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 26 23:42:00 2015 -0600
+summary:     Silence tautological comparison warnings
+
+changeset:   361:4130ffdeb5c8
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 26 17:53:51 2015 -0600
+summary:     Add contributed support for building with Microsoft's compiler
+
+changeset:   360:ade217fd76a5
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 26 17:51:00 2015 -0600
+summary:     Use #define instead of const int to avoid issues with some compilers
+
+changeset:   359:f318407d2469
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 26 17:49:26 2015 -0600
+summary:     Fix some signedness mismatches
+
+changeset:   358:fa3659ffa834
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 26 17:41:22 2015 -0600
+summary:     Fix missing column in terminal entry in instruction table
+
+changeset:   357:b6933dc299e6
+user:        William Astle <lost@l-w.ca>
+date:        Wed May 20 15:06:18 2015 -0600
+summary:     Make listings show the address for lines that only define symbols
+
+changeset:   356:c6bd6e9bc6df
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 19 12:28:37 2015 -0600
+summary:     Mark version number to indicate ongoing development.
+
+changeset:   355:3afb809c7add
+user:        William Astle <lost@l-w.ca>
+date:        Tue May 19 12:26:35 2015 -0600
+summary:     Make 8 bit immediate operands flag a byte overflow if not in 8 bit range.
+
+changeset:   354:433851a26794
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 15 15:47:26 2015 -0600
+summary:     Make base prefix sigils error out if no number following
+
+changeset:   353:e1f4d5af6438
+user:        William Astle <lost@l-w.ca>
+date:        Tue Apr 14 08:57:47 2015 -0600
+summary:     Added tag lwtools-4.11 for changeset fd96bb4a9c8d
+
+changeset:   352:fd96bb4a9c8d
+tag:         lwtools-4.11
+user:        William Astle <lost@l-w.ca>
+date:        Mon Apr 13 13:18:38 2015 -0600
+summary:     Remove manual building targets from Makefile
+
+changeset:   351:e4ad15af2e93
+user:        William Astle <lost@l-w.ca>
+date:        Mon Apr 13 08:49:22 2015 -0600
+summary:     Make the "hg" stuff in the docs/Makefile clearly maintainter related
+
+changeset:   350:f0910d85f7db
+user:        William Astle <lost@l-w.ca>
+date:        Mon Apr 13 08:46:17 2015 -0600
+summary:     Remove extraneous PWD reference from Makefile.
+
+changeset:   349:b62af915c2cc
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 12 12:11:19 2015 -0600
+summary:     Fix includebin to use binary mode when emitting the contents of the file.
+
+changeset:   348:379ef4e08dd2
+user:        William Astle <lost@l-w.ca>
+date:        Thu Apr 09 13:00:34 2015 -0600
+summary:     Update copyright year for manual
+
+changeset:   347:330a66a0f45a
+user:        William Astle <lost@l-w.ca>
+date:        Thu Apr 09 12:51:02 2015 -0600
+summary:     Document the forwardrefmax pragma
+
+changeset:   346:9e35f7a1fca1
+user:        William Astle <lost@l-w.ca>
+date:        Thu Apr 09 12:36:07 2015 -0600
+summary:     Update version number in preparation for a release
+
+changeset:   345:e95f07cbce4e
+user:        William Astle <lost@l-w.ca>
+date:        Thu Apr 09 12:35:24 2015 -0600
+summary:     Update manual to reflect lwlink support for S-record output
+
+changeset:   344:55c1f9a321e9
+user:        William Astle <lost@l-w.ca>
+date:        Thu Apr 09 12:27:33 2015 -0600
+summary:     Add S-record output support to lwlink
+
+changeset:   343:98f3e016cfd8
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 16 09:27:20 2015 -0600
+summary:     Add pragma to turn off forward reference optimization
+
+changeset:   342:12e2453f8417
+user:        William Astle <lost@l-w.ca>
+date:        Sat Mar 14 14:06:13 2015 -0600
+summary:     Fix potential memory access after free in lw_expr_simplify_go()
+
+changeset:   341:48b1cc3991d8
+user:        William Astle <lost@l-w.ca>
+date:        Sun Nov 09 12:23:00 2014 -0700
+summary:     Provide link to the official site in the readme file.
+
+changeset:   340:b0fb675d1ed4
+user:        William Astle <lost@l-w.ca>
+date:        Wed Oct 01 09:25:13 2014 -0600
+summary:     Add gcc 4.6.4 version of gcc6809
+
+changeset:   339:6138e304ab9a
+user:        William Astle <lost@l-w.ca>
+date:        Fri Aug 08 12:14:22 2014 -0600
+summary:     Revert 3b5a45c6ab92
+
+changeset:   338:5d401d1eb3e9
+user:        William Astle <lost@l-w.ca>
+date:        Tue Aug 05 22:04:23 2014 -0600
+summary:     Allow disabling debugging messages.
+
+changeset:   337:3b5a45c6ab92
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 02 10:08:01 2014 -0600
+summary:     Speed improvement to lw_expr
+
+changeset:   336:30b2bad9b5eb
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jul 31 17:20:11 2014 -0600
+summary:     Factor some code for simplifying lines so it can be reused
+
+changeset:   335:af78bad4922c
+user:        William Astle <lost@l-w.ca>
+date:        Fri May 02 21:30:25 2014 -0600
+summary:     Fix opcode for SUBW extended
+
+changeset:   334:b7e4992c12e7
+user:        William Astle <lost@l-w.ca>
+date:        Sat Apr 26 14:27:43 2014 -0600
+summary:     Fix postbyte for d,s indexing
+
+changeset:   333:507f442dc71e
+user:        William Astle <lost@l-w.ca>
+date:        Tue Apr 15 10:57:34 2014 -0600
+summary:     Add support for 6800 compatibility instructions.
+
+changeset:   332:26bfe8d557e2
+user:        Tom LeMense <tlemense@yahoo.com>
+date:        Mon Apr 14 07:43:43 2014 -0600
+summary:     Fix building of manual from main Makefile.
+
+changeset:   331:623b62ab774b
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 13 20:25:04 2014 -0600
+summary:     Allow ; as a delimiter for 6309 logic operations.
+
+changeset:   330:4f507fae9e71
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 13 16:04:25 2014 -0600
+summary:     Bump version number to reflect ongoing development
+
+changeset:   329:9f7889139b06
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 13 16:03:59 2014 -0600
+summary:     Fix 6809 mode to count 6309 instructions as non-existent
+
+changeset:   328:15125b7c865f
+user:        William Astle <lost@l-w.ca>
+date:        Fri Apr 11 21:54:07 2014 -0600
+summary:     Added tag lwtools-4.10 for changeset f3592d276aed
+
+changeset:   327:f3592d276aed
+tag:         lwtools-4.10
+user:        William Astle <lost@l-w.ca>
+date:        Fri Apr 11 21:53:51 2014 -0600
+summary:     Bump version for 4.10 release.
+
+changeset:   326:d399df78e1ab
+user:        Tom LeMense <tlemense@yahoo.com>
+date:        Fri Apr 11 21:50:47 2014 -0600
+summary:     Allow trailing ' or " on ascii constants
+
+changeset:   325:6821f4855702
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 21 23:49:23 2014 -0600
+summary:     Fix bug with section padding and downward allocation.
+
+changeset:   324:b30091890d62
+user:        William Astle <lost@l-w.ca>
+date:        Tue Mar 04 23:10:13 2014 -0700
+summary:     Add documentation of the new hex output formats.
+
+changeset:   323:ba9a0434b115
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 03 21:55:22 2014 -0700
+summary:     Make version number reflect ongoing development.
+
+changeset:   322:69adaab94ffd
+user:        William Astle <lost@l-w.ca>
+date:        Mon Mar 03 21:54:12 2014 -0700
+summary:     Add notes about coding style and submission guidelines.
+
+changeset:   321:d4ac484d0ec6
+user:        Tom LeMense <tlemense@yahoo.com>
+date:        Mon Mar 03 21:30:38 2014 -0700
+summary:     Add support for Motorola SREC and Intel Hex output formats to lwasm.
+
+changeset:   320:a640ff4ed95f
+user:        William Astle <lost@l-w.ca>
+date:        Sat Feb 08 19:25:11 2014 -0700
+summary:     Fix dumbosity in outputting the edition byte in os9 target
+
+changeset:   319:dc763f806dc4
+user:        William Astle <lost@l-w.ca>
+date:        Tue Feb 04 20:16:35 2014 -0700
+summary:     Left truncate file names in list output.
+
+changeset:   318:bcd1daabdb2e
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 10 18:59:26 2014 -0700
+summary:     Added tag lwtools-4.9 for changeset 21ecf29b568e
+
+changeset:   317:21ecf29b568e
+tag:         lwtools-4.9
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 10 18:59:10 2014 -0700
+summary:     Prepare for 4.9 release.
+
+changeset:   316:c4853a54b4a1
+user:        William Astle <lost@l-w.ca>
+date:        Wed Nov 27 16:08:02 2013 -0700
+summary:     Documented new "high" option for link scripts.
+
+changeset:   315:fcd103148aa6
+parent:      310:86eb8814a05c
+user:        William Astle <lost@l-w.ca>
+date:        Wed Nov 27 16:01:26 2013 -0700
+summary:     Add ability to load sections downward instead of upward
+
+changeset:   314:a3e277c58df9
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Nov 17 11:59:36 2013 -0700
+summary:     Checkpoint parser development for lwcc
+
+changeset:   313:73b2bfa17ab0
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 12 20:41:14 2013 -0700
+summary:     Checkpoint
+
+changeset:   312:41118fb0a8f2
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 21 18:43:39 2013 -0600
+summary:     Add no-op parser and parse tree infrastructure
+
+changeset:   311:7957e90d0a35
+branch:      ccdev
+parent:      309:65ed8dde5331
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 21 13:53:18 2013 -0600
+summary:     Add skeleton compiler target to build
+
+changeset:   310:86eb8814a05c
+parent:      284:a1a88a8ddc98
+user:        William Astle <lost@l-w.ca>
+date:        Tue Nov 12 21:03:48 2013 -0700
+summary:     Add comments to linker scripts.
+
+changeset:   309:65ed8dde5331
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 21 13:35:40 2013 -0600
+summary:     Don't remove manual on realclean
+
+changeset:   308:670ea8f90212
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 21 13:33:54 2013 -0600
+summary:     Converted preproc logic to library and moved some utility stuff to lwlib
+
+changeset:   307:9e342c4e4b66
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 21 12:27:48 2013 -0600
+summary:     Added support for __LINE__, __FILE__, __DATE__, and __TIME__
+
+changeset:   306:b08787e5b9f3
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Wed Sep 18 20:41:41 2013 -0600
+summary:     Add include search paths and command line macro definitions
+
+changeset:   305:54f213c8fb81
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Wed Sep 18 19:17:52 2013 -0600
+summary:     Various bugfixes and output tuning
+
+changeset:   304:d85d173ba120
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 17 19:33:41 2013 -0600
+summary:     Checkpoint lwcc development - preprocessor is runnable but nonfunctional
+
+changeset:   303:659e0e4ce50c
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 17 19:32:14 2013 -0600
+summary:     Cleaned up text in COPYING
+
+changeset:   302:f29bebc279a8
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 17 19:10:36 2013 -0600
+summary:     Fix memory leak in lw_stringlist_destroy()
+
+changeset:   301:6f7fe78bb868
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 15 14:22:10 2013 -0600
+summary:     Add string -> number conversion for preproc expression evaluator
+
+changeset:   300:8d6c47395653
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 15 13:49:00 2013 -0600
+summary:     Implemented #include and #line
+
+changeset:   299:856caf91ffaa
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 15 13:06:00 2013 -0600
+summary:     Added token list structure and switched some stuff to use it
+
+changeset:   298:6112c67728ba
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 14 22:42:53 2013 -0600
+summary:     Add stringification and token concatenation
+
+changeset:   297:310df72c641d
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 14 21:27:03 2013 -0600
+summary:     Handle () surrounding macro args on invocation
+
+changeset:   296:83fcc1ed6ad6
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 14 20:04:38 2013 -0600
+summary:     Checkpoint lwcc development
+
+changeset:   295:4b17780f2777
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Thu Sep 12 22:06:26 2013 -0600
+summary:     Checkpoint lwcc development
+
+changeset:   294:048adfee2933
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 10 19:56:05 2013 -0600
+summary:     Checkpoint on lwcc-cpp development
+
+changeset:   293:c419b3b3d43f
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Mon Sep 09 23:07:19 2013 -0600
+summary:     Checkpoint on lwcc-cpp development
+
+changeset:   292:40ecbd5da481
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 21:58:12 2013 -0600
+summary:     Part one of the C preprocessor
+
+changeset:   291:83f682ed4d65
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 17:08:50 2013 -0600
+summary:     Make lwcc driver understand -B
+
+changeset:   290:c648fc4bd006
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 16:55:59 2013 -0600
+summary:     Updated lwcc README with info on the runtime support files
+
+changeset:   289:b67a118dbdb7
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 16:55:21 2013 -0600
+summary:     Updated Makefile to install additonal components of lwcc
+
+changeset:   288:fc76f1a0dc49
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 15:53:06 2013 -0600
+summary:     Initial version of lwcc compiler driver and Makefile infrastructure
+
+changeset:   287:d2f04fa0103b
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 12:37:57 2013 -0600
+summary:     Set up .hgignore to ignore the lwcc driver program.
+
+changeset:   286:d9631a9a5b61
+branch:      ccdev
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 08 12:37:32 2013 -0600
+summary:     Set up for lwcc development with README file.
+
+changeset:   285:e7fc269a4176
+branch:      ccdev
+parent:      283:210d261a614d
+user:        William Astle <lost@l-w.ca>
+date:        Sat Sep 07 23:34:41 2013 -0600
+summary:     Branched for developing lwcc
+
+changeset:   284:a1a88a8ddc98
+user:        William Astle <lost@l-w.ca>
+date:        Tue Sep 17 19:11:47 2013 -0600
+summary:     Fix small memory leak in lw_stringlist_destroy()
+
+changeset:   283:210d261a614d
+user:        William Astle <lost@l-w.ca>
+date:        Mon Sep 02 10:49:57 2013 -0600
+summary:     Make byte overflow detection for indexing work better
+
+changeset:   282:3c421f24c9b8
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 31 11:46:00 2013 -0600
+summary:     Make <...,PCR complain on byte overflows
+
+changeset:   281:cb24ffb23f7c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 16 21:48:49 2013 -0600
+summary:     Make DTS not have problems if used multiple times.
+
+changeset:   280:4370370f38d1
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 16 21:46:12 2013 -0600
+summary:     Correct CRC problems with DTS pseudo op
+
+changeset:   279:4051bc09da78
+user:        William Astle <lost@l-w.ca>
+date:        Tue Jul 16 17:04:45 2013 -0600
+summary:     Fix absolute path handling on Windows
+
+changeset:   278:95c941799c8e
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jun 13 22:17:36 2013 -0600
+summary:     Added tag lwtools-4.8 for changeset 1dcc0b174e3b
+
+changeset:   277:1dcc0b174e3b
+tag:         lwtools-4.8
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jun 13 22:12:35 2013 -0600
+summary:     Bump version string to show 4.8 in preparation for release
+
+changeset:   276:49010c6653e7
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 08 09:54:37 2013 -0600
+summary:     Re-enable rawrel output format
+
+changeset:   275:776a076d1afa
+user:        Tormod Volden <debian.tormod@gmail.com>
+date:        Wed Jun 05 19:57:09 2013 -0600
+summary:     Makefile: Allow DESTDIR for distribution package creation
+
+changeset:   274:d9d02dbf76a6
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jun 05 10:55:18 2013 -0600
+summary:     Fix some missing newlines at the end of header files
+
+changeset:   273:1409debcb1a0
+user:        William Astle <lost@l-w.ca>
+date:        Sat May 25 13:35:46 2013 -0600
+summary:     Fix crash on listing when nested noexpand macros are used
+
+changeset:   272:cfeb196251e4
+user:        William Astle <lost@l-w.ca>
+date:        Sat Apr 20 11:00:11 2013 -0600
+summary:     Fix conditional setting of build tools variables in the makefile
+
+changeset:   271:f6acfc659dd9
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 07 01:29:29 2013 -0600
+summary:     Allow overriding CC, AR, and RANLIB from the environment
+
+changeset:   270:35b6787a5b39
+user:        William Astle <lost@l-w.ca>
+date:        Sun Apr 07 01:18:31 2013 -0600
+summary:     Allow make install destination to be overridden
+
+changeset:   269:1c70570e3d42
+user:        William Astle <lost@l-w.ca>
+date:        Sat Mar 09 19:07:27 2013 -0700
+summary:     Remove references to lwbasic and lwcc directories from the Makefile
+
+changeset:   268:7ad3bd19691b
+user:        William Astle <lost@l-w.ca>
+date:        Sat Mar 09 19:04:21 2013 -0700
+summary:     Remove the obsolete lwbasic directory and associated readme
+
+changeset:   267:1035d6ae4b66
+user:        William Astle <lost@l-w.ca>
+date:        Sat Mar 09 19:03:09 2013 -0700
+summary:     Remove lwcc directory and references in docs
+
+changeset:   266:35c051bffbff
+user:        William Astle <lost@l-w.ca>
+date:        Sat Mar 09 11:11:51 2013 -0700
+summary:     Make fill and align do something useful in the object target
+
+changeset:   265:6f4c4d59666f
+user:        William Astle <lost@l-w.ca>
+date:        Sun Feb 10 19:22:24 2013 -0700
+summary:     Make lwar use the "b" flag when opening files.
+
+changeset:   264:346966cffeef
+user:        William Astle <lost@l-w.ca>
+date:        Wed Feb 06 21:43:10 2013 -0700
+summary:     Clean up various warnings when building under -Wall
+
+changeset:   263:8dd8c3bdca7c
+user:        William Astle <lost@l-w.ca>
+date:        Tue Feb 05 22:39:34 2013 -0700
+summary:     Fix stupid error with ' vs " handling os9 edition
+
+changeset:   262:7de7b14ebaee
+user:        William Astle <lost@l-w.ca>
+date:        Mon Feb 04 21:03:59 2013 -0700
+summary:     Add support for os9 module edition byte
+
+changeset:   261:f45b2a68c3da
+user:        William Astle <lost@l-w.ca>
+date:        Mon Feb 04 20:51:55 2013 -0700
+summary:     Make case insensitive symbols error out on duplication
+
+changeset:   260:c5b1dd523ac4
+user:        William Astle <lost@l-w.ca>
+date:        Mon Feb 04 20:35:47 2013 -0700
+summary:     Make default build use -O3
+
+changeset:   259:0c4b3e8b4d0b
+user:        William Astle <lost@l-w.ca>
+date:        Fri Feb 01 00:04:19 2013 -0700
+summary:     Fix pragma nosymbolcase interaction with -D
+
+changeset:   258:ebda5c96665e
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 31 19:34:54 2013 -0700
+summary:     Improved stack handling for os9 target in lwlink
+
+changeset:   257:d5374e80dd04
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 31 16:28:41 2013 -0700
+summary:     Fix handling of attr override for os9 output
+
+changeset:   256:bc25269d96bc
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 30 21:47:15 2013 -0700
+summary:     Fix crash on expression range calculation
+
+changeset:   255:67acad9db5b3
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 30 21:40:34 2013 -0700
+summary:     Fix crash when no operand is present
+
+changeset:   254:155799f6cfa5
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 30 21:32:14 2013 -0700
+summary:     Add documentation for the FILL pseudo operation
+
+changeset:   253:ed1009bce533
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jan 26 22:27:29 2013 -0700
+summary:     Document the "export" pragma
+
+changeset:   252:201b2774cb0e
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 25 23:48:46 2013 -0700
+summary:     Fix warning about isalpha in input.c on windows
+
+changeset:   251:0e4a9b21ad7b
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 25 22:43:10 2013 -0700
+summary:     Make the complaint about negative block/reservation sizes show value.
+
+changeset:   250:644f8abf87dc
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 25 21:54:02 2013 -0700
+summary:     Apply division by zero fix to modulus operator too.
+
+changeset:   249:1f1a28b797e1
+user:        William Astle <lost@l-w.ca>
+date:        Fri Jan 25 21:48:01 2013 -0700
+summary:     Add trap for divide by zero in expression library
+
+changeset:   248:891bab942b5a
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 24 21:24:32 2013 -0700
+summary:     Another adjustment for the drive letter problem.
+
+changeset:   247:4b36eaaf80c3
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 24 21:00:00 2013 -0700
+summary:     First attempt at fixing the drive letter problem on Windows
+
+changeset:   246:b97460509c3d
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jan 24 20:58:30 2013 -0700
+summary:     Update version number to mark development past 4.7
+
+changeset:   245:0bc1c88fe776
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 23 13:32:15 2013 -0700
+summary:     Fix typo in documentation of lwasm --define switch.
+
+changeset:   244:5fefceb6756b
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 23 13:21:57 2013 -0700
+summary:     Added tag lwtools-4.7 for changeset 65510f1574e4
+
+changeset:   243:65510f1574e4
+tag:         lwtools-4.7
+user:        William Astle <lost@l-w.ca>
+date:        Thu Dec 06 10:53:21 2012 -0700
+summary:     Fix error with [,u] in 6809-only mode
+
+changeset:   242:ea092ebc5323
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 23 13:11:34 2012 -0600
+summary:     Fix thinko with algorithm improvement.
+
+changeset:   241:d0e9dbe9afbe
+user:        William Astle <lost@l-w.ca>
+date:        Sun Sep 23 13:06:43 2012 -0600
+summary:     Add new heuristic for resolving instruction sizes.
+
+changeset:   240:41d64951eb32
+user:        William Astle <lost@l-w.ca>
+date:        Tue Aug 14 23:03:59 2012 -0600
+summary:     Silence debug message
+
+changeset:   239:8beb109dfd69
+user:        William Astle <lost@l-w.ca>
+date:        Tue Aug 14 21:06:52 2012 -0600
+summary:     Fix hang on undefined symbol in rmb under pragma undefextern
+
+changeset:   238:91f91557dc9e
+user:        William Astle <lost@l-w.ca>
+date:        Mon Aug 13 17:22:13 2012 -0600
+summary:     Removed extraneous debug message.
+
+changeset:   237:d4cf2e139e4a
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 11 23:37:43 2012 -0600
+summary:     Bump version number in preparation for a release.
+
+changeset:   236:ce1fdc8d6568
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 11 23:29:57 2012 -0600
+summary:     Added ability to add padding after a section when linking.
+
+changeset:   235:e3741cf53e00
+user:        William Astle <lost@l-w.ca>
+date:        Sat Aug 11 15:18:58 2012 -0600
+summary:     Fix error messages related to undefined symbols in lwlink
+
+changeset:   234:d389adbcc4ab
+user:        William Astle <lost@l-w.ca>
+date:        Fri Aug 10 23:47:56 2012 -0600
+summary:     Added section base and length symbols to lwlink
+
+changeset:   233:7887a48b74df
+user:        William Astle <lost@l-w.ca>
+date:        Thu Jul 19 13:17:30 2012 -0600
+summary:     Remove stray \n from dts
+
+changeset:   232:7da0452512b2
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 23:19:50 2012 -0600
+summary:     Bumped copyright year to include 2012 on manual
+
+changeset:   231:2cc599f1bebf
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 23:12:09 2012 -0600
+summary:     Added --define to lwasm documentation.
+
+changeset:   230:e09985968e64
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:52:24 2012 -0600
+summary:     Don't suppress symbol listing in unicorns mode
+
+changeset:   229:164487152dd9
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:46:29 2012 -0600
+summary:     Add flag to output stream for end of unicorns
+
+changeset:   228:042c7b74faf0
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:43:18 2012 -0600
+summary:     Make unicorns not suppress assembly listings.
+
+changeset:   227:721a5ea5e36a
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:42:39 2012 -0600
+summary:     Make warnings show up in assembly listings.
+
+changeset:   226:7c2c2239ec9c
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:19:43 2012 -0600
+summary:     Make unicorns grok errors and warnings.
+
+changeset:   225:823560a8c251
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 21:19:04 2012 -0600
+summary:     Prevent infinite loop due to warning directive
+
+changeset:   224:3864d96ee8c7
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 20:50:18 2012 -0600
+summary:     Make unicorns notice referenced files better
+
+changeset:   223:211fc8038b8d
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 20:14:51 2012 -0600
+summary:     More unicorn stuff - structs and macros
+
+changeset:   222:03f7192fcd20
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 10:50:46 2012 -0600
+summary:     Add --unicorns option for IDE integration
+
+changeset:   221:2b784a28428e
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jul 15 10:27:43 2012 -0600
+summary:     Silence a few warnings
+
+changeset:   220:3604d0ef06c6
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 18:33:22 2012 -0600
+summary:     Fix thinko in previous commit
+
+changeset:   219:afd50d6b4113
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 18:24:31 2012 -0600
+summary:     Add --preprocess option
+
+changeset:   218:b0c9df865b25
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 14:55:27 2012 -0600
+summary:     Add FDBS pseudo op.
+
+changeset:   217:f87c86668d6b
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 14:14:43 2012 -0600
+summary:     Fix handling of comments on ELSE lines
+
+changeset:   216:398773d7e504
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 14:10:04 2012 -0600
+summary:     Fix crash bug on indexed expression handling
+
+changeset:   215:5330ba70836a
+user:        William Astle <lost@l-w.ca>
+date:        Sun Jun 10 13:29:23 2012 -0600
+summary:     Fix undefined symbol error with pragma nosymbolcase
+
+changeset:   214:ff024e572ff2
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 23:36:24 2012 -0600
+summary:     Added tag lwtools-4.6 for changeset 38ecb99d78dd
+
+changeset:   213:38ecb99d78dd
+tag:         lwtools-4.6
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 23:36:04 2012 -0600
+summary:     Set version to 4.6 for release.
+
+changeset:   212:b0d53e2f3f53
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 23:17:43 2012 -0600
+summary:     Make --6309/--6809 work properly
+
+changeset:   211:6f2e18f1fe67
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 17:23:04 2012 -0600
+summary:     Improve autobranchlength pragma
+
+changeset:   210:5d969517db74
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 16:25:19 2012 -0600
+summary:     Added condundefzero pragma
+
+changeset:   209:52d9dd71f555
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 16:03:36 2012 -0600
+summary:     Make warning actually work.
+
+changeset:   208:fa835b780ffb
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 15:57:58 2012 -0600
+summary:     Fix crash on conditionals with undefined symbols
+
+changeset:   207:07e1fac76321
+user:        William Astle <lost@l-w.ca>
+date:        Sat Jun 09 15:47:22 2012 -0600
+summary:     Added pragma to allow non case sensitive symbols
+
+changeset:   206:080bb67d84f2
+user:        William Astle <lost@l-w.ca>
+date:        Thu May 24 17:28:15 2012 -0600
+summary:     Add export pragma
+
+changeset:   205:806e5fc6dd93
+user:        William Astle <lost@l-w.ca>
+date:        Wed May 23 19:37:30 2012 -0600
+summary:     Fix segfault during command parsing
+
+changeset:   204:a21459814650
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 22:54:10 2012 -0600
+summary:     Set version to indicate development past version 4.5
+
+changeset:   203:b5459ed6fed9
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 22:52:22 2012 -0600
+summary:     Added tag lwtools-4.5 for changeset 47a055c57d4a
+
+changeset:   202:47a055c57d4a
+tag:         lwtools-4.5
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 22:37:02 2012 -0600
+summary:     Bump version to 4.5 in preparation for release
+
+changeset:   201:4503199d56ba
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 22:22:14 2012 -0600
+summary:     Short circuit unneeded loops in pass4
+
+changeset:   200:348e2816ce32
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 19:44:12 2012 -0600
+summary:     Short ciruit some recursion in expression library
+
+changeset:   199:3132b1742eca
+user:        William Astle <lost@l-w.ca>
+date:        Fri Mar 16 17:29:53 2012 -0600
+summary:     Add a time stamp to debug messages
+
+changeset:   198:d2bed389e94a
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 15 09:33:26 2012 -0600
+summary:     Fix --help and --usage to display = correctly for long option args
+
+changeset:   197:82957c407577
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 15 09:27:48 2012 -0600
+summary:     Fix --section-start handling and add --map to ld wrapper.
+
+changeset:   196:83bb31ca8b6a
+user:        William Astle <lost@l-w.ca>
+date:        Thu Mar 15 09:26:24 2012 -0600
+summary:     Elaborated the readme for the gcc6809 patch
+
+changeset:   195:17bd59f045af
+user:        William Astle <lost@l-w.ca>
+date:        Sun Mar 11 16:05:54 2012 -0600
+summary:     Changed symbol table to use a binary tree.
+
+changeset:   194:f8b33b3a45ac
+user:        William Astle <lost@l-w.ca>
+date:        Wed Jan 25 22:39:17 2012 -0700
+summary:     Fix noexpand macro listings to show all bytes output
+
+changeset:   193:68f41eaf44f2
+user:        lost@l-w.ca
+date:        Fri Jan 13 22:32:15 2012 -0700
+summary:     Added lwcc, lwcpp stubs
+
+changeset:   192:8ae2670377ca
+user:        lost@l-w.ca
+date:        Fri Jan 13 21:33:55 2012 -0700
+summary:     Added hidden options to lw_cmdline
+
+changeset:   191:ddffceb3c331
+user:        lost@l-w.ca
+date:        Fri Jan 13 21:28:34 2012 -0700
+summary:     Added "documentation only" options to lw_cmdline and also allowed options that do not have a long equivalent
+
+changeset:   190:20ba68be2cd7
+user:        lost@l-w.ca
+date:        Wed Jan 11 20:26:47 2012 -0700
+summary:     Fixed typos with conversion away from rules.make stuff
+
+changeset:   189:8a84141ea6dd
+user:        lost@l-w.ca
+date:        Wed Jan 11 20:25:29 2012 -0700
+summary:     Removed rules.make stuff in sub directories - it was not particularly helpful
+
+changeset:   188:b6685a7ec2bd
+user:        lost@l-w.ca
+date:        Wed Jan 11 20:18:10 2012 -0700
+summary:     Add stub for lwcc
+
+changeset:   187:4e12d881df85
+user:        lost@l-w.ca
+date:        Sat Dec 24 12:20:43 2011 -0700
+summary:     Added blurb about lwcc
+
+changeset:   186:1824cabf25ce
+user:        lost@l-w.ca
+date:        Thu Dec 22 18:04:13 2011 -0700
+summary:     Various enhancements to lwasm
+
+changeset:   185:cca933d32298
+user:        lost@l-w.ca
+date:        Thu Dec 22 18:03:38 2011 -0700
+summary:     Clean up some mess in lwbasic directory
+
+changeset:   184:6433cb024174
+user:        lost@l-w.ca
+date:        Thu Dec 22 18:03:04 2011 -0700
+summary:     Make ld wrapper more capable
+
+changeset:   183:c6a38fd8bd33
+user:        lost@l-w.ca
+date:        Thu Dec 22 18:01:59 2011 -0700
+summary:     Added --entry option for lwlink
+
+changeset:   182:e0cc66fd0551
+user:        lost@l-w.ca
+date:        Wed Sep 21 21:14:09 2011 -0600
+summary:     Added gcc6809lw patch to extras
+
+changeset:   181:5350ce9f446f
+user:        lost@l-w.ca
+date:        Sat Sep 17 11:45:13 2011 -0600
+summary:     Arranged for dependencies to be generated when building object files; no more extraneous dependency rebuilds
+
+changeset:   180:11b710d231bd
+user:        lost@l-w.ca
+date:        Sat Sep 17 09:57:55 2011 -0600
+summary:     Fixed bug handling bss in lwex
+
+changeset:   179:606123758641
+user:        lost@l-w.ca
+date:        Thu Sep 15 17:08:16 2011 -0600
+summary:     Added --sysroot support to lwlink and the ld wrapper script
+
+changeset:   178:35f7ce3ef857
+user:        lost@l-w.ca
+date:        Fri Sep 09 22:08:07 2011 -0600
+summary:     Fix stupid thinko when making all instances of a constant section start at 0
+
+changeset:   177:f8b07153abc4
+user:        lost@l-w.ca
+date:        Wed Sep 07 21:59:10 2011 -0600
+summary:     Make 'imm8' instructions actually complain about a bad operand if no # is present
+
+changeset:   176:03f425c6c39c
+user:        lost@l-w.ca
+date:        Wed Sep 07 21:49:35 2011 -0600
+summary:     Added note about "make test" to readme
+
+changeset:   175:5e7f8e1ac99f
+user:        lost@l-w.ca
+date:        Wed Sep 07 21:47:07 2011 -0600
+summary:     added tests to verify 6809 opcodes are correct
+
+changeset:   174:411ef9735264
+user:        lost@l-w.ca
+date:        Wed Sep 07 20:45:39 2011 -0600
+summary:     Fixing up helper for building manual
+
+changeset:   173:3413a88f4d09
+user:        lost@l-w.ca
+date:        Wed Sep 07 20:45:20 2011 -0600
+summary:     Added test framework
+
+changeset:   172:a88b04ba5ab8
+user:        William Astle <lost@l-w.ca>
+date:        Mon Sep 05 18:10:21 2011 -0600
+summary:     Fixed segfault opening relative paths without a current directory on the stack; probably a symptom of another bug somewhere
+
+changeset:   171:d59f17580e8b
+user:        lost@l-w.ca
+date:        Fri Sep 02 18:10:26 2011 -0600
+summary:     Actually check for 6309 instructions when in 6809 mode. Thanks to adamgr on IRC for finding the problem.
+
+changeset:   170:372d7c881831
+user:        lost@l-w.ca
+date:        Mon Aug 29 19:18:23 2011 -0600
+summary:     More manual updates
+
+changeset:   169:eb7d220465fb
+user:        lost@l-w.ca
+date:        Mon Aug 29 19:16:35 2011 -0600
+summary:     Added convenience makefile for generating docs
+
+changeset:   168:1e0a0e6cd918
+user:        lost@l-w.ca
+date:        Mon Aug 29 19:15:50 2011 -0600
+summary:     Documentation updates
+
+changeset:   167:872fa82680e1
+user:        lost@l-w.ca
+date:        Mon Aug 29 19:05:18 2011 -0600
+summary:     Make multiple instances of constant sections all start at offset 0 rather than merging them
+
+changeset:   166:324f28905144
+user:        lost@l-w.ca
+date:        Mon Aug 29 18:30:55 2011 -0600
+summary:     Fixed problem with rmb, etc., not working right wrt line address when not in os9 mode
+
+changeset:   165:c45f23ae79e6
+user:        lost@l-w.ca
+date:        Sun Aug 28 17:03:43 2011 -0600
+summary:     Fixed opcodes for MULD
+
+changeset:   164:da891a357d97
+user:        lost@l-w.ca
+date:        Sun Aug 28 16:49:50 2011 -0600
+summary:     Added SPC pseudo NOOPmake
+
+changeset:   163:c2702571818b
+user:        lost@l-w.ca
+date:        Sun Aug 28 15:39:26 2011 -0600
+summary:     Added SPC pseudo NOOP
+
+changeset:   162:5965c01b3dec
+user:        lost@l-w.ca
+date:        Sun Aug 28 15:36:57 2011 -0600
+summary:     Make ELSE not barf if comment on line with it
+
+changeset:   161:409295d09a2e
+user:        lost@l-w.ca
+date:        Sun Aug 28 15:04:35 2011 -0600
+summary:     Add _constants to the list of sections that get the constant flag by default
+
+changeset:   160:02804b7c051c
+user:        lost@l-w.ca
+date:        Sun Aug 28 14:17:33 2011 -0600
+summary:     Don't error out on dlen set and len not for insn length resolution
+
+changeset:   159:8967eb907324
+user:        lost@l-w.ca
+date:        Sun Aug 28 14:16:45 2011 -0600
+summary:     Trap negative sizes for [rz]m[bdq] and flag error
+
+changeset:   158:8dead67ba607
+user:        lost@l-w.ca
+date:        Sun Aug 28 14:16:10 2011 -0600
+summary:     Make constant sections always resolve with a constant base offset of zero instead of an undefined reference
+
+changeset:   157:4682460aed00
+user:        lost@l-w.ca
+date:        Sun Aug 28 11:45:38 2011 -0600
+summary:     Correct bug with handling symbol resolution and constant section handling
+
+changeset:   156:fc8386b13399
+user:        lost@l-w.ca
+date:        Sun Aug 28 02:06:42 2011 -0600
+summary:     Added 'constant' sections to object file handling for lwasm and lwlink
+
+changeset:   155:1571e150f1fd
+user:        lost@l-w.ca
+date:        Sun Aug 28 00:07:15 2011 -0600
+summary:     Fixed error where external references  within a library file were not resolved when linking
+
+changeset:   154:5ac1c4cd81a7
+user:        lost@l-w.ca
+date:        Sat Aug 27 23:16:50 2011 -0600
+summary:     Make sections behave correctly again with the update to support . and * for os9
+
+changeset:   153:83b7b4ce3bbd
+user:        lost@l-w.ca
+date:        Sat Aug 27 00:23:19 2011 -0600
+summary:     Added prebuilt manual to repository to avoid failures to include it during releases
+
+changeset:   152:a26b045c4e18
+user:        lost@l-w.ca
+date:        Sat Aug 27 00:21:35 2011 -0600
+summary:     Added documentation about OS9 module support in lwlink
+
+changeset:   151:3b58d76ea032
+user:        lost@l-w.ca
+date:        Fri Aug 26 23:44:44 2011 -0600
+summary:     Fix up some minor thinkos in handling the module layout and header
+
+changeset:   150:244f1227f2b5
+user:        lost@l-w.ca
+date:        Fri Aug 26 23:36:13 2011 -0600
+summary:     Allow os9 directive in object target
+
+changeset:   149:729a9c70934e
+user:        lost@l-w.ca
+date:        Fri Aug 26 23:36:00 2011 -0600
+summary:     Fixed crash and bogus warning with os9 module target
+
+changeset:   148:08fb11004df9
+user:        lost@l-w.ca
+date:        Fri Aug 26 23:26:00 2011 -0600
+summary:     Initial pass at OS9 module support for lwlink
+
+changeset:   147:9cf1796259b2
+user:        lost@l-w.ca
+date:        Thu Aug 25 22:29:58 2011 -0600
+summary:     Fixed segfault in fcb,fdb,fqb with empty operands
+
+changeset:   146:f5b8559a5f35
+user:        lost@l-w.ca
+date:        Wed Aug 24 21:16:17 2011 -0600
+summary:     Added ENDIF as alias for ENDC
+
+changeset:   145:d6e9cc4484f6
+user:        lost@l-w.ca
+date:        Wed Aug 24 21:16:07 2011 -0600
+summary:     Fixed ENDC to work with comments after it
+
+changeset:   144:86d097dceebc
+user:        lost@l-w.ca
+date:        Sat Aug 20 09:59:45 2011 -0600
+summary:     Make os9 directives not throw spurious bad operand errors
+
+changeset:   143:42a7a16a058f
+user:        lost@l-w.ca
+date:        Sat Aug 20 00:02:55 2011 -0600
+summary:     Documented the addition of data/code address streams for OS9 modules.
+
+changeset:   142:697bc543368c
+user:        lost@l-w.ca
+date:        Fri Aug 19 23:55:40 2011 -0600
+summary:     Implement distinction between . and * for OS9 modules
+
+changeset:   141:11ebce0183a5
+user:        lost@l-w.ca
+date:        Fri Aug 19 20:36:43 2011 -0600
+summary:     Added PAGE as a noop pseudo
+
+changeset:   140:847c7394bc10
+user:        lost@l-w.ca
+date:        Fri Aug 19 20:01:43 2011 -0600
+summary:     Added "OPT" pseudo op as a noop
+
+changeset:   139:7c07c1a2a17c
+user:        lost@l-w.ca
+date:        Fri Aug 19 18:54:57 2011 -0600
+summary:     Fixed opcodes for divd/divq
+
+changeset:   138:57c0210d578c
+user:        lost@l-w.ca
+date:        Fri Aug 19 17:46:19 2011 -0600
+summary:     Fix error with postbyte for constant offset from W modes
+
+changeset:   137:b62f5389b859
+user:        lost@l-w.ca
+date:        Wed Aug 17 22:34:58 2011 -0600
+summary:     Fix bit width of subw
+
+changeset:   136:b78b2f1e011e
+user:        lost@l-w.ca
+date:        Wed Aug 17 21:04:33 2011 -0600
+summary:     Fixed additional instruction length problems with logic/memory operations
+
+changeset:   135:fe117454a1e7
+user:        lost@l-w.ca
+date:        Wed Aug 17 19:44:32 2011 -0600
+summary:     Adjustments to dts/dtb
+
+changeset:   134:09021ba6d755
+user:        lost@l-w.ca
+date:        Wed Aug 17 19:44:26 2011 -0600
+summary:     Fixed length bug in tfm
+
+changeset:   133:3c1a80c2fb95
+user:        lost@l-w.ca
+date:        Fri Aug 12 00:03:07 2011 -0600
+summary:     ifdef sym1|sym2 now works
+
+changeset:   132:4cf44ff89b08
+user:        lost@l-w.ca
+date:        Thu Aug 11 23:50:16 2011 -0600
+summary:     Added DTS and DTB pseudo ops; initial attempt to allow ifdef SYM1|SYM2
+
+changeset:   131:f2f3a4b0a25e
+user:        lost@l-w.ca
+date:        Thu Aug 11 22:58:27 2011 -0600
+summary:     Fix fix for forced index offset sizes
+
+changeset:   130:50d86baf4ea2
+user:        lost@l-w.ca
+date:        Thu Aug 11 22:48:16 2011 -0600
+summary:     Fixed code generation bug with forced-size offsets from X,Y,U,S
+
+changeset:   129:5706712f8a20
+user:        lost@l-w.ca
+date:        Thu Aug 11 22:25:29 2011 -0600
+summary:     Allow [>...] for extended indirect
+
+changeset:   128:3a5f718b24c1
+user:        lost@l-w.ca
+date:        Thu Aug 11 22:04:09 2011 -0600
+summary:     Fixed swapped register lists for 6309/6809 register-to-register instructions
+
+changeset:   127:d92b9c968731
+user:        lost@l-w.ca
+date:        Thu Aug 11 22:03:34 2011 -0600
+summary:     Removed protection from outputting code outside os9 module in os9 target
+
+changeset:   126:2eda3e39b3b8
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 11 20:33:46 2011 -0600
+summary:     Marked development beyond 4.4 in version
+
+changeset:   125:db5690682eb7
+user:        William Astle <lost@l-w.ca>
+date:        Thu Aug 11 20:33:20 2011 -0600
+summary:     Added ! as a synomym for bitwise or (|)
+
+changeset:   124:169018bd9ada
+user:        lost@l-w.ca
+date:        Wed Aug 10 19:16:23 2011 -0600
+summary:     Added tag lwtools-4.4 for changeset 74b4e9f23c62
+
+changeset:   123:74b4e9f23c62
+tag:         lwtools-4.4
+user:        lost@l-w.ca
+date:        Wed Aug 10 19:06:58 2011 -0600
+summary:     Version 4.4
+
+changeset:   122:2be2649841f8
+user:        lost@l-w.ca
+date:        Wed Aug 10 19:05:49 2011 -0600
+summary:     Fixed embarrassing off by one in insn_rel length calculation
+
+changeset:   121:27b51723b218
+user:        lost@l-w.ca
+date:        Tue Aug 09 22:17:31 2011 -0600
+summary:     Added tag lwtools-4.3 for changeset d90ab253471e
+
+changeset:   120:d90ab253471e
+tag:         lwtools-4.3
+user:        lost@l-w.ca
+date:        Tue Aug 09 21:58:51 2011 -0600
+summary:     Bumped copyright year on manual
+
+changeset:   119:ca7d92764e32
+user:        lost@l-w.ca
+date:        Tue Aug 09 21:42:16 2011 -0600
+summary:     Version 4.3
+
+changeset:   118:b6b8c2645f5c
+user:        lost@l-w.ca
+date:        Tue Aug 09 18:17:00 2011 -0600
+summary:     Add back the dollarlocal and nodollarlocal pragma strings for compatibility with the documentation.
+
+changeset:   117:8e2523061ce9
+user:        lost@l-w.ca
+date:        Tue Aug 09 18:16:41 2011 -0600
+summary:     Document the new autobranchlength pragma
+
+changeset:   116:7b0716264251
+user:        lost@l-w.ca
+date:        Tue Aug 09 18:08:55 2011 -0600
+summary:     Pragma autobranchlength implementation completed
+
+changeset:   115:344cfc25afec
+user:        lost@l-w.ca
+date:        Mon Aug 08 23:00:27 2011 -0600
+summary:     Added initial infrastructure for pragma autobranchlength (suggested by Ebonhand on irc)
+
+changeset:   114:707eda49ad60
+user:        lost@l-w.ca
+date:        Sun Aug 07 12:41:06 2011 -0600
+summary:     Fix parsing padding argument for align pseudo op
+
+changeset:   113:7e621e00b887
+user:        lost@l-w.ca
+date:        Sun Aug 07 12:31:19 2011 -0600
+summary:     Fixed uninitialized variable in &-prefix and %-prefix constant parsing
+
+changeset:   112:3fc568436721
+user:        lost@l-w.ca
+date:        Sun Aug 07 12:15:56 2011 -0600
+summary:     Correct size handling for mod and emod
+
+changeset:   111:c0aedb1584af
+user:        lost@l-w.ca
+date:        Sun Aug 07 10:49:28 2011 -0600
+summary:     Updated manual to describe nolist pragma and pragma stacks
+
+changeset:   110:38c1537857ce
+user:        lost@l-w.ca
+date:        Sun Aug 07 10:37:22 2011 -0600
+summary:     Pragma stack at parse stage now works
+
+changeset:   109:6a919c3ca0e9
+user:        lost@l-w.ca
+date:        Sun Aug 07 10:23:14 2011 -0600
+summary:     Fixed pragma noindex0tonone to work
+
+changeset:   108:9960e05cbe3a
+user:        lost@l-w.ca
+date:        Sun Aug 07 00:58:00 2011 -0600
+summary:     Added *pragmapush and *pragmapop; still seems to be nonfunctional
+
+changeset:   107:b3557f8325f7
+user:        lost@l-w.ca
+date:        Sat Aug 06 23:29:17 2011 -0600
+summary:     Fixed bug with symbol on a line with a comment not getting registered
+
+changeset:   106:43a3f1068027
+user:        lost@l-w.ca
+date:        Sat Aug 06 23:20:45 2011 -0600
+summary:     Adjustments for list code
+
+changeset:   105:3e9057059a43
+user:        lost@l-w.ca
+date:        Sat Aug 06 23:20:10 2011 -0600
+summary:     Even more command line parser fixing
+
+changeset:   104:bc82df7f6bbe
+user:        lost@l-w.ca
+date:        Sat Aug 06 22:50:54 2011 -0600
+summary:     More command line args fixing
+
+changeset:   103:8b0be0fc42cf
+user:        lost@l-w.ca
+date:        Sat Aug 06 22:35:58 2011 -0600
+summary:     Fixed arg handling for short args in command line option parser - optional args for short opts should now work and options no longer need a space between option character and argument
+
+changeset:   102:f7a87c3a8e0e
+user:        lost@l-w.ca
+date:        Sat Aug 06 22:16:09 2011 -0600
+summary:     Set version to indicate development since 4.2
+
+changeset:   101:ed7f970f3688
+user:        lost@l-w.ca
+date:        Sat Aug 06 22:15:43 2011 -0600
+summary:     Added --define= option to predfine a symbol for assembly
+
+changeset:   100:7ce01324e391
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:51:33 2011 -0600
+summary:     Added tag lwtools-4.2 for changeset 1cb23a4e1e7d
+
+changeset:   99:1cb23a4e1e7d
+tag:         lwtools-4.2
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:50:52 2011 -0600
+summary:     Removed tag lwtools-4.2
+
+changeset:   98:40409fd84824
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:49:33 2011 -0600
+summary:     Silence compiler warning and tag 4.2 release
+
+changeset:   97:93ff2c8414f4
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:48:48 2011 -0600
+summary:     Added tag lwtools-4.2 for changeset 8ee33204fa79
+
+changeset:   96:8ee33204fa79
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:37:39 2011 -0600
+summary:     Set for 4.2 release
+
+changeset:   95:a23f732c5ce8
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:37:27 2011 -0600
+summary:     Fixed &-prefix decimal constant parse problem
+
+changeset:   94:61c084b2c727
+user:        lost@l-w.ca
+date:        Sat Aug 06 10:29:12 2011 -0600
+summary:     Fixed bug parsing %-prefix binary constants
+
+changeset:   93:5bf9edabd661
+user:        lost@l-w.ca
+date:        Wed Jun 22 19:28:36 2011 -0600
+summary:     Squashed the remaining memory leaks revealed by valgrind
+
+changeset:   92:19ca3108a223
+user:        lost@l-w.ca
+date:        Wed Jun 22 19:13:06 2011 -0600
+summary:     Fixed numerous *common* memory leaks in epxression code
+
+changeset:   91:95181f1ad183
+user:        lost@l-w.ca
+date:        Wed Jun 22 19:06:14 2011 -0600
+summary:     Really fix memory leaks
+
+changeset:   90:e20f9d59d5da
+user:        lost@l-w.ca
+date:        Wed Jun 22 18:58:10 2011 -0600
+summary:     Fixed memory leaks revealed by valgrind
+
+changeset:   89:651b85a98c1b
+user:        lost@l-w.ca
+date:        Wed Jun 22 18:57:59 2011 -0600
+summary:     Fixed memory leaks revealed by valgrind
+
+changeset:   88:1a1fdfe860d0
+user:        lost@l-w.ca
+date:        Wed Jun 22 18:57:42 2011 -0600
+summary:     Fixed several memory leaks revealed by valgrind
+
+changeset:   87:b5785eb3441f
+user:        lost@l-w.ca
+date:        Wed Jun 22 18:39:32 2011 -0600
+summary:     Actually initialize all fields of structure in lw_expr_create()
+
+changeset:   86:00ddfdc1e1e3
+user:        lost@l-w.ca
+date:        Wed Jun 22 18:32:46 2011 -0600
+summary:     Fixed wrong size in lw_alloc() for lw_stack_create()
+
+changeset:   85:8fa52c3f2970
+user:        lost@l-w.ca
+date:        Wed May 25 21:59:58 2011 -0600
+summary:     Make *pragma work correctly
+
+changeset:   84:16a72d9b6eb6
+user:        lost@l-w.ca
+date:        Wed May 25 21:42:01 2011 -0600
+summary:     Make ifdef work correctly
+
+changeset:   83:381cd2421fab
+user:        lost@l-w.ca
+date:        Wed May 25 20:05:34 2011 -0600
+summary:     Bump version to reflect ongoing development
+
+changeset:   82:adf4ce03a6a3
+user:        Lost Wizard (lost@starbug3)
+date:        Wed May 25 19:20:39 2011 -0600
+summary:     Made pragma nolist suppress listing symbols defined under the pragma when listing the symbol table
+
+changeset:   81:428068681cbf
+user:        Lost Wizard (lost@starbug3)
+date:        Wed May 25 19:13:33 2011 -0600
+summary:     Added nolist pragma to suppress listing output of non-code generating lines
+
+changeset:   80:585cd68253f0
+user:        lost@l-w.ca
+date:        Wed May 18 20:09:33 2011 -0600
+summary:     Version 4.1
+
+changeset:   79:17d82b46f4c9
+user:        lost@l-w.ca
+date:        Sat Apr 23 21:27:25 2011 -0600
+summary:     Removed excess verbosity from the 'ld' wrapper script
+
+changeset:   78:19df13313b27
+user:        lost@l-w.ca
+date:        Sat Apr 23 21:02:04 2011 -0600
+summary:     Updated default linkscript for lwex target
+
+changeset:   77:35f6d6a5510f
+user:        lost@l-w.ca
+date:        Wed Apr 20 21:42:02 2011 -0600
+summary:     Fixed typo in static lookup table for indexed modes
+
+changeset:   76:da74ccf4278c
+user:        lost@l-w.ca
+date:        Wed Apr 20 21:12:54 2011 -0600
+summary:     Fixed bug parsing octal constants under cescapes pragma
+
+changeset:   75:3d50022e16e7
+user:        lost@l-w.ca
+date:        Wed Apr 13 19:01:53 2011 -0600
+summary:     Restored pragma cescapes functionality
+
+changeset:   74:e95eaf2f7fe0
+user:        lost@l-w.ca
+date:        Tue Apr 12 17:58:13 2011 -0600
+summary:     Added missing newlines to error messages related to opening files
+
+changeset:   73:1f77ae5c3590
+user:        lost@l-w.ca
+date:        Tue Apr 12 17:56:51 2011 -0600
+summary:     Added --dependnoerr flag to list dependencies on non-existent files without bailing out; also suppress error reports during dependency generation
+
+changeset:   72:84eb35251849
+user:        lost@l-w.ca
+date:        Tue Apr 12 14:16:36 2011 -0600
+summary:     Added extra scripts that can be used to run gcc6809 with lwtools as its binutils
+
+changeset:   71:6dafb4f0fa56
+user:        lost@l-w.ca
+date:        Sun Apr 10 20:45:21 2011 -0600
+summary:     Fix crash during symbol registration when using object target
+
+changeset:   70:ceab04fd2969
+user:        lost@l-w.ca
+date:        Sun Apr 10 13:15:12 2011 -0600
+summary:     Fixed premature installation of external reference under UNDEFEXTERN pragma; should not resolve to external references until after the initial parsing pass
+
+changeset:   69:87026ec7e1c2
+user:        lost@l-w.ca
+date:        Sat Apr 09 01:45:48 2011 -0600
+summary:     Change version to represent past 4.0
+
+changeset:   68:99ce348b0e6b
+user:        lost@l-w.ca
+date:        Sat Apr 09 01:44:45 2011 -0600
+summary:     Fixed error in documentation - linkscripts use "entry" instead of "exec"
+
+changeset:   67:554831f03338
+user:        lost@l-w.ca
+date:        Sat Apr 09 01:44:01 2011 -0600
+summary:     Make lwlink more verbose about unrecognized linkscript lines
+
+changeset:   66:0359d9f1dfca
+user:        lost@l-w.ca
+date:        Fri Apr 08 21:38:15 2011 -0600
+summary:     Added tag lwtools-4.0 for changeset 05f1a31f8f1e
+
+changeset:   65:05f1a31f8f1e
+tag:         lwtools-4.0
+user:        lost@l-w.ca
+date:        Fri Apr 08 21:36:53 2011 -0600
+summary:     Set version to 4.0
+
+changeset:   64:8556e01ffcab
+user:        lost@l-w.ca
+date:        Fri Apr 08 21:36:07 2011 -0600
+summary:     Added note about status of lwbasic
+
+changeset:   63:74b82202d355
+user:        lost@l-w.ca
+date:        Thu Apr 07 18:44:43 2011 -0600
+summary:     Make for condition clearer
+
+changeset:   62:5b10ff307463
+user:        lost@l-w.ca
+date:        Thu Apr 07 18:38:09 2011 -0600
+summary:     Fixed problem with filename handling in includebin
+
+changeset:   61:ccaecdff3fc2
+user:        lost@l-w.ca
+date:        Wed Apr 06 21:35:49 2011 -0600
+summary:     Make structure definitions not affect current assembly address and fix up cosmetic offset display in listings
+
+changeset:   60:9ded7e6fc1b0
+user:        lost@l-w.ca
+date:        Wed Apr 06 20:31:37 2011 -0600
+summary:     Updated documentation to include recently added features
+
+changeset:   59:1830faeef332
+user:        lost@l-w.ca
+date:        Wed Apr 06 20:23:43 2011 -0600
+summary:     Added ?? prefix for opcode to inhibit macro expansion
+
+changeset:   58:62372522ce9c
+user:        lost@l-w.ca
+date:        Wed Apr 06 00:40:40 2011 -0600
+summary:     Clean up warning about unused variable
+
+changeset:   57:e2728091b75a
+user:        lost@l-w.ca
+date:        Wed Apr 06 00:12:33 2011 -0600
+summary:     Added a \* macro parameter expansion to include all macro parameters
+
+changeset:   56:337301ddf74a
+user:        lost@l-w.ca
+date:        Wed Apr 06 00:12:01 2011 -0600
+summary:     Fixed error with pragma and *pragma directives
+
+changeset:   55:bad2ee25acdd
+user:        lost@l-w.ca
+date:        Tue Apr 05 23:59:41 2011 -0600
+summary:     Added string comparison pseudo ops
+
+changeset:   54:2077b755b8b4
+user:        lost@l-w.ca
+date:        Tue Apr 05 21:50:23 2011 -0600
+summary:     Removed extraneous debugging statements from long option parsing routines
+
+changeset:   53:cb4efc47ce9d
+user:        lost@l-w.ca
+date:        Tue Apr 05 21:48:51 2011 -0600
+summary:     Allow macros to shadow/override builtin operations when the "shadow" pragma is active, which is NOT the default
+
+changeset:   52:51c840679a0e
+user:        lost@l-w.ca
+date:        Tue Apr 05 21:48:22 2011 -0600
+summary:     Fixed off by one bug parsing long options
+
+changeset:   51:fd1ecc5d6e69
+user:        lost@l-w.ca
+date:        Tue Apr 05 00:17:17 2011 -0600
+summary:     Added mention of NOEXPAND macro argument in manual
+
+changeset:   50:f55650f5e9b8
+user:        lost@l-w.ca
+date:        Tue Apr 05 00:12:58 2011 -0600
+summary:     Fixed problems with macro expansion supression
+
+changeset:   49:bd8b3fbd1e28
+user:        lost@l-w.ca
+date:        Tue Apr 05 00:06:28 2011 -0600
+summary:     Added ability to flag macros as "noexpand" so they are not expanded in the listing
+
+changeset:   48:1134255553bc
+user:        lost@l-w.ca
+date:        Mon Apr 04 22:20:38 2011 -0600
+summary:     Fix not defining the symbol when instantiating a struct
+
+changeset:   47:1d6a31a2586b
+user:        lost@l-w.ca
+date:        Mon Apr 04 22:15:33 2011 -0600
+summary:     Fixed multiple symbol error with nested structs
+
+changeset:   46:534bfa3389b0
+user:        lost@l-w.ca
+date:        Mon Apr 04 22:10:16 2011 -0600
+summary:     Fixed multiple symbol error with nested structs
+
+changeset:   45:c42d6dc7df68
+user:        lost@l-w.ca
+date:        Mon Apr 04 18:17:31 2011 -0600
+summary:     Fixed code generation error with indirect indexing using 8 or 16 bit offsets from X,Y,U,S
+
+changeset:   44:1bff302e62a3
+user:        lost@l-w.ca
+date:        Mon Apr 04 18:05:18 2011 -0600
+summary:     Accept negative sign after base prefix
+
+changeset:   43:18b49cf10ae9
+user:        lost@l-w.ca
+date:        Mon Apr 04 17:55:08 2011 -0600
+summary:     Added an instruction reduction immediately after instruction parsing to minimize memory footprint and expression complexity
+
+changeset:   42:31adb7c09b4e
+user:        lost@l-w.ca
+date:        Sat Apr 02 22:37:41 2011 -0600
+summary:     Cosmetic fixup in listings for SETDP
+
+changeset:   41:c6b8b455d67f
+user:        lost@l-w.ca
+date:        Sat Apr 02 22:33:39 2011 -0600
+summary:     Fix line number sequence after including a file
+
+changeset:   40:d96037ea0b80
+user:        lost@l-w.ca
+date:        Sat Apr 02 22:28:22 2011 -0600
+summary:     Fixed line number counting being broken by macros
+
+changeset:   39:23b01aa3ecf9
+user:        lost@l-w.ca
+date:        Sat Apr 02 02:48:36 2011 -0600
+summary:     Fixed missing NUL termination in macro expansion
+
+changeset:   38:7e92484cfbc3
+user:        lost@l-w.ca
+date:        Sat Apr 02 02:19:02 2011 -0600
+summary:     Caused expressions used in setdp and conditionals to be reduced on pass 1
+
+changeset:   37:a5d4693483af
+user:        lost@l-w.ca
+date:        Fri Apr 01 23:58:55 2011 -0600
+summary:     Fix hang while parsing long options
+
+changeset:   36:5325b640424d
+user:        Lost Wizard (lost@starbug3)
+date:        Tue Feb 08 22:42:12 2011 -0700
+summary:     First pass expression parsing
+
+changeset:   35:cdb0175e1063
+user:        Lost Wizard (lost@starbug3)
+date:        Sat Feb 05 14:22:54 2011 -0700
+summary:     More work on expressions
+
+changeset:   34:bfea77812e64
+user:        Lost Wizard (lost@starbug3)
+date:        Fri Feb 04 21:27:03 2011 -0700
+summary:     Start of assignment code
+
+changeset:   33:890a8f688889
+user:        lost@l-w.ca
+date:        Thu Feb 03 22:15:57 2011 -0700
+summary:     Basic parsing of local variable decls
+
+changeset:   32:49d608aecc4d
+user:        lost@l-w.ca
+date:        Thu Feb 03 22:00:47 2011 -0700
+summary:     Framework for handling local stack frame and/or variables
+
+changeset:   31:574931d87abd
+user:        lost@l-w.ca
+date:        Thu Feb 03 21:28:24 2011 -0700
+summary:     Created a function to prettyprint the current lexer token
+
+changeset:   30:bcd532a90e53
+user:        lost@l-w.ca
+date:        Thu Feb 03 21:19:11 2011 -0700
+summary:     Renamed "compiler" to "parser" for more consistent terminology
+
+changeset:   29:bc96cd02fbf4
+user:        lost@l-w.ca
+date:        Fri Jan 28 22:35:04 2011 -0700
+summary:     Added basic symbol table structure
+
+changeset:   28:9ac1c97d01db
+user:        lost@l-w.ca
+date:        Fri Jan 28 22:34:49 2011 -0700
+summary:     Fixed up hgignore
+
+changeset:   27:77626fc37af2
+user:        lost@l-w.ca
+date:        Thu Jan 27 20:46:44 2011 -0700
+summary:     Added support for removing stack from in epilog
+
+changeset:   26:26aa76da75ad
+user:        lost@l-w.ca
+date:        Thu Jan 27 20:44:57 2011 -0700
+summary:     Additional parsing in function/sub; emission of prolog/epilog code
+
+changeset:   25:87590f43e76d
+user:        lost@l-w.ca
+date:        Mon Jan 24 20:08:09 2011 -0700
+summary:     Started lwbasic parser; checkpoint
+
+changeset:   24:421d7ceb4d86
+user:        lost@l-w.ca
+date:        Mon Jan 24 18:31:07 2011 -0700
+summary:     Fixed missing return value
+
+changeset:   23:25a4aef9c5ed
+user:        lost@l-w.ca
+date:        Sat Jan 22 21:13:09 2011 -0700
+summary:     lwbasic: Added basic character input framework
+
+changeset:   22:7c35fa8dbc91
+user:        lost@l-w.ca
+date:        Sat Jan 22 21:01:03 2011 -0700
+summary:     Added initial framework for lwbasic
+
+changeset:   21:ac311e7ffed6
+user:        lost@l-w.ca
+date:        Sat Jan 22 18:28:07 2011 -0700
+summary:     Split lw_alloc.c for better linking
+
+changeset:   20:f4df3bd4b85f
+user:        lost@l-w.ca
+date:        Sat Jan 22 18:06:37 2011 -0700
+summary:     Moved removal of dep files to realclean and properly remove any .exe files
+
+changeset:   19:06c4a2b72b24
+user:        lost@l-w.ca
+date:        Sat Jan 22 17:42:22 2011 -0700
+summary:     Adjusted PDF manual build to remove extraneous .html file that is currently produced by docbook2pdf
+
+changeset:   18:8eddaa2ab6c0
+user:        lost@l-w.ca
+date:        Sat Jan 22 17:41:55 2011 -0700
+summary:     Added note about gnu make being suggested
+
+changeset:   17:4969bd6f3b7d
+user:        lost@l-w.ca
+date:        Sat Jan 22 17:33:54 2011 -0700
+summary:     Fixed up glitch with Makefile causing binaries to always be considered out of date
+
+changeset:   16:2f98cf1558e1
+user:        lost@l-w.ca
+date:        Sat Jan 22 17:00:15 2011 -0700
+summary:     Added building of manual from docbook source to Makefile
+
+changeset:   15:ed5cbe83cbd3
+user:        lost@l-w.ca
+date:        Sat Jan 22 16:22:51 2011 -0700
+summary:     Added ignore file for hg
+
+changeset:   14:5ecdc4dae84d
+user:        lost@l-w.ca
+date:        Sat Jan 22 16:19:48 2011 -0700
+summary:     Brought forward patch to make tabs in listings always display as 8 spaces wide by converting tabs to spaces
+
+changeset:   13:c80e5a063967
+user:        lost@l-w.ca
+date:        Sat Jan 22 16:15:32 2011 -0700
+summary:     Brought forward patch to fix segfault with output outside of a section
+
+changeset:   12:6b9991fb39b6
+user:        lost@l-w.ca
+date:        Sat Jan 22 16:11:15 2011 -0700
+summary:     Brought forward patch to fix bug with complex external references generating invalid relocations in the object file
+
+changeset:   11:a0317b794b7b
+user:        lost@l-w.ca
+date:        Sat Jan 22 16:10:42 2011 -0700
+summary:     Make output tidying
+
+changeset:   10:127e5b1e01c0
+user:        lost@l-w.ca
+date:        Sat Jan 22 10:37:53 2011 -0700
+summary:     Removed use of asprintf() and added Makefile options for cross compiling; also a bugfix with sizeof{} in lwasm
+
+changeset:   9:6eed14cccac9
+user:        lost@l-w.ca
+date:        Sat Jan 22 10:04:32 2011 -0700
+summary:     Switched lwar to lw_cmdline and brought in lwlib
+
+changeset:   8:fdc11ef4115b
+user:        lost@l-w.ca
+date:        Sat Jan 22 09:58:24 2011 -0700
+summary:     Switched lwlink to lw_cmdline from argp and also brought in lw_alloc and lw_string to replace util.c
+
+changeset:   7:917b608b8c66
+user:        lost@l-w.ca
+date:        Sat Jan 22 09:40:52 2011 -0700
+summary:     Switched lwasm to lw_cmdline from argp
+
+changeset:   6:1e5e8ec406fb
+user:        lost@l-w.ca
+date:        Sat Jan 22 09:31:43 2011 -0700
+summary:     Various output cleanups for --help and --usage in lw_cmdline
+
+changeset:   5:0e01d1343c02
+user:        lost@l-w.ca
+date:        Fri Jan 21 23:19:19 2011 -0700
+summary:     Added basic --help routine to lw_cmdline
+
+changeset:   4:a4812d57ed13
+user:        lost@l-w.ca
+date:        Fri Jan 21 22:54:48 2011 -0700
+summary:     Started implementing command line parsing in lwlib
+
+changeset:   3:d4eb3c328a47
+user:        lost@l-w.ca
+date:        Thu Jan 20 22:56:29 2011 -0700
+summary:     Typo fixes
+
+changeset:   2:7317fbe024af
+user:        lost@l-w.ca
+date:        Thu Jan 20 22:39:46 2011 -0700
+summary:     Clean up insane number of compiler warnings under -Wall
+
+changeset:   1:96c4dc89016e
+user:        lost@l-w.ca
+date:        Wed Jan 19 22:31:00 2011 -0700
+summary:     Removed unneeded setting for CC in Makefile
+
+changeset:   0:2c24602be78f
+user:        lost@l-w.ca
+date:        Wed Jan 19 22:27:17 2011 -0700
+summary:     Initial import from lwtools 3.0.1 version, with new hand built build system and file reorganization
+

@@ -36,13 +36,21 @@ Write-Host "Checking for local lwasm: $localLwasm"
 if (Test-Path $localLwasm) {
     Write-Host "Found local lwasm at: $localLwasm"
     try {
+        # Change to project root directory for correct include paths
+        $projectRoot = (Split-Path (Split-Path (Split-Path (Split-Path $scriptDir))))
+        Write-Host "Changing to project root: $projectRoot"
+        Push-Location $projectRoot
+        
         Write-Host "Running lwasm with args: $($lwArgs -join ' ')"
         & $localLwasm @lwArgs
         $exitCode = $LASTEXITCODE
+        
+        Pop-Location
         Write-Host "lwasm exit code: $exitCode"
         exit $exitCode
     }
     catch {
+        Pop-Location
         Write-Host "Error running lwasm: $($_.Exception.Message)"
         exit 1
     }
