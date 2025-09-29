@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
+import { watch } from 'fs';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -366,14 +367,33 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       }
       // On success, look for produced bin with same stem (.bin) and emit event for renderer to load via WASM
       const binPath = outAsm.replace(/\.asm$/, '.bin');
+      console.log(`[DEBUG] Compilation completed. Looking for binary at: ${binPath}`);
+      console.log(`[DEBUG] ASM path: ${outAsm}`);
+      
+      // Add small delay to ensure file system operations complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       try {
+        // Check if file exists first
+        const exists = await fs.access(binPath).then(() => true).catch(() => false);
+        console.log(`[DEBUG] Binary file exists: ${exists}`);
+        
+        if (!exists) {
+          // List files in directory to help debug
+          const dir = require('path').dirname(binPath);
+          const files = await fs.readdir(dir).catch(() => []);
+          console.log(`[DEBUG] Files in directory ${dir}:`, files.filter(f => f.includes('bouncing_ball')));
+        }
+        
         const buf = await fs.readFile(binPath);
         const base64 = Buffer.from(buf).toString('base64');
+        console.log(`[DEBUG] Successfully read binary: ${buf.length} bytes`);
         mainWindow?.webContents.send('run://status', `Compilation succeeded: ${binPath} (${buf.length} bytes)`);
         // Notify renderer (which owns WASM emulator) to load binary
         mainWindow?.webContents.send('emu://compiledBin', { base64, size: buf.length, binPath });
         resolvePromise({ ok: true, binPath, size: buf.length, stdout: stdoutBuf, stderr: stderrBuf });
       } catch (e:any) {
+        console.log(`[DEBUG] Error reading binary file:`, e);
         mainWindow?.webContents.send('run://status', `Compiled but failed to read bin: ${e?.message}`);
         resolvePromise({ error: 'bin_read_failed', detail: e?.message });
       }
@@ -470,6 +490,98 @@ ipcMain.handle('file:openFolder', async () => {
   return { path: p };
 });
 
+ipcMain.handle('file:readDirectory', async (_e, dirPath: string) => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    async function readDirRecursive(currentPath: string, relativePath: string = ''): Promise<any[]> {
+      const entries = await fs.readdir(currentPath, { withFileTypes: true });
+      const result = [];
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
+        
+        if (entry.isDirectory()) {
+          const children = await readDirRecursive(fullPath, relPath);
+          result.push({
+            name: entry.name,
+            path: relPath,
+            isDir: true,
+            children: children
+          });
+        } else {
+          result.push({
+            name: entry.name,
+            path: relPath,
+            isDir: false
+          });
+        }
+      }
+      
+      // Sort: directories first, then files, alphabetically
+      return result.sort((a, b) => {
+        if (a.isDir && !b.isDir) return -1;
+        if (!a.isDir && b.isDir) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    
+    const files = await readDirRecursive(dirPath);
+    return { files };
+  } catch (error) {
+    return { error: `Failed to read directory: ${error}` };
+  }
+});
+
+// Delete file or directory
+ipcMain.handle('file:delete', async (_e, filePath: string) => {
+  if (!filePath) return { error: 'no_path' };
+  
+  try {
+    const stat = await fs.stat(filePath);
+    
+    if (stat.isDirectory()) {
+      // Delete directory recursively
+      await fs.rm(filePath, { recursive: true, force: true });
+    } else {
+      // Delete single file
+      await fs.unlink(filePath);
+    }
+    
+    return { success: true, path: filePath };
+  } catch (e: any) {
+    return { error: e?.message || 'delete_failed' };
+  }
+});
+
+// Move file or directory
+ipcMain.handle('file:move', async (_e, args: { sourcePath: string; targetDir: string }) => {
+  const { sourcePath, targetDir } = args;
+  if (!sourcePath || !targetDir) return { error: 'missing_paths' };
+  
+  try {
+    const sourceName = basename(sourcePath);
+    const targetPath = join(targetDir, sourceName);
+    
+    // Check if target already exists
+    try {
+      await fs.stat(targetPath);
+      return { error: 'target_exists', targetPath };
+    } catch {
+      // Target doesn't exist, good to proceed
+    }
+    
+    // Move the file/directory
+    await fs.rename(sourcePath, targetPath);
+    
+    return { success: true, sourcePath, targetPath };
+  } catch (e: any) {
+    return { error: e?.message || 'move_failed' };
+  }
+});
+
 ipcMain.handle('recents:load', async () => {
   const list = await loadRecents();
   return list;
@@ -478,6 +590,83 @@ ipcMain.handle('recents:write', async (_e, list: any[]) => {
   recentsCache = Array.isArray(list) ? list : [];
   await persistRecents();
   return { ok: true };
+});
+
+// File watcher system
+const watchers = new Map<string, ReturnType<typeof watch>>();
+
+ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
+  try {
+    if (watchers.has(dirPath)) {
+      // Already watching this directory
+      return { ok: true };
+    }
+
+    const watcher = watch(dirPath, { recursive: true }, (eventType, filename) => {
+      if (!filename) return;
+      
+      const fullPath = join(dirPath, filename);
+      
+      // Skip temporary files and hidden files
+      if (filename.startsWith('.') || filename.includes('~') || filename.endsWith('.tmp')) {
+        return;
+      }
+      
+      // Determine if it's a directory by trying to stat it
+      let isDir = false;
+      try {
+        const stat = require('fs').statSync(fullPath);
+        isDir = stat.isDirectory();
+      } catch {
+        // File might have been deleted, assume it's a file
+        isDir = false;
+      }
+      
+      let changeType: 'added' | 'removed' | 'changed' = 'changed';
+      
+      // Try to determine if file was added or removed
+      try {
+        require('fs').accessSync(fullPath);
+        changeType = eventType === 'rename' ? 'added' : 'changed';
+      } catch {
+        changeType = 'removed';
+      }
+      
+      console.log(`[FileWatcher] ${changeType}: ${filename} (dir: ${isDir})`);
+      
+      // Notify renderer
+      mainWindow?.webContents.send('file://changed', {
+        type: changeType,
+        path: filename,
+        isDir
+      });
+    });
+    
+    watchers.set(dirPath, watcher);
+    console.log(`[FileWatcher] Started watching: ${dirPath}`);
+    return { ok: true };
+  } catch (error) {
+    console.error(`[FileWatcher] Error watching directory ${dirPath}:`, error);
+    return { ok: false, error: `Failed to watch directory: ${error}` };
+  }
+});
+
+ipcMain.handle('file:unwatchDirectory', async (_e, dirPath: string) => {
+  const watcher = watchers.get(dirPath);
+  if (watcher) {
+    watcher.close();
+    watchers.delete(dirPath);
+    console.log(`[FileWatcher] Stopped watching: ${dirPath}`);
+  }
+  return { ok: true };
+});
+
+// Clean up watchers when app closes
+app.on('before-quit', () => {
+  for (const watcher of watchers.values()) {
+    watcher.close();
+  }
+  watchers.clear();
 });
 
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper

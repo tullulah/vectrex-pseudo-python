@@ -1282,3 +1282,623 @@ Checklist rápido para la nueva sesión (ejecutar al retomar):
 2. `git ls-files -v | findstr \"^H \"` asegurando que ningún archivo clave aparece con H.
 3. Añadir un sentinel trivial a un archivo no crítico y confirmar `git status` lo ve.
 4. Continuar con tareas jsvecx según lista arriba.
+
+---
+
+## 65. IDE Improvements - File Watching & Workspace Persistence (2025-01-22)
+
+### Implementaciones Completadas
+
+**File Watcher System**:
+- ✅ **main.ts**: Sistema completo de file watcher usando Node.js `fs.watch` API
+- ✅ **preload.ts**: APIs seguras para watching (`watchDirectory`, `unwatchDirectory`, `onFileChanged`)
+- ✅ **FileTreePanel.tsx**: Auto-refresh del tree view + botón manual de refresh
+- ✅ **Recursive monitoring**: Detecta cambios en subdirectorios automáticamente
+- ✅ **Cleanup**: File watchers se cierran apropiadamente al salir de la app
+
+**Workspace Auto-Restoration**:
+- ✅ **projectStore.ts**: 
+  - Propiedad `lastWorkspacePath` persistida en localStorage
+  - Función `restoreLastWorkspace()` con manejo de errores
+  - Auto-guarda último workspace al abrir proyecto
+- ✅ **main.tsx**: Auto-restauración al iniciar la aplicación
+- ✅ **Persistence config**: `lastWorkspacePath` incluido en partialización de Zustand
+
+**VPy Compiler Fixes**:
+- ✅ **bouncing_ball_fixed.vpy**: Demo funcional con sintaxis simplificada compatible
+- ✅ **bouncing_ball_advanced.vpy**: Demo avanzada con efectos visuales y borders
+- ✅ **Compiler flag**: `--bin` requerido para generar archivos binarios (.bin)
+- ✅ **Build integration**: IDE llama correctamente `vectrex_lang.exe --bin` para compilación
+
+**Development Workflow**:
+- ✅ **test-ide.ps1**: Script PowerShell separado para evitar interferencia con terminal Electron
+- ✅ **Proper terminal separation**: No usar terminal de Electron para comandos del sistema
+- ✅ **Build verification**: Test completo de Rust compiler + TypeScript frontend + VPy compilation
+
+### Estado Técnico
+
+**File Watching Architecture**:
+```typescript
+// Main Process (main.ts)
+const watchers = new Map<string, fs.FSWatcher>();
+ipcMain.handle('watch-directory', async (_, dirPath) => {
+  const watcher = fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
+    mainWindow?.webContents.send('file-changed', { eventType, filename, dirPath });
+  });
+  watchers.set(dirPath, watcher);
+});
+
+// Renderer (FileTreePanel.tsx)  
+useEffect(() => {
+  const cleanup = window.electronAPI?.onFileChanged?.((data) => {
+    console.log('File changed:', data);
+    refreshWorkspace();
+  });
+  return cleanup;
+}, [refreshWorkspace]);
+```
+
+**Workspace Persistence Pattern**:
+```typescript
+// projectStore.ts - Zustand with persistence
+export const useProjectStore = create<ProjectState>()(
+  persist(
+    (set, get) => ({
+      lastWorkspacePath: undefined,
+      restoreLastWorkspace: async () => {
+        const lastPath = get().lastWorkspacePath;
+        if (!lastPath) return;
+        // Auto-restore logic with error handling
+      },
+    }),
+    {
+      name: 'vpy-workspace-storage',
+      partialize: (state) => ({ 
+        recentWorkspaces: state.recentWorkspaces,
+        lastWorkspacePath: state.lastWorkspacePath // ← Persisted
+      })
+    }
+  )
+);
+```
+
+### Debugging & Testing
+
+**PowerShell Script Usage**:
+```powershell
+# Full build and test
+.\test-ide.ps1
+
+# Skip build, just test compilation  
+.\test-ide.ps1 -SkipBuild
+
+# Include browser opening
+.\test-ide.ps1 -OpenBrowser
+```
+
+**File Watcher Debug Output**:
+- Console logs en main process para debugging de file events
+- Frontend logs para refresh operations
+- Error handling para directorios inaccesibles
+
+### Limitaciones Conocidas
+
+**VPy Compiler Constraints**:
+- Requiere sintaxis simplificada (no complex control flow)
+- `--bin` flag obligatorio o no genera binarios
+- Error messages limitados para debugging
+
+**File Watcher Performance**:
+- Recursive watching puede ser costoso en directorios grandes
+- No filtering de file types (watches todos los cambios)
+- Potential for excessive refresh calls
+
+### Próximos Pasos Sugeridos
+
+**UX Improvements**:
+- Debouncing para file watcher events (evitar refresh excesivo)
+- File type filtering para watchers
+- Progress indicators para workspace restoration
+
+**Error Handling**:
+- Better error messages para compilation failures
+- Recovery mechanisms para workspace corruption
+- Fallback paths cuando auto-restoration falla
+
+**Performance**:
+- Lazy loading para file trees grandes
+- Incremental refresh (solo cambios detectados)
+- Background compilation para VPy files
+
+### Archivos Clave Modificados
+
+- `ide/frontend/src/main.tsx` - Auto-restoration logic
+- `ide/frontend/src/state/projectStore.ts` - Workspace persistence  
+- `ide/electron/main.ts` - File watcher implementation
+- `ide/electron/preload.ts` - Secure IPC APIs
+- `ide/frontend/src/components/FileTreePanel.tsx` - Auto-refresh UI
+- `test-ide.ps1` - Separate testing script
+- `bouncing_ball_fixed.vpy` & `bouncing_ball_advanced.vpy` - Working demos
+
+---
+
+## 66. File Deletion from TreeView (2025-01-22)
+
+### Implementación Completada
+
+**File Deletion API**:
+- ✅ **main.ts**: Handler `file:delete` para eliminación de archivos y directorios
+- ✅ **preload.ts**: API segura `deleteFile()` expuesta al renderer
+- ✅ **Recursive deletion**: Soporte para eliminar directorios con todo su contenido
+- ✅ **Error handling**: Manejo robusto de errores con mensajes informativos
+
+**TreeView Enhancement**:  
+- ✅ **FileTreePanel.tsx**: 
+  - Selección visual de archivos con highlight azul
+  - Detection de tecla `Suprimir` para eliminar archivo seleccionado
+  - Confirmación de eliminación con dialog nativo
+  - Auto-cierre de documentos abiertos cuando se elimina el archivo
+- ✅ **UI/UX**: Help text mostrando tecla `Supr` cuando hay archivo seleccionado
+- ✅ **Document management**: Cierre automático de editores cuando se elimina el archivo correspondiente
+
+### Funcionalidad Técnica
+
+**API Implementation**:
+```typescript
+// main.ts - Electron Main Process
+ipcMain.handle('file:delete', async (_e, filePath: string) => {
+  const stat = await fs.stat(filePath);
+  if (stat.isDirectory()) {
+    await fs.rm(filePath, { recursive: true, force: true }); // Delete directory
+  } else {
+    await fs.unlink(filePath); // Delete file
+  }
+  return { success: true, path: filePath };
+});
+
+// preload.ts - Secure API Bridge
+deleteFile: (path: string) => ipcRenderer.invoke('file:delete', path)
+```
+
+**TreeView Selection & Deletion**:
+```typescript
+// FileTreePanel.tsx - File selection and deletion logic
+const handleDeleteFile = async (filePath: string, fileName: string, isDir: boolean) => {
+  const confirmed = window.confirm(`¿Eliminar ${isDir ? 'carpeta' : 'archivo'} "${fileName}"?`);
+  if (!confirmed) return;
+  
+  const result = await (window as any).files?.deleteFile?.(fullPath);
+  
+  // Close open documents if file/folder deleted
+  if (!isDir) {
+    const openDoc = documents.find(doc => doc.diskPath === fullPath);
+    if (openDoc) closeDocument(openDoc.uri);
+  } else {
+    // Close all documents inside deleted folder
+    documents.forEach(doc => {
+      if (doc.diskPath?.startsWith(fullPath)) closeDocument(doc.uri);
+    });
+  }
+  
+  await refreshWorkspace(); // Update tree view
+};
+
+// Keyboard handler for Delete key
+useEffect(() => {
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Delete' && selectedFile) {
+      // Delete selected file
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+}, [selectedFile]);
+```
+
+### User Experience
+
+**Workflow**:
+1. **Selección**: Click en archivo/carpeta en TreeView → Highlight azul
+2. **Eliminación**: Presionar tecla `Suprimir` → Dialog de confirmación
+3. **Confirmación**: "¿Estás seguro de que quieres eliminar [tipo] '[nombre]'?"
+4. **Auto-close**: Si archivo estaba abierto en editor → se cierra automáticamente
+5. **Refresh**: TreeView se actualiza automáticamente mostrando cambios
+
+**Visual Feedback**:
+- Selected file highlighted in blue (`#0e639c`)
+- Help text: "Presiona `Supr` para eliminar el archivo seleccionado"
+- Native confirmation dialog with file/folder type and name
+- Automatic TreeView refresh after successful deletion
+
+### Safety Features
+
+**Confirmation Dialogs**:
+- Different messages for files vs folders
+- Folder deletion warns: "Esta acción eliminará la carpeta y todo su contenido"
+- File deletion warns: "Esta acción no se puede deshacer"
+- User can cancel operation at any time
+
+**Document Management**:
+- Automatic closure of open editors when file is deleted
+- Recursive document closure for folder deletions (closes all files inside)
+- Workspace refresh to reflect filesystem changes
+- Selection state cleanup when deleted file was selected
+
+### Error Handling
+
+**Robust Error Management**:
+- File system permission errors caught and displayed
+- Invalid path handling with user-friendly messages
+- Graceful handling of already-deleted files
+- Console logging for debugging purposes
+
+### Testing
+
+**Test File Created**: `test_delete_me.txt` - Sample file for testing deletion functionality
+
+**Test Workflow**:
+1. Open IDE and load workspace containing test file
+2. Select `test_delete_me.txt` in TreeView (should highlight blue)
+3. Open file in editor (optional)
+4. Press `Delete` key → Should show confirmation dialog
+5. Confirm deletion → File should disappear from TreeView and close in editor
+6. Verify file is actually deleted from filesystem
+
+### Archivos Modificados
+
+- `ide/electron/src/main.ts` - Added `file:delete` IPC handler
+- `ide/electron/src/preload.ts` - Added `deleteFile` API
+- `ide/frontend/src/components/panels/FileTreePanel.tsx` - Complete deletion functionality
+- `test_delete_me.txt` - Test file for verification
+
+---
+
+## 67. TreeView UI/UX Improvements (2025-01-22)
+
+### Mejoras Implementadas
+
+**Visual Design Overhaul**:
+- ✅ **VSCode-style Tree Icons**: Flecha triangular (`▶`) que rota 90° al expandir carpetas
+- ✅ **Proper Indentation**: Indentación de 12px por nivel con líneas visuales claras
+- ✅ **Black Scrollbar**: Scrollbar negro/gris como el del editor Monaco (webkit-scrollbar)
+- ✅ **Clean Icons**: Iconos de archivo simplificados (todos 📄 para archivos, 📁/📂 para carpetas)
+- ✅ **Selection Highlighting**: Múltiples archivos seleccionados con highlight azul
+
+**Multi-Selection Support**:
+- ✅ **Ctrl/Cmd+Click**: Selección múltiple con teclas modificadoras
+- ✅ **Visual Feedback**: Todos los archivos seleccionados se muestran highlighted
+- ✅ **Multi-Delete**: Eliminar múltiples archivos con confirmación grupal
+- ✅ **Selection State**: Estado de selección persistente hasta nueva interacción
+
+**Drag & Drop File Moving**:  
+- ✅ **main.ts**: Nueva API `file:move` para mover archivos entre carpetas
+- ✅ **preload.ts**: API segura `moveFile()` expuesta al renderer
+- ✅ **Drag Visual**: Archivos arrastrados se muestran semi-transparentes (opacity: 0.5)  
+- ✅ **Drop Zones**: Solo carpetas aceptan drops con visual feedback
+- ✅ **Document Update**: Editores abiertos se actualizan automáticamente al mover archivos
+- ✅ **Error Handling**: Manejo de conflictos de nombres y permisos
+
+**UI Polish**:
+- ✅ **Removed Help Text**: Eliminado "Presiona Supr para eliminar..." (funcionalidad estándar)
+- ✅ **Removed JSVecX Text**: Eliminado "JSVecX Emulator - Canvas renders automatically"
+- ✅ **Compact Layout**: Altura de línea reducida (20px) y espaciado optimizado
+- ✅ **User Select**: `user-select: none` para prevenir selección de texto accidental
+
+### Implementación Técnica
+
+**Multi-Selection Logic**:
+```typescript
+// FileTreePanel.tsx - Multi-selection with Ctrl/Cmd
+const handleFileClick = async (node: FileNode, event?: React.MouseEvent) => {
+  if (event?.ctrlKey || event?.metaKey) {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(node.path)) {
+        next.delete(node.path); // Toggle off
+      } else {
+        next.add(node.path);    // Add to selection
+      }
+      return next;
+    });
+    return; // Don't open file on multi-select
+  } else {
+    setSelectedFiles(new Set([node.path])); // Single selection
+  }
+};
+```
+
+**Drag & Drop Implementation**:
+```typescript
+// Drag start
+onDragStart={(e) => {
+  setDraggedFiles(prev => new Set([...prev, node.path]));
+  e.dataTransfer.setData('text/plain', JSON.stringify({ 
+    type: 'file', path: node.path, name: node.name, isDir: node.isDir
+  }));
+}}
+
+// Drop handling with file moving
+onDrop={async (e) => {
+  const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+  const result = await window.files?.moveFile?.({ sourcePath, targetDir });
+  // Update open documents and refresh workspace
+}}
+```
+
+**VSCode-Style Tree Rendering**:
+```typescript
+// Tree node with expansion arrow and proper indentation
+<div style={{ paddingLeft: depth * 12 }}>
+  {node.isDir && (
+    <span style={{
+      transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+      transition: 'transform 0.1s ease'
+    }}>▶</span>
+  )}
+  <span>{getFileIcon(node)}</span>
+  <span>{node.name}</span>
+</div>
+```
+
+**Black Scrollbar Styling**:
+```css
+/* global.css - Custom scrollbar for file tree */
+.file-tree-scroll::-webkit-scrollbar {
+  width: 14px;
+}
+.file-tree-scroll::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+.file-tree-scroll::-webkit-scrollbar-thumb {
+  background-color: #424242;
+  border-radius: 7px;
+  border: 3px solid #1e1e1e;
+}
+```
+
+### User Experience
+
+**Tree Navigation**:
+- Click en carpeta → Expandir/contraer con animación suave de flecha
+- Indentación visual clara para jerarquía de carpetas
+- Scrollbar consistente con el tema del editor
+
+**File Selection**:
+- Click simple → Selección única (abre archivo si es archivo)
+- Ctrl/Cmd+Click → Selección múltiple (no abre archivo)
+- Delete key → Elimina archivo(s) seleccionado(s) con confirmación
+
+**File Moving**:
+- Drag archivo → Visual feedback (semi-transparente)
+- Drop en carpeta → Mueve archivo automáticamente
+- Conflictos de nombres → Dialog de error informativo
+- Documentos abiertos → Se actualizan automáticamente
+
+### Safety & Error Handling
+
+**Move Operation Safety**:
+- Check de existencia de archivo destino antes de mover
+- Mensajes de error específicos ("target_exists", "move_failed")
+- Rollback automático en caso de error parcial
+- Preservation of file permissions and timestamps
+
+**Document Consistency**:
+- Automatic URI update for moved files in open editors
+- Workspace refresh to reflect filesystem changes
+- Selection state cleanup after operations
+- Console logging for debugging move operations
+
+### Performance Optimizations
+
+**Efficient Updates**:
+- Batch file watcher refreshes (200ms debounce)
+- Minimal re-renders with React keys on file paths  
+- Set-based selection state for O(1) lookups
+- Transition animations only on hover/expand for smooth UX
+
+### Archivos Modificados
+
+**Frontend**:
+- `ide/frontend/src/components/panels/FileTreePanel.tsx` - Complete TreeView rewrite
+- `ide/frontend/src/global.css` - Black scrollbar styling
+- `ide/frontend/src/components/panels/EmulatorPanel.tsx` - Removed JSVecX text
+
+**Backend**:
+- `ide/electron/src/main.ts` - Added `file:move` API
+- `ide/electron/src/preload.ts` - Added `moveFile` API
+
+---
+
+## 68. TreeView Indentation Fix & Emulator Settings Persistence (2025-01-22)
+
+### Problemas Corregidos
+
+**TreeView Indentation Fixed**:
+- ✅ **Padding Issue**: Corregido `paddingLeft` siendo sobrescrito por `padding`
+- ✅ **VSCode Guide Lines**: Añadidas líneas guía verticales (`#333`, opacity 0.4) como VSCode
+- ✅ **Proper Depth Calculation**: Indentación correcta de 16px por nivel
+- ✅ **Visual Hierarchy**: Contenido de carpetas ahora se muestra claramente indentado
+
+**Emulator Settings Persistence**:
+- ✅ **Audio State**: El botón mute/unmute se persiste entre sesiones
+- ✅ **Overlay State**: Estado de overlay visible/oculto se persiste
+- ✅ **Last ROM Selection**: Última ROM seleccionada se restaura automáticamente
+- ✅ **Auto-restore**: Al abrir el emulador, restaura la última ROM si está disponible
+
+### Implementación Técnica
+
+**TreeView Indentation & Guide Lines**:
+```tsx
+// FileTreePanel.tsx - Fixed indentation with guide lines
+const renderFileNode = (node: FileNode, depth: number = 0) => {
+  const indent = depth * 16;
+  
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* VSCode-style guide lines */}
+      {depth > 0 && (
+        <div style={{
+          position: 'absolute',
+          left: depth * 16 - 8,
+          top: 0,
+          bottom: 0,
+          width: 1,
+          backgroundColor: '#333',
+          opacity: 0.4
+        }} />
+      )}
+      
+      <div style={{
+        paddingLeft: indent + 4,  // Proper indentation
+        paddingRight: 4,
+        paddingTop: 2,
+        paddingBottom: 2,
+        // ... rest of styles
+      }}>
+        {/* File/folder content */}
+      </div>
+    </div>
+  );
+};
+```
+
+**Persistent Emulator Settings Store**:
+```typescript
+// emulatorSettings.ts - New Zustand store with persistence
+interface EmulatorSettings {
+  audioEnabled: boolean;
+  overlayEnabled: boolean;
+  lastRomPath: string | null;
+  lastRomName: string | null;
+  
+  setAudioEnabled: (enabled: boolean) => void;
+  setOverlayEnabled: (enabled: boolean) => void;
+  setLastRom: (path: string | null, name: string | null) => void;
+}
+
+export const useEmulatorSettings = create<EmulatorSettings>()(
+  persist(
+    (set) => ({
+      audioEnabled: true,        // Default unmuted
+      overlayEnabled: true,      // Default overlay on
+      lastRomPath: null,
+      lastRomName: null,
+      
+      setAudioEnabled: (enabled) => set({ audioEnabled: enabled }),
+      setOverlayEnabled: (enabled) => set({ overlayEnabled: enabled }),
+      setLastRom: (path, name) => set({ lastRomPath: path, lastRomName: name }),
+    }),
+    {
+      name: 'vpy-emulator-settings',
+      partialize: (state) => ({
+        audioEnabled: state.audioEnabled,
+        overlayEnabled: state.overlayEnabled,
+        lastRomPath: state.lastRomPath,
+        lastRomName: state.lastRomName,
+      })
+    }
+  )
+);
+```
+
+**EmulatorPanel Integration**:
+```tsx
+// EmulatorPanel.tsx - Using persistent settings
+export const EmulatorPanel: React.FC = () => {
+  const { 
+    audioEnabled, overlayEnabled, lastRomPath, lastRomName,
+    setAudioEnabled, setOverlayEnabled, setLastRom 
+  } = useEmulatorSettings();
+  
+  // Initialize selectedROM with last selection
+  const [selectedROM, setSelectedROM] = useState<string>(lastRomName || '');
+  
+  // Auto-restore last ROM on startup
+  useEffect(() => {
+    if (lastRomName && lastRomName !== selectedROM) {
+      console.log('[EmulatorPanel] Auto-restoring last ROM:', lastRomName);
+      setSelectedROM(lastRomName);
+      if (availableROMs.includes(lastRomName)) {
+        loadROMFromDropdown(lastRomName);
+      }
+    }
+  }, [lastRomName, availableROMs, selectedROM]);
+  
+  // Save ROM selection on change
+  const handleROMChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const romName = e.target.value;
+    setSelectedROM(romName);
+    setLastRom(null, romName); // Persist selection
+    if (romName) {
+      loadROMFromDropdown(romName);
+    }
+  };
+};
+```
+
+### User Experience Improvements
+
+**TreeView Navigation**:
+- Carpetas expandidas muestran contenido con indentación visual clara
+- Líneas guía verticales conectan elementos hijo con padres
+- Jerarquía de archivos fácil de seguir visualmente
+- Consistente con el diseño de VSCode
+
+**Emulator State Persistence**:  
+- Audio mute/unmute se recuerda entre sesiones
+- Overlay show/hide se mantiene como se dejó
+- Última ROM seleccionada se restaura automáticamente
+- No necesidad de reconfigurar el emulador cada vez
+
+### Visual Changes
+
+**TreeView Structure**:
+```
+📁 folder1                    # depth 0
+│ 📄 file1.txt               # depth 1, guide line at 8px
+│ 📁 subfolder               # depth 1, guide line at 8px
+│ │ 📄 nested_file.vpy       # depth 2, guide line at 24px
+│ │ 📄 another_file.txt      # depth 2, guide line at 24px
+│ 📄 file2.vpy               # depth 1, guide line at 8px
+📄 root_file.txt             # depth 0
+```
+
+**Persistent Settings UI**:
+- Audio button remembers last state (🔊/🔇)
+- Overlay toggle maintains visibility preference
+- ROM dropdown pre-selects last used ROM
+- Settings survive application restart
+
+### Storage Strategy
+
+**localStorage Keys**:
+- `vpy-emulator-settings`: All emulator preferences in single JSON object
+- Includes: `audioEnabled`, `overlayEnabled`, `lastRomPath`, `lastRomName`
+- Automatically synced via Zustand persist middleware
+
+**Auto-restore Logic**:
+- On EmulatorPanel mount: Check for `lastRomName`
+- If ROM exists in dropdown: Auto-select and load
+- If ROM file loaded: Update persistence with name/path
+- Settings changes: Immediately saved to localStorage
+
+### Error Handling
+
+**TreeView Robustness**:
+- Guide lines only render for depth > 0
+- Proper fallback for missing node properties
+- Consistent spacing even with deeply nested structures
+
+**Settings Persistence Safety**:
+- try/catch around localStorage operations
+- Graceful fallback to defaults if storage corrupted
+- Console logging for debugging restore operations
+
+### Archivos Creados/Modificados
+
+**New Files**:
+- `ide/frontend/src/state/emulatorSettings.ts` - Persistent settings store
+
+**Modified Files**:
+- `ide/frontend/src/components/panels/FileTreePanel.tsx` - Fixed indentation & guide lines
+- `ide/frontend/src/components/panels/EmulatorPanel.tsx` - Integrated persistent settings
+- `ide/frontend/src/global.css` - TreeView scrollbar styling (previous update)

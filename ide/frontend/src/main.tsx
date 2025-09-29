@@ -10,6 +10,7 @@ import { restoreEditorState, ensureEditorPersistence } from './state/editorPersi
 import { deriveBinaryName } from './utils';
 import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus';
 import { useEditorStore } from './state/editorStore';
+import { useProjectStore } from './state/projectStore';
 
 function App() {
   const { t, i18n } = useTranslation(['common']);
@@ -52,6 +53,18 @@ function App() {
     };
     lspClient.onNotification(handler);
   }, [setDiagnostics]);
+
+  // Auto-restore last workspace on app startup
+  const restoreLastWorkspace = useProjectStore(s => s.restoreLastWorkspace);
+  const hasWorkspace = useProjectStore(s => s.hasWorkspace);
+  
+  useEffect(() => {
+    if (!initializedRef.current && !hasWorkspace()) {
+      console.log('App: Auto-restoring last workspace on startup');
+      restoreLastWorkspace();
+      initializedRef.current = true;
+    }
+  }, [restoreLastWorkspace, hasWorkspace]);
 
   // Track which menu is open
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -123,8 +136,18 @@ function App() {
 
     try {
       // Preparar argumentos para runCompile
+      // Use diskPath (real file system path) instead of uri (which is a file:// URI)
+      const filePath = activeDoc.diskPath || activeDoc.uri;
+      
+      if (filePath.startsWith('file://')) {
+        console.error('[Build] Document has no diskPath, cannot compile:', activeDoc.uri);
+        return;
+      }
+      
+      console.log('[Build] Using file path:', filePath);
+      
       const args: any = {
-        path: activeDoc.uri,
+        path: filePath,
         autoStart: autoRun
       };
 

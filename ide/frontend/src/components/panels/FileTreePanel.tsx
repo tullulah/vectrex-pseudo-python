@@ -1,12 +1,571 @@
-import React from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+import { useProjectStore } from '../../state/projectStore';
+import { useEditorStore } from '../../state/editorStore';
+import type { FileNode } from '../../types/models';
 
 export const FileTreePanel: React.FC = () => {
-  const { t } = useTranslation(['common']);
+  const { project, workspaceName, selectFile, hasWorkspace, refreshWorkspace } = useProjectStore();
+  const { openDocument, closeDocument, documents } = useEditorStore();
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [draggedFiles, setDraggedFiles] = useState<Set<string>>(new Set());
+
+  // Auto-expand root directory when workspace loads
+  useEffect(() => {
+    if (project?.rootPath && !expandedDirs.has(project.rootPath)) {
+      setExpandedDirs(prev => new Set([...prev, project.rootPath]));
+    }
+  }, [project?.rootPath]);
+
+  // Set up file watcher when workspace loads
+  useEffect(() => {
+    if (!project?.rootPath) return;
+    
+    let isSubscribed = true;
+    
+    const setupWatcher = async () => {
+      try {
+        const w = window as any;
+        if (w.files?.watchDirectory && w.files?.onFileChanged) {
+          // Start watching the directory
+          await w.files.watchDirectory(project.rootPath);
+          console.log('FileTreePanel: Started watching', project.rootPath);
+          
+          // Set up change listener
+          const handleFileChange = (event: { type: 'added' | 'removed' | 'changed'; path: string; isDir: boolean }) => {
+            if (!isSubscribed) return;
+            console.log('FileTreePanel: File change detected:', event);
+            
+            // Refresh the workspace after a short delay to batch changes
+            setTimeout(() => {
+              if (isSubscribed) {
+                refreshWorkspace();
+              }
+            }, 200);
+          };
+          
+          w.files.onFileChanged(handleFileChange);
+        }
+      } catch (error) {
+        console.error('FileTreePanel: Failed to set up file watcher:', error);
+      }
+    };
+    
+    setupWatcher();
+    
+    return () => {
+      isSubscribed = false;
+      // Clean up watcher when component unmounts or workspace changes
+      const w = window as any;
+      if (w.files?.unwatchDirectory && project?.rootPath) {
+        w.files.unwatchDirectory(project.rootPath);
+      }
+    };
+  }, [project?.rootPath, refreshWorkspace]);
+
+  // Handle keyboard events for file deletion
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Delete' && selectedFiles.size > 0) {
+        event.preventDefault();
+        
+        // Find the selected nodes to get their names and types
+        const findNodeByPath = (nodes: any[], path: string): any => {
+          for (const node of nodes) {
+            if (node.path === path) return node;
+            if (node.children) {
+              const found = findNodeByPath(node.children, path);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        // Delete all selected files
+        const firstSelectedPath = Array.from(selectedFiles)[0];
+        const selectedNode = project?.files ? findNodeByPath(project.files, firstSelectedPath) : null;
+        if (selectedNode && selectedFiles.size === 1) {
+          handleDeleteFile(selectedNode.path, selectedNode.name, selectedNode.isDir);
+        } else if (selectedFiles.size > 1) {
+          const confirmed = window.confirm(
+            `¿Estás seguro de que quieres eliminar ${selectedFiles.size} archivos seleccionados?\n\nEsta acción no se puede deshacer.`
+          );
+          if (confirmed) {
+            selectedFiles.forEach(async (path) => {
+              const node = project?.files ? findNodeByPath(project.files, path) : null;
+              if (node) {
+                await handleDeleteFile(node.path, node.name, node.isDir);
+              }
+            });
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFiles, project?.files]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshWorkspace();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleDeleteFile = async (filePath: string, fileName: string, isDir: boolean) => {
+    // Confirmar eliminación
+    const fileType = isDir ? 'carpeta' : 'archivo';
+    const confirmed = window.confirm(
+      `¿Estás seguro de que quieres eliminar ${fileType} "${fileName}"?\n\n` +
+      `${isDir ? 'Esta acción eliminará la carpeta y todo su contenido.' : 'Esta acción no se puede deshacer.'}`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      // Construir ruta completa del archivo
+      const fullPath = project?.rootPath ? 
+        (project.rootPath.includes('\\') 
+          ? `${project.rootPath}\\${filePath.replace(/\//g, '\\')}`
+          : `${project.rootPath}/${filePath}`
+        ) : filePath;
+
+      console.log('Deleting file:', fullPath);
+      
+      // Llamar a la API de eliminación
+      const result = await (window as any).files?.deleteFile?.(fullPath);
+      
+      if (result?.error) {
+        alert(`Error al eliminar ${fileType}: ${result.error}`);
+        return;
+      }
+
+      // Si el archivo está abierto en el editor, cerrarlo
+      if (!isDir) {
+        const fileUri = `file://${fullPath}`;
+        const openDoc = documents.find(doc => doc.uri === fileUri || doc.diskPath === fullPath);
+        if (openDoc) {
+          console.log('Closing open document:', openDoc.uri);
+          closeDocument(openDoc.uri);
+        }
+      } else {
+        // Si es una carpeta, cerrar todos los documentos que estén dentro
+        documents.forEach(doc => {
+          if (doc.diskPath?.startsWith(fullPath)) {
+            console.log('Closing document in deleted folder:', doc.uri);
+            closeDocument(doc.uri);
+          }
+        });
+      }
+
+      // Actualizar el workspace después de eliminar
+      await refreshWorkspace();
+      
+      // Limpiar selección si el archivo eliminado estaba seleccionado
+      if (selectedFiles.has(filePath)) {
+        setSelectedFiles(prev => {
+          const next = new Set(prev);
+          next.delete(filePath);
+          return next;
+        });
+      }
+
+      console.log(`${fileType} eliminado exitosamente:`, filePath);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert(`Error al eliminar ${fileType}: ${error}`);
+    }
+  };
+
+  const toggleDir = (path: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleFileClick = async (node: FileNode, event?: React.MouseEvent) => {
+    // Handle multi-selection with Ctrl/Cmd key
+    if (event?.ctrlKey || event?.metaKey) {
+      setSelectedFiles(prev => {
+        const next = new Set(prev);
+        if (next.has(node.path)) {
+          next.delete(node.path);
+        } else {
+          next.add(node.path);
+        }
+        return next;
+      });
+      return; // Don't open file on multi-select
+    } else {
+      // Single selection
+      setSelectedFiles(new Set([node.path]));
+    }
+    
+    if (node.isDir) {
+      toggleDir(node.path);
+    } else {
+      selectFile(node.path);
+      
+      // Create a file URI for the document
+      const fileUri = `file://${node.path}`;
+      
+      // Check if document is already open
+      const { documents, active, setActive } = useEditorStore.getState();
+      const existingDoc = documents.find(d => d.uri === fileUri);
+      
+      if (existingDoc) {
+        // File is already open, just switch to it
+        setActive(fileUri);
+      } else {
+        // File is not open, need to load and open it
+        try {
+          // Get the full file path by combining workspace root with relative path
+          const { project } = useProjectStore.getState();
+          if (!project) {
+            console.warn('No project available to construct file path');
+            return;
+          }
+          
+          // Construct full path properly
+          // project.rootPath is the full system path (e.g., C:\Users\...\folder)
+          // node.path is relative to workspace root (e.g., subfolder/file.txt)
+          let fullPath: string;
+          
+          if (project.rootPath.includes('\\')) {
+            // Windows path
+            fullPath = `${project.rootPath}\\${node.path.replace(/\//g, '\\')}`;
+          } else {
+            // Unix-like path
+            fullPath = `${project.rootPath}/${node.path}`;
+          }
+          
+          console.log('Loading file:', fullPath);
+          console.log('Workspace root:', project.rootPath);
+          console.log('Relative path:', node.path);
+          
+          // Load file content using Electron API
+          const fileResult = await (window as any).files?.readFile?.(fullPath);
+          
+          if (fileResult?.error) {
+            console.error('Error loading file:', fileResult.error);
+            // Fallback to placeholder if file can't be loaded
+            const newDoc = {
+              uri: fileUri,
+              language: 'vpy' as const,
+              content: `// Error loading file: ${fileResult.error}\n// File: ${node.path}`,
+              dirty: false,
+              diagnostics: [],
+              diskPath: fullPath,
+              lastSavedContent: ''
+            };
+            openDocument(newDoc);
+            return;
+          }
+          
+          // Create document with real file content
+          const newDoc = {
+            uri: fileUri,
+            language: 'vpy' as const,
+            content: fileResult.content || '',
+            dirty: false,
+            diagnostics: [],
+            diskPath: fullPath,
+            mtime: fileResult.mtime,
+            lastSavedContent: fileResult.content || ''
+          };
+          
+          console.log('File loaded successfully:', node.name, 'Size:', fileResult.size);
+          openDocument(newDoc);
+        } catch (error) {
+          console.warn('Error opening file:', error);
+        }
+      }
+    }
+  };
+
+  const getFileIcon = (node: FileNode): string => {
+    if (node.isDir) {
+      return expandedDirs.has(node.path) ? '📂' : '📁';
+    }
+    
+    const ext = node.name.split('.').pop()?.toLowerCase() || '';
+    switch (ext) {
+      case 'vpy': return '�';
+      case 'py': return '�';
+      case 'js': case 'ts': return '�';
+      case 'json': return '📄';
+      case 'md': return '�';
+      case 'txt': return '📄';
+      case 'css': case 'scss': return '📄';
+      case 'html': case 'htm': return '📄';
+      case 'asm': return '📄';
+      case 'bin': return '�';
+      default: return '📄';
+    }
+  };
+
+  const renderFileNode = (node: FileNode, depth: number = 0): React.ReactNode => {
+    const isExpanded = expandedDirs.has(node.path);
+    const isSelected = selectedFiles.has(node.path);
+    const isDragged = draggedFiles.has(node.path);
+    const indent = depth * 16;
+    
+    return (
+      <div key={node.path} style={{ position: 'relative' }}>
+        {/* Guide lines like VSCode */}
+        {depth > 0 && (
+          <div 
+            style={{
+              position: 'absolute',
+              left: depth * 16 - 8,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              backgroundColor: '#333',
+              opacity: 0.4
+            }}
+          />
+        )}
+        
+        <div 
+          className="file-tree-item"
+          style={{
+            paddingLeft: indent + 4,
+            paddingRight: 4,
+            paddingTop: 2,
+            paddingBottom: 2,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 13,
+            lineHeight: '20px',
+            backgroundColor: isSelected ? '#0e639c' : (isDragged ? '#1e1e1e' : 'transparent'),
+            opacity: isDragged ? 0.5 : 1,
+            userSelect: 'none',
+            position: 'relative'
+          }}
+          onClick={(e) => handleFileClick(node, e)}
+          onMouseEnter={(e) => {
+            if (!isSelected && !isDragged) {
+              (e.target as HTMLElement).style.backgroundColor = '#2a2a2a';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isSelected && !isDragged) {
+              (e.target as HTMLElement).style.backgroundColor = 'transparent';
+            }
+          }}
+          draggable={!node.isDir}
+          onDragStart={(e) => {
+            setDraggedFiles(prev => new Set([...prev, node.path]));
+            e.dataTransfer.setData('text/plain', JSON.stringify({ 
+              type: 'file', 
+              path: node.path, 
+              name: node.name,
+              isDir: node.isDir
+            }));
+            e.dataTransfer.effectAllowed = 'move';
+          }}
+          onDragEnd={() => {
+            setDraggedFiles(prev => {
+              const next = new Set(prev);
+              next.delete(node.path);
+              return next;
+            });
+          }}
+          onDragOver={(e) => {
+            if (node.isDir) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDrop={async (e) => {
+            if (node.isDir) {
+              e.preventDefault();
+              const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+              console.log('Drop:', data, 'onto:', node.path);
+              
+              if (data.type === 'file' && project?.rootPath) {
+                try {
+                  // Construct full paths
+                  const sourcePath = project.rootPath.includes('\\') 
+                    ? `${project.rootPath}\\${data.path.replace(/\//g, '\\')}`
+                    : `${project.rootPath}/${data.path}`;
+                  
+                  const targetDir = project.rootPath.includes('\\') 
+                    ? `${project.rootPath}\\${node.path.replace(/\//g, '\\')}`
+                    : `${project.rootPath}/${node.path}`;
+                  
+                  console.log('Moving file from:', sourcePath, 'to:', targetDir);
+                  
+                  const result = await (window as any).files?.moveFile?.({ sourcePath, targetDir });
+                  
+                  if (result?.error) {
+                    if (result.error === 'target_exists') {
+                      alert(`No se puede mover el archivo: Ya existe un archivo con el mismo nombre en "${node.name}"`);
+                    } else {
+                      alert(`Error al mover archivo: ${result.error}`);
+                    }
+                    return;
+                  }
+                  
+                  // Update editor documents if file was moved
+                  const oldFileUri = `file://${sourcePath}`;
+                  const newFileUri = `file://${result.targetPath}`;
+                  const openDoc = documents.find(doc => doc.uri === oldFileUri || doc.diskPath === sourcePath);
+                  
+                  if (openDoc) {
+                    console.log('Updating moved document URI:', oldFileUri, '→', newFileUri);
+                    // Close old document and open new one with same content
+                    closeDocument(openDoc.uri);
+                    const newDoc = {
+                      ...openDoc,
+                      uri: newFileUri,
+                      diskPath: result.targetPath
+                    };
+                    openDocument(newDoc);
+                  }
+                  
+                  // Refresh workspace to show changes
+                  await refreshWorkspace();
+                  
+                  console.log('File moved successfully:', data.path, '→', node.path);
+                } catch (error) {
+                  console.error('Error moving file:', error);
+                  alert(`Error al mover archivo: ${error}`);
+                }
+              }
+            }
+          }}
+        >
+          {node.isDir && (
+            <span 
+              style={{ 
+                width: 12, 
+                height: 12, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.1s ease',
+                fontSize: 10,
+                color: '#cccccc'
+              }}
+            >
+              ▶
+            </span>
+          )}
+          {!node.isDir && <span style={{ width: 12 }}></span>}
+          <span style={{ 
+            width: 16, 
+            height: 16, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontSize: 14
+          }}>
+            {getFileIcon(node)}
+          </span>
+          <span style={{ 
+            color: node.isDir ? '#569cd6' : '#cccccc',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {node.name}
+          </span>
+        </div>
+        
+        {node.isDir && isExpanded && node.children && (
+          <div>
+            {node.children.map(child => renderFileNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (!hasWorkspace()) {
+    return (
+      <div style={{ padding: 16, textAlign: 'center', color: '#666' }}>
+        <div style={{ marginBottom: 12 }}>📁</div>
+        <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+          No hay workspace abierto.<br />
+          Abre una carpeta desde la página de bienvenida.
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{padding:8, fontSize:13}}>
-      <strong>{t('menu.file')}</strong>
-      <div style={{marginTop:8, color:'#888'}}>(file tree placeholder)</div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontSize: 13 }}>
+      {/* Workspace header */}
+      <div style={{ 
+        padding: '8px 12px', 
+        borderBottom: '1px solid #333',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0
+      }}>
+        <span>📁</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, color: '#569cd6' }}>
+            {workspaceName}
+          </div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
+            {project?.rootPath}
+          </div>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          style={{
+            background: 'transparent',
+            border: '1px solid #444',
+            borderRadius: 4,
+            color: isRefreshing ? '#666' : '#ccc',
+            padding: '4px 8px',
+            fontSize: 12,
+            cursor: isRefreshing ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4
+          }}
+          title="Actualizar archivos"
+        >
+          {isRefreshing ? '🔄' : '↻'}
+          {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+        </button>
+      </div>
+
+      {/* File tree - scrollable content */}
+      <div 
+        style={{ 
+          flex: 1, 
+          overflow: 'auto', 
+          padding: '8px 0',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#424242 #1e1e1e'
+        }}
+        className="file-tree-scroll"
+      >
+        {project?.files.map(node => renderFileNode(node))}
+      </div>
+
+
     </div>
   );
 };

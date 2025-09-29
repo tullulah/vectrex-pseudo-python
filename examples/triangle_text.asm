@@ -8,7 +8,7 @@
 ;***************************************************************************
 ; HEADER SECTION
 ;***************************************************************************
-    FCC "g GCE 1998"
+    FCC "g GCE 1982"
     FCB $80
     FDB music1
     FCB $F8,$50,$20,-$45
@@ -19,14 +19,22 @@
 ;***************************************************************************
 ; CODE SECTION
 ;***************************************************************************
-INIT_ONCE:
+    JMP START
+
+START:
     LDA #$80
     STA VIA_t1_cnt_lo
-main: JSR Wait_Recal
-    JSR Intensity_5F ; set default intensity
-    JSR Reset0Ref ; center beam
+    LDX #Vec_Default_Stk
+    TFR X,S
+
+MAIN_LOOP:
+    JSR Wait_Recal
+    LDA #$D0
+    TFR A,DP
+    JSR Intensity_5F
+    JSR Reset0Ref
     JSR MAIN
-    BRA main
+    BRA MAIN_LOOP
 
 INTENS EQU 95
 TXT_X EQU 65486
@@ -49,32 +57,56 @@ MAIN: ; function
     CLRA
     CLRB
     STD RESULT
+    JSR Intensity_5F
     LDA #$D0
     TFR A,DP
     JSR Reset0Ref
-    JSR Intensity_5F
     LDA #$32
     LDB #$1E
     JSR Moveto_d
     CLR Vec_Misc_Count
-    LDA #$9C
-    LDB #$CE
+    LDA #$CE
+    LDB #$E7
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$CE
+    LDB #$E7
+    JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$CE
+    LDB #$EC
+    JSR Moveto_d
+    CLR Vec_Misc_Count
+    LDA #$00
+    LDB #$32
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$64
+    LDB #$32
+    JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$CE
+    LDB #$50
+    JSR Moveto_d
+    CLR Vec_Misc_Count
+    LDA #$32
+    LDB #$E7
     JSR Draw_Line_d
     CLR Vec_Misc_Count
-    LDA #$64
-    LDB #$CE
+    LDA #$32
+    LDB #$E7
     JSR Draw_Line_d
     CLRA
     CLRB
     STD RESULT
+    JSR Intensity_5F
     LDA #$D0
     TFR A,DP
     JSR Reset0Ref
-    JSR Intensity_5F
     LDA #$D4
     LDB #$AC
     JSR Moveto_d
@@ -82,25 +114,51 @@ MAIN: ; function
     LDA #$00
     LDB #$30
     JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$D4
+    LDB #$DC
+    JSR Moveto_d
     CLR Vec_Misc_Count
-    LDA #$30
+    LDA #$18
     LDB #$00
     JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$18
+    LDB #$00
+    JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$04
+    LDB #$DC
+    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$D0
     JSR Draw_Line_d
-    CLR Vec_Misc_Count
     LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$04
+    LDB #$AC
+    JSR Moveto_d
+    CLR Vec_Misc_Count
+    LDA #$E8
+    LDB #$00
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$E8
     LDB #$00
     JSR Draw_Line_d
     CLRA
     CLRB
     STD RESULT
+    JSR Intensity_5F
     LDA #$D0
     TFR A,DP
     JSR Reset0Ref
-    JSR Intensity_5F
     LDA #$00
     LDB #$5A
     JSR Moveto_d
@@ -108,25 +166,63 @@ MAIN: ; function
     LDA #$1A
     LDB #$F1
     JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$1A
+    LDB #$4B
+    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$E2
     JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$1A
+    LDB #$2D
+    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$E6
     LDB #$F1
     JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$00
+    LDB #$1E
+    JSR Moveto_d
     CLR Vec_Misc_Count
-    LDA #$E6
-    LDB #$0F
+    LDA #$F3
+    LDB #$07
     JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$F3
+    LDB #$08
+    JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$E6
+    LDB #$2D
+    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$1E
     JSR Draw_Line_d
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$E6
+    LDB #$4B
+    JSR Moveto_d
     CLR Vec_Misc_Count
-    LDA #$1A
-    LDB #$0F
+    LDA #$0D
+    LDB #$07
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$0D
+    LDB #$08
     JSR Draw_Line_d
     CLRA
     CLRB
@@ -455,7 +551,7 @@ MAIN: ; function
     JSR Reset0Ref
     JSR Intensity_5F
     LDA #$00
-    LDB #$B0
+    LDB #$78
     JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$02
@@ -463,7 +559,7 @@ MAIN: ; function
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$01
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
@@ -471,67 +567,67 @@ MAIN: ; function
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FF
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FF
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FF
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
@@ -539,7 +635,7 @@ MAIN: ; function
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
@@ -547,75 +643,75 @@ MAIN: ; function
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$01
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
-    LDB #$03
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
-    LDB #$03
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FF
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$05
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$05
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$05
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$04
-    LDB #$03
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$04
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$01
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$06
@@ -623,168 +719,166 @@ MAIN: ; function
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$06
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$05
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$04
-    LDB #$FC
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$04
-    LDB #$FB
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$03
-    LDB #$FA
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$FA
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$01
-    LDB #$FA
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$F9
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FF
-    LDB #$FA
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$F9
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FD
-    LDB #$FA
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$FB
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FB
-    LDB #$FB
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FB
-    LDB #$FB
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$FD
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$FE
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F8
-    LDB #$FF
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$02
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$F9
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FB
-    LDB #$06
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FB
-    LDB #$06
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FC
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$FE
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$00
-    LDB #$09
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$02
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$04
-    LDB #$08
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$06
-    LDB #$07
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$06
-    LDB #$07
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$08
-    LDB #$05
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$08
-    LDB #$04
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$09
-    LDB #$03
+    LDB #$00
     JSR Draw_Line_d
     CLR Vec_Misc_Count
     LDA #$09
-    LDB #$01
+    LDB #$00
     JSR Draw_Line_d
     CLRA
     CLRB
     STD RESULT
     RTS
 
-;***************************************************************************
-; RUNTIME SECTION
-;***************************************************************************
+    INCLUDE "../runtime/vectorlist_runtime.asm"
 VECTREX_PRINT_TEXT:
     ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
     LDU VAR_ARG2   ; string pointer (high-bit terminated)

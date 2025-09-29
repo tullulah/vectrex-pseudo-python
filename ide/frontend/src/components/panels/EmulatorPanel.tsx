@@ -1,27 +1,136 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
+import { useEmulatorSettings } from '../../state/emulatorSettings';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
+
+// Tipos para JSVecX
+interface VecxMetrics {
+  totalCycles: number;
+  instructionCount: number;
+  frameCount: number;
+  running: boolean;
+}
+
+interface VecxRegs {
+  PC: number;
+  A: number; B: number;
+  X: number; Y: number; U: number; S: number;
+  DP: number; CC: number;
+}
+
+// Componente para mostrar información técnica del emulador
+const EmulatorOutputInfo: React.FC = () => {
+  const [metrics, setMetrics] = useState<VecxMetrics | null>(null);
+  const [regs, setRegs] = useState<VecxRegs | null>(null);
+
+  const fetchStats = () => {
+    try {
+      const vecx = (window as any).vecx;
+      if (!vecx) {
+        setMetrics(null);
+        setRegs(null);
+        return;
+      }
+      
+      const fetchedMetrics = vecx.getMetrics && vecx.getMetrics();
+      const fetchedRegs = vecx.getRegisters && vecx.getRegisters();
+      
+      setMetrics(fetchedMetrics || null);
+      setRegs(fetchedRegs || null);
+    } catch (e) {
+      setMetrics(null);
+      setRegs(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+    const interval = setInterval(fetchStats, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const hex8 = (v: any) => typeof v === 'number' ? `0x${(v & 0xFF).toString(16).padStart(2, '0')}` : '--';
+  const hex16 = (v: any) => typeof v === 'number' ? `0x${(v & 0xFFFF).toString(16).padStart(4, '0')}` : '--';
+  
+  const avgCyclesPerFrame = (metrics && metrics.frameCount > 0) ? 
+    Math.round(metrics.totalCycles / metrics.frameCount) : 0;
+
+  return (
+    <div style={{
+      background: '#1a1a1a',
+      border: '1px solid #333',
+      borderRadius: 4,
+      padding: '6px 10px',
+      marginBottom: 12,
+      fontSize: '11px',
+      color: '#ccc',
+      fontFamily: 'monospace'
+    }}>
+      <div style={{ 
+        fontWeight: 'bold', 
+        color: '#0f0',
+        marginBottom: '4px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        fontFamily: 'system-ui'
+      }}>
+        Emulator Output
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        PC: {hex16(regs?.PC)}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        A: {hex8(regs?.A)} B: {hex8(regs?.B)} X: {hex16(regs?.X)} Y: {hex16(regs?.Y)} U: {hex16(regs?.U)} S: {hex16(regs?.S)} DP: {hex8(regs?.DP)} CC: {hex8(regs?.CC)}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Total Cycles: {metrics?.totalCycles ?? 0}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Instructions: {metrics?.instructionCount ?? 0}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Frames: {metrics?.frameCount ?? 0}
+      </div>
+      
+      <div>
+        Avg Cycles/frame: {avgCyclesPerFrame > 0 ? avgCyclesPerFrame : '--'}
+      </div>
+    </div>
+  );
+};
 
 export const EmulatorPanel: React.FC = () => {
   const status = useEmulatorStore(s => s.status);
   const setStatus = useEmulatorStore(s => s.setStatus);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
+  // Persistent emulator settings
+  const { 
+    audioEnabled, 
+    overlayEnabled, 
+    lastRomPath, 
+    lastRomName,
+    setAudioEnabled, 
+    setOverlayEnabled, 
+    setLastRom 
+  } = useEmulatorSettings();
+  
   // Estados básicos necesarios
-  const [audioEnabled, setAudioEnabled] = useState(() => {
-    try { return localStorage.getItem('emu_audio_enabled') !== '0'; } 
-    catch { return true; }
-  });
   const [audioStats, setAudioStats] = useState<{ 
     sampleRate:number; pushed:number; consumed:number; 
     bufferedSamples:number; bufferedMs:number; overflowCount:number 
   }|null>(null);
   const [loadedROM, setLoadedROM] = useState<string | null>(null);
   const [availableROMs, setAvailableROMs] = useState<string[]>([]);
-  const [selectedROM, setSelectedROM] = useState<string>('');
-  const [overlayEnabled, setOverlayEnabled] = useState<boolean>(true);
+  const [selectedROM, setSelectedROM] = useState<string>(lastRomName || '');
   const [currentOverlay, setCurrentOverlay] = useState<string | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -64,6 +173,19 @@ export const EmulatorPanel: React.FC = () => {
       canvas.style.height = `${canvasSize.height}px`;
       canvas.style.border = '1px solid #333';
       canvas.style.background = '#000';
+      
+      // Optimización para múltiples lecturas de canvas (elimina warning Canvas2D)
+      // JSVecX hace muchas operaciones getImageData, necesitamos willReadFrequently
+      try {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (ctx) {
+          console.log('[EmulatorPanel] Canvas context configured with willReadFrequently optimization');
+          // Asegurar que JSVecX use este contexto optimizado
+          (canvas as any)._optimizedContext = ctx;
+        }
+      } catch (e) {
+        console.warn('[EmulatorPanel] Could not configure willReadFrequently, using default context');
+      }
       
       const vecx = (window as any).vecx;
       if (!vecx) {
@@ -108,6 +230,198 @@ export const EmulatorPanel: React.FC = () => {
       console.log(`[EmulatorPanel] Canvas resized to: ${canvasSize.width}x${canvasSize.height}`);
     }
   }, [canvasSize]);
+
+  // Función para cargar overlay basado en nombre de ROM (definida antes de ser usada)
+  const loadOverlay = useCallback(async (romName: string) => {
+    const baseName = romName.replace(/\.(bin|BIN|vec)$/, '').toLowerCase();
+    const overlayPath = `/overlays/${baseName}.png`;
+    
+    try {
+      // Verificar si existe el overlay
+      const response = await fetch(overlayPath, { method: 'HEAD' });
+      if (response.ok) {
+        setCurrentOverlay(overlayPath);
+        console.log(`[EmulatorPanel] ✓ Overlay found: ${overlayPath}`);
+      } else {
+        // No se encontró overlay - quitarlo
+        setCurrentOverlay(null);
+        console.log(`[EmulatorPanel] No overlay found for: ${baseName} - removing overlay`);
+      }
+    } catch (e) {
+      // Error al buscar overlay - quitarlo
+      setCurrentOverlay(null);
+      console.log(`[EmulatorPanel] Error loading overlay for: ${baseName} - removing overlay`);
+    }
+  }, []); // sin dependencias
+
+  // Helper function to apply audio state to vecx
+  const applyAudioState = useCallback((enabled?: boolean) => {
+    const vecx = (window as any).vecx;
+    if (!vecx || !vecx.e8910) {
+      console.warn('[EmulatorPanel] Cannot apply audio state - vecx or e8910 not available');
+      return;
+    }
+    
+    const audioState = enabled !== undefined ? enabled : audioEnabled;
+    
+    try {
+      // Verificar estado actual del audio en e8910
+      const currentAudioEnabled = vecx.e8910.enabled;
+      console.log('[EmulatorPanel] Applying audio state:', audioState ? 'enabled' : 'muted', {
+        currentAudioEnabled,
+        targetAudioState: audioState,
+        needsToggle: currentAudioEnabled !== audioState
+      });
+      
+      // Solo hacer toggle si el estado actual es diferente al deseado
+      if (currentAudioEnabled !== audioState) {
+        if (vecx.toggleSoundEnabled) {
+          const newState = vecx.toggleSoundEnabled();
+          console.log(`[EmulatorPanel] ✓ Toggled audio: ${currentAudioEnabled} → ${newState}`);
+        } else {
+          console.warn('[EmulatorPanel] toggleSoundEnabled not available');
+        }
+      } else {
+        console.log(`[EmulatorPanel] ✓ Audio already in desired state: ${audioState}`);
+      }
+      
+      // Verificar estado final
+      const finalState = vecx.e8910.enabled;
+      console.log('[EmulatorPanel] ✓ Audio state application complete. Final state:', finalState);
+      
+    } catch (error) {
+      console.error('[EmulatorPanel] Error applying audio state:', error);
+    }
+  }, [audioEnabled]);
+
+  // Helper function to get current audio state from vecx
+  const getCurrentAudioState = useCallback(() => {
+    const vecx = (window as any).vecx;
+    if (vecx && vecx.e8910) {
+      return vecx.e8910.enabled;
+    }
+    return audioEnabled; // fallback to stored state
+  }, [audioEnabled]);
+
+  // Sync audio state periodically to ensure UI matches reality
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const vecx = (window as any).vecx;
+      if (vecx && vecx.e8910 && status === 'running') {
+        const actualState = vecx.e8910.enabled;
+        if (actualState !== audioEnabled) {
+          console.log('[EmulatorPanel] Audio state desync detected, syncing:', actualState);
+          setAudioEnabled(actualState);
+        }
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, [audioEnabled, status, setAudioEnabled]);
+
+  // Función para cargar ROM desde dropdown (definida antes de useEffects que la usan)
+  const loadROMFromDropdown = useCallback(async (romName: string) => {
+    if (!romName) return;
+    
+    try {
+      console.log(`[EmulatorPanel] Loading ROM from dropdown: ${romName}`);
+      
+      const response = await fetch(`/roms/${romName}`);
+      if (!response.ok) {
+        console.error(`[EmulatorPanel] Failed to fetch ROM: ${response.status}`);
+        return;
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const romData = new Uint8Array(arrayBuffer);
+      
+      const vecx = (window as any).vecx;
+      if (!vecx) {
+        console.error('[EmulatorPanel] vecx instance not available');
+        return;
+      }
+      
+      // Convertir Uint8Array a string para JSVecX
+      let cartDataString = '';
+      for (let i = 0; i < romData.length; i++) {
+        cartDataString += String.fromCharCode(romData[i]);
+      }
+      
+      // Cargar ROM en Globals.cartdata (método correcto para JSVecX)
+      const Globals = (window as any).Globals || (globalThis as any).Globals;
+      if (!Globals) {
+        console.error('[EmulatorPanel] Globals not available');
+        return;
+      }
+      
+      Globals.cartdata = cartDataString;
+      console.log(`[EmulatorPanel] ✓ ROM loaded into Globals.cartdata (${romData.length} bytes)`);
+      
+      // Actualizar estado del ROM cargado
+      setLoadedROM(`${romName} (${romData.length} bytes)`);
+      
+      // Cargar overlay automáticamente
+      await loadOverlay(romName);
+      
+      // Reset DOBLE después de cargar - esto copiará cartdata al array cart[]
+      // Primer reset para cargar cartdata
+      vecx.reset();
+      console.log('[EmulatorPanel] ✓ First reset after ROM load');
+      
+      // Esperar un poco y hacer segundo reset para asegurarse
+      setTimeout(() => {
+        vecx.reset();
+        console.log('[EmulatorPanel] ✓ Second reset after ROM load');
+        
+        // Si estaba corriendo, reiniciar
+        if (status === 'running') {
+          vecx.start();
+          console.log('[EmulatorPanel] ✓ Restarted after ROM load');
+        }
+        
+        // CRÍTICO: Aplicar estado de audio después de reset/start
+        setTimeout(() => {
+          applyAudioState();
+        }, 100);
+      }, 50);
+      
+    } catch (error) {
+      console.error('[EmulatorPanel] Failed to load ROM from dropdown:', error);
+    }
+  }, [status, loadOverlay, applyAudioState]); // dependencias: status, loadOverlay, applyAudioState
+
+  // Auto-load last ROM on emulator start - only trigger when availableROMs is populated
+  useEffect(() => {
+    console.log('[EmulatorPanel] Auto-load ROM check:', {
+      lastRomName,
+      selectedROM,
+      availableROMs: availableROMs.length,
+      loadedROM,
+      condition1: !!lastRomName,
+      condition2: availableROMs.length > 0,
+      condition3: !loadedROM?.includes(lastRomName || '')
+    });
+    
+    // Only auto-load if we have a stored ROM, available ROMs are loaded, and we haven't loaded this ROM yet
+    if (lastRomName && availableROMs.length > 0 && !loadedROM?.includes(lastRomName)) {
+      console.log('[EmulatorPanel] Auto-restoring last ROM:', lastRomName, 'from', availableROMs.length, 'available ROMs');
+      setSelectedROM(lastRomName);
+      // If it's in the dropdown, load it automatically
+      if (availableROMs.includes(lastRomName)) {
+        console.log('[EmulatorPanel] ✓ Found ROM in list, loading automatically:', lastRomName);
+        loadROMFromDropdown(lastRomName);
+      } else {
+        console.log('[EmulatorPanel] ⚠️ ROM not found in available list:', lastRomName, 'Available:', availableROMs);
+      }
+    }
+  }, [lastRomName, availableROMs, loadedROM]); // Removed selectedROM to avoid dependency cycle
+
+  // Apply initial audio state when emulator starts
+  useEffect(() => {
+    if (status === 'running') {
+      applyAudioState();
+    }
+  }, [status, applyAudioState]); // Apply when status changes to running
 
   // Audio lifecycle: init worklet on enable; start/stop with status
   useEffect(() => {
@@ -234,6 +548,9 @@ export const EmulatorPanel: React.FC = () => {
         // Actualizar estado del ROM cargado
         setLoadedROM(`${file.name} (${romData.length} bytes)`);
         
+        // Save the loaded ROM info for persistence
+        setLastRom(null, file.name); // File object doesn't have path, just name
+        
         // Resetear combo selector (carga manual no debe seleccionar combo)
         setSelectedROM('');
         
@@ -258,28 +575,7 @@ export const EmulatorPanel: React.FC = () => {
     input.click();
   };
 
-  // Función para cargar overlay basado en nombre de ROM
-  const loadOverlay = useCallback(async (romName: string) => {
-    const baseName = romName.replace(/\.(bin|BIN|vec)$/, '').toLowerCase();
-    const overlayPath = `/overlays/${baseName}.png`;
-    
-    try {
-      // Verificar si existe el overlay
-      const response = await fetch(overlayPath, { method: 'HEAD' });
-      if (response.ok) {
-        setCurrentOverlay(overlayPath);
-        console.log(`[EmulatorPanel] ✓ Overlay found: ${overlayPath}`);
-      } else {
-        // No se encontró overlay - quitarlo
-        setCurrentOverlay(null);
-        console.log(`[EmulatorPanel] No overlay found for: ${baseName} - removing overlay`);
-      }
-    } catch (e) {
-      // Error al buscar overlay - quitarlo
-      setCurrentOverlay(null);
-      console.log(`[EmulatorPanel] Error loading overlay for: ${baseName} - removing overlay`);
-    }
-  }, []); // sin dependencias
+
 
   // Cargar overlay de Minestorm al arrancar (default BIOS game) - SOLO UNA VEZ
   useEffect(() => {
@@ -345,65 +641,6 @@ export const EmulatorPanel: React.FC = () => {
     };
   }, []);
 
-  // Función para cargar ROM desde dropdown
-  const loadROMFromDropdown = useCallback(async (romName: string) => {
-    if (!romName) return;
-    
-    try {
-      console.log(`[EmulatorPanel] Loading ROM from dropdown: ${romName}`);
-      
-      const response = await fetch(`/roms/${romName}`);
-      if (!response.ok) {
-        console.error(`[EmulatorPanel] Failed to fetch ROM: ${response.status}`);
-        return;
-      }
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const romData = new Uint8Array(arrayBuffer);
-      
-      const vecx = (window as any).vecx;
-      if (!vecx) {
-        console.error('[EmulatorPanel] vecx instance not available');
-        return;
-      }
-      
-      // Convertir Uint8Array a string para JSVecX
-      let cartDataString = '';
-      for (let i = 0; i < romData.length; i++) {
-        cartDataString += String.fromCharCode(romData[i]);
-      }
-      
-      // Cargar ROM en Globals.cartdata (método correcto para JSVecX)
-      const Globals = (window as any).Globals || (globalThis as any).Globals;
-      if (!Globals) {
-        console.error('[EmulatorPanel] Globals not available');
-        return;
-      }
-      
-      Globals.cartdata = cartDataString;
-      console.log(`[EmulatorPanel] ✓ ROM loaded into Globals.cartdata (${romData.length} bytes)`);
-      
-      // Actualizar estado del ROM cargado
-      setLoadedROM(`${romName} (${romData.length} bytes)`);
-      
-      // Cargar overlay automáticamente
-      await loadOverlay(romName);
-      
-      // Reset después de cargar - esto copiará cartdata al array cart[]
-      vecx.reset();
-      console.log('[EmulatorPanel] ✓ Reset after ROM load');
-      
-      // Si estaba corriendo, reiniciar
-      if (status === 'running') {
-        vecx.start();
-        console.log('[EmulatorPanel] ✓ Restarted after ROM load');
-      }
-      
-    } catch (error) {
-      console.error('[EmulatorPanel] Failed to load ROM from dropdown:', error);
-    }
-  }, [status, loadOverlay]); // dependencias: status, loadOverlay
-
   // Listener para cargar binarios compilados automáticamente
   useEffect(() => {
     const electronAPI: any = (window as any).electronAPI;
@@ -440,6 +677,9 @@ export const EmulatorPanel: React.FC = () => {
         const romName = payload.binPath.split(/[/\\]/).pop()?.replace(/\.(bin|BIN)$/, '') || 'compiled';
         setLoadedROM(`Compiled - ${romName}`);
         
+        // Save the compiled ROM info for persistence
+        setLastRom(payload.binPath, `Compiled - ${romName}`);
+        
         // Intentar cargar overlay si existe
         loadOverlay(romName + '.bin');
         
@@ -460,6 +700,8 @@ export const EmulatorPanel: React.FC = () => {
   const handleROMChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const romName = e.target.value;
     setSelectedROM(romName);
+    // Save the last ROM selection
+    setLastRom(null, romName); // We don't have the path here, just the name
     if (romName) {
       loadROMFromDropdown(romName);
     }
@@ -467,7 +709,8 @@ export const EmulatorPanel: React.FC = () => {
 
   // Toggle overlay visibility
   const toggleOverlay = () => {
-    setOverlayEnabled(!overlayEnabled);
+    const newState = !overlayEnabled;
+    setOverlayEnabled(newState);
   };
 
   const btn: React.CSSProperties = { 
@@ -490,140 +733,59 @@ export const EmulatorPanel: React.FC = () => {
       fontFamily: 'monospace', 
       fontSize: 12
     }}>
-      {/* Controles responsive */}
+      {/* Controles de ROM - Simplificados */}
       <div style={{
-        display: 'flex', 
-        flexDirection: 'column',
-        gap: 8, 
-        marginBottom: 12
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+        justifyContent: 'center'
       }}>
-        {/* Fila 1: Info y status */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexWrap: 'wrap',
-          fontSize: '11px'
-        }}>
-          <span>Status: <span style={{
-            color: status === 'running' ? '#0f0' : status === 'paused' ? '#fa0' : '#f55'
-          }}>{status}</span></span>
-          
-          {loadedROM && <span style={{ opacity: 0.8 }}>ROM: {loadedROM}</span>}
-          {currentOverlay && <span style={{ opacity: 0.6 }}>Overlay: {overlayEnabled ? 'On' : 'Off'}</span>}
-          
-          {/* Botón de control de audio */}
-          <button 
-            style={{
-              ...btn, 
-              background: audioEnabled ? '#2a4a2a' : '#4a2a2a',
-              color: audioEnabled ? '#afa' : '#faa',
-              fontSize: '10px',
-              padding: '4px 8px'
-            }} 
-            onClick={() => {
-              const newState = !audioEnabled;
-              setAudioEnabled(newState); 
-              try { 
-                localStorage.setItem('emu_audio_enabled', newState ? '1' : '0'); 
-              } catch{} 
-              
-              // Control JSVecX audio directamente
-              const vecx = (window as any).vecx;
-              if (vecx) {
-                console.log('[EmulatorPanel] JSVecX audio methods:', Object.keys(vecx).filter(k => k.toLowerCase().includes('snd') || k.toLowerCase().includes('audio') || k.toLowerCase().includes('sound')));
-                
-                try {
-                  if (newState) {
-                    // HABILITAR AUDIO
-                    if (vecx.toggleSoundEnabled) vecx.toggleSoundEnabled(true);
-                    if (vecx.enableSound) vecx.enableSound();
-                    if (vecx.volume !== undefined) vecx.volume = 1.0;
-                    if (vecx.soundEnabled !== undefined) vecx.soundEnabled = true;
-                    psgAudio.start(); // También iniciar PSG Audio
-                    console.log('[EmulatorPanel] ✓ Audio HABILITADO');
-                  } else {
-                    // MUTEAR AUDIO
-                    if (vecx.toggleSoundEnabled) vecx.toggleSoundEnabled(false);
-                    if (vecx.disableSound) vecx.disableSound();
-                    if (vecx.volume !== undefined) vecx.volume = 0.0;
-                    if (vecx.soundEnabled !== undefined) vecx.soundEnabled = false;
-                    psgAudio.stop(); // También parar PSG Audio
-                    console.log('[EmulatorPanel] ✓ Audio MUTEADO');
-                  }
-                } catch (e) {
-                  console.warn('[EmulatorPanel] Could not control JSVecX audio:', e);
-                }
-              }
-            }}
-          >
-            {audioEnabled ? '🔊' : '🔇'} {audioEnabled ? 'Mute' : 'Audio'}
-          </button>
-        </div>
+        {/* Dropdown selector de ROMs */}
+        <select 
+          value={selectedROM} 
+          onChange={handleROMChange}
+          style={{
+            ...btn,
+            background: '#2a4a2a',
+            minWidth: '120px',
+            maxWidth: '180px'
+          }}
+        >
+          <option value="">Select ROM...</option>
+          {availableROMs.map(rom => (
+            <option key={rom} value={rom}>{rom}</option>
+          ))}
+        </select>
         
-        {/* Fila 2: Controles principales */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          flexWrap: 'wrap'
-        }}>
-          {/* Controles de reproducción */}
-          {status !== 'running' && <button style={btn} onClick={onPlay}>
-            {status === 'paused' ? 'Resume' : 'Play'}
-          </button>}
-          {status === 'running' && <button style={btn} onClick={onPause}>Pause</button>}
-          <button style={btn} onClick={onStop}>Stop</button>
-          <button style={btn} onClick={onReset}>Reset</button>
-          
-          {/* Dropdown selector de ROMs */}
-          <select 
-            value={selectedROM} 
-            onChange={handleROMChange}
-            style={{
-              ...btn,
-              background: '#2a4a2a',
-              minWidth: '100px',
-              maxWidth: '150px'
-            }}
-          >
-            <option value="">Select ROM...</option>
-            {availableROMs.map(rom => (
-              <option key={rom} value={rom}>{rom}</option>
-            ))}
-          </select>
-          
-          {/* Toggle Overlay */}
-          {currentOverlay && (
-            <button 
-              style={{
-                ...btn, 
-                background: overlayEnabled ? '#2a4a2a' : '#4a2a2a',
-                color: overlayEnabled ? '#afa' : '#faa',
-                fontSize: '10px'
-              }} 
-              onClick={toggleOverlay}
-            >
-              {overlayEnabled ? 'Hide' : 'Show'} Overlay
-            </button>
-          )}
-          
-          {/* Botón Load ROM manual (como fallback) */}
-          <button style={{...btn, background: '#3a3a3a', fontSize: '10px'}} onClick={onLoadROM}>
-            Load File...
-          </button>
-        </div>
+        {/* Botón Load ROM manual (como fallback) */}
+        <button 
+          style={{
+            ...btn, 
+            background: '#3a3a3a', 
+            fontSize: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '6px 8px'
+          }} 
+          onClick={onLoadROM}
+          title="Load ROM file from disk"
+        >
+          📁 <span>Load File...</span>
+        </button>
       </div>
 
       {/* Canvas para JSVecX con overlay responsive */}
       <div 
         ref={containerRef}
         style={{
-          flex: 1, 
+          flex: 1,
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center',
-          minHeight: '300px'
+          minHeight: '400px',
+          marginBottom: '8px'
         }}
       >
         <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -691,16 +853,142 @@ export const EmulatorPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* Emulator Output - Información técnica del emulador */}
+      <EmulatorOutputInfo />
 
-
+      {/* Controles principales debajo del canvas - Estilo homogéneo */}
       <div style={{
-        marginTop: 12, 
-        fontSize: 11, 
-        color: '#777', 
-        textAlign: 'center'
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 12,
+        paddingTop: 8,
+        borderTop: '1px solid #333'
       }}>
-        JSVecX Emulator - Canvas renders automatically
+        {/* Botón Start/Stop unificado */}
+        <button 
+          style={{
+            ...btn,
+            backgroundColor: status === 'running' ? '#4a2a2a' : '#2a4a2a',
+            color: status === 'running' ? '#faa' : '#afa',
+            fontSize: '20px',
+            padding: '10px',
+            minWidth: '50px',
+            minHeight: '50px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }} 
+          onClick={status === 'running' ? onPause : onPlay}
+          title={status === 'running' ? 'Pause emulation' : (status === 'paused' ? 'Resume emulation' : 'Start emulation')}
+        >
+          {status === 'running' ? '⏸️' : '▶️'}
+        </button>
+        
+        {/* Botón Reset */}
+        <button 
+          style={{
+            ...btn,
+            backgroundColor: '#3a3a4a',
+            color: '#aaf',
+            fontSize: '20px',
+            padding: '10px',
+            minWidth: '50px',
+            minHeight: '50px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }} 
+          onClick={onReset}
+          title="Reset emulation"
+        >
+          🔄
+        </button>
+        
+        {/* Botón Audio Mute/Unmute */}
+        <button 
+          style={{
+            ...btn,
+            backgroundColor: getCurrentAudioState() ? '#2a4a2a' : '#4a2a2a',
+            color: getCurrentAudioState() ? '#afa' : '#faa',
+            fontSize: '20px',
+            padding: '10px',
+            minWidth: '50px',
+            minHeight: '50px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }} 
+          onClick={() => {
+            const currentRealState = getCurrentAudioState();
+            const newState = !currentRealState;
+            
+            console.log('[EmulatorPanel] Audio button clicked:', {
+              storedState: audioEnabled,
+              realCurrentState: currentRealState,
+              newState,
+              status,
+              vecxAvailable: !!(window as any).vecx
+            });
+            
+            setAudioEnabled(newState); 
+            
+            const vecx = (window as any).vecx;
+            if (vecx && vecx.toggleSoundEnabled) {
+              const resultState = vecx.toggleSoundEnabled();
+              console.log(`[EmulatorPanel] ✓ Audio toggled: ${currentRealState} → ${resultState}`);
+              
+              if (resultState !== newState) {
+                console.log('[EmulatorPanel] Correcting stored state to match result:', resultState);
+                setAudioEnabled(resultState);
+              }
+            }
+            
+            try {
+              const finalState = getCurrentAudioState();
+              if (finalState) {
+                psgAudio.start();
+                console.log('[EmulatorPanel] ✓ PSG Audio started');
+              } else {
+                psgAudio.stop();
+                console.log('[EmulatorPanel] ✓ PSG Audio stopped');
+              }
+            } catch (e) {
+              console.warn('[EmulatorPanel] Could not control PSG audio:', e);
+            }
+          }}
+          title={getCurrentAudioState() ? 'Mute audio' : 'Unmute audio'}
+        >
+          {getCurrentAudioState() ? '🔊' : '🔇'}
+        </button>
+        
+        {/* Botón Toggle Overlay - Solo visible si hay overlay disponible */}
+        {currentOverlay && (
+          <button 
+            style={{
+              ...btn,
+              backgroundColor: overlayEnabled ? '#2a4a2a' : '#4a2a2a',
+              color: overlayEnabled ? '#afa' : '#888', // Gris cuando está desactivado
+              fontSize: '20px',
+              padding: '10px',
+              minWidth: '50px',
+              minHeight: '50px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }} 
+            onClick={toggleOverlay}
+            title={overlayEnabled ? 'Hide overlay' : 'Show overlay'} >
+            🖼️
+          </button>
+        )}
       </div>
+
     </div>
   );
 };

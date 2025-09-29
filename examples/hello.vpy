@@ -7,4 +7,4 @@ META COPYRIGHT = "g GCE 2025"
 
 def main():
     # one frame body (auto loop will add frame loop)
-    PRINT_TEXT( -0x50, 0x10, "HELLO WORLD FUNCIONA")
+    PRINT_TEXT( -0x70, 0x10, "HELLO WORLD FUNCIONA")

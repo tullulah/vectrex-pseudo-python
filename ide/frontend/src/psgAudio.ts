@@ -38,17 +38,11 @@ export class PsgAudioStreamer {
     this.sampleRateBackend = emuCore.audioSampleRate?.() || 44100;
     // Intentar cargar worklet inline (generamos un blob con procesador simple)
     try {
-  const code = `class PsgProcessor extends AudioWorkletProcessor { constructor(){ super(); this.q=[]; this.totalConsumed=0; this.port.onmessage=e=>{ if(e.data?.cmd==='push'){ this.q.push(e.data.buf); } }; } process(_i, outputs){ const out=outputs[0][0]; if(!out) return true; let filled=0; while(filled<out.length){ if(!this.q.length) break; const cur=this.q[0]; const take=Math.min(out.length-filled, cur.length); out.set(cur.subarray(0,take), filled); filled+=take; if(take===cur.length) this.q.shift(); else this.q[0]=cur.subarray(take); } for(let i=filled;i<out.length;i++) out[i]=0; this.totalConsumed+=out.length; if((this.totalConsumed & 0x1FFF)===0){ this.port.postMessage({cmd:'consumed', v:this.totalConsumed}); } return true; } } registerProcessor('psg-processor', PsgProcessor);`;
-      const blob = new Blob([code], { type:'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      await this.ctx.audioWorklet.addModule(url);
-  const node = new (window as any).AudioWorkletNode(this.ctx, 'psg-processor');
-  node.port.onmessage = (e:MessageEvent)=>{ if(e.data?.cmd==='consumed'){ this.consumedSamples = e.data.v|0; } };
-      node.connect(this.ctx.destination);
-      this.workletReady = true;
-      (this as any)._node = node;
+      // Skip AudioWorklet due to CSP restrictions in development
+      // Use ScriptProcessor directly for better compatibility
+      throw new Error('[PsgAudio] Skipping AudioWorklet due to CSP restrictions, using ScriptProcessor');
     } catch (e){
-      console.warn('[PsgAudio] AudioWorklet no disponible, usando ScriptProcessor fallback', e);
+      console.warn('[PsgAudio] Using ScriptProcessor (AudioWorklet blocked by CSP)', e);
       if (this.ctx) {
         this.spNode = this.ctx.createScriptProcessor(1024, 0, 1);
         this.spNode.onaudioprocess = (ev)=>{

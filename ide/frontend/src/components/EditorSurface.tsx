@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { useEditorStore } from '../state/editorStore';
+import { useProjectStore } from '../state/projectStore';
 import { WelcomeView } from './WelcomeView';
 import { MonacoEditorWrapper } from './MonacoEditorWrapper';
 
@@ -11,6 +12,7 @@ export const EditorSurface: React.FC = () => {
   const active = useEditorStore(s=>s.active);
   const setActive = useEditorStore(s=>s.setActive);
   const closeDocument = useEditorStore(s=>s.closeDocument);
+  const hasWorkspace = useProjectStore(s=>s.hasWorkspace());
   const visibleDocs = documents; // all docs now visible (no hide/pin)
 
   const onClose = useCallback((e: React.MouseEvent, uri: string) => {
@@ -22,6 +24,15 @@ export const EditorSurface: React.FC = () => {
     closeDocument(uri);
   }, [documents, closeDocument]);
 
+  const onTabMouseDown = useCallback((e: React.MouseEvent, uri: string) => {
+    // Botón central del ratón (rueda) - cerrar pestaña
+    if (e.button === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose(e, uri);
+    }
+  }, [onClose]);
+
   return (
     <div className="vpy-editor-surface">
       <div className="vpy-tab-bar">
@@ -31,7 +42,8 @@ export const EditorSurface: React.FC = () => {
             <div key={doc.uri}
               className={"vpy-tab" + (doc.uri===active?" active":"") + (doc.dirty?" dirty":"")}
               title={doc.uri}
-              onClick={()=> setActive(doc.uri)}>
+              onClick={()=> setActive(doc.uri)}
+              onMouseDown={(e)=> onTabMouseDown(e, doc.uri)}>
               <span className="title">{title}</span>
               <button className="close" onClick={(e)=>onClose(e, doc.uri)}>×</button>
             </div>

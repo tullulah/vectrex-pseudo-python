@@ -28,9 +28,15 @@ contextBridge.exposeInMainWorld('files', {
   saveFileAs: (args: { suggestedName?: string; content: string }) => ipcRenderer.invoke('file:saveAs', args) as Promise<{ path: string; mtime: number; size: number; name: string } | { canceled: true } | { error: string }>,
 
   openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ path: string } | null>,
+  readDirectory: (path: string) => ipcRenderer.invoke('file:readDirectory', path) as Promise<{ files: Array<{ name: string; path: string; isDir: boolean; children?: any[] }> } | { error: string }>,
   readFile: (path: string) => ipcRenderer.invoke('file:read', path) as Promise<{ path: string; content: string; mtime: number; size: number; name: string } | { error: string }>,
   readFileBin: (path: string) => ipcRenderer.invoke('file:readBin', path) as Promise<{ path: string; base64: string; size: number; name: string } | { error: string }>,
   openBin: () => ipcRenderer.invoke('bin:open') as Promise<{ path: string; base64: string; size: number } | { error: string } | null>,
+  deleteFile: (path: string) => ipcRenderer.invoke('file:delete', path) as Promise<{ success: boolean; path: string } | { error: string }>,
+  moveFile: (args: { sourcePath: string; targetDir: string }) => ipcRenderer.invoke('file:move', args) as Promise<{ success: boolean; sourcePath: string; targetPath: string } | { error: string; targetPath?: string }>,
+  watchDirectory: (path: string) => ipcRenderer.invoke('file:watchDirectory', path) as Promise<{ ok: boolean; error?: string }>,
+  unwatchDirectory: (path: string) => ipcRenderer.invoke('file:unwatchDirectory', path) as Promise<{ ok: boolean }>,
+  onFileChanged: (cb: (event: { type: 'added' | 'removed' | 'changed'; path: string; isDir: boolean }) => void) => ipcRenderer.on('file://changed', (_e: IpcRendererEvent, data) => cb(data)),
 });
 
 contextBridge.exposeInMainWorld('recents', {
