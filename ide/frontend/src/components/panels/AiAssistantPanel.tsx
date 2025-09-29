@@ -57,7 +57,7 @@ export const AiAssistantPanel: React.FC = () => {
   // Add system message on first load
   useEffect(() => {
     if (messages.length === 0) {
-      addMessage('system', `🤖 **VPy AI Assistant** activado
+      addMessage('system', `🤖 **PyPilot** activado
 
 Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte con:
 
@@ -399,7 +399,7 @@ def main():
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>🤖</span>
-          <span style={{ fontWeight: '600' }}>VPy AI Assistant</span>
+          <span style={{ fontWeight: '600' }}>PyPilot</span>
           <span style={{ 
             fontSize: '11px', 
             background: aiProvider.enabled ? '#10b981' : '#6b7280',

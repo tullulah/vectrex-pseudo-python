@@ -19,6 +19,13 @@ export const ErrorsPanel: React.FC = () => {
         <span><strong>Errors:</strong> {diagnostics.filter(d=>d.severity==='error').length}</span>
         <span><strong>Warnings:</strong> {diagnostics.filter(d=>d.severity==='warning').length}</span>
         <span><strong>Info:</strong> {diagnostics.filter(d=>d.severity==='info').length}</span>
+        <button onClick={() => {
+          console.log('[ErrorsPanel] DEBUG - documents:', documents);
+          console.log('[ErrorsPanel] DEBUG - allDiagnostics:', allDiagnostics);
+          console.log('[ErrorsPanel] DEBUG - diagnostics:', diagnostics);
+        }} style={{marginLeft: 'auto', padding: '2px 6px', fontSize: '10px'}}>
+          Debug
+        </button>
       </div>
       <div style={{overflow:'auto', flex:1}}>
         <table style={{width:'100%', borderCollapse:'collapse'}}>

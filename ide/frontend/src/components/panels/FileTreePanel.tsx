@@ -3,13 +3,126 @@ import { useProjectStore } from '../../state/projectStore';
 import { useEditorStore } from '../../state/editorStore';
 import type { FileNode } from '../../types/models';
 
+// Helper function to normalize file paths to proper file:// URIs (same logic as File > Open)
+function normalizeFileUri(path: string): string {
+  console.log('[TreeView] normalizeFileUri input path:', path);
+  const normPath = path.replace(/\\/g, '/');
+  console.log('[TreeView] normPath after replace:', normPath);
+  let result: string;
+  if (normPath.match(/^[A-Za-z]:\//)) {
+    // Windows absolute path like C:/path/file.ext
+    result = `file:///${normPath}`;
+    console.log('[TreeView] Windows absolute path detected, result:', result);
+  } else if (normPath.startsWith('/')) {
+    // Unix absolute path like /path/file.ext  
+    result = `file://${normPath}`;
+    console.log('[TreeView] Unix absolute path detected, result:', result);
+  } else {
+    // Relative path - should not happen normally but handle it
+    result = `file://${normPath}`;
+    console.log('[TreeView] Relative path detected, result:', result);
+  }
+  return result;
+}
+
 export const FileTreePanel: React.FC = () => {
   const { project, workspaceName, selectFile, hasWorkspace, refreshWorkspace } = useProjectStore();
-  const { openDocument, closeDocument, documents } = useEditorStore();
+  const { openDocument, closeDocument, documents, active } = useEditorStore();
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [hoveredFile, setHoveredFile] = useState<string | null>(null);
   const [draggedFiles, setDraggedFiles] = useState<Set<string>>(new Set());
+
+  // Helper function to convert file:// URI back to relative path within workspace
+  const uriToRelativePath = (uri: string, workspaceRoot: string): string => {
+    // First convert URI to absolute filesystem path
+    let absolutePath: string;
+    if (uri.startsWith('file:///')) {
+      // file:///C:/path/file.ext -> C:/path/file.ext
+      absolutePath = uri.slice(8); // Remove 'file:///'
+      if (absolutePath.match(/^[A-Za-z]:/)) {
+        // Windows path - convert forward slashes back to backslashes
+        absolutePath = absolutePath.replace(/\//g, '\\');
+      }
+    } else if (uri.startsWith('file://')) {
+      // file://path/file.ext -> /path/file.ext  
+      absolutePath = uri.slice(7); // Remove 'file://'
+    } else {
+      absolutePath = uri; // fallback
+    }
+    
+    // Now convert absolute path to relative path within workspace
+    const normalizedWorkspace = workspaceRoot.replace(/\//g, '\\');
+    const normalizedAbsolute = absolutePath.replace(/\//g, '\\');
+    
+    if (normalizedAbsolute.startsWith(normalizedWorkspace)) {
+      // Remove workspace root and leading slash/backslash
+      let relativePath = normalizedAbsolute.slice(normalizedWorkspace.length);
+      if (relativePath.startsWith('\\') || relativePath.startsWith('/')) {
+        relativePath = relativePath.slice(1);
+      }
+      // Convert to forward slashes for consistency with TreeView paths
+      return relativePath.replace(/\\/g, '/');
+    }
+    
+    // If not within workspace, return the original path
+    return absolutePath;
+  };
+
+  // Sync TreeView selection with active document tab
+  useEffect(() => {
+    console.log('[TreeView] useEffect triggered - active:', active, 'project files:', !!project?.files, 'workspace root:', project?.rootPath);
+    
+    if (!project?.files || !project?.rootPath) {
+      console.log('[TreeView] No project files or workspace root available');
+      return;
+    }
+    
+    // If no active document, clear selection
+    if (!active) {
+      console.log('[TreeView] No active document - clearing selection');
+      setSelectedFiles(new Set());
+      return;
+    }
+    
+    const activePath = uriToRelativePath(active, project.rootPath);
+    console.log('[TreeView] Syncing selection - active URI:', active, 'workspace root:', project.rootPath, 'converted relative path:', activePath);
+    
+    // Find the file node that matches the active document
+    const findFileInTree = (files: any[], targetPath: string): any => {
+      for (const file of files) {
+        if (file.path === targetPath) {
+          return file;
+        }
+        if (file.children) {
+          const found = findFileInTree(file.children, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const activeFile = findFileInTree(project.files, activePath);
+    if (activeFile) {
+      console.log('[TreeView] Found active file in tree:', activeFile.path);
+      setSelectedFiles(new Set([activeFile.path]));
+      
+      // Auto-expand parent directories to make the selected file visible
+      const parts = activeFile.path.split(/[/\\]/);
+      const newExpanded = new Set(expandedDirs);
+      let currentPath = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentPath += (i === 0 ? '' : '\\') + parts[i];
+        newExpanded.add(currentPath);
+      }
+      setExpandedDirs(newExpanded);
+    } else {
+      console.log('[TreeView] Active file not found in tree:', activePath);
+      // Clear selection if active file is not in the tree
+      setSelectedFiles(new Set());
+    }
+  }, [active, project?.files]);
 
   // Auto-expand root directory when workspace loads
   useEffect(() => {
@@ -146,7 +259,7 @@ export const FileTreePanel: React.FC = () => {
 
       // Si el archivo está abierto en el editor, cerrarlo
       if (!isDir) {
-        const fileUri = `file://${fullPath}`;
+        const fileUri = normalizeFileUri(fullPath);
         const openDoc = documents.find(doc => doc.uri === fileUri || doc.diskPath === fullPath);
         if (openDoc) {
           console.log('Closing open document:', openDoc.uri);
@@ -216,8 +329,25 @@ export const FileTreePanel: React.FC = () => {
     } else {
       selectFile(node.path);
       
-      // Create a file URI for the document
-      const fileUri = `file://${node.path}`;
+      // Get the full file path by combining workspace root with relative path
+      const { project } = useProjectStore.getState();
+      if (!project?.rootPath) {
+        console.error('No workspace root path available');
+        return;
+      }
+      
+      let fullPath: string;
+      
+      if (project.rootPath.includes('\\')) {
+        // Windows path
+        fullPath = `${project.rootPath}\\${node.path.replace(/\//g, '\\')}`;
+      } else {
+        // Unix-like path
+        fullPath = `${project.rootPath}/${node.path}`;
+      }
+      
+      // Create a file URI for the document using the full path
+      const fileUri = normalizeFileUri(fullPath);
       
       // Check if document is already open
       const { documents, active, setActive } = useEditorStore.getState();
@@ -229,26 +359,6 @@ export const FileTreePanel: React.FC = () => {
       } else {
         // File is not open, need to load and open it
         try {
-          // Get the full file path by combining workspace root with relative path
-          const { project } = useProjectStore.getState();
-          if (!project) {
-            console.warn('No project available to construct file path');
-            return;
-          }
-          
-          // Construct full path properly
-          // project.rootPath is the full system path (e.g., C:\Users\...\folder)
-          // node.path is relative to workspace root (e.g., subfolder/file.txt)
-          let fullPath: string;
-          
-          if (project.rootPath.includes('\\')) {
-            // Windows path
-            fullPath = `${project.rootPath}\\${node.path.replace(/\//g, '\\')}`;
-          } else {
-            // Unix-like path
-            fullPath = `${project.rootPath}/${node.path}`;
-          }
-          
           console.log('Loading file:', fullPath);
           console.log('Workspace root:', project.rootPath);
           console.log('Relative path:', node.path);
@@ -317,8 +427,19 @@ export const FileTreePanel: React.FC = () => {
   const renderFileNode = (node: FileNode, depth: number = 0): React.ReactNode => {
     const isExpanded = expandedDirs.has(node.path);
     const isSelected = selectedFiles.has(node.path);
+    const isHovered = hoveredFile === node.path;
     const isDragged = draggedFiles.has(node.path);
     const indent = depth * 16;
+    
+    // Determine background color with proper priority
+    let backgroundColor = 'transparent';
+    if (isDragged) {
+      backgroundColor = '#1e1e1e';
+    } else if (isSelected) {
+      backgroundColor = '#0e639c'; // Selection color (blue) has highest priority
+    } else if (isHovered) {
+      backgroundColor = '#2a2a2a'; // Hover color only if not selected
+    }
     
     return (
       <div key={node.path} style={{ position: 'relative' }}>
@@ -350,21 +471,19 @@ export const FileTreePanel: React.FC = () => {
             gap: 4,
             fontSize: 13,
             lineHeight: '20px',
-            backgroundColor: isSelected ? '#0e639c' : (isDragged ? '#1e1e1e' : 'transparent'),
+            backgroundColor,
             opacity: isDragged ? 0.5 : 1,
             userSelect: 'none',
             position: 'relative'
           }}
           onClick={(e) => handleFileClick(node, e)}
-          onMouseEnter={(e) => {
-            if (!isSelected && !isDragged) {
-              (e.target as HTMLElement).style.backgroundColor = '#2a2a2a';
-            }
+          onMouseEnter={() => {
+            // Set hover state - the background color will be calculated in render
+            setHoveredFile(node.path);
           }}
-          onMouseLeave={(e) => {
-            if (!isSelected && !isDragged) {
-              (e.target as HTMLElement).style.backgroundColor = 'transparent';
-            }
+          onMouseLeave={() => {
+            // Clear hover state
+            setHoveredFile(null);
           }}
           draggable={!node.isDir}
           onDragStart={(e) => {
@@ -421,8 +540,8 @@ export const FileTreePanel: React.FC = () => {
                   }
                   
                   // Update editor documents if file was moved
-                  const oldFileUri = `file://${sourcePath}`;
-                  const newFileUri = `file://${result.targetPath}`;
+                  const oldFileUri = normalizeFileUri(sourcePath);
+                  const newFileUri = normalizeFileUri(result.targetPath);
                   const openDoc = documents.find(doc => doc.uri === oldFileUri || doc.diskPath === sourcePath);
                   
                   if (openDoc) {

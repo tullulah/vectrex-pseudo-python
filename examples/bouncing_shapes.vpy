@@ -113,11 +113,9 @@ def draw_bouncing_circle():
 def draw_bouncing_square():
     # Dibuja cuadrado como polígono de 4 lados
     size = 8
-    DRAW_POLYGON(4, I_MEDIUM, 
-                 square_x - size, square_y - size,
-                 square_x + size, square_y - size, 
-                 square_x + size, square_y + size,
-                 square_x - size, square_y + size)
+    DRAW_POLYGON(4, I_MEDIUM, square_x - size, square_y - size, 
+    square_x + size, square_y - size, square_x + size, square_y + size,
+    square_x - size, square_y + size)
 
 def draw_bouncing_line():
     # Dibuja línea rotativa
@@ -126,11 +124,11 @@ def draw_bouncing_line():
     length = 15
     
     # Línea principal
-    VECTREX_DRAW_LINE(line_x - length, line_y, line_x + length, line_y, I_MEDIUM)
+    DRAW_LINE(line_x - length, line_y, line_x + length, line_y, I_MEDIUM)
     
     # Líneas adicionales para efecto de rotación
     if (line_angle & 8) != 0:
-        VECTREX_DRAW_LINE(line_x, line_y - length, line_x, line_y + length, I_DIM)
+        DRAW_LINE(line_x, line_y - length, line_x, line_y + length, I_DIM)
     
     if (line_angle & 16) != 0:
         VECTREX_DRAW_LINE(line_x - 10, line_y - 10, line_x + 10, line_y + 10, I_FAINT)

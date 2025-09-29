@@ -9,6 +9,7 @@ import { join, basename } from 'path';
 import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
 import { watch } from 'fs';
+import * as crypto from 'crypto';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -307,6 +308,64 @@ function resolveCompilerPath(): string | null {
 }
 
 // run:compile => compile a .vpy file, produce .asm + .bin, load into emulator
+// Parse compiler diagnostics from output, including semantic errors without location info
+function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ file: string; line: number; col: number; message: string }> {
+  const diags: Array<{ file: string; line: number; col: number; message: string }> = [];
+  
+  for (const line of output.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    // Standard format: filename:line:col: message
+    const standardMatch = /(.*?):(\d+):(\d+):\s*(.*)/.exec(trimmed);
+    if (standardMatch) {
+      diags.push({ 
+        file: standardMatch[1], 
+        line: parseInt(standardMatch[2], 10) - 1, 
+        col: parseInt(standardMatch[3], 10) - 1, 
+        message: standardMatch[4] 
+      });
+      continue;
+    }
+    
+    // Semantic errors: [error] SemanticsErrorArity: llamada a 'PRINT_TEXT' con 4 argumentos; se esperaban 3.
+    const semanticMatch = /\[error\]\s*(\w+):\s*(.*)/.exec(trimmed);
+    if (semanticMatch) {
+      diags.push({
+        file: sourceFile, // Use the source file being compiled
+        line: 0, // Default to line 0 since location is not provided
+        col: 0,
+        message: `${semanticMatch[1]}: ${semanticMatch[2]}`
+      });
+      continue;
+    }
+    
+    // Codegen errors: [codegen] Code generation failed due to 1 error(s)
+    const codegenMatch = /\[codegen\]\s*(.*)/.exec(trimmed);
+    if (codegenMatch && codegenMatch[1].includes('failed')) {
+      diags.push({
+        file: sourceFile,
+        line: 0,
+        col: 0,
+        message: `Codegen: ${codegenMatch[1]}`
+      });
+      continue;
+    }
+    
+    // General error patterns
+    if (/error|Error|ERROR/.test(trimmed) && !trimmed.includes('ERROR:') && !trimmed.includes('checking')) {
+      diags.push({
+        file: sourceFile,
+        line: 0,
+        col: 0,
+        message: trimmed
+      });
+    }
+  }
+  
+  return diags;
+}
+
 // args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number } }
 ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean }) => {
   const { path, saveIfDirty, autoStart } = args || {} as any;
@@ -325,6 +384,7 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   // Optionally save current buffer content before compiling
   const targetDisplay = fsPath !== path ? `${path} -> ${fsPath}` : fsPath;
   // Optionally save current buffer content before compiling
+  let savedMTime: number | undefined;
   if (saveIfDirty && typeof saveIfDirty.content === 'string') {
     try {
       const statBefore = await fs.stat(fsPath).catch(()=>null);
@@ -332,6 +392,9 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         return { conflict: true, currentMTime: statBefore.mtimeMs };
       }
       await fs.writeFile(fsPath, saveIfDirty.content, 'utf8');
+      // Capture the new modification time after saving
+      const statAfter = await fs.stat(fsPath);
+      savedMTime = statAfter.mtimeMs;
     } catch (e:any) {
       return { error: 'save_failed_before_compile', detail: e?.message };
     }
@@ -355,16 +418,12 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
     child.on('exit', async (code) => {
       if (code !== 0) {
         mainWindow?.webContents.send('run://status', `Compilation FAILED (exit ${code})`);
-        // Attempt to parse basic diagnostics from stderr (pattern: filename:line:col: message)
-        const diags: Array<{ file:string; line:number; col:number; message:string }> = [];
-        const diagRegex = /(.*?):(\d+):(\d+):\s*(.*)/;
-        for (const line of stderrBuf.split(/\r?\n/)) {
-          const m = diagRegex.exec(line.trim());
-          if (m) {
-            diags.push({ file: m[1], line: parseInt(m[2],10)-1, col: parseInt(m[3],10)-1, message: m[4] });
-          }
+        // Parse diagnostics from compiler output using improved parser
+        const allOutput = stdoutBuf + '\n' + stderrBuf;
+        const diags = parseCompilerDiagnostics(allOutput, fsPath);
+        if (diags.length) {
+          mainWindow?.webContents.send('run://diagnostics', diags);
         }
-        if (diags.length) mainWindow?.webContents.send('run://diagnostics', diags);
         return resolvePromise({ error: 'compile_failed', code, stdout: stdoutBuf, stderr: stderrBuf });
       }
       // Check compilation phases: ASM generation + binary assembly
@@ -377,6 +436,14 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         if (!asmExists) {
           mainWindow?.webContents.send('run://stderr', `ERROR: ASM file not generated: ${outAsm}`);
           mainWindow?.webContents.send('run://status', `❌ Phase 1 FAILED: ASM generation failed`);
+          
+          // Parse semantic errors from stdout/stderr even when ASM is not generated
+          const allOutput = stdoutBuf + '\n' + stderrBuf;
+          const diags = parseCompilerDiagnostics(allOutput, fsPath);
+          if (diags.length) {
+            mainWindow?.webContents.send('run://diagnostics', diags);
+          }
+          
           return resolvePromise({ error: 'asm_not_generated', detail: `Expected ASM file: ${outAsm}` });
         }
         
@@ -384,6 +451,14 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         if (asmStats.size === 0) {
           mainWindow?.webContents.send('run://stderr', `ERROR: ASM file is empty: ${outAsm}`);
           mainWindow?.webContents.send('run://status', `❌ Phase 1 FAILED: Empty ASM file generated`);
+          
+          // Parse semantic errors from stdout/stderr even when compilation "succeeds" but generates empty ASM
+          const allOutput = stdoutBuf + '\n' + stderrBuf;
+          const diags = parseCompilerDiagnostics(allOutput, fsPath);
+          if (diags.length) {
+            mainWindow?.webContents.send('run://diagnostics', diags);
+          }
+          
           return resolvePromise({ error: 'empty_asm_file', detail: `ASM file exists but is empty: ${outAsm}` });
         }
         
@@ -450,7 +525,14 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         
         // Notify renderer to load binary
         mainWindow?.webContents.send('emu://compiledBin', { base64, size: buf.length, binPath });
-        resolvePromise({ ok: true, binPath, size: buf.length, stdout: stdoutBuf, stderr: stderrBuf });
+        resolvePromise({ 
+          ok: true, 
+          binPath, 
+          size: buf.length, 
+          stdout: stdoutBuf, 
+          stderr: stderrBuf,
+          savedMTime: savedMTime // Include the mtime if file was saved during compilation
+        });
         
       } catch (e: any) {
         mainWindow?.webContents.send('run://stderr', `❌ ERROR reading binary: ${e.message}`);
@@ -768,18 +850,15 @@ ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: str
 app.whenReady().then(() => {
   const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
   if (verbose) console.log('[IDE] app.whenReady');
+  
   // Seguridad adicional: anular menú global
   try { Menu.setApplicationMenu(null); } catch {}
   // Inyectar Content-Security-Policy por cabecera (más fuerte que meta) en dev y prod
   const isDev = !!process.env.VITE_DEV_SERVER_URL;
-  // CSP:
-  // - Prod (sin VITE_DEV_SERVER_URL): se espera estricta salvo que el empaquetado habilite relajación explícita.
-  // - Dev: ahora relajado por defecto (run-ide.ps1 exporta VPY_IDE_RELAX_CSP=1 a menos que se use -StrictCSP) para soportar React Fast Refresh.
-  //   Use -StrictCSP en el script de arranque para probar política estricta durante desarrollo.
-  const relax = process.env.VPY_IDE_RELAX_CSP === '1';
-  // En dev podemos necesitar React Refresh (eval + inline). Lo hacemos opt-in con VPY_IDE_RELAX_CSP=1
-  const scriptSrc = (isDev && relax) ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'";
-  const styleSrc = (isDev && relax) ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'";
+  // CSP simplificado: por ahora permitimos unsafe-inline para desarrollo y producción
+  // En el futuro, cuando creemos un paquete de instalación, implementaremos CSP estricto
+  const scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+  const styleSrc = "style-src 'self' 'unsafe-inline'";
   const imgSrc = "img-src 'self' data:";
   const fontSrc = "font-src 'self' data:";
   const connectSrc = isDev ? "connect-src 'self' ws: http: https:" : "connect-src 'self'";

@@ -82,12 +82,25 @@ pub struct CodegenOptions {
 
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
-    let (_asm, diags) = emit_asm_with_diagnostics(module, target, opts);
-    // Compat: imprimir warnings a stderr para no romper flujo existente.
-    for d in diags.iter().filter(|d| matches!(d.severity, DiagnosticSeverity::Warning)) {
-        eprintln!("[warn] {}", d.message);
+    let (asm, diags) = emit_asm_with_diagnostics(module, target, opts);
+    
+    // Print all diagnostics to stderr
+    for d in &diags {
+        match d.severity {
+            DiagnosticSeverity::Warning => eprintln!("[warn] {}", d.message),
+            DiagnosticSeverity::Error => eprintln!("[error] {}", d.message),
+        }
     }
-    _asm
+    
+    // Return empty string if there were any errors
+    let has_errors = diags.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
+    if has_errors {
+        eprintln!("[codegen] Code generation failed due to {} error(s)", 
+                 diags.iter().filter(|d| matches!(d.severity, DiagnosticSeverity::Error)).count());
+        return String::new();
+    }
+    
+    asm
 }
 
 // Nueva API estructurada (S8). Mantiene mismo comportamiento pero devuelve diagnostics.

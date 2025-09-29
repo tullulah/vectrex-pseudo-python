@@ -34,7 +34,7 @@ def main():
         vel_y = -vel_y
     
     # Dibujar la pelota como un pequeño cuadrado
-    VECTREX_DRAW_LINE(ball_x-5, ball_y-5, ball_x+5, ball_y-5, 0x7F)
-    VECTREX_DRAW_LINE(ball_x+5, ball_y-5, ball_x+5, ball_y+5, 0x7F)
-    VECTREX_DRAW_LINE(ball_x+5, ball_y+5, ball_x-5, ball_y+5, 0x7F)
-    VECTREX_DRAW_LINE(ball_x-5, ball_y+5, ball_x-5, ball_y-5, 0x7F)
+    DRAW_LINE(ball_x-5, ball_y-5, ball_x+5, ball_y-5, 0x7F)
+    DRAW_LINE(ball_x+5, ball_y-5, ball_x+5, ball_y+5, 0x7F)
+    DRAW_LINE(ball_x+5, ball_y+5, ball_x-5, ball_y+5, 0x7F)
+    DRAW_LINE(ball_x-5, ball_y+5, ball_x-5, ball_y-5, 0x7F)

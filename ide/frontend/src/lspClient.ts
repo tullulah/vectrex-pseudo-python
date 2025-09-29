@@ -1,6 +1,8 @@
 // Simple LSP client (Electron + web fallback). Frames JSON-RPC messages and parses server responses.
 // Tauri support removed: runtime now Electron-only (web build is passive without LSP backend).
 
+import { logger } from './utils/logger';
+
 export type LspNotificationHandler = (method: string, params: any) => void;
 export type LspResponseHandler = (id: number | string, result: any, error?: any) => void;
 
@@ -22,8 +24,8 @@ class LspClient {
     if (!isElectron) return; // plain web build: no backend
     await w.electronAPI.lspStart();
     w.electronAPI.onLspMessage((json: string) => this.dispatchMessage(json));
-    w.electronAPI.onLspStdout((line: string) => console.debug('[LSP-RAW]', line));
-    w.electronAPI.onLspStderr((line: string) => console.warn('[LSP-STDERR]', line));
+    w.electronAPI.onLspStdout((line: string) => logger.verbose('LSP', 'LSP-RAW:', line));
+    w.electronAPI.onLspStderr((line: string) => logger.debug('LSP', 'LSP-STDERR:', line));
     this.started = true;
   }
 
@@ -35,16 +37,16 @@ class LspClient {
       const msg = JSON.parse(jsonText);
       // Ignore parse-error notifications with null id (e.g. { error:{code:-32700}, id:null })
       if ((msg.error && (msg.id === null || msg.id === undefined) && msg.error.code === -32700)) {
-        console.warn('[LSP<-SERVER] parse error (ignored, waiting for real response)', msg);
+        logger.warn('LSP', 'parse error (ignored, waiting for real response):', msg);
         return;
       }
       if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
         // response
         if (msg.error) {
           const pending = this.pending.get(msg.id);
-          console.error('[LSP<-SERVER] error response', msg, 'pendingMethod=', pending?.method);
+          logger.error('LSP', 'error response:', msg, 'pendingMethod=', pending?.method);
         } else {
-          console.debug('[LSP<-SERVER] response', msg);
+          logger.verbose('LSP', 'response:', msg);
         }
         this.respHandlers.forEach(h => h(msg.id, msg.result, msg.error));
         const pending = this.pending.get(msg.id);
@@ -56,10 +58,10 @@ class LspClient {
         // notification or request from server (we treat both same; no request handling yet)
         this.notifHandlers.forEach(h => h(msg.method, msg.params));
       } else {
-        console.warn('Unknown LSP message shape', msg);
+        logger.warn('LSP', 'Unknown LSP message shape:', msg);
       }
     } catch (e) {
-      console.error('Failed parse LSP message', e, jsonText);
+      logger.error('LSP', 'Failed parse LSP message:', e, jsonText);
     }
   }
 
@@ -68,13 +70,13 @@ class LspClient {
     const isElectron = !!(w && w.electronAPI);
     if (!isElectron) return Promise.resolve();
     const json = JSON.stringify(obj);
-    console.debug('[LSP->SERVER]', json);
+    logger.verbose('LSP', 'LSP->SERVER:', json);
     return w.electronAPI.lspSend(json);
   }
 
   request(method: string, params: any): Promise<any> {
     const id = ++this.seq;
-    console.debug('[LSP][req.start]', id, method, params);
+    logger.verbose('LSP', 'req.start:', id, method, params);
     const p = new Promise<any>((resolve, reject) => {
       this.pending.set(id, { resolve, reject, method });
     });
@@ -139,17 +141,17 @@ export async function initLsp(language: string, documentUri: string, text: strin
     locale: language,
     workspaceFolders: null,
   };
-  console.debug('[LSP] initialize params', params);
+  logger.debug('LSP', 'initialize params:', params);
   let gotResult = false;
   const initPromise = lspClient.request('initialize', params).then(res => { gotResult = true; return res; });
   try {
     const res = await initPromise;
-    console.debug('[LSP] initialize result', res);
+    logger.debug('LSP', 'initialize result:', res);
   } catch (e:any) {
     if (e && e.code === -32600) {
-      console.warn('[LSP] initialize returned -32600 (Invalid request) – tolerando por bug inicial, esperando posible respuesta válida posterior');
+      logger.warn('LSP', 'initialize returned -32600 (Invalid request) – tolerando por bug inicial, esperando posible respuesta válida posterior');
     } else {
-      console.error('[LSP] initialize failed', e);
+      logger.error('LSP', 'initialize failed:', e);
       return; // abort if other error
     }
   }

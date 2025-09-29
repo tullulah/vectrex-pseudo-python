@@ -11,6 +11,8 @@ import { deriveBinaryName } from './utils';
 import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus';
 import { useEditorStore } from './state/editorStore';
 import { useProjectStore } from './state/projectStore';
+import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem } from './components/MenuComponents';
+import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger';
 
 function App() {
   const { t, i18n } = useTranslation(['common']);
@@ -29,7 +31,7 @@ function App() {
       openDocument({ uri: 'inmemory://demo.vpy', language: 'vpy', content, dirty:false, diagnostics: [] });
       const w: any = typeof window !== 'undefined' ? window : undefined;
       const isElectron = !!(w && w.electronAPI);
-      if (isElectron) { initLsp(i18n.language || 'en', 'inmemory://demo.vpy', content).catch(e=>console.error(e)); }
+      if (isElectron) { initLsp(i18n.language || 'en', 'inmemory://demo.vpy', content).catch(e=>logger.error('LSP', 'Init error:', e)); }
     }
   }, [documents.length, openDocument, i18n.language]);*/
 
@@ -42,16 +44,93 @@ function App() {
       if (method === 'textDocument/publishDiagnostics') {
         const { uri, diagnostics } = params || {};
         if (!uri) return;
+        
+        logger.debug('LSP', `Received ${(diagnostics||[]).length} diagnostics for URI:`, uri);
+        
+        // Decode URI to handle URL encoding (e.g., %3A -> :)
+        let decodedUri: string;
+        try {
+          decodedUri = decodeURIComponent(uri);
+          logger.verbose('LSP', 'Decoded URI:', decodedUri);
+        } catch (error) {
+          logger.warn('LSP', 'Failed to decode URI, using original:', uri);
+          decodedUri = uri;
+        }
+        
         const mapped = (diagnostics||[]).map((d: any) => ({
           message: d.message,
           severity: (d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info'),
           line: d.range?.start?.line || 0,
           column: d.range?.start?.character || 0
         }));
-        try { setDiagnostics(uri, mapped as any); } catch {}
+        
+        try { 
+          setDiagnostics(decodedUri, mapped as any);
+          const errorCount = mapped.filter((d: any) => d.severity === 'error').length;
+          if (errorCount > 0) {
+            logger.info('LSP', `Set ${errorCount} errors for ${decodedUri.split('/').pop()}`);
+          }
+        } catch (error) {
+          logger.error('LSP', 'Error calling setDiagnostics:', error);
+        }
       }
     };
     lspClient.onNotification(handler);
+  }, [setDiagnostics, documents]);
+
+  // Listen for compilation diagnostics from Electron backend (run://diagnostics)
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.onRunDiagnostics) return;
+    
+    const handler = (diags: Array<{ file: string; line: number; col: number; message: string }>) => {
+      if (diags.length > 0) {
+        logger.info('Compilation', `Received ${diags.length} compilation errors`);
+      }
+      
+      // Group diagnostics by file and convert to store format
+      const diagsByFile: Record<string, any[]> = {};
+      
+      diags.forEach((diag) => {
+        const { file, line, col, message } = diag;
+        
+        // Convert file path to proper URI format
+        let uri = file;
+        if (file && !file.startsWith('file://')) {
+          const normPath = file.replace(/\\/g, '/');
+          uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+        }
+        
+        if (!diagsByFile[uri]) {
+          diagsByFile[uri] = [];
+        }
+        
+        diagsByFile[uri].push({
+          line: Math.max(0, line),
+          column: Math.max(0, col),
+          severity: 'error' as const,
+          message: message
+        });
+      });
+      
+      // Set diagnostics for each file
+      Object.entries(diagsByFile).forEach(([uri, fileDiags]) => {
+        try { 
+          setDiagnostics(uri, fileDiags as any); 
+          const fileName = uri.split('/').pop() || uri;
+          logger.debug('Compilation', `Set ${fileDiags.length} errors for ${fileName}`);
+        } catch (e) {
+          logger.error('Compilation', 'Failed to set diagnostics for', uri, e);
+        }
+      });
+    };
+    
+    electronAPI.onRunDiagnostics(handler);
+    
+    // Cleanup function
+    return () => {
+      // Note: electron doesn't provide an off method, so we rely on component unmount
+    };
   }, [setDiagnostics]);
 
   // Auto-restore last workspace on app startup
@@ -60,7 +139,7 @@ function App() {
   
   useEffect(() => {
     if (!initializedRef.current && !hasWorkspace()) {
-      console.log('App: Auto-restoring last workspace on startup');
+      logger.debug('App', 'Auto-restoring last workspace on startup');
       restoreLastWorkspace();
       initializedRef.current = true;
     }
@@ -116,23 +195,24 @@ function App() {
   const handleBuild = useCallback(async (autoRun: boolean = false) => {
     const electronAPI: any = (window as any).electronAPI;
     if (!electronAPI?.runCompile) {
-      console.warn('[Build] electronAPI.runCompile not available');
+      logger.warn('Build', 'electronAPI.runCompile not available');
       return;
     }
 
     const editorState = useEditorStore.getState();
     const activeDoc = documents.find(d => d.uri === editorState.active);
     if (!activeDoc) {
-      console.warn('[Build] No active document to build');
+      logger.warn('Build', 'No active document to build');
       return;
     }
 
     if (!activeDoc.uri.endsWith('.vpy')) {
-      console.warn('[Build] Active document is not a .vpy file:', activeDoc.uri);
+      logger.warn('Build', 'Active document is not a .vpy file:', activeDoc.uri);
       return;
     }
 
-    console.log(`[Build] ${autoRun ? 'Build & Run' : 'Build'} starting:`, activeDoc.uri);
+    const fileName = activeDoc.uri.split('/').pop() || activeDoc.uri;
+    logger.info('Build', `${autoRun ? 'Build & Run' : 'Build'} starting: ${fileName}`);
 
     try {
       // Preparar argumentos para runCompile
@@ -140,11 +220,11 @@ function App() {
       const filePath = activeDoc.diskPath || activeDoc.uri;
       
       if (filePath.startsWith('file://')) {
-        console.error('[Build] Document has no diskPath, cannot compile:', activeDoc.uri);
+        logger.error('Build', 'Document has no diskPath, cannot compile:', activeDoc.uri);
         return;
       }
       
-      console.log('[Build] Using file path:', filePath);
+      logger.debug('Build', 'Using file path:', filePath);
       
       const args: any = {
         path: filePath,
@@ -163,22 +243,44 @@ function App() {
       const result = await electronAPI.runCompile(args);
       
       if (result.error) {
-        console.error('[Build] Compilation failed:', result.error, result.detail || '');
+        logger.error('Build', 'Compilation failed:', result.error, result.detail || '');
         return;
       }
 
       if (result.conflict) {
-        console.warn('[Build] File was modified externally, mtime:', result.currentMTime);
+        // File was modified externally during build - automatically force overwrite
+        logger.info('Build', 'File conflict detected, auto-overwriting...');
+        try {
+          const forceArgs = { ...args, saveIfDirty: { ...args.saveIfDirty, expectedMTime: null } };
+          const forceResult = await electronAPI.runCompile(forceArgs);
+          if (forceResult.error) {
+            logger.error('Build', 'Force compilation failed:', forceResult.error);
+            return;
+          }
+          useEditorStore.getState().markSaved(activeDoc.uri, forceResult.savedMTime);
+          logger.info('Build', 'Force compilation successful:', forceResult.binPath, `(${forceResult.size} bytes)`);
+          if (autoRun) {
+            logger.debug('Build', 'Auto-run enabled - emulator should load the binary automatically');
+          }
+        } catch (forceError) {
+          logger.error('Build', 'Failed to force compile during conflict:', forceError);
+        }
         return;
       }
 
-      console.log('[Build] Compilation successful:', result.binPath, `(${result.size} bytes)`);
+      logger.info('Build', 'Compilation successful:', result.binPath, `(${result.size} bytes)`);
+      
+      // Si el archivo fue guardado durante la compilación, actualizar el estado del editor
+      if (activeDoc.dirty && result.savedMTime) {
+        useEditorStore.getState().markSaved(activeDoc.uri, result.savedMTime);
+        logger.debug('Build', 'File saved during compilation, tab marked as clean');
+      }
       
       if (autoRun) {
-        console.log('[Build] Auto-run enabled - emulator should load the binary automatically');
+        logger.debug('Build', 'Auto-run enabled - emulator should load the binary automatically');
       }
     } catch (error) {
-      console.error('[Build] Build process failed:', error);
+      logger.error('Build', 'Build process failed:', error);
     }
   }, [documents]);
 
@@ -197,13 +299,24 @@ function App() {
         } catch {}
         break; }
       case 'file.open': {
-        if (!apiFiles?.openFile) { console.warn('files API missing'); break; }
+        if (!apiFiles?.openFile) { logger.warn('File', 'files API missing'); break; }
         apiFiles.openFile().then((res: any) => {
           if (!res || res.error) return;
             const { path, content, mtime } = res;
             const normPath = path.replace(/\\/g,'/');
             // Ensure triple-slash file URI + uppercase drive letter normalized the same way Monaco does (file:///C:/...)
-            const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+            let uri: string;
+            if (normPath.match(/^[A-Za-z]:\//)) {
+              // Windows absolute path like C:/path/file.ext
+              uri = `file:///${normPath}`;
+            } else if (normPath.startsWith('/')) {
+              // Unix absolute path like /path/file.ext  
+              uri = `file://${normPath}`;
+            } else {
+              // Relative path - should not happen normally but handle it
+              uri = `file://${normPath}`;
+            }
+            logger.debug('File', 'Opening file with path:', path, 'normPath:', normPath, 'uri:', uri);
             openDocument({ uri, language: 'vpy', content, dirty: false, diagnostics: [], diskPath: path, mtime, lastSavedContent: content });
             // If already initialized, notify didOpen immediately; else init effect will do first doc.
             try { if ((window as any)._lspInit) { lspClient.didOpen(uri, 'vpy', content); } } catch {}
@@ -222,11 +335,19 @@ function App() {
         apiFiles.saveFile({ path, content, expectedMTime: active.mtime }).then((res: any) => {
           if (!res) return;
           if (res.conflict) {
-            // Simple strategy: prompt reload (placeholder)
-            console.warn('Save conflict, reload strategy not implemented yet', res);
+            // File was modified externally - automatically force overwrite
+            logger.info('Save', 'File conflict detected, auto-overwriting...');
+            apiFiles.saveFile({ path, content, expectedMTime: null }).then((forceRes: any) => {
+              if (forceRes?.error) { 
+                logger.error('Save', 'Force save error:', forceRes.error); 
+                return; 
+              }
+              useEditorStore.getState().markSaved(active.uri, forceRes.mtime);
+              logger.debug('Save', 'Overwrote external changes');
+            });
             return;
           }
-          if (res.error) { console.error('Save error', res.error); return; }
+          if (res.error) { logger.error('Save', 'Save error:', res.error); return; }
           useEditorStore.getState().markSaved(active.uri, res.mtime);
         });
         break; }
@@ -258,28 +379,28 @@ function App() {
         await handleBuild(true); // Compilar y ejecutar
         break;
       case 'build.clean':
-  console.log('[command] clean build artifacts (pending implementation)');
+  logger.debug('App', 'clean build artifacts (pending implementation)');
         break;
       case 'debug.start':
-  console.log('[command] start debug (pending implementation)');
+  logger.debug('App', 'start debug (pending implementation)');
         break;
       case 'debug.stop':
-  console.log('[command] stop debug (pending implementation)');
+  logger.debug('App', 'stop debug (pending implementation)');
         break;
       case 'debug.stepOver':
-  console.log('[command] step over (pending implementation)');
+  logger.debug('App', 'step over (pending implementation)');
         break;
       case 'debug.stepInto':
-  console.log('[command] step into (pending implementation)');
+  logger.debug('App', 'step into (pending implementation)');
         break;
       case 'debug.stepOut':
-  console.log('[command] step out (pending implementation)');
+  logger.debug('App', 'step out (pending implementation)');
         break;
       case 'debug.toggleBreakpoint':
-  console.log('[command] toggle breakpoint (pending implementation)');
+  logger.debug('App', 'toggle breakpoint (pending implementation)');
         break;
       default:
-        console.warn('[command] unknown', id);
+        logger.warn('App', 'unknown command:', id);
     }
   }, [documents, openDocument, activeBinName]);
 
@@ -317,7 +438,7 @@ function App() {
       try {
         await initLsp(i18n.language || 'en', first.uri, first.content);
         (window as any)._lspInit = true;
-      } catch (e) { console.error('[LSP] init failed', e); }
+      } catch (e) { logger.error('LSP', 'init failed:', e); }
     })();
   }, [documents.length, i18n.language]);
 
@@ -447,47 +568,12 @@ function App() {
 }
 
 // Restore persisted editor state before first render
-try { restoreEditorState(); } catch (e) { console.warn('restore failed', e); }
+try { restoreEditorState(); } catch (e) { logger.warn('App', 'restore failed:', e); }
 // Start persistence subscription
-try { ensureEditorPersistence(); } catch (e) { console.warn('persist init failed', e); }
+try { ensureEditorPersistence(); } catch (e) { logger.warn('App', 'persist init failed:', e); }
 
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
   root.render(<App />);
 }
-
-// --- Menubar Components ---
-interface MenuRootProps { label: string; open: boolean; setOpen: () => void; children: React.ReactNode; }
-const MenuRoot: React.FC<MenuRootProps> = ({ label, open, setOpen, children }) => {
-  return (
-    <div style={{position:'relative'}}>
-      <div onClick={setOpen} style={{padding:'4px 10px', cursor:'default', background: open? '#333':'transparent'}}>
-        {label}
-      </div>
-      {open && (
-        <div style={{position:'absolute', top:'100%', left:0, background:'#2d2d2d', border:'1px solid #444', minWidth:180, zIndex:1000, boxShadow:'0 2px 6px rgba(0,0,0,0.4)'}}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface MenuItemProps { label: string; onClick?: () => void; disabled?: boolean; }
-const MenuItem: React.FC<MenuItemProps> = ({ label, onClick, disabled }) => (
-  <div onClick={() => !disabled && onClick && onClick()} style={{
-    padding:'4px 10px', fontSize:12, cursor: disabled? 'not-allowed':'default', color: disabled? '#666':'#eee', display:'flex', alignItems:'center', gap:8
-  }}>{label}</div>
-);
-
-const MenuSeparator: React.FC = () => <div style={{borderTop:'1px solid #444', margin:'4px 0'}} />;
-
-interface MenuCheckItemProps { label: string; checked?: boolean; onClick: () => void; badge?: string; }
-const MenuCheckItem: React.FC<MenuCheckItemProps> = ({ label, checked, onClick, badge }) => (
-  <div onClick={onClick} style={{padding:'4px 10px', fontSize:12, cursor:'default', display:'flex', alignItems:'center', gap:8}}>
-    <span style={{width:14, textAlign:'center', color:'#bbb'}}>{checked ? '✓' : ''}</span>
-    <span style={{flex:1}}>{label}</span>
-    {badge && <span style={{background: badge.includes('E')? '#F14C4C':'#CCA700', color:'#fff', borderRadius:8, padding:'0 4px', fontSize:10}}>{badge}</span>}
-  </div>
-);

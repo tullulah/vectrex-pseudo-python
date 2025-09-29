@@ -22,6 +22,7 @@
   "panel.logs": "Logs",
   "panel.memory": "Memoria",
   "panel.trace": "Traza",
+  "panel.ai": "PyPilot",
   "status.running": "Ejecutando",
   "status.stopped": "Detenido",
   "lang.english": "Inglés",
@@ -48,6 +49,18 @@
   ,"build.buildAndRun": "Compilar y ejecutar"
   ,"build.clean": "Limpiar"
   ,"build.targetBinary": "Binario destino"
+  ,"dialog.conflict.title": "Conflicto de Archivo Detectado"
+  ,"dialog.conflict.message": "El archivo \"{{fileName}}\" ha sido modificado externamente durante la compilación."
+  ,"dialog.conflict.currentTime": "Hora actual del archivo:"
+  ,"dialog.conflict.expectedTime": "Hora esperada:"
+  ,"dialog.conflict.unknown": "desconocido"
+  ,"dialog.conflict.explanation": "Esto significa que el archivo fue cambiado por otro programa mientras lo editabas."
+  ,"dialog.conflict.reload": "Recargar Cambios Externos"
+  ,"dialog.conflict.force": "Mantener Mis Cambios"
+  ,"dialog.conflict.cancel": "Cancelar"
+  ,"dialog.conflict.reloadTooltip": "Cargar los cambios externos y perder tus cambios actuales"
+  ,"dialog.conflict.forceTooltip": "Mantener tus cambios y sobrescribir el archivo externo"
+  ,"dialog.conflict.cancelTooltip": "Cancelar la operación"
   ,"debug.start": "Iniciar depuración"
   ,"debug.stop": "Detener depuración"
   ,"debug.stepOver": "Siguiente"

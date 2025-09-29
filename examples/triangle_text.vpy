@@ -22,4 +22,8 @@ def main():
     # Arco: 24 segmentos, centro (0,0), radio 70, inicio 0°, barrido 180°
     DRAW_ARC(24, 0, 0, 70, 0, 180, 0x5F)
     # Espiral: 80 segmentos, radio inicial 10 final 60, 2.5 vueltas
-    DRAW_SPIRAL(80, -90, 0, 10, 60, 2, 0x5F)
+    DRAW_SPIRAL(80, -90, 0, 10, 60, 2, 0x10)
+
+    DRAW_ARC(14)
+
+    

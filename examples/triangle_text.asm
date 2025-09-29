@@ -3,7 +3,7 @@
 ;***************************************************************************
 ; DEFINE SECTION
 ;***************************************************************************
-    INCLUDE "../include/VECTREX.I"
+    INCLUDE "include/VECTREX.I"
 
 ;***************************************************************************
 ; HEADER SECTION
@@ -549,7 +549,8 @@ MAIN: ; function
     LDA #$D0
     TFR A,DP
     JSR Reset0Ref
-    JSR Intensity_5F
+    LDA #$10
+    JSR Intensity_a
     LDA #$00
     LDB #$78
     JSR Moveto_d
@@ -876,9 +877,17 @@ MAIN: ; function
     CLRA
     CLRB
     STD RESULT
+    LDD #14
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    JSR DRAW_ARC
+    CLRA
+    CLRB
+    STD RESULT
     RTS
 
-    INCLUDE "../runtime/vectorlist_runtime.asm"
+    INCLUDE "runtime/vectorlist_runtime.asm"
 VECTREX_PRINT_TEXT:
     ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
     LDU VAR_ARG2   ; string pointer (high-bit terminated)

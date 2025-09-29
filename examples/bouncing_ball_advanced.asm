@@ -3,7 +3,7 @@
 ;***************************************************************************
 ; DEFINE SECTION
 ;***************************************************************************
-    INCLUDE "../include/VECTREX.I"
+    INCLUDE "include/VECTREX.I"
 
 ;***************************************************************************
 ; HEADER SECTION
@@ -422,7 +422,7 @@ IF_NEXT_17:
 IF_END_16:
     RTS
 
-    INCLUDE "../runtime/vectorlist_runtime.asm"
+    INCLUDE "runtime/vectorlist_runtime.asm"
 VECTREX_PRINT_TEXT:
     ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
     LDU VAR_ARG2   ; string pointer (high-bit terminated)

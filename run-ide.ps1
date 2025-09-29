@@ -5,7 +5,8 @@ param(
   [switch]$NoWasmBuild,  # omite wasm build
   [switch]$Fast,         # omite npm install si ya existe node_modules
   [switch]$NoClear,      # evita limpiar pantalla (preserva logs)
-  [switch]$VerboseLsp    # más logging sobre ruta/estado LSP
+  [switch]$VerboseLsp,   # más logging sobre ruta/estado LSP
+  [switch]$Production    # ejecuta en modo producción (sin hot reload)
 )
 <#
 Script simplificado (con dependencias automáticas):
@@ -69,10 +70,21 @@ if(-not (Test-Path $lspExe)){
   Write-Host "[WARN] Binario LSP no encontrado en $lspExe (spawn podría fallar)" -ForegroundColor Yellow
 }
 
-Write-Host '[INFO] Lanzando entorno Electron (npm run dev)' -ForegroundColor Cyan
-if($NoClear){
-  # Vite normalmente limpia consola; forzamos variable para detectar en plugin (si se implementa) o al menos preservamos scroll buffer
-  $env:FORCE_COLOR = '1'
+Write-Host '[INFO] Lanzando entorno Electron' -ForegroundColor Cyan
+if($Production){
+  Write-Host '[INFO] Modo producción - sin hot reload' -ForegroundColor Green
+  # Asegurar que el frontend esté construido
+  Write-Host '[INFO] Construyendo frontend...' -ForegroundColor Cyan
+  & powershell -NoLogo -NoProfile -Command "Set-Location ide/frontend; npm run build"
+  if($LASTEXITCODE -ne 0){ Write-Host '[ERR ] Frontend build falló' -ForegroundColor Red; exit 1 }
+  # Ejecutar en modo producción
+  & powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; npm run start"
+} else {
+  Write-Host '[INFO] Modo desarrollo - con hot reload' -ForegroundColor Yellow
+  if($NoClear){
+    # Vite normalmente limpia consola; forzamos variable para detectar en plugin (si se implementa) o al menos preservamos scroll buffer
+    $env:FORCE_COLOR = '1'
+  }
+  & powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; if($NoClear){ Write-Host '[INFO] (NoClear) Ejecutando npm run dev'; }; npm run dev"
 }
-& powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; if($NoClear){ Write-Host '[INFO] (NoClear) Ejecutando npm run dev'; }; npm run dev"
 exit $LASTEXITCODE

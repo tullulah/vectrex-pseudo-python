@@ -237,9 +237,10 @@ export const DockWorkspace: React.FC = () => {
       debug: t('panel.debug', 'Debug'),
       errors: t('panel.errors', 'Errors'),
       output: t('panel.output', 'Output'),
-  memory: t('panel.memory', 'Memory'),
-  trace: t('panel.trace', 'Trace'),
-  bioscalls: t('panel.bioscalls', 'BIOS Calls')
+      memory: t('panel.memory', 'Memory'),
+      trace: t('panel.trace', 'Trace'),
+      bioscalls: t('panel.bioscalls', 'BIOS Calls'),
+      'ai-assistant': t('panel.ai', 'PyPilot')
     };
     if (customName) nameMap[comp] = customName;
 

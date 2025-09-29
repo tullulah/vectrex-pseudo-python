@@ -120,6 +120,17 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             exclude_ram_org: true,
             fast_wait: false,
         });
+        
+        // Phase 4 validation: Check if assembly was actually generated
+        if asm.is_empty() {
+            eprintln!("❌ PHASE 4 FAILED: Empty assembly generated (0 bytes)");
+            eprintln!("   This usually indicates:");
+            eprintln!("   - Missing main() function or entry point");
+            eprintln!("   - All code was filtered out or not executed");
+            eprintln!("   - Internal codegen error (no assembly emitted)");
+            return Err(anyhow::anyhow!("Code generation produced empty assembly"));
+        }
+        
         eprintln!("✓ Phase 4 SUCCESS: Generated {} bytes of assembly", asm.len());
         
         // Phase 5: Write ASM file

@@ -22,6 +22,7 @@
   "panel.logs": "Logs",
   "panel.memory": "Memory",
   "panel.trace": "Trace",
+  "panel.ai": "PyPilot",
   "status.running": "Running",
   "status.stopped": "Stopped",
   "lang.english": "English",
@@ -48,6 +49,18 @@
   ,"build.buildAndRun": "Build && Run"
   ,"build.clean": "Clean"
   ,"build.targetBinary": "Target Binary"
+  ,"dialog.conflict.title": "File Conflict Detected"
+  ,"dialog.conflict.message": "The file \"{{fileName}}\" has been modified externally during compilation."
+  ,"dialog.conflict.currentTime": "Current file time:"
+  ,"dialog.conflict.expectedTime": "Expected time:"
+  ,"dialog.conflict.unknown": "unknown"
+  ,"dialog.conflict.explanation": "This means the file was changed by another program while you were editing it."
+  ,"dialog.conflict.reload": "Reload External Changes"
+  ,"dialog.conflict.force": "Keep My Changes"
+  ,"dialog.conflict.cancel": "Cancel"
+  ,"dialog.conflict.reloadTooltip": "Load the external changes and lose your current changes"
+  ,"dialog.conflict.forceTooltip": "Keep your changes and overwrite the external file"
+  ,"dialog.conflict.cancelTooltip": "Cancel the operation"
   ,"debug.start": "Start Debugging"
   ,"debug.stop": "Stop Debugging"
   ,"debug.stepOver": "Step Over"

@@ -26,6 +26,46 @@ struct Backend {
 #[derive(Clone)]
 struct SymbolDef { name: String, uri: Url, range: Range }
 
+#[derive(Debug, Clone)]
+enum AritySpec {
+    Exact(usize),      // Exact number of arguments required
+    Variable(usize),   // At least N arguments required (for POLYGON, etc.)
+}
+
+fn is_python_keyword_or_builtin(word: &str) -> bool {
+    let lower = word.to_ascii_lowercase();
+    matches!(lower.as_str(), 
+        // Python keywords
+        "and" | "as" | "assert" | "break" | "class" | "continue" | "def" | "del" | "elif" | "else" | "except" | "finally" | 
+        "for" | "from" | "global" | "if" | "import" | "in" | "is" | "lambda" | "nonlocal" | "not" | "or" | "pass" | 
+        "raise" | "return" | "try" | "while" | "with" | "yield" | "true" | "false" | "none" |
+        // VPy variable declarations and control structures
+        "var" | "let" | "const" |
+        // Assignment patterns (contains =)
+        _ if word.contains('=')
+    )
+}
+
+fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
+    let upper = func_name.to_ascii_uppercase();
+    match upper.as_str() {
+        "MOVE" => Some(AritySpec::Exact(2)),                    // x, y
+        "RECT" => Some(AritySpec::Exact(4)),                    // x, y, w, h
+        "CIRCLE" => Some(AritySpec::Exact(1)),                  // r
+        "ARC" => Some(AritySpec::Exact(3)),                     // r, startAngle, endAngle
+        "SPIRAL" => Some(AritySpec::Exact(2)),                  // r, turns
+        "ORIGIN" => Some(AritySpec::Exact(0)),                  // no arguments
+        "INTENSITY" => Some(AritySpec::Exact(1)),               // val
+        "PRINT_TEXT" => Some(AritySpec::Exact(3)),              // x, y, text
+        "POLYGON" => Some(AritySpec::Variable(3)),              // n, x1, y1, ... (minimum 3: count + at least one point)
+        "DRAW_POLYGON" => Some(AritySpec::Variable(4)),         // n, intensity, x1, y1, ... (minimum 4: count + intensity + at least one point)
+        "DRAW_CIRCLE" => Some(AritySpec::Exact(4)),             // x, y, r, intensity
+        "DRAW_CIRCLE_SEG" => Some(AritySpec::Exact(5)),         // segments, x, y, r, intensity
+        "DRAW_VECTORLIST" | "VECTREX_DRAW_VECTORLIST" => Some(AritySpec::Exact(2)), // addr, len
+        _ => None,
+    }
+}
+
 lazy_static::lazy_static! {
     static ref SYMBOLS: Mutex<Vec<SymbolDef>> = Mutex::new(Vec::new());
 }
@@ -37,6 +77,12 @@ fn tr(locale: &str, key: &str) -> String {
         ("es", "init.ready") => "VPy LSP inicializado",
         ("en", "diagnostic.polygon.degenerate") => "POLYGON count 2 produces a degenerate list (use >=3 or a thin RECT).",
         ("es", "diagnostic.polygon.degenerate") => "POLYGON count 2 genera lista degenerada (usa >=3 o un RECT delgado).",
+        ("en", "diagnostic.arity.too_few") => "Function `{}` expects {} arguments, but {} were provided.",
+        ("es", "diagnostic.arity.too_few") => "La función `{}` espera {} argumentos, pero se proporcionaron {}.",
+        ("en", "diagnostic.arity.too_many") => "Function `{}` expects {} arguments, but {} were provided.",
+        ("es", "diagnostic.arity.too_many") => "La función `{}` espera {} argumentos, pero se proporcionaron {}.",
+        ("en", "diagnostic.arity.variable") => "Function `{}` expects at least {} arguments, but {} were provided.",
+        ("es", "diagnostic.arity.variable") => "La función `{}` espera al menos {} argumentos, pero se proporcionaron {}.",
         ("en", "hover.user_function.line") => "Function `{}` defined at line {}",
         ("es", "hover.user_function.line") => "Función `{}` definida en línea {}",
         ("en", "doc.MOVE") => "MOVE x,y  - moves the beam to position (x,y) without drawing.",
@@ -104,10 +150,188 @@ fn parse_error_line_col(msg: &str) -> Option<(u32,u32,String)> {
     None
 }
 
+// Parse lexer errors that have the format: "message (line N)"
+fn parse_lexer_error(msg: &str) -> Option<(u32, u32, String)> {
+    if let Some(line_start) = msg.rfind("(line ") {
+        let line_part = &msg[line_start + 6..]; // Skip "(line "
+        if let Some(close_paren) = line_part.find(')') {
+            let line_str = &line_part[..close_paren];
+            if let Ok(line_num) = line_str.parse::<u32>() {
+                let message_part = msg[..line_start].trim();
+                // Convert to 0-based indexing for LSP
+                return Some((line_num.saturating_sub(1), 0, message_part.to_string()));
+            }
+        }
+    }
+    None
+}
+
+// Function call parser for arity validation - VPy uses Python-style syntax with parentheses
+fn validate_function_arity(original_line: &str, line_num: u32, locale: &str, diags: &mut Vec<Diagnostic>) {
+    // VPy should use Python-style function calls: FUNCTION(arg1, arg2, ...)
+    // Calls without parentheses like "FUNCTION arg1, arg2" are syntax errors
+    
+    let trimmed = original_line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
+        return; // Skip comments and empty lines
+    }
+    
+    // Skip Python control structures that end with ':'
+    if trimmed.ends_with(':') {
+        return;
+    }
+    
+    // Skip Python keywords and declarations early
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if !parts.is_empty() {
+        let first_word = parts[0];
+        if is_python_keyword_or_builtin(first_word) {
+            return; // Skip Python keywords, var declarations, assignments, etc.
+        }
+    }
+    
+    // Look for Python-style function calls: FUNCTION(args)
+    // But ignore parentheses that appear in comments
+    let comment_pos = trimmed.find('#').unwrap_or(trimmed.len());
+    let code_part = &trimmed[..comment_pos].trim();
+    
+    if let Some(paren_pos) = code_part.find('(') {
+        let func_name = code_part[..paren_pos].trim();
+        let remaining = &code_part[paren_pos+1..];
+        
+        // Skip if this looks like a Python keyword or declaration
+        if is_python_keyword_or_builtin(func_name) {
+            return;
+        }
+        
+        if let Some(close_paren) = remaining.find(')') {
+            let args_part = &remaining[..close_paren];
+            
+            // Check if this is a known builtin function
+            if let Some(arity_spec) = get_builtin_arity(func_name) {
+                // Count arguments
+                let arg_count = if args_part.trim().is_empty() {
+                    0
+                } else {
+                    // Count non-empty arguments separated by commas
+                    args_part.split(',')
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty())
+                            .count()
+                };
+                
+                let (is_valid, message_key) = match arity_spec {
+                    AritySpec::Exact(expected) => {
+                        if arg_count == expected {
+                            (true, "")
+                        } else if arg_count < expected {
+                            (false, "diagnostic.arity.too_few")
+                        } else {
+                            (false, "diagnostic.arity.too_many")
+                        }
+                    }
+                    AritySpec::Variable(min_args) => {
+                        if arg_count >= min_args {
+                            (true, "")
+                        } else {
+                            (false, "diagnostic.arity.variable")
+                        }
+                    }
+                };
+                
+                if !is_valid {
+                    let expected_str = match arity_spec {
+                        AritySpec::Exact(n) => n.to_string(),
+                        AritySpec::Variable(n) => format!("at least {}", n),
+                    };
+                    
+                    let message = match message_key {
+                        "diagnostic.arity.variable" => {
+                            let template = tr(locale, message_key);
+                            template.replacen("{}", func_name, 1)
+                                   .replacen("{}", &expected_str, 1)
+                                   .replacen("{}", &arg_count.to_string(), 1)
+                        }
+                        _ => {
+                            let template = tr(locale, message_key);
+                            template.replacen("{}", func_name, 1)
+                                   .replacen("{}", &expected_str, 1)
+                                   .replacen("{}", &arg_count.to_string(), 1)
+                        }
+                    };
+                    
+                    diags.push(Diagnostic {
+                        range: Range {
+                            start: Position { line: line_num, character: 0 },
+                            end: Position { line: line_num, character: original_line.len() as u32 }
+                        },
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: None,
+                        code_description: None,
+                        source: Some("vpy".into()),
+                        message,
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+            } else if !func_name.is_empty() {
+                // Unknown function - this is an error
+                let message = format!("Unknown function '{}'", func_name);
+                
+                diags.push(Diagnostic {
+                    range: Range {
+                        start: Position { line: line_num, character: 0 },
+                        end: Position { line: line_num, character: original_line.len() as u32 }
+                    },
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: None,
+                    code_description: None,
+                    source: Some("vpy".into()),
+                    message,
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
+        }
+    } else {
+        // Check for old-style function calls without parentheses (these should be syntax errors)
+        // Only for known VPy functions, and skip Python keywords
+        if !parts.is_empty() {
+            let func_name = parts[0];
+            
+            if get_builtin_arity(func_name).is_some() {
+                // This is a known function called without parentheses - syntax error
+                let message = format!("Function '{}' must be called with parentheses: {}(...)", func_name, func_name);
+                
+                diags.push(Diagnostic {
+                    range: Range {
+                        start: Position { line: line_num, character: 0 },
+                        end: Position { line: line_num, character: original_line.len() as u32 }
+                    },
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: None,
+                    code_description: None,
+                    source: Some("vpy".into()),
+                    message,
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
+        }
+    }
+}
+
 fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
+    eprintln!("[LSP] compute_diagnostics called for URI: {}", uri);
+    eprintln!("[LSP] Text length: {} lines", text.lines().count());
     let mut diags = Vec::new();
+    
     match lex(text) {
         Ok(tokens) => {
+            // If lexing succeeded, try parsing
             if let Err(e) = parse_with_filename(&tokens, uri.path()) {
                 let msg = e.to_string();
                 let (line, col, detail) = if let Some(parsed) = parse_error_line_col(&msg) {
@@ -126,19 +350,75 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
                         )
                     } else { (0,0,msg.clone()) }
                 };
-                diags.push(Diagnostic { range: Range { start: Position { line, character: col }, end: Position { line, character: col + 1 } }, severity: Some(DiagnosticSeverity::ERROR), code: None, code_description: None, source: Some("vpy".into()), message: detail, related_information: None, tags: None, data: None });
+                diags.push(Diagnostic { 
+                    range: Range { 
+                        start: Position { line, character: col }, 
+                        end: Position { line, character: col + 1 } 
+                    }, 
+                    severity: Some(DiagnosticSeverity::ERROR), 
+                    code: None, 
+                    code_description: None, 
+                    source: Some("vpy".into()), 
+                    message: detail, 
+                    related_information: None, 
+                    tags: None, 
+                    data: None 
+                });
             }
-            // Heuristic warning independent of parse success
+            
+            // Additional validation only if lexing succeeded
             for (i, line_txt) in text.lines().enumerate() {
+                // Specific POLYGON count 2 warning
                 if line_txt.contains("POLYGON") && line_txt.contains(" 2") {
-                    diags.push(Diagnostic { range: Range { start: Position { line: i as u32, character: 0 }, end: Position { line: i as u32, character: line_txt.len() as u32 } }, severity: Some(DiagnosticSeverity::WARNING), code: None, code_description: None, source: Some("vpy".into()), message: tr(locale, "diagnostic.polygon.degenerate"), related_information: None, tags: None, data: None });
+                    diags.push(Diagnostic { 
+                        range: Range { 
+                            start: Position { line: i as u32, character: 0 }, 
+                            end: Position { line: i as u32, character: line_txt.len() as u32 } 
+                        }, 
+                        severity: Some(DiagnosticSeverity::WARNING), 
+                        code: None, 
+                        code_description: None, 
+                        source: Some("vpy".into()), 
+                        message: tr(locale, "diagnostic.polygon.degenerate"), 
+                        related_information: None, 
+                        tags: None, 
+                        data: None 
+                    });
                 }
+                
+                // General arity validation for function calls
+                validate_function_arity(line_txt, i as u32, locale, &mut diags);
             }
         }
-        Err(err) => {
-            let msg = err.to_string();
-            diags.push(Diagnostic { range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 1 } }, severity: Some(DiagnosticSeverity::ERROR), code: None, code_description: None, source: Some("vpy".into()), message: msg, related_information: None, tags: None, data: None });
+        Err(e) => {
+            // Lexer error (e.g., indentation errors)
+            let msg = e.to_string();
+            let (line, col, detail) = if let Some(lexer_parsed) = parse_lexer_error(&msg) {
+                lexer_parsed
+            } else {
+                // Fallback for lexer errors that don't match expected pattern
+                (0, 0, msg.clone())
+            };
+            diags.push(Diagnostic { 
+                range: Range { 
+                    start: Position { line, character: col }, 
+                    end: Position { line, character: col + 1 } 
+                }, 
+                severity: Some(DiagnosticSeverity::ERROR), 
+                code: None, 
+                code_description: None, 
+                source: Some("vpy".into()), 
+                message: detail, 
+                related_information: None, 
+                tags: None, 
+                data: None 
+            });
         }
+    }
+    
+    eprintln!("[LSP] compute_diagnostics returning {} diagnostics", diags.len());
+    for (i, diag) in diags.iter().enumerate() {
+        eprintln!("[LSP] Diagnostic {}: line={}, message={}", i, diag.range.start.line, diag.message);
     }
     diags
 }

@@ -313,7 +313,7 @@ ${cmd.example}
 
     // Respuesta genérica mock
     return {
-      content: `🤖 **VPy AI Assistant (Mock Mode)**
+      content: `🤖 **PyPilot (Mock Mode)**
 
 Has enviado: "${request.message}"
 

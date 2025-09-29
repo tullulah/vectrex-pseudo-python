@@ -2,6 +2,66 @@ use anyhow::{bail, Result};
 use crate::ast::*;
 use crate::lexer::{Token, TokenKind};
 
+// Convert TokenKind to user-friendly display name
+fn token_display_name(kind: &TokenKind) -> String {
+    match kind {
+        TokenKind::LParen => "'('".to_string(),
+        TokenKind::RParen => "')'".to_string(),
+        TokenKind::Colon => "':'".to_string(),
+        TokenKind::Comma => "','".to_string(),
+        TokenKind::Dot => "'.'".to_string(),
+        TokenKind::Equal => "'='".to_string(),
+        TokenKind::Plus => "'+'".to_string(),
+        TokenKind::Minus => "'-'".to_string(),
+        TokenKind::Star => "'*'".to_string(),
+        TokenKind::Slash => "'/'".to_string(),
+        TokenKind::Percent => "'%'".to_string(),
+        TokenKind::Lt => "'<'".to_string(),
+        TokenKind::Gt => "'>'".to_string(),
+        TokenKind::Le => "'<='".to_string(),
+        TokenKind::Ge => "'>='".to_string(),
+        TokenKind::EqEq => "'=='".to_string(),
+        TokenKind::NotEq => "'!='".to_string(),
+        TokenKind::And => "'and'".to_string(),
+        TokenKind::Or => "'or'".to_string(),
+        TokenKind::Not => "'not'".to_string(),
+        TokenKind::Amp => "'&'".to_string(),
+        TokenKind::Pipe => "'|'".to_string(),
+        TokenKind::Caret => "'^'".to_string(),
+        TokenKind::Tilde => "'~'".to_string(),
+        TokenKind::ShiftLeft => "'<<'".to_string(),
+        TokenKind::ShiftRight => "'>>'".to_string(),
+        TokenKind::Newline => "newline".to_string(),
+        TokenKind::Indent => "indentation".to_string(),
+        TokenKind::Dedent => "dedentation".to_string(),
+        TokenKind::Eof => "end of file".to_string(),
+        TokenKind::Def => "'def'".to_string(),
+        TokenKind::If => "'if'".to_string(),
+        TokenKind::Elif => "'elif'".to_string(),
+        TokenKind::Else => "'else'".to_string(),
+        TokenKind::While => "'while'".to_string(),
+        TokenKind::For => "'for'".to_string(),
+        TokenKind::In => "'in'".to_string(),
+        TokenKind::Range => "'range'".to_string(),
+        TokenKind::Break => "'break'".to_string(),
+        TokenKind::Continue => "'continue'".to_string(),
+        TokenKind::Return => "'return'".to_string(),
+        TokenKind::Let => "'let'".to_string(),
+        TokenKind::Const => "'const'".to_string(),
+        TokenKind::Var => "'var'".to_string(),
+        TokenKind::VectorList => "'vectorlist'".to_string(),
+        TokenKind::Switch => "'switch'".to_string(),
+        TokenKind::Case => "'case'".to_string(),
+        TokenKind::Default => "'default'".to_string(),
+        TokenKind::Meta => "'META'".to_string(),
+        TokenKind::True => "'true'".to_string(),
+        TokenKind::False => "'false'".to_string(),
+        TokenKind::Identifier(_) => "identifier".to_string(),
+        TokenKind::Number(_) => "number".to_string(),
+        TokenKind::StringLit(_) => "string".to_string(),
+    }
+}
+
 // Public entrypoint (filename-aware only)
 pub fn parse_with_filename(tokens: &[Token], filename: &str) -> Result<Module> {
     let mut p = Parser { tokens, pos: 0, filename: filename.to_string() };
@@ -151,9 +211,19 @@ impl<'a> Parser<'a> {
         let name = self.identifier()?;
         self.consume(TokenKind::LParen)?;
         let mut params = Vec::new();
+        self.skip_newlines(); // Allow newlines after opening paren
         if !self.check(TokenKind::RParen) {
-            loop { params.push(self.identifier()?); if self.match_kind(&TokenKind::Comma) { continue; } break; }
+            loop { 
+                params.push(self.identifier()?); 
+                self.skip_newlines(); // Allow newlines after parameter
+                if self.match_kind(&TokenKind::Comma) { 
+                    self.skip_newlines(); // Allow newlines after comma
+                    continue; 
+                } 
+                break; 
+            }
         }
+        self.skip_newlines(); // Allow newlines before closing paren
         self.consume(TokenKind::RParen)?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?;
         let mut body = Vec::new();
         while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
@@ -197,7 +267,33 @@ impl<'a> Parser<'a> {
 
     fn while_stmt(&mut self) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} Ok(Stmt::While { cond, body }) }
     fn return_stmt(&mut self) -> Result<Stmt> { if self.check(TokenKind::Newline) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Return(None)); } let expr=self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Return(Some(expr))) }
-    fn for_stmt(&mut self) -> Result<Stmt> { let var=self.identifier()?; self.consume(TokenKind::In)?; self.consume(TokenKind::Range)?; self.consume(TokenKind::LParen)?; let start=self.expression()?; self.consume(TokenKind::Comma)?; let end=self.expression()?; let step= if self.match_kind(&TokenKind::Comma){Some(self.expression()?)} else {None}; self.consume(TokenKind::RParen)?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} Ok(Stmt::For { var, start, end, step, body }) }
+    fn for_stmt(&mut self) -> Result<Stmt> { 
+        let var=self.identifier()?; 
+        self.consume(TokenKind::In)?; 
+        self.consume(TokenKind::Range)?; 
+        self.consume(TokenKind::LParen)?; 
+        self.skip_newlines(); // Allow newlines after opening paren
+        let start=self.expression()?; 
+        self.skip_newlines(); // Allow newlines after start
+        self.consume(TokenKind::Comma)?; 
+        self.skip_newlines(); // Allow newlines after comma
+        let end=self.expression()?; 
+        self.skip_newlines(); // Allow newlines after end
+        let step= if self.match_kind(&TokenKind::Comma){
+            self.skip_newlines(); // Allow newlines after second comma
+            Some(self.expression()?)
+        } else {None}; 
+        self.skip_newlines(); // Allow newlines before closing paren
+        self.consume(TokenKind::RParen)?; 
+        self.consume(TokenKind::Colon)?; 
+        self.consume(TokenKind::Newline)?; 
+        self.consume(TokenKind::Indent)?; 
+        let mut body=Vec::new(); 
+        while !self.match_kind(&TokenKind::Dedent){ 
+            body.push(self.statement()?);
+        } 
+        Ok(Stmt::For { var, start, end, step, body }) 
+    }
     fn if_stmt(&mut self) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} let mut elifs=Vec::new(); while self.match_kind(&TokenKind::Elif){ let ec=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut ebody=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ ebody.push(self.statement()?);} elifs.push((ec,ebody)); } let else_body= if self.match_kind(&TokenKind::Else){ self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut eb=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ eb.push(self.statement()?);} Some(eb)} else {None}; Ok(Stmt::If { cond, body, elifs, else_body }) }
 
     // --- expressions ---
@@ -249,19 +345,27 @@ impl<'a> Parser<'a> {
             }
             if self.match_kind(&TokenKind::LParen) {
                 let mut args = Vec::new();
+                self.skip_newlines(); // Allow newlines after opening paren
                 if !self.check(TokenKind::RParen) {
                     loop {
                         args.push(self.expression()?);
-                        if self.match_kind(&TokenKind::Comma) { continue; }
+                        self.skip_newlines(); // Allow newlines after argument
+                        if self.match_kind(&TokenKind::Comma) { 
+                            self.skip_newlines(); // Allow newlines after comma
+                            continue; 
+                        }
                         break;
                     }
                 }
+                self.skip_newlines(); // Allow newlines before closing paren
                 self.consume(TokenKind::RParen)?;
                 return Ok(Expr::Call(crate::ast::CallInfo { name: full, line: ident_token.line, col: ident_token.col, args }));
             }
             return Ok(Expr::Ident(crate::ast::IdentInfo { name: full, line: ident_token.line, col: ident_token.col }));
         } else if self.match_kind(&TokenKind::LParen) {
+            self.skip_newlines(); // Allow newlines after opening paren
             let e = self.expression()?;
+            self.skip_newlines(); // Allow newlines before closing paren
             self.consume(TokenKind::RParen)?;
             return Ok(e);
         }
@@ -279,11 +383,25 @@ impl<'a> Parser<'a> {
     fn unread_identifier(&mut self, name:String) { self.pos-=1; if let TokenKind::Identifier(s)=&self.tokens[self.pos].kind { assert_eq!(&name,s); } }
     fn identifier(&mut self) -> Result<String> { if let Some(s)=self.match_identifier(){ Ok(s) } else { self.err_here("Expected identifier") } }
     fn parse_signed_number(&mut self) -> Result<i32> { let neg=self.match_kind(&TokenKind::Minus); if let TokenKind::Number(n)=self.peek().kind { let v=n; self.pos+=1; Ok(if neg { -v } else { v }) } else { self.err_here("Expected number") } }
-    fn consume(&mut self, kind: TokenKind) -> Result<()> { if std::mem::discriminant(&self.peek().kind)==std::mem::discriminant(&kind) { self.pos+=1; Ok(()) } else { self.err_here(&format!("Expected {:?} got {:?}", kind, self.peek().kind)) } }
+    fn consume(&mut self, kind: TokenKind) -> Result<()> { 
+        if std::mem::discriminant(&self.peek().kind)==std::mem::discriminant(&kind) { 
+            self.pos+=1; 
+            Ok(()) 
+        } else { 
+            let expected = token_display_name(&kind);
+            let got = token_display_name(&self.peek().kind);
+            self.err_here(&format!("Expected {} got {}", expected, got)) 
+        } 
+    }
     fn check(&self, kind: TokenKind) -> bool { std::mem::discriminant(&self.peek().kind)==std::mem::discriminant(&kind) }
     fn match_kind(&mut self, kind:&TokenKind) -> bool { if self.check(kind.clone()) { self.pos+=1; true } else { false } }
     fn peek(&self) -> &Token { &self.tokens[self.pos] }
     fn peek_kind(&self) -> Option<&TokenKind> { self.tokens.get(self.pos).map(|t| &t.kind) }
     fn advance(&mut self) { if self.pos < self.tokens.len() { self.pos+=1; } }
+    
+    // Helper to skip newlines (useful in multiline contexts like function arguments)
+    fn skip_newlines(&mut self) {
+        while self.match_kind(&TokenKind::Newline) {}
+    }
     fn err_here<T>(&self, msg:&str) -> Result<T> { let tk=self.peek(); bail!("{}:{}:{}: error: {}", self.filename, tk.line, tk.col, msg) }
 }

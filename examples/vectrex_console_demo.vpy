@@ -54,6 +54,9 @@ def main():
         DRAW_CIRCLE(58, -56, 12, I_MED)
         DRAW_CIRCLE(40, -74, 12, I_MED)
         DRAW_CIRCLE(58, -72, 12, I_MED)
-
+       
     # Decorativos extra desactivados por ahora
     # (Arco / Espiral / Círculo central)
+
+
+
