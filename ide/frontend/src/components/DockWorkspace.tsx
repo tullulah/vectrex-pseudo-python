@@ -38,7 +38,7 @@ const defaultJson = {
   // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
   { type: 'tabset', id: 'editor-host', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
     { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
-  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Output', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
+  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Stats', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
     ]
   }
 };

@@ -99,104 +99,89 @@ const MiniChart: React.FC<{
   );
 };
 
-// Componente para mostrar estadísticas y métricas del emulador
-const EmulatorStats: React.FC = () => {
+// Componente para mostrar información técnica del emulador (métricas reales)
+const EmulatorOutputInfo: React.FC = () => {
   const [metrics, setMetrics] = useState<VecxMetrics | null>(null);
-  const [cpuUsage, setCpuUsage] = useState(0);
-  const [ramUsage, setRamUsage] = useState(0);
-  const [vectorCount, setVectorCount] = useState(0);
+  const [regs, setRegs] = useState<VecxRegs | null>(null);
 
   const fetchStats = () => {
     try {
       const vecx = (window as any).vecx;
       if (!vecx) {
         setMetrics(null);
+        setRegs(null);
         return;
       }
       
       const fetchedMetrics = vecx.getMetrics && vecx.getMetrics();
-      setMetrics(fetchedMetrics || null);
+      const fetchedRegs = vecx.getRegisters && vecx.getRegisters();
       
-      // Simular métricas de rendimiento basadas en datos reales
-      if (fetchedMetrics && fetchedMetrics.running) {
-        // CPU Usage: Basado en cycles por segundo
-        const currentTime = Date.now();
-        const cyclesPerSecond = fetchedMetrics.totalCycles * 0.75; // Simulación de load
-        setCpuUsage(Math.floor(cyclesPerSecond % 1500000));
-        
-        // RAM usage simulado con patrón más realista
-        const baseRam = 300;
-        const dynamicRam = Math.sin(currentTime / 2000) * 200 + 300; // Oscilación suave
-        setRamUsage(Math.floor(baseRam + Math.abs(dynamicRam)));
-        
-        // Vector count con variación basada en actividad
-        const baseVectors = 80;
-        const activityVariation = Math.sin(currentTime / 1500) * 40; // Variación por actividad
-        const randomSpike = Math.random() > 0.9 ? Math.random() * 60 : 0; // Picos ocasionales
-        setVectorCount(Math.floor(baseVectors + activityVariation + randomSpike));
-      } else {
-        // Emulador pausado/detenido
-        setCpuUsage(0);
-        setRamUsage(256); // RAM básica del sistema
-        setVectorCount(0);
-      }
+      setMetrics(fetchedMetrics || null);
+      setRegs(fetchedRegs || null);
     } catch (e) {
       setMetrics(null);
+      setRegs(null);
     }
   };
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 500); // Actualizar más frecuentemente para las gráficas
+    const interval = setInterval(fetchStats, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const hex8 = (v: any) => typeof v === 'number' ? `0x${(v & 0xFF).toString(16).padStart(2, '0')}` : '--';
+  const hex16 = (v: any) => typeof v === 'number' ? `0x${(v & 0xFFFF).toString(16).padStart(4, '0')}` : '--';
+  
+  const avgCyclesPerFrame = (metrics && metrics.frameCount > 0) ? 
+    Math.round(metrics.totalCycles / metrics.frameCount) : 0;
 
   return (
     <div style={{
       background: '#1a1a1a',
       border: '1px solid #333',
       borderRadius: 4,
-      padding: '8px 12px',
+      padding: '6px 10px',
       marginBottom: 12,
       fontSize: '11px',
-      color: '#ccc'
+      color: '#ccc',
+      fontFamily: 'monospace'
     }}>
       <div style={{ 
         fontWeight: 'bold', 
         color: '#0f0',
-        marginBottom: '8px',
+        marginBottom: '4px',
         fontSize: '10px',
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
         fontFamily: 'system-ui'
       }}>
-        Emulator Stats
+        Emulator Output
       </div>
       
-      <MiniChart 
-        label="CPU Usage"
-        value={cpuUsage}
-        max={1500000}
-        color="#00ff88"
-        unit=" Hz"
-      />
+      <div style={{ marginBottom: '2px' }}>
+        PC: {hex16(regs?.PC)}
+      </div>
       
-      <MiniChart 
-        label="RAM Usage"
-        value={ramUsage}
-        max={1024}
-        color="#4488ff"
-        unit=" bytes"
-      />
+      <div style={{ marginBottom: '2px' }}>
+        A: {hex8(regs?.A)} B: {hex8(regs?.B)} X: {hex16(regs?.X)} Y: {hex16(regs?.Y)} U: {hex16(regs?.U)} S: {hex16(regs?.S)} DP: {hex8(regs?.DP)} CC: {hex8(regs?.CC)}
+      </div>
       
-      <MiniChart 
-        label="Vectors/Frame"
-        value={vectorCount}
-        max={200}
-        color="#ffaa00"
-        dangerZone={150} // Zona roja donde empiezan los parpadeos
-        unit=" vectors"
-      />
+      <div style={{ marginBottom: '2px' }}>
+        Total Cycles: {metrics?.totalCycles ?? 0}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Instructions: {metrics?.instructionCount ?? 0}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Frames: {metrics?.frameCount ?? 0}
+      </div>
+      
+      <div>
+        Avg Cycles/frame: {avgCyclesPerFrame > 0 ? avgCyclesPerFrame : '--'}
+      </div>
     </div>
   );
 };
@@ -939,7 +924,7 @@ export const EmulatorPanel: React.FC = () => {
                   backgroundPosition: 'center',
                   backgroundRepeat: 'no-repeat',
                   mixBlendMode: 'screen',
-                  opacity: 0.5
+                  opacity: 1
                 }}
               />
             </>
@@ -947,8 +932,8 @@ export const EmulatorPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Emulator Stats - Métricas de rendimiento en tiempo real */}
-      <EmulatorStats />
+      {/* Emulator Output - Información técnica del emulador */}
+      <EmulatorOutputInfo />
 
       {/* Controles principales debajo del canvas - Estilo homogéneo */}
       <div style={{
