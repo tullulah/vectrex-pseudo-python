@@ -8,6 +8,7 @@ import * as monacoApi from 'monaco-editor/esm/vs/editor/editor.api';
 // diagnostic underlines show native tooltips and language features work.
 // Without this, only the bare API loads and marker hovers won't appear.
 import 'monaco-editor/esm/vs/editor/editor.all';
+import { logger } from '../utils/logger';
 // Bundle the core editor worker via Vite (?worker) so we don't craft blob strings manually.
 // If later we add languages needing their own workers we can import them similarly.
 // import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'; (example)
@@ -37,7 +38,11 @@ function ensureLanguage(monaco: Monaco) {
           [/(def)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','function.declaration']],
           // Const declaration: const <NAME>
           [/(const)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','constant']],
-          // Keywords (control/meta)
+          // Variable declaration: var <name>
+          [/(var)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','variable']],
+          // Python keywords (lowercase)
+          [/\b(if|else|elif|while|for|return|break|continue|pass|try|except|finally|with|as|import|from|global|nonlocal|class|lambda|yield|assert|del|in|is|not|and|or)\b/, 'keyword'],
+          // VPy keywords (uppercase)
           [/\b(META|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
           // Built-in drawing / std library like calls
           [/\b(DRAW_(POLYGON|CIRCLE_SEG|CIRCLE|ARC|SPIRAL)|PRINT_TEXT)\b/, 'function'],
@@ -135,10 +140,18 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const openedRef = useRef<Set<string>>(new Set());
 
   const handleMount = useCallback((editor: any, monaco: Monaco) => {
+    logger.debug('App', 'Monaco Editor mounted');
     ensureLanguage(monaco);
     editorRef.current = editor;
     monacoRef.current = monaco;
-  monaco.editor.setTheme('vpy-dark');
+    monaco.editor.setTheme('vpy-dark');
+    
+    // Debug: Check if editor is read-only
+    logger.debug('App', 'Monaco Editor readOnly setting:', editor.getOption(monaco.editor.EditorOption.readOnly));
+    logger.debug('App', 'Monaco Editor configuration check:', {
+      readOnly: editor.getOption(monaco.editor.EditorOption.readOnly),
+      domReadOnly: editor.getOption(monaco.editor.EditorOption.domReadOnly)
+    });
     // Semantic tokens provider bridging LSP tokens (on-demand full refresh)
     monaco.languages.registerDocumentSemanticTokensProvider('vpy', {
       getLegend: () => ({ tokenTypes: ['keyword','function','variable','parameter','number','string','operator','enumMember'], tokenModifiers: ['readonly','declaration','defaultLibrary'] }),
@@ -152,7 +165,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         } catch (e) {
           // Evitar inundar logs: primer fallo puede ocurrir antes de didOpen sincronizado.
           if (!(window as any)._vpySemanticWarned) {
-            console.warn('[LSP] semantic tokens error (silenced after first)', e);
+            logger.warn('LSP', 'semantic tokens error (silenced after first):', e);
             (window as any)._vpySemanticWarned = true;
           }
           return { data: new Uint32Array() } as any;
@@ -191,7 +204,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
           // console.debug('[LSP] completion items', suggestions.length);
           return { suggestions };
         } catch (e) {
-          console.warn('[LSP] completion error', e);
+          logger.warn('LSP', 'completion error:', e);
           return { suggestions: [] };
         }
       }
@@ -225,7 +238,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
             });
           }
           return { edits } as any;
-        } catch (e) { console.warn('[LSP] rename error', e); return { edits: [] } as any; }
+        } catch (e) { logger.warn('LSP', 'rename error:', e); return { edits: [] } as any; }
       },
       resolveRenameLocation: async (model, position) => {
         // Optimistic: allow rename of any identifier; server will veto if not a symbol
@@ -244,7 +257,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
           const res = await (lspClient as any).signatureHelp(uri, position.lineNumber - 1, position.column - 1);
           if (!res) return { value: { signatures: [], activeParameter: 0, activeSignature: 0 }, dispose: () => {} };
           return { value: res, dispose: () => {} } as any;
-        } catch (e) { console.warn('[LSP] signatureHelp error', e); return { value: { signatures: [], activeParameter: 0, activeSignature: 0 }, dispose: () => {} }; }
+        } catch (e) { logger.warn('LSP', 'signatureHelp error:', e); return { value: { signatures: [], activeParameter: 0, activeSignature: 0 }, dispose: () => {} }; }
       }
     });
     // Hover provider (dispose any previous instance first to avoid stacking)
@@ -254,38 +267,38 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     }
     hoverDisposableRef.current = monaco.languages.registerHoverProvider('vpy', {
       provideHover: async (model, position) => {
-        console.debug('[LSP][hover] trigger', model.uri.toString(), position.lineNumber, position.column);
+        logger.verbose('LSP', 'hover trigger:', model.uri.toString(), position.lineNumber, position.column);
         try {
           const uri = model.uri.toString();
           const params = { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 } };
           const res = await (lspClient as any).request('textDocument/hover', params);
           if (res && res.contents) {
             const contents = typeof res.contents === 'string' ? res.contents : (res.contents.value || '');
-            console.debug('[LSP][hover] response', contents);
+            logger.verbose('LSP', 'hover response:', contents);
             return { contents: [{ value: contents }], range: undefined } as any;
           }
-        } catch (e) { console.warn('[LSP] hover error', e); }
-        console.debug('[LSP][hover] empty');
+        } catch (e) { logger.warn('LSP', 'hover error:', e); }
+        logger.verbose('LSP', 'hover empty');
         return null as any;
       }
     });
-    console.debug('[LSP][hover] provider registered');
+    logger.verbose('LSP', 'hover provider registered');
     // Extra instrumentation: log mouse move & model language to diagnose missing hover triggers
     try {
       const lang = editor.getModel()?.getLanguageId();
-      console.debug('[hover-debug] current model languageId=', lang, 'uri=', editor.getModel()?.uri.toString());
+      logger.verbose('App', 'Monaco model languageId=', lang, 'uri=', editor.getModel()?.uri.toString());
       let lastLog = 0;
       editor.onMouseMove((e: any) => {
         const now = performance.now();
         if (now - lastLog < 250) return; // throttle
         lastLog = now;
         const pos = e.target?.position ? `${e.target.position.lineNumber}:${e.target.position.column}` : 'n/a';
-        console.debug('[hover-debug] mouseMove target=', e.target?.type, 'pos=', pos, 'detail=', e.target?.detail || '');
+        logger.verbose('App', 'Monaco mouseMove target=', e.target?.type, 'pos=', pos, 'detail=', e.target?.detail || '');
       });
       // Force re-apply hover enabled in case wrapper options lost
       editor.updateOptions({ hover: { enabled: true, delay: 150 } });
       // Fallback hover removed (native Monaco hover now active). If needed, reintroduce with a feature flag.
-    } catch (e) { console.warn('[hover-debug] instrumentation error', e); }
+    } catch (e) { logger.warn('App', 'Monaco instrumentation error:', e); }
     // Definition provider
     monaco.languages.registerDefinitionProvider('vpy', {
       provideDefinition: async (model, position) => {
@@ -304,7 +317,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
               loc.range.end.character + 1
             )
           }));
-        } catch (e) { console.warn('[LSP] definition error', e); }
+        } catch (e) { logger.warn('LSP', 'definition error:', e); }
         return [];
       }
     });
@@ -356,9 +369,27 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   }, [doc, scrollPositions, hadFocus, setScrollPosition, setHadFocus]);
 
   const handleChange: OnChange = useCallback((value) => {
+    logger.debug('App', 'Monaco onChange called, value length:', value?.length, 'doc:', doc?.uri);
     if (doc && typeof value === 'string') {
+      logger.debug('App', 'Monaco Updating content for:', doc.uri);
+      // Check if editor has focus before update
+      const hadFocusBeforeUpdate = editorRef.current?.hasTextFocus();
+      logger.debug('App', 'Monaco hadFocusBeforeUpdate:', hadFocusBeforeUpdate);
+      
       updateContent(doc.uri, value);
-      try { lspClient.didChange(doc.uri, value); } catch {}
+      // Don't duplicate lspClient.didChange - it's already called in updateContent
+      
+      // Restore focus if it was lost during update
+      if (hadFocusBeforeUpdate) {
+        requestAnimationFrame(() => {
+          const stillHasFocus = editorRef.current?.hasTextFocus();
+          logger.debug('App', 'Monaco stillHasFocus after update:', stillHasFocus);
+          if (!stillHasFocus && editorRef.current) {
+            logger.debug('App', 'Monaco restoring focus after content update');
+            editorRef.current.focus();
+          }
+        });
+      }
     }
   }, [doc, updateContent]);
 
@@ -446,11 +477,11 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
               if (docMatch && monacoRef.current) {
                 const mUri = monacoRef.current.Uri.parse(docMatch.uri);
                 model = monacoRef.current.editor.createModel(docMatch.content, 'vpy', mUri);
-                console.debug('[LSP][diag] recreated missing model for', docMatch.uri);
+                logger.verbose('LSP', 'recreated missing model for:', docMatch.uri);
               }
             } catch {}
           }
-        console.debug('[LSP] diagnostics received uri=', rawUri, 'norm=', lcNorm, 'count=', (diagnostics||[]).length, 'matchedModel=', !!model, 'models=', models.map(m=>m.uri.toString()));
+        logger.verbose('LSP', 'diagnostics received uri=', rawUri, 'norm=', lcNorm, 'count=', (diagnostics||[]).length, 'matchedModel=', !!model, 'models=', models.map(m=>m.uri.toString()));
         // Always update store even if model not currently open (will aggregate in Errors panel)
         const diagsForStore = (diagnostics || []).map((d: any) => ({
           message: d.message,
@@ -461,7 +492,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         try {
           const storeUri = model ? model.uri.toString() : uri;
           if (model && storeUri !== uri) {
-            console.debug('[LSP][diag] storeUri differs from raw uri', storeUri, uri);
+            logger.verbose('LSP', 'storeUri differs from raw uri:', storeUri, uri);
           }
           setDiagnostics(storeUri, diagsForStore as any);
         } catch (_) {}
@@ -476,7 +507,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
             source: d.source || 'vpy'
         }));
         monacoRef.current.editor.setModelMarkers(model, 'vpy', markers);
-        console.debug('[LSP] applied markers', markers.length);
+        logger.debug('LSP', 'applied markers:', markers.length);
       }
     };
     lspClient.onNotification(handler);

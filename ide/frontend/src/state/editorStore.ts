@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { DocumentModel, DiagnosticModel } from '../types/models';
 import { lspClient } from '../lspClient';
+import { logger } from '../utils/logger';
 
 interface FlatDiag { uri: string; file: string; line: number; column: number; severity: DiagnosticModel['severity']; message: string; }
+
 interface EditorState {
   documents: DocumentModel[];
   active?: string; // uri
@@ -22,7 +24,9 @@ interface EditorState {
 
 function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
   const rows: FlatDiag[] = [];
+  logger.verbose('LSP', 'recomputeAllDiagnostics - processing documents:', documents.length);
   for (const d of documents) {
+    logger.verbose('LSP', 'Document URI:', d.uri, 'diagnostics count:', (d.diagnostics || []).length);
     for (const diag of d.diagnostics || []) {
       rows.push({
         uri: d.uri,
@@ -34,12 +38,14 @@ function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
       });
     }
   }
+  logger.verbose('LSP', 'Total diagnostic rows before sort:', rows.length);
   const sevOrder: Record<string, number> = { error: 0, warning: 1, info: 2 } as any;
   rows.sort((a,b) => {
     const so = (sevOrder[a.severity]??9) - (sevOrder[b.severity]??9); if (so!==0) return so;
     const f = a.file.localeCompare(b.file); if (f!==0) return f;
     return a.line - b.line || a.column - b.column;
   });
+  logger.verbose('LSP', 'Final sorted diagnostic rows:', rows);
   return rows;
 }
 
@@ -50,6 +56,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   scrollPositions: {},
   hadFocus: {},
   openDocument: (doc) => set((s) => {
+    logger.debug('File', 'openDocument called with URI:', doc.uri);
     // If document already open (by uri) just activate & optionally refresh metadata
     const existing = s.documents.find(d => d.uri === doc.uri);
     let documents: DocumentModel[];
@@ -58,9 +65,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } else {
       documents = [...s.documents, { ...doc, dirty: false, lastSavedContent: doc.content }];
     }
+    logger.debug('File', 'openDocument - final documents URIs:', documents.map(d => d.uri));
     return { documents, active: doc.uri, allDiagnostics: recomputeAllDiagnostics(documents) };
   }),
-  setActive: (uri) => set({ active: uri }),
+  setActive: (uri) => {
+    logger.debug('App', 'setActive called with URI:', uri);
+    const currentStack = new Error().stack;
+    logger.debug('App', 'setActive call stack:', currentStack?.split('\n').slice(1, 4).join('\n'));
+    set({ active: uri });
+  },
   updateContent: (uri, content) => {
     set((s) => {
       const documents = s.documents.map(d => d.uri === uri ? {
@@ -68,9 +81,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         content,
         dirty: d.lastSavedContent !== undefined ? (content !== d.lastSavedContent) : true
       } : d);
-      return { documents, allDiagnostics: recomputeAllDiagnostics(documents) };
+      return { 
+        documents, 
+        allDiagnostics: recomputeAllDiagnostics(documents),
+        active: s.active // PRESERVE active value during content updates
+      };
     });
-    try { lspClient.didChange(uri, content); } catch (_) {}
+    // Note: lspClient.didChange is called from MonacoEditorWrapper.handleChange to avoid duplication
   },
   markSaved: (uri, newMtime) => set((s) => {
     const documents = s.documents.map(d => d.uri === uri ? {
@@ -79,11 +96,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       lastSavedContent: d.content,
       mtime: newMtime ?? d.mtime
     } : d);
-    return { documents };
+    return { 
+      documents,
+      active: s.active // PRESERVE active value during save operations
+    };
   }),
   setDiagnostics: (uri, diags) => set((s) => {
+    logger.verbose('LSP', 'setDiagnostics called with URI:', uri);
+    logger.verbose('LSP', 'Available document URIs:', s.documents.map(d => d.uri));
+    logger.verbose('LSP', 'Diagnostics to set:', diags);
     const documents = s.documents.map(d => d.uri === uri ? { ...d, diagnostics: diags } : d);
-    return { documents, allDiagnostics: recomputeAllDiagnostics(documents) };
+    const foundDoc = s.documents.find(d => d.uri === uri);
+    logger.verbose('LSP', 'Found matching document:', !!foundDoc);
+    if (!foundDoc) {
+      logger.warn('LSP', 'No document found for URI:', uri, 'Available:', s.documents.map(d => d.uri));
+    }
+    const newAllDiagnostics = recomputeAllDiagnostics(documents);
+    logger.verbose('LSP', 'Computed allDiagnostics:', newAllDiagnostics);
+    return { 
+      documents, 
+      allDiagnostics: newAllDiagnostics,
+      active: s.active // PRESERVE active value during diagnostics updates
+    };
   }),
   closeDocument: (uri) => set((s) => {
     const documents = s.documents.filter(d => d.uri !== uri);

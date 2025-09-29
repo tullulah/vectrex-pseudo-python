@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Project, FileNode } from '../types/models';
+import { logger } from '../utils/logger';
 
 interface WorkspaceEntry {
   path: string;
@@ -42,8 +43,8 @@ export const useProjectStore = create<ProjectState>()(
       // Actions
       setProject: (rootPath, files, name) => {
         const workspaceName = name || rootPath.split(/[/\\]/).pop() || 'Workspace';
-        console.log('ProjectStore: Setting project', { rootPath, workspaceName, filesCount: files.length });
-        console.log('ProjectStore: Files structure:', files);
+        logger.debug('Project', 'Setting project', { rootPath, workspaceName, filesCount: files.length });
+        logger.debug('Project', 'Files structure:', files);
         set({ 
           project: { rootPath, files }, 
           workspaceName,
@@ -59,11 +60,11 @@ export const useProjectStore = create<ProjectState>()(
         const recent = get().recentWorkspaces;
         const filtered = recent.filter(w => w.path !== path);
         const newEntry: WorkspaceEntry = { path, name, lastOpened: Date.now() };
-        console.log('ProjectStore: Adding recent workspace', newEntry);
+        logger.debug('Project', 'Adding recent workspace', newEntry);
         set({ 
           recentWorkspaces: [newEntry, ...filtered].slice(0, 10) // Keep last 10
         });
-        console.log('ProjectStore: Recent workspaces now:', get().recentWorkspaces);
+        logger.debug('Project', 'Recent workspaces now:', get().recentWorkspaces);
       },
       
       clearWorkspace: () => set({ 
@@ -73,7 +74,7 @@ export const useProjectStore = create<ProjectState>()(
       }),
       
       clearRecentWorkspaces: () => {
-        console.log('ProjectStore: Clearing recent workspaces');
+        logger.debug('Project', 'Clearing recent workspaces');
         set({ recentWorkspaces: [] });
       },
       
@@ -86,7 +87,7 @@ export const useProjectStore = create<ProjectState>()(
         try {
           const result = await (window as any).files?.readDirectory?.(current.rootPath);
           if (result?.files) {
-            console.log('ProjectStore: Refreshing workspace files');
+            logger.debug('Project', 'Refreshing workspace files');
             set({ 
               project: { 
                 rootPath: current.rootPath, 
@@ -95,7 +96,7 @@ export const useProjectStore = create<ProjectState>()(
             });
           }
         } catch (error) {
-          console.error('ProjectStore: Failed to refresh workspace:', error);
+          logger.error('Project', 'Failed to refresh workspace:', error);
         }
       },
       
@@ -104,7 +105,7 @@ export const useProjectStore = create<ProjectState>()(
         if (!lastPath) return;
         
         try {
-          console.log('ProjectStore: Restoring last workspace:', lastPath);
+          logger.debug('Project', 'Restoring last workspace:', lastPath);
           const result = await (window as any).files?.readDirectory?.(lastPath);
           if (result?.files) {
             const workspaceName = lastPath.split(/[/\\]/).pop() || 'Workspace';
@@ -113,14 +114,14 @@ export const useProjectStore = create<ProjectState>()(
               workspaceName,
               selected: undefined 
             });
-            console.log('ProjectStore: Successfully restored workspace:', workspaceName);
+            logger.info('Project', 'Successfully restored workspace:', workspaceName);
           } else {
-            console.warn('ProjectStore: Failed to restore workspace - directory not accessible');
+            logger.warn('Project', 'Failed to restore workspace - directory not accessible');
             // Clear invalid last workspace
             set({ lastWorkspacePath: undefined });
           }
         } catch (error) {
-          console.error('ProjectStore: Error restoring last workspace:', error);
+          logger.error('Project', 'Error restoring last workspace:', error);
           // Clear invalid last workspace
           set({ lastWorkspacePath: undefined });
         }

@@ -4,6 +4,7 @@ import { WelcomeView, welcomeStyles } from './WelcomeView';
 import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from 'flexlayout-react';
 import { useEditorStore } from '../state/editorStore';
 import { dockBus, DockEvent, DockComponent, notifyDockChanged } from '../state/dockBus';
+import { logger } from '../utils/logger';
 import 'flexlayout-react/style/dark.css';
 import { FileTreePanel } from './panels/FileTreePanel';
 // Legacy EditorPanel kept for reference; replaced by custom EditorSurface for tab management.
@@ -125,7 +126,7 @@ export const DockWorkspace: React.FC = () => {
             try {
               model.doAction(Actions.deleteTab(node.getId()));
             } catch (err) {
-              console.warn('[Dock] close failed', err);
+              logger.warn('Dock', 'close failed', err);
             }
           }}
           style={{
@@ -215,7 +216,7 @@ export const DockWorkspace: React.FC = () => {
         model._root = fresh._root;
         requestAnimationFrame(()=>tagTabsetsWithIds(model));
       }
-    } catch (e) { console.warn('[Dock] ensureEditorHost failed', e); }
+    } catch (e) { logger.warn('Dock', 'ensureEditorHost failed', e); }
   }, [model]);
 
   const addComponent = useCallback((comp: DockComponent | 'editor-placeholder' | string, customName?: string) => {
@@ -254,7 +255,7 @@ export const DockWorkspace: React.FC = () => {
           snapshot.push({ component: c, saved: saved?.json ? { json: saved.json, parentTabsetId: saved.parentTabsetId, index: saved.index, tabsetWeight: saved.tabsetWeight } : undefined });
         });
         window.localStorage.setItem(STORAGE_HIDDEN_KEY, JSON.stringify(snapshot));
-      } catch (e) { console.warn('[Dock] persist hidden panels failed', e); }
+      } catch (e) { logger.warn('Dock', 'persist hidden panels failed', e); }
     });
 
     // Fallback: first tabset id if editor not found
@@ -287,12 +288,12 @@ export const DockWorkspace: React.FC = () => {
       }
       else {
         // Ultimate fallback: append to any (center) if no tabset found
-        console.warn('[Dock] editorTabset not found; appending component in first tabset');
+        logger.warn('Dock', 'editorTabset not found; appending component in first tabset');
         let first: string | undefined; model.visitNodes(n=>{ if (!first && (n as any).getType && (n as any).getType()==='tabset') first = (n as any).getId?.(); });
         if (first) model.doAction(Actions.addNode({ type: 'tab', component: comp, name: nameMap[comp] } as any, first, DockLocation.CENTER, -1));
       }
     } catch (e) {
-      console.warn('[Dock] addComponent failed', e);
+      logger.warn('Dock', 'addComponent failed', e);
     }
     persistPinnedPanels();
   }, [hasComponent, model]);
@@ -315,7 +316,7 @@ export const DockWorkspace: React.FC = () => {
       console.debug('[Dock] removeComponent none-found', comp);
     }
     toRemove.forEach(id => {
-      try { model.doAction(Actions.deleteTab(id)); console.debug('[Dock] removed tab id', id); } catch(e) { console.warn('[Dock] deleteTab failed', e); }
+      try { model.doAction(Actions.deleteTab(id)); logger.debug('Dock', 'removed tab id', id); } catch(e) { logger.warn('Dock', 'deleteTab failed', e); }
     });
     persistPinnedPanels();
   }, [model]);
@@ -377,7 +378,7 @@ export const DockWorkspace: React.FC = () => {
           {label && <span className="vpy-panel-label" style={{fontSize:12, color:'#bbb', userSelect:'none', fontWeight:500}}>{label}</span>}
         </div>
       )
-    } catch (e) { console.warn('[Dock] onRenderTabSet pin failed', e); }
+    } catch (e) { logger.warn('Dock', 'onRenderTabSet pin failed', e); }
   }, [addComponent, hasComponent, removeComponent]);
 
   useEffect(() => {
@@ -456,14 +457,14 @@ export const DockWorkspace: React.FC = () => {
                         else if (n._attributes) n._attributes.weight = saved.tabsetWeight; // fallback
                         console.debug('[Dock] restored tabset weight', saved.tabsetWeight, 'for', comp);
                       } catch (e) {
-                        console.warn('[Dock] failed to restore tabset weight', e);
+                        logger.warn('Dock', 'failed to restore tabset weight', e);
                       }
                     }
                   });
                   // Force layout to recompute (using private call via model._root? fallback to no-op)
                   try { (layoutRef.current as any)?.forceUpdate?.(); } catch {}
                 }
-              } catch (e) { console.warn('[Dock] restore addNode failed, fallback to generic add', e); }
+              } catch (e) { logger.warn('Dock', 'restore addNode failed, fallback to generic add', e); }
             }
           }
           if (!restored) {
@@ -484,7 +485,7 @@ export const DockWorkspace: React.FC = () => {
                       applied = true;
                       console.debug('[Dock] applied saved weight (fallback)', saved.tabsetWeight, 'for', comp);
                     } catch (e) {
-                      console.warn('[Dock] failed to apply saved weight (fallback)', e);
+                      logger.warn('Dock', 'failed to apply saved weight (fallback)', e);
                     }
                   }
                 }
@@ -526,7 +527,7 @@ export const DockWorkspace: React.FC = () => {
           console.info('[Dock] Layout reset to defaults');
           requestAnimationFrame(()=>tagTabsetsWithIds(model));
         } catch (e) {
-          console.warn('[Dock] reset failed', e);
+          logger.warn('Dock', 'reset failed', e);
         }
       }
     });
@@ -559,17 +560,17 @@ export const DockWorkspace: React.FC = () => {
             notifyDockChanged();
             console.info('[Dock] Migrated layout: added missing Errors tab');
           } catch (e) {
-            console.warn('[Dock] Failed to auto-add Errors tab', e);
+            logger.warn('Dock', 'Failed to auto-add Errors tab', e);
           }
         }
       }
       // Auto-inject memory panel if missing (new feature). We place it similar to emulator (right) by calling addComponent.
       // This corresponds to the user-observed log: "[Dock] restore panel fallback add memory" when toggled manually.
       try {
-  if (!hasComponent('memory')) { try { addComponent('memory'); console.info('[Dock] Migrated layout: added missing Memory tab'); } catch(e) { console.warn('[Dock] Failed to auto-add Memory tab', e); } }
-  if (!hasComponent('trace')) { try { addComponent('trace'); console.info('[Dock] Migrated layout: added missing Trace tab'); } catch(e) { console.warn('[Dock] Failed to auto-add Trace tab', e); } }
-  if (!hasComponent('bioscalls')) { try { addComponent('bioscalls'); console.info('[Dock] Migrated layout: added missing BIOS Calls tab'); } catch(e) { console.warn('[Dock] Failed to auto-add BIOS Calls tab', e); } }
-      } catch (e) { console.warn('[Dock] Failed to auto-add Memory tab', e); }
+  if (!hasComponent('memory')) { try { addComponent('memory'); logger.info('Dock', 'Migrated layout: added missing Memory tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add Memory tab', e); } }
+  if (!hasComponent('trace')) { try { addComponent('trace'); logger.info('Dock', 'Migrated layout: added missing Trace tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add Trace tab', e); } }
+  if (!hasComponent('bioscalls')) { try { addComponent('bioscalls'); logger.info('Dock', 'Migrated layout: added missing BIOS Calls tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add BIOS Calls tab', e); } }
+      } catch (e) { logger.warn('Dock', 'Failed to auto-add Memory tab', e); }
     }, 50);
   }, [hasComponent, model]);
 
@@ -602,7 +603,7 @@ export const DockWorkspace: React.FC = () => {
         }
       }
     } catch (e) {
-      console.warn('[Dock] failed to restore hidden panels', e);
+      logger.warn('Dock', 'failed to restore hidden panels', e);
     }
     // Restore pinned panels
     try {
@@ -611,7 +612,7 @@ export const DockWorkspace: React.FC = () => {
         const arr: DockComponent[] = JSON.parse(rawPin);
         pinnedSetRef.current = new Set(arr);
       }
-    } catch (e) { console.warn('[Dock] failed to restore pinned panels', e); }
+    } catch (e) { logger.warn('Dock', 'failed to restore pinned panels', e); }
     // Example: add future dynamic tabs via layoutRef.current?.addTabWithDragAndDrop
     tagTabsetsWithIds(model);
   }, []);
@@ -792,7 +793,7 @@ function handleDragEnd(_e: MouseEvent) {
     model.doAction(Actions.moveNode(tabId, destTabset, DockLocation.CENTER, targetIndex));
     console.debug('[Dock] Moved tab', tabId, 'to tabset', destTabset, 'index', targetIndex);
   } catch (err) {
-    console.warn('[Dock] move failed, fallback not applied', err);
+    logger.warn('Dock', 'move failed, fallback not applied', err);
   }
 }
 
@@ -823,7 +824,7 @@ function tagTabsetsWithIds(model: Model) {
       }
     });
   } catch (e) {
-    console.warn('[Dock] tagTabsetsWithIds failed', e);
+    logger.warn('Dock', 'tagTabsetsWithIds failed', e);
   }
 }
 
@@ -831,5 +832,5 @@ function persistPinnedPanels() {
   try {
     const arr = Array.from(((window as any).__pinnedPanelsRef as React.MutableRefObject<Set<DockComponent>> | undefined)?.current || []);
     if (arr.length) localStorage.setItem(STORAGE_PINNED_KEY, JSON.stringify(arr)); else localStorage.removeItem(STORAGE_PINNED_KEY);
-  } catch (e) { console.warn('[Dock] persistPinned failed', e); }
+  } catch (e) { logger.warn('Dock', 'persistPinned failed', e); }
 }
