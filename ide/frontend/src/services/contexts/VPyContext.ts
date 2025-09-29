@@ -199,6 +199,96 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 - **Target Platform**: Vectrex console
 - **Compilation**: VPy → 6809 Assembly → Vectrex executable
 
+## VPy Project Structure and META Fields:
+
+### 📄 **Project Metadata (META Fields)**
+VPy supports exactly 3 META fields that define ROM header information:
+
+\`\`\`vpy
+META TITLE = "MY GAME"          # Game title (REQUIRED)
+META COPYRIGHT = "g GCE 2025"   # Copyright string (optional)
+META MUSIC = "music1"           # BIOS music symbol (optional)
+
+# Your VPy code starts here
+INTENSITY(255)
+MOVE(0, 0)
+PRINT_TEXT(0, 50, "HELLO VECTREX")
+\`\`\`
+
+### 🏷️ **META Field Reference (3 fields only):**
+
+- **TITLE**: Game title (required)
+  - Example: \`META TITLE = "SPACE SHOOTER"\`
+  - **CRITICAL**: Must be in UPPERCASE letters only
+  - **Max length**: 24 characters
+  - **Valid characters**: Letters, numbers, spaces only (special chars cleaned)
+  - **Used for**: ROM header, game identification
+
+- **COPYRIGHT**: Copyright string (optional)
+  - Example: \`META COPYRIGHT = "g GCE 2025"\`
+  - **Default**: "g GCE 1998"
+  - **Used for**: First line display in ROM header
+
+- **MUSIC**: BIOS music symbol (optional)
+  - Examples: \`META MUSIC = "music1"\` or \`META MUSIC = "0"\`
+  - **Default**: "music1"
+  - **Special**: Use "0" to disable music (FDB $0000)
+  - **Used for**: Background music selection
+
+### ⚠️ **Important META Rules:**
+- **Only 3 META fields supported**: TITLE, COPYRIGHT, MUSIC
+- **TITLE must be UPPERCASE**: Lowercase reserved for special characters
+- **TITLE is required** for proper ROM generation
+- **Other fields are optional** with reasonable defaults
+- **ROM dimensions fixed**: Height/width/coords ($F8,$50,$20,$AA) cannot be changed
+
+### 📂 **Correct Project Examples:**
+
+#### **Simple Game:**
+\`\`\`vpy
+META TITLE = "SQUARE DEMO"
+META COPYRIGHT = "g DANIEL 2025"
+META MUSIC = "0"
+
+INTENSITY(255)
+MOVE(-25, -25)
+DRAW_LINE(50, 0)
+DRAW_LINE(0, 50)
+DRAW_LINE(-50, 0)
+DRAW_LINE(0, -50)
+\`\`\`
+
+#### **Animation with Music:**
+\`\`\`vpy
+META TITLE = "ROTATING LINE"
+META COPYRIGHT = "g VPY DEVELOPER 2025"
+META MUSIC = "music1"
+
+for frame in range(360):
+    INTENSITY(200)
+    angle = frame * 2
+    x = angle % 60 - 30
+    y = angle % 40 - 20
+    MOVE(x, y)
+    DRAW_LINE(30, 0)
+    WAIT_FRAMES(1)
+\`\`\`
+
+#### **Minimal Example:**
+\`\`\`vpy
+META TITLE = "HELLO WORLD"
+
+# Minimal code - other META fields use defaults
+INTENSITY(255)
+PRINT_TEXT(0, 0, "HELLO")
+\`\`\`
+
+### 🔧 **META Fields Usage in IDE:**
+- **ROM Header Generation**: META fields directly affect Vectrex ROM header
+- **Title Display**: TITLE appears in game selection and ROM info
+- **Copyright Notice**: COPYRIGHT shown in ROM header first line
+- **Music Integration**: MUSIC controls background audio from BIOS
+
 ## VPy IDE Features and Functionality:
 
 ### 🎮 **Integrated Vectrex Emulator**
