@@ -136,37 +136,53 @@ export const VPY_LANGUAGE_CONTEXT = `
 
 VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembly for the Vectrex console.
 
+⚠️  **CRITICAL**: VPy is NOT object-oriented programming! VPy is NOT a full Python implementation!
+
 ## Core Concepts:
 - **Vector Graphics**: Vectrex uses vector (line-based) graphics, not pixels
 - **Coordinate System**: Center (0,0), range -127 to +127 on both axes
 - **Beam Control**: Electron beam intensity controls line brightness
 - **Real-time**: Code runs at 60 FPS on real Vectrex hardware
+- **Procedural Programming**: VPy is procedural, NOT object-oriented
 
 ## Current Implementation Limitations:
+❌ **NO Object-Oriented Programming**: No classes, objects, methods, inheritance, encapsulation
+❌ **NO Complex Data Structures**: No lists, dictionaries, tuples, sets, or custom types
+❌ **NO Function Definitions**: Cannot define custom functions (def my_function():)
+❌ **NO Module System**: No imports, packages, or external libraries (import module)
+❌ **NO Exception Handling**: No try/catch or error handling constructs
+❌ **NO String Manipulation**: No string methods like .split(), .join(), .replace()
+❌ **NO Advanced Python Features**: No comprehensions, generators, decorators, lambdas
 - **Function Parameters**: Maximum 2-3 parameters per function call (compiler limitation)
-- **No Object-Oriented Programming**: Classes, objects, inheritance not implemented
-- **No Complex Data Structures**: No lists, dictionaries, tuples, or custom types
 - **Primitive Variables Only**: Only int, string, and basic numeric types
 - **Simple Control Flow**: Basic if/else, for/while loops only
-- **No Module System**: No imports, packages, or external libraries
-- **No Exception Handling**: No try/catch or error handling constructs
 - **Direct BIOS Mapping**: Functions compile directly to Vectrex BIOS calls
-- **No Function Definitions**: Cannot define custom functions (yet)
-- **No String Manipulation**: Limited string operations, mostly for display
 
 ## Supported Language Features:
-- Python-like syntax with Vectrex-specific functions
-- Variable assignments: x = 10, name = "Hello"
-- Basic arithmetic: +, -, *, /, % (modulo)
-- Comparison operators: ==, !=, <, >, <=, >=
-- Boolean logic: and, or, not
-- Conditional statements: if x > 0:, else:
-- Loop constructs: for i in range(10):, while condition:
-- Comments: # This is a comment
+✅ Variable assignments: x = 10, name = "Hello"
+✅ Basic arithmetic: +, -, *, /, % (modulo)
+✅ Comparison operators: ==, !=, <, >, <=, >=
+✅ Boolean logic: and, or, not
+✅ Conditional statements: if x > 0:, else:
+✅ Loop constructs: for i in range(10):, while condition:
+✅ Comments: # This is a comment
+✅ Built-in Vectrex functions: MOVE, DRAW_LINE, INTENSITY, etc.
+
+## What VPy IS:
+- A simple, procedural language with Python-like syntax
+- Specialized for Vectrex vector graphics programming
+- Direct compilation to 6809 assembly
+- Limited but focused on graphics and game programming
+
+## What VPy is NOT:
+- NOT object-oriented (no classes or objects)
+- NOT a full Python implementation
+- NOT suitable for general-purpose programming
+- NOT supporting modern Python features
 
 ## Code Examples:
 \`\`\`vpy
-# Simple drawing example
+# Simple drawing example (CORRECT VPy code)
 INTENSITY(255)          # Set bright intensity
 MOVE(-50, 0)           # Move to starting position
 DRAW_LINE(100, 0)      # Draw horizontal line
@@ -174,7 +190,7 @@ DRAW_LINE(0, 50)       # Draw vertical line up
 DRAW_LINE(-100, 0)     # Draw back to start
 DRAW_LINE(0, -50)      # Complete the rectangle
 
-# Animation example with loop
+# Animation example with loop (CORRECT VPy code)
 for frame in range(100):
     INTENSITY(255)
     angle = frame * 2
@@ -182,6 +198,19 @@ for frame in range(100):
     MOVE(x, 0)
     DRAW_LINE(0, 30)
     WAIT_FRAMES(1)
+
+# INCORRECT - This is NOT valid VPy (NO classes):
+# class Shape:           # ❌ NOT SUPPORTED
+#     def __init__(self): # ❌ NOT SUPPORTED  
+#         pass           # ❌ NOT SUPPORTED
+
+# INCORRECT - This is NOT valid VPy (NO lists):
+# points = [10, 20, 30]  # ❌ NOT SUPPORTED
+# for point in points:   # ❌ NOT SUPPORTED
+
+# INCORRECT - This is NOT valid VPy (NO custom functions):
+# def draw_square():     # ❌ NOT SUPPORTED
+#     pass              # ❌ NOT SUPPORTED
 \`\`\`
 
 ## Hardware Constraints:
@@ -206,6 +235,7 @@ for frame in range(100):
 - Trying to pass too many parameters to functions (max 2-3)
 - Attempting to use unsupported Python features (classes, imports, etc.)
 - Using undefined variables or complex expressions
+- Thinking VPy is object-oriented (it's NOT!)
 `;
 
 export const VECTREX_HARDWARE_CONTEXT = `
