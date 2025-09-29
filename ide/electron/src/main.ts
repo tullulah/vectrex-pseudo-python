@@ -344,7 +344,9 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   return new Promise(async (resolvePromise) => {
     const outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
     const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
-    const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'] });
+    // Set working directory to project root (three levels up from ide/electron/dist/)
+    const projectRoot = join(__dirname, '..', '..', '..');
+    const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'], cwd: projectRoot });
     let stdoutBuf = '';
     let stderrBuf = '';
     child.stdout.on('data', (c: Buffer) => { const txt = c.toString('utf8'); stdoutBuf += txt; mainWindow?.webContents.send('run://stdout', txt); });
@@ -365,37 +367,95 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         if (diags.length) mainWindow?.webContents.send('run://diagnostics', diags);
         return resolvePromise({ error: 'compile_failed', code, stdout: stdoutBuf, stderr: stderrBuf });
       }
-      // On success, look for produced bin with same stem (.bin) and emit event for renderer to load via WASM
+      // Check compilation phases: ASM generation + binary assembly
       const binPath = outAsm.replace(/\.asm$/, '.bin');
-      console.log(`[DEBUG] Compilation completed. Looking for binary at: ${binPath}`);
-      console.log(`[DEBUG] ASM path: ${outAsm}`);
       
-      // Add small delay to ensure file system operations complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      // Phase 1: Check if ASM was generated
+      mainWindow?.webContents.send('run://status', `✓ Compilation Phase 1: Checking ASM generation...`);
       try {
-        // Check if file exists first
-        const exists = await fs.access(binPath).then(() => true).catch(() => false);
-        console.log(`[DEBUG] Binary file exists: ${exists}`);
-        
-        if (!exists) {
-          // List files in directory to help debug
-          const dir = require('path').dirname(binPath);
-          const files = await fs.readdir(dir).catch(() => []);
-          console.log(`[DEBUG] Files in directory ${dir}:`, files.filter(f => f.includes('bouncing_ball')));
+        const asmExists = await fs.access(outAsm).then(() => true).catch(() => false);
+        if (!asmExists) {
+          mainWindow?.webContents.send('run://stderr', `ERROR: ASM file not generated: ${outAsm}`);
+          mainWindow?.webContents.send('run://status', `❌ Phase 1 FAILED: ASM generation failed`);
+          return resolvePromise({ error: 'asm_not_generated', detail: `Expected ASM file: ${outAsm}` });
         }
         
+        const asmStats = await fs.stat(outAsm);
+        if (asmStats.size === 0) {
+          mainWindow?.webContents.send('run://stderr', `ERROR: ASM file is empty: ${outAsm}`);
+          mainWindow?.webContents.send('run://status', `❌ Phase 1 FAILED: Empty ASM file generated`);
+          return resolvePromise({ error: 'empty_asm_file', detail: `ASM file exists but is empty: ${outAsm}` });
+        }
+        
+        mainWindow?.webContents.send('run://status', `✓ Phase 1 SUCCESS: ASM generated (${asmStats.size} bytes)`);
+      } catch (e: any) {
+        mainWindow?.webContents.send('run://stderr', `ERROR checking ASM file: ${e.message}`);
+        mainWindow?.webContents.send('run://status', `❌ Phase 1 FAILED: Error checking ASM file`);
+        return resolvePromise({ error: 'asm_check_failed', detail: e.message });
+      }
+      
+      // Phase 2: Check if binary was assembled
+      mainWindow?.webContents.send('run://status', `✓ Compilation Phase 2: Checking binary assembly...`);
+      
+      // Add delay to ensure lwasm has completed
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      try {
+        const binExists = await fs.access(binPath).then(() => true).catch(() => false);
+        
+        if (!binExists) {
+          // Binary not found - check for lwasm errors in stderr
+          const lwasmeErrors = stderrBuf.split('\n').filter(line => 
+            line.includes('lwasm') || 
+            line.includes('fallo') || 
+            line.includes('failed') ||
+            line.includes('error') ||
+            line.includes('ERROR')
+          );
+          
+          if (lwasmeErrors.length > 0) {
+            mainWindow?.webContents.send('run://stderr', `❌ LWASM ASSEMBLY FAILED:`);
+            lwasmeErrors.forEach(err => mainWindow?.webContents.send('run://stderr', `   ${err}`));
+          } else {
+            mainWindow?.webContents.send('run://stderr', `❌ BINARY NOT GENERATED: ${binPath}`);
+            mainWindow?.webContents.send('run://stderr', `   This usually means lwasm (6809 assembler) is not installed or failed silently.`);
+            mainWindow?.webContents.send('run://stderr', `   Install lwasm or check if the generated ASM has syntax errors.`);
+          }
+          
+          // List available files for debugging
+          const dir = require('path').dirname(binPath);
+          const files = await fs.readdir(dir).catch(() => []);
+          const relevantFiles = files.filter(f => f.includes(require('path').basename(binPath, '.bin')));
+          mainWindow?.webContents.send('run://stderr', `   Files in directory: ${relevantFiles.join(', ') || 'none'}`);
+          
+          mainWindow?.webContents.send('run://status', `❌ Phase 2 FAILED: Binary assembly failed`);
+          return resolvePromise({ error: 'binary_not_generated', detail: `Binary file not created: ${binPath}` });
+        }
+        
+        // Binary exists - check if it's valid
         const buf = await fs.readFile(binPath);
+        
+        if (buf.length === 0) {
+          mainWindow?.webContents.send('run://stderr', `❌ EMPTY BINARY: ${binPath} (0 bytes)`);
+          mainWindow?.webContents.send('run://stderr', `   This indicates lwasm completed but produced no output.`);
+          mainWindow?.webContents.send('run://stderr', `   Check the generated ASM file for missing ORG directive or syntax errors.`);
+          mainWindow?.webContents.send('run://status', `❌ Phase 2 FAILED: Empty binary generated`);
+          return resolvePromise({ error: 'empty_binary', detail: `Binary file is empty: ${binPath}` });
+        }
+        
+        // Success!
         const base64 = Buffer.from(buf).toString('base64');
-        console.log(`[DEBUG] Successfully read binary: ${buf.length} bytes`);
-        mainWindow?.webContents.send('run://status', `Compilation succeeded: ${binPath} (${buf.length} bytes)`);
-        // Notify renderer (which owns WASM emulator) to load binary
+        mainWindow?.webContents.send('run://status', `✅ COMPILATION SUCCESS: ${binPath} (${buf.length} bytes)`);
+        mainWindow?.webContents.send('run://stdout', `✅ Generated binary: ${buf.length} bytes`);
+        
+        // Notify renderer to load binary
         mainWindow?.webContents.send('emu://compiledBin', { base64, size: buf.length, binPath });
         resolvePromise({ ok: true, binPath, size: buf.length, stdout: stdoutBuf, stderr: stderrBuf });
-      } catch (e:any) {
-        console.log(`[DEBUG] Error reading binary file:`, e);
-        mainWindow?.webContents.send('run://status', `Compiled but failed to read bin: ${e?.message}`);
-        resolvePromise({ error: 'bin_read_failed', detail: e?.message });
+        
+      } catch (e: any) {
+        mainWindow?.webContents.send('run://stderr', `❌ ERROR reading binary: ${e.message}`);
+        mainWindow?.webContents.send('run://status', `❌ Phase 2 FAILED: Error reading binary file`);
+        resolvePromise({ error: 'bin_read_failed', detail: e.message });
       }
     });
   });

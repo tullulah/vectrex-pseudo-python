@@ -35,7 +35,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str("        ORG $0000\n");
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // Classic include; no manual EQU needed.
-        out.push_str("    INCLUDE \"../include/VECTREX.I\"\n\n");
+        out.push_str("    INCLUDE \"include/VECTREX.I\"\n\n");
     // (Include already added above)
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Header (emulator-compatible variant):
@@ -256,7 +256,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Suppress runtime/helpers only if trivial main was inlined
     let suppress_runtime = main_inlined; // unchanged logic for helper emission
     // Move runtime include AFTER vector lists like smartlist_demo
-    out.push_str("    INCLUDE \"../runtime/vectorlist_runtime.asm\"\n");
+    out.push_str("    INCLUDE \"runtime/vectorlist_runtime.asm\"\n");
     if !suppress_runtime {
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }

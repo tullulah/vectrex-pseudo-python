@@ -26,3 +26,7 @@ crate-type = ["rlib"]
 [[bin]]
 name = "vpy_lsp"
 path = "src/bin/vpy_lsp.rs"
+
+[[bin]]
+name = "vectrexc"
+path = "src/main.rs"
