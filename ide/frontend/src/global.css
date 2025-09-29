@@ -41,7 +41,35 @@ header button, header select { -webkit-app-region: no-drag; }
 /* Ensure sidebars/panels keep normal cursor */
 .flexlayout__tabset, .flexlayout__border, .flexlayout__layout { cursor: default; }
 
-/* File tree scrollbar styling */
+/* Global scrollbar styling for all components */
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #424242;
+  border-radius: 7px;
+  border: 3px solid #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #4f4f4f;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #555555;
+}
+
+::-webkit-scrollbar-corner {
+  background: #1e1e1e;
+}
+
+/* File tree scrollbar styling (inherits from global) */
 .file-tree-scroll::-webkit-scrollbar {
   width: 14px;
 }
@@ -61,5 +89,28 @@ header button, header select { -webkit-app-region: no-drag; }
 }
 
 .file-tree-scroll::-webkit-scrollbar-thumb:active {
+  background-color: #555555;
+}
+
+/* Build output scrollbar styling */
+.build-output-scroll::-webkit-scrollbar {
+  width: 14px;
+}
+
+.build-output-scroll::-webkit-scrollbar-track {
+  background: #111;
+}
+
+.build-output-scroll::-webkit-scrollbar-thumb {
+  background-color: #424242;
+  border-radius: 7px;
+  border: 3px solid #111;
+}
+
+.build-output-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #4f4f4f;
+}
+
+.build-output-scroll::-webkit-scrollbar-thumb:active {
   background-color: #555555;
 }
