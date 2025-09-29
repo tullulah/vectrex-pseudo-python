@@ -27,53 +27,71 @@ export interface VPyConstant {
 
 export const VPY_FUNCTIONS: VPyFunction[] = [
   {
-    name: "MOVE",
-    syntax: "MOVE(x, y)",
+    name: "MOVE_TO",
+    syntax: "MOVE_TO(x, y)",
     description: "Moves the electron beam to absolute coordinates without drawing",
     parameters: [
       { name: "x", type: "int", description: "X coordinate (-127 to +127)", required: true },
       { name: "y", type: "int", description: "Y coordinate (-127 to +127)", required: true }
     ],
     examples: [
-      "MOVE(0, 0)  # Move to center",
-      "MOVE(-100, 50)  # Move to upper left area"
+      "MOVE_TO(0, 0)  # Move to center",
+      "MOVE_TO(-100, 50)  # Move to upper left area"
     ],
     category: "movement",
     vectrexAddress: "0xF312",
     notes: "Center of screen is (0,0). Coordinate system: -127 (left/bottom) to +127 (right/top)"
   },
   {
-    name: "DRAW_LINE",
-    syntax: "DRAW_LINE(dx, dy)",
-    description: "Draws a line from current position by relative displacement",
+    name: "DRAW_TO",
+    syntax: "DRAW_TO(x, y)",
+    description: "Draws a line from current position to absolute coordinates",
     parameters: [
-      { name: "dx", type: "int", description: "X displacement (-127 to +127)", required: true },
-      { name: "dy", type: "int", description: "Y displacement (-127 to +127)", required: true }
+      { name: "x", type: "int", description: "X coordinate (-127 to +127)", required: true },
+      { name: "y", type: "int", description: "Y coordinate (-127 to +127)", required: true }
     ],
     examples: [
-      "DRAW_LINE(50, 0)  # Horizontal line right",
-      "DRAW_LINE(0, -30)  # Vertical line down",
-      "DRAW_LINE(25, 25)  # Diagonal line"
+      "DRAW_TO(50, 0)  # Draw line to right",
+      "DRAW_TO(0, -30)  # Draw line down",
+      "DRAW_TO(25, 25)  # Draw line to diagonal"
     ],
     category: "drawing",
     vectrexAddress: "0xF3DF",
-    notes: "Intensity must be > 0 to see the line. Uses current beam position as starting point"
+    notes: "Intensity must be > 0 to see the line. Draws from current beam position to target"
   },
   {
-    name: "INTENSITY",
-    syntax: "INTENSITY(value)",
-    description: "Sets the electron beam intensity (brightness)",
+    name: "DRAW_LINE",
+    syntax: "DRAW_LINE(x1, y1, x2, y2, intensity)",
+    description: "Draws a line from one point to another with specified intensity",
+    parameters: [
+      { name: "x1", type: "int", description: "Start X coordinate (-127 to +127)", required: true },
+      { name: "y1", type: "int", description: "Start Y coordinate (-127 to +127)", required: true },
+      { name: "x2", type: "int", description: "End X coordinate (-127 to +127)", required: true },
+      { name: "y2", type: "int", description: "End Y coordinate (-127 to +127)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
+    ],
+    examples: [
+      "DRAW_LINE(0, 0, 50, 50, 255)  # Diagonal line at max brightness",
+      "DRAW_LINE(-25, 0, 25, 0, 128)  # Horizontal line at half brightness"
+    ],
+    category: "drawing",
+    notes: "Complete line drawing function with start point, end point and intensity"
+  },
+  {
+    name: "SET_INTENSITY",
+    syntax: "SET_INTENSITY(value)",
+    description: "Sets the electron beam intensity (brightness) in regular VPy code",
     parameters: [
       { name: "value", type: "int", description: "Intensity level (0-255)", required: true }
     ],
     examples: [
-      "INTENSITY(255)  # Maximum brightness",
-      "INTENSITY(128)  # Half brightness", 
-      "INTENSITY(0)    # Beam off (invisible)"
+      "SET_INTENSITY(255)  # Maximum brightness",
+      "SET_INTENSITY(128)  # Half brightness", 
+      "SET_INTENSITY(0)    # Beam off (invisible)"
     ],
     category: "intensity",
-    vectrexAddress: "0xF373",
-    notes: "0 = beam off, 255 = maximum brightness. Affects all subsequent drawing operations"
+    vectrexAddress: "0xF2AB",
+    notes: "0 = beam off, 255 = maximum brightness. Use this in regular VPy code. For vectorlists, use INTENSITY without parentheses"
   },
   {
     name: "PRINT_TEXT",
@@ -91,33 +109,41 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "text",
     vectrexAddress: "0xF37A",
-    notes: "Uses Vectrex ROM character set. Limited to 3 parameters in current VPy implementation (no size parameter yet)"
+    notes: "Uses Vectrex ROM character set. Text is drawn at specified coordinates"
   },
   {
-    name: "ORIGIN",
-    syntax: "ORIGIN()",
+    name: "SET_ORIGIN",
+    syntax: "SET_ORIGIN()",
     description: "Resets the coordinate reference point to screen center (0,0)",
     parameters: [],
     examples: [
-      "ORIGIN()  # Reset to center"
+      "SET_ORIGIN()  # Reset to center"
     ],
     category: "control",
     vectrexAddress: "0xF36B",
     notes: "Useful after drawing complex shapes to reset coordinate system"
   },
   {
-    name: "WAIT_FRAMES",
-    syntax: "WAIT_FRAMES(frames)",
-    description: "Pauses execution for specified number of video frames",
-    parameters: [
-      { name: "frames", type: "int", description: "Number of frames to wait (60 fps)", required: true }
-    ],
+    name: "WAIT_RECAL",
+    syntax: "WAIT_RECAL()",
+    description: "Waits for vertical retrace (frame synchronization)",
+    parameters: [],
     examples: [
-      "WAIT_FRAMES(60)  # Wait 1 second",
-      "WAIT_FRAMES(30)  # Wait 0.5 seconds"
+      "WAIT_RECAL()  # Wait for next frame"
     ],
     category: "timing",
-    notes: "Vectrex runs at 60 FPS, so 60 frames = 1 second"
+    notes: "Synchronizes with 60 FPS display refresh rate. Essential for smooth animation"
+  },
+  {
+    name: "PLAY_MUSIC1",
+    syntax: "PLAY_MUSIC1()",
+    description: "Plays the built-in music track 1",
+    parameters: [],
+    examples: [
+      "PLAY_MUSIC1()  # Start background music"
+    ],
+    category: "sound",
+    notes: "Activates Vectrex built-in music. Only music1 is currently supported"
   }
 ];
 
@@ -169,6 +195,28 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 - **Simple Control Flow**: Basic if/else, for/while loops only
 - **Direct BIOS Mapping**: Functions compile directly to Vectrex BIOS calls
 
+## CRITICAL: Function Context Differences:
+⚠️ **Regular VPy vs Vectorlist Functions**:
+• Use MOVE_TO(x, y) in regular VPy code - NOT MOVE(x, y)
+• Use SET_INTENSITY(value) in regular VPy code - NOT INTENSITY(value)
+• Use DRAW_TO(x, y) in regular VPy code for drawing to absolute coordinates
+• Use PRINT_TEXT(x, y, text) works in both contexts
+• MOVE and INTENSITY (without parentheses) only work inside vectorlists!
+
+Example of CORRECT usage:
+
+    # Regular VPy code - use these functions with parentheses
+    SET_INTENSITY(255)
+    MOVE_TO(0, 0) 
+    PRINT_TEXT(0, 50, "Hello")
+    DRAW_TO(50, 50)
+
+    # Inside vectorlist - different syntax without parentheses  
+    vectorlist myshape:
+        INTENSITY 128
+        MOVE 0 0
+        RECT -10 -10 10 10
+
 ## Supported Language Features:
 ✅ Variable assignments: x = 10, name = "Hello"
 ✅ Basic arithmetic: +, -, *, /, % (modulo)
@@ -177,7 +225,7 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 ✅ Conditional statements: if x > 0:, else:
 ✅ Loop constructs: for i in range(10):, while condition:
 ✅ Comments: # This is a comment
-✅ Built-in Vectrex functions: MOVE, DRAW_LINE, INTENSITY, etc.
+✅ Built-in Vectrex functions: MOVE_TO, DRAW_TO, DRAW_LINE, SET_INTENSITY, PRINT_TEXT, etc.
 
 ## What VPy IS:
 - A simple, procedural language with Python-like syntax

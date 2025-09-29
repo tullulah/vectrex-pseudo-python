@@ -251,6 +251,80 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
     logger.debug('AI', 'Message added:', { role, contentLength: content.length });
   };
 
+  // Function to parse markdown and render code blocks properly
+  const renderMarkdown = (content: string) => {
+    const parts = content.split(/(```[\s\S]*?```)/);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        // This is a code block
+        const codeContent = part.slice(3, -3).trim();
+        const lines = codeContent.split('\n');
+        const language = lines[0].trim();
+        const code = language && !language.includes(' ') && lines.length > 1 
+          ? lines.slice(1).join('\n') 
+          : codeContent;
+        
+        return (
+          <div key={index} style={{
+            margin: '8px 0',
+            border: '1px solid #3c4043',
+            borderRadius: '6px',
+            overflow: 'hidden'
+          }}>
+            {language && !language.includes(' ') && (
+              <div style={{
+                backgroundColor: '#2d2d30',
+                padding: '4px 8px',
+                fontSize: '11px',
+                color: '#969696',
+                borderBottom: '1px solid #3c4043'
+              }}>
+                {language}
+              </div>
+            )}
+            <pre style={{
+              margin: 0,
+              padding: '12px',
+              backgroundColor: '#1e1e1e',
+              color: '#d4d4d4',
+              fontSize: '13px',
+              lineHeight: '1.4',
+              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+              overflow: 'auto'
+            }}>
+              <code>{code}</code>
+            </pre>
+          </div>
+        );
+      } else {
+        // Regular text - process inline code with single backticks
+        const textParts = part.split(/(`[^`]+`)/);
+        return (
+          <span key={index}>
+            {textParts.map((textPart, textIndex) => {
+              if (textPart.startsWith('`') && textPart.endsWith('`')) {
+                return (
+                  <code key={textIndex} style={{
+                    backgroundColor: '#2d2d30',
+                    color: '#e6db74',
+                    padding: '2px 4px',
+                    borderRadius: '3px',
+                    fontSize: '12px',
+                    fontFamily: 'Consolas, Monaco, monospace'
+                  }}>
+                    {textPart.slice(1, -1)}
+                  </code>
+                );
+              }
+              return textPart;
+            })}
+          </span>
+        );
+      }
+    });
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
     
@@ -884,10 +958,9 @@ Check browser console for detailed error messages.`);
               lineHeight: '1.4'
             }}>
               <div style={{ 
-                whiteSpace: 'pre-wrap',
-                fontFamily: message.content.includes('```') ? 'Consolas, monospace' : 'inherit'
+                whiteSpace: 'pre-wrap'
               }}>
-                {message.content}
+                {renderMarkdown(message.content)}
               </div>
               
               {message.context && (
