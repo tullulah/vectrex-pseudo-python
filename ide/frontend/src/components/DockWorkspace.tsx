@@ -19,6 +19,7 @@ import { BuildOutputPanel } from './panels/BuildOutputPanel';
 import { MemoryPanel } from './panels/MemoryPanel';
 import { TracePanel } from './panels/TracePanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
+import { AiAssistantPanel } from './panels/AiAssistantPanel';
 
 // Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
 const STORAGE_KEY = 'vpy_dock_model_v2';
@@ -37,8 +38,11 @@ const defaultJson = {
     children: [
       { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
   // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
-  { type: 'tabset', id: 'editor-host', weight: 60, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
-    { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Emulator', component: 'emulator' } ] },
+  { type: 'tabset', id: 'editor-host', weight: 50, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
+    { type: 'tabset', weight: 20, children: [ 
+      { type: 'tab', name: 'Emulator', component: 'emulator' },
+      { type: 'tab', name: '🤖 AI Assistant', component: 'ai-assistant' }
+    ] },
   { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Stats', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
     ]
   }
@@ -94,6 +98,7 @@ export const DockWorkspace: React.FC = () => {
   case 'bioscalls': return <BiosCallsPanel />;
   case 'output': return <OutputPanel />;
   case 'build-output': return <BuildOutputPanel />;
+  case 'ai-assistant': return <AiAssistantPanel />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);
@@ -570,6 +575,7 @@ export const DockWorkspace: React.FC = () => {
   if (!hasComponent('memory')) { try { addComponent('memory'); logger.info('Dock', 'Migrated layout: added missing Memory tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add Memory tab', e); } }
   if (!hasComponent('trace')) { try { addComponent('trace'); logger.info('Dock', 'Migrated layout: added missing Trace tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add Trace tab', e); } }
   if (!hasComponent('bioscalls')) { try { addComponent('bioscalls'); logger.info('Dock', 'Migrated layout: added missing BIOS Calls tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add BIOS Calls tab', e); } }
+  if (!hasComponent('ai-assistant')) { try { addComponent('ai-assistant'); logger.info('Dock', 'Migrated layout: added missing AI Assistant tab'); } catch(e) { logger.warn('Dock', 'Failed to auto-add AI Assistant tab', e); } }
       } catch (e) { logger.warn('Dock', 'Failed to auto-add Memory tab', e); }
     }, 50);
   }, [hasComponent, model]);
