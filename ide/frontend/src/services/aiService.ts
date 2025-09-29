@@ -209,17 +209,25 @@ class AiService {
 
   private getMockResponse(request: AiRequest): AiResponse {
     // Mock responses inteligentes basadas en el tipo de request
-    if (request.command === '/explain' && request.context.selectedCode) {
-      return {
-        content: `📖 **Explicación del código VPy:**
+    if (request.command === '/explain') {
+      const codeToExplain = request.context.selectedCode || (request.context as any).documentContent;
+      const isFullDocument = !request.context.selectedCode && (request.context as any).documentContent;
+      
+      if (codeToExplain) {
+        return {
+          content: `📖 **Explicación del código VPy:**
 
 \`\`\`vpy
-${request.context.selectedCode}
+${isFullDocument && codeToExplain.length > 500 ? 
+  codeToExplain.substring(0, 500) + '\n...[código completo disponible]' : 
+  codeToExplain}
 \`\`\`
 
 🔍 **Análisis (Mock Response):**
 
 Este código utiliza la sintaxis VPy (Vectrex Python) que se compila a ensamblador 6809 para la consola Vectrex.
+
+**Fuente:** ${isFullDocument ? 'Documento completo' : 'Código seleccionado'} (${codeToExplain.length} caracteres)
 
 **Elementos identificados:**
 • Comandos de dibujo vectorial típicos del Vectrex
@@ -229,7 +237,22 @@ Este código utiliza la sintaxis VPy (Vectrex Python) que se compila a ensamblad
 **Para análisis real:** Configura tu API key en Settings.
 
 💡 **Sugerencia:** Los comandos Vectrex son optimizados para gráficos vectoriales - evita usar demasiados puntos en polígonos complejos.`
-      };
+        };
+      } else {
+        return {
+          content: `📖 **Sin código para explicar**
+
+Para usar \`/explain\`:
+• **Opción 1:** Selecciona código en el editor y usa \`/explain\`
+• **Opción 2:** Activa "Auto-contexto" para analizar el archivo completo
+• **Opción 3:** Adjunta contexto manual con código específico
+
+**Estado actual:**
+• Código seleccionado: No
+• Auto-contexto: ${(request.context as any).documentContent ? 'Sí, pero sin contenido' : 'No'}
+• Archivo activo: ${request.context.fileName || 'Ninguno'}`
+        };
+      }
     }
 
     if (request.command === '/generate') {
@@ -320,6 +343,8 @@ Has enviado: "${request.message}"
 **Contexto detectado:**
 • Archivo: ${request.context.fileName || 'ninguno'}
 • Código seleccionado: ${request.context.selectedCode ? 'Sí (' + request.context.selectedCode.length + ' chars)' : 'No'}
+• Documento completo: ${(request.context as any).documentContent ? 'Sí (' + ((request.context as any).documentLength || 0) + ' chars)' : 'No'}
+• Contexto manual: ${(request.context as any).manualContext ? 'Sí (' + (request.context as any).manualContext.length + ' chars)' : 'No'}
 • Errores: ${request.context.errors?.length || 0}
 
 **Esta es una respuesta simulada.** Para obtener asistencia real de IA:
@@ -328,6 +353,11 @@ Has enviado: "${request.message}"
 2. Selecciona un proveedor (OpenAI, Anthropic, Local)
 3. Configura tu API Key
 4. ¡Disfruta de asistencia IA real!
+
+**💡 Contexto mejorado:**
+• ✅ Auto-contexto incluye el archivo completo activo
+• ✅ Puedes adjuntar contexto manual adicional
+• ✅ Código seleccionado tiene prioridad sobre documento completo
 
 **Comandos disponibles:**
 • \`/help\` - Ver todos los comandos
@@ -378,6 +408,25 @@ Responde siempre en español y enfócate en ayudar con desarrollo para Vectrex.`
 
     if (request.context.selectedCode) {
       prompt += `CÓDIGO SELECCIONADO:\n\`\`\`vpy\n${request.context.selectedCode}\n\`\`\`\n`;
+    }
+
+    // Add document content if available (auto-context)
+    if ((request.context as any).documentContent) {
+      const content = (request.context as any).documentContent;
+      const length = (request.context as any).documentLength || content.length;
+      
+      if (length > 2000) {
+        // Truncate large documents
+        const truncated = content.substring(0, 2000);
+        prompt += `CONTENIDO DEL DOCUMENTO (${length} chars, mostrando primeros 2000):\n\`\`\`vpy\n${truncated}\n...[truncado]\n\`\`\`\n`;
+      } else {
+        prompt += `CONTENIDO DEL DOCUMENTO:\n\`\`\`vpy\n${content}\n\`\`\`\n`;
+      }
+    }
+
+    // Add manual context if provided
+    if ((request.context as any).manualContext) {
+      prompt += `CONTEXTO ADICIONAL:\n${(request.context as any).manualContext}\n`;
     }
 
     if (request.context.errors?.length) {

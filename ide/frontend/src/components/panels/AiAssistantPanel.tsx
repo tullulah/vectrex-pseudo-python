@@ -16,6 +16,8 @@ export const AiAssistantPanel: React.FC = () => {
     apiKey: ''
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [autoContext, setAutoContext] = useState(true);
+  const [manualContext, setManualContext] = useState<string>('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -34,24 +36,63 @@ export const AiAssistantPanel: React.FC = () => {
 
   // Get current editor context
   const getCurrentContext = () => {
-    if (!activeDocument) return {};
+    const context: any = { language: 'vpy' };
+    
+    if (!activeDocument) return context;
     
     const doc = documents.find(d => d.uri === activeDocument);
-    if (!doc) return {};
+    if (!doc) return context;
 
-    // Get selected text if any (mock for now)
-    const selectedCode = ''; // TODO: Get from Monaco editor selection
-    
     // Extract filename from URI or diskPath
     const fileName = doc.diskPath ? 
       doc.diskPath.split(/[/\\]/).pop() || doc.uri :
       doc.uri;
     
-    return {
-      fileName,
-      selectedCode,
-      language: 'vpy'
-    };
+    context.fileName = fileName;
+    
+    // Get selected text if any (mock for now)
+    // TODO: Integrate with Monaco editor to get real selection
+    const selectedCode = ''; // Will be empty until Monaco integration
+    if (selectedCode) {
+      context.selectedCode = selectedCode;
+    }
+    
+    // Auto-attach document content as context if enabled
+    if (autoContext && doc.content) {
+      context.documentContent = doc.content;
+      context.documentLength = doc.content.length;
+    }
+    
+    // Add manual context if provided
+    if (manualContext.trim()) {
+      context.manualContext = manualContext.trim();
+    }
+    
+    return context;
+  };
+
+  // Get context preview for display
+  const getContextPreview = () => {
+    const context = getCurrentContext();
+    const items = [];
+    
+    if (context.fileName) {
+      items.push(`📄 ${context.fileName}`);
+    }
+    
+    if (context.selectedCode) {
+      items.push(`✂️ Selección (${context.selectedCode.length} chars)`);
+    }
+    
+    if (autoContext && context.documentContent) {
+      items.push(`📋 Documento (${context.documentLength} chars)`);
+    }
+    
+    if (context.manualContext) {
+      items.push(`📎 Contexto manual (${context.manualContext.length} chars)`);
+    }
+    
+    return items.length > 0 ? items.join(' • ') : 'Sin contexto';
   };
 
   // Add system message on first load
@@ -632,6 +673,46 @@ def main():
         borderTop: '1px solid #3c3c3c',
         background: '#252526'
       }}>
+        {/* Context indicator */}
+        <div style={{
+          fontSize: '11px',
+          color: '#6b7280',
+          marginBottom: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span>📎 Contexto: {getContextPreview()}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={autoContext}
+                onChange={(e) => setAutoContext(e.target.checked)}
+                style={{ margin: 0 }}
+              />
+              <span>Auto-contexto</span>
+            </label>
+            <button
+              onClick={() => {
+                const context = prompt('Añadir contexto manual:', manualContext);
+                if (context !== null) setManualContext(context);
+              }}
+              style={{
+                background: 'transparent',
+                border: '1px solid #3c3c3c',
+                color: '#cccccc',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                fontSize: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              📎 Adjuntar
+            </button>
+          </div>
+        </div>
+        
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
           <textarea
             ref={inputRef}
@@ -644,15 +725,16 @@ def main():
               background: '#1e1e1e',
               border: '1px solid #3c3c3c',
               color: '#cccccc',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              resize: 'none',
-              minHeight: '20px',
-              maxHeight: '100px',
-              fontSize: '13px',
-              lineHeight: '1.4'
+              padding: '12px 16px',
+              borderRadius: '8px',
+              resize: 'vertical',
+              minHeight: '60px',
+              maxHeight: '200px',
+              fontSize: '14px',
+              lineHeight: '1.5',
+              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Inconsolata, "Roboto Mono", monospace'
             }}
-            rows={1}
+            rows={3}
           />
           
           <button
@@ -662,11 +744,15 @@ def main():
               background: inputValue.trim() && !isLoading ? '#0e639c' : '#3c3c3c',
               border: 'none',
               color: 'white',
-              padding: '8px 12px',
-              borderRadius: '6px',
+              padding: '12px 16px',
+              borderRadius: '8px',
               cursor: inputValue.trim() && !isLoading ? 'pointer' : 'not-allowed',
-              fontSize: '12px',
-              height: '36px'
+              fontSize: '14px',
+              height: '60px',
+              minWidth: '60px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
           >
             {isLoading ? '⏳' : '📤'}
@@ -676,9 +762,12 @@ def main():
         <div style={{
           fontSize: '11px',
           color: '#6b7280',
-          marginTop: '6px'
+          marginTop: '8px'
         }}>
-          Enter para enviar • Shift+Enter para nueva línea • /help para comandos
+          <div>⌨️ Enter para enviar • Shift+Enter para nueva línea • /help para comandos</div>
+          <div style={{ marginTop: '2px' }}>
+            📎 Auto-contexto incluye archivo activo • 📎 Adjuntar para contexto manual
+          </div>
         </div>
       </div>
     </div>
