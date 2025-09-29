@@ -136,6 +136,17 @@ export const VPY_LANGUAGE_CONTEXT = `
 
 VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembly for the Vectrex console.
 
+## Language History and Authorship:
+🏗️ **Created by**: Daniel Ferrer Guerrero (2025)
+📅 **Development Year**: 2025 (NOT 1982 - Python didn't exist then!)
+🎯 **Purpose**: Modern domain-specific language for Vectrex game development
+🚫 **NOT created by GCE in 1982** - This is completely false information
+
+## Emulator Technology:
+🖥️ **Emulator**: JSVecX by raz0red
+📖 **Description**: JavaScript port of the VecX Vectrex emulator originally developed by Valavan Manohararajah
+🔗 **Integration**: VPy IDE uses JSVecX for real-time code execution and testing
+
 ⚠️  **CRITICAL**: VPy is NOT object-oriented programming! VPy is NOT a full Python implementation!
 
 ## Core Concepts:
@@ -173,12 +184,20 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 - Specialized for Vectrex vector graphics programming
 - Direct compilation to 6809 assembly
 - Limited but focused on graphics and game programming
+- **Created in 2025 by Daniel Ferrer Guerrero**
 
 ## What VPy is NOT:
 - NOT object-oriented (no classes or objects)
 - NOT a full Python implementation
 - NOT suitable for general-purpose programming
 - NOT supporting modern Python features
+- **NOT created by GCE in 1982** (this is false - Python didn't exist then!)
+
+## Development Environment:
+- **VPy IDE**: Custom IDE created by Daniel Ferrer Guerrero
+- **Emulator**: JSVecX by raz0red (JavaScript port of VecX by Valavan Manohararajah)
+- **Target Platform**: Vectrex console
+- **Compilation**: VPy → 6809 Assembly → Vectrex executable
 
 ## Code Examples:
 \`\`\`vpy
@@ -236,6 +255,7 @@ for frame in range(100):
 - Attempting to use unsupported Python features (classes, imports, etc.)
 - Using undefined variables or complex expressions
 - Thinking VPy is object-oriented (it's NOT!)
+- Believing VPy was created in 1982 (completely false!)
 `;
 
 export const VECTREX_HARDWARE_CONTEXT = `
