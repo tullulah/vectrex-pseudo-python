@@ -248,6 +248,11 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             Item::GlobalLet { name, value } => {
                 if let Expr::Number(n) = value { global_mutables.push((name.clone(), *n)); } else { global_mutables.push((name.clone(), 0)); }
             }
+            Item::ExprStatement(_expr) => {
+                // TODO: Handle top-level expression statements in m6809 backend
+                // For now, these would need to be executed in a generated main function
+                // or as part of initialization code. Skip for now.
+            }
         }
     }
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference
@@ -384,6 +389,8 @@ fn module_uses_trig(module: &Module) -> bool {
     for item in &module.items {
         if let Item::Function(f) = item {
             for s in &f.body { if stmt_has_trig(s) { return true; } }
+        } else if let Item::ExprStatement(expr) = item {
+            if expr_has_trig(expr) { return true; }
         }
     }
     false
@@ -408,6 +415,8 @@ fn compute_max_args_used(module: &Module) -> usize {
     for item in &module.items {
         if let Item::Function(f) = item {
             for s in &f.body { maxa = maxa.max(scan_stmt_args(s)); }
+        } else if let Item::ExprStatement(expr) = item {
+            maxa = maxa.max(scan_expr_args(expr));
         }
     }
     maxa
@@ -473,6 +482,8 @@ fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
     for item in &module.items {
         if let Item::Function(f) = item {
             for s in &f.body { scan_stmt_runtime(s, &mut usage); }
+        } else if let Item::ExprStatement(expr) = item {
+            scan_expr_runtime(expr, &mut usage);
         }
     }
     // Derive grouped variable needs from wrappers
@@ -532,7 +543,8 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             let up = ci.name.to_ascii_uppercase();
             let resolved = match up.as_str() {
                 "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-                "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+                "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
+                "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
                 "DRAW_TO" => Some("VECTREX_DRAW_TO"),
                 "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
                 "DRAW_VL" => Some("VECTREX_DRAW_VL"),
@@ -869,7 +881,8 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         // Backward compatibility: map legacy short names to vectrex-prefixed versions
         let translated = match up.as_str() {
             "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-            "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+            "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
+            "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
             "DRAW_TO" => Some("VECTREX_DRAW_TO"),
             "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
             "DRAW_POLYGON" => Some("DRAW_POLYGON"), // already handled if constants; allow pass-through if dynamic (future)
@@ -1302,8 +1315,11 @@ fn collect_symbols(module: &Module) -> Vec<String> {
         if let Item::Function(f) = item {
             for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
             for l in collect_locals(&f.body) { locals.insert(l); }
+        } else if let Item::GlobalLet { name, .. } = item { 
+            globals.insert(name.clone()); 
+        } else if let Item::ExprStatement(expr) = item {
+            collect_expr_syms(expr, &mut globals);
         }
-    if let Item::GlobalLet { name, .. } = item { globals.insert(name.clone()); }
     }
     for l in &locals { globals.remove(l); }
     globals.into_iter().collect()

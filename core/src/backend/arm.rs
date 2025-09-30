@@ -19,7 +19,8 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             Item::Function(f) => emit_function(f, &mut out, &string_map),
             Item::Const { name, value } => if let Expr::Number(n) = value { out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF)); },
             Item::GlobalLet { name, value } => if let Expr::Number(n) = value { out.push_str(&format!("GVAR_{}: .word {}\n", name.to_uppercase(), n & 0xFFFF)); } else { out.push_str(&format!("GVAR_{}: .word 0\n", name.to_uppercase())); },
-            Item::VectorList { name, .. } => { out.push_str(&format!("; vectorlist {} ignored on ARM backend (NYI)\n", name)); }
+            Item::VectorList { name, .. } => { out.push_str(&format!("; vectorlist {} ignored on ARM backend (NYI)\n", name)); },
+            Item::ExprStatement(_) => { out.push_str("; ExprStatement ignored on ARM backend (TODO: implement top-level execution)\n"); },
         }
     }
     out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
@@ -357,7 +358,8 @@ fn emit_builtin_call_arm(name: &str, args: &[Expr], out: &mut String, fctx: &Fun
         // Backward or namespace translation
         let translated = match up.as_str() {
             "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-            "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+            "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
+            "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
             "DRAW_TO" => Some("VECTREX_DRAW_TO"),
             "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
             "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),

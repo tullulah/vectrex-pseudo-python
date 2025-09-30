@@ -35,18 +35,24 @@ thread_local! {
 // Tabla centralizada de builtins (nombre normalizado sin prefijo VECTREX_) -> aridad.
 // Mantener sincronizada con backend m6809 (emit_builtin_call / scan_expr_runtime).
 static BUILTIN_ARITIES: &[(&str, usize)] = &[
+    // Funciones unificadas (global + vectorlist)
+    ("MOVE", 2),            // was MOVE_TO
     ("PRINT_TEXT", 3),
-    ("MOVE_TO", 2),
     ("DRAW_TO", 2),
     ("DRAW_LINE", 5),
+    ("SET_ORIGIN", 0),
+    ("SET_INTENSITY", 1),
+    
+    // Funciones específicas de vectorlist
     ("DRAW_VL", 2),
     ("FRAME_BEGIN", 1),
     ("VECTOR_PHASE_BEGIN", 0),
-    ("SET_ORIGIN", 0),
-    ("SET_INTENSITY", 1),
     ("WAIT_RECAL", 0),
     ("PLAY_MUSIC1", 0),
     ("DBG_STATIC_VL", 0),
+    
+    // Compatibilidad hacia atrás (deprecated)
+    ("MOVE_TO", 2),         // deprecated: use MOVE
 ];
 
 fn expected_builtin_arity(name: &str) -> Option<usize> {
@@ -167,7 +173,8 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
         match it {
             Item::Const { name, .. } | Item::GlobalLet { name, .. } => { globals.insert(name.clone()); },
             Item::VectorList { .. } => {},
-            Item::Function(_) => {}
+            Item::Function(_) => {},
+            Item::ExprStatement(_) => {}, // Expression statements no definen globals
         }
     }
     // Validar cada función independientemente.
@@ -279,7 +286,15 @@ fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut
     }
 }
 
-fn opt_item(it: &Item) -> Item { match it { Item::Function(f) => Item::Function(opt_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } } }
+fn opt_item(it: &Item) -> Item { 
+    match it { 
+        Item::Function(f) => Item::Function(opt_function(f)), 
+        Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) }, 
+        Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, 
+        Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
+        Item::ExprStatement(expr) => Item::ExprStatement(opt_expr(expr)),
+    } 
+}
 
 fn opt_function(f: &Function) -> Function {
     Function {
@@ -428,7 +443,16 @@ fn opt_expr(e: &Expr) -> Expr {
 
 // dead_code_elim: prune unreachable branches / empty loops.
 fn dead_code_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dce_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
+    Module { 
+        items: m.items.iter().map(|it| match it { 
+            Item::Function(f) => Item::Function(dce_function(f)), 
+            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
+            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
+            Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+        }).collect(), 
+        meta: m.meta.clone() 
+    }
 }
 
 fn dce_function(f: &Function) -> Function {
@@ -519,7 +543,16 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
 
 // dead_store_elim: remove assignments whose values are never subsequently used.
 fn dead_store_elim(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(dse_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
+    Module { 
+        items: m.items.iter().map(|it| match it { 
+            Item::Function(f) => Item::Function(dse_function(f)), 
+            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
+            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
+            Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+        }).collect(), 
+        meta: m.meta.clone() 
+    }
 }
 
 fn dse_function(f: &Function) -> Function {
@@ -653,7 +686,16 @@ fn propagate_constants(m: &Module) -> Module {
             globals.insert(name.clone(), *n);
         }
     }
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
+    Module { 
+        items: m.items.iter().map(|it| match it { 
+            Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), 
+            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
+            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
+            Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+        }).collect(), 
+        meta: m.meta.clone() 
+    }
 }
 
 
@@ -789,7 +831,16 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
 // fold_const_switches: if a switch expression is a constant number and all case values are constant numbers,
 // select the matching case (or default) and inline its body, removing the switch. Conservatively keeps semantics.
 fn fold_const_switches(m: &Module) -> Module {
-    Module { items: m.items.iter().map(|it| match it { Item::Function(f) => Item::Function(fold_const_switches_function(f)), Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() } }).collect(), meta: m.meta.clone() }
+    Module { 
+        items: m.items.iter().map(|it| match it { 
+            Item::Function(f) => Item::Function(fold_const_switches_function(f)), 
+            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
+            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
+            Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+        }).collect(), 
+        meta: m.meta.clone() 
+    }
 }
 
 fn fold_const_switches_function(f: &Function) -> Function {

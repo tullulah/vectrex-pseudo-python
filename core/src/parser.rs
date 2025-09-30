@@ -139,6 +139,15 @@ impl<'a> Parser<'a> {
                 let vl = self.parse_vectorlist()?; items.push(vl); continue;
             }
             if self.check(TokenKind::Def) { items.push(self.function()?); continue; }
+            
+            // Permitir expression statements en top-level (llamadas a funciones, etc.)
+            if !self.check(TokenKind::Eof) && !self.check(TokenKind::Newline) {
+                let expr = self.expression()?;
+                self.consume(TokenKind::Newline)?;
+                items.push(Item::ExprStatement(expr));
+                continue;
+            }
+            
             return self.err_here(&format!("Unexpected token {:?} at top-level", self.peek().kind));
         }
         Ok(Module { items, meta })
@@ -163,7 +172,15 @@ impl<'a> Parser<'a> {
                 "INTENSITY" => {
                     let expr = self.expression()?; if let Some(v)=const_eval(&expr) { entries.push(VlEntry::Intensity(v)); } else { return self.err_here("Expected number after INTENSITY"); }
                 }
+                "SET_INTENSITY" => {
+                    // Unificado: SET_INTENSITY funciona igual que INTENSITY
+                    let expr = self.expression()?; if let Some(v)=const_eval(&expr) { entries.push(VlEntry::Intensity(v)); } else { return self.err_here("Expected number after SET_INTENSITY"); }
+                }
                 "ORIGIN" => entries.push(VlEntry::Origin),
+                "SET_ORIGIN" => {
+                    // Unificado: SET_ORIGIN funciona igual que ORIGIN
+                    entries.push(VlEntry::Origin)
+                }
                 "MOVE" => { let x=self.parse_signed_number()?; let y=self.parse_signed_number()?; entries.push(VlEntry::Move(x,y)); }
                 "RECT" => {
                     let x1=self.parse_signed_number()?; let y1=self.parse_signed_number()?; let x2=self.parse_signed_number()?; let y2=self.parse_signed_number()?; entries.push(VlEntry::Rect(x1,y1,x2,y2));

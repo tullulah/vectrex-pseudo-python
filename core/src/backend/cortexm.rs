@@ -18,6 +18,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             emit_function(f, &mut out, &string_map);
         } else if let Item::Const { name, value: Expr::Number(n) } = item {
             out.push_str(&format!(".equ {} , {}\n", name, n & 0xFFFF));
+        } else if let Item::ExprStatement(_) = item {
+            // TODO: Manejar expresiones top-level en cortexm backend
+            // Por ahora las ignoramos ya que no tenemos un "main" automático
         }
     }
     out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
@@ -349,7 +352,8 @@ fn emit_builtin_call_cm(name: &str, args: &[Expr], out: &mut String, fctx:&FuncC
     if !is {
         let translated = match up.as_str() {
             "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-            "MOVE_TO" => Some("VECTREX_MOVE_TO"),
+            "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
+            "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
             "DRAW_TO" => Some("VECTREX_DRAW_TO"),
             "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
             "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),
@@ -414,6 +418,9 @@ fn collect_symbols(module: &Module) -> Vec<String> {
         if let Item::Function(f) = item {
             for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
             for l in collect_locals(&f.body) { locals.insert(l); }
+        } else if let Item::ExprStatement(expr) = item {
+            // Scan expression statements for symbol usage
+            collect_expr_syms(expr, &mut globals);
         }
     }
     for l in &locals { globals.remove(l); }

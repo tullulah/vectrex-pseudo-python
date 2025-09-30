@@ -27,7 +27,7 @@ struct Backend {
 struct SymbolDef { name: String, uri: Url, range: Range }
 
 #[derive(Debug, Clone)]
-enum AritySpec {
+pub enum AritySpec {
     Exact(usize),      // Exact number of arguments required
     Variable(usize),   // At least N arguments required (for POLYGON, etc.)
 }
@@ -46,24 +46,88 @@ fn is_python_keyword_or_builtin(word: &str) -> bool {
     )
 }
 
-fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
+pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
     let upper = func_name.to_ascii_uppercase();
     match upper.as_str() {
+        // Funciones unificadas (funcionan tanto global como en vectorlist)
         "MOVE" => Some(AritySpec::Exact(2)),                    // x, y
+        "SET_INTENSITY" => Some(AritySpec::Exact(1)),           // val
+        "DRAW_TO" => Some(AritySpec::Exact(2)),                 // x, y
+        "DRAW_LINE" => Some(AritySpec::Exact(5)),               // x1, y1, x2, y2, intensity
+        "SET_ORIGIN" => Some(AritySpec::Exact(0)),              // no arguments
+        
+        // Funciones específicas de dibujo directo (solo globales)
         "RECT" => Some(AritySpec::Exact(4)),                    // x, y, w, h
         "CIRCLE" => Some(AritySpec::Exact(1)),                  // r
         "ARC" => Some(AritySpec::Exact(3)),                     // r, startAngle, endAngle
         "SPIRAL" => Some(AritySpec::Exact(2)),                  // r, turns
-        "ORIGIN" => Some(AritySpec::Exact(0)),                  // no arguments
-        "INTENSITY" => Some(AritySpec::Exact(1)),               // val
-        "PRINT_TEXT" => Some(AritySpec::Exact(3)),              // x, y, text
         "POLYGON" => Some(AritySpec::Variable(3)),              // n, x1, y1, ... (minimum 3: count + at least one point)
+        "PRINT_TEXT" => Some(AritySpec::Exact(3)),              // x, y, text
+        
+        // Funciones de dibujo con intensidad explícita
         "DRAW_POLYGON" => Some(AritySpec::Variable(4)),         // n, intensity, x1, y1, ... (minimum 4: count + intensity + at least one point)
         "DRAW_CIRCLE" => Some(AritySpec::Exact(4)),             // x, y, r, intensity
         "DRAW_CIRCLE_SEG" => Some(AritySpec::Exact(5)),         // segments, x, y, r, intensity
         "DRAW_VECTORLIST" | "VECTREX_DRAW_VECTORLIST" => Some(AritySpec::Exact(2)), // addr, len
+        
+        // Funciones específicas de vectorlist
+        "FRAME_BEGIN" | "VECTREX_FRAME_BEGIN" => Some(AritySpec::Exact(1)), // intensity
+        "VECTOR_PHASE_BEGIN" | "VECTREX_VECTOR_PHASE_BEGIN" => Some(AritySpec::Exact(0)),
+        "WAIT_RECAL" | "VECTREX_WAIT_RECAL" => Some(AritySpec::Exact(0)),
+        "PLAY_MUSIC1" | "VECTREX_PLAY_MUSIC1" => Some(AritySpec::Exact(0)),
+        "DBG_STATIC_VL" | "VECTREX_DBG_STATIC_VL" => Some(AritySpec::Exact(0)),
+        "DRAW_VL" | "VECTREX_DRAW_VL" => Some(AritySpec::Exact(2)),         // addr, len
+        
+        // Compatibilidad hacia atrás con nombres antiguos (deprecated)
+        "INTENSITY" => Some(AritySpec::Exact(1)),               // deprecated: use SET_INTENSITY
+        "ORIGIN" => Some(AritySpec::Exact(0)),                  // deprecated: use SET_ORIGIN
+        "MOVE_TO" | "VECTREX_MOVE_TO" => Some(AritySpec::Exact(2)),         // deprecated: use MOVE
+        "VECTREX_DRAW_TO" => Some(AritySpec::Exact(2)),         // deprecated: use DRAW_TO
+        "VECTREX_DRAW_LINE" => Some(AritySpec::Exact(5)),       // deprecated: use DRAW_LINE
+        "VECTREX_SET_ORIGIN" => Some(AritySpec::Exact(0)),      // deprecated: use SET_ORIGIN
+        "VECTREX_SET_INTENSITY" => Some(AritySpec::Exact(1)),   // deprecated: use SET_INTENSITY
+        
         _ => None,
     }
+}
+
+// Helper para detectar si un nombre es una función builtin (unificada para global y vectorlist)
+pub fn is_builtin_function(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    
+    // Funciones unificadas (global + vectorlist)
+    if matches!(upper.as_str(),
+        "MOVE"|"SET_INTENSITY"|"DRAW_TO"|"DRAW_LINE"|"SET_ORIGIN"|"PRINT_TEXT"
+    ) {
+        return true;
+    }
+    
+    // Funciones específicas de dibujo directo (solo globales)
+    if upper.starts_with("DRAW_") || matches!(upper.as_str(), 
+        "RECT"|"POLYGON"|"CIRCLE"|"ARC"|"SPIRAL"|"DRAW_VECTORLIST"
+    ) {
+        return true;
+    }
+    
+    // Funciones específicas de vectorlist
+    if matches!(upper.as_str(),
+        "FRAME_BEGIN"|"VECTOR_PHASE_BEGIN"|"WAIT_RECAL"|"PLAY_MUSIC1"|
+        "DBG_STATIC_VL"|"DRAW_VL"
+    ) {
+        return true;
+    }
+    
+    // Compatibilidad hacia atrás (deprecated)
+    if matches!(upper.as_str(),
+        "INTENSITY"|"ORIGIN"|"MOVE_TO"|
+        "VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|
+        "VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_WAIT_RECAL"|"VECTREX_PLAY_MUSIC1"|
+        "VECTREX_DBG_STATIC_VL"|"VECTREX_DRAW_VL"|"VECTREX_DRAW_VECTORLIST"
+    ) {
+        return true;
+    }
+    
+    false
 }
 
 lazy_static::lazy_static! {
@@ -85,8 +149,21 @@ fn tr(locale: &str, key: &str) -> String {
         ("es", "diagnostic.arity.variable") => "La función `{}` espera al menos {} argumentos, pero se proporcionaron {}.",
         ("en", "hover.user_function.line") => "Function `{}` defined at line {}",
         ("es", "hover.user_function.line") => "Función `{}` definida en línea {}",
+        // Documentación para funciones unificadas (global + vectorlist)
         ("en", "doc.MOVE") => "MOVE x,y  - moves the beam to position (x,y) without drawing.",
         ("es", "doc.MOVE") => "MOVE x,y  - mueve el haz a la posición (x,y) sin dibujar.",
+        ("en", "doc.SET_INTENSITY") => "SET_INTENSITY val  - sets beam intensity.",
+        ("es", "doc.SET_INTENSITY") => "SET_INTENSITY val  - fija la intensidad del haz.",
+        ("en", "doc.DRAW_TO") => "DRAW_TO x,y  - draws line to position.",
+        ("es", "doc.DRAW_TO") => "DRAW_TO x,y  - dibuja línea a posición.",
+        ("en", "doc.DRAW_LINE") => "DRAW_LINE x1,y1,x2,y2,intensity  - draws line segment.",
+        ("es", "doc.DRAW_LINE") => "DRAW_LINE x1,y1,x2,y2,intensidad  - dibuja segmento.",
+        ("en", "doc.SET_ORIGIN") => "SET_ORIGIN  - resets origin (0,0).",
+        ("es", "doc.SET_ORIGIN") => "SET_ORIGIN  - restablece origen (0,0).",
+        ("en", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"text\"  - shows vector text.",
+        ("es", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial.",
+        
+        // Funciones específicas de dibujo directo
         ("en", "doc.RECT") => "RECT x,y,w,h  - draws a rectangle.",
         ("es", "doc.RECT") => "RECT x,y,w,h  - dibuja un rectángulo.",
         ("en", "doc.POLYGON") => "POLYGON n x1,y1 ...  - draws a polygon with n vertices.",
@@ -97,14 +174,30 @@ fn tr(locale: &str, key: &str) -> String {
         ("es", "doc.ARC") => "ARC r angIni angFin  - dibuja un arco.",
         ("en", "doc.SPIRAL") => "SPIRAL r turns  - draws a spiral.",
         ("es", "doc.SPIRAL") => "SPIRAL r vueltas  - dibuja una espiral.",
-        ("en", "doc.ORIGIN") => "ORIGIN  - resets the origin (0,0).",
-        ("es", "doc.ORIGIN") => "ORIGIN  - restablece el origen (0,0).",
-        ("en", "doc.INTENSITY") => "INTENSITY val  - sets beam intensity.",
-        ("es", "doc.INTENSITY") => "INTENSITY val  - fija la intensidad del haz.",
-        ("en", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"text\"  - shows vector text.",
-        ("es", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial.",
         ("en", "doc.DRAW_VECTORLIST") => "DRAW_VECTORLIST addr,len  - draws a raw vector list (advanced).",
         ("es", "doc.DRAW_VECTORLIST") => "DRAW_VECTORLIST dir,long  - dibuja una vector list cruda (avanzado).",
+        
+        // Funciones específicas de vectorlist
+        ("en", "doc.FRAME_BEGIN") => "FRAME_BEGIN intensity  - begins new frame.",
+        ("es", "doc.FRAME_BEGIN") => "FRAME_BEGIN intensidad  - iniciar nuevo frame.",
+        ("en", "doc.VECTOR_PHASE_BEGIN") => "VECTOR_PHASE_BEGIN  - begins vector phase.",
+        ("es", "doc.VECTOR_PHASE_BEGIN") => "VECTOR_PHASE_BEGIN  - iniciar fase vectorial.",
+        ("en", "doc.WAIT_RECAL") => "WAIT_RECAL  - waits for recalibration.",
+        ("es", "doc.WAIT_RECAL") => "WAIT_RECAL  - esperar recalibración.",
+        ("en", "doc.PLAY_MUSIC1") => "PLAY_MUSIC1  - plays music track 1.",
+        ("es", "doc.PLAY_MUSIC1") => "PLAY_MUSIC1  - reproducir música pista 1.",
+        ("en", "doc.DBG_STATIC_VL") => "DBG_STATIC_VL  - debug static vectorlist.",
+        ("es", "doc.DBG_STATIC_VL") => "DBG_STATIC_VL  - debug vectorlist estática.",
+        ("en", "doc.DRAW_VL") => "DRAW_VL addr,len  - draws raw vectorlist.",
+        ("es", "doc.DRAW_VL") => "DRAW_VL dir,long  - dibuja vectorlist cruda.",
+        
+        // Compatibilidad hacia atrás (deprecated)
+        ("en", "doc.INTENSITY") => "INTENSITY val  - DEPRECATED: use SET_INTENSITY instead.",
+        ("es", "doc.INTENSITY") => "INTENSITY val  - OBSOLETO: usar SET_INTENSITY en su lugar.",
+        ("en", "doc.ORIGIN") => "ORIGIN  - DEPRECATED: use SET_ORIGIN instead.",
+        ("es", "doc.ORIGIN") => "ORIGIN  - OBSOLETO: usar SET_ORIGIN en su lugar.",
+        ("en", "doc.MOVE_TO") => "MOVE_TO x,y  - DEPRECATED: use MOVE instead.",
+        ("es", "doc.MOVE_TO") => "MOVE_TO x,y  - OBSOLETO: usar MOVE en su lugar.",
         _ => key,
     };
     val.to_string()
@@ -112,16 +205,39 @@ fn tr(locale: &str, key: &str) -> String {
 
 fn builtin_doc(locale: &str, upper: &str) -> Option<String> {
     let key = match upper {
+        // Funciones unificadas (global + vectorlist)
         "MOVE" => "doc.MOVE",
+        "SET_INTENSITY" => "doc.SET_INTENSITY",
+        "DRAW_TO" => "doc.DRAW_TO",
+        "DRAW_LINE" => "doc.DRAW_LINE",
+        "SET_ORIGIN" => "doc.SET_ORIGIN",
+        "PRINT_TEXT" => "doc.PRINT_TEXT",
+        
+        // Funciones específicas de dibujo directo
         "RECT" => "doc.RECT",
         "POLYGON" => "doc.POLYGON",
         "CIRCLE" => "doc.CIRCLE",
         "ARC" => "doc.ARC",
         "SPIRAL" => "doc.SPIRAL",
-        "ORIGIN" => "doc.ORIGIN",
-        "INTENSITY" => "doc.INTENSITY",
-        "PRINT_TEXT" => "doc.PRINT_TEXT",
         "DRAW_VECTORLIST" | "VECTREX_DRAW_VECTORLIST" => "doc.DRAW_VECTORLIST",
+        
+        // Funciones específicas de vectorlist
+        "FRAME_BEGIN" | "VECTREX_FRAME_BEGIN" => "doc.FRAME_BEGIN",
+        "VECTOR_PHASE_BEGIN" | "VECTREX_VECTOR_PHASE_BEGIN" => "doc.VECTOR_PHASE_BEGIN",
+        "WAIT_RECAL" | "VECTREX_WAIT_RECAL" => "doc.WAIT_RECAL",
+        "PLAY_MUSIC1" | "VECTREX_PLAY_MUSIC1" => "doc.PLAY_MUSIC1",
+        "DBG_STATIC_VL" | "VECTREX_DBG_STATIC_VL" => "doc.DBG_STATIC_VL",
+        "DRAW_VL" | "VECTREX_DRAW_VL" => "doc.DRAW_VL",
+        
+        // Compatibilidad hacia atrás (deprecated)
+        "INTENSITY" => "doc.INTENSITY",
+        "ORIGIN" => "doc.ORIGIN",
+        "MOVE_TO" | "VECTREX_MOVE_TO" => "doc.MOVE_TO",
+        "VECTREX_DRAW_TO" => "doc.DRAW_TO",
+        "VECTREX_DRAW_LINE" => "doc.DRAW_LINE",
+        "VECTREX_SET_ORIGIN" => "doc.SET_ORIGIN",
+        "VECTREX_SET_INTENSITY" => "doc.SET_INTENSITY",
+        
         _ => return None,
     };
     Some(tr(locale, key))
@@ -450,9 +566,54 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> LspResult<()> { Ok(()) }
     async fn did_open(&self, params: DidOpenTextDocumentParams) { let uri = params.text_document.uri; let text = params.text_document.text; self.docs.lock().unwrap().insert(uri.clone(), text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; }
     async fn did_change(&self, params: DidChangeTextDocumentParams) { let uri = params.text_document.uri; if let Some(change) = params.content_changes.into_iter().last() { self.docs.lock().unwrap().insert(uri.clone(), change.text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &change.text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; } }
-    async fn completion(&self, _: CompletionParams) -> LspResult<Option<CompletionResponse>> { let items = [ "DRAW_POLYGON","DRAW_CIRCLE","DRAW_CIRCLE_SEG","DRAW_ARC","DRAW_SPIRAL","PRINT_TEXT","VECTORLIST","INTENSITY","ORIGIN","MOVE","RECT","POLYGON","CIRCLE","ARC","SPIRAL","CONST","VAR","META","TITLE","MUSIC","COPYRIGHT","def","for","while","if","switch" ].iter().map(|s| CompletionItem { label: s.to_string(), kind: Some(CompletionItemKind::KEYWORD), insert_text: None, ..Default::default() }).collect(); Ok(Some(CompletionResponse::Array(items))) }
+    async fn completion(&self, _params: CompletionParams) -> LspResult<Option<CompletionResponse>> { 
+        // Funciones unificadas (global + vectorlist) y palabras clave VPy
+        let unified_items = [ 
+            // Funciones unificadas (funcionan en ambos contextos)
+            "MOVE","SET_INTENSITY","DRAW_TO","DRAW_LINE","SET_ORIGIN","PRINT_TEXT",
+            // Funciones específicas de dibujo directo
+            "DRAW_POLYGON","DRAW_CIRCLE","DRAW_CIRCLE_SEG","DRAW_ARC","DRAW_SPIRAL",
+            "RECT","POLYGON","CIRCLE","ARC","SPIRAL","DRAW_VECTORLIST",
+            // Declaraciones y estructuras VPy
+            "VECTORLIST","CONST","VAR","META","TITLE","MUSIC","COPYRIGHT",
+            // Palabras clave de control
+            "def","for","while","if","switch"
+        ];
+        
+        // Funciones específicas de vectorlist
+        let vectorlist_only = [
+            "FRAME_BEGIN","VECTOR_PHASE_BEGIN","WAIT_RECAL","PLAY_MUSIC1",
+            "DBG_STATIC_VL","DRAW_VL"
+        ];
+        
+        let mut items = Vec::new();
+        
+        // Añadir funciones unificadas como Keywords
+        for &name in &unified_items {
+            items.push(CompletionItem { 
+                label: name.to_string(), 
+                kind: Some(CompletionItemKind::KEYWORD), 
+                insert_text: None, 
+                detail: Some("Unified function (global/vectorlist)".to_string()),
+                ..Default::default() 
+            });
+        }
+        
+        // Añadir funciones específicas de vectorlist como Methods
+        for &name in &vectorlist_only {
+            items.push(CompletionItem { 
+                label: name.to_string(), 
+                kind: Some(CompletionItemKind::METHOD), 
+                insert_text: None, 
+                detail: Some("Vectorlist-only function".to_string()),
+                ..Default::default() 
+            });
+        }
+        
+        Ok(Some(CompletionResponse::Array(items))) 
+    }
     async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> LspResult<Option<SemanticTokensResult>> {
-        let uri = params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t) => t.clone(), None => return Ok(None) }; drop(docs); let lines: Vec<&str> = text.lines().collect(); let mut data: Vec<SemanticToken> = Vec::new(); let mut defs: Vec<SymbolDef> = Vec::new(); if let Ok(tokens) = lex(&text) { const KEYWORD: u32 = 0; const FUNCTION: u32 = 1; const VARIABLE: u32 = 2; const NUMBER: u32 = 4; const STRING: u32 = 5; const OPERATOR: u32 = 6; const ENUM_MEMBER: u32 = 7; const MOD_READONLY: u32 = 1 << 0; const MOD_DECL: u32 = 1 << 1; const MOD_DEFAULT_LIB: u32 = 1 << 2; fn keyword_len(kind: &TokenKind) -> Option<usize> { Some(match kind { TokenKind::Def => 3, TokenKind::If => 2, TokenKind::Elif => 4, TokenKind::Else => 4, TokenKind::For => 3, TokenKind::In => 2, TokenKind::Range => 5, TokenKind::Return => 6, TokenKind::While => 5, TokenKind::Break => 5, TokenKind::Continue => 8, TokenKind::Let => 3, TokenKind::Const => 5, TokenKind::Var => 3, TokenKind::VectorList => 10, TokenKind::Switch => 6, TokenKind::Case => 4, TokenKind::Default => 7, TokenKind::Meta => 4, TokenKind::And => 3, TokenKind::Or => 2, TokenKind::Not => 3, TokenKind::True => 4, TokenKind::False => 5, _ => return None }) } let mut raw: Vec<(u32,u32,u32,u32,u32)> = Vec::new(); for (idx, tk) in tokens.iter().enumerate() { let line1 = tk.line; if line1 == 0 { continue; } let line0 = (line1 - 1) as u32; let line_str = lines.get(line0 as usize).copied().unwrap_or(""); let indent = line_str.chars().take_while(|c| *c==' ').count() as u32; let base_col = indent + tk.col as u32; match &tk.kind { k if keyword_len(k).is_some() => { let length = keyword_len(k).unwrap() as u32; raw.push((line0, base_col, length, KEYWORD, 0)); } TokenKind::Identifier(name) => { let mut is_after_def = false; if idx > 0 { let mut j = idx as isize - 1; while j >= 0 { match tokens[j as usize].kind { TokenKind::Newline | TokenKind::Indent | TokenKind::Dedent => { j -= 1; continue; } TokenKind::Def => { is_after_def = true; } _ => {} } break; } } let upper = name.to_ascii_uppercase(); let is_builtin = upper.starts_with("DRAW_") || matches!(upper.as_str(), "MOVE"|"RECT"|"POLYGON"|"CIRCLE"|"ARC"|"SPIRAL"|"ORIGIN"|"INTENSITY"|"PRINT_TEXT"); let is_constant = upper.starts_with("I_"); if is_after_def { raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DECL)); defs.push(SymbolDef { name: name.clone(), uri: uri.clone(), range: Range { start: Position { line: line0, character: base_col }, end: Position { line: line0, character: base_col + name.len() as u32 } } }); } else if is_builtin { raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DEFAULT_LIB)); } else if is_constant { raw.push((line0, base_col, name.len() as u32, ENUM_MEMBER, MOD_READONLY)); } else { raw.push((line0, base_col, name.len() as u32, VARIABLE, 0)); } } TokenKind::Number(_)=> { let slice = &line_str[(base_col as usize)..]; let mut len = 0; for ch in slice.chars() { if ch.is_ascii_hexdigit() || ch=='x'||ch=='X'||ch=='b'||ch=='B' { len+=1; } else { break; } } if len==0 { len=1; } raw.push((line0, base_col, len as u32, NUMBER, 0)); } TokenKind::StringLit(s) => { let length = (s.len()+2) as u32; raw.push((line0, base_col, length, STRING, 0)); } TokenKind::Plus|TokenKind::Minus|TokenKind::Star|TokenKind::Slash|TokenKind::Percent|TokenKind::Amp|TokenKind::Pipe|TokenKind::Caret|TokenKind::Tilde|TokenKind::Dot|TokenKind::Colon|TokenKind::Comma|TokenKind::Equal|TokenKind::Lt|TokenKind::Gt => { raw.push((line0, base_col, 1, OPERATOR, 0)); } TokenKind::ShiftLeft|TokenKind::ShiftRight|TokenKind::EqEq|TokenKind::NotEq|TokenKind::Le|TokenKind::Ge => { raw.push((line0, base_col, 2, OPERATOR, 0)); } _ => {} } } raw.sort_by(|a,b| a.0.cmp(&b.0).then(a.1.cmp(&b.1))); let mut last_line=0; let mut last_col=0; let mut first=true; for (line,col,length,ttype,mods) in raw { let delta_line = if first { line } else { line - last_line }; let delta_start = if first { col } else if delta_line==0 { col - last_col } else { col }; data.push(SemanticToken { delta_line, delta_start, length, token_type: ttype, token_modifiers_bitset: mods }); last_line=line; last_col=col; first=false; } } if !defs.is_empty() { SYMBOLS.lock().unwrap().retain(|d| d.uri != uri); SYMBOLS.lock().unwrap().extend(defs); } else { SYMBOLS.lock().unwrap().retain(|d| d.uri != uri); } Ok(Some(SemanticTokensResult::Tokens(SemanticTokens { result_id: None, data }))) }
+        let uri = params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t) => t.clone(), None => return Ok(None) }; drop(docs); let lines: Vec<&str> = text.lines().collect(); let mut data: Vec<SemanticToken> = Vec::new(); let mut defs: Vec<SymbolDef> = Vec::new(); if let Ok(tokens) = lex(&text) { const KEYWORD: u32 = 0; const FUNCTION: u32 = 1; const VARIABLE: u32 = 2; const NUMBER: u32 = 4; const STRING: u32 = 5; const OPERATOR: u32 = 6; const ENUM_MEMBER: u32 = 7; const MOD_READONLY: u32 = 1 << 0; const MOD_DECL: u32 = 1 << 1; const MOD_DEFAULT_LIB: u32 = 1 << 2; fn keyword_len(kind: &TokenKind) -> Option<usize> { Some(match kind { TokenKind::Def => 3, TokenKind::If => 2, TokenKind::Elif => 4, TokenKind::Else => 4, TokenKind::For => 3, TokenKind::In => 2, TokenKind::Range => 5, TokenKind::Return => 6, TokenKind::While => 5, TokenKind::Break => 5, TokenKind::Continue => 8, TokenKind::Let => 3, TokenKind::Const => 5, TokenKind::Var => 3, TokenKind::VectorList => 10, TokenKind::Switch => 6, TokenKind::Case => 4, TokenKind::Default => 7, TokenKind::Meta => 4, TokenKind::And => 3, TokenKind::Or => 2, TokenKind::Not => 3, TokenKind::True => 4, TokenKind::False => 5, _ => return None }) } let mut raw: Vec<(u32,u32,u32,u32,u32)> = Vec::new(); for (idx, tk) in tokens.iter().enumerate() { let line1 = tk.line; if line1 == 0 { continue; } let line0 = (line1 - 1) as u32; let line_str = lines.get(line0 as usize).copied().unwrap_or(""); let indent = line_str.chars().take_while(|c| *c==' ').count() as u32; let base_col = indent + tk.col as u32; match &tk.kind { k if keyword_len(k).is_some() => { let length = keyword_len(k).unwrap() as u32; raw.push((line0, base_col, length, KEYWORD, 0)); } TokenKind::Identifier(name) => { let mut is_after_def = false; if idx > 0 { let mut j = idx as isize - 1; while j >= 0 { match tokens[j as usize].kind { TokenKind::Newline | TokenKind::Indent | TokenKind::Dedent => { j -= 1; continue; } TokenKind::Def => { is_after_def = true; } _ => {} } break; } } let upper = name.to_ascii_uppercase(); let is_builtin = is_builtin_function(name); let is_constant = upper.starts_with("I_"); if is_after_def { raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DECL)); defs.push(SymbolDef { name: name.clone(), uri: uri.clone(), range: Range { start: Position { line: line0, character: base_col }, end: Position { line: line0, character: base_col + name.len() as u32 } } }); } else if is_builtin { raw.push((line0, base_col, name.len() as u32, FUNCTION, MOD_DEFAULT_LIB)); } else if is_constant { raw.push((line0, base_col, name.len() as u32, ENUM_MEMBER, MOD_READONLY)); } else { raw.push((line0, base_col, name.len() as u32, VARIABLE, 0)); } } TokenKind::Number(_)=> { let slice = &line_str[(base_col as usize)..]; let mut len = 0; for ch in slice.chars() { if ch.is_ascii_hexdigit() || ch=='x'||ch=='X'||ch=='b'||ch=='B' { len+=1; } else { break; } } if len==0 { len=1; } raw.push((line0, base_col, len as u32, NUMBER, 0)); } TokenKind::StringLit(s) => { let length = (s.len()+2) as u32; raw.push((line0, base_col, length, STRING, 0)); } TokenKind::Plus|TokenKind::Minus|TokenKind::Star|TokenKind::Slash|TokenKind::Percent|TokenKind::Amp|TokenKind::Pipe|TokenKind::Caret|TokenKind::Tilde|TokenKind::Dot|TokenKind::Colon|TokenKind::Comma|TokenKind::Equal|TokenKind::Lt|TokenKind::Gt => { raw.push((line0, base_col, 1, OPERATOR, 0)); } TokenKind::ShiftLeft|TokenKind::ShiftRight|TokenKind::EqEq|TokenKind::NotEq|TokenKind::Le|TokenKind::Ge => { raw.push((line0, base_col, 2, OPERATOR, 0)); } _ => {} } } raw.sort_by(|a,b| a.0.cmp(&b.0).then(a.1.cmp(&b.1))); let mut last_line=0; let mut last_col=0; let mut first=true; for (line,col,length,ttype,mods) in raw { let delta_line = if first { line } else { line - last_line }; let delta_start = if first { col } else if delta_line==0 { col - last_col } else { col }; data.push(SemanticToken { delta_line, delta_start, length, token_type: ttype, token_modifiers_bitset: mods }); last_line=line; last_col=col; first=false; } } if !defs.is_empty() { SYMBOLS.lock().unwrap().retain(|d| d.uri != uri); SYMBOLS.lock().unwrap().extend(defs); } else { SYMBOLS.lock().unwrap().retain(|d| d.uri != uri); } Ok(Some(SemanticTokensResult::Tokens(SemanticTokens { result_id: None, data }))) }
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
         eprintln!("[vpy_lsp][hover] request pos= {:?} uri= {}", params.text_document_position_params.position, params.text_document_position_params.text_document.uri);
         let pos = params.text_document_position_params.position; let uri = params.text_document_position_params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t)=>t.clone(), None=>return Ok(None) }; drop(docs); let line = text.lines().nth(pos.line as usize).unwrap_or(""); let chars: Vec<char> = line.chars().collect(); if (pos.character as usize) > chars.len() { return Ok(None); } let mut start = pos.character as isize; let mut end = pos.character as usize; while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; } while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; } if start as usize >= end { return Ok(None); } let word = &line[start as usize .. end]; let upper = word.to_ascii_uppercase(); let loc = self.locale.lock().unwrap().clone(); if let Some(doc) = builtin_doc(&loc, &upper) { return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: doc }), range: None })); } if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) { let template = tr(&loc, "hover.user_function.line"); let value = template.replacen("{}", &def.name, 1).replacen("{}", &(def.range.start.line + 1).to_string(), 1); return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value }), range: Some(def.range.clone()) })); } Ok(None) }

@@ -13,7 +13,13 @@ pub struct ModuleMeta {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Item { Function(Function), Const { name: String, value: Expr }, GlobalLet { name: String, value: Expr }, VectorList { name: String, entries: Vec<VlEntry> } }
+pub enum Item { 
+    Function(Function), 
+    Const { name: String, value: Expr }, 
+    GlobalLet { name: String, value: Expr }, 
+    VectorList { name: String, entries: Vec<VlEntry> },
+    ExprStatement(Expr),  // Para permitir expresiones ejecutables en top-level
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VlEntry {
