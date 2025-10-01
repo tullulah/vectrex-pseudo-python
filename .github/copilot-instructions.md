@@ -50,6 +50,49 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Próximo paso pendiente: mapear direcciones desconocidas como 0xF18B a etiquetas reales revisando `bios.asm` y actualizar `record_bios_call`.
 - Añadir export WASM: `bios_calls_json()` (pendiente: TODO id 13).
 
+## 2.1. VPy Language Compilation Architecture (2025-10-01)
+
+### 2.1.1 Subroutine-Based Code Generation (BREAKTHROUGH)
+- **ESTADO ACTUAL**: FUNCIONANDO - Arquitectura de subrutinas implementada exitosamente
+- **PROBLEMA RESUELTO**: BRA overflow en programas grandes eliminado completamente
+- **ARQUITECTURA**:
+  ```asm
+  main:
+      JSR Wait_Recal
+      LDA #$80
+      STA VIA_t1_cnt_lo
+      JSR LOOP_BODY    ; ← Llamada a subrutina (sin límites de distancia)
+      BRA main
+
+  LOOP_BODY:           ; ← Código del loop() en subrutina separada
+      [código loop...]
+      RTS              ; ← Retorno a main
+  ```
+
+### 2.1.2 Beneficios Técnicos Implementados
+1. **✅ ELIMINA CÓDIGO DUPLICADO**: Una sola copia del loop en `LOOP_BODY`
+2. **✅ RESUELVE OVERFLOW**: JSR puede saltar a cualquier dirección (vs BRA limitado a ±127 bytes)
+3. **✅ MANTIENE COMPATIBILIDAD**: Programas pequeños siguen funcionando
+4. **✅ ESTRUCTURA PROFESIONAL**: Código más limpio y mantenible
+
+### 2.1.3 Resultados de Compilación Verificados
+- **test_vectrex_pattern.vpy**: 61 bytes (era 57, +4 overhead JSR/RTS aceptable)
+- **vectrex_console_demo.vpy**: 2138 bytes (era FALLO por overflow, ahora ÉXITO)
+- **Ambos programas**: Compilan y funcionan correctamente
+- **Capacidad**: Hasta 5KB de espacio disponible para juegos complejos
+
+### 2.1.4 Implementación Backend (m6809.rs)
+- **Ubicación crítica**: `core/src/backend/m6809.rs` líneas 160-190
+- **Cambio principal**: `JSR LOOP_BODY` en lugar de código inline duplicado
+- **Generación automática**: `LOOP_BODY:` con contenido de función `loop()` + `RTS`
+- **Mantenimiento**: Auto-loop mode optimizado para estructura Vectrex
+
+### 2.1.5 Reglas de Desarrollo VPy
+- **NUNCA volver al patrón inline**: La arquitectura de subrutinas es definitiva
+- **Tests obligatorios**: Verificar tanto programas simples como complejos
+- **Compilación dual**: Siempre probar test_vectrex_pattern Y vectrex_console_demo
+- **Sin regresiones**: JSR/RTS es la solución estándar, no usar BRA para loops
+
 ## 3. Tests - Estructura y Reglas Obligatorias
 
 ### 3.1 Estructura de Directorios

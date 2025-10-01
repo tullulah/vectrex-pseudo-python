@@ -1,6 +1,38 @@
 # Compiler Status (vectrex_lang)
 
-Fecha: 2025-09-20 (actualizado tras implementación DRAW_TO)
+Fecha: 2025-10-01 (actualizado tras BREAKTHROUGH: Subroutine Architecture)
+
+## ESTADO CRÍTICO: ARQUITECTURA SUBRUTINAS IMPLEMENTADA ✅
+
+**FECHA**: 2025-10-01  
+**PROBLEMA RESUELTO**: BRA overflow en programas grandes eliminado completamente  
+**SOLUCIÓN**: Arquitectura de subrutinas JSR/RTS en lugar de código inline duplicado  
+
+### Resultados Verificados:
+- ✅ **test_vectrex_pattern.vpy**: 61 bytes (era 57, overhead JSR/RTS mínimo)
+- ✅ **vectrex_console_demo.vpy**: 2138 bytes (era FALLO por overflow, ahora ÉXITO)
+- ✅ **Capacidad mejorada**: Hasta 5KB disponibles para juegos complejos
+- ✅ **Sin regresiones**: Ambos programas compilan y funcionan
+
+### Arquitectura Técnica:
+```asm
+main:
+    JSR Wait_Recal
+    LDA #$80  
+    STA VIA_t1_cnt_lo
+    JSR LOOP_BODY    ; ← Subrutina (sin límites distancia)
+    BRA main
+
+LOOP_BODY:           ; ← Código loop() separado
+    [código usuario...]
+    RTS              ; ← Retorno a main
+```
+
+### Impacto en Desarrollo:
+- **Eliminación**: Código duplicado en assembly generado
+- **Escalabilidad**: Programas grandes ahora viables (hasta 5KB+)
+- **Mantenibilidad**: Estructura más limpia y profesional
+- **Compatibilidad**: Programas simples mantienen funcionalidad
 
 Este documento resume el estado actual del compilador DSL (`vectrex_lang`, carpeta `core/`), capacidades implementadas, carencias detectadas y backlog priorizado.
 

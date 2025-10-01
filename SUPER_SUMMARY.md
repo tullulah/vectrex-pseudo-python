@@ -162,6 +162,38 @@ Exports (selection):
   - For raw `.asm` files, the same WSL-based lwasm flow is used, bypassing the VPY compiler step.
   - The IDE assembles and loads the binary as above.
 
+### 5.1.2 VPy Subroutine Architecture (2025-10-01 BREAKTHROUGH)
+**CRITICAL ADVANCEMENT**: Implemented subroutine-based code generation to eliminate BRA overflow and code duplication:
+
+**Architecture Pattern**:
+```asm
+main:
+    JSR Wait_Recal
+    LDA #$80
+    STA VIA_t1_cnt_lo
+    JSR LOOP_BODY    ; ← Subroutine call (no distance limits)
+    BRA main
+
+LOOP_BODY:           ; ← loop() function code in separate subroutine
+    [user loop code...]
+    RTS              ; ← Return to main
+```
+
+**Benefits Achieved**:
+- ✅ **Eliminates Code Duplication**: Single copy of loop code in `LOOP_BODY`
+- ✅ **Solves BRA Overflow**: JSR can reach any address (vs BRA ±127 byte limit)
+- ✅ **Maintains Compatibility**: Small programs still work efficiently
+- ✅ **Professional Structure**: Cleaner, more maintainable assembly output
+
+**Verification Results**:
+- `test_vectrex_pattern.vpy`: 61 bytes (was 57, +4 JSR/RTS overhead acceptable)
+- `vectrex_console_demo.vpy`: 2138 bytes (was FAILING with overflow, now SUCCESS)
+- Both programs compile and execute correctly
+- Available space: Up to 5KB remaining for complex games
+
+**Implementation Location**: `core/src/backend/m6809.rs` lines 160-190
+**Code Generation**: Auto-loop mode generates `JSR LOOP_BODY` call + separate `LOOP_BODY:` subroutine
+
 ### 5.2 Precedence for Building (Current Panel Logic)
 1. Explicit Source dropdown selection.
 2. Fallback to currently active editor document (if it has `.vpy` or `.asm`).
