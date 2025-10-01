@@ -117,9 +117,16 @@ export class GroqProvider extends BaseAiProvider {
     }
   }
 
-  public async getAvailableModels(): Promise<string[]> {
+  public async getModels(): Promise<string[]> {
+    console.log('🚀 GroqProvider.getModels() called');
+    console.log('🔍 Config status:', {
+      isConfigured: this.isConfigured(),
+      hasApiKey: !!this.config.apiKey,
+      apiKeyLength: this.config.apiKey?.length
+    });
+    
     if (!this.isConfigured()) {
-      console.warn('Groq not configured for model discovery');
+      console.warn('Groq not configured for model discovery, returning fallback models');
       return [
         'llama-3.1-70b-versatile',
         'llama-3.1-8b-instant', 
@@ -167,5 +174,10 @@ export class GroqProvider extends BaseAiProvider {
         'gemma2-9b-it'
       ];
     }
+  }
+
+  // Alias method for backward compatibility
+  public async getAvailableModels(): Promise<string[]> {
+    return this.getModels();
   }
 }

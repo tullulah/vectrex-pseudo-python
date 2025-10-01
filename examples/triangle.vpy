@@ -18,10 +18,10 @@ def draw_frame(i):
     VECTREX_PRINT_TEXT(-40, 50, "TRI")
     VECTREX_PRINT_TEXT(-60, -60, "DEMO")
     # Ya no se necesita fase vectorial explícita; DRAW_LINE cambia DP internamente
-    VECTREX_DRAW_LINE(0, 0, 10, 0, INT)
-    VECTREX_DRAW_LINE(X0, Y0, X1, Y1, INT)
-    VECTREX_DRAW_LINE(X1, Y1, X2, Y2, INT)
-    VECTREX_DRAW_LINE(X2, Y2, X0, Y0, INT)
+    DRAW_LINE(0, 0, 10, 0, INT)
+    DRAW_LINE(X0, Y0, X1, Y1, INT)
+    DRAW_LINE(X1, Y1, X2, Y2, INT)
+    DRAW_LINE(X2, Y2, X0, Y0, INT)
     return 0
 
 # main se llama una vez por frame por el auto_loop: NO usar while infinito aquí

@@ -596,7 +596,7 @@ If you see frame counters increasing but zero vector segments, double‑check th
 - Bitwise / arithmetic identity simplifications (x&0, x|0, x^0, x&0xFFFF, x*1, x+0, etc.)
 - Math & trig built-ins: sin, cos, tan (also via math.sin etc.), abs/min/max/clamp
 - Vectrex built-ins (prototype): vectrex.set_origin, vectrex.set_intensity, vectrex.move_to, vectrex.print_text, vectrex.draw_line (skeleton), vectrex.draw_to (TODO), draw_polygon macro (constante)
-- Vectorlist DSL: embebido en `.vpy` mediante bloques `vectorlist nombre:` con comandos declarativos (MOVE, RECT, POLYGON, CIRCLE, ARC, SPIRAL, ORIGIN, INTENSITY) que se expanden a una lista compacta (count + triples y,x,cmd) interpretada por `Run_VectorList`.
+- Vectorlist DSL: embebido en `.vpy` mediante bloques `vectorlist nombre:` con comandos declarativos usando sintaxis unificada: `MOVE(x, y)`, `RECT(x1, y1, x2, y2)`, `POLYGON(n, x1, y1, ...)`, `CIRCLE(cx, cy, r)`, `ARC(cx, cy, r, start, sweep)`, `SPIRAL(cx, cy, r_start, r_end, turns)`, `SET_ORIGIN()`, `SET_INTENSITY(val)` que se expanden a una lista compacta (count + triples y,x,cmd) interpretada por `Run_VectorList`.
 - Runtime minimal: bucle de frame automático, Reset0Ref + intensidad fija ($5F) salvo que la lista incluya comandos INTENSITY propios.
 
 ## Status Notes
@@ -655,57 +655,63 @@ See `MANUAL.md` for the evolving language and ABI specification.
 ### Arithmetic / Helpers
 6809 uses `MUL16` / `DIV16` helper routines (prototype) or shift peepholes for powers of two. ARM / Cortex-M use inline software loops for 32-bit widen-narrow mult/div then mask to 16 bits.
 
-### Built-ins & Vectorlist Reference (Evolving)
+### Built-ins & Vectorlist Reference (Sintaxis Unificada)
+
+**Funciones Globales** (sintaxis con paréntesis):
 
 General math:
-- abs(x), min(a,b), max(a,b), clamp(v, lo, hi)
+- `abs(x)`, `min(a, b)`, `max(a, b)`, `clamp(v, lo, hi)`
+
 Trig (argument 0..127 covers full circle, 7-bit index):
-- sin(a), cos(a), tan(a) (values scaled to -127..127). Namespace forms math.sin etc. are aliases.
+- `sin(a)`, `cos(a)`, `tan(a)` (values scaled to -127..127). Namespace forms math.sin etc. are aliases.
 
- Vectrex (6809 backend current built-ins & helpers):
- vectrex.frame_begin(intensity) : Wait_Recal + optional intensity + Reset0Ref (used manually only if auto loop disabled)
- vectrex.set_origin() : Reset0Ref (origin only)
- vectrex.set_intensity(i) : variable intensity (Intensity_a)
- vectrex.move_to(x, y) : absolute move (low bytes) via Moveto_d
- vectrex.print_text(x, y, ptr) : high-bit terminated string (last char bit7=1) via Print_Str_d
- vectrex.draw_line(x0,y0,x1,y1,intensity) : single segment using BIOS Draw_Line_d (delta 8‑bit)
- draw_polygon forms (compilation macro, argumentos constantes):
-     Form A: DRAW_POLYGON(N, x0,y0, ..., xN-1,yN-1) usa intensidad $5F
-     Form B: DRAW_POLYGON(N, INTENS, x0,y0, ..., xN-1,yN-1)
-     Implementación optimizada: un solo Reset0Ref + Intensity al inicio, Moveto_d al primer vértice y luego N líneas (cierre automático). Menos flicker.
-     Futuro: versión runtime con vértices dinámicos.
-     draw_circle(xc,yc,diam[,intensity]) : macro constante que genera un 16-gon aproximando el círculo (formas A/B como polygon; B añade intensidad). Un solo Reset0Ref + intensidad.
-     draw_circle_seg(nseg, xc,yc,diam[,intensity]) : variante con número de segmentos (3..64)
-     draw_arc(nseg, xc,yc,radius,start_deg,sweep_deg[,intensity]) : arco abierto subdividido (1..128 segmentos)
-     draw_spiral(nseg, xc,yc,r_start,r_end,turns[,intensity]) : espiral abierta interpolando radio y ángulo (1..160 segmentos)
- vectrex.draw_vl(ptr,intensity) : call BIOS Draw_VL with user vector list (y x y x ...; end flagged by bit7 in Y)
- vectrex.draw_to(x,y) : placeholder (updates current position only)
+Vectrex (6809 backend current built-ins & helpers):
+- `vectrex.frame_begin(intensity)` : Wait_Recal + optional intensity + Reset0Ref 
+- `vectrex.set_origin()` : Reset0Ref (origin only)
+- `vectrex.set_intensity(i)` : variable intensity (Intensity_a)
+- `vectrex.move_to(x, y)` : absolute move (low bytes) via Moveto_d
+- `vectrex.print_text(x, y, ptr)` : high-bit terminated string via Print_Str_d
+- `vectrex.draw_line(x0, y0, x1, y1, intensity)` : single segment using BIOS Draw_Line_d
+- **Funciones Unificadas** (funcionan igual en global y vectorlist):
+  - `MOVE(x, y)` : moves beam to position without drawing
+  - `SET_INTENSITY(val)` : sets beam intensity  
+  - `SET_ORIGIN()` : resets origin (0,0)
+  - `RECT(x1, y1, x2, y2)` : draws a rectangle
+  - `CIRCLE(cx, cy, r)` o `CIRCLE(cx, cy, r, segs)` : draws a circle
+  - `ARC(cx, cy, r, start_deg, sweep_deg)` o `ARC(..., segs)` : draws an arc
+  - `SPIRAL(cx, cy, r_start, r_end, turns)` o `SPIRAL(..., segs)` : draws a spiral
 
-Vectorlist embedded DSL (simple, orden agnóstico entre comandos de forma):
+**Vectorlist Commands** (misma sintaxis que funciones globales):
+
+Vectorlist embedded DSL (sintaxis unificada con paréntesis):
 ```
 vectorlist shapes:
-    ORIGIN              # Reset0Ref (CMD_ZERO)
-    INTENSITY 0x5F      # Inserta CMD_INT (traduce 0..7 a presets, o valor directo)
-    MOVE -16 -16        # Inicio rectángulo (emite CMD_START absoluto)
-    RECT -16 -16 16 16  # Cuadrado -> 4 segmentos (CMD_LINE)
-    POLYGON 4 0 -16 16 0 0 16 -16 0  # Diamante cerrado
-    CIRCLE 0 0 12 24    # Centro (cx,cy) radio=12, 24 segmentos
-    ARC 0 -16 16 0 180 24   # Arco desde 0° a 180°
-    SPIRAL 0 0 10 40 2 64   # r_start, r_end, turns, segs
+    ORIGIN                          # Reset0Ref (CMD_ZERO) - sin paréntesis
+    SET_INTENSITY(0x5F)             # Inserta CMD_INT (traduce 0..7 a presets, o valor directo)
+    MOVE(-16, -16)                  # Inicio rectángulo (emite CMD_START absoluto)
+    RECT(-16, -16, 16, 16)          # Cuadrado -> 4 segmentos (CMD_LINE)
+    POLYGON(4, 0, -16, 16, 0, 0, 16, -16, 0)  # Diamante cerrado
+    CIRCLE(0, 0, 12, 24)            # Centro (cx,cy) radio=12, 24 segmentos
+    ARC(0, -16, 16, 0, 180, 24)     # Arco desde 0° a 180°
+    SPIRAL(0, 0, 10, 40, 2, 64)     # r_start, r_end, turns, segs
 ```
 Reglas:
-- MOVE genera un START absoluto; RECT genera START + 4 líneas; POLYGON N genera START + N líneas cerrando; CIRCLE/ARC/SPIRAL generan aproximaciones poligonales.
-- ORIGIN -> CMD_ZERO (Reset0Ref) que recentra el haz (se colapsan duplicados y se elimina un ZERO inicial redundante si tras él viene un START).
+- **Sintaxis Unificada**: Todos los comandos usan paréntesis igual que las funciones globales
+- `MOVE(x, y)` genera un START absoluto; `RECT(x1, y1, x2, y2)` genera START + 4 líneas
+- `POLYGON(n, x1, y1, ...)` genera START + N líneas cerrando
+- `CIRCLE/ARC/SPIRAL` generan aproximaciones poligonales con argumentos opcionales para segmentos
+- `ORIGIN` -> CMD_ZERO (Reset0Ref) que recentra el haz (se colapsan duplicados)
+- `SET_INTENSITY(val)` equivale a `INTENSITY(val)` para consistencia
 - El backend reordena para asegurar un START (0,0) inicial y mueve la primera INTENSITY justo después.
 - Comentarios automáticos en el `.asm` indican coordenadas absolutas y deltas para depurar.
 
-Ejemplo Pac-Man mini (fragmento):
+Ejemplo Pac-Man mini (sintaxis nueva):
 ```
 vectorlist maze:
-    INTENSITY 0x7F
-    ORIGIN
-    MOVE -68 -68
-    RECT -68 -68 68 -67   # borde superior
+    SET_INTENSITY(0x7F)
+    SET_ORIGIN()
+    MOVE(-68, -68)
+    RECT(-68, -68, 68, -67)   # borde superior
     ...
 ```
 Luego en `main()`:

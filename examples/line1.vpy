@@ -10,4 +10,4 @@ const Y1 = 100
 const INT = 0x5F
 
 def main():
-    VECTREX_DRAW_LINE(X0, Y0, X1, Y1, INT)
+    DRAW_LINE(X0, Y0, X1, Y1, INT)

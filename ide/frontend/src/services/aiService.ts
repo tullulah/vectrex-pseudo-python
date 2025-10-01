@@ -117,8 +117,17 @@ export class AiService {
    */
   public async getProviderModels(type: AiProviderType, config?: AiProviderConfig): Promise<string[]> {
     try {
-      return await AiProviderFactory.getProviderModels(type, config);
+      console.log('🎯 aiService.getProviderModels called for:', type, 'with config:', {
+        hasApiKey: !!config?.apiKey,
+        apiKeyLength: config?.apiKey?.length
+      });
+      
+      const models = await AiProviderFactory.getProviderModels(type, config);
+      console.log('📦 aiService received models:', models);
+      
+      return models;
     } catch (error) {
+      console.error('❌ aiService.getProviderModels error:', error);
       logger.error('AI', `Failed to get models for ${type}:`, error);
       return [];
     }

@@ -172,12 +172,26 @@ export class AiProviderFactory {
    */
   public static async getProviderModels(type: AiProviderType, config?: AiProviderConfig): Promise<string[]> {
     try {
+      console.log('🔄 AiProviderFactory.getProviderModels called for:', type, 'with config:', {
+        hasApiKey: !!config?.apiKey,
+        apiKeyLength: config?.apiKey?.length
+      });
+      
       const provider = this.getProvider(type, config);
+      console.log('✅ Provider instance created:', provider.name);
+      
       if (!provider.getModels) {
+        console.warn('⚠️ Provider does not have getModels method');
         return [];
       }
-      return await provider.getModels();
-    } catch {
+      
+      console.log('🚀 Calling provider.getModels()...');
+      const models = await provider.getModels();
+      console.log('✅ Models returned from provider:', models);
+      
+      return models;
+    } catch (error) {
+      console.error('❌ Error in getProviderModels:', error);
       return [];
     }
   }

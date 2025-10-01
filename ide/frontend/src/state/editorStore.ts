@@ -3,7 +3,7 @@ import type { DocumentModel, DiagnosticModel } from '../types/models';
 import { lspClient } from '../lspClient';
 import { logger } from '../utils/logger';
 
-interface FlatDiag { uri: string; file: string; line: number; column: number; severity: DiagnosticModel['severity']; message: string; }
+interface FlatDiag { uri: string; file: string; line: number; column: number; severity: DiagnosticModel['severity']; message: string; source?: string; }
 
 interface EditorState {
   documents: DocumentModel[];
@@ -16,6 +16,7 @@ interface EditorState {
   updateContent: (uri: string, content: string) => void;
   markSaved: (uri: string, newMtime?: number) => void;
   setDiagnostics: (uri: string, diags: DiagnosticModel[]) => void;
+  setDiagnosticsBySource: (uri: string, source: string, diags: DiagnosticModel[]) => void;
   closeDocument: (uri: string) => void;
   gotoLocation: (uri: string, line: number, column: number) => void;
   setScrollPosition: (uri: string, top: number) => void;
@@ -34,7 +35,8 @@ function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
         line: diag.line,
         column: diag.column,
         severity: diag.severity,
-        message: diag.message
+        message: diag.message,
+        source: diag.source
       });
     }
   }
@@ -117,6 +119,34 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       documents, 
       allDiagnostics: newAllDiagnostics,
       active: s.active // PRESERVE active value during diagnostics updates
+    };
+  }),
+  setDiagnosticsBySource: (uri, source, diags) => set((s) => {
+    logger.verbose('LSP', 'setDiagnosticsBySource called with URI:', uri, 'source:', source);
+    logger.verbose('LSP', 'New diagnostics:', diags);
+    
+    const documents = s.documents.map(d => {
+      if (d.uri !== uri) return d;
+      
+      // Filter out existing diagnostics from this source, then add new ones
+      const existingDiags = (d.diagnostics || []).filter(diag => diag.source !== source);
+      const newDiags = diags.map(diag => ({ ...diag, source }));
+      const combinedDiags = [...existingDiags, ...newDiags];
+      
+      logger.verbose('LSP', 'Existing diags (other sources):', existingDiags.length);
+      logger.verbose('LSP', 'New diags for source', source, ':', newDiags.length);
+      logger.verbose('LSP', 'Combined diags:', combinedDiags.length);
+      
+      return { ...d, diagnostics: combinedDiags };
+    });
+    
+    const newAllDiagnostics = recomputeAllDiagnostics(documents);
+    logger.verbose('LSP', 'Final allDiagnostics count:', newAllDiagnostics.length);
+    
+    return { 
+      documents, 
+      allDiagnostics: newAllDiagnostics,
+      active: s.active
     };
   }),
   closeDocument: (uri) => set((s) => {

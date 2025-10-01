@@ -170,20 +170,53 @@ impl<'a> Parser<'a> {
             self.match_identifier();
             match upper.as_str() {
                 "INTENSITY" => {
-                    let expr = self.expression()?; if let Some(v)=const_eval(&expr) { entries.push(VlEntry::Intensity(v)); } else { return self.err_here("Expected number after INTENSITY"); }
+                    // Unificado: INTENSITY(value) funciona igual que las funciones globales
+                    self.consume(TokenKind::LParen)?;
+                    let expr = self.expression()?;
+                    let v = if let Some(v) = const_eval(&expr) { v } else { return self.err_here("Expected number for INTENSITY"); };
+                    self.consume(TokenKind::RParen)?;
+                    entries.push(VlEntry::Intensity(v));
                 }
                 "SET_INTENSITY" => {
-                    // Unificado: SET_INTENSITY funciona igual que INTENSITY
-                    let expr = self.expression()?; if let Some(v)=const_eval(&expr) { entries.push(VlEntry::Intensity(v)); } else { return self.err_here("Expected number after SET_INTENSITY"); }
+                    // Unificado: SET_INTENSITY(value) funciona igual que INTENSITY
+                    self.consume(TokenKind::LParen)?;
+                    let expr = self.expression()?;
+                    let v = if let Some(v) = const_eval(&expr) { v } else { return self.err_here("Expected number for SET_INTENSITY"); };
+                    self.consume(TokenKind::RParen)?;
+                    entries.push(VlEntry::Intensity(v));
                 }
                 "ORIGIN" => entries.push(VlEntry::Origin),
                 "SET_ORIGIN" => {
                     // Unificado: SET_ORIGIN funciona igual que ORIGIN
                     entries.push(VlEntry::Origin)
                 }
-                "MOVE" => { let x=self.parse_signed_number()?; let y=self.parse_signed_number()?; entries.push(VlEntry::Move(x,y)); }
+                "MOVE" => { 
+                    // Unificado: MOVE(x, y) funciona igual que las funciones globales
+                    self.consume(TokenKind::LParen)?;
+                    let x_expr = self.expression()?;
+                    let x = if let Some(v) = const_eval(&x_expr) { v } else { return self.err_here("Expected number for x in MOVE"); };
+                    self.consume(TokenKind::Comma)?;
+                    let y_expr = self.expression()?;
+                    let y = if let Some(v) = const_eval(&y_expr) { v } else { return self.err_here("Expected number for y in MOVE"); };
+                    self.consume(TokenKind::RParen)?;
+                    entries.push(VlEntry::Move(x, y));
+                }
                 "RECT" => {
-                    let x1=self.parse_signed_number()?; let y1=self.parse_signed_number()?; let x2=self.parse_signed_number()?; let y2=self.parse_signed_number()?; entries.push(VlEntry::Rect(x1,y1,x2,y2));
+                    // Unificado: RECT(x1, y1, x2, y2) funciona igual que las funciones globales
+                    self.consume(TokenKind::LParen)?;
+                    let x1_expr = self.expression()?;
+                    let x1 = if let Some(v) = const_eval(&x1_expr) { v } else { return self.err_here("Expected number for x1 in RECT"); };
+                    self.consume(TokenKind::Comma)?;
+                    let y1_expr = self.expression()?;
+                    let y1 = if let Some(v) = const_eval(&y1_expr) { v } else { return self.err_here("Expected number for y1 in RECT"); };
+                    self.consume(TokenKind::Comma)?;
+                    let x2_expr = self.expression()?;
+                    let x2 = if let Some(v) = const_eval(&x2_expr) { v } else { return self.err_here("Expected number for x2 in RECT"); };
+                    self.consume(TokenKind::Comma)?;
+                    let y2_expr = self.expression()?;
+                    let y2 = if let Some(v) = const_eval(&y2_expr) { v } else { return self.err_here("Expected number for y2 in RECT"); };
+                    self.consume(TokenKind::RParen)?;
+                    entries.push(VlEntry::Rect(x1, y1, x2, y2));
                 }
                 "POLYGON" => {
                     // Count can be an expression, vertices must be literal signed ints (no binary ops across coords).
@@ -195,24 +228,81 @@ impl<'a> Parser<'a> {
                     entries.push(VlEntry::Polygon(verts));
                 }
                 "CIRCLE" => {
-                    // CIRCLE cx cy r [segs]
-                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let r = self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(16) } else { 16 };
-                    let segs = segs.clamp(3,64);
+                    // Unificado: CIRCLE(cx, cy, r) o CIRCLE(cx, cy, r, segs)
+                    self.consume(TokenKind::LParen)?;
+                    let cx_expr = self.expression()?;
+                    let cx = if let Some(v) = const_eval(&cx_expr) { v } else { return self.err_here("Expected number for cx in CIRCLE"); };
+                    self.consume(TokenKind::Comma)?;
+                    let cy_expr = self.expression()?;
+                    let cy = if let Some(v) = const_eval(&cy_expr) { v } else { return self.err_here("Expected number for cy in CIRCLE"); };
+                    self.consume(TokenKind::Comma)?;
+                    let r_expr = self.expression()?;
+                    let r = if let Some(v) = const_eval(&r_expr) { v } else { return self.err_here("Expected number for r in CIRCLE"); };
+                    
+                    // Parámetro opcional segs
+                    let segs = if self.match_kind(&TokenKind::Comma) {
+                        let segs_expr = self.expression()?;
+                        if let Some(v) = const_eval(&segs_expr) { v } else { return self.err_here("Expected number for segs in CIRCLE"); }
+                    } else { 16 };
+                    
+                    self.consume(TokenKind::RParen)?;
+                    let segs = segs.clamp(3, 64);
                     entries.push(VlEntry::Circle { cx, cy, r, segs });
                 }
                 "ARC" => {
-                    // ARC cx cy r startDeg sweepDeg [segs]
-                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let r = self.parse_signed_number()?; let start = self.parse_signed_number()?; let sweep = self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(16) } else { 16 };
-                    let segs = segs.clamp(2,128);
+                    // Unificado: ARC(cx, cy, r, startDeg, sweepDeg) o ARC(cx, cy, r, startDeg, sweepDeg, segs)
+                    self.consume(TokenKind::LParen)?;
+                    let cx_expr = self.expression()?;
+                    let cx = if let Some(v) = const_eval(&cx_expr) { v } else { return self.err_here("Expected number for cx in ARC"); };
+                    self.consume(TokenKind::Comma)?;
+                    let cy_expr = self.expression()?;
+                    let cy = if let Some(v) = const_eval(&cy_expr) { v } else { return self.err_here("Expected number for cy in ARC"); };
+                    self.consume(TokenKind::Comma)?;
+                    let r_expr = self.expression()?;
+                    let r = if let Some(v) = const_eval(&r_expr) { v } else { return self.err_here("Expected number for r in ARC"); };
+                    self.consume(TokenKind::Comma)?;
+                    let start_expr = self.expression()?;
+                    let start = if let Some(v) = const_eval(&start_expr) { v } else { return self.err_here("Expected number for startDeg in ARC"); };
+                    self.consume(TokenKind::Comma)?;
+                    let sweep_expr = self.expression()?;
+                    let sweep = if let Some(v) = const_eval(&sweep_expr) { v } else { return self.err_here("Expected number for sweepDeg in ARC"); };
+                    
+                    // Parámetro opcional segs
+                    let segs = if self.match_kind(&TokenKind::Comma) {
+                        let segs_expr = self.expression()?;
+                        if let Some(v) = const_eval(&segs_expr) { v } else { return self.err_here("Expected number for segs in ARC"); }
+                    } else { 16 };
+                    
+                    self.consume(TokenKind::RParen)?;
+                    let segs = segs.clamp(2, 128);
                     entries.push(VlEntry::Arc { cx, cy, r, start_deg: start, sweep_deg: sweep, segs });
                 }
                 "SPIRAL" => {
-                    // SPIRAL cx cy r_start r_end turns [segs]
-                    let cx = self.parse_signed_number()?; let cy = self.parse_signed_number()?; let rs = self.parse_signed_number()?; let re = self.parse_signed_number()?; let turns = self.parse_signed_number()?;
-                    let segs = if !self.check(TokenKind::Newline) { self.parse_signed_number().unwrap_or(64) } else { 64 };
-                    let segs = segs.clamp(4,256);
+                    // Unificado: SPIRAL(cx, cy, r_start, r_end, turns) o SPIRAL(cx, cy, r_start, r_end, turns, segs)
+                    self.consume(TokenKind::LParen)?;
+                    let cx_expr = self.expression()?;
+                    let cx = if let Some(v) = const_eval(&cx_expr) { v } else { return self.err_here("Expected number for cx in SPIRAL"); };
+                    self.consume(TokenKind::Comma)?;
+                    let cy_expr = self.expression()?;
+                    let cy = if let Some(v) = const_eval(&cy_expr) { v } else { return self.err_here("Expected number for cy in SPIRAL"); };
+                    self.consume(TokenKind::Comma)?;
+                    let rs_expr = self.expression()?;
+                    let rs = if let Some(v) = const_eval(&rs_expr) { v } else { return self.err_here("Expected number for r_start in SPIRAL"); };
+                    self.consume(TokenKind::Comma)?;
+                    let re_expr = self.expression()?;
+                    let re = if let Some(v) = const_eval(&re_expr) { v } else { return self.err_here("Expected number for r_end in SPIRAL"); };
+                    self.consume(TokenKind::Comma)?;
+                    let turns_expr = self.expression()?;
+                    let turns = if let Some(v) = const_eval(&turns_expr) { v } else { return self.err_here("Expected number for turns in SPIRAL"); };
+                    
+                    // Parámetro opcional segs
+                    let segs = if self.match_kind(&TokenKind::Comma) {
+                        let segs_expr = self.expression()?;
+                        if let Some(v) = const_eval(&segs_expr) { v } else { return self.err_here("Expected number for segs in SPIRAL"); }
+                    } else { 64 };
+                    
+                    self.consume(TokenKind::RParen)?;
+                    let segs = segs.clamp(4, 256);
                     entries.push(VlEntry::Spiral { cx, cy, r_start: rs, r_end: re, turns, segs });
                 }
                 _ => return self.err_here(&format!("Unknown vectorlist command {}", cmd)),

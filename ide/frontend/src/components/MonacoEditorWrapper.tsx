@@ -112,7 +112,6 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const active = useEditorStore(s => s.active);
   const setActive = useEditorStore(s => s.setActive);
   const updateContent = useEditorStore(s => s.updateContent);
-  const setDiagnostics = useEditorStore(s => s.setDiagnostics);
   const setScrollPosition = useEditorStore(s => s.setScrollPosition);
   const scrollPositions = useEditorStore(s => s.scrollPositions);
   const setHadFocus = useEditorStore(s => s.setHadFocus);
@@ -482,20 +481,8 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
             } catch {}
           }
         logger.verbose('LSP', 'diagnostics received uri=', rawUri, 'norm=', lcNorm, 'count=', (diagnostics||[]).length, 'matchedModel=', !!model, 'models=', models.map(m=>m.uri.toString()));
-        // Always update store even if model not currently open (will aggregate in Errors panel)
-        const diagsForStore = (diagnostics || []).map((d: any) => ({
-          message: d.message,
-          severity: lspSeverityToText(d.severity),
-          line: d.range.start.line,
-          column: d.range.start.character
-        }));
-        try {
-          const storeUri = model ? model.uri.toString() : uri;
-          if (model && storeUri !== uri) {
-            logger.verbose('LSP', 'storeUri differs from raw uri:', storeUri, uri);
-          }
-          setDiagnostics(storeUri, diagsForStore as any);
-        } catch (_) {}
+        // Note: Store update is handled by global handler in main.tsx to avoid duplication
+        // This handler only applies visual markers to Monaco editor
         if (!model) return; // markers only for open model
         const markers = (diagnostics || []).map((d: any) => ({
           severity: severityToMonaco(d.severity, monacoRef.current!),

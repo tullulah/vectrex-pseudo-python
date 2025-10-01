@@ -26,32 +26,94 @@ export interface VPyConstant {
 }
 
 export const VPY_FUNCTIONS: VPyFunction[] = [
+  // Unified Functions (work in both global and vectorlist contexts)
   {
-    name: "MOVE_TO",
-    syntax: "MOVE_TO(x, y)",
+    name: "MOVE",
+    syntax: "MOVE(x, y)",
     description: "Moves the electron beam to absolute coordinates without drawing",
     parameters: [
       { name: "x", type: "int", description: "X coordinate (-127 to +127)", required: true },
       { name: "y", type: "int", description: "Y coordinate (-127 to +127)", required: true }
     ],
     examples: [
-      "MOVE_TO(0, 0)  # Move to center",
-      "MOVE_TO(-100, 50)  # Move to upper left area"
+      "MOVE(0, 0)  # Move to center",
+      "MOVE(-100, 50)  # Move to upper left area"
     ],
-    category: "movement",
-    vectrexAddress: "0xF312",
-    notes: "Center of screen is (0,0). Coordinate system: -127 (left/bottom) to +127 (right/top)"
+    category: "unified",
+    notes: "Works in both global code and vectorlist contexts with same syntax"
+  },
+  {
+    name: "SET_INTENSITY",
+    syntax: "SET_INTENSITY(level)",
+    description: "Sets the electron beam intensity (brightness)",
+    parameters: [
+      { name: "level", type: "int", description: "Intensity level (0-255, 0=invisible, 255=brightest)", required: true }
+    ],
+    examples: [
+      "SET_INTENSITY(255)  # Maximum brightness",
+      "SET_INTENSITY(128)  # Medium brightness",
+      "SET_INTENSITY(0)    # Invisible (off)"
+    ],
+    category: "unified",
+    vectrexAddress: "0xF2AB",
+    notes: "Works in both global code and vectorlist contexts with same syntax"
+  },
+  {
+    name: "SET_ORIGIN",
+    syntax: "SET_ORIGIN()",
+    description: "Resets the coordinate system origin to center (0,0)",
+    parameters: [],
+    examples: [
+      "SET_ORIGIN()  # Reset to center"
+    ],
+    category: "unified",
+    vectrexAddress: "0xF354",
+    notes: "Works in both global code and vectorlist contexts with same syntax"
+  },
+  {
+    name: "RECT",
+    syntax: "RECT(x, y, w, h)",
+    description: "Draws a rectangle with given position and dimensions",
+    parameters: [
+      { name: "x", type: "int", description: "Left X coordinate", required: true },
+      { name: "y", type: "int", description: "Bottom Y coordinate", required: true },
+      { name: "w", type: "int", description: "Width (positive)", required: true },
+      { name: "h", type: "int", description: "Height (positive)", required: true }
+    ],
+    examples: [
+      "RECT(-50, -50, 100, 100)  # Square centered at origin",
+      "RECT(0, 0, 100, 75)      # Rectangle from origin"
+    ],
+    category: "unified",
+    notes: "Works in both global code and vectorlist contexts with same syntax"
+  },
+  {
+    name: "CIRCLE",
+    syntax: "CIRCLE(cx, cy, r) or CIRCLE(cx, cy, r, segs)",
+    description: "Draws a circle or circle approximation with optional segment count",
+    parameters: [
+      { name: "cx", type: "int", description: "Center X coordinate", required: true },
+      { name: "cy", type: "int", description: "Center Y coordinate", required: true },
+      { name: "r", type: "int", description: "Radius", required: true },
+      { name: "segs", type: "int", description: "Number of segments (3-64, default=16)", required: false }
+    ],
+    examples: [
+      "CIRCLE(0, 0, 25)      # Circle at center, radius 25",
+      "CIRCLE(50, 50, 30, 8) # Octagon approximation"
+    ],
+    category: "unified",
+    notes: "Works in both global code and vectorlist contexts with same syntax"
   },
   {
     name: "DRAW_TO",
     syntax: "DRAW_TO(x, y)",
     description: "Draws a line from current position to absolute coordinates",
     parameters: [
-      { name: "x", type: "int", description: "X coordinate (-127 to +127)", required: true },
-      { name: "y", type: "int", description: "Y coordinate (-127 to +127)", required: true }
+      { name: "x", type: "int", description: "Target X coordinate (-127 to +127)", required: true },
+      { name: "y", type: "int", description: "Target Y coordinate (-127 to +127)", required: true }
     ],
     examples: [
-      "DRAW_TO(50, 0)  # Draw line to right",
+      "DRAW_TO(50, 0)   # Draw line to right",
       "DRAW_TO(0, -30)  # Draw line down",
       "DRAW_TO(25, 25)  # Draw line to diagonal"
     ],
@@ -62,7 +124,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
   {
     name: "DRAW_LINE",
     syntax: "DRAW_LINE(x1, y1, x2, y2, intensity)",
-    description: "Draws a line from one point to another with specified intensity",
+    description: "PRIMARY LINE FUNCTION: Draws a line between two absolute coordinate points with specified intensity",
     parameters: [
       { name: "x1", type: "int", description: "Start X coordinate (-127 to +127)", required: true },
       { name: "y1", type: "int", description: "Start Y coordinate (-127 to +127)", required: true },
@@ -71,11 +133,99 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
     ],
     examples: [
-      "DRAW_LINE(0, 0, 50, 50, 255)  # Diagonal line at max brightness",
-      "DRAW_LINE(-25, 0, 25, 0, 128)  # Horizontal line at half brightness"
+      "DRAW_LINE(0, 0, 50, 0, 255)    # Horizontal line with max intensity",
+      "DRAW_LINE(-25, -25, 25, 25, 128)  # Diagonal line with medium intensity",
+      "DRAW_LINE(0, 50, 0, -50, 200)     # Vertical line"
     ],
     category: "drawing",
-    notes: "Complete line drawing function with start point, end point and intensity"
+    notes: "RECOMMENDED: Single unified line function. Always reliable, handles intensity and positioning automatically. Use this instead of other line functions."
+  },
+  {
+    name: "DRAW_CIRCLE",
+    syntax: "DRAW_CIRCLE(x, y, r, intensity)",
+    description: "Draws a circle at specified position with given radius and intensity",
+    parameters: [
+      { name: "x", type: "int", description: "Center X coordinate (-127 to +127)", required: true },
+      { name: "y", type: "int", description: "Center Y coordinate (-127 to +127)", required: true },
+      { name: "r", type: "int", description: "Radius (positive)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
+    ],
+    examples: [
+      "DRAW_CIRCLE(0, 0, 50, 255)    # Large circle at center",
+      "DRAW_CIRCLE(-25, 25, 15, 128) # Small circle with medium intensity"
+    ],
+    category: "drawing",
+    notes: "Draws complete circle with specified intensity"
+  },
+  {
+    name: "DRAW_CIRCLE_SEG",
+    syntax: "DRAW_CIRCLE_SEG(segments, x, y, r, intensity)",
+    description: "Draws a circle approximation using specified number of line segments",
+    parameters: [
+      { name: "segments", type: "int", description: "Number of line segments (more = smoother)", required: true },
+      { name: "x", type: "int", description: "Center X coordinate (-127 to +127)", required: true },
+      { name: "y", type: "int", description: "Center Y coordinate (-127 to +127)", required: true },
+      { name: "r", type: "int", description: "Radius (positive)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
+    ],
+    examples: [
+      "DRAW_CIRCLE_SEG(8, 0, 0, 30, 255)  # Octagon approximation",
+      "DRAW_CIRCLE_SEG(16, 0, 0, 30, 200) # Smoother circle"
+    ],
+    category: "drawing",
+    notes: "More segments = smoother but slower. Typical values: 8-32 segments"
+  },
+  {
+    name: "sin",
+    syntax: "sin(angle)",
+    description: "Sine function using precalculated lookup table (fast)",
+    parameters: [
+      { name: "angle", type: "int", description: "Angle in range 0-127 (0-127 represents 0-2π radians)", required: true }
+    ],
+    examples: [
+      "y = sin(angle)       # Returns -127 to +127",
+      "y = sin(angle) / 2   # Scale down for smaller radius",
+      "# Rotating line example:",
+      "let x_end = cos(angle) / 2",
+      "let y_end = sin(angle) / 2",
+      "DRAW_LINE(0, 0, x_end, y_end, 127)",
+      "# Rotating triangle:",
+      "let x1 = cos(angle) / 2",
+      "let x2 = cos(angle + 42) / 2  # +120° offset",
+      "let x3 = cos(angle + 85) / 2  # +240° offset"
+    ],
+    category: "math",
+    notes: "Uses precalculated table. Input: 0-127 (0=0°, 32=90°, 64=180°, 96=270°). Output: -127 to +127 (fits in signed byte). For DRAW_LINE coordinates, use values ≤±63 or divide by 2."
+  },
+  {
+    name: "cos",
+    syntax: "cos(angle)",
+    description: "Cosine function using precalculated lookup table (fast)",
+    parameters: [
+      { name: "angle", type: "int", description: "Angle in range 0-127 (0-127 represents 0-2π radians)", required: true }
+    ],
+    examples: [
+      "x = cos(angle)       # Returns -127 to +127",
+      "x = cos(angle) / 2   # Scale down for smaller radius",
+      "# Circular motion:",
+      "MOVE(cos(t) / 2, sin(t) / 2)"
+    ],
+    category: "math",
+    notes: "Uses precalculated table. Input: 0-127 (0=0°, 32=90°, 64=180°, 96=270°). Output: -127 to +127 (fits in signed byte). For DRAW_LINE coordinates, use values ≤±63 or divide by 2."
+  },
+  {
+    name: "tan",
+    syntax: "tan(angle)",
+    description: "Tangent function using precalculated lookup table (fast)",
+    parameters: [
+      { name: "angle", type: "int", description: "Angle in range 0-127 (0-127 represents 0-2π radians)", required: true }
+    ],
+    examples: [
+      "slope = tan(angle)  # Returns -120 to +120",
+      "# Values near ±90° are clamped to ±120"
+    ],
+    category: "math",
+    notes: "Uses precalculated table. Input: 0-127 maps to 0-360°. Output clamped to ±120 to avoid overflow near 90° and 270°."
   },
   {
     name: "SET_INTENSITY",
@@ -91,7 +241,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "intensity",
     vectrexAddress: "0xF2AB",
-    notes: "0 = beam off, 255 = maximum brightness. Use this in regular VPy code. For vectorlists, use INTENSITY without parentheses"
+    notes: "0 = beam off, 255 = maximum brightness. Works in both global code and vectorlist contexts with same syntax."
   },
   {
     name: "PRINT_TEXT",
@@ -195,37 +345,51 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 - **Simple Control Flow**: Basic if/else, for/while loops only
 - **Direct BIOS Mapping**: Functions compile directly to Vectrex BIOS calls
 
-## CRITICAL: Function Context Differences:
-⚠️ **Regular VPy vs Vectorlist Functions**:
-• Use MOVE_TO(x, y) in regular VPy code - NOT MOVE(x, y)
-• Use SET_INTENSITY(value) in regular VPy code - NOT INTENSITY(value)
-• Use DRAW_TO(x, y) in regular VPy code for drawing to absolute coordinates
-• Use PRINT_TEXT(x, y, text) works in both contexts
-• MOVE and INTENSITY (without parentheses) only work inside vectorlists!
+## UNIFIED SYNTAX: Global Functions and Vectorlist Commands
+🎉 **All functions now use consistent parentheses syntax**:
+• MOVE(x, y) - works in both global code and vectorlists
+• SET_INTENSITY(value) - works in both global code and vectorlists  
+• SET_ORIGIN() - works in both global code and vectorlists
+• RECT(x, y, w, h) - works in both global code and vectorlists
+• CIRCLE(cx, cy, r) - works in both global code and vectorlists
+• All commands use the same syntax everywhere - no more confusion!
 
-Example of CORRECT usage:
+Example of UNIFIED syntax:
 
-    # Regular VPy code - use these functions with parentheses
+\`\`\`vpy
+# Global VPy code - unified syntax with parentheses
+META TITLE = "UNIFIED DEMO"
+META COPYRIGHT = "g GCE 1982"
+
+def main():
+    # Initialization
+    pass
+
+def loop():
+    # Game logic every frame
     SET_INTENSITY(255)
-    MOVE_TO(0, 0) 
-    PRINT_TEXT(0, 50, "Hello")
-    DRAW_TO(50, 50)
+    MOVE(0, 0) 
+    RECT(-50, -50, 100, 100)
+\`\`\`
 
-    # Inside vectorlist - different syntax without parentheses  
+    # Inside vectorlist - same syntax with parentheses  
     vectorlist myshape:
-        INTENSITY 128
-        MOVE 0 0
-        RECT -10 -10 10 10
+        SET_INTENSITY(128)
+        MOVE(0, 0)
+        RECT(-10, -10, 20, 20)
+        CIRCLE(0, 0, 25, 16)
 
 ## Supported Language Features:
-✅ Variable assignments: x = 10, name = "Hello"
+✅ Variable assignments: let x = 10, name = "Hello"
 ✅ Basic arithmetic: +, -, *, /, % (modulo)
 ✅ Comparison operators: ==, !=, <, >, <=, >=
 ✅ Boolean logic: and, or, not
 ✅ Conditional statements: if x > 0:, else:
 ✅ Loop constructs: for i in range(10):, while condition:
+✅ **Two required functions**: def main(): (initialization) and def loop(): (game loop)
 ✅ Comments: # This is a comment
-✅ Built-in Vectrex functions: MOVE_TO, DRAW_TO, DRAW_LINE, SET_INTENSITY, PRINT_TEXT, etc.
+✅ Built-in Vectrex functions: MOVE, SET_INTENSITY, RECT, CIRCLE, ARC, SPIRAL, etc.
+✅ Unified syntax: All functions use parentheses everywhere
 
 ## What VPy IS:
 - A simple, procedural language with Python-like syntax
@@ -247,20 +411,74 @@ Example of CORRECT usage:
 - **Target Platform**: Vectrex console
 - **Compilation**: VPy → 6809 Assembly → Vectrex executable
 
-## VPy Project Structure and META Fields:
+## VPy Game Structure (New Model):
+
+### 🎮 **Two-Function Architecture**
+VPy uses a clean separation between initialization and game logic:
+
+#### **def main():** - Initialization (runs once)
+- Called **once** when the program starts
+- Use for: setting up variables, initial game state, one-time setup
+- **Do NOT** put game loops or drawing code here
+- **Purpose**: Initialize your game world
+
+#### **def loop():** - Game Loop (runs every frame)  
+- Called **automatically** 60 times per second (60 FPS)
+- Use for: game logic, drawing, input handling, animations
+- **No manual loops needed** - the function IS the loop
+- **Purpose**: Update and draw your game each frame
+
+### 🎯 **Why This Structure?**
+- **Clear separation**: Initialization vs. game logic
+- **Automatic timing**: No need for manual frame timing
+- **Professional pattern**: Follows game engine conventions (Unity, Arduino, etc.)
+- **Performance**: Optimized by the compiler for Vectrex hardware
+- **Error prevention**: Compiler enforces both functions exist
+
+### ❌ **Old vs. New Structure**
+
+**Old (deprecated):**
+\\\`\\\`\\\`vpy
+def main():
+    # Everything mixed together
+    player_x = 0  # Init
+    for frame in range(1000):  # Manual loop
+        draw_player()  # Game logic
+        WAIT_FRAMES(1)  # Manual timing
+\\\`\\\`\\\`
+
+**New (correct):**
+\\\`\\\`\\\`vpy
+def main():
+    # Clean initialization
+    let player_x = 0
+    let score = 0
+
+def loop():
+    # Clean game logic (automatic 60 FPS)
+    draw_player()
+    update_score()
+    # No manual timing needed!
+\\\`\\\`\\\`
 
 ### 📄 **Project Metadata (META Fields)**
 VPy supports exactly 3 META fields that define ROM header information:
 
 \`\`\`vpy
 META TITLE = "MY GAME"          # Game title (REQUIRED)
-META COPYRIGHT = "g GCE 2025"   # Copyright string (optional)
+META COPYRIGHT = "g GCE 1982"   # Copyright string (optional)
 META MUSIC = "music1"           # BIOS music symbol (optional)
 
 # Your VPy code starts here
-INTENSITY(255)
-MOVE(0, 0)
-PRINT_TEXT(0, 50, "HELLO VECTREX")
+def main():
+    # Initialization
+    pass
+
+def loop():
+    # Game logic
+    SET_INTENSITY(255)
+    MOVE(0, 0)
+    PRINT_TEXT(0, 50, "HELLO VECTREX")
 \`\`\`
 
 ### 🏷️ **META Field Reference (3 fields only):**
@@ -273,8 +491,8 @@ PRINT_TEXT(0, 50, "HELLO VECTREX")
   - **Used for**: ROM header, game identification
 
 - **COPYRIGHT**: Copyright string (optional)
-  - Example: \`META COPYRIGHT = "g GCE 2025"\`
-  - **Default**: "g GCE 1998"
+  - Example: \`META COPYRIGHT = "g GCE 1982"\`
+  - **Default**: "g GCE 1982"
   - **Used for**: First line display in ROM header
 
 - **MUSIC**: BIOS music symbol (optional)
@@ -295,40 +513,60 @@ PRINT_TEXT(0, 50, "HELLO VECTREX")
 #### **Simple Game:**
 \`\`\`vpy
 META TITLE = "SQUARE DEMO"
-META COPYRIGHT = "g DANIEL 2025"
+META COPYRIGHT = "g GCE 1982"
 META MUSIC = "0"
 
-INTENSITY(255)
-MOVE(-25, -25)
-DRAW_LINE(50, 0)
-DRAW_LINE(0, 50)
-DRAW_LINE(-50, 0)
-DRAW_LINE(0, -50)
+def main():
+    # Initialize once
+    pass
+
+def loop():
+    # Draw every frame
+    SET_INTENSITY(255)
+    MOVE(-25, -25)
+    DRAW_TO(25, -25)
+    DRAW_TO(25, 25)
+    DRAW_TO(-25, 25)
+    DRAW_TO(-25, -25)
 \`\`\`
 
 #### **Animation with Music:**
 \`\`\`vpy
 META TITLE = "ROTATING LINE"
-META COPYRIGHT = "g VPY DEVELOPER 2025"
+META COPYRIGHT = "g GCE 1982"
 META MUSIC = "music1"
 
-for frame in range(360):
-    INTENSITY(200)
-    angle = frame * 2
-    x = angle % 60 - 30
-    y = angle % 40 - 20
-    MOVE(x, y)
-    DRAW_LINE(30, 0)
-    WAIT_FRAMES(1)
+def main():
+    # Initialize animation variables once
+    let x = -30
+    let direction = 1
+
+def loop():
+    # Animation runs automatically every frame
+    SET_INTENSITY(200)
+    MOVE(x, 0)
+    DRAW_TO(x + 30, 0)
+    
+    # Update position
+    x = x + direction
+    if x > 30:
+        direction = -1
+    if x < -30:
+        direction = 1
 \`\`\`
 
 #### **Minimal Example:**
 \`\`\`vpy
 META TITLE = "HELLO WORLD"
 
-# Minimal code - other META fields use defaults
-INTENSITY(255)
-PRINT_TEXT(0, 0, "HELLO")
+def main():
+    # Minimal initialization
+    pass
+
+def loop():
+    # Minimal code - other META fields use defaults
+    SET_INTENSITY(255)
+    PRINT_TEXT(0, 0, "HELLO")
 \`\`\`
 
 ### 🔧 **META Fields Usage in IDE:**
@@ -415,21 +653,46 @@ PRINT_TEXT(0, 0, "HELLO")
 ## Code Examples:
 \`\`\`vpy
 # Simple drawing example (CORRECT VPy code)
-INTENSITY(255)          # Set bright intensity
-MOVE(-50, 0)           # Move to starting position
-DRAW_LINE(100, 0)      # Draw horizontal line
-DRAW_LINE(0, 50)       # Draw vertical line up
-DRAW_LINE(-100, 0)     # Draw back to start
-DRAW_LINE(0, -50)      # Complete the rectangle
+META TITLE = "SQUARE DEMO"
+META COPYRIGHT = "g GCE 1982"
 
-# Animation example with loop (CORRECT VPy code)
-for frame in range(100):
-    INTENSITY(255)
-    angle = frame * 2
-    x = angle % 100 - 50
-    MOVE(x, 0)
-    DRAW_LINE(0, 30)
-    WAIT_FRAMES(1)
+def main():
+    # Initialization - runs ONCE at startup
+    pass
+
+def loop():
+    # Game loop - runs every frame (60 FPS)
+    SET_INTENSITY(255)     # Set bright intensity
+    MOVE(-50, 0)           # Move to starting position
+    DRAW_TO(50, 0)         # Draw horizontal line
+    DRAW_TO(50, 50)        # Draw vertical line up
+    DRAW_TO(-50, 50)       # Draw back to start
+    DRAW_TO(-50, 0)        # Complete the rectangle
+
+# Animation example with variables (CORRECT VPy code)
+META TITLE = "MOVING SQUARE"  
+META COPYRIGHT = "g GCE 1982"
+
+def main():
+    # Initialize variables once
+    let player_x = -50
+    let direction = 1
+
+def loop():
+    # Animation logic every frame
+    SET_INTENSITY(255)
+    MOVE(player_x, 0)
+    DRAW_TO(player_x + 20, 0)
+    DRAW_TO(player_x + 20, 20)
+    DRAW_TO(player_x, 20)
+    DRAW_TO(player_x, 0)
+    
+    # Update position
+    player_x = player_x + direction
+    if player_x > 50:
+        direction = -1
+    if player_x < -50:
+        direction = 1
 
 # INCORRECT - This is NOT valid VPy (NO classes):
 # class Shape:           # ❌ NOT SUPPORTED
@@ -453,22 +716,48 @@ for frame in range(100):
 - 4-channel sound via AY-3-8912 PSG
 
 ## Programming Patterns:
-1. Set intensity before drawing (INTENSITY > 0)
-2. Move to start position (MOVE)
-3. Draw lines with relative coordinates (DRAW_LINE)
-4. Use ORIGIN() to reset coordinate system
-5. WAIT_FRAMES() for timing and animation
+1. **Two required functions**: \`def main():\` for initialization and \`def loop():\` for game logic
+2. **main() runs once**: Use for initializing variables, setting up game state
+3. **loop() runs every frame**: Use for game logic, drawing, input handling (60 FPS)
+4. Set intensity before drawing (SET_INTENSITY > 0)
+5. Move to start position (MOVE)
+6. Draw lines with relative coordinates (DRAW_LINE)
+7. Use ORIGIN() to reset coordinate system
+
+## Required Program Structure:
+\\\`\\\`\\\`vpy
+META TITLE = "YOUR GAME"
+META COPYRIGHT = "g GCE 1982"
+
+def main():
+    # Initialization code - runs ONCE at startup
+    let player_x = 0
+    let score = 0
+    # Set up initial game state
+
+def loop():
+    # Game logic - runs every frame (60 FPS automatically)
+    SET_INTENSITY(255)
+    MOVE(player_x, 0)
+    DRAW_TO(player_x + 20, 0)
+    # Update game state, handle input, etc.
+\\\`\\\`\\\`
 
 ## Common Mistakes:
+- **Missing def main()**: Initialization function is required (runs once at startup)
+- **Missing def loop()**: Game loop function is required (runs every frame at 60 FPS)
+- **Putting game logic in main()**: main() is for initialization only, put game logic in loop()
+- **Manual frame loops**: Don't use for/while loops for animation - loop() runs automatically
 - Forgetting to set intensity (lines won't show)
 - Using absolute coordinates for DRAW_LINE (should be relative)
 - Coordinates outside -127 to +127 range
-- Not considering 60 FPS timing for animations
-- Trying to pass too many parameters to functions (max 2-3)
+- Not considering automatic 60 FPS timing
+- Trying to pass too many parameters to functions (check function documentation - varies from 0 to 5 params)
 - Attempting to use unsupported Python features (classes, imports, etc.)
 - Using undefined variables or complex expressions
 - Thinking VPy is object-oriented (it's NOT!)
 - Believing VPy was created in 1982 (completely false!)
+- **Old structure**: Don't put all code in main() - separate initialization from game loop
 `;
 
 export const VECTREX_HARDWARE_CONTEXT = `
@@ -548,6 +837,47 @@ ${projectFiles ? projectFiles.map(f => `- ${f}`).join('\n') : 'No files loaded'}
 - **Language**: VPy (Vectrex Python) - procedural, not object-oriented
 - **Compiler**: VPy → 6809 Assembly → Vectrex executable
 - **Emulator**: Built-in JSVecX Vectrex emulator
+## Common Trigonometric Patterns:
+
+### Rotating Line:
+\`\`\`vpy
+var angle = 0
+def loop():
+    let x = cos(angle) / 2
+    let y = sin(angle) / 2
+    DRAW_LINE(0, 0, x, y, 127)
+    angle = angle + 1
+    if angle > 127: angle = 0
+\`\`\`
+
+### Rotating Triangle:
+\`\`\`vpy
+var angle = 0
+def loop():
+    # 3 vertices at 120° intervals (42 units in 0-127 system)
+    let x1 = cos(angle) / 2
+    let y1 = sin(angle) / 2
+    let x2 = cos(angle + 42) / 2
+    let y2 = sin(angle + 42) / 2
+    let x3 = cos(angle + 85) / 2
+    let y3 = sin(angle + 85) / 2
+    DRAW_LINE(x1, y1, x2, y2, 120)
+    DRAW_LINE(x2, y2, x3, y3, 120)
+    DRAW_LINE(x3, y3, x1, y1, 120)
+    angle = angle + 1
+    if angle > 127: angle = 0
+\`\`\`
+
+### Circular Motion:
+\`\`\`vpy
+var t = 0
+def loop():
+    MOVE(cos(t) / 3, sin(t) / 3)
+    # Draw something at this position
+    t = t + 2  # Faster motion
+    if t > 127: t = 0
+\`\`\`
+
 - **AI Assistant**: PyPilot with context-aware VPy expertise
 
 ## Available IDE Features:

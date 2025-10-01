@@ -4,14 +4,31 @@ use super::string_literals::collect_string_literals;
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-static FIRST_CONST_LINE: AtomicBool = AtomicBool::new(false);
 static LAST_END_SET: AtomicBool = AtomicBool::new(false);
-static LAST_END_X: AtomicUsize = AtomicUsize::new(0);
-static LAST_END_Y: AtomicUsize = AtomicUsize::new(0);
-// Track last intensity used by constant line inliner (0x100 = none)
-static LAST_INTENSITY: AtomicUsize = AtomicUsize::new(0x100);
+
+// Helper function to map legacy function names to their modern counterparts
+fn resolve_function_name(name: &str) -> Option<String> {
+    match name {
+        "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT".to_string()),
+        "MOVE" => Some("VECTREX_MOVE_TO".to_string()),        // Unificado: MOVE -> VECTREX_MOVE_TO
+        "MOVE_TO" => Some("VECTREX_MOVE_TO".to_string()),     // Compatibilidad hacia atrás
+        "DRAW_TO" => Some("VECTREX_DRAW_TO".to_string()),
+        // DRAW_LINE -> removed from auto-mapping, handled by inline optimization or explicit wrapper call
+        "DRAW_POLYGON" => Some("DRAW_POLYGON".to_string()),   // already handled if constants; allow pass-through if dynamic (future)
+        "DRAW_VL" => Some("VECTREX_DRAW_VL".to_string()),
+        "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN".to_string()),
+        "VECTOR_PHASE_BEGIN" => Some("VECTREX_VECTOR_PHASE_BEGIN".to_string()),
+        "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN".to_string()),
+        "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY".to_string()),
+        "WAIT_RECAL" => Some("VECTREX_WAIT_RECAL".to_string()),
+        "PLAY_MUSIC1" => Some("VECTREX_PLAY_MUSIC1".to_string()),
+        "DBG_STATIC_VL" => Some("VECTREX_DBG_STATIC_VL".to_string()),
+        name if name.starts_with("VECTREX_") => Some(name.to_string()),
+        _ => None
+    }
+}
 
 // emit: entry point for Motorola 6809 backend assembly generation.
 // Produces a simple Vectrex-style header, calls platform init + MAIN, then infinite loop.
@@ -20,11 +37,39 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let syms = collect_symbols(module);
     let string_map = collect_string_literals(module);
         let rt_usage = analyze_runtime_usage(module);
-    // Locate user 'main' function (lowercase) for potential inlining (classic style)
+    
+    // Locate required 'main' and 'loop' functions
     let mut user_main: Option<&Function> = None;
-    for item in &module.items { if let Item::Function(f) = item { if f.name.eq_ignore_ascii_case("main") { user_main = Some(f); break; } } }
+    let mut user_loop: Option<&Function> = None;
+    
+    for item in &module.items { 
+        if let Item::Function(f) = item { 
+            if f.name.eq_ignore_ascii_case("main") { 
+                user_main = Some(f); 
+            } else if f.name.eq_ignore_ascii_case("loop") { 
+                user_loop = Some(f); 
+            }
+        } 
+    }
+    
+    // Validate that both required functions exist and emit errors in assembly
+    if user_main.is_none() {
+        out.push_str("; ERROR: Missing required function 'def main():'\n");
+        out.push_str("; The main() function is required for initialization code that runs once at startup.\n");
+        out.push_str("        ; Compilation failed - please add def main(): function\n");
+        return out;
+    }
+    if user_loop.is_none() {
+        out.push_str("; ERROR: Missing required function 'def loop():'\n");
+        out.push_str("; The loop() function is required and contains code that runs every frame (60 FPS).\n");
+        out.push_str("        ; Compilation failed - please add def loop(): function\n");
+        return out;
+    }
+    
     // Track whether we ended up inlining 'main'
     let main_inlined = false; // not currently toggled (kept for future inlining logic)
+    // Initially suppress runtime only if main was inlined (will be re-evaluated later)
+    let mut suppress_runtime = main_inlined;
     // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
     // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
     // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
@@ -60,8 +105,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         effective_copy = canonical_prefix.to_string();
     }
     let music_fdb = if music_raw == "0" { String::from("$0000") } else { music_raw.to_string() };
-    // Single classic header only
-    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n    FCB $F8,$50,$20,-$45\n", effective_copy, music_fdb));
+    // Single classic header only (tutorial format)
+    out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n    FDB {}\n", effective_copy, music_fdb));
+    out.push_str("    FCB $F8\n    FCB $50\n    FCB $20\n    FCB $BB\n"); // -$45 = $BB
     let mut title = opts.title.to_uppercase();
     if title.len() > 24 { title.truncate(24); }
     title = title.chars().map(|c| if c.is_ascii_alphanumeric() || c==' ' { c } else { ' ' }).collect();
@@ -69,9 +115,22 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(&format!("    FCC \"{}\"\n", title));
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
-    // Jump over code to START like smartlist_demo pattern
-    out.push_str("    JMP START\n\n");
-    out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
+    
+    // Check if main() has real content (not just return)
+    let main_has_content = if let Some(main_func) = user_main {
+        !main_func.body.is_empty() && !main_func.body.iter().all(|stmt| {
+            matches!(stmt, Stmt::Return { .. })
+        })
+    } else {
+        false
+    };
+    
+    if main_has_content {
+        // main() has real content - use START structure
+        out.push_str("    JMP START\n\n");
+        out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
+    }
+    
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
     // Entry sequence: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).
@@ -82,14 +141,34 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     let _wait_recal_call = if opts.fast_wait { "JSR VECTREX_WAIT_RECAL" } else { &format!("JSR {}Wait_Recal", jsr_ext) };
 
     if opts.auto_loop {
-        // smartlist_demo style MAIN_LOOP calling vector list (if main body calls vectrex_draw_vectorlist it will be inlined later anyway).
-        out.push_str("MAIN_LOOP:\n    JSR Wait_Recal\n    LDA #$D0\n    TFR A,DP\n    JSR Intensity_5F\n    JSR Reset0Ref\n");
-        if let Some(_f)=user_main { out.push_str("    JSR MAIN\n"); }
-        out.push_str("    BRA MAIN_LOOP\n\n");
+        // Vectrex tutorial structure: main() code inline in START, loop() code inline in MAIN
+        
+        // Emit main() function body inline only if it has real content
+        if main_has_content {
+            out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
+            if let Some(main_func) = user_main {
+                let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
+                for stmt in &main_func.body {
+                    emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts);
+                }
+            }
+        }
+        
+        // Choose label based on whether we have START or not
+        let main_label = if main_has_content { "MAIN" } else { "main" };
+        out.push_str(&format!("\n{}:\n    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n", main_label));
+        
+        // Call loop() function as subroutine to avoid code duplication and overflow
+        if let Some(_loop_func) = user_loop {
+            out.push_str("    ; *** Call loop() as subroutine (executed every frame)\n");
+            out.push_str("    JSR LOOP_BODY\n");
+        }
+        
+        out.push_str(&format!("    BRA {}\n\n", main_label));
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
-    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user loop required\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
+    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
     let mut global_mutables: Vec<(String,i32)> = Vec::new();
@@ -98,7 +177,21 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     for item in &module.items {
         match item {
             Item::Function(f) => {
-                    if opts.auto_loop && f.name.eq_ignore_ascii_case("main") && main_inlined { /* inlined above */ } else { emit_function(f, &mut out, &string_map, opts); }
+                if opts.auto_loop && f.name == "main" {
+                    // Skip main function in auto_loop mode - it's inlined in START/MAIN
+                    continue;
+                } else if opts.auto_loop && f.name == "loop" {
+                    // Emit loop function as LOOP_BODY subroutine to avoid code duplication
+                    out.push_str("LOOP_BODY:\n");
+                    let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
+                    for stmt in &f.body {
+                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts);
+                    }
+                    out.push_str("    RTS\n\n");
+                } else {
+                    // Emit other functions normally
+                    emit_function(f, &mut out, &string_map, opts);
+                }
             }
                 Item::VectorList { name, entries } => {
                     // Emit compact data-only vector list consumed by Run_VectorList.
@@ -258,10 +351,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference
     // Classic mode: don't duplicate string literals; rely on collected emission below
     // (Legacy tail loop removed; entry sequence already loops.)
-    // Suppress runtime/helpers only if trivial main was inlined
-    let suppress_runtime = main_inlined; // unchanged logic for helper emission
-    // Move runtime include AFTER vector lists like smartlist_demo
-    out.push_str("    INCLUDE \"runtime/vectorlist_runtime.asm\"\n");
+    // Move runtime include AFTER vector lists like smartlist_demo - but only if needed
+    if rt_usage.needs_vectorlist_runtime {
+        out.push_str("    INCLUDE \"runtime/vectorlist_runtime.asm\"\n");
+    }
     if !suppress_runtime {
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
@@ -273,6 +366,17 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // NOTE: External packer should align to desired bank size (4K/8K). No internal alignment performed.
     // Optional bank alignment (4K/8K). Use ALIGN macro if bank_size is power-of-two.
     // Bank padding handled at end of file now.
+    
+    // Determine max args used (0..5) BEFORE evaluating suppress_runtime
+    let max_args = compute_max_args_used(module);
+    // Re-evaluate suppress_runtime now that we know max_args
+    let no_runtime_vars_needed = !rt_usage.needs_tmp_left && !rt_usage.needs_tmp_right && 
+                                 !rt_usage.needs_tmp_ptr && 
+                                 !rt_usage.needs_mul_helper && !rt_usage.needs_div_helper && 
+                                 !rt_usage.needs_line_vars && !rt_usage.needs_vcur_vars &&
+                                 string_map.is_empty() && max_args == 0;
+    suppress_runtime = main_inlined || no_runtime_vars_needed;
+    
     // RAM variables: either emit ORG or symbolic EQU addresses.
     if suppress_runtime { /* skip RAM ORG and temp vars entirely */ }
     else if !opts.exclude_ram_org {
@@ -318,8 +422,6 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             }
         }
     }
-    // Determine max args used (0..5)
-    let max_args = compute_max_args_used(module);
     if !suppress_runtime {
         out.push_str("; Call argument scratch space\n");
         if opts.exclude_ram_org {
@@ -456,7 +558,20 @@ fn scan_stmt_args(s: &Stmt) -> usize {
 
 fn scan_expr_args(e: &Expr) -> usize {
     match e {
-        Expr::Call(ci) => ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0)),
+        Expr::Call(ci) => {
+            // Check if this call can be optimized inline (no VAR_ARG usage)
+            let up = ci.name.to_ascii_uppercase();
+            
+            // DRAW_LINE with all constants doesn't use VAR_ARG (optimized inline)
+            if up == "DRAW_LINE" && ci.args.len() == 5 && 
+               ci.args.iter().all(|a| matches!(a, Expr::Number(_))) {
+                // This call will be optimized inline - doesn't use VAR_ARG
+                return ci.args.iter().map(scan_expr_args).max().unwrap_or(0);
+            }
+            
+            // Other calls use VAR_ARG normally
+            ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0))
+        },
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => scan_expr_args(left).max(scan_expr_args(right)),
         Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_args(inner),
         _ => 0,
@@ -474,6 +589,7 @@ struct RuntimeUsage {
     needs_tmp_ptr: bool,
     needs_line_vars: bool,
     needs_vcur_vars: bool,
+    needs_vectorlist_runtime: bool,
     wrappers_used: HashSet<String>,
 }
 
@@ -487,7 +603,7 @@ fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
         }
     }
     // Derive grouped variable needs from wrappers
-    if usage.wrappers_used.contains("VECTREX_DRAW_LINE") || usage.wrappers_used.contains("VECTREX_DRAW_VL") {
+    if usage.wrappers_used.contains("DRAW_LINE_WRAPPER") || usage.wrappers_used.contains("VECTREX_DRAW_VL") || usage.wrappers_used.contains("VECTREX_DRAW_TO") {
         usage.needs_line_vars = true;
     }
     if usage.wrappers_used.contains("VECTREX_MOVE_TO") || usage.wrappers_used.contains("VECTREX_DRAW_TO") {
@@ -541,27 +657,24 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
         Expr::Call(ci) => { 
             // Track wrapper usage (normalize like emit_builtin_call)
             let up = ci.name.to_ascii_uppercase();
-            let resolved = match up.as_str() {
-                "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-                "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
-                "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
-                "DRAW_TO" => Some("VECTREX_DRAW_TO"),
-                "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
-                "DRAW_VL" => Some("VECTREX_DRAW_VL"),
-                "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN"),
-                "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),
-                "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY"),
-                "WAIT_RECAL" => Some("VECTREX_WAIT_RECAL"),
-                "PLAY_MUSIC1" => Some("VECTREX_PLAY_MUSIC1"),
-                "DBG_STATIC_VL" => Some("VECTREX_DBG_STATIC_VL"),
-                _ if up.starts_with("VECTREX_") => Some(up.as_str()),
-                _ => None
-            };
+            let resolved = resolve_function_name(&up);
             if let Some(r) = resolved {
-                if r == "VECTREX_DRAW_LINE" && ci.args.len()==5 && ci.args.iter().all(|a| matches!(a, Expr::Number(_))) {
-                    // Will inline classic pattern; do not mark runtime wrapper.
-                } else {
-                    usage.wrappers_used.insert(r.to_string());
+                // Always use wrapper (no inline optimization)
+                usage.wrappers_used.insert(r);
+            }
+            // Check if this function needs vectorlist runtime
+            if up == "VECTREX_DRAW_VECTORLIST" || up == "DRAW_VECTORLIST" {
+                usage.needs_vectorlist_runtime = true;
+            }
+            // DRAW_LINE: only mark wrapper as needed if it can't be optimized inline
+            if up == "DRAW_LINE" {
+                // Check if this call can be optimized inline (all 5 args are constants)
+                let can_optimize_inline = ci.args.len() == 5 && 
+                    ci.args.iter().all(|a| matches!(a, Expr::Number(_)));
+                
+                if !can_optimize_inline {
+                    // Only mark wrapper as needed if inline optimization isn't possible
+                    usage.wrappers_used.insert("DRAW_LINE_WRAPPER".to_string());
                 }
             }
             for a in &ci.args { scan_expr_runtime(a, usage); }
@@ -578,10 +691,17 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
 
 // emit_function: outputs code for a function.
 fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
-    // Mark start of function for constant line inlining state
-    FIRST_CONST_LINE.store(true, Ordering::Relaxed);
+    // Reset end position tracking for each function
     LAST_END_SET.store(false, Ordering::Relaxed);
-    out.push_str(&format!("{}: ; function\n", f.name.to_uppercase()));
+    
+    // Map special VPy functions to proper ASM labels
+    let label_name = if f.name == "main" {
+        "MAIN".to_string()
+    } else {
+        f.name.to_uppercase()
+    };
+    
+    out.push_str(&format!("{}: ; function\n", label_name));
     out.push_str(&format!("; --- function {} ---\n", f.name));
     let locals = collect_locals(&f.body);
     let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
@@ -636,9 +756,9 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
             "; Draw from current (VCUR_X,VCUR_Y) to new (x,y) provided in low bytes VAR_ARG0/1.\n; Semántica: igual a MOVE_TO seguido de línea, pero preserva origen previo como punto inicial.\n; Limita dx/dy a rango BIOS (-64..63) antes de invocar Draw_Line_d.\nVECTREX_DRAW_TO:\n    ; Cargar destino (x,y)\n    LDA VAR_ARG0+1  ; Xdest en A temporalmente\n    STA VLINE_DX    ; reutilizar buffer temporal (bajo) para Xdest\n    LDA VAR_ARG1+1  ; Ydest en A\n    STA VLINE_DY    ; reutilizar buffer temporal para Ydest\n    ; Calcular dx = Xdest - VCUR_X\n    LDA VLINE_DX\n    SUBA VCUR_X\n    STA VLINE_DX\n    ; Calcular dy = Ydest - VCUR_Y\n    LDA VLINE_DY\n    SUBA VCUR_Y\n    STA VLINE_DY\n    ; Clamp dx\n    LDA VLINE_DX\n    CMPA #63\n    BLE D2_DX_HI_OK\n    LDA #63\nD2_DX_HI_OK: CMPA #-64\n    BGE D2_DX_LO_OK\n    LDA #-64\nD2_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy\n    LDA VLINE_DY\n    CMPA #63\n    BLE D2_DY_HI_OK\n    LDA #63\nD2_DY_HI_OK: CMPA #-64\n    BGE D2_DY_LO_OK\n    LDA #-64\nD2_DY_LO_OK: STA VLINE_DY\n    ; Mover haz al origen previo (VCUR_Y en A, VCUR_X en B)\n    LDA VCUR_Y\n    LDB VCUR_X\n    JSR Moveto_d\n    ; Dibujar línea usando deltas (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    ; Actualizar posición actual al destino exacto original (no clamped)\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
         );
     }
-    if w.contains("VECTREX_DRAW_LINE") {
+    if w.contains("DRAW_LINE_WRAPPER") {
         out.push_str(
-            "; Draw single dynamic line. Args: (x0,y0,x1,y1,intensity) low bytes.\n; Uses BIOS Draw_Line_d directly (A=dy, B=dx).\n; Preconditions: DP is $D0 after Wait_Recal.\nVECTREX_DRAW_LINE:\n    ; Intensity\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; Move to start (y in A, x in B)\n    LDA VAR_ARG1+1\n    LDB VAR_ARG0+1\n    JSR Moveto_d\n    ; Compute deltas (end-start)\n    LDA VAR_ARG2+1\n    SUBA VAR_ARG0+1\n    STA VLINE_DX\n    LDA VAR_ARG3+1\n    SUBA VAR_ARG1+1\n    STA VLINE_DY\n    ; Clamp dx to +/-63\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLX_OK_HI\n    LDA #63\nDLX_OK_HI: CMPA #-64\n    BGE DLX_OK_LO\n    LDA #-64\nDLX_OK_LO: STA VLINE_DX\n    ; Clamp dy to +/-63\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLY_OK_HI\n    LDA #63\nDLY_OK_HI: CMPA #-64\n    BGE DLY_OK_LO\n    LDA #-64\nDLY_OK_LO: STA VLINE_DY\n    ; Draw line (Vec_Misc_Count left to BIOS)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
+            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity and handles Reset0Ref properly.\nDRAW_LINE_WRAPPER:\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; CRITICAL: Reset integrator origin before each line\n    JSR Reset0Ref\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLW_DX_HI_OK\n    LDA #63\nDLW_DX_HI_OK: CMPA #-64\n    BGE DLW_DX_LO_OK\n    LDA #-64\nDLW_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLW_DY_HI_OK\n    LDA #63\nDLW_DY_HI_OK: CMPA #-64\n    BGE DLW_DY_LO_OK\n    LDA #-64\nDLW_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
         );
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
@@ -682,7 +802,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
-        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"VECTREX_DRAW_LINE"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
+        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
@@ -709,6 +829,45 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             return true;
         }
     }
+    
+    // DRAW_LINE optimization: when all args are numeric constants, generate inline code
+    if up == "DRAW_LINE" && args.len() == 5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(x0), Expr::Number(y0), Expr::Number(x1), Expr::Number(y1), Expr::Number(intensity)) 
+            = (&args[0], &args[1], &args[2], &args[3], &args[4]) {
+            // Calculate deltas with proper signed handling
+            let dx_total = *x1 - *x0;
+            let dy_total = *y1 - *y0;
+            
+            // Use raw deltas (no clamping - let BIOS handle overflow)
+            let dx = dx_total;
+            let dy = dy_total;
+            
+            // Generate optimized inline assembly (tutorial style)
+            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Moveto_d\n", *y0, *x0));
+            if *intensity != 0x5F { 
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity & 0xFF)); 
+            } else {
+                out.push_str("    JSR Intensity_5F\n");
+            }
+            out.push_str("    CLR Vec_Misc_Count\n");
+            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Draw_Line_d\n", dy, dx));
+            return true;
+        }
+    }
+    
+    // DRAW_LINE fallback: if not all constants, use wrapper
+    if up == "DRAW_LINE" && args.len() == 5 {
+        // Generate standard call sequence with wrapper
+        for (i, arg) in args.iter().enumerate() {
+            emit_expr(arg, out, fctx, string_map, opts);
+            out.push_str("    LDD RESULT\n");
+            out.push_str(&format!("    STD VAR_ARG{}\n", i));
+        }
+        out.push_str("    JSR DRAW_LINE_WRAPPER\n");
+        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
+    
     // Custom macro: DRAW_POLYGON(N, x0,y0,x1,y1,...,x_{N-1},y_{N-1}) all numeric constants -> inline lines with origin resets
     if up == "DRAW_POLYGON" && !args.is_empty() {
         if let Expr::Number(nv) = &args[0] {
@@ -846,59 +1005,12 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 out.push_str("    CLRA\n    CLRB\n    STD RESULT\n"); return true;
         }
     }
-    // Inline classic single line when all numeric constants
-    if up=="VECTREX_DRAW_LINE" && args.len()==5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
-        if let (Expr::Number(x0),Expr::Number(y0),Expr::Number(x1),Expr::Number(y1),Expr::Number(inten)) = (&args[0],&args[1],&args[2],&args[3],&args[4]) {
-                // Always move explicitly to start for robustness (avoid chaining state mismatch)
-                let start_x = *x0 & 0xFF; let start_y = *y0 & 0xFF;
-                // Ensure DP points to $D0 hardware registers (BIOS routines like Print_Str_d may have changed it)
-                out.push_str("    LDA #$D0\n    TFR A,DP\n");
-                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d ; move to ({}, {})\n", start_y, start_x, start_x, start_y));
-                // Intensity: only emit on first line or change
-                let first = FIRST_CONST_LINE.swap(false, Ordering::Relaxed);
-                let inten_low = *inten & 0xFF;
-                let prev_int = LAST_INTENSITY.load(Ordering::Relaxed) as i32;
-                if first || prev_int != inten_low {
-                    if inten_low == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", inten_low)); }
-                    LAST_INTENSITY.store(inten_low as usize, Ordering::Relaxed);
-                }
-                // Compute raw 8-bit signed deltas (allow full -128..127 range). BIOS handles larger |values| by hardware scaling.
-                let dx_i = *x1 - *x0;
-                let dy_i = *y1 - *y0;
-                let dx = dx_i & 0xFF;
-                let dy = dy_i & 0xFF;
-                // Clear Vec_Misc_Count like original stable version to ensure proper line timing
-                out.push_str("    CLR Vec_Misc_Count\n");
-                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d ; dy={}, dx={}\n", dy, dx, dy_i, dx_i));
-                out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
-                LAST_END_X.store((*x1 as usize) & 0xFF, Ordering::Relaxed); // kept for potential future chaining use
-                LAST_END_Y.store((*y1 as usize) & 0xFF, Ordering::Relaxed);
-                LAST_END_SET.store(true, Ordering::Relaxed);
-                return true;
-        }
-    }
     if !is {
         // Backward compatibility: map legacy short names to vectrex-prefixed versions
-        let translated = match up.as_str() {
-            "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT"),
-            "MOVE" => Some("VECTREX_MOVE_TO"),        // Unificado: MOVE -> VECTREX_MOVE_TO
-            "MOVE_TO" => Some("VECTREX_MOVE_TO"),     // Compatibilidad hacia atrás
-            "DRAW_TO" => Some("VECTREX_DRAW_TO"),
-            "DRAW_LINE" => Some("VECTREX_DRAW_LINE"),
-            "DRAW_POLYGON" => Some("DRAW_POLYGON"), // already handled if constants; allow pass-through if dynamic (future)
-            "DRAW_VL" => Some("VECTREX_DRAW_VL"),
-            "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN"),
-            "VECTOR_PHASE_BEGIN" => Some("VECTREX_VECTOR_PHASE_BEGIN"),
-            "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN"),
-            "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY"),
-            "WAIT_RECAL" => Some("VECTREX_WAIT_RECAL"),
-            "PLAY_MUSIC1" => Some("VECTREX_PLAY_MUSIC1"),
-            "DBG_STATIC_VL" => Some("VECTREX_DBG_STATIC_VL"),
-            _ => None
-        };
+        let translated = resolve_function_name(&up);
         if let Some(new_up) = translated {
             // Re-dispatch using new name recursively (avoid infinite loop by guarding is set)
-            return emit_builtin_call(new_up, args, out, fctx, string_map, opts);
+            return emit_builtin_call(&new_up, args, out, fctx, string_map, opts);
         }
         return false;
     }

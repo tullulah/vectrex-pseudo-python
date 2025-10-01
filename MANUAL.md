@@ -260,19 +260,23 @@ Genera cabecera con música desactivada (FDB $0000) y título/copyright.
 - Posibles META adicionales (coordenadas/escala) aún no implementados.
 - Limpieza de opciones legacy en estructuras internas pendiente (campos no usados en CodegenOptions).
 
-## 16. DSL de Vector Lists (Nuevo)
+## 16. DSL de Vector Lists (Nuevo - Sintaxis Unificada)
 
 Bloques `vectorlist nombre:` permiten definir listas de vectores compactas interpretadas por el runtime `Run_VectorList`.
 
-Comandos soportados (insensibles a mayúsculas):
-- `MOVE x y` : punto inicial absoluto (CMD_START)
-- `RECT x1 y1 x2 y2` : rectángulo (4 segmentos)
-- `POLYGON N x0 y0 ... xN-1 yN-1` : polígono cerrado (N≥2) usando líneas sucesivas (START + N segmentos)
-- `CIRCLE cx cy r segs` : aproximación poligonal (segs≥3)
-- `ARC cx cy r start_deg sweep_deg segs` : arco abierto subdividido (segs≥2)
-- `SPIRAL cx cy r_start r_end turns segs` : espiral abierta (segs≥4)
-- `ORIGIN` : Reset0Ref (CMD_ZERO) recarga integradores a (0,0)
-- `INTENSITY val` : inserta comando de intensidad; si val ∈ [0..7] se mapea a presets ($1F,$3F,$5F,$7F); otro valor se toma directo (8 bits)
+Comandos soportados (sintaxis unificada con paréntesis):
+- `MOVE(x, y)` : punto inicial absoluto (CMD_START)
+- `SET_INTENSITY(val)` : fija intensidad del haz; equivale a `INTENSITY(val)`
+- `SET_ORIGIN()` : reset origen (0,0); equivale a `ORIGIN`
+- `RECT(x1, y1, x2, y2)` : rectángulo (4 segmentos)
+- `POLYGON(N, x0, y0, ..., xN-1, yN-1)` : polígono cerrado (N≥2) usando líneas sucesivas
+- `CIRCLE(cx, cy, r)` o `CIRCLE(cx, cy, r, segs)` : aproximación poligonal (segs≥3, default=16)
+- `ARC(cx, cy, r, start_deg, sweep_deg)` o `ARC(..., segs)` : arco abierto subdividido (segs≥2, default=16)
+- `SPIRAL(cx, cy, r_start, r_end, turns)` o `SPIRAL(..., segs)` : espiral abierta (segs≥4, default=64)
+- `ORIGIN` : Reset0Ref (CMD_ZERO) recarga integradores a (0,0) - sin paréntesis
+- `INTENSITY(val)` : inserta comando de intensidad; si val ∈ [0..7] se mapea a presets ($1F,$3F,$5F,$7F); otro valor se toma directo (8 bits)
+
+**Sintaxis Unificada**: Todos los comandos de vectorlist ahora usan la misma sintaxis que las funciones globales con paréntesis y comas. Esto hace el lenguaje más consistente y fácil de usar.
 
 Normalización backend:
 1. Se elimina ZERO inicial redundante si inmediatamente va un START.
@@ -291,14 +295,17 @@ VL_MAZE:
 ```
 Los comentarios muestran deltas y coordenadas absolutas para depuración.
 
-Ejemplo mínimo:
+Ejemplo mínimo (sintaxis nueva):
 ```
 vectorlist demo:
-    INTENSITY 0x5F
-    MOVE -16 -16
-    RECT -16 -16 16 16
-    ORIGIN
-    POLYGON 4 0 -16 16 0 0 16 -16 0
+    SET_INTENSITY(0x5F)
+    MOVE(-16, -16)
+    RECT(-16, -16, 16, 16)
+    SET_ORIGIN()
+    POLYGON(4, 0, -16, 16, 0, 0, 16, -16, 0)
+    CIRCLE(0, 0, 12, 24)
+    ARC(0, -16, 16, 0, 180, 24)
+    SPIRAL(0, 0, 10, 40, 2, 64)
 ```
 
 Uso en `main`:

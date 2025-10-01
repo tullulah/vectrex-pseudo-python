@@ -121,18 +121,18 @@ def draw_current_ball():
     DRAW_CIRCLE(ball_x, ball_y, BALL_SIZE, I_BRIGHT)
     
     # Añade un punto central
-    VECTREX_DRAW_LINE(ball_x-1, ball_y, ball_x+1, ball_y, I_BRIGHT)
-    VECTREX_DRAW_LINE(ball_x, ball_y-1, ball_x, ball_y+1, I_BRIGHT)
+    DRAW_LINE(ball_x-1, ball_y, ball_x+1, ball_y, I_BRIGHT)
+    DRAW_LINE(ball_x, ball_y-1, ball_x, ball_y+1, I_BRIGHT)
 
 def draw_scene_elements():
     # Título
     PRINT_TEXT(-70, 60, "TRAIL DEMO")
     
     # Bordes sutiles
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_TOP, I_DIM)
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_BOTTOM, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_LEFT, SCREEN_BOTTOM, I_DIM)
-    VECTREX_DRAW_LINE(SCREEN_RIGHT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_TOP, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_BOTTOM, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_LEFT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_RIGHT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
     
     # Información de velocidad (opcional, parpadea)
     if (frame_count & 31) < 16:

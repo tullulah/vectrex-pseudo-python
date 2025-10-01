@@ -20,7 +20,7 @@ function App() {
   const documents = useEditorStore(s => s.documents);
   const openDocument = useEditorStore(s => s.openDocument);
   const allDiagnostics = useEditorStore(s => s.allDiagnostics);
-  const setDiagnostics = useEditorStore(s => s.setDiagnostics);
+  const setDiagnosticsBySource = useEditorStore(s => s.setDiagnosticsBySource);
 
   const initializedRef = useRef(false);
 
@@ -65,18 +65,18 @@ function App() {
         }));
         
         try { 
-          setDiagnostics(decodedUri, mapped as any);
+          setDiagnosticsBySource(decodedUri, 'lsp', mapped as any);
           const errorCount = mapped.filter((d: any) => d.severity === 'error').length;
           if (errorCount > 0) {
             logger.info('LSP', `Set ${errorCount} errors for ${decodedUri.split('/').pop()}`);
           }
         } catch (error) {
-          logger.error('LSP', 'Error calling setDiagnostics:', error);
+          logger.error('LSP', 'Error calling setDiagnosticsBySource:', error);
         }
       }
     };
     lspClient.onNotification(handler);
-  }, [setDiagnostics, documents]);
+  }, [setDiagnosticsBySource, documents]);
 
   // Listen for compilation diagnostics from Electron backend (run://diagnostics)
   useEffect(() => {
@@ -116,7 +116,7 @@ function App() {
       // Set diagnostics for each file
       Object.entries(diagsByFile).forEach(([uri, fileDiags]) => {
         try { 
-          setDiagnostics(uri, fileDiags as any); 
+          setDiagnosticsBySource(uri, 'compiler', fileDiags as any); 
           const fileName = uri.split('/').pop() || uri;
           logger.debug('Compilation', `Set ${fileDiags.length} errors for ${fileName}`);
         } catch (e) {
@@ -131,7 +131,7 @@ function App() {
     return () => {
       // Note: electron doesn't provide an off method, so we rely on component unmount
     };
-  }, [setDiagnostics]);
+  }, [setDiagnosticsBySource]);
 
   // Auto-restore last workspace on app startup
   const restoreLastWorkspace = useProjectStore(s => s.restoreLastWorkspace);

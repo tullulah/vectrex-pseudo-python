@@ -87,6 +87,11 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "VECTREX_SET_ORIGIN" => Some(AritySpec::Exact(0)),      // deprecated: use SET_ORIGIN
         "VECTREX_SET_INTENSITY" => Some(AritySpec::Exact(1)),   // deprecated: use SET_INTENSITY
         
+        // Funciones trigonométricas (tablas precalculadas)
+        "SIN" | "MATH_SIN" | "MATH.SIN" => Some(AritySpec::Exact(1)),       // angle (0-127 represents 0-2π)
+        "COS" | "MATH_COS" | "MATH.COS" => Some(AritySpec::Exact(1)),       // angle (0-127 represents 0-2π)
+        "TAN" | "MATH_TAN" | "MATH.TAN" => Some(AritySpec::Exact(1)),       // angle (0-127 represents 0-2π)
+        
         _ => None,
     }
 }
@@ -127,6 +132,13 @@ pub fn is_builtin_function(name: &str) -> bool {
         return true;
     }
     
+    // Funciones trigonométricas (tablas precalculadas)
+    if matches!(upper.as_str(),
+        "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|"MATH.SIN"|"MATH.COS"|"MATH.TAN"
+    ) {
+        return true;
+    }
+    
     false
 }
 
@@ -150,30 +162,30 @@ fn tr(locale: &str, key: &str) -> String {
         ("en", "hover.user_function.line") => "Function `{}` defined at line {}",
         ("es", "hover.user_function.line") => "Función `{}` definida en línea {}",
         // Documentación para funciones unificadas (global + vectorlist)
-        ("en", "doc.MOVE") => "MOVE x,y  - moves the beam to position (x,y) without drawing.",
-        ("es", "doc.MOVE") => "MOVE x,y  - mueve el haz a la posición (x,y) sin dibujar.",
-        ("en", "doc.SET_INTENSITY") => "SET_INTENSITY val  - sets beam intensity.",
-        ("es", "doc.SET_INTENSITY") => "SET_INTENSITY val  - fija la intensidad del haz.",
-        ("en", "doc.DRAW_TO") => "DRAW_TO x,y  - draws line to position.",
-        ("es", "doc.DRAW_TO") => "DRAW_TO x,y  - dibuja línea a posición.",
-        ("en", "doc.DRAW_LINE") => "DRAW_LINE x1,y1,x2,y2,intensity  - draws line segment.",
-        ("es", "doc.DRAW_LINE") => "DRAW_LINE x1,y1,x2,y2,intensidad  - dibuja segmento.",
-        ("en", "doc.SET_ORIGIN") => "SET_ORIGIN  - resets origin (0,0).",
-        ("es", "doc.SET_ORIGIN") => "SET_ORIGIN  - restablece origen (0,0).",
-        ("en", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"text\"  - shows vector text.",
-        ("es", "doc.PRINT_TEXT") => "PRINT_TEXT x,y,\"texto\"  - muestra texto vectorial.",
+        ("en", "doc.MOVE") => "MOVE(x, y)  - moves the beam to position (x,y) without drawing.",
+        ("es", "doc.MOVE") => "MOVE(x, y)  - mueve el haz a la posición (x,y) sin dibujar.",
+        ("en", "doc.SET_INTENSITY") => "SET_INTENSITY(val)  - sets beam intensity.",
+        ("es", "doc.SET_INTENSITY") => "SET_INTENSITY(val)  - fija la intensidad del haz.",
+        ("en", "doc.DRAW_TO") => "DRAW_TO(x, y)  - draws line to position.",
+        ("es", "doc.DRAW_TO") => "DRAW_TO(x, y)  - dibuja línea a posición.",
+        ("en", "doc.DRAW_LINE") => "DRAW_LINE(x1, y1, x2, y2, intensity)  - draws line segment.",
+        ("es", "doc.DRAW_LINE") => "DRAW_LINE(x1, y1, x2, y2, intensidad)  - dibuja segmento.",
+        ("en", "doc.SET_ORIGIN") => "SET_ORIGIN()  - resets origin (0,0).",
+        ("es", "doc.SET_ORIGIN") => "SET_ORIGIN()  - restablece origen (0,0).",
+        ("en", "doc.PRINT_TEXT") => "PRINT_TEXT(x, y, \"text\")  - shows vector text.",
+        ("es", "doc.PRINT_TEXT") => "PRINT_TEXT(x, y, \"texto\")  - muestra texto vectorial.",
         
         // Funciones específicas de dibujo directo
-        ("en", "doc.RECT") => "RECT x,y,w,h  - draws a rectangle.",
-        ("es", "doc.RECT") => "RECT x,y,w,h  - dibuja un rectángulo.",
-        ("en", "doc.POLYGON") => "POLYGON n x1,y1 ...  - draws a polygon with n vertices.",
-        ("es", "doc.POLYGON") => "POLYGON n x1,y1 ...  - dibuja un polígono de n vértices.",
-        ("en", "doc.CIRCLE") => "CIRCLE r  - draws a circle of radius r.",
-        ("es", "doc.CIRCLE") => "CIRCLE r  - dibuja un círculo de radio r.",
-        ("en", "doc.ARC") => "ARC r startAngle endAngle  - draws an arc.",
-        ("es", "doc.ARC") => "ARC r angIni angFin  - dibuja un arco.",
-        ("en", "doc.SPIRAL") => "SPIRAL r turns  - draws a spiral.",
-        ("es", "doc.SPIRAL") => "SPIRAL r vueltas  - dibuja una espiral.",
+        ("en", "doc.RECT") => "RECT(x1, y1, x2, y2)  - draws a rectangle.",
+        ("es", "doc.RECT") => "RECT(x1, y1, x2, y2)  - dibuja un rectángulo.",
+        ("en", "doc.POLYGON") => "POLYGON(n, x1, y1, ...)  - draws a polygon with n vertices.",
+        ("es", "doc.POLYGON") => "POLYGON(n, x1, y1, ...)  - dibuja un polígono de n vértices.",
+        ("en", "doc.CIRCLE") => "CIRCLE(cx, cy, r) or CIRCLE(cx, cy, r, segs)  - draws a circle.",
+        ("es", "doc.CIRCLE") => "CIRCLE(cx, cy, r) o CIRCLE(cx, cy, r, segs)  - dibuja un círculo.",
+        ("en", "doc.ARC") => "ARC(cx, cy, r, startDeg, sweepDeg) or ARC(..., segs)  - draws an arc.",
+        ("es", "doc.ARC") => "ARC(cx, cy, r, angIni, angFin) o ARC(..., segs)  - dibuja un arco.",
+        ("en", "doc.SPIRAL") => "SPIRAL(cx, cy, r_start, r_end, turns) or SPIRAL(..., segs)  - draws a spiral.",
+        ("es", "doc.SPIRAL") => "SPIRAL(cx, cy, r_ini, r_fin, vueltas) o SPIRAL(..., segs)  - dibuja una espiral.",
         ("en", "doc.DRAW_VECTORLIST") => "DRAW_VECTORLIST addr,len  - draws a raw vector list (advanced).",
         ("es", "doc.DRAW_VECTORLIST") => "DRAW_VECTORLIST dir,long  - dibuja una vector list cruda (avanzado).",
         

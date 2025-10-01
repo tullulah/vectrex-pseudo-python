@@ -6,8 +6,13 @@ pub fn collect_string_literals(module: &Module) -> std::collections::BTreeMap<St
     use std::collections::{BTreeSet, BTreeMap};
     let mut set = BTreeSet::new();
     for item in &module.items {
-        if let Item::Function(f) = item { for s in &f.body { gather_stmt_strings(s, &mut set); } }
-        else if let Item::Const { value, .. } = item { gather_expr_strings(value, &mut set); }
+        if let Item::Function(f) = item { 
+            for s in &f.body { gather_stmt_strings(s, &mut set); } 
+        } else if let Item::Const { value, .. } = item { 
+            gather_expr_strings(value, &mut set); 
+        } else if let Item::ExprStatement(expr) = item {
+            gather_expr_strings(expr, &mut set);
+        }
     }
     let mut map = BTreeMap::new();
     for (i, lit) in set.iter().enumerate() { map.insert(lit.clone(), format!("STR_{}", i)); }
@@ -32,7 +37,7 @@ fn gather_expr_strings(expr: &Expr, set: &mut std::collections::BTreeSet<String>
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => { gather_expr_strings(left,set); gather_expr_strings(right,set); }
-        Expr::Call { args, .. } => { for a in args { gather_expr_strings(a,set); } }
+    Expr::Call(ci) => { for a in &ci.args { gather_expr_strings(a,set); } }
         Expr::Not(inner) | Expr::BitNot(inner) => gather_expr_strings(inner,set),
         Expr::Ident(_) | Expr::Number(_) => {}
     }

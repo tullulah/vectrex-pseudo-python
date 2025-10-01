@@ -13,6 +13,6 @@ const INT = 95  # intensidad (0..127 aprox)
 
 def main():
     # Tres segmentos
-    VECTREX_DRAW_LINE(X0, Y0, X1, Y1, INT)
-    VECTREX_DRAW_LINE(X1, Y1, X2, Y2, INT)
-    VECTREX_DRAW_LINE(X2, Y2, X0, Y0, INT)
+    DRAW_LINE(X0, Y0, X1, Y1, INT)
+    DRAW_LINE(X1, Y1, X2, Y2, INT)
+    DRAW_LINE(X2, Y2, X0, Y0, INT)

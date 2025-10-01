@@ -131,21 +131,21 @@ def draw_bouncing_line():
         DRAW_LINE(line_x, line_y - length, line_x, line_y + length, I_DIM)
     
     if (line_angle & 16) != 0:
-        VECTREX_DRAW_LINE(line_x - 10, line_y - 10, line_x + 10, line_y + 10, I_FAINT)
-        VECTREX_DRAW_LINE(line_x - 10, line_y + 10, line_x + 10, line_y - 10, I_FAINT)
+        DRAW_LINE(line_x - 10, line_y - 10, line_x + 10, line_y + 10, I_FAINT)
+        DRAW_LINE(line_x - 10, line_y + 10, line_x + 10, line_y - 10, I_FAINT)
 
 def draw_background():
     # Dibuja una grilla de fondo sutil
     if (frame_count & 127) < 64:  # Aparece/desaparece lentamente
         # Lines verticales
-        VECTREX_DRAW_LINE(-50, SCREEN_TOP, -50, SCREEN_BOTTOM, I_FAINT)
-        VECTREX_DRAW_LINE(0, SCREEN_TOP, 0, SCREEN_BOTTOM, I_FAINT)
-        VECTREX_DRAW_LINE(50, SCREEN_TOP, 50, SCREEN_BOTTOM, I_FAINT)
+        DRAW_LINE(-50, SCREEN_TOP, -50, SCREEN_BOTTOM, I_FAINT)
+        DRAW_LINE(0, SCREEN_TOP, 0, SCREEN_BOTTOM, I_FAINT)
+        DRAW_LINE(50, SCREEN_TOP, 50, SCREEN_BOTTOM, I_FAINT)
         
         # Líneas horizontales
-        VECTREX_DRAW_LINE(SCREEN_LEFT, 40, SCREEN_RIGHT, 40, I_FAINT)
-        VECTREX_DRAW_LINE(SCREEN_LEFT, 0, SCREEN_RIGHT, 0, I_FAINT)
-        VECTREX_DRAW_LINE(SCREEN_LEFT, -40, SCREEN_RIGHT, -40, I_FAINT)
+        DRAW_LINE(SCREEN_LEFT, 40, SCREEN_RIGHT, 40, I_FAINT)
+        DRAW_LINE(SCREEN_LEFT, 0, SCREEN_RIGHT, 0, I_FAINT)
+        DRAW_LINE(SCREEN_LEFT, -40, SCREEN_RIGHT, -40, I_FAINT)
 
 def main():
     frame_count = frame_count + 1

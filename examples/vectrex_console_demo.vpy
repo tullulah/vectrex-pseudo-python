@@ -17,6 +17,9 @@ const I_DIM    = 0x28
 var stage = 0  # variable global (contador)
 
 def main():
+    let dummy = 0
+
+def loop():
     stage = stage + 1
     if stage > 400:
         stage = 400

@@ -29,13 +29,30 @@ PyPilot has been significantly enhanced to provide GitHub Copilot-like AI assist
 - **No Module System**: No imports, packages, or external libraries
 - **Simple Control Flow**: Basic if/else, for/while loops only
 
-#### VPy Functions Available:
+#### VPy Functions Available (Sintaxis Unificada):
+**Funciones Globales y Vectorlist** (misma sintaxis con paréntesis):
 1. **MOVE(x, y)** - Move beam to absolute coordinates
-2. **DRAW_LINE(dx, dy)** - Draw line with relative coordinates
-3. **INTENSITY(level)** - Set beam brightness (0-255)
-4. **PRINT_TEXT(x, y, text)** - Display text (limited to 3 params)
-5. **ORIGIN()** - Reset coordinate system to center
-6. **WAIT_FRAMES(count)** - Pause execution for animation timing
+2. **SET_INTENSITY(level)** - Set beam brightness (0-255) 
+3. **SET_ORIGIN()** - Reset coordinate system to center
+4. **RECT(x1, y1, x2, y2)** - Draw rectangle between two points
+5. **CIRCLE(cx, cy, r)** o **CIRCLE(cx, cy, r, segs)** - Draw circle with optional segments
+6. **ARC(cx, cy, r, start_deg, sweep_deg)** o **ARC(..., segs)** - Draw arc
+7. **SPIRAL(cx, cy, r_start, r_end, turns)** o **SPIRAL(..., segs)** - Draw spiral
+8. **POLYGON(n, x1, y1, ...)** - Draw polygon with n vertices
+
+**Funciones Específicas del Sistema**:
+- **DRAW_LINE(dx, dy)** - Draw line with relative coordinates  
+- **PRINT_TEXT(x, y, text)** - Display text (limited to 3 params)
+- **WAIT_FRAMES(count)** - Pause execution for animation timing
+
+**VECTORLIST DSL** (sintaxis unificada):
+```vpy
+vectorlist my_shape:
+    SET_INTENSITY(255)
+    MOVE(0, 0)
+    RECT(-50, -50, 50, 50)
+    CIRCLE(0, 0, 25, 16)
+```
 
 ### 3. Enhanced Provider Architecture
 **Location**: `ide/frontend/src/services/providers/`
@@ -63,12 +80,13 @@ PyPilot has been significantly enhanced to provide GitHub Copilot-like AI assist
 - 4-channel AY-3-8912 PSG sound chip
 
 ### 5. Programming Pattern Guidance
-**Best Practices Built into AI Context**:
-1. Set intensity before drawing (INTENSITY > 0)
+**Best Practices Built into AI Context (Sintaxis Unificada)**:
+1. Set intensity before drawing (SET_INTENSITY > 0)
 2. Move to start position (MOVE)
-3. Draw lines with relative coordinates (DRAW_LINE)
-4. Use ORIGIN() to reset coordinate system
+3. Draw lines with relative coordinates (DRAW_LINE) 
+4. Use SET_ORIGIN() to reset coordinate system
 5. WAIT_FRAMES() for timing and animation
+6. Use VECTORLIST for complex shapes with unified syntax
 
 **Common Mistakes Prevention**:
 - Forgetting to set intensity (lines won't show)
@@ -77,13 +95,14 @@ PyPilot has been significantly enhanced to provide GitHub Copilot-like AI assist
 - Not considering 60 FPS timing for animations
 - Trying to pass too many parameters to functions
 - Attempting to use unsupported Python features
+- **Mixing old and new syntax** (always use parentheses now)
 
 ## Code Examples in Context
 
-### Basic Drawing Pattern:
+### Basic Drawing Pattern (Sintaxis Unificada):
 ```vpy
 # Set up for drawing
-INTENSITY(255)          # Maximum brightness
+SET_INTENSITY(255)     # Maximum brightness
 MOVE(-50, -50)         # Move to bottom-left
 DRAW_LINE(100, 0)      # Draw horizontal line
 DRAW_LINE(0, 100)      # Draw vertical line
@@ -91,11 +110,27 @@ DRAW_LINE(-100, 0)     # Draw back left
 DRAW_LINE(0, -100)     # Complete the square
 ```
 
+### VECTORLIST Example (Sintaxis Unificada):
+```vpy
+# Define shapes using vectorlist
+vectorlist house:
+    SET_INTENSITY(200)
+    MOVE(-40, -40)
+    RECT(-40, -40, 40, 0)     # House base
+    POLYGON(3, -40, 0, 0, 40, 40, 0)  # Roof triangle
+    CIRCLE(-15, -20, 5)       # Window
+    CIRCLE(15, -20, 5)        # Window
+    RECT(-5, -40, 5, -20)     # Door
+
+def main():
+    vectrex_draw_vectorlist("house")
+```
+
 ### Animation Example:
 ```vpy
 # Simple rotation animation
 for frame in range(60):
-    INTENSITY(200)
+    SET_INTENSITY(200)
     angle = frame * 6  # 6 degrees per frame
     x = angle % 80 - 40
     y = angle % 60 - 30

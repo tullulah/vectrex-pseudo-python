@@ -11,7 +11,10 @@
     FCC "g GCE 1982"
     FCB $80
     FDB music1
-    FCB $F8,$50,$20,-$45
+    FCB $F8
+    FCB $50
+    FCB $20
+    FCB $BB
     FCC "VECTREX"
     FCB $80
     FCB 0
@@ -19,28 +22,19 @@
 ;***************************************************************************
 ; CODE SECTION
 ;***************************************************************************
-    JMP START
 
-START:
+main:
+    JSR Wait_Recal
     LDA #$80
     STA VIA_t1_cnt_lo
-    LDX #Vec_Default_Stk
-    TFR X,S
-
-MAIN_LOOP:
-    JSR Wait_Recal
-    LDA #$D0
-    TFR A,DP
-    JSR Intensity_5F
-    JSR Reset0Ref
-    JSR MAIN
-    BRA MAIN_LOOP
+    ; *** Call loop() as subroutine (executed every frame)
+    JSR LOOP_BODY
+    BRA main
 
 I_STRONG EQU 95
 I_MED EQU 64
 I_DIM EQU 40
-MAIN: ; function
-; --- function main ---
+LOOP_BODY:
     LDD VAR_STAGE
     STD RESULT
     LDD RESULT
@@ -889,7 +883,6 @@ IF_END_0:
     STD RESULT
     RTS
 
-    INCLUDE "runtime/vectorlist_runtime.asm"
 VECTREX_PRINT_TEXT:
     ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
     LDU VAR_ARG2   ; string pointer (high-bit terminated)

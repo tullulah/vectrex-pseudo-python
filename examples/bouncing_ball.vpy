@@ -33,8 +33,8 @@ def draw_ball(x, y, intensity):
     DRAW_CIRCLE(x, y, BALL_RADIUS, intensity)
     
     # Añade una pequeña cruz en el centro para mejor visibilidad
-    VECTREX_DRAW_LINE(x-3, y, x+3, y, intensity)
-    VECTREX_DRAW_LINE(x, y-3, x, y+3, intensity)
+    DRAW_LINE(x-3, y, x+3, y, intensity)
+    DRAW_LINE(x, y-3, x, y+3, intensity)
 
 def update_ball_position():
     # Actualiza la posición de la pelota
@@ -62,13 +62,13 @@ def update_ball_position():
 def draw_borders():
     # Dibuja los bordes de la pantalla para visualizar los límites
     # Borde superior
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_TOP, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_TOP, I_DIM)
     # Borde inferior  
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_BOTTOM, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_BOTTOM, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
     # Borde izquierdo
-    VECTREX_DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_LEFT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_LEFT, SCREEN_TOP, SCREEN_LEFT, SCREEN_BOTTOM, I_DIM)
     # Borde derecho
-    VECTREX_DRAW_LINE(SCREEN_RIGHT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
+    DRAW_LINE(SCREEN_RIGHT, SCREEN_TOP, SCREEN_RIGHT, SCREEN_BOTTOM, I_DIM)
 
 def draw_info():
     # Muestra información en pantalla

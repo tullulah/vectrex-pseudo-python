@@ -31,6 +31,7 @@ export interface DiagnosticModel {
   severity: 'error' | 'warning' | 'info';
   line: number;
   column: number;
+  source?: string; // 'lsp', 'compiler', etc.
 }
 
 export interface DebugState {

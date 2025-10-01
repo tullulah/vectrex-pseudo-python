@@ -13,7 +13,7 @@ pub fn generate_trig_tables() -> TrigTables {
     let mut cos_vals: Vec<i16> = Vec::new();
     for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; cos_vals.push((ang.cos()*127.0).round() as i16); }
     let mut tan_vals: Vec<i16> = Vec::new();
-    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let t = ang.tan(); let v = if t.is_finite() { (t.max(-6.0).min(6.0)*20.0).round() as i16 } else { 0 }; tan_vals.push(v); }
+    for i in 0..128 { let ang = (i as f32) * std::f32::consts::TAU / 128.0; let t = ang.tan(); let v = if t.is_finite() { (t.clamp(-6.0, 6.0)*20.0).round() as i16 } else { 0 }; tan_vals.push(v); }
     TrigTables { sin: sin_vals, cos: cos_vals, tan: tan_vals }
 }
 

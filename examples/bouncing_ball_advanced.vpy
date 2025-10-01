@@ -36,25 +36,25 @@ def main():
         vel_y = -vel_y
     
     # Dibujar bordes de la pantalla
-    VECTREX_DRAW_LINE(-90, -70, 90, -70, 0x30)    # Borde inferior
-    VECTREX_DRAW_LINE(-90, 70, 90, 70, 0x30)      # Borde superior
-    VECTREX_DRAW_LINE(-90, -70, -90, 70, 0x30)    # Borde izquierdo
-    VECTREX_DRAW_LINE(90, -70, 90, 70, 0x30)      # Borde derecho
+    DRAW_LINE(-90, -70, 90, -70, 0x30)    # Borde inferior
+    DRAW_LINE(-90, 70, 90, 70, 0x30)      # Borde superior
+    DRAW_LINE(-90, -70, -90, 70, 0x30)    # Borde izquierdo
+    DRAW_LINE(90, -70, 90, 70, 0x30)      # Borde derecho
     
     # Dibujar título
     PRINT_TEXT(-80, 60, "BOUNCING BALL")
     
     # Dibujar la pelota como un diamante
-    VECTREX_DRAW_LINE(ball_x, ball_y-8, ball_x+6, ball_y, 0x7F)
-    VECTREX_DRAW_LINE(ball_x+6, ball_y, ball_x, ball_y+8, 0x7F)
-    VECTREX_DRAW_LINE(ball_x, ball_y+8, ball_x-6, ball_y, 0x7F)
-    VECTREX_DRAW_LINE(ball_x-6, ball_y, ball_x, ball_y-8, 0x7F)
+    DRAW_LINE(ball_x, ball_y-8, ball_x+6, ball_y, 0x7F)
+    DRAW_LINE(ball_x+6, ball_y, ball_x, ball_y+8, 0x7F)
+    DRAW_LINE(ball_x, ball_y+8, ball_x-6, ball_y, 0x7F)
+    DRAW_LINE(ball_x-6, ball_y, ball_x, ball_y-8, 0x7F)
     
     # Dibujar estela si está en movimiento diagonal
     if vel_x > 0:
         if vel_y > 0:
-            VECTREX_DRAW_LINE(ball_x-10, ball_y-10, ball_x-5, ball_y-5, 0x20)
+            DRAW_LINE(ball_x-10, ball_y-10, ball_x-5, ball_y-5, 0x20)
     
     if vel_x < 0:
         if vel_y < 0:  
-            VECTREX_DRAW_LINE(ball_x+10, ball_y+10, ball_x+5, ball_y+5, 0x20)
+            DRAW_LINE(ball_x+10, ball_y+10, ball_x+5, ball_y+5, 0x20)
