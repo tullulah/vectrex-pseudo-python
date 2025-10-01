@@ -35,6 +35,7 @@ fn resolve_function_name(name: &str) -> Option<String> {
 pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> String {
     let mut out = String::new();
     let syms = collect_symbols(module);
+    let global_vars = collect_global_vars(module); // NEW: Collect variables with initial values
     let string_map = collect_string_literals(module);
         let rt_usage = analyze_runtime_usage(module);
     
@@ -146,6 +147,19 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         // Emit main() function body inline only if it has real content
         if main_has_content {
             out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
+            
+            // NEW: Initialize global variables with their initial values (ONCE at startup)
+            for (name, value) in &global_vars {
+                if let Expr::Number(n) = value {
+                    out.push_str(&format!("    LDD #{}\n", n));
+                    out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                } else {
+                    // For non-constant initial values, evaluate the expression
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0 }, &string_map, opts);
+                    out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                }
+            }
+            
             if let Some(main_func) = user_main {
                 let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                 for stmt in &main_func.body {
@@ -157,6 +171,22 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         // Choose label based on whether we have START or not
         let main_label = if main_has_content { "MAIN" } else { "main" };
         out.push_str(&format!("\n{}:\n    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n", main_label));
+        
+        // CRITICAL: Initialize global variables even if main() has no content
+        // This must happen ONCE before the loop starts
+        if !main_has_content && !global_vars.is_empty() {
+            out.push_str("    ; Initialize global variables\n");
+            for (name, value) in &global_vars {
+                if let Expr::Number(n) = value {
+                    out.push_str(&format!("    LDD #{}\n", n));
+                    out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                } else {
+                    // For non-constant initial values, evaluate the expression
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0 }, &string_map, opts);
+                    out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                }
+            }
+        }
         
         // Call loop() function as subroutine to avoid code duplication and overflow
         if let Some(_loop_func) = user_loop {
@@ -183,8 +213,10 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
+                    out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
-                    for stmt in &f.body {
+                    for (i, stmt) in f.body.iter().enumerate() {
+                        out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts);
                     }
                     out.push_str("    RTS\n\n");
@@ -383,8 +415,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
     }
     if !suppress_runtime { out.push_str("; Variables (in RAM)\n"); }
-    // Runtime temporaries used by expression lowering and helpers
-    if !suppress_runtime { if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); } }
+    // CRITICAL FIX: RESULT must ALWAYS be defined because DRAW_LINE and other functions depend on it
+    // Even if suppress_runtime is true, RESULT is fundamental for basic operations
+    if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); }
     if !suppress_runtime && rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
     if !suppress_runtime && rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
     if !suppress_runtime && rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
@@ -398,10 +431,12 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         if opts.exclude_ram_org { out.push_str("DIV_A   EQU RESULT+18\nDIV_B   EQU RESULT+20\nDIV_Q   EQU RESULT+22\nDIV_R   EQU RESULT+24\n"); }
         else { out.push_str("DIV_A:    FDB 0\nDIV_B:    FDB 0\nDIV_Q:   FDB 0\nDIV_R:   FDB 0\n"); }
     }
-    let mut var_offset = 26; // after reserved temps above when exclude_ram_org
+    let mut var_offset = 0; // Variables start at separate base, not after RESULT temps
     for v in syms {
         if opts.exclude_ram_org {
-            out.push_str(&format!("VAR_{} EQU RESULT+{}\n", v.to_uppercase(), var_offset));
+            // FIX: Use separate memory area for global variables, not RESULT+offset
+            // Global variables should persist between function calls, but RESULT is temporary
+            out.push_str(&format!("VAR_{} EQU $C900+{}\n", v.to_uppercase(), var_offset));
             var_offset += 2;
         } else {
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
@@ -425,7 +460,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     if !suppress_runtime {
         out.push_str("; Call argument scratch space\n");
         if opts.exclude_ram_org {
-            for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, var_offset)); var_offset += 2; }
+            // Function arguments can use RESULT area since they're temporary
+            let mut arg_offset = 26; // after reserved temps above when exclude_ram_org
+            for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, arg_offset)); arg_offset += 2; }
         } else {
             if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
             if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
@@ -848,14 +885,14 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             let dy = dy_total;
             
             // Generate optimized inline assembly - check for consecutive same-intensity draws
-            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Moveto_d\n", *y0, *x0));
+            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Moveto_d\n", *y0 as i8, *x0 as i8));
             if *intensity != 0x5F { 
                 out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity & 0xFF)); 
             } else {
                 out.push_str("    JSR Intensity_5F\n");
             }
             out.push_str("    CLR Vec_Misc_Count\n");
-            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Draw_Line_d\n", dy, dx));
+            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Draw_Line_d\n", dy as i8, dx as i8));
             return true;
         }
     }
@@ -1208,7 +1245,10 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 out.push_str(&format!("{}:\n", next));
                 for s in eb { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
             } else if !elifs.is_empty() || simple_if {
-                out.push_str(&format!("{}:\n", next));
+                // Only emit next label if it's different from end
+                if next != end {
+                    out.push_str(&format!("{}:\n", next));
+                }
             }
             out.push_str(&format!("{}:\n", end));
         }
@@ -1288,7 +1328,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
 fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
     match expr {
         Expr::Number(n) => {
-            out.push_str(&format!("    LDD #{}\n    STD RESULT\n", *n & 0xFFFF));
+            out.push_str(&format!("    LDD #{}\n    STD RESULT\n", *n));
         }
         Expr::StringLit(s) => {
             if let Some(label) = string_map.get(s) {
@@ -1309,7 +1349,19 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i));
             }
-            if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", ci.name.to_uppercase())); } else { out.push_str(&format!("    JSR {}\n", ci.name.to_uppercase())); }
+            
+            // Special case: in auto_loop mode, loop() function calls should use LOOP_BODY
+            let target_name = if opts.auto_loop && ci.name.to_lowercase() == "loop" {
+                "LOOP_BODY".to_string()
+            } else {
+                ci.name.to_uppercase()
+            };
+            
+            if opts.force_extended_jsr { 
+                out.push_str(&format!("    JSR >{}\n", target_name)); 
+            } else { 
+                out.push_str(&format!("    JSR {}\n", target_name)); 
+            }
         }
         Expr::Binary { op, left, right } => {
             // x+x and x-x peepholes
@@ -1375,12 +1427,12 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
             emit_expr(right, out, fctx, string_map, opts);
             out.push_str("    LDD RESULT\n    STD TMPRIGHT\n    LDD TMPLEFT\n    SUBD TMPRIGHT\n");
-            out.push_str("    LDD #0\n    STD RESULT\n");
+            // DON'T overwrite result before branch - execute branch immediately after SUBD
             let lt = fresh_label("CT");
             let end = fresh_label("CE");
             let br = match op { CmpOp::Eq => "BEQ", CmpOp::Ne => "BNE", CmpOp::Lt => "BLT", CmpOp::Le => "BLE", CmpOp::Gt => "BGT", CmpOp::Ge => "BGE" };
             out.push_str(&format!(
-                "    {} {}\n    BRA {}\n{}:\n    LDD #1\n    STD RESULT\n{}:\n",
+                "    {} {}\n    LDD #0\n    STD RESULT\n    BRA {}\n{}:\n    LDD #1\n    STD RESULT\n{}:\n",
                 br, lt, end, lt, end
             ));
         }
@@ -1454,6 +1506,17 @@ fn collect_symbols(module: &Module) -> Vec<String> {
     }
     for l in &locals { globals.remove(l); }
     globals.into_iter().collect()
+}
+
+// NEW: Collect global variables with their initial values
+fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
+    let mut vars = Vec::new();
+    for item in &module.items {
+        if let Item::GlobalLet { name, value } = item {
+            vars.push((name.clone(), value.clone()));
+        }
+    }
+    vars
 }
 
 // collect_stmt_syms: process statement symbols.
