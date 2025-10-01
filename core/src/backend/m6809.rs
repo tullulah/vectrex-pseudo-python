@@ -787,6 +787,11 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     if w.contains("VECTREX_SET_INTENSITY") {
     out.push_str("VECTREX_SET_INTENSITY:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    RTS\n");
     }
+    if w.contains("SETUP_DRAW_COMMON") {
+        out.push_str(
+            "; Common drawing setup - sets DP register and resets integrator origin\n; Eliminates repetitive LDA #$D0; TFR A,DP; JSR Reset0Ref sequences\nSETUP_DRAW_COMMON:\n    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n    RTS\n"
+        );
+    }
     if w.contains("VECTREX_WAIT_RECAL") || opts.fast_wait {
         if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    RTS\n");
             out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR WAIT_RECAL\n    RTS\n"); }
@@ -802,7 +807,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
-        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
+        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
@@ -857,14 +862,22 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     
     // DRAW_LINE fallback: if not all constants, use wrapper
     if up == "DRAW_LINE" && args.len() == 5 {
-        // Generate standard call sequence with wrapper
+        // Optimized argument setup - emit directly to VAR_ARG when possible
         for (i, arg) in args.iter().enumerate() {
-            emit_expr(arg, out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT\n");
-            out.push_str(&format!("    STD VAR_ARG{}\n", i));
+            match arg {
+                Expr::Number(n) => {
+                    // Direct constant: skip RESULT, write directly to VAR_ARG
+                    out.push_str(&format!("    LDD #{}\n    STD VAR_ARG{}\n", *n & 0xFFFF, i));
+                }
+                _ => {
+                    // Complex expression: use RESULT intermediate
+                    emit_expr(arg, out, fctx, string_map, opts);
+                    out.push_str(&format!("    LDD RESULT\n    STD VAR_ARG{}\n", i));
+                }
+            }
         }
         out.push_str("    JSR DRAW_LINE_WRAPPER\n");
-        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
         return true;
     }
     
@@ -891,7 +904,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                             // OPTIMIZED MODE: Set intensity and DP once, then draw all edges efficiently
                             // Set intensity once for all edges
                             if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
-                            // Set DP once for all VIA operations
+                            // Set DP once for all VIA operations (inline for now)
                             out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
                             
                             for i in 0..n {
@@ -916,7 +929,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                                     out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", (second_dy & 0xFF), (second_dx & 0xFF)));
                                 }
                             }
-                            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+                            out.push_str("    LDD #0\n    STD RESULT\n");
                             return true;
                         }
                     }
@@ -951,7 +964,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                         out.push_str("    CLR Vec_Misc_Count\n");
                         out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", dy, dx));
                     }
-                    out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+                    out.push_str("    LDD #0\n    STD RESULT\n");
                     return true;
         }
     }

@@ -150,8 +150,7 @@ IF_END_0:
     LDA #$14
     LDB #$16
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     JSR Intensity_5F
     LDA #$D0
@@ -192,8 +191,7 @@ IF_END_0:
     LDA #$37
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$40
     JSR Intensity_a
@@ -235,8 +233,7 @@ IF_END_0:
     LDA #$2E
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     JSR Intensity_5F
     LDA #$D0
@@ -269,8 +266,7 @@ IF_END_0:
     LDA #$24
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$D0
     TFR A,DP
@@ -482,8 +478,7 @@ IF_END_0:
     LDA #$02
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$D0
     TFR A,DP
@@ -557,8 +552,7 @@ IF_END_0:
     LDA #$02
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$D0
     TFR A,DP
@@ -632,8 +626,7 @@ IF_END_0:
     LDA #$02
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$D0
     TFR A,DP
@@ -707,8 +700,7 @@ IF_END_0:
     LDA #$02
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     LDA #$D0
     TFR A,DP
@@ -782,8 +774,7 @@ IF_END_0:
     LDA #$02
     LDB #$00
     JSR Draw_Line_d
-    CLRA
-    CLRB
+    LDD #0
     STD RESULT
     RTS
 
