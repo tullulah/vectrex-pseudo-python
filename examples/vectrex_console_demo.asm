@@ -110,22 +110,10 @@ IF_END_0:
     LDA #$00
     LDB #$4E
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$5A
-    LDB #$4E
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$EC
     LDB #$16
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$46
-    LDB #$64
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$BA
     LDB #$00
@@ -134,22 +122,10 @@ IF_END_0:
     LDA #$BA
     LDB #$00
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$BA
-    LDB #$64
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$EC
     LDB #$EA
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$A6
-    LDB #$4E
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$B2
@@ -158,22 +134,10 @@ IF_END_0:
     LDA #$00
     LDB #$B2
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$A6
-    LDB #$B2
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$14
     LDB #$EA
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$BA
-    LDB #$9C
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$46
     LDB #$00
@@ -182,12 +146,6 @@ IF_END_0:
     LDA #$46
     LDB #$00
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$46
-    LDB #$9C
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$14
     LDB #$16
@@ -210,12 +168,6 @@ IF_END_0:
     LDA #$00
     LDB #$48
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$44
-    LDB #$48
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$C9
     LDB #$00
@@ -224,12 +176,6 @@ IF_END_0:
     LDA #$C9
     LDB #$00
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$D6
-    LDB #$48
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$B8
@@ -238,12 +184,6 @@ IF_END_0:
     LDA #$00
     LDB #$B8
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$D6
-    LDB #$B8
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$37
     LDB #$00
@@ -271,12 +211,6 @@ IF_END_0:
     LDA #$00
     LDB #$40
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$3A
-    LDB #$40
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$D2
     LDB #$00
@@ -285,12 +219,6 @@ IF_END_0:
     LDA #$D2
     LDB #$00
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$DE
-    LDB #$40
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$C0
@@ -299,12 +227,6 @@ IF_END_0:
     LDA #$00
     LDB #$C0
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$DE
-    LDB #$C0
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$2E
     LDB #$00
@@ -331,22 +253,10 @@ IF_END_0:
     LDA #$00
     LDB #$48
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$D6
-    LDB #$48
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$DC
     LDB #$00
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$B2
-    LDB #$48
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$00
     LDB #$B8
@@ -355,12 +265,6 @@ IF_END_0:
     LDA #$00
     LDB #$B8
     JSR Draw_Line_d
-    LDA #$D0
-    TFR A,DP
-    JSR Reset0Ref
-    LDA #$B2
-    LDB #$B8
-    JSR Moveto_d
     CLR Vec_Misc_Count
     LDA #$24
     LDB #$00

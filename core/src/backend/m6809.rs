@@ -758,7 +758,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("DRAW_LINE_WRAPPER") {
         out.push_str(
-            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity and handles Reset0Ref properly.\nDRAW_LINE_WRAPPER:\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; CRITICAL: Reset integrator origin before each line\n    JSR Reset0Ref\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLW_DX_HI_OK\n    LDA #63\nDLW_DX_HI_OK: CMPA #-64\n    BGE DLW_DX_LO_OK\n    LDA #-64\nDLW_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLW_DY_HI_OK\n    LDA #63\nDLW_DY_HI_OK: CMPA #-64\n    BGE DLW_DY_LO_OK\n    LDA #-64\nDLW_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
+            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity and handles Reset0Ref properly.\nDRAW_LINE_WRAPPER:\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; CRITICAL: Reset integrator origin before each line\n    JSR Reset0Ref\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLW_DX_HI_OK\n    LDA #63\nDLW_DX_HI_OK: CMPA #-64\n    BGE DLW_DX_LO_OK\n    LDA #-64\nDLW_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLW_DY_HI_OK\n    LDA #63\nDLW_DY_HI_OK: CMPA #-64\n    BGE DLW_DY_LO_OK\n    LDA #-64\nDLW_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n\n; DRAW_LINE_FAST - optimized version that skips redundant setup\n; Use this for multiple consecutive draws with same intensity\n; Args: (x0,y0,x1,y1) only - intensity must be set beforehand\nDRAW_LINE_FAST:\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DX_CLAMP_HI_OK\n    LDD #127\nDLF_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DX_CLAMP_LO_OK\n    LDD #-128\nDLF_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DY_CLAMP_HI_OK\n    LDD #127\nDLF_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DY_CLAMP_LO_OK\n    LDD #-128\nDLF_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLF_DX_HI_OK\n    LDA #63\nDLF_DX_HI_OK: CMPA #-64\n    BGE DLF_DX_LO_OK\n    LDA #-64\nDLF_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLF_DY_HI_OK\n    LDA #63\nDLF_DY_HI_OK: CMPA #-64\n    BGE DLF_DY_LO_OK\n    LDA #-64\nDLF_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
         );
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
@@ -802,7 +802,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
-        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
+        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
@@ -842,7 +842,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             let dx = dx_total;
             let dy = dy_total;
             
-            // Generate optimized inline assembly (tutorial style)
+            // Generate optimized inline assembly - check for consecutive same-intensity draws
             out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Moveto_d\n", *y0, *x0));
             if *intensity != 0x5F { 
                 out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity & 0xFF)); 
@@ -888,9 +888,12 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                         let mut verts: Vec<(i32,i32)> = Vec::new();
                         for i in 0..n { if let (Expr::Number(xv), Expr::Number(yv)) = (&args[start_index+2*i], &args[start_index+2*i+1]) { verts.push((*xv, *yv)); } }
                         if verts.len()==n {
-                            // DEBUG / SAFE MODE: draw each edge independently with a Reset0Ref + Moveto to start vertex.
-                            // This is less efficient and may flicker more, but isolates any integrator drift issues.
+                            // OPTIMIZED MODE: Set intensity and DP once, then draw all edges efficiently
+                            // Set intensity once for all edges
                             if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
+                            // Set DP once for all VIA operations
+                            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                            
                             for i in 0..n {
                                 let (x0,y0)=verts[i];
                                 let (x1,y1)=verts[(i+1)%n];
@@ -901,8 +904,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                                 let (first_dx, first_dy, second_dx, second_dy, second) = if need_split {
                                     (dx_total/2, dy_total/2, dx_total - dx_total/2, dy_total - dy_total/2, true)
                                 } else { (dx_total, dy_total, 0, 0, false) };
-                                out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
-                                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (y0 & 0xFF), (x0 & 0xFF)));
+                                
+                                // Only reset origin for first edge, others are connected
+                                if i == 0 {
+                                    out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (y0 & 0xFF), (x0 & 0xFF)));
+                                }
                                 out.push_str("    CLR Vec_Misc_Count\n");
                                 out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", (first_dy & 0xFF), (first_dx & 0xFF)));
                                 if second {
