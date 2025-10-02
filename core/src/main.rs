@@ -8,6 +8,19 @@ mod backend; // Backend modules declared in src/backend/mod.rs
 use std::fs;
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+
+fn find_project_root() -> anyhow::Result<PathBuf> {
+    let mut current = std::env::current_dir()?;
+    loop {
+        if current.join("Cargo.toml").exists() {
+            return Ok(current);
+        }
+        match current.parent() {
+            Some(parent) => current = parent.to_path_buf(),
+            None => return Err(anyhow::anyhow!("Could not find project root (no Cargo.toml found)")),
+        }
+    }
+}
 use anyhow::Result;
 
 #[derive(Parser)]
@@ -94,6 +107,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 blink_intensity: false,
                 exclude_ram_org: true,
                 fast_wait: false,
+                source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -119,6 +133,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             blink_intensity: false,
             exclude_ram_org: true,
             fast_wait: false,
+            source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
         });
         
         // Phase 4 validation: Check if assembly was actually generated
@@ -168,26 +183,45 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     eprintln!("ASM input: {}", asm_path.display());
     eprintln!("BIN output: {}", bin_path.display());
     
+    // Find project root by looking for Cargo.toml
+    let project_root = find_project_root()?;
+    eprintln!("Project root detected: {}", project_root.display());
+    
+    // Convert asm_path to absolute if it's relative
+    let asm_path_abs = if asm_path.is_absolute() {
+        asm_path.clone()
+    } else {
+        std::env::current_dir()?.join(asm_path)
+    };
+    
+    // Convert bin_path to absolute if it's relative  
+    let bin_path_abs = if bin_path.is_absolute() {
+        bin_path.clone()
+    } else {
+        std::env::current_dir()?.join(&bin_path)
+    };
+    
     // Try lwasm first (system PATH)
     eprintln!("Attempting lwasm assembly...");
     let mut attempt_local = std::process::Command::new("lwasm")
         .arg("--6809")
         .arg("--format=raw")
-        .arg(format!("--output={}", bin_path.display()))
-        .arg(asm_path)
+        .arg(format!("--output={}", bin_path_abs.display()))
+        .arg(&asm_path_abs)
+        .current_dir(&project_root) // Always run from project root
         .output();
     
     // If system lwasm failed, try local lwasm in tools directory
     if attempt_local.is_err() {
-        let local_lwasm = PathBuf::from("ide/frontend/public/tools/lwasm.exe");
+        let local_lwasm = project_root.join("ide/frontend/public/tools/lwasm.exe");
         if local_lwasm.exists() {
             eprintln!("System lwasm not found, trying local lwasm...");
             attempt_local = std::process::Command::new(&local_lwasm)
                 .arg("--6809")
                 .arg("--format=raw")
-                .arg(format!("--output={}", bin_path.display()))
-                .arg(asm_path)
-                .current_dir(".") // Ensure we're in project root
+                .arg(format!("--output={}", bin_path_abs.display()))
+                .arg(&asm_path_abs)
+                .current_dir(&project_root) // Always run from project root
                 .output();
         }
     }
@@ -198,7 +232,7 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     match attempt_local {
         Ok(res) => {
             if res.status.success() {
-                eprintln!("✓ lwasm SUCCESS: {}", bin_path.display());
+                eprintln!("✓ lwasm SUCCESS: {}", bin_path_abs.display());
                 assembled_success = true;
             } else {
                 let stderr_text = String::from_utf8_lossy(&res.stderr);
@@ -217,20 +251,21 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     // Try PowerShell fallback if lwasm failed
     if !assembled_success {
         eprintln!("Trying PowerShell fallback script...");
-        let script = PathBuf::from("ide/frontend/public/tools/lwasm.ps1");
+        let script = project_root.join("ide/frontend/public/tools/lwasm.ps1");
         if script.exists() {
             let pw = std::process::Command::new("powershell")
                 .arg("-NoProfile")
                 .arg("-ExecutionPolicy").arg("Bypass")
                 .arg("-File")
                 .arg(&script)
-                .arg(asm_path)
-                .arg(&bin_path)
+                .arg(&asm_path_abs)
+                .arg(&bin_path_abs)
+                .current_dir(&project_root)
                 .output();
             match pw {
                 Ok(r) => {
                     if r.status.success() {
-                        eprintln!("✓ PowerShell fallback SUCCESS: {}", bin_path.display());
+                        eprintln!("✓ PowerShell fallback SUCCESS: {}", bin_path_abs.display());
                         assembled_success = true;
                     } else {
                         let stderr_text = String::from_utf8_lossy(&r.stderr);
@@ -251,7 +286,7 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     // Final validation
     if assembled_success {
         // Check if binary was actually created and is not empty
-        match std::fs::metadata(&bin_path) {
+        match std::fs::metadata(&bin_path_abs) {
             Ok(metadata) => {
                 if metadata.len() == 0 {
                     eprintln!("❌ CRITICAL ERROR: Binary file created but is EMPTY (0 bytes)");
@@ -268,11 +303,11 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
         }
         
         // Pad to minimum 8K so BIOS detects cartridge instead of launching MineStorm
-        if let Ok(mut data) = std::fs::read(&bin_path) {
+        if let Ok(mut data) = std::fs::read(&bin_path_abs) {
             let original_size = data.len();
             if original_size < 0x2000 { 
                 data.resize(0x2000, 0); 
-                std::fs::write(&bin_path, &data)?; 
+                std::fs::write(&bin_path_abs, &data)?; 
                 let remaining = 0x2000 - original_size;
                 eprintln!("✓ Binary size: {} bytes (padded to 8192 bytes)", original_size); 
                 eprintln!("✓ Available space: {} bytes ({} KB) remaining", remaining, remaining / 1024);

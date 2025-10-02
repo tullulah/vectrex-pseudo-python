@@ -9,6 +9,13 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   private fcInitCached: number | null = null;
   private memScratch: Uint8Array | null = null;
   private vecxEmuPatched: boolean = false;
+  
+  // Debug output system
+  private debugMessages: string[] = [];
+  private debugLabelBuffer: { high: number | null; low: number | null } = { high: null, low: null };
+  private lastDebugOutput: string = '';
+  private lastDebugValue: number = 0xFF; // Track last value at $DFFF
+  private debugRam = new Uint8Array(256); // Debug pseudo-RAM for D800-D8FF area
 
   async init(){
     if (this.mod) return;
@@ -34,6 +41,54 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       console.log('[JsVecxCore] Found global VecX class and vecx instance');
       this.mod = { VecX, Globals };
       this.inst = vecx;
+      
+      // CRÍTICO: Interceptar la función write8 original de JSVecx para debug
+      console.log('[JsVecxCore] Original write8 function:', typeof this.inst.write8);
+      const originalWrite8 = this.inst.write8.bind(this.inst);
+      this.inst.write8 = (address: number, data: number) => {
+        console.log(`[DEBUG-INTERCEPT] Write attempt: ${address.toString(16)} = ${data}`);
+        
+        // Interceptar escrituras al área de debug CF00-CF03 (end of RAM)
+        if (address >= 0xCF00 && address <= 0xCF03) {
+          const debugAddr = address - 0xCF00;
+          this.debugRam[debugAddr] = data;
+          console.log(`[DEBUG-WRITE] Wrote ${data} to debug address CF${debugAddr.toString(16).padStart(2, '0').toUpperCase()}`);
+          // También llamar la función original para que se escriba en RAM real
+          originalWrite8(address, data);
+          return;
+        }
+        // Para otras direcciones, usar la función original
+        return originalWrite8(address, data);
+      };
+      
+      // También interceptar read8 si existe
+      if (this.inst.read8) {
+        console.log('[JsVecxCore] Original read8 function:', typeof this.inst.read8);
+        const originalRead8 = this.inst.read8.bind(this.inst);
+        this.inst.read8 = (address: number) => {
+          console.log(`[DEBUG-INTERCEPT] Read attempt: ${address.toString(16)}`);
+          
+          // Interceptar lecturas del área de debug CF00-CF03
+          if (address >= 0xCF00 && address <= 0xCF03) {
+            const value = originalRead8(address); // Leer de RAM real
+            console.log(`[DEBUG-READ] Read ${value} from debug address CF${(address - 0xCF00).toString(16).padStart(2, '0').toUpperCase()}`);
+            return value;
+          }
+          // Para otras direcciones, usar la función original
+          return originalRead8(address);
+        };
+      } else {
+        console.log('[JsVecxCore] No read8 function found in JSVecx');
+      }
+      
+      // NUEVO: También interceptar acceso directo a arrays de memoria
+      console.log('[JsVecxCore] Available memory arrays:', {
+        ram: this.inst.ram ? 'available' : 'not found',
+        cart: this.inst.cart ? 'available' : 'not found',
+        rom: this.inst.rom ? 'available' : 'not found'
+      });
+      
+      console.log('[JsVecxCore] Debug memory interceptor installed');
       
       // Verificar que la instancia tiene los componentes necesarios
       if (!this.inst.rom) {
@@ -81,9 +136,13 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
             // RAM 0xC800-0xCFFF (1K mirrored)
             const ramAddr = (address - 0xC800) & 0x3FF;
             return this.inst!.ram![ramAddr] || 0;
-          } else if (address >= 0xD000 && address < 0xE000) {
-            // VIA registers 0xD000-0xDFFF (simplified)
+          } else if (address >= 0xD000 && address < 0xD800) {
+            // VIA registers 0xD000-0xD7FF (simplified)
             return 0; // TODO: Implementar VIA si es necesario
+          } else if (address >= 0xD800 && address < 0xD900) {
+            // Debug pseudo-RAM 0xD800-0xD8FF
+            const debugAddr = address - 0xD800;
+            return this.debugRam[debugAddr] || 0;
           } else if (address >= 0xE000) {
             // ROM/BIOS 0xE000-0xFFFF
             const romAddr = address - 0xE000;
@@ -105,9 +164,14 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
             // RAM 0xC800-0xCFFF
             const ramAddr = (address - 0xC800) & 0x3FF;
             if (this.inst!.ram) this.inst!.ram[ramAddr] = value;
-          } else if (address >= 0xD000 && address < 0xE000) {
+          } else if (address >= 0xD000 && address < 0xD800) {
             // VIA registers - ignorar por ahora
             // TODO: Implementar escritura VIA si es necesario
+          } else if (address >= 0xD800 && address < 0xD900) {
+            // Debug pseudo-RAM 0xD800-0xD8FF
+            const debugAddr = address - 0xD800;
+            this.debugRam[debugAddr] = value;
+            console.log(`[DEBUG-WRITE] Wrote ${value} to debug address D${(0x800 + debugAddr).toString(16).toUpperCase()}`);
           }
           // ROM es read-only, ignorar escrituras
         };
@@ -157,6 +221,10 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       } else if (address >= 0xC800 && address < 0xD000) {
         const ramAddr = (address - 0xC800) & 0x3FF;
         return this.inst!.ram![ramAddr] || 0;
+      } else if (address >= 0xD800 && address < 0xD900) {
+        // Debug pseudo-RAM 0xD800-0xD8FF
+        const debugAddr = address - 0xD800;
+        return this.debugRam[debugAddr] || 0;
       } else if (address >= 0xE000) {
         const romAddr = address - 0xE000;
         return this.inst!.rom[romAddr] || 0;
@@ -172,6 +240,11 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       } else if (address >= 0xC800 && address < 0xD000) {
         const ramAddr = (address - 0xC800) & 0x3FF;
         if (this.inst!.ram) this.inst!.ram[ramAddr] = value;
+      } else if (address >= 0xD800 && address < 0xD900) {
+        // Debug pseudo-RAM 0xD800-0xD8FF
+        const debugAddr = address - 0xD800;
+        this.debugRam[debugAddr] = value;
+        console.log(`[DEBUG-WRITE] Wrote ${value} to debug address D${(0x800 + debugAddr).toString(16).toUpperCase()}`);
       }
     };
   }
@@ -180,6 +253,7 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
     if (!this.inst || !this.inst.read8 || !this.inst.write8) return;
     
     console.log('[JsVecxCore] Assigning memory functions to all possible contexts...');
+    console.log('[JsVecxCore] Our write8 function reference:', this.inst.write8.toString().substring(0, 100) + '...');
     
     // CRÍTICO: jsvecx parece buscar las funciones en el contexto global/this de e6809_sstep
     // Vamos a asignar a ABSOLUTAMENTE TODOS los contextos posibles
@@ -463,14 +537,40 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
           // Asegurar funciones JUSTO antes de ejecutar emulación
           console.log('[JsVecxCore] Patched vecx_emu: Re-assigning functions before execution...');
           this.assignMemoryFunctionsToAllContexts();
+          
+          // EXTRA DEBUG: Verificar si se ejecutan instrucciones cerca de $DFFF
+          let debugCallCount = 0;
+          const originalStep = this.inst.e6809?.sstep;
+          if (originalStep) {
+            this.inst.e6809.sstep = () => {
+              const result = originalStep.call(this.inst.e6809);
+              const pc = this.inst.e6809.pc || 0;
+              
+              // Log PC si está cerca de areas importantes o es una escritura a debug
+              if (pc >= 0x0 && pc < 0x2000) { // Cartridge area
+                if (debugCallCount < 50) { // Limit debug spam
+                  console.log(`[DEBUG-CPU] PC=$${pc.toString(16).toUpperCase()}`);
+                  debugCallCount++;
+                }
+              }
+              
+              return result;
+            };
+          }
+          
           return originalVecxEmu.call(this.inst, cycles, cyclesDone);
         };
         this.vecxEmuPatched = true;
-        console.log('[JsVecxCore] Patched vecx_emu to inject memory functions');
+        console.log('[JsVecxCore] Patched vecx_emu to inject memory functions AND CPU debugging');
       }
       
       // Intentar ejecutar un frame usando la función jsvecx
       this.inst.vecx_emu(40000, 0); // Aprox 40K cycles por frame
+      
+      // POLLING DIRECTO: Verificar si hay nuevo debug output chequeando memoria directamente
+      console.log('[DEBUG-POLL] About to call pollDebugMemory...');
+      this.pollDebugMemory();
+      console.log('[DEBUG-POLL] pollDebugMemory completed');
       
       // Extraer vectores del frame actual
       const vectors: Segment[] = [];
@@ -568,4 +668,164 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   resetStats(){ /* noop */ }
   biosCalls(){ return []; }
   clearBiosCalls(){ /* noop */ }
+
+  // Debug output system methods
+  private handleDebugOutput(value: number): void {
+    console.log(`[DEBUG] handleDebugOutput called with value=${value} (0x${value.toString(16)})`);
+    console.log(`[DEBUG] Label buffer state: high=${this.debugLabelBuffer.high}, low=${this.debugLabelBuffer.low}`);
+    
+    if (value === 0xFE) {
+      // Label marker - next output will be labeled
+      console.log(`[DEBUG] Received label marker (0xFE)`);
+      return;
+    }
+    
+    // Check if we have a complete label pointer
+    if (this.debugLabelBuffer.high !== null && this.debugLabelBuffer.low !== null) {
+      // We have a labeled debug output
+      const labelPtr = (this.debugLabelBuffer.high << 8) | this.debugLabelBuffer.low;
+      console.log(`[DEBUG] Processing labeled output: labelPtr=$${labelPtr.toString(16)}, value=${value}`);
+      const label = this.readDebugString(labelPtr);
+      const message = `${label} = ${value}`;
+      this.debugMessages.push(message);
+      this.lastDebugOutput = message;
+      console.log(`[DEBUG] Added labeled message: ${message}`);
+      
+      // Clear label buffer
+      this.debugLabelBuffer.high = null;
+      this.debugLabelBuffer.low = null;
+    } else {
+      // Simple debug output (just value)
+      const message = `DEBUG: ${value}`;
+      this.debugMessages.push(message);
+      this.lastDebugOutput = message;
+      console.log(`[DEBUG] Added simple message: ${message}`);
+    }
+    
+    console.log(`[DEBUG] Total debug messages now: ${this.debugMessages.length}`);
+  }
+
+  private pollDebugMemory(): void {
+    console.log('[DEBUG-POLL] pollDebugMemory function called');
+    
+    if (!this.inst) {
+      console.log('[DEBUG-POLL] No inst available');
+      return;
+    }
+    
+    console.log('[DEBUG-POLL] About to read memory...');
+    
+    try {
+      // Debug: verificar qué funciones y arrays están disponibles
+      console.log('[DEBUG-POLL] Available functions:', {
+        read8: typeof this.inst.read8,
+        write8: typeof this.inst.write8,
+        ram: this.inst.ram ? 'available' : 'not available',
+        cart: this.inst.cart ? 'available' : 'not available'
+      });
+      
+      // Read debug output from end of RAM (CF00-CF03)
+      const debugValue = this.inst.read8 ? this.inst.read8(0xCF00) : 0xFF;  // Debug value
+      const debugMarker = this.inst.read8 ? this.inst.read8(0xCF01) : 0;    // Debug marker
+      const labelHigh = this.inst.read8 ? this.inst.read8(0xCF02) : 0;     // Label pointer high
+      const labelLow = this.inst.read8 ? this.inst.read8(0xCF03) : 0;      // Label pointer low
+      
+      console.log('[DEBUG-POLL] Read memory values:', { debugValue, debugMarker, labelHigh, labelLow });
+      
+      // NUEVO: También verificar directamente el debugRam interno
+      console.log('[DEBUG-POLL] Direct debugRam values:', {
+        ram0: this.debugRam[0],
+        ram1: this.debugRam[1], 
+        ram2: this.debugRam[2],
+        ram3: this.debugRam[3]
+      });
+      
+      // Check if debug marker indicates new output (0x42 = simple, 0xFE = labeled)
+      if ((debugMarker === 0x42 || debugMarker === 0xFE) && debugMarker !== this.lastDebugValue) {
+        console.log(`[DEBUG-POLL] RAM polling detected debug output: value=${debugValue}, marker=${debugMarker}`);
+        
+        // Process the debug output
+        if (debugMarker === 0xFE && (labelHigh !== 0 || labelLow !== 0)) {
+          // Labeled debug output
+          const labelPtr = (labelHigh << 8) | labelLow;
+          const label = this.readDebugString(labelPtr);
+          const message = `${label} = ${debugValue}`;
+          this.debugMessages.push(message);
+          this.lastDebugOutput = message;
+          console.log(`[DEBUG-POLL] Added labeled message: ${message}`);
+        } else {
+          // Simple debug output
+          const message = `DEBUG: ${debugValue}`;
+          this.debugMessages.push(message);
+          this.lastDebugOutput = message;
+          console.log(`[DEBUG-POLL] Added simple message: ${message}`);
+        }
+        
+        this.lastDebugValue = debugMarker;
+        
+        // Clear the marker to avoid re-processing
+        if (this.inst.write8) {
+          this.inst.write8(0xCF01, 0);
+        }
+      }
+    } catch (error) {
+      console.warn('[DEBUG-POLL] Error during debug memory polling:', error);
+    }
+  }
+
+  private readDebugString(address: number): string {
+    if (!this.inst) return 'UNKNOWN';
+    
+    let result = '';
+    let current = address;
+    
+    // Read string until high bit is set (Vectrex string termination)
+    for (let i = 0; i < 32; i++) { // Safety limit
+      const byte = this.readMemoryByte(current);
+      if (byte === 0) break; // Safety fallback
+      
+      if (byte & 0x80) {
+        // High bit set - last character
+        result += String.fromCharCode(byte & 0x7F);
+        break;
+      } else {
+        result += String.fromCharCode(byte);
+        current++;
+      }
+    }
+    
+    return result || 'EMPTY';
+  }
+
+  private readMemoryByte(address: number): number {
+    if (!this.inst) return 0;
+    
+    address = address & 0xFFFF;
+    
+    if (address < 0x8000 && this.inst.cart) {
+      return this.inst.cart[address] || 0;
+    } else if (address >= 0xC800 && address < 0xD000 && this.inst.ram) {
+      const ramAddr = (address - 0xC800) & 0x3FF;
+      return this.inst.ram[ramAddr] || 0;
+    } else if (address >= 0xE000 && this.inst.rom) {
+      const romAddr = (address - 0xE000) & 0x1FFF;
+      return this.inst.rom[romAddr] || 0;
+    }
+    
+    return 0;
+  }
+
+  // Public methods to access debug messages
+  public getDebugMessages(): string[] {
+    return [...this.debugMessages];
+  }
+
+  public clearDebugMessages(): void {
+    this.debugMessages = [];
+    this.lastDebugOutput = '';
+  }
+
+  public getLastDebugOutput(): string {
+    return this.lastDebugOutput;
+  }
 }

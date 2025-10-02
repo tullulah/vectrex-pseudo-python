@@ -12,9 +12,14 @@ static LAST_END_SET: AtomicBool = AtomicBool::new(false);
 fn resolve_function_name(name: &str) -> Option<String> {
     match name {
         "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT".to_string()),
+        "DEBUG_PRINT" => Some("VECTREX_DEBUG_PRINT".to_string()),
+        "DEBUG_PRINT_LABELED" => Some("VECTREX_DEBUG_PRINT_LABELED".to_string()),
         "MOVE" => Some("VECTREX_MOVE_TO".to_string()),        // Unificado: MOVE -> VECTREX_MOVE_TO
         "MOVE_TO" => Some("VECTREX_MOVE_TO".to_string()),     // Compatibilidad hacia atrás
         "DRAW_TO" => Some("VECTREX_DRAW_TO".to_string()),
+        "POKE" => Some("VECTREX_POKE".to_string()),
+        "PEEK" => Some("VECTREX_PEEK".to_string()),
+        "PRINT_NUMBER" => Some("VECTREX_PRINT_NUMBER".to_string()),
         // DRAW_LINE -> removed from auto-mapping, handled by inline optimization or explicit wrapper call
         "DRAW_POLYGON" => Some("DRAW_POLYGON".to_string()),   // already handled if constants; allow pass-through if dynamic (future)
         "DRAW_VL" => Some("VECTREX_DRAW_VL".to_string()),
@@ -30,11 +35,23 @@ fn resolve_function_name(name: &str) -> Option<String> {
     }
 }
 
+// Helper function to calculate the correct include path based on source file location
+fn calculate_include_path(_opts: &CodegenOptions) -> String {
+    // Always use relative path from project root - assembler should be run from project root
+    "include/VECTREX.I".to_string()
+}
+
+// Helper function to calculate the correct runtime path based on source file location  
+fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
+    // Always use relative path from project root - assembler should be run from project root
+    "runtime/vectorlist_runtime.asm".to_string()
+}
+
 // emit: entry point for Motorola 6809 backend assembly generation.
 // Produces a simple Vectrex-style header, calls platform init + MAIN, then infinite loop.
 pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> String {
     let mut out = String::new();
-    let syms = collect_symbols(module);
+    let syms = collect_all_vars(module); // Use ALL vars (including locals) for assembly generation
     let global_vars = collect_global_vars(module); // NEW: Collect variables with initial values
     let string_map = collect_string_literals(module);
         let rt_usage = analyze_runtime_usage(module);
@@ -81,7 +98,8 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str("        ORG $0000\n");
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // Classic include; no manual EQU needed.
-        out.push_str("    INCLUDE \"include/VECTREX.I\"\n\n");
+    let include_path = calculate_include_path(opts);
+    out.push_str(&format!("    INCLUDE \"{}\"\n\n", include_path));
     // (Include already added above)
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Header (emulator-compatible variant):
@@ -385,7 +403,8 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // (Legacy tail loop removed; entry sequence already loops.)
     // Move runtime include AFTER vector lists like smartlist_demo - but only if needed
     if rt_usage.needs_vectorlist_runtime {
-        out.push_str("    INCLUDE \"runtime/vectorlist_runtime.asm\"\n");
+        let runtime_path = calculate_runtime_path(opts);
+        out.push_str(&format!("    INCLUDE \"{}\"\n", runtime_path));
     }
     if !suppress_runtime {
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
@@ -436,7 +455,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         if opts.exclude_ram_org {
             // FIX: Use separate memory area for global variables, not RESULT+offset
             // Global variables should persist between function calls, but RESULT is temporary
-            out.push_str(&format!("VAR_{} EQU $C900+{}\n", v.to_uppercase(), var_offset));
+            out.push_str(&format!("VAR_{} EQU $CF00+{}\n", v.to_uppercase(), var_offset));
             var_offset += 2;
         } else {
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
@@ -546,6 +565,7 @@ fn stmt_has_trig(s: &Stmt) -> bool {
         Stmt::Return(o) => o.as_ref().map(expr_has_trig).unwrap_or(false),
         Stmt::Switch { expr, cases, default } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
         Stmt::Break | Stmt::Continue => false,
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before stmt_has_trig"),
     }
 }
 
@@ -590,6 +610,7 @@ fn scan_stmt_args(s: &Stmt) -> usize {
             m
         }
         Stmt::Break | Stmt::Continue => 0,
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_args"),
     }
 }
 
@@ -674,7 +695,8 @@ fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
             if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage); } }
             usage.needs_tmp_left = true; usage.needs_tmp_right = true; // switch lowering uses TMPLEFT
         }
-        Stmt::Break | Stmt::Continue => {}
+        Stmt::Break | Stmt::Continue => {},
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_runtime"),
     }
 }
 
@@ -783,6 +805,31 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
             "VECTREX_PRINT_TEXT:\n    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS\n    LDU VAR_ARG2   ; string pointer (high-bit terminated)\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Print_Str_d\n    RTS\n"
         );
     }
+    if w.contains("VECTREX_DEBUG_PRINT") {
+        out.push_str(
+            "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to end of RAM (safe area)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$42         ; Debug marker\n    STA $CF01        ; Debug marker to indicate new output\n    RTS\n"
+        );
+    }
+    if w.contains("VECTREX_DEBUG_PRINT_LABELED") {
+        out.push_str(
+            "VECTREX_DEBUG_PRINT_LABELED:\n    ; Debug print with label - writes to end of RAM (safe area)\n    ; Write label string pointer to end of RAM\n    LDA VAR_ARG0     ; Label string pointer high byte\n    STA $CF02        ; Label pointer high at end of RAM\n    LDA VAR_ARG0+1   ; Label string pointer low byte  \n    STA $CF03        ; Label pointer low at end of RAM\n    ; Write value to debug output\n    LDA VAR_ARG1+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$FE         ; Labeled debug marker\n    STA $CF01        ; Debug marker to indicate labeled output\n    RTS\n"
+        );
+    }
+    if w.contains("VECTREX_POKE") {
+        out.push_str(
+            "VECTREX_POKE:\n    ; Write byte to memory address\n    ; ARG0 = address (16-bit), ARG1 = value (8-bit)\n    LDX VAR_ARG0     ; Load address into X\n    LDA VAR_ARG1+1   ; Load value (low byte)\n    STA ,X           ; Store value to address\n    RTS\n"
+        );
+    }
+    if w.contains("VECTREX_PEEK") {
+        out.push_str(
+            "VECTREX_PEEK:\n    ; Read byte from memory address\n    ; ARG0 = address (16-bit), returns value in VAR_ARG0+1\n    LDX VAR_ARG0     ; Load address into X\n    LDA ,X           ; Load value from address\n    STA VAR_ARG0+1   ; Store result in low byte of ARG0\n    RTS\n"
+        );
+    }
+    if w.contains("VECTREX_PRINT_NUMBER") {
+        out.push_str(
+            "VECTREX_PRINT_NUMBER:\n    ; Print number at position\n    ; ARG0 = X position, ARG1 = Y position, ARG2 = number value\n    ; Simple implementation: convert number to string and print\n    LDA VAR_ARG1+1   ; Y position\n    LDB VAR_ARG0+1   ; X position\n    JSR Moveto_d     ; Move to position\n    \n    ; Convert number to string (simple: just show low byte as hex)\n    LDA VAR_ARG2+1   ; Load number value\n    \n    ; Convert high nibble to ASCII\n    LSRA\n    LSRA\n    LSRA\n    LSRA\n    ANDA #$0F\n    CMPA #10\n    BLO PN_DIGIT1\n    ADDA #7          ; A-F\nPN_DIGIT1:\n    ADDA #'0'\n    STA NUM_STR      ; Store first digit\n    \n    ; Convert low nibble to ASCII  \n    LDA VAR_ARG2+1\n    ANDA #$0F\n    CMPA #10\n    BLO PN_DIGIT2\n    ADDA #7          ; A-F\nPN_DIGIT2:\n    ADDA #'0'\n    ORA #$80         ; Set high bit for string termination\n    STA NUM_STR+1    ; Store second digit with high bit\n    \n    ; Print the string\n    LDU #NUM_STR     ; Point to our number string\n    JSR Print_Str_d  ; Print using BIOS\n    RTS\n\nNUM_STR: RMB 2      ; Space for 2-digit hex number\n"
+        );
+    }
     if w.contains("VECTREX_MOVE_TO") {
         out.push_str(
             "VECTREX_MOVE_TO:\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Moveto_d\n    ; store new current position\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
@@ -831,7 +878,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("VECTREX_WAIT_RECAL") || opts.fast_wait {
         if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    RTS\n");
-            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR WAIT_RECAL\n    RTS\n"); }
+            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR Wait_Recal\n    RTS\n"); }
     }
     if w.contains("VECTREX_PLAY_MUSIC1") {
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
@@ -844,7 +891,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
 fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
-        "VECTREX_PRINT_TEXT"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
+        "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
@@ -1319,7 +1366,8 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
             }
             out.push_str(&format!("{}:\n", end));
-        }
+        },
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before emit_stmt"),
     }
 }
 
@@ -1410,6 +1458,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
                 BinOp::Sub => out.push_str("    LDD TMPLEFT\n    SUBD TMPRIGHT\n    STD RESULT\n"),
                 BinOp::Mul => out.push_str("    LDD TMPLEFT\n    STD MUL_A\n    LDD TMPRIGHT\n    STD MUL_B\n    JSR MUL16\n"),
                 BinOp::Div => out.push_str("    LDD TMPLEFT\n    STD DIV_A\n    LDD TMPRIGHT\n    STD DIV_B\n    JSR DIV16\n"),
+                BinOp::FloorDiv => out.push_str("    LDD TMPLEFT\n    STD DIV_A\n    LDD TMPRIGHT\n    STD DIV_B\n    JSR DIV16\n"), // División entera igual que Div en enteros
                 BinOp::Mod => out.push_str("    LDD TMPLEFT\n    STD DIV_A\n    LDD TMPRIGHT\n    STD DIV_B\n    JSR DIV16\n    ; quotient in RESULT, need remainder: A - Q*B\n    LDD DIV_A\n    STD TMPLEFT\n    LDD RESULT\n    STD MUL_A\n    LDD DIV_B\n    STD MUL_B\n    JSR MUL16\n    ; product in RESULT, subtract from original A (TMPLEFT)\n    LDD TMPLEFT\n    SUBD RESULT\n    STD RESULT\n"),
                 BinOp::Shl => out.push_str("    LDD TMPLEFT\nSHL_LOOP: LDA TMPRIGHT+1\n    BEQ SHL_DONE\n    ASLB\n    ROLA\n    DEC TMPRIGHT+1\n    BRA SHL_LOOP\nSHL_DONE: STD RESULT\n"),
                 BinOp::Shr => out.push_str("    LDD TMPLEFT\nSHR_LOOP: LDA TMPRIGHT+1\n    BEQ SHR_DONE\n    LSRA\n    RORB\n    DEC TMPRIGHT+1\n    BRA SHR_LOOP\nSHR_DONE: STD RESULT\n"),
@@ -1489,7 +1538,26 @@ fn format_expr_ref(e: &Expr) -> String {
     }
 }
 
+// collect_all_vars: gather ALL variable identifiers used in the module (including locals)
+// In the Vectrex context, all variables need DATA section definitions regardless of scope
+fn collect_all_vars(module: &Module) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut all_vars = BTreeSet::new();
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for stmt in &f.body { collect_stmt_syms(stmt, &mut all_vars); }
+        } else if let Item::GlobalLet { name, .. } = item { 
+            all_vars.insert(name.clone()); 
+        } else if let Item::ExprStatement(expr) = item {
+            collect_expr_syms(expr, &mut all_vars);
+        }
+    }
+    // Don't remove locals - we need ALL variables for assembly generation
+    all_vars.into_iter().collect()
+}
+
 // collect_symbols: gather variable identifiers.
+#[allow(dead_code)]
 fn collect_symbols(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
     let mut globals = BTreeSet::new();
@@ -1556,7 +1624,11 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break | Stmt::Continue => {}
+        Stmt::Break | Stmt::Continue => {},
+        Stmt::CompoundAssign { target, value, .. } => {
+            set.insert(target.name.clone());
+            collect_expr_syms(value, set);
+        }
     }
 }
 

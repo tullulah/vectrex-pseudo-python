@@ -7,6 +7,7 @@ pub enum TokenKind {
     Def, Identifier(String), Number(i32), Newline, Indent, Dedent,
     LParen, RParen, Colon, Comma, Dot,
     Plus, Minus, Star, Slash, Percent,
+    SlashSlash,  // División entera //
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
     Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let, Const, Var, VectorList,
@@ -16,6 +17,8 @@ pub enum TokenKind {
     StringLit(String),
     True, False,
     EqEq, NotEq, Lt, Le, Gt, Ge,
+    // Operadores de asignación compuesta
+    PlusEqual, MinusEqual, StarEqual, SlashEqual, SlashSlashEqual, PercentEqual,
     Eof,
 }
 
@@ -94,23 +97,57 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                 idx += 1;
             }
             '+' => {
-                out.push(tok(TokenKind::Plus, line_no, idx));
-                idx += 1;
+                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                    out.push(tok(TokenKind::PlusEqual, line_no, idx));
+                    idx += 2;
+                } else {
+                    out.push(tok(TokenKind::Plus, line_no, idx));
+                    idx += 1;
+                }
             }
             '-' => {
-                out.push(tok(TokenKind::Minus, line_no, idx));
-                idx += 1;
+                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                    out.push(tok(TokenKind::MinusEqual, line_no, idx));
+                    idx += 2;
+                } else {
+                    out.push(tok(TokenKind::Minus, line_no, idx));
+                    idx += 1;
+                }
             }
             '#' => { break; }
             ';' => { break; }
             '*' => {
-                out.push(tok(TokenKind::Star, line_no, idx));
-                idx += 1;
+                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                    out.push(tok(TokenKind::StarEqual, line_no, idx));
+                    idx += 2;
+                } else {
+                    out.push(tok(TokenKind::Star, line_no, idx));
+                    idx += 1;
+                }
             }
-            '%' => { out.push(tok(TokenKind::Percent, line_no, idx)); idx += 1; }
+            '%' => { 
+                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                    out.push(tok(TokenKind::PercentEqual, line_no, idx));
+                    idx += 2;
+                } else {
+                    out.push(tok(TokenKind::Percent, line_no, idx)); 
+                    idx += 1; 
+                }
+            }
             '/' => {
-                out.push(tok(TokenKind::Slash, line_no, idx));
-                idx += 1;
+                if idx + 1 < chars.len() && chars[idx + 1] == '=' {
+                    out.push(tok(TokenKind::SlashEqual, line_no, idx));
+                    idx += 2;
+                } else if idx + 2 < chars.len() && chars[idx + 1] == '/' && chars[idx + 2] == '=' {
+                    out.push(tok(TokenKind::SlashSlashEqual, line_no, idx));
+                    idx += 3;
+                } else if idx + 1 < chars.len() && chars[idx + 1] == '/' {
+                    out.push(tok(TokenKind::SlashSlash, line_no, idx));
+                    idx += 2;
+                } else {
+                    out.push(tok(TokenKind::Slash, line_no, idx));
+                    idx += 1;
+                }
             }
             '&' => {
                 out.push(tok(TokenKind::Amp, line_no, idx));

@@ -47,7 +47,9 @@ pub enum Stmt {
 	Expr(Expr),
 	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>> },
 	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>> },
-	Return(Option<Expr>)
+	Return(Option<Expr>),
+	// Operadores de asignación compuesta: var += expr
+	CompoundAssign { target: AssignTarget, op: BinOp, value: Expr },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +77,7 @@ pub enum Expr {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BinOp { Add, Sub, Mul, Div, Mod, Shl, Shr, BitAnd, BitOr, BitXor }
+pub enum BinOp { Add, Sub, Mul, Div, FloorDiv, Mod, Shl, Shr, BitAnd, BitOr, BitXor }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpOp { Eq, Ne, Lt, Le, Gt, Ge }

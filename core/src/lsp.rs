@@ -63,6 +63,8 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "SPIRAL" => Some(AritySpec::Exact(2)),                  // r, turns
         "POLYGON" => Some(AritySpec::Variable(3)),              // n, x1, y1, ... (minimum 3: count + at least one point)
         "PRINT_TEXT" => Some(AritySpec::Exact(3)),              // x, y, text
+        "DEBUG_PRINT" => Some(AritySpec::Exact(1)),             // value - debug output to console
+        "DEBUG_PRINT_LABELED" => Some(AritySpec::Exact(2)),     // label, value - debug output with label
         
         // Funciones de dibujo con intensidad explícita
         "DRAW_POLYGON" => Some(AritySpec::Variable(4)),         // n, intensity, x1, y1, ... (minimum 4: count + intensity + at least one point)

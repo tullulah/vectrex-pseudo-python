@@ -15,6 +15,7 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::Minus => "'-'".to_string(),
         TokenKind::Star => "'*'".to_string(),
         TokenKind::Slash => "'/'".to_string(),
+        TokenKind::SlashSlash => "'//'".to_string(),
         TokenKind::Percent => "'%'".to_string(),
         TokenKind::Lt => "'<'".to_string(),
         TokenKind::Gt => "'>'".to_string(),
@@ -56,6 +57,12 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::Meta => "'META'".to_string(),
         TokenKind::True => "'true'".to_string(),
         TokenKind::False => "'false'".to_string(),
+        TokenKind::PlusEqual => "'+='".to_string(),
+        TokenKind::MinusEqual => "'-='".to_string(),
+        TokenKind::StarEqual => "'*='".to_string(),
+        TokenKind::SlashEqual => "'/='".to_string(),
+        TokenKind::SlashSlashEqual => "'//='".to_string(),
+        TokenKind::PercentEqual => "'%='".to_string(),
         TokenKind::Identifier(_) => "identifier".to_string(),
         TokenKind::Number(_) => "number".to_string(),
         TokenKind::StringLit(_) => "string".to_string(),
@@ -80,6 +87,7 @@ fn const_eval(e: &Expr) -> Option<i32> {
                 BinOp::Sub => l.wrapping_sub(r),
                 BinOp::Mul => l.wrapping_mul(r),
                 BinOp::Div => if r!=0 { l.wrapping_div(r) } else { return None },
+                BinOp::FloorDiv => if r!=0 { l.wrapping_div(r) } else { return None }, // División entera (igual que Div en enteros)
                 BinOp::Mod => if r!=0 { l.wrapping_rem(r) } else { return None },
                 BinOp::Shl => l.wrapping_shl((r & 0xF) as u32),
                 BinOp::Shr => ((l as u32) >> (r & 0xF)) as i32,
@@ -353,6 +361,22 @@ impl<'a> Parser<'a> {
                 let expr = self.expression()?;
                 self.consume(TokenKind::Newline)?;
                 return Ok(Stmt::Assign { target: crate::ast::AssignTarget { name, line: ident_tok.line, col: ident_tok.col }, value: expr });
+            } else if self.check(TokenKind::PlusEqual) || self.check(TokenKind::MinusEqual) || 
+                      self.check(TokenKind::StarEqual) || self.check(TokenKind::SlashEqual) || 
+                      self.check(TokenKind::SlashSlashEqual) || self.check(TokenKind::PercentEqual) {
+                // Compound assignment: var += expr
+                let op = match self.peek().kind {
+                    TokenKind::PlusEqual => { self.advance(); crate::ast::BinOp::Add }
+                    TokenKind::MinusEqual => { self.advance(); crate::ast::BinOp::Sub }
+                    TokenKind::StarEqual => { self.advance(); crate::ast::BinOp::Mul }
+                    TokenKind::SlashEqual => { self.advance(); crate::ast::BinOp::Div }
+                    TokenKind::SlashSlashEqual => { self.advance(); crate::ast::BinOp::FloorDiv }
+                    TokenKind::PercentEqual => { self.advance(); crate::ast::BinOp::Mod }
+                    _ => unreachable!()
+                };
+                let expr = self.expression()?;
+                self.consume(TokenKind::Newline)?;
+                return Ok(Stmt::CompoundAssign { target: crate::ast::AssignTarget { name, line: ident_tok.line, col: ident_tok.col }, op, value: expr });
             } else {
                 // No era asignación, revertir.
                 self.unread_identifier(name);
@@ -413,7 +437,7 @@ impl<'a> Parser<'a> {
     fn shift(&mut self) -> Result<Expr> { let mut node=self.comparison()?; while let Some(op)= if self.match_kind(&TokenKind::ShiftLeft){Some(BinOp::Shl)} else if self.match_kind(&TokenKind::ShiftRight){Some(BinOp::Shr)} else {None} { let rhs=self.comparison()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)}; } Ok(node) }
     fn comparison(&mut self) -> Result<Expr> { let first=self.term()?; if let Some(op0)=self.match_cmp_op(){ let mut operands=vec![first]; let mut ops=vec![op0]; operands.push(self.term()?); while let Some(nop)=self.match_cmp_op(){ ops.push(nop); operands.push(self.term()?);} if ops.len()==1 { let left=operands.remove(0); let right=operands.remove(0); return Ok(Expr::Compare { op:ops[0], left:Box::new(left), right:Box::new(right)});} let mut chain=None; for i in 0..ops.len(){ let cmp=Expr::Compare { op:ops[i], left:Box::new(operands[i].clone()), right:Box::new(operands[i+1].clone())}; chain=Some(if let Some(acc)=chain { Expr::Logic { op:LogicOp::And, left:Box::new(acc), right:Box::new(cmp)} } else { cmp }); } return Ok(chain.unwrap()); } Ok(first) }
     fn term(&mut self) -> Result<Expr> { let mut node=self.factor()?; while let Some(op)= if self.match_kind(&TokenKind::Plus){Some(BinOp::Add)} else if self.match_kind(&TokenKind::Minus){Some(BinOp::Sub)} else {None} { let rhs=self.factor()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)};} Ok(node) }
-    fn factor(&mut self) -> Result<Expr> { let mut node=self.unary()?; while let Some(op)= if self.match_kind(&TokenKind::Star){Some(BinOp::Mul)} else if self.match_kind(&TokenKind::Slash){Some(BinOp::Div)} else if self.match_kind(&TokenKind::Percent){Some(BinOp::Mod)} else {None} { let rhs=self.unary()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)};} Ok(node) }
+    fn factor(&mut self) -> Result<Expr> { let mut node=self.unary()?; while let Some(op)= if self.match_kind(&TokenKind::Star){Some(BinOp::Mul)} else if self.match_kind(&TokenKind::Slash){Some(BinOp::Div)} else if self.match_kind(&TokenKind::SlashSlash){Some(BinOp::FloorDiv)} else if self.match_kind(&TokenKind::Percent){Some(BinOp::Mod)} else {None} { let rhs=self.unary()?; node=Expr::Binary { op, left:Box::new(node), right:Box::new(rhs)};} Ok(node) }
     fn unary(&mut self) -> Result<Expr> {
         if self.match_kind(&TokenKind::Not) {
             let inner = self.unary()?;

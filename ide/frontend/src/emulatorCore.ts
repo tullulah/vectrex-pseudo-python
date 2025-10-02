@@ -36,6 +36,11 @@ export interface IEmulatorCore {
 
   /** Devuelve true si el envelope PSG acaba de finalizar (evento one-shot, se limpia tras leer). */
   psgEnvJustFinished?(): boolean;
+  
+  // Debug output system (optional methods)
+  getDebugMessages?(): string[];
+  clearDebugMessages?(): void;
+  getLastDebugOutput?(): string;
 }
 
 // Tipo del identificador de backend.

@@ -42,6 +42,8 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("DRAW_LINE", 5),
     ("SET_ORIGIN", 0),
     ("SET_INTENSITY", 1),
+            ("DEBUG_PRINT", 1),
+        ("DEBUG_PRINT_LABELED", 2),  // label, value     // Nueva función para debug output
     
     // Funciones específicas de vectorlist
     ("DRAW_VL", 2),
@@ -83,6 +85,7 @@ pub struct CodegenOptions {
     pub blink_intensity: bool,       // replace fixed INTENSITY_5F with blinking pattern
     pub exclude_ram_org: bool,       // emit RAM variables as EQU instead of ORG-ing into RAM (keeps ROM size small)
     pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
+    pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -234,6 +237,14 @@ fn validate_stmt_collect(stmt: &Stmt, scope: &mut Vec<HashSet<String>>, reads: &
             }
             validate_expr_collect(value, scope, reads);
         }
+        Stmt::CompoundAssign { target, value, .. } => {
+            // Similar a Assign, pero también leemos la variable del lado izquierdo
+            if !is_declared(&target.name, scope) {
+                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.line), col: Some(target.col) }));
+            }
+            reads.insert(target.name.clone()); // Leemos la variable para x += expr
+            validate_expr_collect(value, scope, reads);
+        }
         Stmt::For { var, start, end, step, body } => {
             validate_expr_collect(start, scope, reads); validate_expr_collect(end, scope, reads); if let Some(se) = step { validate_expr_collect(se, scope, reads); }
             push_scope(scope); // cuerpo loop con var declarada
@@ -312,6 +323,20 @@ fn opt_stmt(s: &Stmt) -> Stmt {
     match s {
     Stmt::Assign { target, value } => Stmt::Assign { target: target.clone(), value: opt_expr(value) },
     Stmt::Let { name, value } => Stmt::Let { name: name.clone(), value: opt_expr(value) },
+        Stmt::CompoundAssign { target, op, value } => {
+            // Transformar x += expr en x = x + expr
+            let var_expr = Expr::Ident(IdentInfo { 
+                name: target.name.clone(), 
+                line: target.line, 
+                col: target.col 
+            });
+            let combined_expr = Expr::Binary { 
+                op: *op, 
+                left: Box::new(var_expr), 
+                right: Box::new(opt_expr(value)) 
+            };
+            Stmt::Assign { target: target.clone(), value: combined_expr }
+        },
         Stmt::For { var, start, end, step, body } => Stmt::For {
             var: var.clone(),
             start: opt_expr(start),
@@ -358,6 +383,7 @@ fn opt_expr(e: &Expr) -> Expr {
                     BinOp::Sub => a.wrapping_sub(*b),
                     BinOp::Mul => a.wrapping_mul(*b),
                     BinOp::Div => if *b != 0 { a / b } else { *a },
+                    BinOp::FloorDiv => if *b != 0 { a / b } else { *a }, // División entera (igual que Div en enteros)
                     BinOp::Mod => if *b != 0 { a % b } else { *a },
                     BinOp::Shl => a.wrapping_shl((*b & 0xF) as u32),
                     BinOp::Shr => ((*a as u32) >> (*b & 0xF)) as i32,
@@ -538,27 +564,15 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
             out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default });
         }
         Stmt::Return(e) => { out.push(Stmt::Return(e.clone())); *terminated = true; }
-    Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
-    Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
+        Stmt::Assign { target, value } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() }),
+        Stmt::Let { name, value } => out.push(Stmt::Let { name: name.clone(), value: value.clone() }),
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
         Stmt::Expr(e) => out.push(Stmt::Expr(e.clone())),
         Stmt::Break | Stmt::Continue => out.push(stmt.clone()),
     }
 }
 
-// dead_store_elim: remove assignments whose values are never subsequently used.
-fn dead_store_elim(m: &Module) -> Module {
-    Module { 
-        items: m.items.iter().map(|it| match it { 
-            Item::Function(f) => Item::Function(dse_function(f)), 
-            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
-            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
-            Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
-            Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
-        }).collect(), 
-        meta: m.meta.clone() 
-    }
-}
-
+#[allow(dead_code)]
 fn dse_function(f: &Function) -> Function {
     use std::collections::HashSet;
     let mut used: HashSet<String> = HashSet::new();
@@ -614,6 +628,7 @@ fn dse_function(f: &Function) -> Function {
                 if let Some(db) = default { for s in db { collect_reads_stmt(s, &mut used); } }
                 new_body.push(stmt.clone());
             }
+            Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
             Stmt::Break | Stmt::Continue => new_body.push(stmt.clone()),
         }
     }
@@ -667,6 +682,7 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
             for (ce, cb) in cases { collect_reads_expr(ce, used); for st in cb { collect_reads_stmt(st, used); } }
             if let Some(db) = default { for st in db { collect_reads_stmt(st, used); } }
         }
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
         Stmt::Break | Stmt::Continue => {}
     }
 }
@@ -690,6 +706,7 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
 }
 
 // propagate_constants: simple forward constant propagation with branch merging.
+#[allow(dead_code)]
 fn propagate_constants(m: &Module) -> Module {
     use std::collections::HashMap;
     let mut globals: HashMap<String, i32> = HashMap::new();
@@ -711,7 +728,7 @@ fn propagate_constants(m: &Module) -> Module {
     }
 }
 
-
+#[allow(dead_code)]
 fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<String, i32>) -> Function {
     let mut env = HashMap::<String, i32>::new();
     // preload globals (function-locals can shadow by inserting new value later)
@@ -721,6 +738,7 @@ fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<St
     Function { name: f.name.clone(), params: f.params.clone(), body: new_body }
 }
 
+#[allow(dead_code)]
 fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
     match stmt {
         Stmt::Assign { target, value } => {
@@ -824,9 +842,11 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
             } else { None };
             Stmt::Switch { expr: se, cases: new_cases, default: new_default }
         }
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
     }
 }
 
+#[allow(dead_code)]
 fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
     match e {
     Expr::Ident(name) => env.get(&name.name).map(|v| Expr::Number(*v)).unwrap_or_else(|| Expr::Ident(name.clone())),
@@ -906,5 +926,6 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
         Stmt::Return(o) => out.push(Stmt::Return(o.clone())),
         Stmt::Break => out.push(Stmt::Break),
         Stmt::Continue => out.push(Stmt::Continue),
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before fold_const_switch_stmt"),
     }
 }

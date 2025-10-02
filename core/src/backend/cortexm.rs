@@ -224,6 +224,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("{}:\n", end));
         },
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before emit_stmt"),
     }
 }
 
@@ -282,6 +283,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
                 BinOp::Sub => out.push_str("    SUB r0,r4,r5\n    AND r0,r0,#0xFFFF\n"),
                 BinOp::Mul => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __mul32\n    AND r0,r0,#0xFFFF\n"),
                 BinOp::Div => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __div32\n    AND r0,r0,#0xFFFF\n"),
+                BinOp::FloorDiv => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __div32\n    AND r0,r0,#0xFFFF\n"), // División entera igual que Div
                 BinOp::Mod => out.push_str("    MOV r0,r4\n    MOV r1,r5\n    BL __div32\n    MOV r2,r0\n    MUL r2,r2,r5\n    RSBS r0,r2,r4\n    AND r0,r0,#0xFFFF\n"),
                 BinOp::Shl => out.push_str("    MOV r0,r4,LSL r5\n    AND r0,r0,#0xFFFF\n"),
                 BinOp::Shr => out.push_str("    MOV r0,r4,LSR r5\n    AND r0,r0,#0xFFFF\n"),
@@ -475,7 +477,8 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break | Stmt::Continue => {}
+        Stmt::Break | Stmt::Continue => {},
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before collect_stmt_syms"),
     }
 }
 
