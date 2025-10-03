@@ -320,10 +320,7 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
 
         // System operations
         0x39 => CpuOp { op_code: 0x39, name: "RTS", addr_mode: AddressingMode::Inherent, cycles: 5, size: 1, description: "Return from Subroutine" },
-        0x3B => CpuOp { op_code: 0x3B, name: "RTI", addr_mode: AddressingMode::Inherent, cycles: 6, size: 1, description: "Return from Interrupt" },
-        0x3C => CpuOp { op_code: 0x3C, name: "CWAI", addr_mode: AddressingMode::Immediate, cycles: 20, size: 2, description: "Clear and Wait for Interrupt" },
         0x3D => CpuOp { op_code: 0x3D, name: "MUL", addr_mode: AddressingMode::Inherent, cycles: 11, size: 1, description: "Multiply A by B" },
-        0x3F => CpuOp { op_code: 0x3F, name: "SWI", addr_mode: AddressingMode::Inherent, cycles: 19, size: 1, description: "Software Interrupt" },
 
         // Register operations
         0x1E => CpuOp { op_code: 0x1E, name: "EXG", addr_mode: AddressingMode::Immediate, cycles: 8, size: 2, description: "Exchange Registers" },

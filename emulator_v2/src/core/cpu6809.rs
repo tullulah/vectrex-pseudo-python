@@ -1292,7 +1292,8 @@ impl Cpu6809 {
                     },
                     // Implemented opcode
                     0x9D => {
-                        self.op_jsr(AddressingMode::Indexed);
+                        // JSR direct - fixed: was incorrectly using AddressingMode::Indexed
+                        self.op_jsr(AddressingMode::Direct);
                     },
                     // Implemented opcode
                     0x9E => {
@@ -1396,9 +1397,11 @@ impl Cpu6809 {
                         let operand = self.read_operand_value16(opcode_byte);
                         self.subtract_impl_u16(self.registers.x, operand, 0);
                     },
-                    // TODO: Implement opcode 0xAD
+                    // Implemented opcode
                     0xAD => {
-                        panic!("Opcode 0xAD not implemented yet");
+                        // JSR indexed - Jump to Subroutine using indexed addressing
+                        // Push return address (PC) onto system stack, then jump to EA
+                        self.op_jsr(AddressingMode::Indexed);
                     },
                     // Implemented opcode
                     0xAE => {
@@ -1610,9 +1613,11 @@ impl Cpu6809 {
                         panic!("Opcode 0xCF not implemented yet");
                     },
 
-                    // TODO: Implement opcode 0xD0
+                    // Implemented opcode
                     0xD0 => {
-                        panic!("Opcode 0xD0 not implemented yet");
+                        // SUBB direct - Subtract from B using direct addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xD1 => {
@@ -1686,9 +1691,11 @@ impl Cpu6809 {
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
                         self.registers.cc.v = false;
                     },
-                    // TODO: Implement opcode 0xDB
+                    // Implemented opcode
                     0xDB => {
-                        panic!("Opcode 0xDB not implemented yet");
+                        // ADDB direct - Add to B using direct addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xDC => {
@@ -1711,9 +1718,11 @@ impl Cpu6809 {
                         self.op_st_16(self.registers.u, opcode_byte);
                     },
 
-                    // TODO: Implement opcode 0xE0
+                    // Implemented opcode
                     0xE0 => {
-                        panic!("Opcode 0xE0 not implemented yet");
+                        // SUBB indexed - Subtract from B using indexed addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xE1 => {
@@ -1734,9 +1743,14 @@ impl Cpu6809 {
                         let result = self.add_impl_u16(d_value, operand, 0);
                         self.registers.set_d(result);
                     },
-                    // TODO: Implement opcode 0xE4
+                    // Implemented opcode
                     0xE4 => {
-                        panic!("Opcode 0xE4 not implemented yet");
+                        // ANDB indexed - AND B with memory using indexed addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.registers.b & operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
                     },
                     // Implemented opcode
                     0xE5 => {
@@ -1758,9 +1772,14 @@ impl Cpu6809 {
                         // STB indexed
                         self.op_st_8(self.registers.b, opcode_byte);
                     },
-                    // TODO: Implement opcode 0xE8
+                    // Implemented opcode
                     0xE8 => {
-                        panic!("Opcode 0xE8 not implemented yet");
+                        // EORB indexed - Exclusive OR B with memory using indexed addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.registers.b ^ operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
                     },
                     // Implemented opcode
                     0xE9 => {
@@ -1768,13 +1787,20 @@ impl Cpu6809 {
                         let operand = self.read8(ea);
                         self.registers.b = self.add_impl_u8(self.registers.b, operand, self.registers.cc.c as u8);
                     },
-                    // TODO: Implement opcode 0xEA
+                    // Implemented opcode
                     0xEA => {
-                        panic!("Opcode 0xEA not implemented yet");
+                        // ORAB indexed - OR B with memory using indexed addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.registers.b | operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
                     },
-                    // TODO: Implement opcode 0xEB
+                    // Implemented opcode
                     0xEB => {
-                        panic!("Opcode 0xEB not implemented yet");
+                        // ADDB indexed - Add to B using indexed addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xEC => {
@@ -1797,9 +1823,11 @@ impl Cpu6809 {
                         self.op_st_16(self.registers.u, opcode_byte);
                     },
 
-                    // TODO: Implement opcode 0xF0
+                    // Implemented opcode
                     0xF0 => {
-                        panic!("Opcode 0xF0 not implemented yet");
+                        // SUBB extended - Subtract from B using extended addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.subtract_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xF1 => {
@@ -1849,9 +1877,14 @@ impl Cpu6809 {
                         // STB extended
                         self.op_st_8(self.registers.b, opcode_byte);
                     },
-                    // TODO: Implement opcode 0xF8
+                    // Implemented opcode
                     0xF8 => {
-                        panic!("Opcode 0xF8 not implemented yet");
+                        // EORB extended - Exclusive OR B with memory using extended addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.registers.b ^ operand;
+                        self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
+                        self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
+                        self.registers.cc.v = false;
                     },
                     // Implemented opcode
                     0xF9 => {
@@ -1868,9 +1901,11 @@ impl Cpu6809 {
                         self.registers.cc.z = Self::calc_zero_u8(self.registers.b);
                         self.registers.cc.v = false;
                     },
-                    // TODO: Implement opcode 0xFB
+                    // Implemented opcode
                     0xFB => {
-                        panic!("Opcode 0xFB not implemented yet");
+                        // ADDB extended - Add to B using extended addressing
+                        let operand = self.read_operand_value8(opcode_byte);
+                        self.registers.b = self.add_impl_u8(self.registers.b, operand, 0);
                     },
                     // Implemented opcode
                     0xFC => {
@@ -2182,12 +2217,12 @@ impl Cpu6809 {
         match opcode {
             // Immediate addressing - includes SBCA, BITA, ADCA immediate for A register and SBCB, BITB, ADCB immediate for B register, ADDD immediate, SUBD immediate, ORCC, ANDCC
             0x86 | 0xC6 | 0x8E | 0xCC | 0xCE | 0x81 | 0xC1 | 0x8C | 0x8A | 0x34 | 0x35 | 0x36 | 0x37 | 0x1E | 0x1F | 0x82 | 0x85 | 0x89 | 0xC2 | 0xC5 | 0xC9 | 0xC3 | 0x83 | 0x1A | 0x1C => AddressingMode::Immediate,
-            // Direct addressing - includes SBCA, BITA, ADCA direct for A register and SBCB, BITB, ADCB direct for B register, ADDD direct, SUBD direct
-            0x96 | 0xD6 | 0x9E | 0xDC | 0xDE | 0x97 | 0xD7 | 0x9F | 0xDD | 0xDF | 0x91 | 0xD1 | 0x9C | 0x90 | 0x94 | 0x98 | 0x9A | 0x9B | 0x0F | 0x00 | 0x03 | 0x0A | 0x0C | 0x0D | 0x07 | 0x04 | 0x09 | 0x06 | 0x08 | 0x92 | 0x95 | 0x99 | 0xD2 | 0xD5 | 0xD9 | 0xD3 | 0x93 => AddressingMode::Direct,
-            // Indexed addressing - includes SBCA, BITA, ADCA indexed for A register and SBCB, BITB, ADCB indexed for B register, ADDD indexed, SUBD indexed
-            0xA6 | 0xE6 | 0xAE | 0xEC | 0xEE | 0xA7 | 0xE7 | 0xAF | 0xED | 0xEF | 0xA1 | 0xE1 | 0xAC | 0xA0 | 0xA4 | 0xA8 | 0xAA | 0xAB | 0x30 | 0x31 | 0x32 | 0x33 | 0x6F | 0x60 | 0x63 | 0x6A | 0x6C | 0x6D | 0x67 | 0x64 | 0x69 | 0x66 | 0x68 | 0xA2 | 0xA5 | 0xA9 | 0xE2 | 0xE5 | 0xE9 | 0xE3 | 0xA3 => AddressingMode::Indexed,
-            // Extended addressing - includes SBCA, BITA, ADCA extended for A register and SBCB, BITB, ADCB extended for B register, ADDD extended, SUBD extended
-            0xB6 | 0xF6 | 0xBE | 0xFC | 0xFE | 0xB7 | 0xF7 | 0xBF | 0xFD | 0xFF | 0xB1 | 0xF1 | 0xBC | 0xB0 | 0xB4 | 0xB8 | 0xBA | 0xBB | 0x7F | 0x70 | 0x73 | 0x7A | 0x7C | 0x7D | 0x77 | 0x74 | 0x79 | 0x76 | 0x78 | 0xB2 | 0xB5 | 0xB9 | 0xF2 | 0xF5 | 0xF9 | 0xF3 | 0xB3 => AddressingMode::Extended,
+            // Direct addressing - includes SBCA, BITA, ADCA direct for A register and SBCB, BITB, ADCB direct for B register, ADDD direct, SUBD direct, SUBB direct, ANDB direct, EORB direct, ORAB direct, ADDB direct
+            0x96 | 0xD6 | 0x9E | 0xDC | 0xDE | 0x97 | 0xD7 | 0x9F | 0xDD | 0xDF | 0x91 | 0xD1 | 0x9C | 0x90 | 0x94 | 0x98 | 0x9A | 0x9B | 0x0F | 0x00 | 0x03 | 0x0A | 0x0C | 0x0D | 0x07 | 0x04 | 0x09 | 0x06 | 0x08 | 0x92 | 0x95 | 0x99 | 0xD2 | 0xD5 | 0xD9 | 0xD3 | 0x93 | 0xD0 | 0xD4 | 0xD8 | 0xDA | 0xDB => AddressingMode::Direct,
+            // Indexed addressing - includes SBCA, BITA, ADCA indexed for A register and SBCB, BITB, ADCB indexed for B register, ADDD indexed, SUBD indexed, SUBB indexed, ANDB indexed, EORB indexed, ORAB indexed, ADDB indexed
+            0xA6 | 0xE6 | 0xAE | 0xEC | 0xEE | 0xA7 | 0xE7 | 0xAF | 0xED | 0xEF | 0xA1 | 0xE1 | 0xAC | 0xA0 | 0xA4 | 0xA8 | 0xAA | 0xAB | 0x30 | 0x31 | 0x32 | 0x33 | 0x6F | 0x60 | 0x63 | 0x6A | 0x6C | 0x6D | 0x67 | 0x64 | 0x69 | 0x66 | 0x68 | 0xA2 | 0xA5 | 0xA9 | 0xE2 | 0xE5 | 0xE9 | 0xE3 | 0xA3 | 0xE0 | 0xE4 | 0xE8 | 0xEA | 0xEB => AddressingMode::Indexed,
+            // Extended addressing - includes SBCA, BITA, ADCA extended for A register and SBCB, BITB, ADCB extended for B register, ADDD extended, SUBD extended, SUBB extended, ANDB extended, EORB extended, ORAB extended, ADDB extended
+            0xB6 | 0xF6 | 0xBE | 0xFC | 0xFE | 0xB7 | 0xF7 | 0xBF | 0xFD | 0xFF | 0xB1 | 0xF1 | 0xBC | 0xB0 | 0xB4 | 0xB8 | 0xBA | 0xBB | 0x7F | 0x70 | 0x73 | 0x7A | 0x7C | 0x7D | 0x77 | 0x74 | 0x79 | 0x76 | 0x78 | 0xB2 | 0xB5 | 0xB9 | 0xF2 | 0xF5 | 0xF9 | 0xF3 | 0xB3 | 0xF0 | 0xF4 | 0xF8 | 0xFA | 0xFB => AddressingMode::Extended,
             // Inherent addressing (no operand)
             0x4F | 0x5F | 0x3A | 0x19 | 0x39 | 0x40 | 0x43 | 0x4A | 0x4C | 0x4D | 0x50 | 0x53 | 0x5A | 0x5C | 0x5D | 0x47 | 0x44 | 0x49 | 0x46 | 0x48 | 0x57 | 0x54 | 0x59 | 0x56 | 0x58 | 0x3D | 0x1D => AddressingMode::Inherent,
             _ => panic!("Unknown addressing mode for opcode: {:02X}", opcode)
