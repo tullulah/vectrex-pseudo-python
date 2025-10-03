@@ -7,12 +7,12 @@
   - **Funcionales:** 240 opcodes válidos (**100% COMPLETO**)
   - **Page prefixes:** 2 (0x10, 0x11 - esenciales para extensiones)
   - **Ilegales identificados:** 25 opcodes (panics con mensaje descriptivo)
-  - **Sin implementar:** 6 opcodes (TODOS reserved - correctamente hacen panic)
+  - **Reserved con tests:** 8 opcodes (0x01, 0x02, 0x05, 0x0B, 0x14, 0x15, 0x18, 0x1B) ✅
   - **Extendidos (0x10XX/0x11XX):** 16 opcodes implementados
-- **Con tests:** 98/100 tests passing (2 tests RTI temporalmente fallando por refactor)
+- **Con tests:** 114/116 tests passing (2 tests RTI temporalmente fallando por refactor)
 - **Estado:** **✅ IMPLEMENTACIÓN FUNCIONAL COMPLETA - 100% OPCODES VÁLIDOS** ✅
 - **Características adicionales:** PSG AY-3-8912, VIA 6522, Stack diagnostics
-- **Última implementación:** SYNC (0x13) - 03 Oct 2025 ✅
+- **Última implementación:** SYNC (0x13) + Tests Reserved Opcodes - 03 Oct 2025 ✅
 
 ## 🎉 **HITO ALCANZADO: 100% OPCODES FUNCIONALES IMPLEMENTADOS**
 
@@ -20,15 +20,19 @@
 
 ### ✅ **IMPLEMENTACIÓN COMPLETA - 250/256 (97.7%)**
 
-**Opcodes Reserved con panic implementado (8 total):**
-- ✅ 0x01 - Reserved (panic implementado)
-- ✅ 0x02 - Reserved (panic implementado)
-- ✅ 0x05 - Reserved (panic implementado)
-- ✅ 0x0B - Reserved (panic implementado)
-- ✅ 0x14 - Reserved (panic implementado)
-- ✅ 0x15 - Reserved (panic implementado)
-- ✅ 0x18 - Reserved (panic implementado)
-- ✅ 0x1B - Reserved (panic implementado)
+**Opcodes Reserved con tests completos (8 total):**
+- ✅ 0x01 - Reserved (panic + 2 tests) ✅
+- ✅ 0x02 - Reserved (panic + 2 tests) ✅
+- ✅ 0x05 - Reserved (panic + 2 tests) ✅
+- ✅ 0x0B - Reserved (panic + 2 tests) ✅
+- ✅ 0x14 - Reserved (panic + 2 tests) ✅
+- ✅ 0x15 - Reserved (panic + 2 tests) ✅
+- ✅ 0x18 - Reserved (panic + 2 tests) ✅
+- ✅ 0x1B - Reserved (panic + 2 tests) ✅
+
+**Cada opcode reserved tiene:**
+1. Test de panic: Verifica que hace "Illegal instruction" correctamente
+2. Test de validación: Documenta que NO está en especificación MC6809
 
 **TODOS los opcodes base tienen código - 250/256 opcodes con implementación**
 
@@ -110,17 +114,17 @@
 
 |--------|-------------|------|-------------|
 | 0x00 | ✅ Sí | ✅ Sí | NEG direct |
-| 0x01 | ✅ Sí | ❌ No | Illegal |
-| 0x02 | ✅ Sí | ❌ No | Illegal |
+| 0x01 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
+| 0x02 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x03 | ✅ Sí | ❌ No | COM direct |
 | 0x04 | ✅ Sí | ❌ No | LSR direct |
-| 0x05 | ✅ Sí | ❌ No | Illegal |
+| 0x05 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x06 | ✅ Sí | ❌ No | ROR direct |
 | 0x07 | ✅ Sí | ❌ No | ASR direct |
 | 0x08 | ✅ Sí | ❌ No | ASL direct |
 | 0x09 | ✅ Sí | ❌ No | ROL direct |
 | 0x0A | ✅ Sí | ❌ No | DEC direct |
-| 0x0B | ✅ Sí | ❌ No | Illegal |
+| 0x0B | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x0C | ✅ Sí | ❌ No | INC direct |
 | 0x0D | ✅ Sí | ❌ No | TST direct |
 | 0x0E | ✅ Sí | ❌ No | JMP direct |
@@ -129,14 +133,14 @@
 | 0x11 | ✅ Sí | ✅ Sí | Page 2 prefix (0x11XX) - IMPLEMENTADO |
 | 0x12 | ✅ Sí | ❌ No | NOP |
 | 0x13 | ✅ Sí | ✅ Sí | SYNC - Synchronize with External Event (4 tests) |
-| 0x14 | ❌ No | ❌ No | Illegal |
-| 0x15 | ❌ No | ❌ No | Illegal |
+| 0x14 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
+| 0x15 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x16 | ✅ Sí | ✅ Sí | LBRA (Long Branch Always) |
 | 0x17 | ✅ Sí | ✅ Sí | LBSR (Long Branch to Subroutine) |
-| 0x18 | ✅ Sí | ❌ No | Illegal (reserved) |
+| 0x18 | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x19 | ✅ Sí | ✅ Sí | DAA (Decimal Adjust A) |
 | 0x1A | ✅ Sí | ✅ Sí | ORCC |
-| 0x1B | ❌ No | ❌ No | Illegal |
+| 0x1B | ✅ Sí | ✅ Sí | Reserved (2 tests) |
 | 0x1C | ✅ Sí | ✅ Sí | ANDCC |
 | 0x1D | ✅ Sí | ✅ Sí | SEX |
 | 0x1E | ✅ Sí | ❌ No | EXG |
