@@ -354,16 +354,43 @@ impl Cpu6809 {
                     0x11 => {
                         panic!("Page 2 prefix should not reach here");
                     },
-                    // Implemented opcode
+                    // NOP (0x12) - No Operation
                     0x12 => {
                         // No operation - cycles already added
                     },
-                    // Implemented opcode
+                    // SYNC (0x13) - Synchronize with External Event
+                    // C++ Original (MC6809 Programming Manual):
+                    // Operation:
+                    // - Stop execution and wait for interrupt (IRQ, FIRQ, or NMI)
+                    // - Does NOT push registers to stack (unlike CWAI 0x3C)
+                    // - Does NOT modify condition codes (unlike CWAI)
+                    // - When interrupt occurs:
+                    //   * If interrupt enabled: process normally
+                    //   * If interrupt masked: exit SYNC and continue
+                    // 
+                    // Timing: 4 cycles minimum (actual = 4 + wait time for interrupt)
+                    // In simplified emulator without full interrupt support:
+                    // - Acts as special NOP that consumes 4 cycles
+                    // - No register or flag modification
+                    // - No stack operations
                     0x13 => {
-                        // TODO: Implement SYNC instruction
-                        panic!("Unimplemented opcode 0x13 (SYNC)");
+                        // SYNC implementation:
+                        // En un emulador completo, aquí se entraría en estado de espera
+                        // hasta que llegue una interrupción (IRQ, FIRQ, NMI).
+                        // 
+                        // Para este emulador simplificado:
+                        // - Consume 4 cycles (minimum timing per MC6809 spec)
+                        // - No modifica registros ni flags
+                        // - No hace operaciones de pila
+                        // - PC ya avanzó en fetch, apunta a siguiente instrucción
+                        //
+                        // Nota: En hardware real, SYNC esperaría hasta interrupt.
+                        // Aquí simplemente completamos como si interrupt masked.
+                        
+                        // No operation needed - just consume cycles
+                        // (cycles already added by opcode fetch: base 4 cycles for SYNC)
                     },
-                    // Implemented opcode
+                    // Reserved opcode (0x14)
                     0x14 => {
                         // TODO: Implement or mark as illegal
                         panic!("Unimplemented opcode 0x14 (Reserved)");

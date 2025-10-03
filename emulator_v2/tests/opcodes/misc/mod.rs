@@ -1,4 +1,5 @@
 pub mod test_nop;
+pub mod test_sync;
 // pub mod test_jmp;
 pub mod test_jmp_modes;
 // pub mod test_tfr_exg;

@@ -341,6 +341,14 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         // NOP
         0x12 => CpuOp { op_code: 0x12, name: "NOP", addr_mode: AddressingMode::Inherent, cycles: 2, size: 1, description: "No Operation" },
 
+        // SYNC - Synchronize with External Event
+        // C++ Original (MC6809 Programming Manual):
+        // - Waits for interrupt (IRQ, FIRQ, or NMI)
+        // - Does NOT push registers (unlike CWAI)
+        // - Does NOT modify condition codes
+        // - Timing: 4 cycles minimum + wait time
+        0x13 => CpuOp { op_code: 0x13, name: "SYNC", addr_mode: AddressingMode::Inherent, cycles: 4, size: 1, description: "Synchronize with External Event" },
+
         // LD family - 8-bit
         0x86 => CpuOp { op_code: 0x86, name: "LDA", addr_mode: AddressingMode::Immediate, cycles: 2, size: 2, description: "Load Accumulator A" },
         0x96 => CpuOp { op_code: 0x96, name: "LDA", addr_mode: AddressingMode::Direct, cycles: 4, size: 2, description: "Load Accumulator A" },
