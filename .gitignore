@@ -39,5 +39,7 @@ dist/
  
 # C++ experimental host / not part of Rust core build
 
+# Vectrexy reference implementation (backup only, not for version control)
+vectrexy/
 
 # C++ parity host (vectrexy) versionado: marker2

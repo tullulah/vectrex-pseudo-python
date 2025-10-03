@@ -723,6 +723,16 @@ Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (ma
 - Particionar ciclos por micro‑etapas (fetch vs memoria adicional) antes de habilitar microtraza.
 - Validar tiempos exactos frente a referencia (doc / ciclo real BIOS) y ajustar tablas.
 
+### 24.8 MUL Opcode Flag C Correction (2025-09-25)
+- **Problema detectado**: MUL opcode (0x3D) establecía flag C basado en bit 15 del resultado de 16-bit, pero Vectrexy reference usa bit 7.
+- **Consulta Vectrexy**: Revisado `libs/emulator/src/Cpu.cpp` líneas 449-460, confirma `CC.Carry = TestBits01(result, BITS(7))` donde `BITS(7) = 0x80`.
+- **Corrección aplicada**: Cambiado de `(result & 0x8000) != 0` a `(result & 0x80) != 0` en `cpu6809.rs:1458`.
+- **Tests actualizados**: `test_mul_sex_opcodes.rs` corregido con expectativas Vectrexy-compliant:
+  - Test 1 (12×13=156): bit 7 de 0x009C es 1 (0x9C & 0x80), C=true ✅
+  - Test 2 (255×255=65025): bit 7 de 0xFE01 es 0 (0x01 & 0x80), C=false ✅
+- **Validación**: `cargo test test_mul_0x3d` pasa todos los tests (3 passed; 0 failed).
+- **Referencia implementación**: Seguirá modelo Vectrexy para futuras correcciones similares.
+
 ---
 ## 25. Expanded CHANGE NOTES
 (Chronological – newest last)
@@ -745,6 +755,7 @@ Coverage Tool: `recompute_opcode_coverage()` mantiene `opcode_unimpl_bitmap` (ma
 - 2025-09-17: Open bus unificado (`last_bus_value`), RAM power-on pseudo-aleatoria, tablas de ciclos data-driven, infraestructura micro-steps (desactivada), re-clasificación final de opcodes ilegales (cobertura válida = 100%), batch de implementación (LBSR, ABX, SBCB/ADCB variantes, ADDD direct, CMPX idx/ext, SUBA/SBCA/BITA/EORA/ORA extended, ADDB extended), tests `opcode_validity.rs` y `opcode_scan.rs` estabilizados.
  - 2025-09-19: Barrido 0x00–0xFF endurecido (ok + delta ciclos + bitmap) y fetch logging reducido (solo trace). Añadido helper público `opcode_marked_unimplemented`.
  - 2025-09-19: Migración layout vectores de interrupción a estándar 6809 (FIRQ=FFF6, IRQ=FFF8, SWI=FFFA, NMI=FFFC, RESET=FFFE) + helper `read_vector` big-endian; tests actualizados.
+ - 2025-09-25: **Corrección crítica MUL opcode (0x3D)**: Flag C corregido de bit 15 a bit 7 del resultado según referencia Vectrexy (`CC.Carry = TestBits01(result, BITS(7))`). Tests `test_mul_sex_opcodes.rs` actualizados con expectativas Vectrexy-compliant. Proceso de verificación contra implementación de referencia establecido para futuras correcciones.
 
 ---
 ## 28. Línea de Tiempo de los 39 Pasos Recientes
