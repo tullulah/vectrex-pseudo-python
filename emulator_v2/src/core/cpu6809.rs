@@ -3,7 +3,7 @@
 
 use crate::types::Cycles;
 use crate::core::memory_bus::MemoryBus;
-use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, u8, s16_from_u8};
+use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, s16_from_u8};
 use crate::core::cpu_op_codes::{lookup_cpu_op_runtime, is_opcode_page1, is_opcode_page2, AddressingMode};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -577,71 +577,43 @@ impl Cpu6809 {
                     0x3A => {
                         self.op_abx();
                     },
-                    // TODO: Implement opcode 0x3B
+                    // Implemented opcode
                     0x3B => {
                         // RTI - Return from Interrupt
                         // MC6809 Spec: Pop entire state from stack (reverse order of interrupt entry)
-                        // Stack layout: [PC.high][PC.low][U.high][U.low][Y.high][Y.low][X.high][X.low][DP][B][A][CC]
-                        //                ↑ S (lowest address)                                              ↑ S+11 (highest)
+                        // C++ Original (Cpu.cpp lines 880-891): Uses Pop8/Pop16 helpers
                         
-                        // First peek at CC (at highest address) to check E bit
-                        let stacked_cc = self.read8(self.registers.s.wrapping_add(11));
-                        let entire_state = (stacked_cc & 0x80) != 0; // E bit
-                        
-                        // Pop PC first (lowest address, pushed last)
-                        let pc_high = self.read8(self.registers.s);
-                        self.registers.s = self.registers.s.wrapping_add(1);
-                        let pc_low = self.read8(self.registers.s);
-                        self.registers.s = self.registers.s.wrapping_add(1);
-                        self.registers.pc = ((pc_high as u16) << 8) | (pc_low as u16);
+                        // Pop CC first to check E bit (Vectrexy pops CC first)
+                        let mut sp = self.registers.s;
+                        let cc_value = self.pop8(&mut sp);
+                        let entire_state = (cc_value & 0x80) != 0; // E bit
                         
                         if entire_state {
-                            // Pop U
-                            let u_high = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            let u_low = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            self.registers.u = ((u_high as u16) << 8) | (u_low as u16);
-                            
-                            // Pop Y
-                            let y_high = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            let y_low = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            self.registers.y = ((y_high as u16) << 8) | (y_low as u16);
-                            
-                            // Pop X
-                            let x_high = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            let x_low = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            self.registers.x = ((x_high as u16) << 8) | (x_low as u16);
-                            
-                            // Pop DP
-                            self.registers.dp = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            
-                            // Pop B
-                            self.registers.b = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
-                            
-                            // Pop A
-                            self.registers.a = self.read8(self.registers.s);
-                            self.registers.s = self.registers.s.wrapping_add(1);
+                            // Pop entire state (matches Vectrexy order)
+                            self.registers.a = self.pop8(&mut sp);
+                            self.registers.b = self.pop8(&mut sp);
+                            self.registers.dp = self.pop8(&mut sp);
+                            self.registers.x = self.pop16(&mut sp);
+                            self.registers.y = self.pop16(&mut sp);
+                            self.registers.u = self.pop16(&mut sp);
+                            self.registers.pc = self.pop16(&mut sp);
+                        } else {
+                            // FIRQ-style: only PC+CC
+                            self.registers.pc = self.pop16(&mut sp);
                         }
+                        self.registers.s = sp;
                         
-                        // Pop CC last (highest address, pushed first)
-                        let cc_value = self.read8(self.registers.s);
-                        self.registers.s = self.registers.s.wrapping_add(1);
+                        // Restore CC (already popped at start)
                         self.registers.cc.from_u8(cc_value);
                         
                         // Cycles: 6 for FIRQ-style (PC+CC), 15 for entire state
                         self.add_cycles(if entire_state { 15 } else { 6 });
                     }
-                    // TODO: Implement opcode 0x3C
+                    // Implemented opcode
                     0x3C => {
                         // CWAI - Clear and Wait for Interrupt
                         // MC6809 Spec: AND CC with immediate, push entire state, wait for interrupt
+                        // C++ Original: Similar to SWI but clears CC bits first
                         
                         // Read immediate mask operand
                         let mask = self.read8(self.registers.pc);
@@ -651,49 +623,20 @@ impl Cpu6809 {
                         let new_cc = self.registers.cc.to_u8() & mask;
                         self.registers.cc.from_u8(new_cc);
                         
-                        // Push entire state (same as SWI)
                         // Set E bit in CC before pushing (indicates entire state on stack)
                         self.registers.cc.e = true; // E bit = 1
                         
-                        // Push CC
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.cc.to_u8());
-                        
-                        // Push A
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.a);
-                        
-                        // Push B
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.b);
-                        
-                        // Push DP
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.dp);
-                        
-                        // Push X (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.x & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.x >> 8) as u8);
-                        
-                        // Push Y (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.y & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.y >> 8) as u8);
-                        
-                        // Push U (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.u & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.u >> 8) as u8);
-                        
-                        // Push PC (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);
+                        // Push entire state using helpers (same as SWI)
+                        let mut sp = self.registers.s;
+                        self.push8(&mut sp, self.registers.cc.to_u8());
+                        self.push8(&mut sp, self.registers.a);
+                        self.push8(&mut sp, self.registers.b);
+                        self.push8(&mut sp, self.registers.dp);
+                        self.push16(&mut sp, self.registers.x);
+                        self.push16(&mut sp, self.registers.y);
+                        self.push16(&mut sp, self.registers.u);
+                        self.push16(&mut sp, self.registers.pc);
+                        self.registers.s = sp;
                         
                         // Set waiting state (emulator halts until interrupt)
                         // TODO: Implement actual wait mechanism when interrupt system is ready
@@ -712,61 +655,32 @@ impl Cpu6809 {
                     0x3E => {
                         panic!("Illegal opcode 0x3E: Reserved opcode on MC6809");
                     },
-                    // TODO: Implement opcode 0x3F
+                    // Implemented opcode
                     0x3F => {
                         // SWI - Software Interrupt
                         // MC6809 Spec: Push entire state, set E and I bits, jump to SWI vector (0xFFFA)
+                        // C++ Original (Cpu.cpp lines 869-877): Uses Push8/Push16 helpers
                         
                         // Set E bit in CC before pushing (indicates entire state on stack)
                         self.registers.cc.e = true; // E bit = 1
                         
-                        // Push CC
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.cc.to_u8());
-                        
-                        // Push A
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.a);
-                        
-                        // Push B
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.b);
-                        
-                        // Push DP
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, self.registers.dp);
-                        
-                        // Push X (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.x & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.x >> 8) as u8);
-                        
-                        // Push Y (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.y & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.y >> 8) as u8);
-                        
-                        // Push U (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.u & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.u >> 8) as u8);
-                        
-                        // Push PC (16-bit, low byte first then high)
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8);
-                        self.registers.s = self.registers.s.wrapping_sub(1);
-                        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);
+                        // Push entire state using helpers (matches Vectrexy order)
+                        let mut sp = self.registers.s;
+                        self.push8(&mut sp, self.registers.cc.to_u8());
+                        self.push8(&mut sp, self.registers.a);
+                        self.push8(&mut sp, self.registers.b);
+                        self.push8(&mut sp, self.registers.dp);
+                        self.push16(&mut sp, self.registers.x);
+                        self.push16(&mut sp, self.registers.y);
+                        self.push16(&mut sp, self.registers.u);
+                        self.push16(&mut sp, self.registers.pc);
+                        self.registers.s = sp;
                         
                         // Set I bit (mask normal interrupts)
                         self.registers.cc.i = true; // I bit = 1
                         
-                        // Jump to SWI vector (0xFFFA) - big endian (high byte first)
-                        let pc_high = self.read8(SWI_VECTOR);
-                        let pc_low = self.read8(SWI_VECTOR + 1);
-                        self.registers.pc = ((pc_high as u16) << 8) | (pc_low as u16);
+                        // Jump to SWI vector (0xFFFA) - big endian
+                        self.registers.pc = self.read16(SWI_VECTOR);
                         
                         // 19 cycles
                         self.add_cycles(19);
@@ -2324,7 +2238,6 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, value); 
     }
     */
-    #[allow(dead_code)]
     fn push8(&mut self, stack_pointer: &mut u16, value: u8) {
         *stack_pointer = stack_pointer.wrapping_sub(1);
         self.write8(*stack_pointer, value);
@@ -2336,7 +2249,6 @@ impl Cpu6809 {
         return value;
     }
     */
-    #[allow(dead_code)]
     fn pop8(&mut self, stack_pointer: &mut u16) -> u8 {
         let value = self.read8(*stack_pointer);
         *stack_pointer = stack_pointer.wrapping_add(1);
@@ -2349,10 +2261,9 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
     }
     */
-    #[allow(dead_code)]
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
-        self.push8(stack_pointer, u8(value & 0xFF)); // Low
-        self.push8(stack_pointer, u8(value >> 8));   // High
+        self.push8(stack_pointer, (value & 0xFF) as u8); // Low
+        self.push8(stack_pointer, (value >> 8) as u8);   // High
     }
 
     /* C++ Original:
@@ -2362,7 +2273,6 @@ impl Cpu6809 {
         return CombineToU16(high, low);
     }
     */
-    #[allow(dead_code)]
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);
