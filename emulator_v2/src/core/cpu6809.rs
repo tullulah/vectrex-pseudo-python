@@ -368,15 +368,23 @@ impl Cpu6809 {
                         // TODO: Implement or mark as illegal
                         panic!("Unimplemented opcode 0x15 (Reserved)");
                     },
-                    // Implemented opcode
+                    // Implemented opcode: LBRA (Long Branch Always)
+                    // C++ Original: case 0x16: OpLBranch<true>(); break;
                     0x16 => {
-                        // TODO: Implement LBRA (Long Branch Always)
-                        panic!("Unimplemented opcode 0x16 (LBRA)");
+                        let offset = self.read_relative_offset16();
+                        self.registers.pc = self.registers.pc.wrapping_add(offset as u16);
                     },
-                    // Implemented opcode
+                    // Implemented opcode: LBSR (Long Branch to Subroutine)
+                    // C++ Original: case 0x17: OpLBSR(); break;
                     0x17 => {
-                        // TODO: Implement LBSR (Long Branch to Subroutine)
-                        panic!("Unimplemented opcode 0x17 (LBSR)");
+                        let offset = self.read_relative_offset16();
+                        // Push return address onto stack
+                        self.registers.s = self.registers.s.wrapping_sub(1);
+                        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low
+                        self.registers.s = self.registers.s.wrapping_sub(1);
+                        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);   // High
+                        // Branch to target
+                        self.registers.pc = self.registers.pc.wrapping_add(offset as u16);
                     },
                     // Implemented opcode
                     0x18 => {

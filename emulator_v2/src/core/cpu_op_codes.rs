@@ -124,6 +124,10 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0xAD => CpuOp { op_code: 0xAD, name: "JSR", addr_mode: AddressingMode::Indexed, cycles: 7, size: 2, description: "Jump to Subroutine indexed" },
         0xBD => CpuOp { op_code: 0xBD, name: "JSR", addr_mode: AddressingMode::Extended, cycles: 8, size: 3, description: "Jump to Subroutine extended" },
 
+        // Long branch instructions - C++ Original: OpLBranch
+        0x16 => CpuOp { op_code: 0x16, name: "LBRA", addr_mode: AddressingMode::Relative, cycles: 5, size: 3, description: "Long Branch Always" },
+        0x17 => CpuOp { op_code: 0x17, name: "LBSR", addr_mode: AddressingMode::Relative, cycles: 9, size: 3, description: "Long Branch to Subroutine" },
+
         // Branch instructions - C++ Original: OpBranch(condition_lambda)
         // All branch instructions are 3 cycles, 2 bytes (no cycle adjustment for taken/not taken)
         0x20 => CpuOp { op_code: 0x20, name: "BRA", addr_mode: AddressingMode::Relative, cycles: 3, size: 2, description: "Branch always" },
