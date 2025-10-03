@@ -108,26 +108,36 @@ fn test_rti_pops_entire_state_0x3B() {
     let mut mem = memory_bus.borrow_mut();
     
     // Setup stack with full interrupt frame (E bit set)
-    // Stack layout (memory addresses from low to high):
-    // [PC.high][PC.low][U.high][U.low][Y.high][Y.low][X.high][X.low][DP][B][A][CC]
-    // ↑ S                                                                     ↑ S+11
+    // After SWI push, stack layout in memory:
+    // [STACK_START-12] = PC.high
+    // [STACK_START-11] = PC.low
+    // [STACK_START-10] = U.high
+    // [STACK_START-9]  = U.low
+    // [STACK_START-8]  = Y.high
+    // [STACK_START-7]  = Y.low
+    // [STACK_START-6]  = X.high
+    // [STACK_START-5]  = X.low
+    // [STACK_START-4]  = DP
+    // [STACK_START-3]  = B
+    // [STACK_START-2]  = A
+    // [STACK_START-1]  = CC (with E bit)
+    // S points to STACK_START-12 (first byte of PC)
     
-    let s = STACK_START - 12;
-    cpu.registers_mut().s = s;
+    cpu.registers_mut().s = STACK_START - 12;
     
-    // Push entire state on stack (as SWI would do) - REVERSE order in memory
-    mem.write(s, 0xE0);      // PC high (0xE000)
-    mem.write(s + 1, 0x00);  // PC low
-    mem.write(s + 2, 0x9A);  // U high (0x9ABC)
-    mem.write(s + 3, 0xBC);  // U low
-    mem.write(s + 4, 0x56);  // Y high (0x5678)
-    mem.write(s + 5, 0x78);  // Y low
-    mem.write(s + 6, 0x12);  // X high (0x1234)
-    mem.write(s + 7, 0x34);  // X low
-    mem.write(s + 8, 0xCC);  // DP
-    mem.write(s + 9, 0xBB);  // B
-    mem.write(s + 10, 0xAA); // A
-    mem.write(s + 11, 0x85); // CC with E bit set (0x80) and Z+C bits
+    // Write stack content as SWI would leave it
+    mem.write(STACK_START - 12, 0xE0);  // PC high (0xE000)
+    mem.write(STACK_START - 11, 0x00);  // PC low
+    mem.write(STACK_START - 10, 0x9A);  // U high (0x9ABC)
+    mem.write(STACK_START - 9, 0xBC);   // U low
+    mem.write(STACK_START - 8, 0x56);   // Y high (0x5678)
+    mem.write(STACK_START - 7, 0x78);   // Y low
+    mem.write(STACK_START - 6, 0x12);   // X high (0x1234)
+    mem.write(STACK_START - 5, 0x34);   // X low
+    mem.write(STACK_START - 4, 0xCC);   // DP
+    mem.write(STACK_START - 3, 0xBB);   // B
+    mem.write(STACK_START - 2, 0xAA);   // A
+    mem.write(STACK_START - 1, 0x85);   // CC with E bit set (0x80) and Z+C bits
     
     // Write RTI opcode (0x3B) at current PC
     let current_pc = 0xD000;
@@ -167,12 +177,12 @@ fn test_rti_firq_mode_0x3B() {
     
     // Setup stack with minimal interrupt frame (E bit clear)
     // Stack layout: [PC.high][PC.low][CC]
-    // ↑ S                         ↑ S+2
+    // ↑ S (apunta al primer byte)   ↑ S+2
     
     let s = STACK_START - 3;
     cpu.registers_mut().s = s;
     
-    // Push minimal state (CC + PC only, as FIRQ would do)
+    // Write stack content (FIRQ only pushes PC + CC)
     mem.write(s, 0xF0);      // PC high (0xF000)
     mem.write(s + 1, 0x00);  // PC low
     mem.write(s + 2, 0x01);  // CC without E bit (just C bit set)

@@ -2,24 +2,13 @@
 //! Comprehensive 1:1 tests for all 6809 CPU opcodes
 //! Based on Vectrexy implementation
 
-// LD (Load) family - COMPLETED
-pub mod test_lda;
-pub mod test_ldb;
-pub mod test_ldx;
-pub mod test_ldd;
-pub mod test_ldu;
+// Categorized opcode test modules
+pub mod data_transfer;  // LD, ST, LEA, TFR, EXG, PSH, PUL
+pub mod arithmetic;     // ADD, SUB, MUL, DIV, CMP, INC, DEC
+pub mod misc;          // NOP, SYNC, JMP, ORCC, ANDCC
+pub mod branch;        // BRA, BEQ, JSR, RTS, LBRA, LBSR
 
-// ST (Store) family - IN PROGRESS
-pub mod test_sta;
-pub mod test_stb;
-
-// New test modules for coverage
-pub mod data_transfer;
-pub mod arithmetic;
-pub mod misc;
-pub mod branch;
-
-// Illegal/Reserved opcodes
-pub mod illegal;
-pub mod reserved;
-pub mod interrupt;
+// Special opcode categories
+pub mod illegal;       // Illegal opcodes (should panic)
+pub mod reserved;      // Reserved opcodes (should panic)
+pub mod interrupt;     // RTI, SWI, CWAI
