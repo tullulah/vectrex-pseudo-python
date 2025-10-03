@@ -21,4 +21,5 @@ pub mod branch;
 
 // Illegal/Reserved opcodes
 pub mod illegal;
+pub mod reserved;
 pub mod interrupt;
