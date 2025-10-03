@@ -18,4 +18,7 @@ pub mod data_transfer;
 pub mod arithmetic;
 pub mod misc;
 pub mod branch;
+
+// Illegal/Reserved opcodes
+pub mod illegal;
 pub mod interrupt;

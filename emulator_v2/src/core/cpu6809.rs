@@ -560,9 +560,9 @@ impl Cpu6809 {
                     0x37 => {
                         self.op_pul(false); // false = U stack
                     },
-                    // TODO: Implement opcode 0x38
+                    // ILLEGAL OPCODE: Reserved
                     0x38 => {
-                        panic!("Opcode 0x38 not implemented yet");
+                        panic!("Illegal opcode 0x38: Reserved opcode on MC6809");
                     },
                     // Implemented opcode
                     0x39 => {
@@ -703,9 +703,9 @@ impl Cpu6809 {
                         self.registers.cc.c = (result & 0x80) != 0; // Carry = bit 7 of 16-bit result (BITS(7) in Vectrexy)
                         self.registers.set_d(result);
                     },
-                    // TODO: Implement opcode 0x3E
+                    // ILLEGAL OPCODE: Reserved
                     0x3E => {
-                        panic!("Opcode 0x3E not implemented yet");
+                        panic!("Illegal opcode 0x3E: Reserved opcode on MC6809");
                     },
                     // TODO: Implement opcode 0x3F
                     0x3F => {
@@ -771,13 +771,13 @@ impl Cpu6809 {
                     0x40 => {
                         self.registers.a = self.subtract_impl_u8(0, self.registers.a, 0);
                     },
-                    // TODO: Implement opcode 0x41
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for comparison/test operations
                     0x41 => {
-                        panic!("Opcode 0x41 not implemented yet");
+                        panic!("Illegal opcode 0x41: Invalid indexed addressing for CMP/TST");
                     },
-                    // TODO: Implement opcode 0x42
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for SBC operations
                     0x42 => {
-                        panic!("Opcode 0x42 not implemented yet");
+                        panic!("Illegal opcode 0x42: Invalid indexed addressing for SBC");
                     },
                     // Implemented opcode
                     0x43 => {
@@ -795,9 +795,9 @@ impl Cpu6809 {
                         self.registers.cc.n = false; // Bit 7 always shifted out
                         self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
                     },
-                    // TODO: Implement opcode 0x45
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for BIT test operations
                     0x45 => {
-                        panic!("Opcode 0x45 not implemented yet");
+                        panic!("Illegal opcode 0x45: Invalid indexed addressing for BIT");
                     },
                     // Implemented opcode
                     0x46 => {
@@ -837,9 +837,9 @@ impl Cpu6809 {
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.a);
                         // Note: DEC does NOT modify Carry flag in 6809
                     },
-                    // TODO: Implement opcode 0x4B
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for ADD operations  
                     0x4B => {
-                        panic!("Opcode 0x4B not implemented yet");
+                        panic!("Illegal opcode 0x4B: Invalid indexed addressing for ADD");
                     },
                     // Implemented opcode
                     0x4C => {
@@ -857,9 +857,9 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                         // Note: TST does NOT modify Carry flag in 6809
                     },
-                    // TODO: Implement opcode 0x4E
+                    // ILLEGAL OPCODE: Invalid postbyte for JMP indexed
                     0x4E => {
-                        panic!("Opcode 0x4E not implemented yet");
+                        panic!("Illegal opcode 0x4E: Invalid indexed addressing postbyte for JMP");
                     },
                     // Implemented opcode
                     0x4F => {
@@ -874,13 +874,13 @@ impl Cpu6809 {
                     0x50 => {
                         self.registers.b = self.subtract_impl_u8(0, self.registers.b, 0);
                     },
-                    // TODO: Implement opcode 0x51
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for CMPB
                     0x51 => {
-                        panic!("Opcode 0x51 not implemented yet");
+                        panic!("Illegal opcode 0x51: Invalid indexed addressing for CMPB");
                     },
-                    // TODO: Implement opcode 0x52
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for SBCB
                     0x52 => {
-                        panic!("Opcode 0x52 not implemented yet");
+                        panic!("Illegal opcode 0x52: Invalid indexed addressing for SBCB");
                     },
                     // Implemented opcode
                     0x53 => {
@@ -898,9 +898,9 @@ impl Cpu6809 {
                         self.registers.cc.n = false; // Bit 7 always shifted out
                         self.registers.cc.c = (orig_value & 0b0000_0001) != 0;
                     },
-                    // TODO: Implement opcode 0x55
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for BITB
                     0x55 => {
-                        panic!("Opcode 0x55 not implemented yet");
+                        panic!("Illegal opcode 0x55: Invalid indexed addressing for BITB");
                     },
                     // Implemented opcode
                     0x56 => {
@@ -940,9 +940,9 @@ impl Cpu6809 {
                         self.registers.cc.n = Self::calc_negative_u8(self.registers.b);
                         // Note: DEC does NOT modify Carry flag in 6809
                     },
-                    // TODO: Implement opcode 0x5B
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for ADDB
                     0x5B => {
-                        panic!("Opcode 0x5B not implemented yet");
+                        panic!("Illegal opcode 0x5B: Invalid indexed addressing for ADDB");
                     },
                     // Implemented opcode
                     0x5C => {
@@ -960,9 +960,9 @@ impl Cpu6809 {
                         self.registers.cc.v = false;
                         // Note: TST does NOT modify Carry flag in 6809
                     },
-                    // TODO: Implement opcode 0x5E
+                    // ILLEGAL OPCODE: Invalid postbyte for JMP indexed
                     0x5E => {
-                        panic!("Opcode 0x5E not implemented yet");
+                        panic!("Illegal opcode 0x5E: Invalid indexed addressing postbyte for JMP");
                     },
                     // Implemented opcode
                     0x5F => {
@@ -977,13 +977,13 @@ impl Cpu6809 {
                     0x60 => {
                         self.op_neg_memory(AddressingMode::Indexed);
                     },
-                    // TODO: Implement opcode 0x61
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for CMP
                     0x61 => {
-                        panic!("Opcode 0x61 not implemented yet");
+                        panic!("Illegal opcode 0x61: Invalid indexed addressing for CMP");
                     },
-                    // TODO: Implement opcode 0x62
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for SBC
                     0x62 => {
-                        panic!("Opcode 0x62 not implemented yet");
+                        panic!("Illegal opcode 0x62: Invalid indexed addressing for SBC");
                     },
                     // Implemented opcode
                     0x63 => {
@@ -993,9 +993,9 @@ impl Cpu6809 {
                     0x64 => {
                         self.op_lsr_memory(AddressingMode::Indexed);
                     },
-                    // TODO: Implement opcode 0x65
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for BIT
                     0x65 => {
-                        panic!("Opcode 0x65 not implemented yet");
+                        panic!("Illegal opcode 0x65: Invalid indexed addressing for BIT");
                     },
                     // Implemented opcode
                     0x66 => {
@@ -1017,9 +1017,9 @@ impl Cpu6809 {
                     0x6A => {
                         self.op_dec_memory(AddressingMode::Indexed);
                     },
-                    // TODO: Implement opcode 0x6B
+                    // ILLEGAL OPCODE: Cannot use indexed addressing for ADD
                     0x6B => {
-                        panic!("Opcode 0x6B not implemented yet");
+                        panic!("Illegal opcode 0x6B: Invalid indexed addressing for ADD");
                     },
                     // Implemented opcode
                     0x6C => {
@@ -1044,13 +1044,13 @@ impl Cpu6809 {
                     0x70 => {
                         self.op_neg_memory(AddressingMode::Extended);
                     },
-                    // TODO: Implement opcode 0x71
+                    // ILLEGAL OPCODE: Cannot use extended addressing for CMP
                     0x71 => {
-                        panic!("Opcode 0x71 not implemented yet");
+                        panic!("Illegal opcode 0x71: Invalid extended addressing for CMP");
                     },
-                    // TODO: Implement opcode 0x72
+                    // ILLEGAL OPCODE: Cannot use extended addressing for SBC
                     0x72 => {
-                        panic!("Opcode 0x72 not implemented yet");
+                        panic!("Illegal opcode 0x72: Invalid extended addressing for SBC");
                     },
                     // Implemented opcode
                     0x73 => {
@@ -1060,9 +1060,9 @@ impl Cpu6809 {
                     0x74 => {
                         self.op_lsr_memory(AddressingMode::Extended);
                     },
-                    // TODO: Implement opcode 0x75
+                    // ILLEGAL OPCODE: Cannot use extended addressing for BIT
                     0x75 => {
-                        panic!("Opcode 0x75 not implemented yet");
+                        panic!("Illegal opcode 0x75: Invalid extended addressing for BIT");
                     },
                     // Implemented opcode
                     0x76 => {
@@ -1084,9 +1084,9 @@ impl Cpu6809 {
                     0x7A => {
                         self.op_dec_memory(AddressingMode::Extended);
                     },
-                    // TODO: Implement opcode 0x7B
+                    // ILLEGAL OPCODE: Cannot use extended addressing for ADD
                     0x7B => {
-                        panic!("Opcode 0x7B not implemented yet");
+                        panic!("Illegal opcode 0x7B: Invalid extended addressing for ADD");
                     },
                     // Implemented opcode
                     0x7C => {
@@ -1151,9 +1151,9 @@ impl Cpu6809 {
                         let value = self.op_ld_8(opcode_byte);
                         self.registers.a = value;
                     },
-                    // TODO: Implement opcode 0x87
+                    // ILLEGAL OPCODE: Cannot store to immediate value (STA immediate)
                     0x87 => {
-                        panic!("Opcode 0x87 not implemented yet");
+                        panic!("Illegal opcode 0x87: STA immediate - cannot store A register to literal value");
                     },
                     // Implemented opcode
                     0x88 => {
@@ -1196,9 +1196,9 @@ impl Cpu6809 {
                         let value = self.op_ld_16(opcode_byte);
                         self.registers.x = value;
                     },
-                    // TODO: Implement opcode 0x8F
+                    // ILLEGAL OPCODE: Cannot store to immediate value (STX immediate)
                     0x8F => {
-                        panic!("Opcode 0x8F not implemented yet");
+                        panic!("Illegal opcode 0x8F: STX immediate - cannot store X register to literal value");
                     },
 
                     // Implemented opcode
@@ -1564,9 +1564,9 @@ impl Cpu6809 {
                         let value = self.op_ld_8(opcode_byte);
                         self.registers.b = value;
                     },
-                    // TODO: Implement opcode 0xC7
+                    // ILLEGAL OPCODE: Cannot store to immediate value (STB immediate)
                     0xC7 => {
-                        panic!("Opcode 0xC7 not implemented yet");
+                        panic!("Illegal opcode 0xC7: STB immediate - cannot store B register to literal value");
                     },
                     // Implemented opcode
                     0xC8 => {
@@ -1598,9 +1598,9 @@ impl Cpu6809 {
                     0xCC => {
                         self.op_ld_16_d(opcode_byte); // LDD #immediate
                     },
-                    // TODO: Implement opcode 0xCD
+                    // ILLEGAL OPCODE: Cannot store to immediate value (STD immediate)
                     0xCD => {
-                        panic!("Opcode 0xCD not implemented yet");
+                        panic!("Illegal opcode 0xCD: STD immediate - cannot store D register to literal value");
                     },
                     // Implemented opcode
                     0xCE => {
@@ -1608,9 +1608,9 @@ impl Cpu6809 {
                         let value = self.op_ld_16(opcode_byte);
                         self.registers.u = value;
                     },
-                    // TODO: Implement opcode 0xCF
+                    // ILLEGAL OPCODE: Cannot store to immediate value (STU immediate)
                     0xCF => {
-                        panic!("Opcode 0xCF not implemented yet");
+                        panic!("Illegal opcode 0xCF: STU immediate - cannot store U register to literal value");
                     },
 
                     // Implemented opcode
