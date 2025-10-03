@@ -18,3 +18,4 @@ pub mod data_transfer;
 pub mod arithmetic;
 pub mod misc;
 pub mod branch;
+pub mod interrupt;

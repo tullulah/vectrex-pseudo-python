@@ -128,6 +128,11 @@ fn lookup_cpu_op_page0(op_code: u8) -> CpuOp {
         0x16 => CpuOp { op_code: 0x16, name: "LBRA", addr_mode: AddressingMode::Relative, cycles: 5, size: 3, description: "Long Branch Always" },
         0x17 => CpuOp { op_code: 0x17, name: "LBSR", addr_mode: AddressingMode::Relative, cycles: 9, size: 3, description: "Long Branch to Subroutine" },
 
+        // Interrupt and synchronization instructions - MC6809 Spec
+        0x3B => CpuOp { op_code: 0x3B, name: "RTI", addr_mode: AddressingMode::Inherent, cycles: 15, size: 1, description: "Return from Interrupt (6 cycles if E=0)" },
+        0x3C => CpuOp { op_code: 0x3C, name: "CWAI", addr_mode: AddressingMode::Immediate, cycles: 20, size: 2, description: "Clear and Wait for Interrupt" },
+        0x3F => CpuOp { op_code: 0x3F, name: "SWI", addr_mode: AddressingMode::Inherent, cycles: 19, size: 1, description: "Software Interrupt" },
+
         // Branch instructions - C++ Original: OpBranch(condition_lambda)
         // All branch instructions are 3 cycles, 2 bytes (no cycle adjustment for taken/not taken)
         0x20 => CpuOp { op_code: 0x20, name: "BRA", addr_mode: AddressingMode::Relative, cycles: 3, size: 2, description: "Branch always" },
