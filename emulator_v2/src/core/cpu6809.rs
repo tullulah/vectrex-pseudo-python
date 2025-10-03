@@ -850,9 +850,11 @@ impl Cpu6809 {
                     0x6D => {
                         self.op_tst_memory(AddressingMode::Indexed);
                     },
-                    // TODO: Implement opcode 0x6E
+                    // Implemented opcode 0x6E - JMP indexed
+                    // C++ Original: JMP indexed - Sets PC to effective address
                     0x6E => {
-                        panic!("Opcode 0x6E not implemented yet");
+                        let ea = self.read_indexed_ea();
+                        self.registers.pc = ea;
                     },
                     // Implemented opcode
                     0x6F => {
@@ -915,9 +917,11 @@ impl Cpu6809 {
                     0x7D => {
                         self.op_tst_memory(AddressingMode::Extended);
                     },
-                    // TODO: Implement opcode 0x7E
+                    // Implemented opcode 0x7E - JMP extended
+                    // C++ Original: JMP extended - Sets PC to effective address
                     0x7E => {
-                        panic!("Opcode 0x7E not implemented yet");
+                        let ea = self.read_extended_ea();
+                        self.registers.pc = ea;
                     },
                     // Implemented opcode
                     0x7F => {
