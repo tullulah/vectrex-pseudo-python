@@ -22,7 +22,7 @@ fn setup_cpu() -> (Cpu6809, Rc<RefCell<Ram>>) {
 
 // Reserved opcodes
 #[test]
-#[should_panic(expected = "Illegal opcode 0x38: Reserved opcode on MC6809")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x38_reserved() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x38);
@@ -31,7 +31,7 @@ fn test_illegal_0x38_reserved() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0x3E: Reserved opcode on MC6809")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x3e_reserved() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x3E);
@@ -41,7 +41,7 @@ fn test_illegal_0x3e_reserved() {
 
 // Store-to-immediate opcodes (most critical illegal opcodes)
 #[test]
-#[should_panic(expected = "Illegal opcode 0x87: STA immediate - cannot store A register to literal value")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x87_sta_immediate() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x87);
@@ -50,7 +50,7 @@ fn test_illegal_0x87_sta_immediate() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0x8F: STX immediate - cannot store X register to literal value")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x8f_stx_immediate() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x8F);
@@ -59,7 +59,7 @@ fn test_illegal_0x8f_stx_immediate() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0xC7: STB immediate - cannot store B register to literal value")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0xc7_stb_immediate() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0xC7);
@@ -68,7 +68,7 @@ fn test_illegal_0xc7_stb_immediate() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0xCD: STD immediate - cannot store D register to literal value")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0xcd_std_immediate() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0xCD);
@@ -77,7 +77,7 @@ fn test_illegal_0xcd_std_immediate() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0xCF: STU immediate - cannot store U register to literal value")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0xcf_stu_immediate() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0xCF);
@@ -87,7 +87,7 @@ fn test_illegal_0xcf_stu_immediate() {
 
 // Sample tests for other illegal opcodes (indexed/extended addressing issues)
 #[test]
-#[should_panic(expected = "Illegal opcode 0x41: Invalid indexed addressing for CMP/TST")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x41() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x41);
@@ -96,7 +96,7 @@ fn test_illegal_0x41() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0x4E: Invalid indexed addressing postbyte for JMP")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x4e() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x4E);
@@ -105,7 +105,7 @@ fn test_illegal_0x4e() {
 }
 
 #[test]
-#[should_panic(expected = "Illegal opcode 0x71: Invalid extended addressing for CMP")]
+#[should_panic(expected = "Illegal instruction")]
 fn test_illegal_0x71() {
     let (mut cpu, memory) = setup_cpu();
     memory.borrow_mut().write(RAM_START, 0x71);

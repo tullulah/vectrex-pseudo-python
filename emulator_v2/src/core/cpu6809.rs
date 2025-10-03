@@ -159,11 +159,16 @@ pub struct Cpu6809 {
 
 // C++ Original: Interrupt vector constants
 const RESET_VECTOR: u16 = 0xFFFE;
+#[allow(dead_code)]
 const NMI_VECTOR: u16   = 0xFFFC;
 const SWI_VECTOR: u16   = 0xFFFA;
+#[allow(dead_code)]
 const IRQ_VECTOR: u16   = 0xFFF8;
+#[allow(dead_code)]
 const FIRQ_VECTOR: u16  = 0xFFF6;
+#[allow(dead_code)]
 const SWI2_VECTOR: u16  = 0xFFF4;
+#[allow(dead_code)]
 const SWI3_VECTOR: u16  = 0xFFF2;
 
 impl Cpu6809 {
@@ -2319,6 +2324,7 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, value); 
     }
     */
+    #[allow(dead_code)]
     fn push8(&mut self, stack_pointer: &mut u16, value: u8) {
         *stack_pointer = stack_pointer.wrapping_sub(1);
         self.write8(*stack_pointer, value);
@@ -2330,6 +2336,7 @@ impl Cpu6809 {
         return value;
     }
     */
+    #[allow(dead_code)]
     fn pop8(&mut self, stack_pointer: &mut u16) -> u8 {
         let value = self.read8(*stack_pointer);
         *stack_pointer = stack_pointer.wrapping_add(1);
@@ -2342,6 +2349,7 @@ impl Cpu6809 {
         m_memoryBus->Write(--stackPointer, U8(value >> 8));   // High
     }
     */
+    #[allow(dead_code)]
     fn push16(&mut self, stack_pointer: &mut u16, value: u16) {
         self.push8(stack_pointer, u8(value & 0xFF)); // Low
         self.push8(stack_pointer, u8(value >> 8));   // High
@@ -2354,6 +2362,7 @@ impl Cpu6809 {
         return CombineToU16(high, low);
     }
     */
+    #[allow(dead_code)]
     fn pop16(&mut self, stack_pointer: &mut u16) -> u16 {
         let high = self.pop8(stack_pointer);
         let low = self.pop8(stack_pointer);

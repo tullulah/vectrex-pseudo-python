@@ -301,22 +301,35 @@ const PORT_B_COMPARATOR: u8 = 0x20;
 const PORT_B_RAMP_DISABLED: u8 = 0x80;
 
 // C++ Original: InterruptFlag bit definitions
+#[allow(dead_code)]
 const IF_CA2: u8 = 0x01;
 const IF_CA1: u8 = 0x02;
+#[allow(dead_code)]
 const IF_SHIFT: u8 = 0x04;
+#[allow(dead_code)]
 const IF_CB2: u8 = 0x08;
+#[allow(dead_code)]
 const IF_CB1: u8 = 0x10;
+#[allow(dead_code)]
 const IF_TIMER2: u8 = 0x20;
+#[allow(dead_code)]
 const IF_TIMER1: u8 = 0x40;
 const IF_IRQ_ENABLED: u8 = 0x80;
 
 // C++ Original: InterruptEnable bit definitions
+#[allow(dead_code)]
 const IE_CA2: u8 = 0x01;
+#[allow(dead_code)]
 const IE_CA1: u8 = 0x02;
+#[allow(dead_code)]
 const IE_SHIFT: u8 = 0x04;
+#[allow(dead_code)]
 const IE_CB2: u8 = 0x08;
+#[allow(dead_code)]
 const IE_CB1: u8 = 0x10;
+#[allow(dead_code)]
 const IE_TIMER2: u8 = 0x20;
+#[allow(dead_code)]
 const IE_TIMER1: u8 = 0x40;
 const IE_SET_CLEAR_CONTROL: u8 = 0x80;
 
