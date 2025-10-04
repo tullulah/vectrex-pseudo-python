@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use crate::core::memory_bus::MemoryBus;
 
 pub struct Ram {
-    memory: [u8; Self::SIZE_BYTES],
+    memory: [u8; Self::SIZE_BYTES],  // Back to simple array
 }
 
 impl Ram {
@@ -30,8 +30,6 @@ impl Ram {
         let mut ram = Self {
             memory: [0; Self::SIZE_BYTES],
         };
-        // C++ Original: void Ram::Init() { Randomize(); }
-        // Note: In C++ this would use a default/random seed, we use 0 for deterministic behavior
         ram.randomize(0);
         ram
     }
@@ -41,17 +39,16 @@ impl Ram {
         self.memory[addr]
     }
 
-    pub fn write(&mut self, address: u16, value: u8) {
+    pub fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
         let addr = (address as usize) % Self::SIZE_BYTES;
         self.memory[addr] = value;
     }
 
-    pub fn zero(&mut self) {
+    pub fn zero(&mut self) {  // Back to &mut self
         self.memory.fill(0);
     }
 
-    // C++ Original: void Randomize(unsigned int seed)
-    pub fn randomize(&mut self, seed: u32) {
+    pub fn randomize(&mut self, seed: u32) {  // Back to &mut self
         let mut rng = StdRng::seed_from_u64(seed as u64);
         for i in 0..Self::SIZE_BYTES {
             self.memory[i] = rng.gen_range(0..=255);
@@ -86,11 +83,11 @@ impl MemoryBusDevice for Ram {
         self.read(address)
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
         self.write(address, value);
     }
 
-    fn sync(&mut self, _cycles: Cycles) {
+    fn sync(&mut self, _cycles: Cycles) {  // Back to &mut self
         // RAM no necesita sincronización por ciclos
     }
 }

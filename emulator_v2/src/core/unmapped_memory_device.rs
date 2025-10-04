@@ -32,7 +32,7 @@ impl MemoryBusDevice for UnmappedMemoryDevice {
     }
     
     // C++ Original: void Write(uint16_t address, uint8_t value) override
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
         // C++ Original: ErrorHandler::Undefined("Write to unmappped range of value $%02x at address $%04x\n", value, address);
         eprintln!("Write to unmapped range of value ${:02X} at address ${:04X}", value, address);
     }

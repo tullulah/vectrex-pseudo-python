@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectrex Emulator V2 WASM Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            background: #222;
+        }
+        .test-section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        button:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #000;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #00ff00;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            border-left-color: #ff0000;
+            color: #ff6666;
+        }
+        .success {
+            border-left-color: #00ff00;
+            color: #00ff00;
+        }
+        canvas {
+            border: 1px solid #00ff00;
+            background: #000;
+            display: block;
+            margin: 10px 0;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .metric-card {
+            background: #111;
+            padding: 10px;
+            border-left: 3px solid #00ccff;
+        }
+        .metric-label {
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            color: #00ccff;
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Vectrex Emulator V2 WASM Test</h1>
+    
+    <div class="test-section">
+        <h2>1. WASM Module Loading</h2>
+        <button id="btnLoadWasm">Load WASM Module</button>
+        <div id="outputLoad" class="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Emulator Initialization</h2>
+        <button id="btnInit" disabled>Initialize Emulator (Auto-loads embedded 8KB BIOS)</button>
+        <div id="outputInit" class="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Execution Test</h2>
+        <button id="btnStart" disabled>Start</button>
+        <button id="btnStop" disabled>Stop</button>
+        <button id="btnRunFrame" disabled>Run Single Frame</button>
+        <button id="btnReset" disabled>Reset</button>
+        <div id="outputExec" class="output"></div>
+        
+        <h3>Metrics</h3>
+        <div class="metrics" id="metrics"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Vector Output</h2>
+        <canvas id="canvas" width="600" height="600"></canvas>
+        <div id="outputVectors" class="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. CPU Registers</h2>
+        <div id="outputRegs" class="output"></div>
+    </div>
+
+    <script type="module">
+        import init, { VectrexEmulator, Vector } from './pkg/vectrex_emulator_v2.js';
+
+        let emulator = null;
+        let animationId = null;
+
+        // Utility functions
+        function log(elementId, message, type = 'info') {
+            const el = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            el.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function updateMetrics() {
+            if (!emulator) return;
+            
+            try {
+                const metricsJson = emulator.getMetrics();
+                const metrics = JSON.parse(metricsJson);
+                
+                const metricsEl = document.getElementById('metrics');
+                metricsEl.innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-label">Total Cycles</div>
+                        <div class="metric-value">${metrics.totalCycles.toLocaleString()}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Instructions</div>
+                        <div class="metric-value">${metrics.instructionCount.toLocaleString()}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Frames</div>
+                        <div class="metric-value">${metrics.frameCount}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Status</div>
+                        <div class="metric-value">${metrics.running ? '🟢 RUNNING' : '🔴 STOPPED'}</div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Error updating metrics:', e);
+            }
+        }
+
+        function updateRegisters() {
+            if (!emulator) return;
+            
+            try {
+                const regsJson = emulator.getRegisters();
+                const regs = JSON.parse(regsJson);
+                
+                const regsEl = document.getElementById('outputRegs');
+                regsEl.innerHTML = `
+                    <div>PC: 0x${regs.PC.toString(16).padStart(4, '0')}  A: 0x${regs.A.toString(16).padStart(2, '0')}  B: 0x${regs.B.toString(16).padStart(2, '0')}</div>
+                    <div>X:  0x${regs.X.toString(16).padStart(4, '0')}  Y: 0x${regs.Y.toString(16).padStart(4, '0')}</div>
+                    <div>U:  0x${regs.U.toString(16).padStart(4, '0')}  S: 0x${regs.S.toString(16).padStart(4, '0')}</div>
+                    <div>DP: 0x${regs.DP.toString(16).padStart(2, '0')}  CC: 0x${regs.CC.toString(16).padStart(2, '0')}</div>
+                `;
+            } catch (e) {
+                console.error('Error updating registers:', e);
+            }
+        }
+
+        function renderVectors() {
+            if (!emulator) return;
+            
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 0.01; // Scale from Vectrex coordinates to canvas
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const vectorCount = emulator.getVectorCount();
+            
+            // Draw vectors
+            for (let i = 0; i < vectorCount; i++) {
+                const vec = emulator.getVector(i);
+                if (!vec) continue;
+                
+                const x0 = centerX + vec.x0 * scale;
+                const y0 = centerY - vec.y0 * scale; // Invert Y
+                const x1 = centerX + vec.x1 * scale;
+                const y1 = centerY - vec.y1 * scale;
+                
+                // Color intensity (0-128 to 0-255)
+                const intensity = Math.min(255, vec.color * 2);
+                
+                ctx.strokeStyle = `rgb(0, ${intensity}, 0)`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+            }
+            
+            // Update vector count display
+            const outputVec = document.getElementById('outputVectors');
+            outputVec.innerHTML = `<div>Vector count: ${vectorCount}</div>`;
+            if (vectorCount > 0) {
+                const firstVec = emulator.getVector(0);
+                outputVec.innerHTML += `<div>First vector: (${firstVec.x0}, ${firstVec.y0}) → (${firstVec.x1}, ${firstVec.y1}) color=${firstVec.color}</div>`;
+            }
+        }
+
+        // Button handlers
+        document.getElementById('btnLoadWasm').addEventListener('click', async () => {
+            try {
+                log('outputLoad', 'Loading WASM module...');
+                await init();
+                log('outputLoad', '✅ WASM module loaded successfully', 'success');
+                
+                document.getElementById('btnInit').disabled = false;
+                document.getElementById('btnLoadWasm').disabled = true;
+            } catch (e) {
+                log('outputLoad', `❌ Error: ${e.message}`, 'error');
+            }
+        });
+
+        document.getElementById('btnInit').addEventListener('click', () => {
+            try {
+                log('outputInit', 'Creating emulator instance...');
+                emulator = new VectrexEmulator();
+                log('outputInit', '✅ Emulator created successfully', 'success');
+                
+                log('outputInit', 'Initializing emulator with embedded BIOS...');
+                const biosLoaded = emulator.init();
+                
+                if (biosLoaded) {
+                    log('outputInit', '✅ BIOS loaded successfully (8192 bytes: 4KB real + 4KB padding)', 'success');
+                } else {
+                    log('outputInit', '❌ Failed to load BIOS', 'error');
+                }
+                
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStop').disabled = false;
+                document.getElementById('btnRunFrame').disabled = false;
+                document.getElementById('btnReset').disabled = false;
+                document.getElementById('btnInit').disabled = true;
+                
+                updateMetrics();
+                updateRegisters();
+            } catch (e) {
+                log('outputInit', `❌ Error: ${e.message}`, 'error');
+            }
+        });
+
+        document.getElementById('btnStart').addEventListener('click', () => {
+            if (!emulator) return;
+            emulator.start();
+            log('outputExec', '▶️  Emulator started');
+            
+            // Start animation loop
+            const CYCLES_PER_FRAME = 30000n; // ~50Hz
+            function loop() {
+                if (emulator.isRunning()) {
+                    emulator.runFrame(CYCLES_PER_FRAME);
+                    updateMetrics();
+                    updateRegisters();
+                    renderVectors();
+                    animationId = requestAnimationFrame(loop);
+                }
+            }
+            loop();
+        });
+
+        document.getElementById('btnStop').addEventListener('click', () => {
+            if (!emulator) return;
+            emulator.stop();
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            log('outputExec', '⏸️  Emulator stopped');
+            updateMetrics();
+        });
+
+        document.getElementById('btnRunFrame').addEventListener('click', () => {
+            if (!emulator) return;
+            const CYCLES_PER_FRAME = 30000n;
+            emulator.runFrame(CYCLES_PER_FRAME);
+            log('outputExec', `Executed 1 frame (${CYCLES_PER_FRAME} cycles)`);
+            updateMetrics();
+            updateRegisters();
+            renderVectors();
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            if (!emulator) return;
+            emulator.reset();
+            log('outputExec', '🔄 Emulator reset');
+            updateMetrics();
+            updateRegisters();
+            renderVectors();
+        });
+
+        // Auto-load on page load
+        log('outputLoad', 'Ready to load WASM module');
+    </script>
+</body>
+</html>

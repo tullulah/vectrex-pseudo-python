@@ -1,6 +1,123 @@
 # Vectrex Pseudo-Python Project – Super Summary (Context Recovery Document)
 
 > Purpose: Single authoritative, regularly updated high‑signal document to restore full project context after a lost session. Includes architecture, design decisions, build/runtime flows, IPC, emulator core specifics, frontend panels, conventions, troubleshooting, and short/medium backlog.
+
+## 2025-10-04 - Emulator V2 WASM: BIOS Embebida Implementada ✅
+
+### Cambio Crítico
+**BIOS ROM ahora embebida en binario WASM** (8192 bytes: 4KB real + 4KB padding) siguiendo patrón JSVecx (`Globals.romdata`).
+
+### Implementación
+- **Archivo generado**: `emulator_v2/src/bios_rom.rs` - Array estático `&[u8; 8192]`
+- **Método nuevo**: `Emulator::load_bios_from_bytes(&[u8])` - Carga BIOS desde memoria
+- **API actualizada**: `init()` **SIN parámetros** - Auto-carga BIOS embebida
+- **Custom BIOS**: `loadBiosBytes(data: Uint8Array)` disponible si se necesita
+
+### ⚠️ CRITICAL FIX (19:15)
+**Size mismatch detectado y corregido**:
+- ❌ **Problema**: BIOS embebida 4096 bytes, pero `BiosRom::SIZE_BYTES = 8192`
+- ✅ **Solución**: Regenerar `bios_rom.rs` con padding 0xFF a 8192 bytes
+- ✅ **Resultado**: BIOS carga correctamente, compatible con arquitectura C++
+
+### Impacto
+- **Simplicidad**: `const emu = new VectrexEmulator(); emu.init();` - Sin archivos externos
+- **Deployment**: Un solo archivo WASM (192.7 KB con BIOS 8KB)
+- **Latencia**: Carga instantánea, no requiere fetch de `bios.bin`
+- **Consistencia**: BIOS siempre presente, eliminado punto de fallo
+
+### Generación de bios_rom.rs
+```python
+# Script Python para regenerar si BIOS cambia:
+import pathlib
+data = pathlib.Path(r'C:\...\bios.bin').read_bytes()  # 4096 bytes real
+padded = data + bytes([0xFF] * (8192 - len(data)))    # Padding a 8192 bytes
+chunks = [', '.join(f'0x{b:02X}' for b in padded[i:i+16]) for i in range(0, len(padded), 16)]
+output = '// Auto-generated BIOS ROM data (4096 bytes real + 4096 bytes padding)\npub const BIOS_ROM: &[u8; 8192] = &[\n' + ',\n'.join(f'    {chunk}' for chunk in chunks) + '\n];'
+pathlib.Path('emulator_v2/src/bios_rom.rs').write_text(output)
+```
+
+### Estado API
+**✅ COMPLETADO**:
+- BIOS embebida (8KB: 4KB real + 4KB padding en WASM)
+- `init()` auto-carga BIOS
+- `loadBiosBytes(data)` para custom BIOS
+- Stub de test HTML eliminado
+- **Size mismatch fix**: Padding a 8192 bytes para compatibilidad C++
+
+**⚠️ PENDIENTE**:
+- Campos `Input` struct (joystick_x/y, buttons)
+- Verificación Screen → RenderContext → vectors
+- Test funcional en browser
+
+### Archivos
+- `emulator_v2/src/bios_rom.rs` [REGENERATED] - BIOS 8KB embebida
+- `emulator_v2/src/wasm_api.rs` [EDIT] - init() sin parámetros
+- `emulator_v2/src/core/emulator.rs` [EDIT] - load_bios_from_bytes()
+- `emulator_v2/test_wasm.html` [EDIT] - Sin stub
+- `emulator_v2/WASM_API.md` [EDIT] - Documentación actualizada
+- `emulator_v2/SESSION_2025_10_04_BIOS_EMBEDDED.md` [NEW] - Resumen sesión
+- `emulator_v2/BIOS_SIZE_FIX.md` [NEW] - Fix crítico size mismatch
+
+---
+
+## 2025-10-04 - Emulator V2 WASM API Completado ✅
+
+### Contexto
+Se ha implementado y compilado exitosamente el módulo WASM para `emulator_v2`, replicando 1:1 la API de JSVecx para permitir un drop-in replacement en la IDE.
+
+### Implementación Completa
+- **Archivo**: `emulator_v2/src/wasm_api.rs` (393 líneas)
+- **Compilación**: ✅ Exitosa a `wasm32-unknown-unknown` target
+- **Bindings generados**: `emulator_v2/pkg/` con `.wasm`, `.js`, `.d.ts`
+- **Build script**: `emulator_v2/build-wasm.ps1` para automatizar compilación
+- **Test HTML**: `emulator_v2/test_wasm.html` para verificación funcional
+
+### API Surface (matching JSVecx)
+**Lifecycle**:
+- `new VectrexEmulator()` - Constructor
+- `init(biosPath)` - Inicializar con BIOS
+- `loadBiosBytes(data)` - ⚠️ TODO: Necesita `Emulator::load_bios_from_bytes()`
+- `loadRom(path)` - Cargar cartucho
+- `reset()` - Reset completo
+- `start() / stop() / isRunning()` - Control de ejecución
+
+**Frame Execution**:
+- `runFrame(cycles: u64)` - Ejecutar frame de emulación (~30000 cycles para 50Hz)
+
+**Vector Output** (matching `vector_t`):
+- `getVectorCount()` - Cantidad de vectores
+- `getVector(index)` - Vector individual `{x0, y0, x1, y1, color}`
+- `getVectorsJson()` - Array completo en JSON
+
+**Metrics & Debug**:
+- `getMetrics()` - JSON: `{totalCycles, instructionCount, frameCount, running}`
+- `getRegisters()` - JSON: `{PC, A, B, X, Y, U, S, DP, CC}`
+- `read8(addr) / write8(addr, val)` - Acceso memoria
+
+**Input Handling**:
+- `onKeyDown(keyCode) / onKeyUp(keyCode)` - Manejo teclado (keycodes idénticos a JSVecx)
+- `setJoystick(x, y)` / `setButton(button, pressed)` - Control programático
+
+### Pendientes Críticos
+1. **`Emulator::load_bios_from_bytes(&[u8])`** - Cargar BIOS desde memoria (actual solo acepta path)
+2. **`Input` struct fields** - Agregar `joystick_x`, `joystick_y`, `button1-4` (actualmente comentados)
+3. **Coordinación Screen → RenderContext** - Verificar generación correcta de vectores desde hardware
+
+### Próximos Pasos
+1. Testear con BIOS real cargada
+2. Verificar output de vectores vs JSVecx
+3. Integrar en EmulatorPanel.tsx como replacement de JSVecx
+4. Implementar audio samples export
+
+### Archivos Clave
+- **Implementación**: `emulator_v2/src/wasm_api.rs`
+- **Documentación**: `emulator_v2/WASM_API.md`
+- **Build**: `emulator_v2/build-wasm.ps1`
+- **Test**: `emulator_v2/test_wasm.html`
+- **Output**: `emulator_v2/pkg/*`
+
+---
+
 ## 2025-09-22/23 - Diagnóstico crítico discrepancia vectores UI/WASM
 
 ### Contexto y síntesis

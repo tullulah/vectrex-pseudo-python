@@ -152,6 +152,12 @@ impl Emulator {
         }
     }
     
+    // Load BIOS from bytes (for WASM embedded BIOS)
+    // C++ Original pattern: bool LoadBiosRom(const uint8_t* data, size_t size)
+    pub fn load_bios_from_bytes(&mut self, data: &[u8]) -> bool {
+        self.bios_rom.borrow_mut().load_bios_rom(data)
+    }
+    
     // C++ Original: bool LoadRom(const char* file)
     pub fn load_rom(&mut self, file: &str) -> bool {
         // C++ Original: return m_cartridge.LoadRom(file);

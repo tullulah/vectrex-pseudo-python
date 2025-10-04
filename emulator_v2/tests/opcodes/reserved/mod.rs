@@ -1,6 +1,5 @@
-// Reserved opcodes tests
-// Estos opcodes NO están definidos en la especificación MC6809
-// Tests verifican que el emulador correctamente hace panic al encontrarlos
+// Reserved opcode tests
+// Auto-generated - one file per opcode
 
 pub mod test_reserved_0x01;
 pub mod test_reserved_0x02;

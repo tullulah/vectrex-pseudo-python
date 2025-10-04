@@ -21,7 +21,10 @@ fn test_components_integration() {
     screen.set_integrators_enabled(true);
     screen.set_integrator_x(50);
     screen.set_integrator_y(25);
-    screen.update(10, &mut render_context);
+    // Via::DoSync pattern - cycle-accurate loop
+    for _ in 0..10 {
+        screen.update(1, &mut render_context);
+    }
     
     assert_eq!(screen.brightness(), 100.0);
     assert!(screen.integrators_enabled());

@@ -533,7 +533,16 @@ impl MemoryBusDevice for Via6522 {
             INTERRUPT_FLAG => self.get_interrupt_flag_value(),
             INTERRUPT_ENABLE => self.interrupt_enable,
             PORT_A_NO_HANDSHAKE => {
-                panic!("A without handshake not implemented yet");
+                // C++ Original (Via.cpp:318-320):
+                // case Register::PortANoHandshake:
+                //     ErrorHandler::Unsupported("A without handshake not implemented yet\n");
+                //     break;
+                // No hace panic - simplemente devuelve 0 y loguea warning
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::warn_1(&format!("VIA: Port A without handshake not implemented yet (address {:04X})", address).into());
+                #[cfg(not(target_arch = "wasm32"))]
+                eprintln!("VIA: Port A without handshake not implemented yet (address {:04X})", address);
+                0
             }
             _ => {
                 panic!("Invalid VIA register address: {:04X}", address);
@@ -551,7 +560,7 @@ impl MemoryBusDevice for Via6522 {
         }
     }
     */
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
         let index = address & 0x0F;
         
         match index {
@@ -682,7 +691,7 @@ impl MemoryBusDevice for Via6522 {
         DoSync(cycles, input, renderContext, audioContext);
     }
     */
-    fn sync(&mut self, cycles: Cycles) {
+    fn sync(&mut self, cycles: Cycles) {  // Back to &mut self
         // Simplified sync - in full implementation this would take input/render/audio contexts
         self.do_sync(cycles);
     }

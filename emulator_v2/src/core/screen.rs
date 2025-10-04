@@ -71,11 +71,11 @@ impl Screen {
 
     /// C++ Original: void Screen::Update(cycles_t cycles, RenderContext& renderContext)
     pub fn update(&mut self, cycles: u64, render_context: &mut RenderContext) {
-        // Update DelayedValueStore one cycle at a time
-        for _ in 0..cycles {
-            self.velocity_x.update(1);
-            self.velocity_y.update(1);
-        }
+        // C++ Original: m_velocityX.Update(cycles); m_velocityY.Update(cycles);
+        // Note: Vectrexy's Via::DoSync calls this with cycles=1 in a loop.
+        // We expect cycles=1 here, matching Vectrexy's cycle-accurate architecture.
+        self.velocity_x.update(cycles);
+        self.velocity_y.update(cycles);
 
         // Handle switching to RampUp/RampDown
         match self.ramp_phase {

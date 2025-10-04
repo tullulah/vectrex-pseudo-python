@@ -208,8 +208,11 @@ fn test_screen_beam_movement() {
     
     let initial_pos = screen.pos();
     
-    // Update with some cycles - beam should move (C++ original uses cycles for delta calculation)
-    screen.update(100, &mut render_context);
+    // Update with some cycles - beam should move
+    // Note: Screen::update() expects cycles=1 (called in loop like Via::DoSync)
+    for _ in 0..100 {
+        screen.update(1, &mut render_context);
+    }
     
     let new_pos = screen.pos();
     
@@ -240,8 +243,10 @@ fn test_screen_line_drawing() {
     // Clear any existing lines
     render_context.lines.clear();
     
-    // Update to draw lines
-    screen.update(50, &mut render_context);
+    // Update to draw lines (Via::DoSync pattern - cycle-accurate loop)
+    for _ in 0..50 {
+        screen.update(1, &mut render_context);
+    }
     
     // Should have created at least one line when drawing is enabled
     // (exact behavior depends on movement and brightness)
@@ -259,7 +264,9 @@ fn test_screen_brightness_curve() {
     let mut render_context = RenderContext::new();
     screen.set_brightness(64);
     screen.set_blank_enabled(false);
-    screen.update(10, &mut render_context);
+    for _ in 0..10 {
+        screen.update(1, &mut render_context);
+    }
 }
 
 #[test]

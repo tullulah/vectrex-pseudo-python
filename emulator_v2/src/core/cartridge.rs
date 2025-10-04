@@ -93,7 +93,7 @@ impl MemoryBusDevice for Cartridge {
     }
     
     // C++ Original: void Write(uint16_t /*address*/, uint8_t /*value*/) override
-    fn write(&mut self, _address: u16, _value: u8) {
+    fn write(&mut self, _address: u16, _value: u8) {  // Back to &mut self
         // C++ Original: ErrorHandler::Undefined("Writes to Cartridge ROM not allowed\n");
         eprintln!("Writes to Cartridge ROM not allowed");
     }

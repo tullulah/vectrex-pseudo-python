@@ -1,17 +1,11 @@
-// Arithmetic opcodes tests
-pub mod test_indexed_arithmetic;
-pub mod test_addb_subb;
-pub mod test_logic_b;
+// Arithmetic opcode tests
+// Auto-generated - one file per opcode
 
-// Additional arithmetic tests (moved from root)
+pub mod test_add;
 pub mod test_adda_variants;
-pub mod test_add_sub_opcodes;
-pub mod test_arithmetic_corrected;
-pub mod test_mul_sex_opcodes;
-pub mod test_and_eor_opcodes;
-pub mod test_or_opcodes;
-
-// Comparison tests
+pub mod test_addb;
+pub mod test_and;
+pub mod test_andb;
 pub mod test_cmpa_opcodes;
 pub mod test_cmpb_opcodes;
 pub mod test_cmpd_opcodes;
@@ -19,7 +13,15 @@ pub mod test_cmps_opcodes;
 pub mod test_cmpu_opcodes;
 pub mod test_cmpx_opcodes;
 pub mod test_cmpy_opcodes;
-
-// Register operation tests
-pub mod test_b_register_opcodes;
+pub mod test_eorb;
+pub mod test_extended;
+pub mod test_ldaa;
+pub mod test_logic;
+pub mod test_mul;
+pub mod test_oraa;
+pub mod test_orab;
+pub mod test_orb;
 pub mod test_register_control_opcodes;
+pub mod test_sex;
+pub mod test_staa;
+pub mod test_subb;

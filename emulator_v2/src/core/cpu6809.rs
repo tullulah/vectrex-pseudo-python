@@ -8,6 +8,21 @@ use crate::core::cpu_op_codes::{lookup_cpu_op_runtime, is_opcode_page1, is_opcod
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// Macro to log errors to browser console in WASM builds
+#[cfg(target_arch = "wasm32")]
+macro_rules! console_error {
+    ($($arg:tt)*) => {
+        web_sys::console::error_1(&format!($($arg)*).into());
+    };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! console_error {
+    ($($arg:tt)*) => {
+        eprintln!($($arg)*);
+    };
+}
+
 // C++ Original: using InterruptType = std::function<void()>;
 pub type InterruptCallback = Box<dyn Fn()>;
 
@@ -266,8 +281,30 @@ impl Cpu6809 {
         self.add_cycles(cpu_op.cycles as Cycles);
 
         if cpu_op.addr_mode == AddressingMode::Illegal {
-            panic!("Illegal instruction at PC={:04X}, opcode: {:02X}, page: {}", 
-                   self.registers.pc.wrapping_sub(1), opcode_byte, cpu_op_page);
+            let page_prefix = match cpu_op_page {
+                0 => format!("0x{:02X}", opcode_byte),
+                1 => format!("0x10 0x{:02X}", opcode_byte),
+                2 => format!("0x11 0x{:02X}", opcode_byte),
+                _ => format!("Page{} 0x{:02X}", cpu_op_page, opcode_byte),
+            };
+            let error_msg = format!(
+                "❌ ILLEGAL OPCODE {} at PC=0x{:04X}\n\
+                 CPU State: A=0x{:02X} B=0x{:02X} X=0x{:04X} Y=0x{:04X} U=0x{:04X} S=0x{:04X} DP=0x{:02X}\n\
+                 Flags: N={} Z={} V={} C={}\n\
+                 This opcode is ILLEGAL per MC6809 specification",
+                page_prefix,
+                self.registers.pc.wrapping_sub(if cpu_op_page == 0 { 1 } else { 2 }),
+                self.registers.a, self.registers.b,
+                self.registers.x, self.registers.y,
+                self.registers.u, self.registers.s,
+                self.registers.dp,
+                self.registers.cc.n as u8,
+                self.registers.cc.z as u8,
+                self.registers.cc.v as u8,
+                self.registers.cc.c as u8
+            );
+            console_error!("{}", error_msg);
+            panic!("{}", error_msg);
         }
 
         // C++ Original: switch (cpuOpPage)
@@ -607,33 +644,42 @@ impl Cpu6809 {
                     // Implemented opcode
                     0x3B => {
                         // RTI - Return from Interrupt
-                        // MC6809 Spec: Pop entire state from stack (reverse order of interrupt entry)
-                        // C++ Original (Cpu.cpp lines 880-891): Uses Pop8/Pop16 helpers
+                        // Pops state from stack in REVERSE order of how SWI pushed it
+                        // SWI pushes: CC, A, B, DP, X, Y, U, PC (S decrements)
+                        // RTI must pop: PC, U, Y, X, DP, B, A, CC (S increments)
                         
-                        // Pop CC first to check E bit (Vectrexy pops CC first)
                         let mut sp = self.registers.s;
-                        let cc_value = self.pop8(&mut sp);
-                        let entire_state = (cc_value & 0x80) != 0; // E bit
+                        
+                        // Peek at CC to check E bit (without incrementing SP yet)
+                        // CC is at the END of the stack frame, so we need to check it first
+                        // For entire state: CC is at S+11
+                        // For FIRQ: CC is at S+2
+                        // We need to peek ahead to determine which mode
+                        
+                        // FIRQ check: Read byte at S+2 to see if E bit is clear
+                        let cc_at_s_plus_2 = self.read8(sp.wrapping_add(2));
+                        let entire_state = (cc_at_s_plus_2 & 0x80) != 0; // E bit
                         
                         if entire_state {
-                            // Pop entire state (matches Vectrexy order)
-                            self.registers.a = self.pop8(&mut sp);
-                            self.registers.b = self.pop8(&mut sp);
-                            self.registers.dp = self.pop8(&mut sp);
-                            self.registers.x = self.pop16(&mut sp);
-                            self.registers.y = self.pop16(&mut sp);
+                            // Pop entire state (reverse order of SWI push)
+                            self.registers.pc = self.pop16(&mut sp);
                             self.registers.u = self.pop16(&mut sp);
-                            self.registers.pc = self.pop16(&mut sp);
+                            self.registers.y = self.pop16(&mut sp);
+                            self.registers.x = self.pop16(&mut sp);
+                            self.registers.dp = self.pop8(&mut sp);
+                            self.registers.b = self.pop8(&mut sp);
+                            self.registers.a = self.pop8(&mut sp);
+                            let cc_value = self.pop8(&mut sp);
+                            self.registers.cc.from_u8(cc_value);
                         } else {
-                            // FIRQ-style: only PC+CC
+                            // FIRQ-style: only PC, then CC
                             self.registers.pc = self.pop16(&mut sp);
+                            let cc_value = self.pop8(&mut sp);
+                            self.registers.cc.from_u8(cc_value);
                         }
                         self.registers.s = sp;
                         
-                        // Restore CC (already popped at start)
-                        self.registers.cc.from_u8(cc_value);
-                        
-                        // Cycles: 6 for FIRQ-style (PC+CC), 15 for entire state
+                        // Cycles: 6 for FIRQ-style, 15 for entire state
                         self.add_cycles(if entire_state { 15 } else { 6 });
                     }
                     // Implemented opcode
@@ -1132,9 +1178,10 @@ impl Cpu6809 {
                         let operand = self.read_pc16();
                         self.subtract_impl_u16(self.registers.x, operand, 0);
                     },
-                    // Implemented opcode
+                    // Implemented opcode: BSR - Branch to Subroutine (relative)
+                    // MC6809 Datasheet: BSR takes 8-bit signed offset, pushes PC, then PC = PC + offset
                     0x8D => {
-                        self.op_jsr(AddressingMode::Direct);
+                        self.op_bsr();
                     },
                     // Implemented opcode
                     0x8E => {
@@ -1878,6 +1925,143 @@ impl Cpu6809 {
             1 => {
                 // Page 1 instructions (0x10xx)
                 match opcode_byte {
+                    // C++ Original: OpSWI(InterruptVector::Swi2);
+                    0x3F => {
+                        panic!("SWI2 not yet implemented");
+                    },
+
+                    // C++ Original: OpLD<1, 0x8E>(Y); - LDY immediate
+                    0x8E => {
+                        let value = self.read_pc16();
+                        self.registers.y = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0x9E>(Y); - LDY direct
+                    0x9E => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.y = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xAE>(Y); - LDY indexed
+                    0xAE => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.y = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xBE>(Y); - LDY extended
+                    0xBE => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.y = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xCE>(S); - LDS immediate
+                    0xCE => {
+                        let value = self.read_pc16();
+                        self.registers.s = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xDE>(S); - LDS direct
+                    0xDE => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.s = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xEE>(S); - LDS indexed
+                    0xEE => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.s = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpLD<1, 0xFE>(S); - LDS extended
+                    0xFE => {
+                        let value = self.read_operand_value16_page1(opcode_byte);
+                        self.registers.s = value;
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0x9F>(Y); - STY direct
+                    0x9F => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.y;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0xAF>(Y); - STY indexed
+                    0xAF => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.y;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0xBF>(Y); - STY extended
+                    0xBF => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.y;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0xDF>(S); - STS direct
+                    0xDF => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.s;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0xEF>(S); - STS indexed
+                    0xEF => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.s;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
+                    // C++ Original: OpST<1, 0xFF>(S); - STS extended
+                    0xFF => {
+                        let ea = self.read_ea16_page1(opcode_byte);
+                        let value = self.registers.s;
+                        self.write16(ea, value);
+                        self.registers.cc.n = Self::calc_negative_u16(value);
+                        self.registers.cc.z = (value == 0);
+                        self.registers.cc.v = false;
+                    },
+
                     // C++ Original: OpCMP<1, 0x83>(D); - CMPD immediate
                     // Compare D register (16-bit combination of A and B)
                     0x83 => {
@@ -1931,8 +2115,49 @@ impl Cpu6809 {
                         self.subtract_impl_u16(self.registers.y, operand, 0);
                     },
 
+                    // C++ Original: OpLongBranch - Long branch instructions
+                    0x21 ..= 0x2F => {
+                        let offset = self.read_pc16() as i16;
+                        let should_branch = match opcode_byte {
+                            0x21 => false, // LBRN - never
+                            0x22 => (self.registers.cc.c as u8 == 0) && (self.registers.cc.z as u8 == 0), // LBHI
+                            0x23 => (self.registers.cc.c as u8 != 0) || (self.registers.cc.z as u8 != 0), // LBLS
+                            0x24 => self.registers.cc.c as u8 == 0, // LBCC/LBHS
+                            0x25 => self.registers.cc.c as u8 != 0, // LBCS/LBLO
+                            0x26 => self.registers.cc.z as u8 == 0, // LBNE
+                            0x27 => self.registers.cc.z as u8 != 0, // LBEQ
+                            0x28 => self.registers.cc.v as u8 == 0, // LBVC
+                            0x29 => self.registers.cc.v as u8 != 0, // LBVS
+                            0x2A => self.registers.cc.n as u8 == 0, // LBPL
+                            0x2B => self.registers.cc.n as u8 != 0, // LBMI
+                            0x2C => (self.registers.cc.n as u8 ^ self.registers.cc.v as u8) == 0, // LBGE
+                            0x2D => (self.registers.cc.n as u8 ^ self.registers.cc.v as u8) != 0, // LBLT
+                            0x2E => (self.registers.cc.z as u8 | (self.registers.cc.n as u8 ^ self.registers.cc.v as u8)) == 0, // LBGT
+                            0x2F => (self.registers.cc.z as u8 | (self.registers.cc.n as u8 ^ self.registers.cc.v as u8)) != 0, // LBLE
+                            _ => unreachable!(),
+                        };
+                        if should_branch {
+                            self.registers.pc = self.registers.pc.wrapping_add(offset as u16);
+                            self.add_cycles(1); // Extra cycle if branch taken
+                        }
+                    },
+
                     _ => {
-                        panic!("Unhandled page 1 opcode: {:02X}", opcode_byte);
+                        panic!(
+                            "Unhandled page 1 opcode: 0x10 0x{:02X} at PC={:04X}\n\
+                             A={:02X} B={:02X} X={:04X} Y={:04X} U={:04X} S={:04X} DP={:02X}\n\
+                             Flags: N={} Z={} V={} C={}",
+                            opcode_byte,
+                            self.registers.pc.wrapping_sub(2), // PC antes de leer el opcode
+                            self.registers.a, self.registers.b,
+                            self.registers.x, self.registers.y,
+                            self.registers.u, self.registers.s,
+                            self.registers.dp,
+                            self.registers.cc.n as u8,
+                            self.registers.cc.z as u8,
+                            self.registers.cc.v as u8,
+                            self.registers.cc.c as u8
+                        );
                     }
                 }
             },
@@ -1990,11 +2215,28 @@ impl Cpu6809 {
                     },
 
                     _ => {
-                        panic!("Unhandled page 2 opcode: {:02X}", opcode_byte);
+                        panic!(
+                            "Unhandled page 2 opcode: 0x11 0x{:02X} at PC={:04X}\n\
+                             A={:02X} B={:02X} X={:04X} Y={:04X} U={:04X} S={:04X} DP={:02X}\n\
+                             Flags: N={} Z={} V={} C={}",
+                            opcode_byte,
+                            self.registers.pc.wrapping_sub(2),
+                            self.registers.a, self.registers.b,
+                            self.registers.x, self.registers.y,
+                            self.registers.u, self.registers.s,
+                            self.registers.dp,
+                            self.registers.cc.n as u8,
+                            self.registers.cc.z as u8,
+                            self.registers.cc.v as u8,
+                            self.registers.cc.c as u8
+                        );
                     }
                 }
             },
-            _ => panic!("Invalid CPU op page: {}", cpu_op_page)
+            _ => panic!(
+                "Invalid CPU op page: {} (opcode byte: 0x{:02X} at PC={:04X})",
+                cpu_op_page, opcode_byte, self.registers.pc.wrapping_sub(1)
+            )
         }
     }
 
@@ -2141,6 +2383,17 @@ impl Cpu6809 {
         }
     }
 
+    // Read effective address for Page 1 opcodes (for ST instructions)
+    fn read_ea16_page1(&mut self, opcode: u8) -> u16 {
+        let addressing_mode = self.get_addressing_mode_for_opcode_page1(opcode);
+        match addressing_mode {
+            AddressingMode::Direct => self.read_direct_ea(),
+            AddressingMode::Indexed => self.read_indexed_ea(),
+            AddressingMode::Extended => self.read_extended_ea(),
+            _ => panic!("Invalid addressing mode for EA read: {:?}", addressing_mode)
+        }
+    }
+
     // Helper functions for condition codes - C++ Original: CalcNegative, CalcZero
     fn calc_negative_8(&self, value: u8) -> bool {
         (value & 0x80) != 0
@@ -2222,8 +2475,13 @@ impl Cpu6809 {
     }
     */
     pub fn read16(&self, address: u16) -> u16 {
-        let high = self.memory_bus.borrow().read(address);
-        let low = self.memory_bus.borrow().read(address.wrapping_add(1));
+        // CRITICAL FIX: Isolate each borrow() to ensure RefCell is released
+        let high = {
+            self.memory_bus.borrow().read(address)
+        };
+        let low = {
+            self.memory_bus.borrow().read(address.wrapping_add(1))
+        };
         combine_to_u16(high, low)
     }
 
@@ -2234,8 +2492,15 @@ impl Cpu6809 {
     pub fn write16(&mut self, address: u16, value: u16) {
         let high = (value >> 8) as u8;
         let low = value as u8;
-        self.memory_bus.borrow_mut().write(address, high);
-        self.memory_bus.borrow_mut().write(address.wrapping_add(1), low);
+        
+        // CRITICAL FIX: Each borrow_mut() must complete and drop before the next one
+        // Isolate each write in its own scope to ensure RefCell is released
+        {
+            self.memory_bus.borrow_mut().write(address, high);
+        } // borrow_mut() dropped here
+        {
+            self.memory_bus.borrow_mut().write(address.wrapping_add(1), low);
+        } // borrow_mut() dropped here
     }
 
     /* C++ Original:
@@ -2547,7 +2812,7 @@ impl Cpu6809 {
                     self.add_cycles(1);
                 }
                 0x07 => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte: 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x08 => { // (+/- 7 bit offset),R
                     let postbyte2 = self.read_pc8();
@@ -2561,7 +2826,7 @@ impl Cpu6809 {
                     self.add_cycles(4);
                 }
                 0x0A => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte: 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x0B => { // (+/- D),R
                     ea = self.register_select(postbyte).wrapping_add(s16_from_u8(self.registers.d() as u8) as u16);
@@ -2579,7 +2844,7 @@ impl Cpu6809 {
                     self.add_cycles(5);
                 }
                 0x0E => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte: 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x0F => { // [address] (Indirect-only)
                     let postbyte2 = self.read_pc8();
@@ -2588,7 +2853,7 @@ impl Cpu6809 {
                     self.add_cycles(2);
                 }
                 _ => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte: 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
             }
         }
@@ -2668,7 +2933,7 @@ impl Cpu6809 {
                     // Note: NO self.add_cycles(1) for LEA instructions
                 }
                 0x07 => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte (LEA): 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x08 => { // (signed 8-bit offset),R
                     let offset = self.read_pc8() as i8;
@@ -2683,7 +2948,7 @@ impl Cpu6809 {
                     // Note: NO self.add_cycles(4) for LEA instructions
                 }
                 0x0A => { // unused
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte (LEA): 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x0B => { // (signed D),R
                     ea = self.register_select(postbyte).wrapping_add(self.registers.d());
@@ -2701,7 +2966,7 @@ impl Cpu6809 {
                     // Note: NO self.add_cycles(5) for LEA instructions
                 }
                 0x0E => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte (LEA): 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
                 0x0F => { // [address] (Indirect-only)
                     let postbyte2 = self.read_pc8();
@@ -2710,7 +2975,7 @@ impl Cpu6809 {
                     // Note: NO self.add_cycles(2) for LEA instructions
                 }
                 _ => {
-                    panic!("Illegal indexed instruction post-byte");
+                    panic!("Illegal indexed instruction post-byte (LEA): 0x{:02X} at PC: 0x{:04X}", postbyte, self.registers.pc.wrapping_sub(1));
                 }
             }
         }
@@ -2763,6 +3028,23 @@ impl Cpu6809 {
         let low = self.read8(self.registers.s);
         self.registers.s = self.registers.s.wrapping_add(1);
         self.registers.pc = combine_to_u16(high, low);
+    }
+
+    // C++ Original: void OpBSR() - Branch to Subroutine (relative addressing)
+    // BSR works like JSR but with 8-bit signed relative offset instead of absolute address
+    fn op_bsr(&mut self) {
+        // Read signed 8-bit offset after opcode
+        let offset = self.read_relative_offset8();
+        
+        // Push return address (current PC) to stack S
+        // C++ Original: Push16(S, PC);
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low byte
+        self.registers.s = self.registers.s.wrapping_sub(1);
+        self.write8(self.registers.s, (self.registers.pc >> 8) as u8);   // High byte
+        
+        // Branch to PC + offset
+        self.registers.pc = self.registers.pc.wrapping_add(offset as u16);
     }
 
     // C++ Original: template <int page, uint8_t opCode> void OpJSR()

@@ -39,12 +39,28 @@ impl BiosRom {
     }
 
     // C++ Original: bool BiosRom::LoadBiosRom(const uint8_t *data, size_t size)
+    // Acepta tanto 4KB (duplica) como 8KB (directo)
     pub fn load_bios_rom(&mut self, data: &[u8]) -> bool {
-        if data.len() != Self::SIZE_BYTES {
-            return false;
+        match data.len() {
+            0x1000 => {
+                // BIOS de 4KB: duplicar en ambas mitades del espacio de 8KB
+                // Primera mitad: 0x0000-0x0FFF
+                self.memory[0..0x1000].copy_from_slice(data);
+                // Segunda mitad: 0x1000-0x1FFF (duplicado)
+                self.memory[0x1000..0x2000].copy_from_slice(data);
+                true
+            }
+            0x2000 => {
+                // BIOS de 8KB: copiar directamente
+                self.memory.copy_from_slice(data);
+                true
+            }
+            _ => {
+                // Tamaño inválido
+                eprintln!("BIOS size mismatch: expected 4096 or 8192 bytes, got {}", data.len());
+                false
+            }
         }
-        self.memory.copy_from_slice(data);
-        true
     }
 
     pub fn load_bios_rom_from_file(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -85,11 +101,11 @@ impl MemoryBusDevice for BiosRom {
         self.read(address)
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: u16, value: u8) {  // Changed back to &mut self
         self.write(address, value);
     }
 
-    fn sync(&mut self, _cycles: Cycles) {
+    fn sync(&mut self, _cycles: Cycles) {  // Changed back to &mut self
         // ROM no necesita sincronización por ciclos
     }
 }
