@@ -332,15 +332,15 @@ impl VectrexEmulator {
     /// Read memory byte
     /// JSVecx Pattern: read8(address)
     #[wasm_bindgen(js_name = read8)]
-    pub fn read8(&self, address: u16) -> u8 {
-        self.emulator.get_memory_bus().borrow().read(address)
+    pub fn read8(&mut self, address: u16) -> u8 {
+        self.emulator.get_memory_bus().read(address)
     }
     
     /// Write memory byte
     /// JSVecx Pattern: write8(address, value)
     #[wasm_bindgen(js_name = write8)]
     pub fn write8(&mut self, address: u16, value: u8) {
-        self.emulator.get_memory_bus().borrow_mut().write(address, value);
+        self.emulator.get_memory_bus().write(address, value);
     }
     
     // === Input Handlers (matching JSVecx key handling) ===
@@ -483,23 +483,19 @@ impl VectrexEmulator {
     
     /// Read byte from memory (for debugging)
     #[wasm_bindgen(js_name = readMemory)]
-    pub fn read_memory(&self, address: u16) -> u8 {
-        self.emulator.get_memory_bus().borrow().read(address)
+    pub fn read_memory(&mut self, address: u16) -> u8 {
+        self.emulator.get_memory_bus().read(address)
     }
     
     /// Execute single instruction (for step debugging)
     #[wasm_bindgen(js_name = step)]
     pub fn step(&mut self) {
-        // CRITICAL FIX: Capture PC/opcode in isolated scope to ensure ALL borrows are dropped
-        // BEFORE execute_instruction() is called (which may panic with active borrows)
-        let (pc, opcode) = {
-            let cpu = self.emulator.get_cpu();
-            let pc = cpu.registers.pc;
-            let opcode = self.emulator.get_memory_bus().borrow().read(pc);
-            (pc, opcode)
-        }; // ALL borrows dropped here
+        // ARCHITECTURE FIX: Direct memory_bus access, no RefCell borrows needed
+        let cpu = self.emulator.get_cpu();
+        let pc = cpu.registers.pc;
+        let opcode = self.emulator.get_memory_bus().read(pc);
         
-        // Store in fields AFTER borrows are released
+        // Store in fields
         self.last_pc = pc;
         self.last_opcode = opcode;
         

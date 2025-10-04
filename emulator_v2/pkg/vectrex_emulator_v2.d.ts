@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export function wasm_init(): void;
 /**
  * Vector structure matching JSVecx vector_t
  * JSVecx Original: function vector_t() { this.x0 = 0; this.y0 = 0; this.x1 = 0; this.y1 = 0; this.color = 0; }
@@ -172,6 +173,10 @@ export class VectrexEmulator {
    */
   step(): void;
   /**
+   * Get last error message (for debugging)
+   */
+  getLastError(): string;
+  /**
    * Get last PC (for debugging panics)
    */
   getLastPC(): number;
@@ -179,6 +184,10 @@ export class VectrexEmulator {
    * Get last opcode (for debugging panics)
    */
   getLastOpcode(): number;
+  /**
+   * Get PC history as JSON string (last N instructions before current)
+   */
+  getPCHistory(): string;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -229,16 +238,19 @@ export interface InitOutput {
   readonly vectrexemulator_getDP: (a: number) => number;
   readonly vectrexemulator_getCC: (a: number) => number;
   readonly vectrexemulator_getTotalCycles: (a: number) => bigint;
-  readonly vectrexemulator_readMemory: (a: number, b: number) => number;
   readonly vectrexemulator_step: (a: number) => void;
+  readonly vectrexemulator_getLastError: (a: number) => [number, number];
   readonly vectrexemulator_getLastPC: (a: number) => number;
   readonly vectrexemulator_getLastOpcode: (a: number) => number;
+  readonly vectrexemulator_getPCHistory: (a: number) => [number, number];
+  readonly vectrexemulator_readMemory: (a: number, b: number) => number;
+  readonly wasm_init: () => void;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_start: () => void;
 }
 

@@ -50,18 +50,7 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-
 let WASM_VECTOR_LEN = 0;
-
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
 
 const cachedTextEncoder = (typeof TextEncoder !== 'undefined' ? new TextEncoder('utf-8') : { encode: () => { throw Error('TextEncoder not available') } } );
 
@@ -114,6 +103,30 @@ function passStringToWasm0(arg, malloc, realloc) {
     }
 
     WASM_VECTOR_LEN = offset;
+    return ptr;
+}
+
+let cachedDataViewMemory0 = null;
+
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
+
+export function wasm_init() {
+    wasm.wasm_init();
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
 
@@ -536,7 +549,7 @@ export class VectrexEmulator {
      * @returns {number}
      */
     readMemory(address) {
-        const ret = wasm.vectrexemulator_readMemory(this.__wbg_ptr, address);
+        const ret = wasm.vectrexemulator_read8(this.__wbg_ptr, address);
         return ret;
     }
     /**
@@ -544,6 +557,22 @@ export class VectrexEmulator {
      */
     step() {
         wasm.vectrexemulator_step(this.__wbg_ptr);
+    }
+    /**
+     * Get last error message (for debugging)
+     * @returns {string}
+     */
+    getLastError() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.vectrexemulator_getLastError(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * Get last PC (for debugging panics)
@@ -560,6 +589,22 @@ export class VectrexEmulator {
     getLastOpcode() {
         const ret = wasm.vectrexemulator_getLastOpcode(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * Get PC history as JSON string (last N instructions before current)
+     * @returns {string}
+     */
+    getPCHistory() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.vectrexemulator_getPCHistory(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
 }
 
@@ -613,6 +658,20 @@ function __wbg_get_imports() {
         const ret = arg0.crypto;
         return ret;
     };
+    imports.wbg.__wbg_error_41f0589870426ea4 = function(arg0) {
+        console.error(arg0);
+    };
+    imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function(arg0, arg1) {
+        let deferred0_0;
+        let deferred0_1;
+        try {
+            deferred0_0 = arg0;
+            deferred0_1 = arg1;
+            console.error(getStringFromWasm0(arg0, arg1));
+        } finally {
+            wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
+        }
+    };
     imports.wbg.__wbg_getRandomValues_b8f5dbd5f3995a9e = function() { return handleError(function (arg0, arg1) {
         arg0.getRandomValues(arg1);
     }, arguments) };
@@ -622,6 +681,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_msCrypto_a61aeb35a24c1329 = function(arg0) {
         const ret = arg0.msCrypto;
+        return ret;
+    };
+    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
+        const ret = new Error();
         return ret;
     };
     imports.wbg.__wbg_newnoargs_a81330f6e05d8aca = function(arg0, arg1) {
@@ -650,6 +713,13 @@ function __wbg_get_imports() {
         const ret = module.require;
         return ret;
     }, arguments) };
+    imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
+        const ret = arg1.stack;
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
     imports.wbg.__wbg_static_accessor_GLOBAL_1f13249cc3acc96d = function() {
         const ret = typeof global === 'undefined' ? null : global;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
@@ -673,6 +743,9 @@ function __wbg_get_imports() {
     imports.wbg.__wbg_versions_c01dfd4722a88165 = function(arg0) {
         const ret = arg0.versions;
         return ret;
+    };
+    imports.wbg.__wbg_warn_07ef1f61c52799fb = function(arg0) {
+        console.warn(arg0);
     };
     imports.wbg.__wbg_wbindgenisfunction_ea72b9d66a0e1705 = function(arg0) {
         const ret = typeof(arg0) === 'function';
@@ -725,6 +798,7 @@ function __wbg_init_memory(imports, memory) {
 function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     __wbg_init.__wbindgen_wasm_module = module;
+    cachedDataViewMemory0 = null;
     cachedUint8ArrayMemory0 = null;
 
 

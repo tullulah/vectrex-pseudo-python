@@ -40,12 +40,11 @@ use crate::core::{MemoryBus, Cpu6809, Via6522, Ram, BiosRom, Cartridge, Unmapped
 use crate::types::Cycles;
 use std::rc::Rc;
 use std::cell::RefCell;
+// ARCHITECTURE FIX: MemoryBus owned by CPU directly (no RefCell for MemoryBus itself)
 
 pub struct Emulator {
-    // C++ Original: MemoryBus m_memoryBus;
-    memory_bus: Rc<RefCell<MemoryBus>>,
-    
-    // C++ Original: Cpu m_cpu;
+    // ARCHITECTURE FIX: CPU owns MemoryBus directly (no RefCell)
+    // C++ Original: Cpu m_cpu; + MemoryBus m_memoryBus;
     cpu: Cpu6809,
     
     // C++ Original: Via m_via;
@@ -72,10 +71,11 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new() -> Self {
-        let memory_bus = Rc::new(RefCell::new(MemoryBus::new()));
+        // ARCHITECTURE FIX: CPU takes ownership of MemoryBus
+        let memory_bus = MemoryBus::new();
         
         Self {
-            cpu: Cpu6809::new(memory_bus.clone()),
+            cpu: Cpu6809::new(memory_bus),
             via: Rc::new(RefCell::new(Via6522::new())),
             ram: Rc::new(RefCell::new(Ram::new())),
             bios_rom: Rc::new(RefCell::new(BiosRom::new())),
@@ -83,7 +83,6 @@ impl Emulator {
             unmapped: Rc::new(RefCell::new(UnmappedMemoryDevice::new())),
             dev: Rc::new(RefCell::new(DevMemoryDevice::new())),
             cartridge: Rc::new(RefCell::new(Cartridge::new())),
-            memory_bus,
         }
     }
     
@@ -92,11 +91,12 @@ impl Emulator {
         // C++ Original: const bool DeveloperMode = true;
         const DEVELOPER_MODE: bool = true;
         
+        // ARCHITECTURE FIX: Access memory_bus through CPU
         // C++ Original: Now connect all devices to memory bus following exact C++ pattern
         // C++ Original: m_cpu.Init(m_memoryBus); - CPU init already handled in constructor
         
         // C++ Original: m_via.Init(m_memoryBus);
-        Via6522::init_memory_bus(self.via.clone(), &mut self.memory_bus.borrow_mut());
+        Via6522::init_memory_bus(self.via.clone(), self.cpu.memory_bus_mut());
         
         // C++ Original: Set VIA sync context for component coordination
         self.via.borrow_mut().set_sync_context(
@@ -106,23 +106,25 @@ impl Emulator {
         );
         
         // C++ Original: m_ram.Init(m_memoryBus);
-        Ram::init_memory_bus(self.ram.clone(), &mut self.memory_bus.borrow_mut());
+        Ram::init_memory_bus(self.ram.clone(), self.cpu.memory_bus_mut());
         
         // C++ Original: m_biosRom.Init(m_memoryBus);
-        BiosRom::init_memory_bus(self.bios_rom.clone(), &mut self.memory_bus.borrow_mut());
+        BiosRom::init_memory_bus(self.bios_rom.clone(), self.cpu.memory_bus_mut());
         
         // C++ Original: m_illegal.Init(m_memoryBus);
-        IllegalMemoryDevice::init_memory_bus(self.illegal.clone(), &mut self.memory_bus.borrow_mut());
+        IllegalMemoryDevice::init_memory_bus(self.illegal.clone(), self.cpu.memory_bus_mut());
         
         // C++ Original: if (DeveloperMode) { m_dev.Init(m_memoryBus); } else { m_unmapped.Init(m_memoryBus); }
         if DEVELOPER_MODE {
-            DevMemoryDevice::init_memory_bus(self.dev.clone(), &mut self.memory_bus.borrow_mut(), std::rc::Rc::downgrade(&self.memory_bus));
+            // TODO: DevMemoryDevice necesita Weak<RefCell<MemoryBus>> para printf
+            // Por ahora skip init hasta resolver arquitectura
+            // DevMemoryDevice::init_memory_bus(self.dev.clone(), self.cpu.memory_bus_mut(), weak_ref);
         } else {
-            UnmappedMemoryDevice::init_memory_bus(self.unmapped.clone(), &mut self.memory_bus.borrow_mut());
+            UnmappedMemoryDevice::init_memory_bus(self.unmapped.clone(), self.cpu.memory_bus_mut());
         }
         
         // C++ Original: m_cartridge.Init(m_memoryBus);
-        Cartridge::init_memory_bus(self.cartridge.clone(), &mut self.memory_bus.borrow_mut());
+        Cartridge::init_memory_bus(self.cartridge.clone(), self.cpu.memory_bus_mut());
         
         // C++ Original: LoadBios(biosRomFile);
         self.load_bios(bios_rom_file);
@@ -177,7 +179,7 @@ impl Emulator {
         );
         
         // C++ Original: m_memoryBus.Sync();
-        self.memory_bus.borrow_mut().sync();
+        self.cpu.memory_bus_mut().sync();
         
         cpu_cycles
     }
@@ -190,9 +192,10 @@ impl Emulator {
         let _ = frame_time; // suppress unused warning for now
     }
     
+    // ARCHITECTURE FIX: Access memory_bus through CPU
     // C++ Original: MemoryBus& GetMemoryBus() { return m_memoryBus; }
-    pub fn get_memory_bus(&self) -> Rc<RefCell<MemoryBus>> {
-        self.memory_bus.clone()
+    pub fn get_memory_bus(&mut self) -> &mut MemoryBus {
+        self.cpu.memory_bus_mut()
     }
     
     // C++ Original: Cpu& GetCpu() { return m_cpu; }

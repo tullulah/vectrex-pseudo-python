@@ -5,8 +5,7 @@ use crate::types::Cycles;
 use crate::core::memory_bus::MemoryBus;
 use crate::core::cpu_helpers::{combine_to_u16, combine_to_s16, s16_from_u8};
 use crate::core::cpu_op_codes::{lookup_cpu_op_runtime, is_opcode_page1, is_opcode_page2, AddressingMode};
-use std::cell::RefCell;
-use std::rc::Rc;
+// ARCHITECTURE FIX: RefCell and Rc no longer needed
 
 // Macro to log errors to browser console in WASM builds
 #[cfg(target_arch = "wasm32")]
@@ -161,7 +160,7 @@ private:
 
 pub struct Cpu6809 {
     pub registers: CpuRegisters,
-    memory_bus: Rc<RefCell<MemoryBus>>,
+    memory_bus: MemoryBus,  // ARCHITECTURE FIX: Direct ownership, no RefCell needed
     
     // C++ Original: Interrupt vectors as static constexpr
     cycles: Cycles,
@@ -187,7 +186,7 @@ const SWI2_VECTOR: u16  = 0xFFF4;
 const SWI3_VECTOR: u16  = 0xFFF2;
 
 impl Cpu6809 {
-    pub fn new(memory_bus: Rc<RefCell<MemoryBus>>) -> Self {
+    pub fn new(memory_bus: MemoryBus) -> Self {  // ARCHITECTURE FIX: Take ownership directly
         Self {
             registers: CpuRegisters::new(),
             memory_bus,
@@ -207,9 +206,13 @@ impl Cpu6809 {
         &mut self.registers
     }
 
-    // C++ Original: Init(MemoryBus& memoryBus) - for testing access
-    pub fn memory_bus(&self) -> &Rc<RefCell<MemoryBus>> {
+    // ARCHITECTURE FIX: Direct access to memory_bus (no RefCell)
+    pub fn memory_bus(&self) -> &MemoryBus {
         &self.memory_bus
+    }
+    
+    pub fn memory_bus_mut(&mut self) -> &mut MemoryBus {
+        &mut self.memory_bus
     }
 
     /* C++ Original:
@@ -246,7 +249,7 @@ impl Cpu6809 {
     */
     pub fn add_cycles(&mut self, cycles: Cycles) {
         self.cycles += cycles;
-        self.memory_bus.borrow().add_sync_cycles(cycles);
+        self.memory_bus.add_sync_cycles(cycles);
     }
 
     pub fn get_cycles(&self) -> Cycles {
@@ -2464,7 +2467,7 @@ impl Cpu6809 {
     }
     */
     pub fn read8(&self, address: u16) -> u8 {
-        self.memory_bus.borrow().read(address)
+        self.memory_bus.read(address)
     }
 
     /* C++ Original:
@@ -2477,16 +2480,16 @@ impl Cpu6809 {
     pub fn read16(&self, address: u16) -> u16 {
         // CRITICAL FIX: Isolate each borrow() to ensure RefCell is released
         let high = {
-            self.memory_bus.borrow().read(address)
+            self.memory_bus.read(address)
         };
         let low = {
-            self.memory_bus.borrow().read(address.wrapping_add(1))
+            self.memory_bus.read(address.wrapping_add(1))
         };
         combine_to_u16(high, low)
     }
 
     pub fn write8(&mut self, address: u16, value: u8) {
-        self.memory_bus.borrow_mut().write(address, value);
+        self.memory_bus.write(address, value);
     }
 
     pub fn write16(&mut self, address: u16, value: u16) {
@@ -2496,10 +2499,10 @@ impl Cpu6809 {
         // CRITICAL FIX: Each borrow_mut() must complete and drop before the next one
         // Isolate each write in its own scope to ensure RefCell is released
         {
-            self.memory_bus.borrow_mut().write(address, high);
+            self.memory_bus.write(address, high);
         } // borrow_mut() dropped here
         {
-            self.memory_bus.borrow_mut().write(address.wrapping_add(1), low);
+            self.memory_bus.write(address.wrapping_add(1), low);
         } // borrow_mut() dropped here
     }
 
@@ -3706,3 +3709,4 @@ impl Cpu6809 {
         }
     }
 }
+
