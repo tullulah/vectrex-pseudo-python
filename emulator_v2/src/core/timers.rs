@@ -14,7 +14,7 @@ impl TimerMode {
     pub fn to_string(&self) -> &'static str {
         match self {
             TimerMode::FreeRunning => "FreeRunning",
-            TimerMode::OneShot => "OneShot", 
+            TimerMode::OneShot => "OneShot",
             TimerMode::PulseCounting => "PulseCounting",
         }
     }
@@ -55,7 +55,11 @@ impl Timer1 {
     /// C++ Original: void SetTimerMode(TimerMode mode)
     pub fn set_timer_mode(&self, mode: TimerMode) {
         // C++ Original: ASSERT_MSG(mode == TimerMode::OneShot, "Only supports one-shot mode for now");
-        assert_eq!(mode, TimerMode::OneShot, "Only supports one-shot mode for now");
+        assert_eq!(
+            mode,
+            TimerMode::OneShot,
+            "Only supports one-shot mode for now"
+        );
     }
 
     /// C++ Original: TimerMode Mode() const
@@ -181,7 +185,11 @@ impl Timer2 {
     /// C++ Original: void SetTimerMode(TimerMode mode)
     pub fn set_timer_mode(&self, mode: TimerMode) {
         // C++ Original: ASSERT_MSG(mode == TimerMode::OneShot, "Only supports one-shot mode for now");
-        assert_eq!(mode, TimerMode::OneShot, "Only supports one-shot mode for now");
+        assert_eq!(
+            mode,
+            TimerMode::OneShot,
+            "Only supports one-shot mode for now"
+        );
     }
 
     /// C++ Original: TimerMode Mode() const

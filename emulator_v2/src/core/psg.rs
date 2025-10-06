@@ -376,7 +376,7 @@ impl EnvelopeGenerator {
         // Simplified envelope shapes - this would need the full lookup table from C++
         // For now, just implement a basic envelope
         let volume_levels = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
-        
+
         if self.curr_shape_index < volume_levels.len() {
             self.value = volume_levels[self.curr_shape_index] as u32;
             self.curr_shape_index += 1;
@@ -438,7 +438,11 @@ impl Psg {
             latched_address: 0,
             registers: [0; 16],
             master_divider: Timer::new(16),
-            tone_generators: [ToneGenerator::new(), ToneGenerator::new(), ToneGenerator::new()],
+            tone_generators: [
+                ToneGenerator::new(),
+                ToneGenerator::new(),
+                ToneGenerator::new(),
+            ],
             noise_generator: NoiseGenerator::new(),
             envelope_generator: EnvelopeGenerator::new(),
             sample: 0.0,
@@ -473,7 +477,7 @@ impl Psg {
     /// C++ Original: void Psg::WriteDA(uint8_t value)
     pub fn write_da(&mut self, value: u8) {
         self.da = value;
-        
+
         // Determine mode from BDIR and BC1
         self.mode = match (self.bdir, self.bc1) {
             (false, false) => PsgMode::Inactive,

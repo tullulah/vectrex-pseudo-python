@@ -3,8 +3,8 @@
 // development purposes.
 
 use crate::core::MemoryBusDevice;
+use std::cell::UnsafeCell;
 use std::rc::Weak;
-use std::cell::RefCell;
 
 // C++ Original: Printf-registers constants - made public for testing
 pub const DEV_PRINTF_PUSH_ARG8: u16 = 0xC100;
@@ -14,8 +14,10 @@ pub const DEV_PRINTF_FORMAT: [u16; 2] = [0xC105, 0xC106];
 
 pub struct DevMemoryDevice {
     // C++ Original: MemoryBus* m_memoryBus{};
-    memory_bus: Option<Weak<RefCell<crate::core::memory_bus::MemoryBus>>>,
-    
+    // NOTA: memory_bus no es usable con UnsafeCell ya que necesita Weak<>
+    // Por ahora dejarlo como None (printf no disponible)
+    memory_bus: Option<Weak<UnsafeCell<crate::core::memory_bus::MemoryBus>>>,
+
     // C++ Original: uint8_t m_opFirstByte{};
     op_first_byte: u8,
 }
@@ -29,22 +31,26 @@ impl DevMemoryDevice {
     }
 
     // Helper method to read null-terminated string from memory
-    fn read_string_from_memory(&self, memory_bus: &crate::core::memory_bus::MemoryBus, mut address: u16) -> String {
+    fn read_string_from_memory(
+        &self,
+        memory_bus: &crate::core::memory_bus::MemoryBus,
+        mut address: u16,
+    ) -> String {
         let mut result = String::new();
         let mut max_len = 256; // Prevent infinite loops
-        
+
         loop {
             if max_len == 0 {
                 result.push_str("...[truncated]");
                 break;
             }
-            
+
             let byte = memory_bus.read(address);
             if byte == 0 {
                 break; // Null terminator
             }
-            
-            // Only add printable ASCII characters 
+
+            // Only add printable ASCII characters
             if byte >= 0x20 && byte < 0x7F {
                 result.push(byte as char);
             } else if byte == 0x0A {
@@ -54,11 +60,11 @@ impl DevMemoryDevice {
             } else {
                 result.push_str(&format!("\\x{:02X}", byte));
             }
-            
+
             address = address.wrapping_add(1);
             max_len -= 1;
         }
-        
+
         result
     }
 }
@@ -68,20 +74,23 @@ impl MemoryBusDevice for DevMemoryDevice {
     fn read(&self, address: u16) -> u8 {
         // C++ Original: ErrorHandler::Undefined("Read from unmapped range at address $%04x\n", address);
         eprintln!("Read from unmapped range at address ${:04X}", address);
-        
+
         // C++ Original: return 0;
         0
     }
-    
+
     // C++ Original: void Write(uint16_t address, uint8_t value) override
     fn write(&mut self, address: u16, value: u8) {
         // C++ Original: if (HandleDevWrite(address, value)) return;
         if self.handle_dev_write(address, value) {
             return;
         }
-        
+
         // C++ Original: ErrorHandler::Undefined("Write to unmappped range of value $%02x at address $%04x\n", value, address);
-        eprintln!("Write to unmapped range of value ${:02X} at address ${:04X}", value, address);
+        eprintln!(
+            "Write to unmapped range of value ${:02X} at address ${:04X}",
+            value, address
+        );
     }
 }
 
@@ -95,57 +104,65 @@ impl DevMemoryDevice {
                 println!("DEV: Push ARG8: ${:02X}", value);
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_PUSH_ARG16[0] => {
                 // C++ Original: m_opFirstByte = value;
                 self.op_first_byte = value;
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_PUSH_ARG16[1] => {
                 // C++ Original: 16-bit value construction and storage
                 let v = (self.op_first_byte as u16) << 8 | (value as u16);
                 println!("DEV: Push ARG16: ${:04X}", v);
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_PUSH_CSTR[0] => {
                 // C++ Original: m_opFirstByte = value;
                 self.op_first_byte = value;
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_PUSH_CSTR[1] => {
                 // C++ Original: String address construction
                 let string_address = (self.op_first_byte as u16) << 8 | (value as u16);
                 println!("DEV: Push CSTR address: ${:04X}", string_address);
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_FORMAT[0] => {
                 // C++ Original: m_opFirstByte = value;
                 self.op_first_byte = value;
                 true
             }
-            
+
             addr if addr == DEV_PRINTF_FORMAT[1] => {
                 // C++ Original: Format string handling and printf execution
                 let format_address = (self.op_first_byte as u16) << 8 | (value as u16);
-                
+
                 // Try to read format string from memory bus if available
                 if let Some(weak_bus) = &self.memory_bus {
                     if let Some(bus_ref) = weak_bus.upgrade() {
-                        let format_string = self.read_string_from_memory(&*bus_ref.borrow(), format_address);
+                        let format_string = unsafe {
+                            self.read_string_from_memory(&*bus_ref.get(), format_address)
+                        };
                         println!("DEV: Printf: {}", format_string);
                     } else {
-                        println!("DEV: Printf format at: ${:04X} (memory bus not available)", format_address);
+                        println!(
+                            "DEV: Printf format at: ${:04X} (memory bus not available)",
+                            format_address
+                        );
                     }
                 } else {
-                    println!("DEV: Printf format at: ${:04X} (memory bus not connected)", format_address);
+                    println!(
+                        "DEV: Printf format at: ${:04X} (memory bus not connected)",
+                        format_address
+                    );
                 }
                 true
             }
-            
+
             _ => false,
         }
     }
@@ -157,15 +174,17 @@ impl DevMemoryDevice {
 // }
 impl DevMemoryDevice {
     pub fn init_memory_bus(
-        self_ref: std::rc::Rc<std::cell::RefCell<Self>>, 
+        self_ref: std::rc::Rc<std::cell::UnsafeCell<Self>>,
         memory_bus: &mut crate::core::memory_bus::MemoryBus,
-        memory_bus_weak: std::rc::Weak<std::cell::RefCell<crate::core::memory_bus::MemoryBus>>
+        memory_bus_weak: std::rc::Weak<std::cell::UnsafeCell<crate::core::memory_bus::MemoryBus>>,
     ) {
-        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
-        
+        use crate::core::{memory_bus::EnableSync, memory_map::MemoryMap};
+
         // Store weak reference to memory bus for printf functionality
-        self_ref.borrow_mut().memory_bus = Some(memory_bus_weak);
-        
+        unsafe {
+            (*self_ref.get()).memory_bus = Some(memory_bus_weak);
+        }
+
         // C++ Original: memoryBus.ConnectDevice(*this, MemoryMap::Unmapped.range, EnableSync::False);
         memory_bus.connect_device(self_ref, MemoryMap::UNMAPPED.range, EnableSync::False);
     }

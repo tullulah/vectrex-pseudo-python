@@ -2,6 +2,7 @@
 //! Port of vectrexy/libs/core/include/core/Line.h
 
 use super::vector2::Vector2;
+use serde::{Deserialize, Serialize};
 
 /* C++ Original:
 struct Line {
@@ -10,7 +11,7 @@ struct Line {
     float brightness = 1.f;
 };
 */
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Line {
     pub p0: Vector2,
     pub p1: Vector2,

@@ -2,7 +2,7 @@
 
 ## 0.1. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
 **ANTES DE CREAR CUALQUIER ARCHIVO O API**:
-1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy_backup/libs/emulator/src/` y `vectrexy_backup/libs/emulator/include/emulator/`
+1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy/libs/emulator/src/` y `vectrexy/libs/emulator/include/emulator/`
 2. **LEER CÓDIGO ORIGINAL**: Examinar el .cpp/.h correspondiente LÍNEA POR LÍNEA
 3. **NO ASUMIR NADA**: No inventar APIs, estructuras, o patrones sin verificar
 4. **DOCUMENTAR ORIGEN**: Cada función/struct debe tener comentario "// C++ Original:" con código fuente
@@ -46,8 +46,8 @@
 - ❌ Meter todo en `cpu6809.rs` cuando existen headers separados
 
 ## PROCESO OBLIGATORIO ANTES DE IMPLEMENTAR:
-1. `ls vectrexy_backup/libs/emulator/src/`
-2. `ls vectrexy_backup/libs/emulator/include/emulator/`
+1. `ls vectrexy/libs/emulator/src/`
+2. `ls vectrexy/libs/emulator/include/emulator/`
 3. `cat ArchivoCorrespondiente.cpp`
 4. `cat ArchivoCorrespondiente.h`
 5. Implementar EXACTAMENTE lo que dice el código original
@@ -58,6 +58,6 @@
 
 ## SI TIENES DUDAS:
 - PREGUNTA al usuario antes de crear algo nuevo
-- VERIFICA en vectrexy_backup/ si existe
+- VERIFICA en vectrexy/ si existe
 - LEE el código C++ original COMPLETO
 - NO ASUMAS que algo "debería existir"

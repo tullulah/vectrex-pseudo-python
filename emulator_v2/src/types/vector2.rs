@@ -1,6 +1,8 @@
 //! Vector2 type for 2D coordinates and math operations
 //! Port of vectrexy/libs/core/include/core/Vector2.h
 
+use serde::{Deserialize, Serialize};
+
 /* C++ Original:
 struct Vector2 {
     float x = 0.f;
@@ -12,7 +14,7 @@ struct Vector2 {
     }
 };
 */
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector2 {
     pub x: f32,
     pub y: f32,
@@ -37,7 +39,7 @@ impl Vector2 {
 // C++ Original: inline Vector2 operator+(const Vector2& lhs, const Vector2& rhs)
 impl std::ops::Add for Vector2 {
     type Output = Self;
-    
+
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
@@ -57,7 +59,7 @@ impl std::ops::AddAssign for Vector2 {
 // C++ Original: inline Vector2 operator-(const Vector2& lhs, const Vector2& rhs)
 impl std::ops::Sub for Vector2 {
     type Output = Self;
-    
+
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x - rhs.x,
@@ -69,7 +71,7 @@ impl std::ops::Sub for Vector2 {
 // C++ Original: inline Vector2 operator*(const Vector2& lhs, float scalar)
 impl std::ops::Mul<f32> for Vector2 {
     type Output = Self;
-    
+
     fn mul(self, scalar: f32) -> Self::Output {
         Self {
             x: self.x * scalar,
@@ -81,7 +83,7 @@ impl std::ops::Mul<f32> for Vector2 {
 // C++ Original: inline Vector2 operator/(const Vector2& lhs, float scalar)
 impl std::ops::Div<f32> for Vector2 {
     type Output = Self;
-    
+
     fn div(self, scalar: f32) -> Self::Output {
         Self {
             x: self.x / scalar,

@@ -1399,7 +1399,7 @@ A continuación te dejo:
 ## 26. Emulator V2 Status (2025-01-20)
 
 **REGLA CRÍTICA**: Port 1:1 desde Vectrexy original
-- **Referencia**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy_backup\libs\emulator\`
+- **Referencia**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\emulator\`
 - **Verificación obligatoria**: Leer .cpp/.h correspondiente ANTES de implementar
 - **Comentarios mandatorios**: `// C++ Original:` con código fuente real
 

@@ -1,0 +1,37 @@
+﻿{
+  "cycles": 150,
+  "cpu": {
+    "pc": 51230,
+    "a": 170,
+    "b": 187,
+    "x": 4660,
+    "y": 22136,
+    "u": 0,
+    "s": 53247,
+    "dp": 0,
+    "cc": {
+      "c": false,
+      "v": false,
+      "z": true,
+      "n": false,
+      "i": true,
+      "h": false,
+      "f": true,
+      "e": false
+    }
+  },
+  "via": {
+    "ifr": 96,
+    "ier": 0,
+    "timer1_counter": 0,
+    "timer2_counter": 0,
+    "port_a": 0,
+    "port_b": 128,
+    "shift_register": 0
+  },
+  "vectors": {
+    "count": 0,
+    "lines": []
+  },
+  "audio_samples": 0
+}

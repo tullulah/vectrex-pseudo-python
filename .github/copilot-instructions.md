@@ -16,7 +16,7 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 
 ## 0.2. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
 **ANTES DE CREAR CUALQUIER ARCHIVO O API**:
-1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy_backup/libs/emulator/src/` y `vectrexy_backup/libs/emulator/include/emulator/`
+1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy/libs/emulator/src/` y `vectrexy/libs/emulator/include/emulator/`
 2. **LEER CÓDIGO ORIGINAL**: Examinar el .cpp/.h correspondiente LÍNEA POR LÍNEA
 3. **NO ASUMIR NADA**: No inventar APIs, estructuras, o patrones sin verificar
 4. **DOCUMENTAR ORIGEN**: Cada función/struct debe tener comentario "// C++ Original:" con código fuente
@@ -30,7 +30,7 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - ❌ Tests sintéticos sin verificar APIs reales
 
 ### Proceso Obligatorio:
-1. `ls vectrexy_backup/libs/emulator/src/` 
+1. `ls vectrexy/libs/emulator/src/` 
 2. `cat ArchiveCorrespondiente.cpp` 
 3. `cat ArchiveCorrespondiente.h`
 4. Implementar EXACTAMENTE lo que dice el código original
@@ -198,8 +198,8 @@ fn test_[opcode]_[mode]_0x[hexcode]() {  // Nombre con código hex
 
 ## 7.1. emulator_v2 - Port 1:1 desde Vectrexy
 - **REGLA CRÍTICA**: NUNCA inventar implementación propia. TODO debe ser port línea-por-línea desde Vectrexy C++.
-- **Referencia obligatoria**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy_backup\libs\emulator\` (archivos .h/.cpp)
-- **IMPORTANTE**: Usar `vectrexy_backup` NO `vectrexy` - la carpeta `vectrexy` puede haber sido modificada por nosotros.
+- **Referencia obligatoria**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\emulator\` (archivos .h/.cpp)
+- **IMPORTANTE**: Usar `vectrexy` NO `vectrexy` - la carpeta `vectrexy` puede haber sido modificada por nosotros.
 - **Formato mandatorio**: Cada método/función debe incluir comentario `// C++ Original:` con código fuente real.
 - **Verificación**: Antes de implementar, leer el archivo C++ correspondiente para entender comportamiento exacto.
 - **Constantes**: Usar valores exactos del original (ej: RampUpDelay=5, VelocityXDelay=6, LineDrawScale=0.85f).

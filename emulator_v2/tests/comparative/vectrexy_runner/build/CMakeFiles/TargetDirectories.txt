@@ -1,0 +1,3 @@
+C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner/build/CMakeFiles/vectrexy_runner.dir
+C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner/build/CMakeFiles/ZERO_CHECK.dir

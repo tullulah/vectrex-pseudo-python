@@ -1,0 +1,10 @@
+^C:\USERS\DANIELFERRERGUERRERO\SOURCE\REPOS\PSEUDO-PYTHON\EMULATOR_V2\TESTS\COMPARATIVE\VECTREXY_EMULATOR_BUILD\BUILD\CMAKEFILES\DB39E2576B18AB835285B7A351844E27\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build -BC:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/vectrexy_emulator_only.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -2,7 +2,7 @@
 //! Port of vectrexy/libs/emulator/include/emulator/MemoryBus.h
 
 use crate::types::Cycles;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, UnsafeCell}; // UnsafeCell para evitar RefCell panic
 use std::rc::Rc;
 
 // C++ Original: using MemoryRange = std::pair<uint16_t, uint16_t>;
@@ -17,10 +17,11 @@ struct IMemoryBusDevice {
 */
 pub trait MemoryBusDevice {
     fn read(&self, address: u16) -> u8;
-    fn write(&mut self, address: u16, value: u8);  // Back to &mut self
-    
+    fn write(&mut self, address: u16, value: u8);
+
     // C++ Original: virtual void Sync(cycles_t cycles) { (void)cycles; }
-    fn sync(&mut self, _cycles: Cycles) {  // Back to &mut self
+    // 1:1 Port: Only takes cycles, devices get context from their stored state (like Via::m_syncContext)
+    fn sync(&mut self, _cycles: Cycles) {
         // Default implementation does nothing
     }
 }
@@ -35,14 +36,15 @@ pub enum EnableSync {
 // C++ Original: struct DeviceInfo in MemoryBus private section
 struct DeviceInfo {
     // C++ Original: IMemoryBusDevice* device = nullptr;
-    device: Rc<RefCell<dyn MemoryBusDevice>>, // Use shared reference like C++ pointer
-    
+    // UNSAFE FIX: Use UnsafeCell to avoid RefCell borrow panic
+    device: Rc<UnsafeCell<dyn MemoryBusDevice>>,
+
     // C++ Original: MemoryRange memoryRange;
     memory_range: MemoryRange,
-    
+
     // C++ Original: bool syncEnabled = false;
     sync_enabled: bool,
-    
+
     // C++ Original: mutable cycles_t syncCycles = 0;
     sync_cycles: Cell<Cycles>,
 }
@@ -63,7 +65,7 @@ public:
 pub struct MemoryBus {
     // C++ Original: std::vector<DeviceInfo> m_devices;
     device_infos: Vec<DeviceInfo>,
-    
+
     // C++ Original: OnReadCallback m_onReadCallback; OnWriteCallback m_onWriteCallback;
     on_read_callback: Option<Box<dyn Fn(u16, u8)>>,
     on_write_callback: Option<Box<dyn Fn(u16, u8)>>,
@@ -88,7 +90,12 @@ impl MemoryBus {
                   });
     }
     */
-    pub fn connect_device(&mut self, device: Rc<RefCell<dyn MemoryBusDevice>>, range: MemoryRange, enable_sync: EnableSync) {
+    pub fn connect_device(
+        &mut self,
+        device: Rc<UnsafeCell<dyn MemoryBusDevice>>,
+        range: MemoryRange,
+        enable_sync: EnableSync,
+    ) {
         self.device_infos.push(DeviceInfo {
             device,
             memory_range: range,
@@ -97,7 +104,8 @@ impl MemoryBus {
         });
 
         // Sort by first address in range (equivalent to C++ sort)
-        self.device_infos.sort_by(|a, b| a.memory_range.0.cmp(&b.memory_range.0));
+        self.device_infos
+            .sort_by(|a, b| a.memory_range.0.cmp(&b.memory_range.0));
     }
 
     /* C++ Original:
@@ -106,9 +114,9 @@ impl MemoryBus {
     void RegisterCallbacks(OnReadCallback onReadCallback, OnWriteCallback onWriteCallback);
     */
     pub fn register_callbacks(
-        &mut self, 
-        on_read: Option<Box<dyn Fn(u16, u8)>>, 
-        on_write: Option<Box<dyn Fn(u16, u8)>>
+        &mut self,
+        on_read: Option<Box<dyn Fn(u16, u8)>>,
+        on_write: Option<Box<dyn Fn(u16, u8)>>,
     ) {
         self.on_read_callback = on_read;
         self.on_write_callback = on_write;
@@ -129,12 +137,14 @@ impl MemoryBus {
     */
     pub fn read(&self, address: u16) -> u8 {
         let device_info = self.find_device_info(address);
-        
-        // REMOVED: sync_device call here causes RefCell conflict
-        // Sync must be done externally before read() is called
-        // self.sync_device(device_info);
 
-        let value = device_info.device.borrow().read(address);
+        // C++ Original: SyncDevice(deviceInfo) is called BEFORE reading in Vectrexy
+        // 1:1 Port: Always sync before reading (devices get context from stored state)
+        self.sync_device_for_read(device_info);
+
+        // UNSAFE FIX: Use UnsafeCell to get mutable access without RefCell
+        // SAFETY: We control all access through MemoryBus, no concurrent mutation
+        let value = unsafe { (*device_info.device.get()).read(address) };
 
         if let Some(callback) = &self.on_read_callback {
             callback(address, value);
@@ -154,15 +164,18 @@ impl MemoryBus {
         deviceInfo.device->Write(address, value);
     }
     */
-    pub fn write(&mut self, address: u16, value: u8) {  // CRITICAL FIX: Changed to &mut self
+    pub fn write(&mut self, address: u16, value: u8) {
         if let Some(callback) = &self.on_write_callback {
             callback(address, value);
         }
 
         let device_info = self.find_device_info(address);
-        
-        // CRITICAL FIX: With &mut self, we can safely borrow_mut() without conflicts
-        device_info.device.borrow_mut().write(address, value);
+
+        // UNSAFE FIX: Use UnsafeCell to get mutable access without RefCell panic
+        // SAFETY: We control all access through MemoryBus, no concurrent mutation possible
+        unsafe {
+            (*device_info.device.get()).write(address, value);
+        }
     }
 
     /* C++ Original:
@@ -173,7 +186,8 @@ impl MemoryBus {
     */
     pub fn read_raw(&self, address: u16) -> u8 {
         let device_info = self.find_device_info(address);
-        device_info.device.borrow().read(address)
+        // UNSAFE FIX: Use UnsafeCell
+        unsafe { (*device_info.device.get()).read(address) }
     }
 
     /* C++ Original:
@@ -215,12 +229,15 @@ impl MemoryBus {
         }
     }
     */
+    // 1:1 Port: No render_context parameter - devices get context from their stored state
     pub fn sync(&mut self) {
-        // We need to sync all devices. Since we're using RefCell, we can access them mutably
+        // UNSAFE FIX: Use UnsafeCell for device access
         for device_info in &self.device_infos {
             let cycles = device_info.sync_cycles.get();
             if cycles > 0 {
-                device_info.device.borrow_mut().sync(cycles);
+                unsafe {
+                    (*device_info.device.get()).sync(cycles);
+                }
                 device_info.sync_cycles.set(0);
             }
         }
@@ -248,7 +265,7 @@ impl MemoryBus {
                 }
             }
         }
-        
+
         // C++ uses ErrorHandler::Undefined, we'll panic for now
         panic!("Unmapped address: ${:04X}", address);
     }
@@ -261,12 +278,16 @@ impl MemoryBus {
         }
     }
     */
-    fn sync_device(&self, device_info: &DeviceInfo) {
+    // C++ Original: SyncDevice called during Read() to sync cycles before reading device
+    // 1:1 Port: Devices get context from their stored state (Via::m_syncContext), not passed as parameter
+    fn sync_device_for_read(&self, device_info: &DeviceInfo) {
         let cycles = device_info.sync_cycles.get();
         if cycles > 0 {
-            // CRITICAL: Drop the borrow_mut immediately after calling sync
-            // to avoid "already borrowed" panic when read() is called next
-            device_info.device.borrow_mut().sync(cycles);
+            // UNSAFE FIX: Use UnsafeCell
+            unsafe {
+                (*device_info.device.get()).sync(cycles);
+            }
+            // C++ Original: deviceInfo.syncCycles = 0; (clears after sync)
             device_info.sync_cycles.set(0);
         }
     }

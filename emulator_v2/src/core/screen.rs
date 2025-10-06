@@ -3,7 +3,7 @@
 
 use crate::core::delayed_value_store::DelayedValueStore;
 use crate::core::engine_types::RenderContext;
-use crate::types::{Vector2, Line, magnitude, normalized};
+use crate::types::{magnitude, normalized, Line, Vector2};
 
 /// C++ Original: enum class RampPhase { RampOff, RampUp, RampOn, RampDown }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,7 +115,10 @@ impl Screen {
         }
 
         let last_pos = self.pos;
-        let curr_dir = normalized(Vector2::new(*self.velocity_x.value(), *self.velocity_y.value()));
+        let curr_dir = normalized(Vector2::new(
+            *self.velocity_x.value(),
+            *self.velocity_y.value(),
+        ));
 
         // Move beam while ramp is on or its way down
         match self.ramp_phase {
@@ -132,14 +135,14 @@ impl Screen {
 
         // We might draw even when integrators are disabled (e.g. drawing dots)
         let drawing_enabled = !self.blank && (self.brightness > 0.0 && self.brightness <= 128.0);
-        
+
         if drawing_enabled {
-            if self.last_drawing_enabled 
-                && magnitude(self.last_dir) > 0.0 
+            if self.last_drawing_enabled
+                && magnitude(self.last_dir) > 0.0
                 && self.last_dir == curr_dir
                 && !render_context.lines.is_empty()
             {
-                // Extend the last line - update the end point  
+                // Extend the last line - update the end point
                 if let Some(last_line) = render_context.lines.last_mut() {
                     last_line.p1 = self.pos;
                 }
@@ -147,14 +150,14 @@ impl Screen {
                 // Lerp between the linear brightness value and an ease out curve based on the user-set
                 // brightness curve value.
                 let mut b = self.brightness / 128.0;
-                
+
                 // C++ Original: auto easeOut = [](float v) { return 1.f - powf(1.f - v, 5); };
                 let ease_out_b = 1.0 - (1.0 - b).powf(5.0);
-                
+
                 // C++ Original: auto lerp = [](float a, float b, float t) { return a + t * (b - a); };
                 b = b + self.brightness_curve * (ease_out_b - b);
-                
-                // C++ Original: Create new Line with Vector2 p0, p1, brightness 
+
+                // C++ Original: Create new Line with Vector2 p0, p1, brightness
                 render_context.lines.push(Line {
                     p0: last_pos,
                     p1: self.pos,

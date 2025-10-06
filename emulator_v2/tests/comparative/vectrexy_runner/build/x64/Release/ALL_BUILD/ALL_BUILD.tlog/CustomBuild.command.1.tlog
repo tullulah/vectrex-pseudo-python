@@ -1,0 +1,10 @@
+^C:\USERS\DANIELFERRERGUERRERO\SOURCE\REPOS\PSEUDO-PYTHON\EMULATOR_V2\TESTS\COMPARATIVE\VECTREXY_RUNNER\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner -BC:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner/build --check-stamp-file C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_runner/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

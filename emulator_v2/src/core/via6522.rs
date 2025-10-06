@@ -1,17 +1,26 @@
 //! VIA 6522 Versatile Interface Adapter implementation
 //! Port of vectrexy/libs/emulator/include/emulator/Via.h and src/Via.cpp
 
+use crate::core::engine_types::{AudioContext, Input, RenderContext};
+use crate::core::{
+    psg::Psg,
+    screen::Screen,
+    shift_register::{ShiftRegister, ShiftRegisterMode},
+    MemoryBusDevice,
+};
 use crate::types::Cycles;
-use crate::core::engine_types::{RenderContext, Input, AudioContext};
-use crate::core::{MemoryBusDevice, screen::Screen, psg::Psg, shift_register::{ShiftRegister, ShiftRegisterMode}};
 
 // C++ Original: struct SyncContext (simplified for Rust ownership)
+// 1:1 Port: Use raw pointers like C++ to store temporary references during instruction execution
 #[derive(Debug)]
 pub struct SyncContext {
-    // Stored as owned values for Rust compatibility
-    pub input_data: Input,
-    pub render_context_data: RenderContext,  
-    pub audio_context_data: AudioContext,
+    // C++ Original: const Input* input{};
+    // C++ Original: RenderContext* renderContext{};
+    // C++ Original: AudioContext* audioContext{};
+    // Rust: Use raw pointers to match C++ semantics - only valid during instruction execution
+    pub input: *const Input,
+    pub render_context: *mut RenderContext,
+    pub audio_context: *mut AudioContext,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -47,7 +56,7 @@ pub struct Timer1 {
     // C++ Original: Timer1 from Timers.h
     latch_low: u8,
     latch_high: u8,
-    counter: u16,
+    pub(crate) counter: u16,  // Accessible within via6522 module for direct read
     interrupt_flag: bool,
     pb7_flag: bool,
     pb7_signal_low: bool,
@@ -143,11 +152,25 @@ impl Timer1 {
     */
     pub fn update(&mut self, cycles: Cycles) {
         let expired = cycles >= (self.counter as Cycles);
-        self.counter = self.counter.saturating_sub(cycles as u16);
+        let counter_before = self.counter;
+        // C++ Original: m_counter -= checked_static_cast<uint16_t>(cycles);
+        // CRITICAL: Must use wrapping_sub (NOT saturating_sub) to match C++ underflow behavior
+        // When timer expires, C++ wraps around (10 - 20 = 0xFFF6), Rust saturating_sub would stop at 0
+        self.counter = self.counter.wrapping_sub(cycles as u16);
         if expired {
             self.interrupt_flag = true;
             if self.pb7_flag {
                 self.pb7_signal_low = false;
+            }
+            // DEBUG: Log Timer1 expiration
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                static TIMER1_EXPIRE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let count = TIMER1_EXPIRE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count < 5 {
+                    eprintln!("[TIMER1 EXPIRE] counter_before=0x{:04x}, cycles={}, counter_after=0x{:04x}, interrupt_flag=true",
+                        counter_before, cycles, self.counter);
+                }
             }
         }
     }
@@ -181,7 +204,7 @@ impl Timer1 {
 pub struct Timer2 {
     // C++ Original: Timer2 from Timers.h - Note: Timer2 has no high-order latch
     latch_low: u8, // C++ Original: uint8_t m_latchLow = 0; // Note: Timer2 has no high-order latch
-    counter: u16,  // C++ Original: uint16_t m_counter = 0;
+    pub(crate) counter: u16,  // Accessible within via6522 module for direct read
     interrupt_flag: bool, // C++ Original: mutable bool m_interruptFlag = false;
 }
 
@@ -243,9 +266,22 @@ impl Timer2 {
     */
     pub fn update(&mut self, cycles: Cycles) {
         let expired = cycles >= (self.counter as Cycles);
-        self.counter = self.counter.saturating_sub(cycles as u16);
+        let counter_before = self.counter;
+        // C++ Original: m_counter -= checked_static_cast<uint16_t>(cycles);
+        // CRITICAL: Must use wrapping_sub (NOT saturating_sub) to match C++ underflow behavior
+        self.counter = self.counter.wrapping_sub(cycles as u16);
         if expired {
             self.interrupt_flag = true;
+            // DEBUG: Log Timer2 expiration
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                static TIMER2_EXPIRE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let count = TIMER2_EXPIRE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count < 5 {
+                    eprintln!("[TIMER2 EXPIRE] counter_before=0x{:04x}, cycles={}, counter_after=0x{:04x}, interrupt_flag=true",
+                        counter_before, cycles, self.counter);
+                }
+            }
         }
     }
 
@@ -270,8 +306,6 @@ impl Timer2 {
         self.interrupt_flag
     }
 }
-
-
 
 // C++ Original: VIA register addresses from Via.cpp
 const PORT_B: u16 = 0x0;
@@ -443,6 +477,18 @@ impl Via6522 {
             result |= IF_IRQ_ENABLED;
         }
 
+        // DEBUG: Log IFR reads when Timer2 flag is checked
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            static IFR_READ_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let count = IFR_READ_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count < 10 || (self.timer2.interrupt_flag() && count < 100) {
+                eprintln!("[VIA IFR] timer1.flag={}, timer2.flag={}, shift.flag={}, ca1.flag={}, result=0x{:02x}",
+                    self.timer1.interrupt_flag(), self.timer2.interrupt_flag(), 
+                    self.shift_register.interrupt_flag(), self.ca1_interrupt_flag, result);
+            }
+        }
+
         result
     }
 
@@ -477,14 +523,18 @@ impl MemoryBusDevice for Via6522 {
     */
     fn read(&self, address: u16) -> u8 {
         let index = address & 0x0F; // VIA registers are 4-bit addressed
-        
+
         match index {
             PORT_B => {
                 let mut result = self.port_b;
 
                 // Set comparator bit to port A (DAC) value < joystick POT value
                 let port_a_signed = self.port_a as i8;
-                Self::set_bits(&mut result, PORT_B_COMPARATOR, port_a_signed < self.joystick_pot);
+                Self::set_bits(
+                    &mut result,
+                    PORT_B_COMPARATOR,
+                    port_a_signed < self.joystick_pot,
+                );
 
                 Self::set_bits(&mut result, PORT_B_SOUND_BC1, self.psg.bc1());
                 Self::set_bits(&mut result, PORT_B_SOUND_BDIR, self.psg.bdir());
@@ -497,8 +547,11 @@ impl MemoryBusDevice for Via6522 {
                 let mut result = self.port_a;
 
                 // Digital input
-                if !Self::test_bits(self.port_b, PORT_B_SOUND_BDIR) && Self::test_bits(self.port_b, PORT_B_SOUND_BC1) {
-                    if self.data_dir_a == 0 { // Input mode
+                if !Self::test_bits(self.port_b, PORT_B_SOUND_BDIR)
+                    && Self::test_bits(self.port_b, PORT_B_SOUND_BC1)
+                {
+                    if self.data_dir_a == 0 {
+                        // Input mode
                         result = self.joystick_button_state;
                     }
                 }
@@ -515,7 +568,7 @@ impl MemoryBusDevice for Via6522 {
             TIMER1_LATCH_LOW => self.timer1.read_latch_low(),
             TIMER1_LATCH_HIGH => self.timer1.read_latch_high(),
             TIMER2_LOW => {
-                // Note: This should clear interrupt flag but we're in read() 
+                // Note: This should clear interrupt flag but we're in read()
                 (self.timer2.counter & 0xFF) as u8
             }
             TIMER2_HIGH => self.timer2.read_counter_high(),
@@ -524,8 +577,16 @@ impl MemoryBusDevice for Via6522 {
                 let mut aux_cntl = 0u8;
                 // C++ Original: SetBits(auxCntl, 0b110 << AuxCntl::ShiftRegisterModeShift, true); //@HACK
                 aux_cntl |= 0b110 << 2; // ShiftRegisterModeShift = 2
-                Self::set_bits(&mut aux_cntl, 0x40, self.timer1.mode() == TimerMode::FreeRunning); // Timer1FreeRunning
-                Self::set_bits(&mut aux_cntl, 0x20, self.timer2.mode() == TimerMode::PulseCounting); // Timer2PulseCounting  
+                Self::set_bits(
+                    &mut aux_cntl,
+                    0x40,
+                    self.timer1.mode() == TimerMode::FreeRunning,
+                ); // Timer1FreeRunning
+                Self::set_bits(
+                    &mut aux_cntl,
+                    0x20,
+                    self.timer2.mode() == TimerMode::PulseCounting,
+                ); // Timer2PulseCounting
                 Self::set_bits(&mut aux_cntl, 0x80, self.timer1.pb7_flag()); // PB7Flag
                 aux_cntl
             }
@@ -537,11 +598,12 @@ impl MemoryBusDevice for Via6522 {
                 // case Register::PortANoHandshake:
                 //     ErrorHandler::Unsupported("A without handshake not implemented yet\n");
                 //     break;
-                // No hace panic - simplemente devuelve 0 y loguea warning
-                #[cfg(target_arch = "wasm32")]
-                web_sys::console::warn_1(&format!("VIA: Port A without handshake not implemented yet (address {:04X})", address).into());
-                #[cfg(not(target_arch = "wasm32"))]
-                eprintln!("VIA: Port A without handshake not implemented yet (address {:04X})", address);
+                // No hace panic - simplemente devuelve 0
+                // Warnings silenciados - esta funcionalidad no se usa en práctica
+                // #[cfg(target_arch = "wasm32")]
+                // web_sys::console::warn_1(&format!("VIA: Port A without handshake not implemented yet (address {:04X})", address).into());
+                // #[cfg(not(target_arch = "wasm32"))]
+                // eprintln!("VIA: Port A without handshake not implemented yet (address {:04X})", address);
                 0
             }
             _ => {
@@ -560,9 +622,10 @@ impl MemoryBusDevice for Via6522 {
         }
     }
     */
-    fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
+    fn write(&mut self, address: u16, value: u8) {
+        // Back to &mut self
         let index = address & 0x0F;
-        
+
         match index {
             PORT_B => {
                 self.port_b = value;
@@ -571,7 +634,7 @@ impl MemoryBusDevice for Via6522 {
             }
             PORT_A => {
                 self.ca1_interrupt_flag = false; // Cleared by read/write of Port A
-                
+
                 // Port A is connected directly to the DAC
                 self.port_a = value;
                 if self.data_dir_a == 0xFF {
@@ -610,7 +673,8 @@ impl MemoryBusDevice for Via6522 {
             }
             AUX_CNTL => {
                 // C++ Original: complex aux control register handling
-                let shift_mode = match Self::read_bits_with_shift(value, 0x1C, 2) { // ShiftRegisterModeMask, Shift
+                let shift_mode = match Self::read_bits_with_shift(value, 0x1C, 2) {
+                    // ShiftRegisterModeMask, Shift
                     0 => ShiftRegisterMode::Disabled,
                     0b110 => ShiftRegisterMode::ShiftOutUnder02,
                     _ => {
@@ -622,13 +686,13 @@ impl MemoryBusDevice for Via6522 {
 
                 // Timer modes - C++ original only supports OneShot
                 if !Self::test_bits(value, 0x40) { // Timer1FreeRunning
-                    // OneShot mode - supported
+                     // OneShot mode - supported
                 } else {
                     println!("t1 assumed always on one-shot mode");
                 }
 
-                if !Self::test_bits(value, 0x20) { // Timer2PulseCounting  
-                    // OneShot mode - supported
+                if !Self::test_bits(value, 0x20) { // Timer2PulseCounting
+                     // OneShot mode - supported
                 } else {
                     println!("t2 assumed always on one-shot mode");
                 }
@@ -649,7 +713,8 @@ impl MemoryBusDevice for Via6522 {
                 self.periph_cntl = value;
                 if self.shift_register.mode() == ShiftRegisterMode::Disabled {
                     // C++ Original: IsBlankEnabled check
-                    let blank_enabled = Self::read_bits_with_shift(self.periph_cntl, 0xE0, 5) == 0b110;
+                    let blank_enabled =
+                        Self::read_bits_with_shift(self.periph_cntl, 0xE0, 5) == 0b110;
                     self.screen.set_blank_enabled(blank_enabled);
                 }
             }
@@ -673,12 +738,25 @@ impl MemoryBusDevice for Via6522 {
                 // When bit 7 = 1 : Each 1 in a bit position enables that bit.
                 let set_clear = Self::test_bits(value, IE_SET_CLEAR_CONTROL);
                 let mask = value & 0x7F;
-                
+
                 if set_clear {
                     self.interrupt_enable |= mask; // Enable bits
                 } else {
                     self.interrupt_enable &= !mask; // Clear bits
                 }
+            }
+            PORT_A_NO_HANDSHAKE => {
+                // C++ Original (JSVecx): case 0xf: this.via_ora = data; this.snd_update(); this.alg_xsh = data ^ 0x80;
+                // Port A Output Register - usado para DAC y control de sonido
+                self.port_a = value;
+
+                // Actualizar integradores (incluyendo X-axis DAC)
+                // Esto es CRÍTICO para que se vean vectores - el Port A sin handshake
+                // es la escritura rápida al DAC que alimenta el eje X del CRT
+                self.update_integrators();
+
+                // El PSG también puede estar conectado si MUX está deshabilitado
+                self.update_psg();
             }
             _ => {
                 panic!("Invalid VIA register address: {:04X}", address);
@@ -688,12 +766,17 @@ impl MemoryBusDevice for Via6522 {
 
     /* C++ Original:
     void Sync(cycles_t cycles) override {
-        DoSync(cycles, input, renderContext, audioContext);
+        DoSync(cycles, *m_syncContext.input, *m_syncContext.renderContext, *m_syncContext.audioContext);
     }
     */
-    fn sync(&mut self, cycles: Cycles) {  // Back to &mut self
-        // Simplified sync - in full implementation this would take input/render/audio contexts
-        self.do_sync(cycles);
+    // 1:1 Port: Uses stored sync_context pointers (set by SetSyncContext before instruction)
+    fn sync(&mut self, cycles: Cycles) {
+        if let Some(ctx) = &self.sync_context {
+            // SAFETY: Pointers are valid during instruction execution (set by set_sync_context)
+            unsafe {
+                self.do_sync(cycles, &mut *ctx.render_context);
+            }
+        }
     }
 }
 
@@ -717,20 +800,24 @@ impl Via6522 {
         let mux_enabled = !Self::test_bits(self.port_b, PORT_B_MUX_DISABLED);
 
         if mux_enabled {
-            let mux_sel = Self::read_bits_with_shift(self.port_b, PORT_B_MUX_SEL_MASK, PORT_B_MUX_SEL_SHIFT);
+            let mux_sel =
+                Self::read_bits_with_shift(self.port_b, PORT_B_MUX_SEL_MASK, PORT_B_MUX_SEL_SHIFT);
             match mux_sel {
-                0 => { // Y-axis integrator
+                0 => {
+                    // Y-axis integrator
                     self.screen.set_integrator_y(self.port_a as i8);
                 }
-                1 => { // X,Y Axis integrator offset
+                1 => {
+                    // X,Y Axis integrator offset
                     self.screen.set_integrator_xy_offset(self.port_a as i8);
                 }
-                2 => { // Z Axis (Vector Brightness) level
+                2 => {
+                    // Z Axis (Vector Brightness) level
                     self.screen.set_brightness(self.port_a);
                 }
                 3 => { // Connected to sound output line via divider network
-                    // C++ Original: m_directAudioSamples.Add(static_cast<int8_t>(m_portA) / 128.f);
-                    // Simplified for now
+                     // C++ Original: m_directAudioSamples.Add(static_cast<int8_t>(m_portA) / 128.f);
+                     // Simplified for now
                 }
                 _ => {
                     panic!("Invalid MUX selection: {}", mux_sel);
@@ -756,8 +843,10 @@ impl Via6522 {
         let mux_enabled = !Self::test_bits(self.port_b, PORT_B_MUX_DISABLED);
 
         if !mux_enabled {
-            self.psg.set_bc1(Self::test_bits(self.port_b, PORT_B_SOUND_BC1));
-            self.psg.set_bdir(Self::test_bits(self.port_b, PORT_B_SOUND_BDIR));
+            self.psg
+                .set_bc1(Self::test_bits(self.port_b, PORT_B_SOUND_BC1));
+            self.psg
+                .set_bdir(Self::test_bits(self.port_b, PORT_B_SOUND_BDIR));
             self.psg.write_da(self.port_a);
         }
     }
@@ -766,23 +855,22 @@ impl Via6522 {
     void DoSync(cycles_t cycles, const Input& input, RenderContext& renderContext, AudioContext& audioContext) {
         // Update cached input state
         m_joystickButtonState = input.ButtonStateMask();
-        
+
         // Analog input: update POT value if MUX is enabled
         const bool muxEnabled = !TestBits(m_portB, PortB::MuxDisabled);
         if (muxEnabled) {
             uint8_t muxSel = ReadBitsWithShift(m_portB, PortB::MuxSelMask, PortB::MuxSelShift);
             m_joystickPot = input.AnalogStateMask(muxSel);
         }
-        
+
         // CA1 and FIRQ handling
         // Audio update
         // Timer updates in cycle-accurate loop
     }
     */
-    fn do_sync(&mut self, cycles: Cycles) {
-        // Simplified DoSync without input/render/audio contexts
-        // In full implementation, this would update input state, handle audio, etc.
-
+    // C++ Original: void DoSync(cycles_t cycles, const Input& input, RenderContext& renderContext, AudioContext& audioContext)
+    // Simplified version taking only render_context - matches Vectrexy architecture
+    fn do_sync(&mut self, cycles: Cycles, render_context: &mut RenderContext) {
         // Update timers and shift register cycle by cycle for accuracy
         let mut cycles_left = cycles;
         while cycles_left > 0 {
@@ -792,30 +880,37 @@ impl Via6522 {
 
             // Shift register's CB2 line drives /BLANK
             if self.shift_register.mode() == ShiftRegisterMode::ShiftOutUnder02 {
-                self.screen.set_blank_enabled(self.shift_register.cb2_active());
+                self.screen
+                    .set_blank_enabled(self.shift_register.cb2_active());
             }
 
             // If the Timer1 PB7 flag is set, then PB7 drives /RAMP
             if self.timer1.pb7_flag() {
-                Self::set_bits(&mut self.port_b, PORT_B_RAMP_DISABLED, !self.timer1.pb7_signal_low());
+                Self::set_bits(
+                    &mut self.port_b,
+                    PORT_B_RAMP_DISABLED,
+                    !self.timer1.pb7_signal_low(),
+                );
             }
 
-            // C++ Original: PeriphCntl::IsZeroEnabled check
-            let zero_enabled = Self::read_bits_with_shift(self.periph_cntl, 0x0E, 1) == 0b110;
-            if zero_enabled {
+            // C++ Original: if (PeriphCntl::IsZeroEnabled(m_periphCntl)) { m_screen.ZeroBeam(); }
+            // CA2 -> /ZERO, 110=low (zero enabled), 111=high (zero disabled)
+            // C++ inline bool IsZeroEnabled(uint8_t periphCntrl) {
+            //     const uint8_t value = ReadBitsWithShift(periphCntrl, CA2Mask, CA2Shift);
+            //     return value == 0b110;
+            // }
+            let is_zero_enabled = Self::read_bits_with_shift(self.periph_cntl, 0x0E, 1) == 0b110;
+            if is_zero_enabled {
                 self.screen.zero_beam();
             }
 
             // Integrators are enabled while RAMP line is active (low)
-            self.screen.set_integrators_enabled(!Self::test_bits(self.port_b, PORT_B_RAMP_DISABLED));
+            self.screen
+                .set_integrators_enabled(!Self::test_bits(self.port_b, PORT_B_RAMP_DISABLED));
 
-            // Note: In full implementation, this would update screen with render context
-            // For now we'll create a dummy render context
-            let mut dummy_render_context = RenderContext {
-                lines: Vec::new(),
-            };
-            self.screen.update(1, &mut dummy_render_context);
-            // In a real emulator, we'd accumulate these lines somewhere
+            // C++ Original: m_screen.Update(cycles, renderContext); - DIRECT WRITE
+            // Screen writes directly to renderContext passed by reference (NO intermediate buffer)
+            self.screen.update(1, render_context);
 
             cycles_left -= 1;
         }
@@ -823,23 +918,32 @@ impl Via6522 {
 
     // C++ Original: void Via::Init(MemoryBus& memoryBus)
     pub fn init_memory_bus(
-        via: std::rc::Rc<std::cell::RefCell<Via6522>>,
+        via: std::rc::Rc<std::cell::UnsafeCell<Via6522>>,
         memory_bus: &mut crate::core::memory_bus::MemoryBus,
     ) {
         // C++ Original: memoryBus.ConnectDevice(*this, MemoryMap::Via.range, EnableSync::True);
         memory_bus.connect_device(
             via.clone(),
-            (crate::core::memory_map::VIA_RANGE_START, crate::core::memory_map::VIA_RANGE_END),
+            (
+                crate::core::memory_map::VIA_RANGE_START,
+                crate::core::memory_map::VIA_RANGE_END,
+            ),
             crate::core::EnableSync::True,
         );
     }
 
-    // C++ Original: void SetSyncContext(const Input& input, RenderContext& renderContext, AudioContext& audioContext)  
-    pub fn set_sync_context(&mut self, input: Input, render_context: RenderContext, audio_context: AudioContext) {
+    // C++ Original: void SetSyncContext(const Input& input, RenderContext& renderContext, AudioContext& audioContext)
+    // 1:1 Port: Store raw pointers to contexts (valid only during instruction execution)
+    pub fn set_sync_context(
+        &mut self,
+        input: &Input,
+        render_context: &mut RenderContext,
+        audio_context: &mut AudioContext,
+    ) {
         self.sync_context = Some(SyncContext {
-            input_data: input,
-            render_context_data: render_context,
-            audio_context_data: audio_context,
+            input: input as *const Input,
+            render_context: render_context as *mut RenderContext,
+            audio_context: audio_context as *mut AudioContext,
         });
     }
 
@@ -865,17 +969,20 @@ impl Via6522 {
         // C++ Original: m_portB = m_portA = 0;
         self.port_b = 0;
         self.port_a = 0;
-        
+
         // C++ Original: m_dataDirB = m_dataDirA = 0;
         self.data_dir_b = 0;
         self.data_dir_a = 0;
-        
+
         // C++ Original: m_periphCntl = 0;
         self.periph_cntl = 0;
-        
+
         // C++ Original: m_interruptEnable = 0;
         self.interrupt_enable = 0;
-        
+
+        // C++ Original: SetBits(m_portB, PortB::RampDisabled, true);
+        self.port_b |= PORT_B_RAMP_DISABLED;
+
         // Reset components
         self.ca1_enabled = false;
         self.ca1_interrupt_flag = false;

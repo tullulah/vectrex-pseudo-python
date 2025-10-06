@@ -1,0 +1,16 @@
+[package]
+name = "rust_runner"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# Empty workspace to prevent being treated as part of emulator_v2 workspace
+
+[[bin]]
+name = "rust_runner"
+path = "src/main.rs"
+
+[dependencies]
+vectrex_emulator_v2 = { path = "../../.." }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

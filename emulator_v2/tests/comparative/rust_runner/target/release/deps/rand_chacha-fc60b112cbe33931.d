@@ -1,0 +1,9 @@
+C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\emulator_v2\tests\comparative\rust_runner\target\release\deps\rand_chacha-fc60b112cbe33931.d: C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\lib.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\chacha.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\guts.rs
+
+C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\emulator_v2\tests\comparative\rust_runner\target\release\deps\librand_chacha-fc60b112cbe33931.rlib: C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\lib.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\chacha.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\guts.rs
+
+C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\emulator_v2\tests\comparative\rust_runner\target\release\deps\librand_chacha-fc60b112cbe33931.rmeta: C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\lib.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\chacha.rs C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\guts.rs
+
+C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\lib.rs:
+C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\chacha.rs:
+C:\Users\DanielFerrerGuerrero\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rand_chacha-0.3.1\src\guts.rs:

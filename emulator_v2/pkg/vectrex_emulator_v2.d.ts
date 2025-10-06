@@ -81,6 +81,10 @@ export class VectrexEmulator {
    */
   getVectorsJson(): string;
   /**
+   * Clear accumulated vectors (call after drawing each frame)
+   */
+  clearVectors(): void;
+  /**
    * Get metrics as JSON
    * JSVecx Pattern: getMetrics() returns { totalCycles, instructionCount, frameCount, running }
    */
@@ -219,6 +223,7 @@ export interface InitOutput {
   readonly vectrexemulator_getVectorCount: (a: number) => number;
   readonly vectrexemulator_getVector: (a: number, b: number) => number;
   readonly vectrexemulator_getVectorsJson: (a: number) => [number, number];
+  readonly vectrexemulator_clearVectors: (a: number) => void;
   readonly vectrexemulator_getMetrics: (a: number) => [number, number];
   readonly vectrexemulator_getRegisters: (a: number) => [number, number];
   readonly vectrexemulator_read8: (a: number, b: number) => number;
@@ -243,8 +248,8 @@ export interface InitOutput {
   readonly vectrexemulator_getLastPC: (a: number) => number;
   readonly vectrexemulator_getLastOpcode: (a: number) => number;
   readonly vectrexemulator_getPCHistory: (a: number) => [number, number];
-  readonly vectrexemulator_readMemory: (a: number, b: number) => number;
   readonly wasm_init: () => void;
+  readonly vectrexemulator_readMemory: (a: number, b: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;

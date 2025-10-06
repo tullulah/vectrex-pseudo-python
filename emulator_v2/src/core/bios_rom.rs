@@ -39,35 +39,35 @@ impl BiosRom {
     }
 
     // C++ Original: bool BiosRom::LoadBiosRom(const uint8_t *data, size_t size)
-    // Acepta tanto 4KB (duplica) como 8KB (directo)
+    // Vectrexy expects EXACTLY 8KB - no duplication, no size flexibility
     pub fn load_bios_rom(&mut self, data: &[u8]) -> bool {
-        match data.len() {
-            0x1000 => {
-                // BIOS de 4KB: duplicar en ambas mitades del espacio de 8KB
-                // Primera mitad: 0x0000-0x0FFF
-                self.memory[0..0x1000].copy_from_slice(data);
-                // Segunda mitad: 0x1000-0x1FFF (duplicado)
-                self.memory[0x1000..0x2000].copy_from_slice(data);
-                true
-            }
-            0x2000 => {
-                // BIOS de 8KB: copiar directamente
-                self.memory.copy_from_slice(data);
-                true
-            }
-            _ => {
-                // Tamaño inválido
-                eprintln!("BIOS size mismatch: expected 4096 or 8192 bytes, got {}", data.len());
-                false
-            }
+        if data.len() != Self::SIZE_BYTES {
+            eprintln!(
+                "BIOS size mismatch: expected {} bytes (8KB), got {}",
+                Self::SIZE_BYTES,
+                data.len()
+            );
+            return false;
         }
+        
+        // C++ Original: fs.Read(&m_data[0], m_data.size());
+        // Copy full 8KB directly (NO duplication like we had before)
+        self.memory.copy_from_slice(data);
+        true
     }
 
-    pub fn load_bios_rom_from_file(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_bios_rom_from_file(
+        &mut self,
+        path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let data = fs::read(path)?;
         if !self.load_bios_rom(&data) {
-            return Err(format!("BIOS ROM size mismatch: expected {} bytes, got {}", 
-                              Self::SIZE_BYTES, data.len()).into());
+            return Err(format!(
+                "BIOS ROM size mismatch: expected {} bytes, got {}",
+                Self::SIZE_BYTES,
+                data.len()
+            )
+            .into());
         }
         Ok(())
     }
@@ -82,8 +82,11 @@ impl BiosRom {
     // C++ Original: void BiosRom::Init(MemoryBus& memoryBus) {
     //     memoryBus.ConnectDevice(*this, MemoryMap::Bios.range, EnableSync::False);
     // }
-    pub fn init_memory_bus(self_ref: std::rc::Rc<std::cell::RefCell<Self>>, memory_bus: &mut crate::core::memory_bus::MemoryBus) {
-        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+    pub fn init_memory_bus(
+        self_ref: std::rc::Rc<std::cell::UnsafeCell<Self>>,
+        memory_bus: &mut crate::core::memory_bus::MemoryBus,
+    ) {
+        use crate::core::{memory_bus::EnableSync, memory_map::MemoryMap};
         memory_bus.connect_device(self_ref, MemoryMap::BIOS.range, EnableSync::False);
     }
 }
@@ -101,11 +104,12 @@ impl MemoryBusDevice for BiosRom {
         self.read(address)
     }
 
-    fn write(&mut self, address: u16, value: u8) {  // Changed back to &mut self
+    fn write(&mut self, address: u16, value: u8) {
+        // Changed back to &mut self
         self.write(address, value);
     }
 
-    fn sync(&mut self, _cycles: Cycles) {  // Changed back to &mut self
+    fn sync(&mut self, _cycles: Cycles) {
         // ROM no necesita sincronización por ciclos
     }
 }

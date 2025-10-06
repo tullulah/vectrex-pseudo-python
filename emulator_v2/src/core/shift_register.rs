@@ -136,20 +136,40 @@ impl Default for ShiftRegister {
 // C++ Original: BitOps.h functions
 /// C++ Original: inline T TestBits01(T target, U mask)
 fn test_bits_01(target: u8, mask: u8) -> u8 {
-    if (target & mask) != 0 { 1 } else { 0 }
+    if (target & mask) != 0 {
+        1
+    } else {
+        0
+    }
 }
 
 /// C++ Original: BITS macro - creates bit mask
 /// BITS(0) = 0x01, BITS(7) = 0x80, etc.
 macro_rules! bits {
-    (0) => { 0x01 };
-    (1) => { 0x02 };
-    (2) => { 0x04 };
-    (3) => { 0x08 };
-    (4) => { 0x10 };
-    (5) => { 0x20 };
-    (6) => { 0x40 };
-    (7) => { 0x80 };
+    (0) => {
+        0x01
+    };
+    (1) => {
+        0x02
+    };
+    (2) => {
+        0x04
+    };
+    (3) => {
+        0x08
+    };
+    (4) => {
+        0x10
+    };
+    (5) => {
+        0x20
+    };
+    (6) => {
+        0x40
+    };
+    (7) => {
+        0x80
+    };
 }
 
 // Make macro available for use

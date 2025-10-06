@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSVecx - Test de Offset del Título</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            margin-bottom: 10px;
+        }
+        
+        #container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            background: #000;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        #canvas {
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            background: #000;
+            image-rendering: crisp-edges;
+        }
+        
+        #stats {
+            width: 400px;
+            min-height: 400px;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 3px;
+        }
+        
+        .stat-label {
+            color: #00aa00;
+        }
+        
+        .stat-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        
+        .critical {
+            color: #ffff00;
+            font-weight: bold;
+            text-shadow: 0 0 5px #ffff00;
+        }
+        
+        button {
+            background: #003300;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #00ff00;
+            color: #000;
+            box-shadow: 0 0 15px #00ff00;
+        }
+        
+        button:disabled {
+            background: #111;
+            color: #333;
+            border-color: #333;
+            cursor: not-allowed;
+        }
+        
+        #controls {
+            margin-bottom: 15px;
+        }
+        
+        #analysis {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 0, 0.1);
+            border: 1px solid #ffff00;
+            border-radius: 5px;
+        }
+        
+        .comparison {
+            display: grid;
+            grid-template-columns: 150px 100px 100px;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .comparison div {
+            padding: 5px;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        .comparison .header {
+            font-weight: bold;
+            background: rgba(0, 255, 0, 0.2);
+        }
+        
+        #log {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff00;
+            border-radius: 3px;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+        }
+        
+        .log-info { color: #00ff00; }
+        .log-warn { color: #ffff00; }
+        .log-error { color: #ff0000; }
+    </style>
+</head>
+<body>
+    <h1>🎮 JSVecx - Análisis de Offset del Título</h1>
+    <p style="color: #00aa00; margin-bottom: 20px;">
+        Comparación con Rust Emulator - Objetivo: Verificar offset X = -10.75
+    </p>
+    
+    <div id="container">
+        <div class="panel">
+            <canvas id="canvas" width="330" height="410"></canvas>
+            <div id="controls">
+                <button onclick="startEmulation()">▶ Run</button>
+                <button onclick="pauseEmulation()">⏸ Pause</button>
+                <button onclick="resetEmulation()">🔄 Reset</button>
+                <button onclick="snapshotVectors()">📸 Snapshot</button>
+                <button onclick="analyzeVectors()">📊 Analyze</button>
+            </div>
+        </div>
+        
+        <div class="panel" id="stats">
+            <h3 style="margin-top: 0; color: #00ff00;">📊 Estadísticas</h3>
+            <div class="stat-row">
+                <span class="stat-label">Emulation State:</span>
+                <span class="stat-value" id="state">Stopped</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Total Cycles:</span>
+                <span class="stat-value" id="cycles">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Frames Rendered:</span>
+                <span class="stat-value" id="frames">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Vectors Count:</span>
+                <span class="stat-value" id="vectorCount">0</span>
+            </div>
+            
+            <div id="analysis" style="display:none;">
+                <h4 style="margin-top: 0; color: #ffff00;">🔍 Análisis de Coordenadas</h4>
+                <div class="stat-row">
+                    <span class="stat-label">X Range:</span>
+                    <span class="stat-value critical" id="xRange">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Y Range:</span>
+                    <span class="stat-value critical" id="yRange">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">X Center:</span>
+                    <span class="stat-value critical" id="xCenter">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Y Center:</span>
+                    <span class="stat-value critical" id="yCenter">-</span>
+                </div>
+                
+                <div class="comparison">
+                    <div class="header">Metric</div>
+                    <div class="header">JSVecx</div>
+                    <div class="header">Rust</div>
+                    
+                    <div>X Center:</div>
+                    <div id="cmpXCenter">-</div>
+                    <div style="color: #ff8800;">-10.75</div>
+                    
+                    <div>X Range:</div>
+                    <div id="cmpXRange">-</div>
+                    <div style="color: #ff8800;">-64.30 to 42.80</div>
+                    
+                    <div>Y Center:</div>
+                    <div id="cmpYCenter">-</div>
+                    <div style="color: #ff8800;">1.02</div>
+                </div>
+            </div>
+            
+            <div id="log"></div>
+        </div>
+    </div>
+    
+    <!-- Snapshot Panel -->
+    <div class="panel" id="snapshotPanel" style="display:none; max-width: 900px; margin-top: 20px;">
+        <h3 style="margin-top: 0; color: #00ff00;">📸 Vector Snapshot (JSVecx - Normalized to -127..+127)</h3>
+        <div style="margin-bottom: 10px;">
+            <strong>Vector Count:</strong> <span id="snapCount">0</span>
+            <button onclick="clearSnapshot()" style="margin-left: 15px;">Clear Snapshot</button>
+        </div>
+        <div id="snapshotContent" style="max-height: 600px; overflow-y: auto; font-size: 11px; background: #000; padding: 10px; border: 1px solid #00ff00;"></div>
+    </div>
+    
+    <!-- JSVecx Scripts - Same order as in IDE -->
+    <script src="../ide/frontend/public/jsvecx_deploy/utils.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/globals.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/fastromdata.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/e6809.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/e8910.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/osint.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/vector_t.js"></script>
+    <script src="../ide/frontend/public/jsvecx_deploy/vecx.js"></script>
+    
+    <script>
+        // Verify BIOS loaded from fastromdata.js
+        console.log('[INIT] Globals.romdata loaded:', Globals.romdata ? `${Globals.romdata.length} bytes` : 'NULL - ERROR!');
+        
+        // Create global vecx instance (CRITICAL - must be after vecx.js loads)
+        var vecx = new VecX();
+        // === JSVecx Initialization (IDE Pattern) ===
+        // Create global vecx instance
+        var vecx = new VecX();
+        console.log('[INIT] vecx instance created');
+        
+        // State
+        let running = false;
+        let animationId = null;
+        let totalCycles = 0;
+        let frameCount = 0;
+        let canvas, ctx;
+        let vectorData = [];
+        
+        // Logging
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Initialize using EXACT IDE pattern
+        async function init() {
+            // Setup our canvas first
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            log('Initializing JSVecx (IDE pattern)...');
+            
+            try {
+                // Check BIOS
+                if (!Globals.romdata || Globals.romdata.length === 0) {
+                    log('✗ BIOS (Globals.romdata) not loaded!', 'error');
+                    return;
+                }
+                log(`✓ BIOS loaded: ${Globals.romdata.length} bytes`);
+                
+                // IDE pattern: osint.init(vecx) - sets up canvas, colors, connections
+                // NOTE: osint.init() expects canvas with id='screen', but we use 'canvas'
+                // So we'll do manual initialization instead
+                vecx.osint.vecx = vecx;
+                vecx.osint.screen_x = 330;
+                vecx.osint.screen_y = 410;
+                vecx.osint.lPitch = vecx.osint.bytes_per_pixel * vecx.osint.screen_x;
+                vecx.osint.osint_defaults();
+                
+                // Initialize osint canvas (normally done in osint.init but we have different canvas id)
+                vecx.osint.canvas = canvas;
+                vecx.osint.ctx = ctx;
+                vecx.osint.imageData = ctx.getImageData(0, 0, vecx.osint.screen_x, vecx.osint.screen_y);
+                vecx.osint.data = vecx.osint.imageData.data;
+                
+                // Set alpha channel
+                for (let i = 3; i < vecx.osint.imageData.data.length - 3; i += 4) {
+                    vecx.osint.imageData.data[i] = 0xFF;
+                }
+                
+                // CRITICAL: Generate color_set array
+                vecx.osint.osint_gencolors();
+                log('✓ osint initialized (colors generated)');
+                
+                // IDE pattern: e6809.init(vecx)
+                vecx.e6809.init(vecx);
+                log('✓ e6809.init(vecx) - CPU connected');
+                
+                // Reset vecx
+                vecx.vecx_reset();
+                log('✓ vecx.vecx_reset() successful');
+                
+                // Clear screen
+                vecx.osint.osint_clearscreen();
+                log('✓ osint.osint_clearscreen()');
+
+                
+                // Setup rendering
+                setupRendering();
+                
+                log('✓ JSVecx initialized successfully', 'info');
+                updateStats();
+                
+            } catch (error) {
+                log(`✗ Initialization failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        function setupRendering() {
+            // Clear canvas
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Setup transform to match Vectrex coordinate system
+            // Canvas center should be (0, 0) in Vectrex coords
+            ctx.setTransform(1, 0, 0, 1, canvas.width / 2, canvas.height / 2);
+        }
+        
+        function startEmulation() {
+            if (running) return;
+            
+            running = true;
+            document.getElementById('state').textContent = 'Running';
+            log('Emulation started');
+            
+            animationId = requestAnimationFrame(emulationLoop);
+        }
+        
+        function pauseEmulation() {
+            running = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            document.getElementById('state').textContent = 'Paused';
+            log('Emulation paused');
+        }
+        
+        function resetEmulation() {
+            pauseEmulation();
+            
+            vecx.vecx_reset();
+            totalCycles = 0;
+            frameCount = 0;
+            vectorData = [];
+            
+            setupRendering();
+            updateStats();
+            
+            document.getElementById('state').textContent = 'Reset';
+            document.getElementById('analysis').style.display = 'none';
+            log('Emulator reset');
+        }
+        
+        function emulationLoop() {
+            if (!running) return;
+            
+            // Run emulation for one frame (~1500000 cycles / 60fps ≈ 25000 cycles per frame)
+            const cyclesPerFrame = 25000;
+            
+            try {
+                // Execute cycles (call method on vecx instance)
+                vecx.vecx_emu(cyclesPerFrame);
+                totalCycles += cyclesPerFrame;
+                
+                // [DEBUG] Log vector count after frame execution
+                const vectorCount = vecx.vector_draw_cnt ?? 0;
+                if (vectorCount > 0) {
+                    console.log(`[JSVecX] Frame ${frameCount}: ${vectorCount} vectors generated`);
+                }
+                
+                // Render
+                renderFrame();
+                frameCount++;
+                
+                updateStats();
+                
+            } catch (error) {
+                log(`Emulation error: ${error.message}`, 'error');
+                pauseEmulation();
+                return;
+            }
+            
+            animationId = requestAnimationFrame(emulationLoop);
+        }
+        
+        function renderFrame() {
+            try {
+                // Use IDE pattern: osint.osint_render() handles all vector rendering
+                // This uses the EXACT same code as the working IDE
+                vecx.osint.osint_render();
+                
+                // Store vector data for analysis
+                vectorData = [];
+                for (let i = 0; i < vecx.vector_draw_cnt; i++) {
+                    const v = vecx.vectors_draw[i];
+                    if (v) {
+                        vectorData.push({
+                            x0: v.x0,
+                            y0: v.y0,
+                            x1: v.x1,
+                            y1: v.y1,
+                            color: v.color
+                        });
+                    }
+                }
+            } catch (error) {
+                log(`[RENDER ERROR] ${error.message}`, 'error');
+                console.error('[RENDER ERROR]', error);
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('cycles').textContent = totalCycles.toLocaleString();
+            document.getElementById('frames').textContent = frameCount.toLocaleString();
+            document.getElementById('vectorCount').textContent = vectorData.length;
+        }
+        
+        function analyzeVectors() {
+            if (vectorData.length === 0) {
+                log('No vectors to analyze. Run emulation first.', 'warn');
+                return;
+            }
+            
+            log(`Analyzing ${vectorData.length} vectors...`);
+            
+            // JSVecx coordinate conversion to DAC range (-127 to +127)
+            // JSVecx uses integrator values: 0-33000 (X), 0-41000 (Y)
+            // Center: X=16500, Y=20500
+            // DAC range: -127 to +127 (255 total)
+            const ALG_MAX_X = 33000;
+            const ALG_MAX_Y = 41000;
+            const DAC_CENTER = 0;
+            const DAC_RANGE = 127;
+            
+            function convertToDac(value, algMax) {
+                // Convert from 0-algMax to -127 to +127
+                const center = algMax / 2;
+                const normalized = (value - center) / center; // -1 to +1
+                return normalized * DAC_RANGE;
+            }
+            
+            // Calculate coordinate ranges in DAC space
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            
+            vectorData.forEach(v => {
+                const x0_dac = convertToDac(v.x0, ALG_MAX_X);
+                const x1_dac = convertToDac(v.x1, ALG_MAX_X);
+                const y0_dac = convertToDac(v.y0, ALG_MAX_Y);
+                const y1_dac = convertToDac(v.y1, ALG_MAX_Y);
+                
+                minX = Math.min(minX, x0_dac, x1_dac);
+                maxX = Math.max(maxX, x0_dac, x1_dac);
+                minY = Math.min(minY, y0_dac, y1_dac);
+                maxY = Math.max(maxY, y0_dac, y1_dac);
+            });
+            
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            
+            // Update UI
+            document.getElementById('xRange').textContent = `${minX.toFixed(2)} to ${maxX.toFixed(2)}`;
+            document.getElementById('yRange').textContent = `${minY.toFixed(2)} to ${maxY.toFixed(2)}`;
+            document.getElementById('xCenter').textContent = centerX.toFixed(2);
+            document.getElementById('yCenter').textContent = centerY.toFixed(2);
+            
+            document.getElementById('cmpXCenter').textContent = centerX.toFixed(2);
+            document.getElementById('cmpXRange').textContent = `${minX.toFixed(2)} to ${maxX.toFixed(2)}`;
+            document.getElementById('cmpYCenter').textContent = centerY.toFixed(2);
+            
+            document.getElementById('analysis').style.display = 'block';
+            
+            // Comparison with Rust
+            const rustXCenter = -10.75;
+            const offsetDiff = Math.abs(centerX - rustXCenter);
+            
+            if (offsetDiff < 1.0) {
+                log(`✓ X Center matches Rust: ${centerX.toFixed(2)} ≈ ${rustXCenter}`, 'info');
+            } else {
+                log(`✗ X Center differs from Rust: ${centerX.toFixed(2)} vs ${rustXCenter} (Δ ${offsetDiff.toFixed(2)})`, 'warn');
+            }
+            
+            log(`📊 Analysis complete: ${vectorData.length} vectors`, 'info');
+            log(`   X Range: ${minX.toFixed(2)} to ${maxX.toFixed(2)}`, 'info');
+            log(`   Y Range: ${minY.toFixed(2)} to ${maxY.toFixed(2)}`, 'info');
+            log(`   Center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)})`, 'info');
+        }
+        
+        function snapshotVectors() {
+            if (vectorData.length === 0) {
+                log('No vectors to snapshot. Run emulation first.', 'warn');
+                return;
+            }
+            
+            log(`📸 Capturing snapshot of ${vectorData.length} vectors...`);
+            
+            // JSVecx coordinate conversion to DAC range (-127 to +127)
+            const ALG_MAX_X = 33000;
+            const ALG_MAX_Y = 41000;
+            const DAC_RANGE = 127;
+            
+            function convertToDac(value, algMax) {
+                const center = algMax / 2;
+                const normalized = (value - center) / center; // -1 to +1
+                return normalized * DAC_RANGE;
+            }
+            
+            // Build HTML table with normalized coordinates
+            let html = '<table style="width: 100%; border-collapse: collapse; font-family: monospace;">';
+            html += '<tr style="background: #003300; font-weight: bold;">';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">#</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">X0 (DAC)</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">Y0 (DAC)</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">X1 (DAC)</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">Y1 (DAC)</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">Color</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00;">Length</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00; font-size: 9px;">Raw X0</td>';
+            html += '<td style="padding: 5px; border: 1px solid #00ff00; font-size: 9px;">Raw Y0</td>';
+            html += '</tr>';
+            
+            vectorData.forEach((v, idx) => {
+                // Convert to DAC coordinates
+                const x0_dac = convertToDac(v.x0, ALG_MAX_X);
+                const y0_dac = convertToDac(v.y0, ALG_MAX_Y);
+                const x1_dac = convertToDac(v.x1, ALG_MAX_X);
+                const y1_dac = convertToDac(v.y1, ALG_MAX_Y);
+                
+                const dx = x1_dac - x0_dac;
+                const dy = y1_dac - y0_dac;
+                const length = Math.sqrt(dx * dx + dy * dy).toFixed(2);
+                
+                html += '<tr>';
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${idx}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${x0_dac.toFixed(2)}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${y0_dac.toFixed(2)}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${x1_dac.toFixed(2)}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${y1_dac.toFixed(2)}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${v.color}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500;">${length}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500; font-size: 9px; color: #888;">${v.x0}</td>`;
+                html += `<td style="padding: 3px; border: 1px solid #005500; font-size: 9px; color: #888;">${v.y0}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</table>';
+            
+            document.getElementById('snapshotContent').innerHTML = html;
+            document.getElementById('snapCount').textContent = vectorData.length;
+            document.getElementById('snapshotPanel').style.display = 'block';
+            
+            log(`✓ Snapshot captured: ${vectorData.length} vectors (normalized to -127..+127 DAC range)`, 'info');
+        }
+        
+        function clearSnapshot() {
+            document.getElementById('snapshotPanel').style.display = 'none';
+            log('Snapshot cleared');
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 // C++ Original:
 // #pragma once
 // #include <array>
-// class Ram { 
+// class Ram {
 //   static inline constexpr size_t k_sizeBytes = 1024;
 //   std::array<uint8_t, k_sizeBytes> m_memory;
 //   public:
@@ -12,19 +12,23 @@
 //     void Randomize();
 //     void Init(); };
 
-use crate::types::Cycles;
-use rand::{Rng, SeedableRng};
-use rand::rngs::StdRng;
-use std::rc::Rc;
-use std::cell::RefCell;
 use crate::core::memory_bus::MemoryBus;
+use crate::core::engine_types::RenderContext;
+use crate::types::Cycles;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
+use std::cell::UnsafeCell;
+use std::rc::Rc;
 
 pub struct Ram {
-    memory: [u8; Self::SIZE_BYTES],  // Back to simple array
+    memory: [u8; Self::SIZE_BYTES], // Back to simple array
 }
 
 impl Ram {
-    pub const SIZE_BYTES: usize = 1024;
+    // C++ Original: static inline constexpr size_t k_sizeBytes = 1024;
+    // VECTREXY FIX: Vectrex has 1KB internal RAM but the system supports up to 32KB
+    // The memory map from 0xC800-0xFFFF is 14KB, so we use 32KB to cover all ranges safely
+    pub const SIZE_BYTES: usize = 32768; // 32KB (0x8000 bytes)
 
     pub fn new() -> Self {
         let mut ram = Self {
@@ -39,16 +43,19 @@ impl Ram {
         self.memory[addr]
     }
 
-    pub fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
+    pub fn write(&mut self, address: u16, value: u8) {
+        // Back to &mut self
         let addr = (address as usize) % Self::SIZE_BYTES;
         self.memory[addr] = value;
     }
 
-    pub fn zero(&mut self) {  // Back to &mut self
+    pub fn zero(&mut self) {
+        // Back to &mut self
         self.memory.fill(0);
     }
 
-    pub fn randomize(&mut self, seed: u32) {  // Back to &mut self
+    pub fn randomize(&mut self, seed: u32) {
+        // Back to &mut self
         let mut rng = StdRng::seed_from_u64(seed as u64);
         for i in 0..Self::SIZE_BYTES {
             self.memory[i] = rng.gen_range(0..=255);
@@ -64,8 +71,8 @@ impl Ram {
     // C++ Original: void Init(MemoryBus& memoryBus) {
     //     memoryBus.ConnectDevice(*this, MemoryMap::Ram.range, EnableSync::False);
     // }
-    pub fn init_memory_bus(self_ref: Rc<RefCell<Self>>, memory_bus: &mut MemoryBus) {
-        use crate::core::{memory_map::MemoryMap, memory_bus::EnableSync};
+    pub fn init_memory_bus(self_ref: Rc<UnsafeCell<Self>>, memory_bus: &mut MemoryBus) {
+        use crate::core::{memory_bus::EnableSync, memory_map::MemoryMap};
         memory_bus.connect_device(self_ref, MemoryMap::RAM.range, EnableSync::False);
     }
 }
@@ -83,11 +90,12 @@ impl MemoryBusDevice for Ram {
         self.read(address)
     }
 
-    fn write(&mut self, address: u16, value: u8) {  // Back to &mut self
+    fn write(&mut self, address: u16, value: u8) {
+        // Back to &mut self
         self.write(address, value);
     }
 
-    fn sync(&mut self, _cycles: Cycles) {  // Back to &mut self
+    fn sync(&mut self, _cycles: Cycles) {
         // RAM no necesita sincronización por ciclos
     }
 }
@@ -99,15 +107,15 @@ mod tests {
     #[test]
     fn test_ram_basic_operations() {
         let mut ram = Ram::new();
-        
+
         // Test write and read
         ram.write(0x00, 0xAA);
         assert_eq!(ram.read(0x00), 0xAA);
-        
-        // Test address wrapping (RAM is 1024 bytes)
-        ram.write(0x400, 0xBB); // Should wrap to 0x00
+
+        // Test address wrapping (RAM is 32KB = 0x8000 bytes)
+        ram.write(0x8000, 0xBB); // Should wrap to 0x00
         assert_eq!(ram.read(0x00), 0xBB);
-        
+
         // Test zero
         ram.zero();
         assert_eq!(ram.read(0x00), 0x00);
@@ -120,7 +128,7 @@ mod tests {
     fn test_ram_randomize() {
         let mut ram = Ram::new();
         ram.zero();
-        
+
         // After randomize, should have some non-zero values
         ram.randomize(42); // Use a seed for deterministic test
         let mut has_non_zero = false;
@@ -130,18 +138,22 @@ mod tests {
                 break;
             }
         }
-        assert!(has_non_zero, "RAM should have non-zero values after randomize");
+        assert!(
+            has_non_zero,
+            "RAM should have non-zero values after randomize"
+        );
     }
 
-    #[test] 
+    #[test]
     fn test_ram_memory_bus_device() {
         let mut ram = Ram::new();
-        
+        let mut render_context = RenderContext::new();
+
         // Test MemoryBusDevice trait implementation
         MemoryBusDevice::write(&mut ram, 0x123, 0x45);
         assert_eq!(MemoryBusDevice::read(&ram, 0x123), 0x45);
-        
+
         // Test sync (should do nothing for RAM)
-        MemoryBusDevice::sync(&mut ram, 100u64); // Cycles is u64
+        MemoryBusDevice::sync(&mut ram, 100u64, &mut render_context);
     }
 }

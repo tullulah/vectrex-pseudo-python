@@ -1,0 +1,40 @@
+{
+  "test_name": null,
+  "description": null,
+  "cycles": 150,
+  "cpu": {
+    "pc": null,
+    "a": 0,
+    "b": 0,
+    "x": null,
+    "y": null,
+    "u": null,
+    "s": null,
+    "dp": null,
+    "cc": {
+      "c": null,
+      "v": null,
+      "z": true,
+      "n": false,
+      "i": null,
+      "h": null,
+      "f": null,
+      "e": null
+    }
+  },
+  "via": {
+    "ifr": null,
+    "ier": null,
+    "timer1_counter": null,
+    "timer2_counter": null,
+    "port_a": 0,
+    "port_b": 0,
+    "shift_register": 0
+  },
+  "vectors": {
+    "count": null,
+    "lines": null
+  },
+  "audio_samples": null,
+  "_notes": null
+}

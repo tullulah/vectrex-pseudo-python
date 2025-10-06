@@ -1,8 +1,8 @@
 // C++ Original: EngineTypes.h
 // Port 1:1 from Vectrexy libs/emulator/include/emulator/EngineTypes.h
 
-use std::path::PathBuf;
 use crate::types::Line;
+use std::path::PathBuf;
 
 /// Input system for joysticks and buttons
 /// C++ Original: class Input
@@ -90,9 +90,7 @@ pub struct RenderContext {
 
 impl RenderContext {
     pub fn new() -> Self {
-        Self {
-            lines: Vec::new(),
-        }
+        Self { lines: Vec::new() }
     }
 
     pub fn clear(&mut self) {

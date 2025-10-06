@@ -369,6 +369,12 @@ export class VectrexEmulator {
         }
     }
     /**
+     * Clear accumulated vectors (call after drawing each frame)
+     */
+    clearVectors() {
+        wasm.vectrexemulator_clearVectors(this.__wbg_ptr);
+    }
+    /**
      * Get metrics as JSON
      * JSVecx Pattern: getMetrics() returns { totalCycles, instructionCount, frameCount, running }
      * @returns {string}

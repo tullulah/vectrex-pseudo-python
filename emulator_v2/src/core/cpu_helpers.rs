@@ -14,7 +14,7 @@ pub fn s16_from_u8(v: u8) -> i16 {
     v as i8 as i16
 }
 
-// C++ Original: template <typename T> constexpr uint16_t U16(T v)  
+// C++ Original: template <typename T> constexpr uint16_t U16(T v)
 pub fn u16(v: u16) -> u16 {
     v
 }

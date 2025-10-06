@@ -5,7 +5,7 @@
 ## Referencia Obligatoria
 
 Antes de implementar cualquier funcionalidad, SIEMPRE consultar el código original:
-- **Ubicación**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy_backup\libs\emulator\`
+- **Ubicación**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\emulator\`
 - **Archivos**: `.cpp` y `.h` correspondientes
 - **Formato mandatorio**: Cada método debe incluir comentario `// C++ Original:` con código fuente
 
@@ -47,7 +47,7 @@ Antes de implementar cualquier funcionalidad, SIEMPRE consultar el código origi
 
 ### 1. Verificación Obligatoria 1:1
 Antes de crear cualquier archivo o API:
-1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy_backup/libs/emulator/src/` y `vectrexy_backup/libs/emulator/include/emulator/`
+1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy/libs/emulator/src/` y `vectrexy/libs/emulator/include/emulator/`
 2. **LEER CÓDIGO ORIGINAL**: Examinar el .cpp/.h correspondiente LÍNEA POR LÍNEA
 3. **NO ASUMIR NADA**: No inventar APIs, estructuras, o patrones sin verificar
 4. **DOCUMENTAR ORIGEN**: Cada función/struct debe tener comentario "// C++ Original:" con código fuente
@@ -114,6 +114,6 @@ cargo test -- --nocapture
 
 ## Referencias
 
-- **Vectrexy Original**: `vectrexy_backup/libs/emulator/` (C++)
+- **Vectrexy Original**: `vectrexy/libs/emulator/` (C++)
 - **Documentación**: `SUPER_SUMMARY.md` (sección 26)
 - **Commit History**: Ver mensajes de commit para detalles de correcciones
