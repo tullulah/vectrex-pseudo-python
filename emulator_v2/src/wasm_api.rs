@@ -210,7 +210,8 @@ impl VectrexEmulator {
         // Clear vectors from previous frame (CRITICAL: must clear BEFORE executing)
         self.vectors_draw.clear();
         self.vector_draw_cnt = 0;
-        self.render_context.lines.clear();
+        // NOTE: Do NOT clear render_context.lines here - let it accumulate during execution
+        // We'll clear it AFTER copying to vectors_draw to avoid losing data
 
         // Execute instructions for the frame
         let mut cycles_remaining = cycles;
