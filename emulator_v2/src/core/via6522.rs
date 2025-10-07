@@ -521,7 +521,7 @@ impl MemoryBusDevice for Via6522 {
         }
     }
     */
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         let index = address & 0x0F; // VIA registers are 4-bit addressed
 
         match index {
@@ -543,7 +543,7 @@ impl MemoryBusDevice for Via6522 {
             }
             PORT_A => {
                 // C++ Original: m_ca1InterruptFlag = false; // Cleared by read/write of Port A
-                // Note: This is a mutable operation, but we're in read() - we'll handle this differently
+                self.ca1_interrupt_flag = false;
                 let mut result = self.port_a;
 
                 // Digital input
@@ -561,14 +561,16 @@ impl MemoryBusDevice for Via6522 {
             DATA_DIR_B => self.data_dir_b,
             DATA_DIR_A => self.data_dir_a,
             TIMER1_LOW => {
-                // Note: This should clear interrupt flag but we're in read() - need RefCell or different approach
+                // C++ Original: m_interruptFlag = false;
+                self.timer1.set_interrupt_flag(false);
                 (self.timer1.counter & 0xFF) as u8
             }
             TIMER1_HIGH => self.timer1.read_counter_high(),
             TIMER1_LATCH_LOW => self.timer1.read_latch_low(),
             TIMER1_LATCH_HIGH => self.timer1.read_latch_high(),
             TIMER2_LOW => {
-                // Note: This should clear interrupt flag but we're in read()
+                // C++ Original: m_interruptFlag = false;
+                self.timer2.set_interrupt_flag(false);
                 (self.timer2.counter & 0xFF) as u8
             }
             TIMER2_HIGH => self.timer2.read_counter_high(),
@@ -591,7 +593,14 @@ impl MemoryBusDevice for Via6522 {
                 aux_cntl
             }
             PERIPH_CNTL => self.periph_cntl,
-            INTERRUPT_FLAG => self.get_interrupt_flag_value(),
+            INTERRUPT_FLAG => {
+                let value = self.get_interrupt_flag_value();
+                // Reading IFR clears T1 and T2 interrupt flags.
+                // This is a critical side-effect for many BIOS loops.
+                self.timer1.set_interrupt_flag(false);
+                self.timer2.set_interrupt_flag(false);
+                value
+            }
             INTERRUPT_ENABLE => self.interrupt_enable,
             PORT_A_NO_HANDSHAKE => {
                 // C++ Original (Via.cpp:318-320):

@@ -129,6 +129,45 @@ function passArray8ToWasm0(arg, malloc) {
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
+/**
+ * @returns {number}
+ */
+export function test_function() {
+    const ret = wasm.test_function();
+    return ret >>> 0;
+}
+
+const SimpleTestFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_simpletest_free(ptr >>> 0, 1));
+
+export class SimpleTest {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        SimpleTestFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_simpletest_free(ptr, 0);
+    }
+    constructor() {
+        const ret = wasm.simpletest_new();
+        this.__wbg_ptr = ret >>> 0;
+        SimpleTestFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {number}
+     */
+    get value() {
+        const ret = wasm.simpletest_value(this.__wbg_ptr);
+        return ret;
+    }
+}
 
 const VectorFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -611,6 +650,44 @@ export class VectrexEmulator {
         } finally {
             wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
         }
+    }
+}
+
+const WasmTestFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmtest_free(ptr >>> 0, 1));
+
+export class WasmTest {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmTestFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmtest_free(ptr, 0);
+    }
+    constructor() {
+        const ret = wasm.wasmtest_new();
+        this.__wbg_ptr = ret >>> 0;
+        WasmTestFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {number}
+     */
+    get value() {
+        const ret = wasm.wasmtest_value(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} value
+     */
+    set value(value) {
+        wasm.wasmtest_set_value(this.__wbg_ptr, value);
     }
 }
 

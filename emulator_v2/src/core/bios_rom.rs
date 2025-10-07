@@ -41,19 +41,25 @@ impl BiosRom {
     // C++ Original: bool BiosRom::LoadBiosRom(const uint8_t *data, size_t size)
     // Vectrexy expects EXACTLY 8KB - no duplication, no size flexibility
     pub fn load_bios_rom(&mut self, data: &[u8]) -> bool {
-        if data.len() != Self::SIZE_BYTES {
+        // C++ Original: fs.Read(&m_data[0], m_data.size());
+        // Handle both 4KB and 8KB BIOS data. If 4KB, duplicate it to fill 8KB.
+        if data.len() == 4096 {
+            // Duplicate 4KB data into the 8KB buffer
+            self.memory[..4096].copy_from_slice(data);
+            self.memory[4096..].copy_from_slice(data);
+            true
+        } else if data.len() == Self::SIZE_BYTES {
+            // Copy full 8KB directly
+            self.memory.copy_from_slice(data);
+            true
+        } else {
             eprintln!(
-                "BIOS size mismatch: expected {} bytes (8KB), got {}",
+                "BIOS size mismatch: expected 4096 or {} bytes, got {}",
                 Self::SIZE_BYTES,
                 data.len()
             );
-            return false;
+            false
         }
-        
-        // C++ Original: fs.Read(&m_data[0], m_data.size());
-        // Copy full 8KB directly (NO duplication like we had before)
-        self.memory.copy_from_slice(data);
-        true
     }
 
     pub fn load_bios_rom_from_file(
@@ -100,16 +106,12 @@ impl Default for BiosRom {
 use crate::core::memory_bus::MemoryBusDevice;
 
 impl MemoryBusDevice for BiosRom {
-    fn read(&self, address: u16) -> u8 {
-        self.read(address)
+    fn read(&mut self, address: u16) -> u8 {
+        let mapped_addr = self.map_address(address);
+        self.memory[mapped_addr as usize]
     }
 
     fn write(&mut self, address: u16, value: u8) {
-        // Changed back to &mut self
         self.write(address, value);
-    }
-
-    fn sync(&mut self, _cycles: Cycles) {
-        // ROM no necesita sincronización por ciclos
     }
 }

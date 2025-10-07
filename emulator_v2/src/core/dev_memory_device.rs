@@ -33,7 +33,7 @@ impl DevMemoryDevice {
     // Helper method to read null-terminated string from memory
     fn read_string_from_memory(
         &self,
-        memory_bus: &crate::core::memory_bus::MemoryBus,
+        memory_bus: &mut crate::core::memory_bus::MemoryBus,
         mut address: u16,
     ) -> String {
         let mut result = String::new();
@@ -71,7 +71,7 @@ impl DevMemoryDevice {
 
 impl MemoryBusDevice for DevMemoryDevice {
     // C++ Original: uint8_t Read(uint16_t address) const override
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         // C++ Original: ErrorHandler::Undefined("Read from unmapped range at address $%04x\n", address);
         eprintln!("Read from unmapped range at address ${:04X}", address);
 
@@ -143,14 +143,15 @@ impl DevMemoryDevice {
 
                 // Try to read format string from memory bus if available
                 if let Some(weak_bus) = &self.memory_bus {
-                    if let Some(bus_ref) = weak_bus.upgrade() {
+                    if let Some(bus_rc) = weak_bus.upgrade() {
+                        let bus_ptr = bus_rc.get();
                         let format_string = unsafe {
-                            self.read_string_from_memory(&*bus_ref.get(), format_address)
+                            self.read_string_from_memory(&mut *bus_ptr, format_address)
                         };
                         println!("DEV: Printf: {}", format_string);
                     } else {
                         println!(
-                            "DEV: Printf format at: ${:04X} (memory bus not available)",
+                            "DEV: Printf format at: ${:04X} (memory bus dropped)",
                             format_address
                         );
                     }

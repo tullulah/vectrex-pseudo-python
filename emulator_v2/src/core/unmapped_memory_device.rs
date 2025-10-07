@@ -23,7 +23,7 @@ impl UnmappedMemoryDevice {
 
 impl MemoryBusDevice for UnmappedMemoryDevice {
     // C++ Original: uint8_t Read(uint16_t address) const override
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         // C++ Original: ErrorHandler::Undefined("Read from unmapped range at address $%04x\n", address);
         eprintln!("Read from unmapped range at address ${:04X}", address);
 

@@ -29,7 +29,7 @@ fn test_staa_direct_basic() {
     // Verify memory was written at effective address 0xC850
     // IMPORTANT: Read through CPU's memory bus to get proper address translation
     assert_eq!(
-        cpu.memory_bus().read(0xC850),
+        cpu.memory_bus_mut().read(0xC850),
         0x42,
         "Memory at 0xC850 should contain 0x42"
     );

@@ -1,6 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 export function wasm_init(): void;
+export function test_function(): number;
+export class SimpleTest {
+  free(): void;
+  constructor();
+  readonly value: number;
+}
 /**
  * Vector structure matching JSVecx vector_t
  * JSVecx Original: function vector_t() { this.x0 = 0; this.y0 = 0; this.x1 = 0; this.y1 = 0; this.color = 0; }
@@ -193,6 +199,11 @@ export class VectrexEmulator {
    */
   getPCHistory(): string;
 }
+export class WasmTest {
+  free(): void;
+  constructor();
+  value: number;
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -248,8 +259,16 @@ export interface InitOutput {
   readonly vectrexemulator_getLastPC: (a: number) => number;
   readonly vectrexemulator_getLastOpcode: (a: number) => number;
   readonly vectrexemulator_getPCHistory: (a: number) => [number, number];
-  readonly wasm_init: () => void;
   readonly vectrexemulator_readMemory: (a: number, b: number) => number;
+  readonly wasm_init: () => void;
+  readonly __wbg_simpletest_free: (a: number, b: number) => void;
+  readonly simpletest_new: () => number;
+  readonly simpletest_value: (a: number) => number;
+  readonly __wbg_wasmtest_free: (a: number, b: number) => void;
+  readonly wasmtest_new: () => number;
+  readonly wasmtest_value: (a: number) => number;
+  readonly wasmtest_set_value: (a: number, b: number) => void;
+  readonly test_function: () => number;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;

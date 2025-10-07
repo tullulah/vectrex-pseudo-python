@@ -72,7 +72,7 @@ impl Cartridge {
 
 impl MemoryBusDevice for Cartridge {
     // C++ Original: uint8_t Read(uint16_t address) const override
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         // C++ Original: auto mappedAddress = MemoryMap::Cartridge.MapAddress(address);
         let mapped_address = MemoryMap::CARTRIDGE.map_address(address);
 
@@ -113,8 +113,7 @@ impl Cartridge {
             MemoryMap::CARTRIDGE.range,
             EnableSync::False,
         );
-
-        // C++ Original: m_data.resize(MemoryMap::Cartridge.physicalSize, 0);
+        
         unsafe {
             (*self_ref.get())
                 .data

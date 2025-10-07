@@ -168,45 +168,102 @@
     </div>
 
     <script type="module">
-        import init, { VectrexEmulator } from './wasm-pkg/vectrex_emulator_v2.js';
+        import init, { VectrexEmulator, Vector } from './pkg/vectrex_emulator_v2.js';
 
+        let wasm;
         let emulator = null;
         let animationId = null;
+        let offsetX = 0;
+        let offsetY = 0;
 
-        // Utility functions
+        // --- DOM Elements ---
+        const btnLoadWasm = document.getElementById('btnLoadWasm');
+        const btnInit = document.getElementById('btnInit');
+        const btnStart = document.getElementById('btnStart');
+        const btnStop = document.getElementById('btnStop');
+        const btnRunFrame = document.getElementById('btnRunFrame');
+        const btnReset = document.getElementById('btnReset');
+        const btnSnapshot = document.getElementById('btnSnapshot');
+        const btnClearSnapshot = document.getElementById('btnClearSnapshot');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Utility Functions ---
         function log(elementId, message, type = 'info') {
             const el = document.getElementById(elementId);
+            if (!el) return;
             const timestamp = new Date().toLocaleTimeString();
             const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
             el.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
             el.scrollTop = el.scrollHeight;
         }
 
+        function updateUIState(isInitialized, isRunning) {
+            btnInit.disabled = isInitialized;
+            btnStart.disabled = !isInitialized || isRunning;
+            btnStop.disabled = !isInitialized || !isRunning;
+            btnRunFrame.disabled = !isInitialized || isRunning;
+            btnReset.disabled = !isInitialized;
+            btnSnapshot.disabled = !isInitialized;
+        }
+
+        // --- Core Emulator Functions ---
+        function gameLoop() {
+            if (!emulator) return;
+
+            try {
+                emulator.runFrame();
+                updateMetrics();
+                updateRegisters();
+                renderVectors();
+                animationId = requestAnimationFrame(gameLoop);
+            } catch (e) {
+                log('outputExec', `❌ Runtime Error: ${e.message}`, 'error');
+                console.error(e);
+                stopEmulator();
+            }
+        }
+
+        function renderVectors() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 2.0; // Increased scale for better visibility
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!emulator) return;
+
+            const vectors = emulator.getVectors();
+
+            ctx.lineWidth = 1.5;
+
+            for (const vec of vectors) {
+                const x0 = centerX + (vec.x0 + offsetX) * scale;
+                const y0 = centerY - (vec.y0 + offsetY) * scale;
+                const x1 = centerX + (vec.x1 + offsetX) * scale;
+                const y1 = centerY - (vec.y1 + offsetY) * scale;
+                
+                const intensity = Math.min(255, vec.color * 2);
+                ctx.strokeStyle = `rgb(0, ${intensity}, 0)`;
+                
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+            }
+        }
+
         function updateMetrics() {
             if (!emulator) return;
-            
             try {
-                const metricsJson = emulator.getMetrics();
-                const metrics = JSON.parse(metricsJson);
-                
+                const metrics = emulator.getMetrics();
                 const metricsEl = document.getElementById('metrics');
                 metricsEl.innerHTML = `
-                    <div class="metric-card">
-                        <div class="metric-label">Total Cycles</div>
-                        <div class="metric-value">${metrics.totalCycles.toLocaleString()}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Instructions</div>
-                        <div class="metric-value">${metrics.instructionCount.toLocaleString()}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Frames</div>
-                        <div class="metric-value">${metrics.frameCount}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Status</div>
-                        <div class="metric-value">${metrics.running ? '🟢 RUNNING' : '🔴 STOPPED'}</div>
-                    </div>
+                    <div class="metric-card"><div class="metric-label">Total Cycles</div><div class="metric-value">${metrics.total_cycles.toLocaleString()}</div></div>
+                    <div class="metric-card"><div class="metric-label">Instructions</div><div class="metric-value">${metrics.instruction_count.toLocaleString()}</div></div>
+                    <div class="metric-card"><div class="metric-label">Frames</div><div class="metric-value">${metrics.frame_count}</div></div>
+                    <div class="metric-card"><div class="metric-label">Status</div><div class="metric-value">${animationId ? 'RUNNING' : 'STOPPED'}</div></div>
                 `;
             } catch (e) {
                 console.error('Error updating metrics:', e);
@@ -215,278 +272,178 @@
 
         function updateRegisters() {
             if (!emulator) return;
-            
             try {
-                const regsJson = emulator.getRegisters();
-                const regs = JSON.parse(regsJson);
-                
+                const regs = emulator.getRegisters();
                 const regsEl = document.getElementById('outputRegs');
                 regsEl.innerHTML = `
-                    <div>PC: 0x${regs.PC.toString(16).padStart(4, '0')}  A: 0x${regs.A.toString(16).padStart(2, '0')}  B: 0x${regs.B.toString(16).padStart(2, '0')}</div>
-                    <div>X:  0x${regs.X.toString(16).padStart(4, '0')}  Y: 0x${regs.Y.toString(16).padStart(4, '0')}</div>
-                    <div>U:  0x${regs.U.toString(16).padStart(4, '0')}  S: 0x${regs.S.toString(16).padStart(4, '0')}</div>
-                    <div>DP: 0x${regs.DP.toString(16).padStart(2, '0')}  CC: 0x${regs.CC.toString(16).padStart(2, '0')}</div>
+                    <div>PC: 0x${regs.pc.toString(16).padStart(4, '0')}  A: 0x${regs.a.toString(16).padStart(2, '0')}  B: 0x${regs.b.toString(16).padStart(2, '0')}</div>
+                    <div>X:  0x${regs.x.toString(16).padStart(4, '0')}  Y: 0x${regs.y.toString(16).padStart(4, '0')}</div>
+                    <div>U:  0x${regs.u.toString(16).padStart(4, '0')}  S: 0x${regs.s.toString(16).padStart(4, '0')}</div>
+                    <div>DP: 0x${regs.dp.toString(16).padStart(2, '0')}  CC: 0x${regs.cc.toString(16).padStart(2, '0')}</div>
                 `;
             } catch (e) {
                 console.error('Error updating registers:', e);
             }
         }
 
-        function renderVectors() {
-            if (!emulator) return;
-            
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Get user-adjustable offset values from sliders
-            const offsetX = parseFloat(document.getElementById('offsetX').value);
-            const offsetY = parseFloat(document.getElementById('offsetY').value);
-            
-            // JSVecx-compatible scaling:
-            // - Vectrex coordinate range: approximately -127 to +127 (256 units total)
-            // - Canvas resolution: 600x600 (we use 600 to match 3:4 aspect with visible area)
-            // - Scale factor: match JSVecx approach (direct mapping, no transform)
-            const VECTREX_RANGE = 256;  // Full Vectrex coordinate range
-            const scale = canvas.width / VECTREX_RANGE;  // Pixels per Vectrex unit (≈2.34 for 600px)
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            
-            // Clear canvas
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            const vectorCount = emulator.getVectorCount();
-            
-            // Draw vectors using direct pixel mapping (no Canvas transform)
-            for (let i = 0; i < vectorCount; i++) {
-                const vec = emulator.getVector(i);
-                if (!vec) continue;
-                
-                // Map Vectrex coordinates to canvas pixels with user offset adjustment
-                // Note: Y is inverted (Vectrex +Y is up, Canvas +Y is down)
-                const x0 = centerX + ((vec.x0 + offsetX) * scale);
-                const y0 = centerY - ((vec.y0 + offsetY) * scale);  // Invert Y
-                const x1 = centerX + ((vec.x1 + offsetX) * scale);
-                const y1 = centerY - ((vec.y1 + offsetY) * scale);  // Invert Y
-                
-                // Color intensity (0-128 to 0-255)
-                const intensity = Math.min(255, Math.floor(vec.color * 2));
-                
-                ctx.strokeStyle = `rgb(0, ${intensity}, 0)`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x0, y0);
-                ctx.lineTo(x1, y1);
-                ctx.stroke();
-            }
-            
-            // Update vector count display
-            const outputVec = document.getElementById('outputVectors');
-            outputVec.innerHTML = `<div>Vector count: ${vectorCount}</div>`;
-            if (vectorCount > 0) {
-                const firstVec = emulator.getVector(0);
-                outputVec.innerHTML += `<div>First vector: (${firstVec.x0}, ${firstVec.y0}) → (${firstVec.x1}, ${firstVec.y1}) color=${firstVec.color}</div>`;
-            }
-        }
-
-        // Button handlers
-        document.getElementById('btnLoadWasm').addEventListener('click', async () => {
-            try {
-                log('outputLoad', 'Loading WASM module...');
-                await init();
-                log('outputLoad', '✅ WASM module loaded successfully', 'success');
-                
-                document.getElementById('btnInit').disabled = false;
-                document.getElementById('btnLoadWasm').disabled = true;
-            } catch (e) {
-                log('outputLoad', `❌ Error: ${e.message}`, 'error');
-            }
-        });
-
-        document.getElementById('btnInit').addEventListener('click', () => {
-            try {
-                log('outputInit', 'Creating emulator instance...');
-                emulator = new VectrexEmulator();
-                log('outputInit', '✅ Emulator created successfully', 'success');
-                
-                log('outputInit', 'Initializing emulator with embedded BIOS...');
-                const biosLoaded = emulator.init();
-                
-                if (biosLoaded) {
-                    log('outputInit', '✅ BIOS loaded successfully (8192 bytes: 4KB real + 4KB padding)', 'success');
-                } else {
-                    log('outputInit', '❌ Failed to load BIOS', 'error');
-                }
-                
-                document.getElementById('btnStart').disabled = false;
-                document.getElementById('btnStop').disabled = false;
-                document.getElementById('btnRunFrame').disabled = false;
-                document.getElementById('btnReset').disabled = false;
-                document.getElementById('btnSnapshot').disabled = false;
-                document.getElementById('btnInit').disabled = true;
-                
-                updateMetrics();
-                updateRegisters();
-            } catch (e) {
-                log('outputInit', `❌ Error: ${e.message}`, 'error');
-            }
-        });
-
-        document.getElementById('btnStart').addEventListener('click', () => {
-            if (!emulator) return;
-            emulator.start();
-            log('outputExec', '▶️  Emulator started');
-            
-            // Start animation loop
-            const CYCLES_PER_FRAME = 30000n; // ~50Hz
-            function loop() {
-                if (emulator.isRunning()) {
-                    emulator.runFrame(CYCLES_PER_FRAME);
-                    updateMetrics();
-                    updateRegisters();
-                    renderVectors();
-                    animationId = requestAnimationFrame(loop);
-                }
-            }
-            loop();
-        });
-
-        document.getElementById('btnStop').addEventListener('click', () => {
-            if (!emulator) return;
-            emulator.stop();
+        function stopEmulator() {
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
-            log('outputExec', '⏸️  Emulator stopped');
-            updateMetrics();
+            updateUIState(true, false);
+            log('outputExec', '⏹️ Emulator stopped.');
+        }
+
+        // --- Event Handlers ---
+        btnLoadWasm.addEventListener('click', async () => {
+            try {
+                log('outputLoad', 'Loading WASM module...');
+                wasm = await init();
+                log('outputLoad', '✅ WASM module loaded successfully', 'success');
+                console.log('WASM exports:', wasm);
+                log('outputLoad', `Available exports: ${Object.keys(wasm).join(', ')}`);
+                btnInit.disabled = false;
+                btnLoadWasm.disabled = true;
+            } catch (e) {
+                log('outputLoad', `❌ Error: ${e.message}`, 'error');
+                console.error('WASM loading error:', e);
+            }
         });
 
-        document.getElementById('btnRunFrame').addEventListener('click', () => {
-            if (!emulator) return;
-            const CYCLES_PER_FRAME = 30000n;
-            emulator.runFrame(CYCLES_PER_FRAME);
-            log('outputExec', `Executed 1 frame (${CYCLES_PER_FRAME} cycles)`);
-            updateMetrics();
-            updateRegisters();
-            renderVectors();
-        });
-
-        document.getElementById('btnReset').addEventListener('click', () => {
-            if (!emulator) return;
-            emulator.reset();
-            log('outputExec', '🔄 Emulator reset');
-            updateMetrics();
-            updateRegisters();
-            renderVectors();
-        });
-
-        // Offset slider event listeners
-        document.getElementById('offsetX').addEventListener('input', (e) => {
-            const value = parseFloat(e.target.value);
-            document.getElementById('offsetXValue').textContent = value.toFixed(1);
-            renderVectors(); // Re-render with new offset
-        });
-
-        document.getElementById('offsetY').addEventListener('input', (e) => {
-            const value = parseFloat(e.target.value);
-            document.getElementById('offsetYValue').textContent = value.toFixed(1);
-            renderVectors(); // Re-render with new offset
-        });
-
-        document.getElementById('btnResetOffsetX').addEventListener('click', () => {
-            document.getElementById('offsetX').value = 0;
-            document.getElementById('offsetXValue').textContent = '0.0';
-            renderVectors();
-        });
-
-        document.getElementById('btnResetOffsetY').addEventListener('click', () => {
-            document.getElementById('offsetY').value = 0;
-            document.getElementById('offsetYValue').textContent = '0.0';
-            renderVectors();
-        });
-
-        document.getElementById('btnAutoCenter').addEventListener('click', () => {
-            // Auto-center based on measured -10.75 offset from Vectrexy emulation
-            document.getElementById('offsetX').value = 10.75;
-            document.getElementById('offsetXValue').textContent = '10.75';
-            renderVectors();
-            log('outputVectors', '📐 Applied auto-center offset: +10.75 units (compensates for Vectrexy\'s -10.75 offset)', 'success');
-        });
-        
-        // Snapshot button handler
-        document.getElementById('btnSnapshot').addEventListener('click', () => {
-            if (!emulator) return;
-            
-            const vectorCount = emulator.getVectorCount();
-            if (vectorCount === 0) {
-                log('outputVectors', '⚠️  No vectors to snapshot', 'error');
-                document.getElementById('snapshotStatus').textContent = 'No vectors available';
+        btnInit.addEventListener('click', async () => {
+            if (!wasm) {
+                log('outputInit', '❌ WASM module not loaded.', 'error');
                 return;
             }
-            
-            // Collect all vectors
-            const vectors = [];
-            for (let i = 0; i < vectorCount; i++) {
-                const vec = emulator.getVector(i);
-                if (vec) {
-                    vectors.push({
-                        x0: vec.x0,
-                        y0: vec.y0,
-                        x1: vec.x1,
-                        y1: vec.y1,
-                        color: vec.color
-                    });
-                }
-            }
-            
-            // Display snapshot
-            let html = '<div style="font-family: monospace;">';
-            html += '<table style="width: 100%; border-collapse: collapse;">';
-            html += '<tr style="background: #333; font-weight: bold;">';
-            html += '<td style="padding: 5px; border: 1px solid #555;">#</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">X0</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">Y0</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">X1</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">Y1</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">Color</td>';
-            html += '<td style="padding: 5px; border: 1px solid #555;">Length</td>';
-            html += '</tr>';
-            
-            vectors.forEach((v, idx) => {
-                const dx = v.x1 - v.x0;
-                const dy = v.y1 - v.y0;
-                const length = Math.sqrt(dx * dx + dy * dy).toFixed(2);
+            try {
+                log('outputInit', 'Instantiating VectrexEmulator...');
+                emulator = new VectrexEmulator();
+                log('outputInit', 'Emulator instantiated. Loading BIOS...', 'success');
+
+                const success = await emulator.init();
                 
-                html += '<tr>';
-                html += `<td style="padding: 3px; border: 1px solid #555;">${idx}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${v.x0.toFixed(2)}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${v.y0.toFixed(2)}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${v.x1.toFixed(2)}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${v.y1.toFixed(2)}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${v.color}</td>`;
-                html += `<td style="padding: 3px; border: 1px solid #555;">${length}</td>`;
-                html += '</tr>';
-            });
-            
-            html += '</table></div>';
-            
-            document.getElementById('outputSnapshot').innerHTML = html;
-            document.getElementById('snapCount').textContent = vectorCount;
-            document.getElementById('snapshotPanel').style.display = 'block';
-            document.getElementById('snapshotStatus').textContent = `✅ ${vectorCount} vectors captured`;
-            
-            log('outputVectors', `📸 Snapshot captured: ${vectorCount} vectors`, 'success');
-        });
-        
-        document.getElementById('btnClearSnapshot').addEventListener('click', () => {
-            document.getElementById('snapshotPanel').style.display = 'none';
-            document.getElementById('snapshotStatus').textContent = '';
-            log('outputVectors', '🗑️ Snapshot cleared');
+                if (success) {
+                    log('outputInit', '✅ Emulator initialized successfully with BIOS.', 'success');
+                    updateUIState(true, false);
+                    renderVectors(); // Initial render
+                } else {
+                    log('outputInit', '❌ Failed to initialize emulator. BIOS loading failed.', 'error');
+                    emulator = null;
+                }
+            } catch (e) {
+                log('outputInit', `❌ Error: ${e.message}`, 'error');
+                console.error(e);
+            }
         });
 
-        // Auto-load on page load
-        log('outputLoad', 'Ready to load WASM module');
+        btnStart.addEventListener('click', () => {
+            if (emulator && !animationId) {
+                log('outputExec', '▶️ Starting emulator...');
+                animationId = requestAnimationFrame(gameLoop);
+                updateUIState(true, true);
+            }
+        });
+
+        btnStop.addEventListener('click', stopEmulator);
+
+        btnRunFrame.addEventListener('click', () => {
+            if (emulator && !animationId) {
+                log('outputExec', 'Running single frame...');
+                try {
+                    emulator.runFrame();
+                    updateMetrics();
+                    updateRegisters();
+                    renderVectors();
+                    log('outputExec', '✅ Frame executed.');
+                } catch (e) {
+                    log('outputExec', `❌ Frame execution error: ${e.message}`, 'error');
+                    console.error(e);
+                }
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            if (emulator) {
+                stopEmulator();
+                log('outputExec', '🔄 Resetting emulator...');
+                emulator.reset();
+                updateMetrics();
+                updateRegisters();
+                renderVectors();
+                log('outputExec', '✅ Emulator reset.');
+            }
+        });
+
+        // --- Offset Controls ---
+        const setupOffsetSlider = (sliderId, valueId, axis) => {
+            const slider = document.getElementById(sliderId);
+            const valueEl = document.getElementById(valueId);
+            slider.addEventListener('input', () => {
+                const value = parseFloat(slider.value);
+                if (axis === 'x') offsetX = value;
+                else offsetY = value;
+                valueEl.textContent = value.toFixed(1);
+                if (!animationId) renderVectors();
+            });
+            return slider;
+        };
+
+        const xSlider = setupOffsetSlider('offsetX', 'offsetXValue', 'x');
+        const ySlider = setupOffsetSlider('offsetY', 'offsetYValue', 'y');
+
+        document.getElementById('btnResetOffsetX').addEventListener('click', () => {
+            xSlider.value = 0;
+            offsetX = 0;
+            document.getElementById('offsetXValue').textContent = '0.0';
+            if (!animationId) renderVectors();
+        });
+        document.getElementById('btnAutoCenter').addEventListener('click', () => {
+            const autoCenterX = 10.75;
+            xSlider.value = autoCenterX;
+            offsetX = autoCenterX;
+            document.getElementById('offsetXValue').textContent = autoCenterX.toFixed(2);
+            if (!animationId) renderVectors();
+        });
+        document.getElementById('btnResetOffsetY').addEventListener('click', () => {
+            ySlider.value = 0;
+            offsetY = 0;
+            document.getElementById('offsetYValue').textContent = '0.0';
+            if (!animationId) renderVectors();
+        });
+
+        // --- Snapshot Controls ---
+        btnSnapshot.addEventListener('click', () => {
+            if (!emulator) return;
+            const panel = document.getElementById('snapshotPanel');
+            const output = document.getElementById('outputSnapshot');
+            const countEl = document.getElementById('snapCount');
+            
+            log('snapshotStatus', 'Generating snapshot...');
+            const vectors = emulator.getVectors();
+            
+            output.innerHTML = '';
+            let snapshotContent = '[\n';
+            vectors.forEach((v, i) => {
+                snapshotContent += `  { "x0": ${v.x0}, "y0": ${v.y0}, "x1": ${v.x1}, "y1": ${v.y1}, "color": ${v.color} }${i === vectors.length - 1 ? '' : ','}\n`;
+            });
+            snapshotContent += ']';
+            
+            output.textContent = snapshotContent;
+            countEl.textContent = vectors.length;
+            panel.style.display = 'block';
+            log('snapshotStatus', `✅ Snapshot created with ${vectors.length} vectors.`);
+        });
+
+        btnClearSnapshot.addEventListener('click', () => {
+            document.getElementById('snapshotPanel').style.display = 'none';
+            document.getElementById('outputSnapshot').textContent = '';
+            document.getElementById('snapCount').textContent = '0';
+        });
+
+        // --- Auto-load on page load ---
+        log('outputLoad', 'Page loaded. Click "Load WASM Module" to begin.');
+        updateUIState(false, false);
     </script>
 </body>
 </html>

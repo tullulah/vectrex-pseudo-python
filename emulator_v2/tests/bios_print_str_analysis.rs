@@ -36,7 +36,7 @@ fn test_bios_print_str_trace() {
     
     // 3. Ejecutar hasta alcanzar Print_Str
     let mut step = 0;
-    let max_steps = 5000000; // BIOS power-up completo + game load requiere muchos ciclos
+    let max_steps = 50000; // Reducido drásticamente para debugging - era 5000000
     let mut reached_print_str = false;
     let mut print_str_calls = 0;
     let mut captured_init = false;

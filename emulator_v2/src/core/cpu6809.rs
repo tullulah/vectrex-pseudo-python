@@ -2721,7 +2721,7 @@ impl Cpu6809 {
         return m_memoryBus->Read(address);
     }
     */
-    pub fn read8(&self, address: u16) -> u8 {
+    pub fn read8(&mut self, address: u16) -> u8 {
         self.memory_bus.read(address)
     }
 
@@ -2732,11 +2732,8 @@ impl Cpu6809 {
         return CombineToU16(high, low);
     }
     */
-    pub fn read16(&self, address: u16) -> u16 {
-        // CRITICAL FIX: Isolate each borrow() to ensure RefCell is released
-        let high = { self.memory_bus.read(address) };
-        let low = { self.memory_bus.read(address.wrapping_add(1)) };
-        combine_to_u16(high, low)
+    pub fn read16(&mut self, address: u16) -> u16 {
+        self.memory_bus.read16(address)
     }
 
     pub fn write8(&mut self, address: u16, value: u8) {
@@ -3443,12 +3440,9 @@ impl Cpu6809 {
 
     // C++ Original: void OpRTS() { PC = Pop16(S); }
     fn op_rts(&mut self) {
-        // C++ Original: PC = Pop16(S); inline implementation to avoid borrowing conflicts
-        let high = self.read8(self.registers.s);
-        self.registers.s = self.registers.s.wrapping_add(1);
-        let low = self.read8(self.registers.s);
-        self.registers.s = self.registers.s.wrapping_add(1);
-        self.registers.pc = combine_to_u16(high, low);
+        let mut sp = self.registers.s;
+        self.registers.pc = self.pop16(&mut sp);
+        self.registers.s = sp;
     }
 
     // C++ Original: void OpBSR() - Branch to Subroutine (relative addressing)
@@ -3458,11 +3452,9 @@ impl Cpu6809 {
         let offset = self.read_relative_offset8();
 
         // Push return address (current PC) to stack S
-        // C++ Original: Push16(S, PC);
-        self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low byte
-        self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc >> 8) as u8); // High byte
+        let mut sp = self.registers.s;
+        self.push16(&mut sp, self.registers.pc);
+        self.registers.s = sp;
 
         // Branch to PC + offset
         self.registers.pc = self.registers.pc.wrapping_add(offset as u16);
@@ -3476,11 +3468,11 @@ impl Cpu6809 {
             AddressingMode::Extended => self.read_extended_ea(),
             _ => panic!("Invalid addressing mode for JSR: {:?}", addressing_mode),
         };
-        // C++ Original: Push16(S, PC); inline implementation to avoid borrowing conflicts
-        self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low
-        self.registers.s = self.registers.s.wrapping_sub(1);
-        self.write8(self.registers.s, (self.registers.pc >> 8) as u8); // High
+        
+        let mut sp = self.registers.s;
+        self.push16(&mut sp, self.registers.pc);
+        self.registers.s = sp;
+
         self.registers.pc = ea;
     }
 
@@ -3501,146 +3493,29 @@ impl Cpu6809 {
     fn op_psh(&mut self, stack_reg: bool) {
         // true = S stack, false = U stack
         let value = self.read_operand_value8(if stack_reg { 0x34 } else { 0x36 });
+        
+        let mut sp = if stack_reg { self.registers.s } else { self.registers.u };
 
-        // C++ Original: if (value & BITS(7)) Push16(stackReg, PC);
-        if (value & 0x80) != 0 {
-            // bit 7
-            if stack_reg {
-                // inline push16 for S stack and PC
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.pc & 0xFF) as u8); // Low
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.pc >> 8) as u8); // High
-            } else {
-                // inline push16 for U stack and PC
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.pc & 0xFF) as u8); // Low
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.pc >> 8) as u8); // High
-            }
+        if (value & 0x80) != 0 { self.push16(&mut sp, self.registers.pc); }
+        if (value & 0x40) != 0 { 
+            let other_stack = if stack_reg { self.registers.u } else { self.registers.s };
+            self.push16(&mut sp, other_stack); 
+        }
+        if (value & 0x20) != 0 { self.push16(&mut sp, self.registers.y); }
+        if (value & 0x10) != 0 { self.push16(&mut sp, self.registers.x); }
+        if (value & 0x08) != 0 { self.push8(&mut sp, self.registers.dp); }
+        if (value & 0x04) != 0 { self.push8(&mut sp, self.registers.b); }
+        if (value & 0x02) != 0 { self.push8(&mut sp, self.registers.a); }
+        if (value & 0x01) != 0 { self.push8(&mut sp, self.registers.cc.to_u8()); }
+
+        if stack_reg {
+            self.registers.s = sp;
+        } else {
+            self.registers.u = sp;
         }
 
-        // C++ Original: if (value & BITS(6)) { auto otherStackReg = &stackReg == &S ? U : S; Push16(stackReg, otherStackReg); }
-        if (value & 0x40) != 0 {
-            // bit 6
-            let other_stack = if stack_reg {
-                self.registers.u
-            } else {
-                self.registers.s
-            };
-            if stack_reg {
-                // inline push16 for S stack and other_stack
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (other_stack & 0xFF) as u8); // Low
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (other_stack >> 8) as u8); // High
-            } else {
-                // inline push16 for U stack and other_stack
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (other_stack & 0xFF) as u8); // Low
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (other_stack >> 8) as u8); // High
-            }
-        }
-
-        // C++ Original: if (value & BITS(5)) Push16(stackReg, Y);
-        if (value & 0x20) != 0 {
-            // bit 5
-            if stack_reg {
-                // inline push16 for S stack and Y
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.y & 0xFF) as u8); // Low
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.y >> 8) as u8); // High
-            } else {
-                // inline push16 for U stack and Y
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.y & 0xFF) as u8); // Low
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.y >> 8) as u8); // High
-            }
-        }
-
-        // C++ Original: if (value & BITS(4)) Push16(stackReg, X);
-        if (value & 0x10) != 0 {
-            // bit 4
-            if stack_reg {
-                // inline push16 for S stack and X
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.x & 0xFF) as u8); // Low
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, (self.registers.x >> 8) as u8); // High
-            } else {
-                // inline push16 for U stack and X
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.x & 0xFF) as u8); // Low
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, (self.registers.x >> 8) as u8); // High
-            }
-        }
-
-        // C++ Original: if (value & BITS(3)) Push8(stackReg, DP);
-        if (value & 0x08) != 0 {
-            // bit 3
-            if stack_reg {
-                // inline push8 for S stack and DP
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, self.registers.dp);
-            } else {
-                // inline push8 for U stack and DP
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, self.registers.dp);
-            }
-        }
-
-        // C++ Original: if (value & BITS(2)) Push8(stackReg, B);
-        if (value & 0x04) != 0 {
-            // bit 2
-            if stack_reg {
-                // inline push8 for S stack and B
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, self.registers.b);
-            } else {
-                // inline push8 for U stack and B
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, self.registers.b);
-            }
-        }
-
-        // C++ Original: if (value & BITS(1)) Push8(stackReg, A);
-        if (value & 0x02) != 0 {
-            // bit 1
-            if stack_reg {
-                // inline push8 for S stack and A
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, self.registers.a);
-            } else {
-                // inline push8 for U stack and A
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, self.registers.a);
-            }
-        }
-
-        // C++ Original: if (value & BITS(0)) Push8(stackReg, CC.Value);
-        if (value & 0x01) != 0 {
-            // bit 0
-            let cc_value = self.registers.cc.to_u8();
-            if stack_reg {
-                // inline push8 for S stack and CC
-                self.registers.s = self.registers.s.wrapping_sub(1);
-                self.write8(self.registers.s, cc_value);
-            } else {
-                // inline push8 for U stack and CC
-                self.registers.u = self.registers.u.wrapping_sub(1);
-                self.write8(self.registers.u, cc_value);
-            }
-        }
-
-        // C++ Original: // 1 cycle per byte pushed
-        // C++ Original: AddCycles(NumBitsSet(ReadBits(value, BITS(0, 1, 2, 3))));
-        // C++ Original: AddCycles(NumBitsSet(ReadBits(value, BITS(4, 5, 6, 7))) * 2);
-        let low_bits = value & 0x0F; // bits 0-3 (8-bit registers)
-        let high_bits = value & 0xF0; // bits 4-7 (16-bit registers)
+        let low_bits = value & 0x0F;
+        let high_bits = value & 0xF0;
         let cycles = Self::num_bits_set(low_bits) + (Self::num_bits_set(high_bits) * 2);
         self.add_cycles(cycles as u64);
     }
@@ -3649,162 +3524,32 @@ impl Cpu6809 {
     fn op_pul(&mut self, stack_reg: bool) {
         // true = S stack, false = U stack
         let value = self.read_operand_value8(if stack_reg { 0x35 } else { 0x37 });
+        
+        let mut sp = if stack_reg { self.registers.s } else { self.registers.u };
 
-        // C++ Original: if (value & BITS(0)) CC.Value = Pop8(stackReg);
-        if (value & 0x01) != 0 {
-            // bit 0
-            let cc_value = if stack_reg {
-                // inline pop8 for S stack
-                let val = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                val
-            } else {
-                // inline pop8 for U stack
-                let val = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                val
-            };
-            self.registers.cc.from_u8(cc_value);
-        }
-
-        // C++ Original: if (value & BITS(1)) A = Pop8(stackReg);
-        if (value & 0x02) != 0 {
-            // bit 1
-            self.registers.a = if stack_reg {
-                // inline pop8 for S stack
-                let val = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                val
-            } else {
-                // inline pop8 for U stack
-                let val = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                val
-            };
-        }
-
-        // C++ Original: if (value & BITS(2)) B = Pop8(stackReg);
-        if (value & 0x04) != 0 {
-            // bit 2
-            self.registers.b = if stack_reg {
-                // inline pop8 for S stack
-                let val = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                val
-            } else {
-                // inline pop8 for U stack
-                let val = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                val
-            };
-        }
-
-        // C++ Original: if (value & BITS(3)) DP = Pop8(stackReg);
-        if (value & 0x08) != 0 {
-            // bit 3
-            self.registers.dp = if stack_reg {
-                // inline pop8 for S stack
-                let val = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                val
-            } else {
-                // inline pop8 for U stack
-                let val = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                val
-            };
-        }
-
-        // C++ Original: if (value & BITS(4)) X = Pop16(stackReg);
-        if (value & 0x10) != 0 {
-            // bit 4
-            self.registers.x = if stack_reg {
-                // inline pop16 for S stack
-                let high = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                let low = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                combine_to_u16(high, low)
-            } else {
-                // inline pop16 for U stack
-                let high = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                let low = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                combine_to_u16(high, low)
-            };
-        }
-
-        // C++ Original: if (value & BITS(5)) Y = Pop16(stackReg);
-        if (value & 0x20) != 0 {
-            // bit 5
-            self.registers.y = if stack_reg {
-                // inline pop16 for S stack
-                let high = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                let low = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                combine_to_u16(high, low)
-            } else {
-                // inline pop16 for U stack
-                let high = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                let low = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                combine_to_u16(high, low)
-            };
-        }
-
-        // C++ Original: if (value & BITS(6)) { auto& otherStackReg = &stackReg == &S ? U : S; otherStackReg = Pop16(stackReg); }
+        if (value & 0x01) != 0 { let val = self.pop8(&mut sp); self.registers.cc.from_u8(val); }
+        if (value & 0x02) != 0 { self.registers.a = self.pop8(&mut sp); }
+        if (value & 0x04) != 0 { self.registers.b = self.pop8(&mut sp); }
+        if (value & 0x08) != 0 { self.registers.dp = self.pop8(&mut sp); }
+        if (value & 0x10) != 0 { self.registers.x = self.pop16(&mut sp); }
+        if (value & 0x20) != 0 { self.registers.y = self.pop16(&mut sp); }
         if (value & 0x40) != 0 {
-            // bit 6
-            let other_stack = if stack_reg {
-                // inline pop16 for S stack
-                let high = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                let low = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                combine_to_u16(high, low)
-            } else {
-                // inline pop16 for U stack
-                let high = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                let low = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                combine_to_u16(high, low)
-            };
             if stack_reg {
-                self.registers.u = other_stack;
+                self.registers.u = self.pop16(&mut sp);
             } else {
-                self.registers.s = other_stack;
+                self.registers.s = self.pop16(&mut sp);
             }
         }
+        if (value & 0x80) != 0 { self.registers.pc = self.pop16(&mut sp); }
 
-        // C++ Original: if (value & BITS(7)) PC = Pop16(stackReg);
-        if (value & 0x80) != 0 {
-            // bit 7
-            self.registers.pc = if stack_reg {
-                // inline pop16 for S stack
-                let high = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                let low = self.read8(self.registers.s);
-                self.registers.s = self.registers.s.wrapping_add(1);
-                combine_to_u16(high, low)
-            } else {
-                // inline pop16 for U stack
-                let high = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                let low = self.read8(self.registers.u);
-                self.registers.u = self.registers.u.wrapping_add(1);
-                combine_to_u16(high, low)
-            };
+        if stack_reg {
+            self.registers.s = sp;
+        } else {
+            self.registers.u = sp;
         }
 
-        // C++ Original: // 1 cycle per byte pulled
-        // C++ Original: AddCycles(NumBitsSet(ReadBits(value, BITS(0, 1, 2, 3))));
-        // C++ Original: AddCycles(NumBitsSet(ReadBits(value, BITS(4, 5, 6, 7))) * 2);
-        let low_bits = value & 0x0F; // bits 0-3 (8-bit registers)
-        let high_bits = value & 0xF0; // bits 4-7 (16-bit registers)
+        let low_bits = value & 0x0F;
+        let high_bits = value & 0xF0;
         let cycles = Self::num_bits_set(low_bits) + (Self::num_bits_set(high_bits) * 2);
         self.add_cycles(cycles as u64);
     }

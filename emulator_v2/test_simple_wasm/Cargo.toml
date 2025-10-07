@@ -1,0 +1,12 @@
+[package]
+name = "wasm_test_simple"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }

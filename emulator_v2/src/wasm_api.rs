@@ -1,4 +1,4 @@
-// WASM API for Vectrex Emulator V2
+﻿// WASM API for Vectrex Emulator V2
 // Replicates JSVecx API surface for drop-in replacement in the IDE
 //
 // JSVecx Reference: ide/frontend/public/jsvecx_deploy/vecx.js

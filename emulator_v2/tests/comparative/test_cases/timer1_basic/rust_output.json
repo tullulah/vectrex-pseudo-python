@@ -3,7 +3,7 @@
   "cpu": {
     "pc": 51226,
     "a": 96,
-    "b": 0,
+    "b": 214,
     "x": 0,
     "y": 0,
     "u": 0,
@@ -12,21 +12,21 @@
     "cc": {
       "c": false,
       "v": false,
-      "z": true,
-      "n": false,
-      "i": false,
+      "z": false,
+      "n": true,
+      "i": true,
       "h": false,
-      "f": false,
+      "f": true,
       "e": false
     }
   },
   "via": {
     "ifr": 96,
     "ier": 0,
-    "timer1_counter": 0,
-    "timer2_counter": 0,
+    "timer1_counter": 65437,
+    "timer2_counter": 65434,
     "port_a": 0,
-    "port_b": 0,
+    "port_b": 128,
     "shift_register": 0
   },
   "vectors": {

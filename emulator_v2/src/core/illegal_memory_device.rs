@@ -34,7 +34,7 @@ impl IllegalMemoryDevice {
 
 impl MemoryBusDevice for IllegalMemoryDevice {
     // C++ Original: uint8_t Read(uint16_t address) const override
-    fn read(&self, address: u16) -> u8 {
+    fn read(&mut self, address: u16) -> u8 {
         // C++ Original: ErrorHandler::Undefined("Read from illegal range at address $%04x\n", address);
         eprintln!("Read from illegal range at address ${:04X}", address);
 

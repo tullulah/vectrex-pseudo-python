@@ -13,7 +13,6 @@
 //     void Init(); };
 
 use crate::core::memory_bus::MemoryBus;
-use crate::core::engine_types::RenderContext;
 use crate::types::Cycles;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -86,13 +85,14 @@ impl Default for Ram {
 use crate::core::memory_bus::MemoryBusDevice;
 
 impl MemoryBusDevice for Ram {
-    fn read(&self, address: u16) -> u8 {
-        self.read(address)
+    fn read(&mut self, address: u16) -> u8 {
+        let addr = (address as usize) % Self::SIZE_BYTES;
+        self.memory[addr]
     }
 
     fn write(&mut self, address: u16, value: u8) {
-        // Back to &mut self
-        self.write(address, value);
+        let addr = (address as usize) % Self::SIZE_BYTES;
+        self.memory[addr] = value;
     }
 
     fn sync(&mut self, _cycles: Cycles) {
@@ -103,6 +103,7 @@ impl MemoryBusDevice for Ram {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::engine_types::RenderContext;
 
     #[test]
     fn test_ram_basic_operations() {
@@ -147,13 +148,12 @@ mod tests {
     #[test]
     fn test_ram_memory_bus_device() {
         let mut ram = Ram::new();
-        let mut render_context = RenderContext::new();
 
         // Test MemoryBusDevice trait implementation
         MemoryBusDevice::write(&mut ram, 0x123, 0x45);
-        assert_eq!(MemoryBusDevice::read(&ram, 0x123), 0x45);
+        assert_eq!(MemoryBusDevice::read(&mut ram, 0x123), 0x45);
 
         // Test sync (should do nothing for RAM)
-        MemoryBusDevice::sync(&mut ram, 100u64, &mut render_context);
+        MemoryBusDevice::sync(&mut ram, 100u64);
     }
 }
