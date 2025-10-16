@@ -27,6 +27,13 @@ function VecX()
     this.snd_regs = new Array(16);
     this.e8910.init(this.snd_regs);
     this.snd_select = 0;
+    
+    // Debug system - Estado del debugger
+    this.debugState = 'stopped'; // 'stopped' | 'running' | 'paused'
+    this.breakpoints = new Set(); // Set de direcciones con breakpoints
+    this.stepMode = null; // null | 'over' | 'into' | 'out'
+    this.stepTargetAddress = null; // Dirección objetivo para step over
+    this.callStackDepth = 0; // Profundidad de la pila de llamadas (para step out)
     this.via_ora = 0;
     this.via_orb = 0;
     this.via_ddra = 0;
@@ -581,9 +588,48 @@ function VecX()
         var sig_blank = 0;
         while( cycles > 0 )
         {
+            // Debug: Check breakpoint ANTES de ejecutar la instrucción
+            var currentPC = e6809.reg_pc;
+            if (this.debugState === 'running' && this.breakpoints.has(currentPC)) {
+                this.pauseDebugger('breakpoint', currentPC);
+                return; // Detener ejecución inmediatamente
+            }
+            
+            // Debug: Check step over/into/out
+            if (this.stepMode === 'over' && currentPC === this.stepTargetAddress) {
+                this.pauseDebugger('step', currentPC);
+                this.stepMode = null;
+                this.stepTargetAddress = null;
+                return;
+            }
+            
+            if (this.stepMode === 'into') {
+                // Step into pausa en CADA instrucción
+                this.pauseDebugger('step', currentPC);
+                this.stepMode = null;
+                return;
+            }
+            
+            if (this.stepMode === 'out' && this.callStackDepth === 0) {
+                // Step out pausa cuando retornamos al nivel original
+                this.pauseDebugger('step', currentPC);
+                this.stepMode = null;
+                return;
+            }
+            
             icycles = e6809.e6809_sstep(this.via_ifr & 0x80, 0);
             this.instructionCount++; // Contar instrucciones ejecutadas
             this.totalCycles += icycles; // Contar cycles totales
+            
+            // Debug: Track call stack depth para step out
+            if (this.stepMode === 'out') {
+                var opcode = this.read8(currentPC);
+                if (opcode === 0xBD || opcode === 0x17 || opcode === 0x9D || opcode === 0xAD) { // JSR variants
+                    this.callStackDepth++;
+                } else if (opcode === 0x39) { // RTS
+                    this.callStackDepth--;
+                }
+            }
             for( c = 0; c < icycles; c++ )
             {
                 this.t2shift = 0;
@@ -1064,4 +1110,204 @@ function VecX()
             CC: this.e6809.reg_cc || 0
         };
     }
+    
+    // === DEBUG SYSTEM - Control Methods ===
+    
+    // Pausar el debugger y notificar al IDE
+    this.pauseDebugger = function(mode, pc) {
+        this.debugState = 'paused';
+        
+        var registers = this.getRegisters();
+        var callStack = this.buildCallStack(); // TODO: Implementar call stack real
+        
+        // Enviar evento al IDE vía postMessage
+        if (window.parent !== window) {
+            window.parent.postMessage({
+                type: 'debugger-paused',
+                pc: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'),
+                mode: mode, // 'breakpoint' | 'step'
+                registers: registers,
+                callStack: callStack,
+                cycles: this.totalCycles
+            }, '*');
+        }
+        
+        console.log('[JSVecx Debug] Paused at PC=' + pc.toString(16) + ', mode=' + mode);
+    }
+    
+    // Construir call stack (placeholder por ahora)
+    this.buildCallStack = function() {
+        // TODO: Implementar tracking real de JSR/RTS
+        return [{
+            function: 'MAIN',
+            line: 0,
+            address: '0x' + this.e6809.reg_pc.toString(16).toUpperCase().padStart(4, '0'),
+            type: 'vpy'
+        }];
+    }
+    
+    // Añadir breakpoint
+    this.addBreakpoint = function(address) {
+        if (typeof address === 'string') {
+            address = parseInt(address, 16);
+        }
+        this.breakpoints.add(address);
+        console.log('[JSVecx Debug] Breakpoint added at 0x' + address.toString(16));
+    }
+    
+    // Eliminar breakpoint
+    this.removeBreakpoint = function(address) {
+        if (typeof address === 'string') {
+            address = parseInt(address, 16);
+        }
+        this.breakpoints.delete(address);
+        console.log('[JSVecx Debug] Breakpoint removed from 0x' + address.toString(16));
+    }
+    
+    // Limpiar todos los breakpoints
+    this.clearBreakpoints = function() {
+        this.breakpoints.clear();
+        console.log('[JSVecx Debug] All breakpoints cleared');
+    }
+    
+    // Continuar ejecución (F5)
+    this.debugContinue = function() {
+        if (this.debugState === 'paused') {
+            this.debugState = 'running';
+            console.log('[JSVecx Debug] Continuing execution');
+            // Reiniciar el loop de emulación
+            if (!this.running) {
+                this.vecx_emuloop();
+            }
+        }
+    }
+    
+    // Pausar ejecución manualmente
+    this.debugPause = function() {
+        if (this.debugState === 'running') {
+            this.pauseDebugger('manual', this.e6809.reg_pc);
+        }
+    }
+    
+    // Detener ejecución (Stop button)
+    this.debugStop = function() {
+        this.debugState = 'stopped';
+        this.running = false;
+        this.stepMode = null;
+        this.stepTargetAddress = null;
+        this.callStackDepth = 0;
+        console.log('[JSVecx Debug] Execution stopped');
+    }
+    
+    // Step Over (F10) - ejecutar hasta la siguiente línea
+    this.debugStepOver = function(targetAddress) {
+        if (typeof targetAddress === 'string') {
+            targetAddress = parseInt(targetAddress, 16);
+        }
+        
+        this.stepMode = 'over';
+        this.stepTargetAddress = targetAddress;
+        this.debugState = 'running';
+        
+        console.log('[JSVecx Debug] Step Over to 0x' + targetAddress.toString(16));
+        
+        // Ejecutar hasta el target
+        if (!this.running) {
+            this.vecx_emuloop();
+        }
+    }
+    
+    // Step Into (F11) - entrar en funciones
+    this.debugStepInto = function(isNativeCall) {
+        this.stepMode = 'into';
+        this.debugState = 'running';
+        
+        console.log('[JSVecx Debug] Step Into (native=' + isNativeCall + ')');
+        
+        // Ejecutar UNA instrucción y pausar
+        if (!this.running) {
+            this.vecx_emuloop();
+        }
+    }
+    
+    // Step Out (Shift+F11) - salir de función actual
+    this.debugStepOut = function() {
+        this.stepMode = 'out';
+        this.callStackDepth = 0; // Reset depth counter
+        this.debugState = 'running';
+        
+        console.log('[JSVecx Debug] Step Out');
+        
+        // Ejecutar hasta RTS que nos saque del nivel actual
+        if (!this.running) {
+            this.vecx_emuloop();
+        }
+    }
+    
+    // Setup de listeners para postMessage desde el IDE
+    this.setupDebugListeners = function() {
+        var vecx = this;
+        
+        window.addEventListener('message', function(event) {
+            // Validar origen si es necesario
+            // if (event.origin !== 'expected-origin') return;
+            
+            var msg = event.data;
+            if (!msg || !msg.type) return;
+            
+            console.log('[JSVecx Debug] Received message:', msg.type);
+            
+            switch (msg.type) {
+                case 'debug-continue':
+                    vecx.debugContinue();
+                    break;
+                    
+                case 'debug-pause':
+                    vecx.debugPause();
+                    break;
+                    
+                case 'debug-stop':
+                    vecx.debugStop();
+                    break;
+                    
+                case 'debug-step-over':
+                    if (msg.targetAddress) {
+                        vecx.debugStepOver(msg.targetAddress);
+                    }
+                    break;
+                    
+                case 'debug-step-into':
+                    vecx.debugStepInto(msg.isNativeCall || false);
+                    break;
+                    
+                case 'debug-step-out':
+                    vecx.debugStepOut();
+                    break;
+                    
+                case 'debug-add-breakpoint':
+                    if (msg.address) {
+                        vecx.addBreakpoint(msg.address);
+                    }
+                    break;
+                    
+                case 'debug-remove-breakpoint':
+                    if (msg.address) {
+                        vecx.removeBreakpoint(msg.address);
+                    }
+                    break;
+                    
+                case 'debug-clear-breakpoints':
+                    vecx.clearBreakpoints();
+                    break;
+                    
+                default:
+                    console.warn('[JSVecx Debug] Unknown message type:', msg.type);
+            }
+        });
+        
+        console.log('[JSVecx Debug] Listeners setup complete');
+    }
+    
+    // Auto-setup de listeners al crear el emulador
+    this.setupDebugListeners();
 }
