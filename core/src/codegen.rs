@@ -69,6 +69,7 @@ mod backends_ref {
     pub use crate::backend::arm::emit as emit_arm;
     pub use crate::backend::cortexm::emit as emit_cortexm;
     pub use crate::backend::m6809::emit as emit_6809;
+    pub use crate::backend::m6809::emit_with_debug as emit_6809_with_debug;
 }
 
 // CodegenOptions: options affecting generation (title, etc.).
@@ -110,6 +111,42 @@ pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> Strin
     }
     
     asm
+}
+
+// emit_asm_with_debug: Same as emit_asm but also returns debug information for .pdb generation
+// Currently only M6809/Vectrex backend supports debug info generation
+pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOptions) 
+    -> (String, Option<crate::backend::debug_info::DebugInfo>, Vec<Diagnostic>) 
+{
+    use crate::target::CpuArch;
+    
+    // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
+    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    validate_semantics(module, &mut diagnostics);
+    let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
+    if has_errors {
+        return (String::new(), None, diagnostics);
+    }
+    
+    // Paso 2: pipeline de optimización (dead_store_elim preserva asignaciones con literales string).
+    let optimized = optimize_module(module);
+    let ti = info(target);
+    
+    // If source defines CONST TITLE = "..." let it override CLI title.
+    let mut effective = CodegenOptions { ..opts.clone() };
+    if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
+    
+    // Generate ASM and debug info
+    let (asm, debug_info) = match ti.arch {
+        CpuArch::M6809 => {
+            let (asm, dbg) = backends_ref::emit_6809_with_debug(&optimized, target, &ti, &effective);
+            (asm, Some(dbg))
+        },
+        CpuArch::Arm => (backends_ref::emit_arm(&optimized, target, &ti, opts), None),
+        CpuArch::CortexM => (backends_ref::emit_cortexm(&optimized, target, &ti, opts), None),
+    };
+    
+    (asm, debug_info, diagnostics)
 }
 
 // Nueva API estructurada (S8). Mantiene mismo comportamiento pero devuelve diagnostics.

@@ -1,6 +1,7 @@
 // (Removed duplicated legacy block above during refactor)
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
+use super::debug_info::DebugInfo;
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -49,7 +50,23 @@ fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
 
 // emit: entry point for Motorola 6809 backend assembly generation.
 // Produces a simple Vectrex-style header, calls platform init + MAIN, then infinite loop.
-pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> String {
+pub fn emit(module: &Module, t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> String {
+    let (asm, _debug_info) = emit_with_debug(module, t, ti, opts);
+    asm
+}
+
+// emit_with_debug: Same as emit but also returns debug information for .pdb generation
+pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> (String, DebugInfo) {
+    // Initialize debug info with source and binary names
+    let source_name = opts.source_path.as_ref()
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown.vpy")
+        .to_string();
+    
+    let binary_name = source_name.replace(".vpy", ".bin");
+    let mut debug_info = DebugInfo::new(source_name, binary_name);
+    
     let mut out = String::new();
     let syms = collect_all_vars(module); // Use ALL vars (including locals) for assembly generation
     let global_vars = collect_global_vars(module); // NEW: Collect variables with initial values
@@ -75,13 +92,13 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         out.push_str("; ERROR: Missing required function 'def main():'\n");
         out.push_str("; The main() function is required for initialization code that runs once at startup.\n");
         out.push_str("        ; Compilation failed - please add def main(): function\n");
-        return out;
+        return (out, debug_info);
     }
     if user_loop.is_none() {
         out.push_str("; ERROR: Missing required function 'def loop():'\n");
         out.push_str("; The loop() function is required and contains code that runs every frame (60 FPS).\n");
         out.push_str("        ; Compilation failed - please add def loop(): function\n");
-        return out;
+        return (out, debug_info);
     }
     
     // Track whether we ended up inlining 'main'
@@ -528,8 +545,36 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     // Touch var_offset so compiler sees it used when EQU mode enabled
     #[allow(unused_variables)]
     { let _vo = var_offset; }
+    
+    // Populate debug info with function symbols
+    // Entry point is either START (if main has content) or main label
+    debug_info.set_entry_point(0x0000); // Vectrex cartridges start at 0x0000
+    
+    // Add symbols for main() and loop() functions
+    if user_main.is_some() {
+        if main_has_content {
+            debug_info.add_symbol("START".to_string(), 0x0000);
+            debug_info.add_symbol("MAIN".to_string(), 0x0000); // Approximate - actual address calculation would need tracking
+        } else {
+            debug_info.add_symbol("main".to_string(), 0x0000);
+        }
+    }
+    
+    if user_loop.is_some() {
+        debug_info.add_symbol("LOOP_BODY".to_string(), 0x0000); // Approximate
+    }
+    
+    // Add symbols for all other functions
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            if f.name != "main" && f.name != "loop" {
+                debug_info.add_symbol(f.name.to_uppercase(), 0x0000); // Approximate
+            }
+        }
+    }
+    
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
-    out
+    (out, debug_info)
 }
 fn expr_has_trig(e: &Expr) -> bool {
     match e {

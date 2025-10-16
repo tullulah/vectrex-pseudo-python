@@ -122,7 +122,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     } else {
         // Phase 4: Code generation
         eprintln!("Phase 4: Code generation (ASM emission)...");
-        let asm = codegen::emit_asm(&module, tgt, &codegen::CodegenOptions {
+        let (asm, debug_info, _diagnostics) = codegen::emit_asm_with_debug(&module, tgt, &codegen::CodegenOptions {
             title: title.to_string(),
             auto_loop: true,
             diag_freeze: false,
@@ -158,6 +158,28 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             e
         })?;
         eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
+        
+        // Phase 5.5: Write .pdb file if debug info available
+        if let Some(dbg) = debug_info {
+            eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
+            let pdb_path = out_path.with_extension("pdb");
+            match dbg.to_json() {
+                Ok(json) => {
+                    fs::write(&pdb_path, json).map_err(|e| {
+                        eprintln!("⚠ Warning: Cannot write debug symbols file");
+                        eprintln!("   Output path: {}", pdb_path.display());
+                        eprintln!("   Error: {}", e);
+                        e
+                    })?;
+                    eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                },
+                Err(e) => {
+                    eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                }
+            }
+        } else {
+            eprintln!("Phase 5.5: Debug symbols generation skipped (not supported for target={})", tgt);
+        }
         
         // Phase 6: Binary assembly (if requested)
         if bin && tgt == target::Target::Vectrex { 
