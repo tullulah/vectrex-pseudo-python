@@ -116,6 +116,9 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const scrollPositions = useEditorStore(s => s.scrollPositions);
   const setHadFocus = useEditorStore(s => s.setHadFocus);
   const hadFocus = useEditorStore(s => s.hadFocus);
+  const breakpoints = useEditorStore(s => s.breakpoints);
+  const toggleBreakpoint = useEditorStore(s => s.toggleBreakpoint);
+  const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
 
   const targetUri = uri || active;
   const doc = documents.find(d => d.uri === targetUri);
@@ -125,6 +128,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
 
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const breakpointDecorationsRef = useRef<string[]>([]); // Track breakpoint decoration IDs
   const beforeMount: BeforeMount = (_monaco) => {
     (window as any).MonacoEnvironment = {
       getWorker: function (_moduleId: string, _label: string) {
@@ -521,6 +525,95 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     return () => window.removeEventListener('vpy.goto', listener as any);
   }, []);
 
+  // Update breakpoint decorations when breakpoints change
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !doc) return;
+    
+    const bps = breakpoints[doc.uri] || new Set<number>();
+    const decorations = Array.from(bps).map(lineNumber => ({
+      range: new monacoRef.current!.Range(lineNumber, 1, lineNumber, 1),
+      options: {
+        isWholeLine: false,
+        glyphMarginClassName: 'breakpoint-glyph',
+        glyphMarginHoverMessage: { value: 'Breakpoint' }
+      }
+    }));
+    
+    breakpointDecorationsRef.current = editorRef.current.deltaDecorations(
+      breakpointDecorationsRef.current,
+      decorations
+    );
+  }, [breakpoints, doc?.uri]);
+
+  // Keyboard shortcuts for breakpoints
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !doc) return;
+    
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    
+    // Store the current doc URI in closure to avoid stale references
+    const currentUri = doc.uri;
+    
+    // F9: Toggle breakpoint
+    const f9Disposable = editor.addCommand(monaco.KeyCode.F9, () => {
+      const position = editor.getPosition();
+      if (position) {
+        toggleBreakpoint(currentUri, position.lineNumber);
+        logger.debug('App', `F9 pressed - toggled breakpoint at line ${position.lineNumber}`);
+      }
+    });
+    
+    // Ctrl+Shift+F9: Clear all breakpoints
+    const clearAllDisposable = editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F9,
+      () => {
+        const bps = breakpoints[currentUri] || new Set<number>();
+        const count = bps.size;
+        
+        if (count === 0) {
+          logger.debug('App', 'Ctrl+Shift+F9 pressed - no breakpoints to clear');
+          return;
+        } else if (count === 1) {
+          clearAllBreakpoints(currentUri);
+          logger.debug('App', 'Ctrl+Shift+F9 pressed - cleared 1 breakpoint');
+        } else {
+          const confirmed = confirm(`Delete all ${count} breakpoints in this file?`);
+          if (confirmed) {
+            clearAllBreakpoints(currentUri);
+            logger.debug('App', `Ctrl+Shift+F9 pressed - cleared ${count} breakpoints`);
+          }
+        }
+      }
+    );
+    
+    // Cleanup: Monaco addCommand doesn't return disposable, but we log registration
+    logger.debug('App', `F9 shortcuts registered for ${currentUri}`);
+    
+    return () => {
+      // No cleanup needed - Monaco commands are editor-scoped
+      logger.debug('App', `F9 shortcuts cleanup for ${currentUri}`);
+    };
+  }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
+
+  // Gutter (margin) click handler for breakpoints
+  useEffect(() => {
+    if (!editorRef.current || !doc) return;
+    
+    const editor = editorRef.current;
+    const disposable = editor.onMouseDown((e: any) => {
+      // Check if click is in the glyph margin (where breakpoints appear)
+      if (e.target?.type === 2) { // GUTTER_GLYPH_MARGIN = 2
+        const lineNumber = e.target.position?.lineNumber;
+        if (lineNumber) {
+          toggleBreakpoint(doc.uri, lineNumber);
+        }
+      }
+    });
+    
+    return () => disposable?.dispose();
+  }, [doc?.uri, toggleBreakpoint]);
+
   useEffect(() => {
     const w: any = window as any;
     if (!w.electronAPI || !editorRef.current || !monacoRef.current) return;
@@ -594,12 +687,14 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         fontSize: 14,
         scrollBeyondLastLine: false,
         wordWrap: 'on',
-  wordBasedSuggestions: 'off',
+        wordBasedSuggestions: 'off',
         hover: { enabled: true, delay: 150 },
         'semanticHighlighting.enabled': true,
         quickSuggestions: { other: true, strings: false, comments: false },
         suggestOnTriggerCharacters: true,
-        renderValidationDecorations: 'on'
+        renderValidationDecorations: 'on',
+        glyphMargin: true, // Enable glyph margin for breakpoints
+        lineNumbersMinChars: 3 // Make room for line numbers + glyph margin
       }}
     />
   );
