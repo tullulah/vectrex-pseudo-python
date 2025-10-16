@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSVecx Debug Backend Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #4ec9b0;
+            border-bottom: 2px solid #569cd6;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .section h2 {
+            color: #569cd6;
+            margin-top: 0;
+            font-size: 18px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #1177bb;
+        }
+        
+        button.danger {
+            background: #c5504e;
+        }
+        
+        button.danger:hover {
+            background: #e8433f;
+        }
+        
+        button.success {
+            background: #14a96e;
+        }
+        
+        button.success:hover {
+            background: #18c77f;
+        }
+        
+        button.warning {
+            background: #cca700;
+        }
+        
+        button.warning:hover {
+            background: #e5bb00;
+        }
+        
+        input {
+            background: #3c3c3c;
+            border: 1px solid #555;
+            color: #d4d4d4;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .log {
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #2d2d30;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .log-time {
+            color: #858585;
+            margin-right: 8px;
+        }
+        
+        .log-type-info {
+            color: #4ec9b0;
+        }
+        
+        .log-type-success {
+            color: #14a96e;
+        }
+        
+        .log-type-error {
+            color: #f48771;
+        }
+        
+        .log-type-warning {
+            color: #cca700;
+        }
+        
+        .state-display {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .state-item {
+            background: #1e1e1e;
+            padding: 10px 15px;
+            border-radius: 4px;
+            border: 1px solid #3e3e42;
+        }
+        
+        .state-label {
+            color: #858585;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .state-value {
+            color: #4ec9b0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .badge-stopped {
+            background: #3a3d41;
+            color: #cccccc;
+        }
+        
+        .badge-running {
+            background: #0e639c;
+            color: white;
+        }
+        
+        .badge-paused {
+            background: #cca700;
+            color: white;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            background: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 JSVecx Debug Backend Test</h1>
+        
+        <div class="section">
+            <h2>Estado del Debugger</h2>
+            <div class="state-display">
+                <div class="state-item">
+                    <div class="state-label">Estado</div>
+                    <div class="state-value">
+                        <span id="debugState" class="badge badge-stopped">STOPPED</span>
+                    </div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">Program Counter (PC)</div>
+                    <div class="state-value" id="pcValue">0x0000</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">Cycles</div>
+                    <div class="state-value" id="cyclesValue">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">Breakpoints</div>
+                    <div class="state-value" id="breakpointCount">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Control de Ejecución</h2>
+            <div class="controls">
+                <button class="success" onclick="sendCommand('debug-continue')">▶️ Continue (F5)</button>
+                <button class="warning" onclick="sendCommand('debug-pause')">⏸️ Pause</button>
+                <button class="danger" onclick="sendCommand('debug-stop')">⏹️ Stop</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Step Modes</h2>
+            <div class="controls">
+                <button onclick="stepOver()">↗️ Step Over (F10)</button>
+                <button onclick="stepInto()">↘️ Step Into (F11)</button>
+                <button onclick="stepOut()">↖️ Step Out (Shift+F11)</button>
+                <input type="text" id="stepOverTarget" placeholder="0x0050" value="0x0050" />
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Breakpoint Management</h2>
+            <div class="controls">
+                <input type="text" id="breakpointAddress" placeholder="0x0050" value="0x0050" />
+                <button class="success" onclick="addBreakpoint()">➕ Add Breakpoint</button>
+                <button class="danger" onclick="removeBreakpoint()">➖ Remove Breakpoint</button>
+                <button class="danger" onclick="clearBreakpoints()">🗑️ Clear All</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Event Log</h2>
+            <div class="log" id="logContainer"></div>
+            <button onclick="clearLog()" style="margin-top: 10px;">Clear Log</button>
+        </div>
+        
+        <div class="section">
+            <h2>JSVecx Emulator (BIOS)</h2>
+            <iframe id="jsvecxFrame" src="./jsvecx_deploy/vecx.html"></iframe>
+        </div>
+    </div>
+
+    <script>
+        // Estado local
+        let breakpoints = new Set();
+        let debugState = 'stopped';
+        
+        // Enviar comando a JSVecx
+        function sendCommand(type, payload = {}) {
+            const frame = document.getElementById('jsvecxFrame').contentWindow;
+            const message = { type, ...payload };
+            
+            frame.postMessage(message, '*');
+            log('info', `Sent: ${type}`, JSON.stringify(payload));
+        }
+        
+        // Breakpoint management
+        function addBreakpoint() {
+            const address = document.getElementById('breakpointAddress').value;
+            if (!address) {
+                log('error', 'Invalid address', 'Please enter a valid hex address (e.g., 0x0050)');
+                return;
+            }
+            
+            breakpoints.add(address);
+            sendCommand('debug-add-breakpoint', { address, line: 0 });
+            updateBreakpointCount();
+        }
+        
+        function removeBreakpoint() {
+            const address = document.getElementById('breakpointAddress').value;
+            if (!address) {
+                log('error', 'Invalid address', 'Please enter a valid hex address');
+                return;
+            }
+            
+            breakpoints.delete(address);
+            sendCommand('debug-remove-breakpoint', { address, line: 0 });
+            updateBreakpointCount();
+        }
+        
+        function clearBreakpoints() {
+            breakpoints.clear();
+            sendCommand('debug-clear-breakpoints');
+            updateBreakpointCount();
+        }
+        
+        function updateBreakpointCount() {
+            document.getElementById('breakpointCount').textContent = breakpoints.size;
+        }
+        
+        // Step modes
+        function stepOver() {
+            const targetAddress = document.getElementById('stepOverTarget').value;
+            if (!targetAddress) {
+                log('error', 'Invalid target', 'Please enter a target address for Step Over');
+                return;
+            }
+            
+            sendCommand('debug-step-over', { targetAddress });
+        }
+        
+        function stepInto() {
+            sendCommand('debug-step-into', { isNativeCall: false });
+        }
+        
+        function stepOut() {
+            sendCommand('debug-step-out');
+        }
+        
+        // Logging
+        function log(type, message, details = '') {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span class="log-type-${type}">[${type.toUpperCase()}]</span>
+                ${message}
+                ${details ? `<br><span style="color: #858585; margin-left: 85px;">${details}</span>` : ''}
+            `;
+            
+            const container = document.getElementById('logContainer');
+            container.appendChild(logEntry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+        }
+        
+        // Update state display
+        function updateState(state) {
+            debugState = state;
+            const stateEl = document.getElementById('debugState');
+            stateEl.textContent = state.toUpperCase();
+            stateEl.className = `badge badge-${state}`;
+        }
+        
+        function updatePC(pc) {
+            document.getElementById('pcValue').textContent = pc;
+        }
+        
+        function updateCycles(cycles) {
+            document.getElementById('cyclesValue').textContent = cycles.toLocaleString();
+        }
+        
+        // Listen for messages from JSVecx
+        window.addEventListener('message', function(event) {
+            const msg = event.data;
+            if (!msg || !msg.type) return;
+            
+            if (msg.type === 'debugger-paused') {
+                updateState('paused');
+                updatePC(msg.pc);
+                updateCycles(msg.cycles);
+                
+                log('success', `Debugger Paused`, 
+                    `Mode: ${msg.mode}, PC: ${msg.pc}, Cycles: ${msg.cycles}`);
+                
+                // Log registers
+                if (msg.registers) {
+                    const regs = msg.registers;
+                    log('info', 'Registers', 
+                        `A=${regs.A.toString(16).padStart(2,'0')} ` +
+                        `B=${regs.B.toString(16).padStart(2,'0')} ` +
+                        `X=${regs.X.toString(16).padStart(4,'0')} ` +
+                        `Y=${regs.Y.toString(16).padStart(4,'0')} ` +
+                        `S=${regs.S.toString(16).padStart(4,'0')}`
+                    );
+                }
+                
+                // Log call stack
+                if (msg.callStack && msg.callStack.length > 0) {
+                    const stack = msg.callStack.map(f => 
+                        `${f.function}@${f.address}`
+                    ).join(' → ');
+                    log('info', 'Call Stack', stack);
+                }
+            }
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'F5') {
+                event.preventDefault();
+                sendCommand('debug-continue');
+            } else if (event.key === 'F10') {
+                event.preventDefault();
+                stepOver();
+            } else if (event.key === 'F11') {
+                event.preventDefault();
+                stepInto();
+            } else if (event.shiftKey && event.key === 'F11') {
+                event.preventDefault();
+                stepOut();
+            }
+        });
+        
+        // Initial log
+        log('success', 'Test page loaded', 'Debug backend ready for testing');
+        log('info', 'Instructions', 
+            'Wait for BIOS to load, then add breakpoint at 0xF000 (BIOS start) and click Continue');
+    </script>
+</body>
+</html>
