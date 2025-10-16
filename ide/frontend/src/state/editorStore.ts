@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DocumentModel, DiagnosticModel } from '../types/models';
 import { lspClient } from '../lspClient';
 import { logger } from '../utils/logger';
+import { useDebugStore } from './debugStore';
 
 interface FlatDiag { uri: string; file: string; line: number; column: number; severity: DiagnosticModel['severity']; message: string; source?: string; }
 
@@ -11,6 +12,7 @@ interface EditorState {
   allDiagnostics: FlatDiag[]; // kept sorted & stable reference unless content changes
   scrollPositions: Record<string, number>; // vertical scrollTop per document
   hadFocus: Record<string, boolean>; // whether doc was focused last interaction
+  breakpoints: Record<string, Set<number>>; // uri -> set of line numbers (1-indexed)
   openDocument: (doc: DocumentModel) => void;
   setActive: (uri: string) => void;
   updateContent: (uri: string, content: string) => void;
@@ -21,6 +23,8 @@ interface EditorState {
   gotoLocation: (uri: string, line: number, column: number) => void;
   setScrollPosition: (uri: string, top: number) => void;
   setHadFocus: (uri: string, focused: boolean) => void;
+  toggleBreakpoint: (uri: string, lineNumber: number) => void;
+  clearAllBreakpoints: (uri?: string) => void;
 }
 
 function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
@@ -57,6 +61,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   allDiagnostics: [],
   scrollPositions: {},
   hadFocus: {},
+  breakpoints: {}, // Initialize breakpoints map
   openDocument: (doc) => set((s) => {
     logger.debug('File', 'openDocument called with URI:', doc.uri);
     // If document already open (by uri) just activate & optionally refresh metadata
@@ -165,5 +170,38 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     window.dispatchEvent(ev);
   },
   setScrollPosition: (uri, top) => set(s => ({ scrollPositions: { ...s.scrollPositions, [uri]: top } })),
-  setHadFocus: (uri, focused) => set(s => ({ hadFocus: { ...s.hadFocus, [uri]: focused } }))
+  setHadFocus: (uri, focused) => set(s => ({ hadFocus: { ...s.hadFocus, [uri]: focused } })),
+  toggleBreakpoint: (uri, lineNumber) => {
+    const s = useEditorStore.getState();
+    const bps = s.breakpoints[uri] || new Set<number>();
+    const newBps = new Set(bps);
+    const wasAdded = !newBps.has(lineNumber);
+    
+    if (newBps.has(lineNumber)) {
+      newBps.delete(lineNumber);
+      logger.debug('App', `Removed breakpoint at ${uri}:${lineNumber}`);
+    } else {
+      newBps.add(lineNumber);
+      logger.debug('App', `Added breakpoint at ${uri}:${lineNumber}`);
+    }
+    
+    useEditorStore.setState({ breakpoints: { ...s.breakpoints, [uri]: newBps } });
+    
+    // Notify debugStore for dynamic breakpoint synchronization
+    // This allows adding/removing breakpoints during active debugging session
+    if (wasAdded) {
+      useDebugStore.getState().onBreakpointAdded(uri, lineNumber);
+    } else {
+      useDebugStore.getState().onBreakpointRemoved(uri, lineNumber);
+    }
+  },
+  clearAllBreakpoints: (uri) => set(s => {
+    if (uri) {
+      logger.debug('App', `Cleared all breakpoints for ${uri}`);
+      return { breakpoints: { ...s.breakpoints, [uri]: new Set<number>() } };
+    } else {
+      logger.debug('App', 'Cleared all breakpoints in all files');
+      return { breakpoints: {} };
+    }
+  })
 }));

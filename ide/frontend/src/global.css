@@ -114,3 +114,121 @@ header button, header select { -webkit-app-region: no-drag; }
 .build-output-scroll::-webkit-scrollbar-thumb:active {
   background-color: #555555;
 }
+
+/* Breakpoint glyph styling (VS2022-style red circle) */
+.breakpoint-glyph, .debug-breakpoint {
+  background: #e51400 !important;
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  margin-left: 3px !important;
+  margin-top: 3px !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3) !important;
+}
+
+.breakpoint-glyph:hover, .debug-breakpoint:hover {
+  background: #ff1e00 !important;
+  box-shadow: 0 0 4px rgba(229, 20, 0, 0.5) !important;
+}
+
+/* Current line decoration (yellow arrow + highlight) */
+.debug-current-line {
+  background: rgba(255, 255, 0, 0.2) !important;
+}
+
+.debug-current-line-arrow {
+  background: #ffff00 !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-style: solid !important;
+  border-width: 6px 0 6px 10px !important;
+  border-color: transparent transparent transparent #ffff00 !important;
+  margin-left: 3px !important;
+  margin-top: 3px !important;
+}
+
+/* Current ASM instruction highlight */
+.debug-current-asm-line {
+  background: rgba(255, 255, 0, 0.15) !important;
+  border-left: 2px solid #ffff00 !important;
+}
+
+.debug-current-asm-arrow {
+  background: #ffff00 !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-style: solid !important;
+  border-width: 6px 0 6px 10px !important;
+  border-color: transparent transparent transparent #ffff00 !important;
+  margin-left: 0px !important;
+  margin-top: 3px !important;
+}
+
+/* Debug Split View Layout */
+.debug-split-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+}
+
+.split-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.vpy-panel, .asm-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-header {
+  background: #252526;
+  padding: 8px 12px;
+  border-bottom: 1px solid #3c3c3c;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.panel-title {
+  font-weight: 600;
+  color: #cccccc;
+}
+
+.panel-file {
+  color: #858585;
+  font-size: 12px;
+}
+
+.panel-address {
+  color: #4ec9b0;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.editor-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.splitter {
+  width: 4px;
+  background: #2d2d30;
+  cursor: col-resize;
+  transition: background 0.2s;
+}
+
+.splitter:hover {
+  background: #3e3e42;
+}
+
+.splitter:active {
+  background: #007acc;
+}

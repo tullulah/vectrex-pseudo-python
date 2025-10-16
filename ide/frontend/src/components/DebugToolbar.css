@@ -1,0 +1,137 @@
+/* DebugToolbar.css - Styling for debug control toolbar */
+
+.debug-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  padding: 8px 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  height: 48px;
+  box-sizing: border-box;
+}
+
+.debug-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.debug-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #3c3c3c;
+  border: 1px solid #5a5a5a;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.debug-btn:hover {
+  background: #505050;
+  border-color: #6e6e6e;
+}
+
+.debug-btn:active {
+  background: #2d2d2d;
+  transform: translateY(1px);
+}
+
+.debug-btn .icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.debug-btn .label {
+  font-weight: 500;
+}
+
+.debug-btn-run, .debug-btn-continue {
+  background: #0e639c;
+  border-color: #1177bb;
+}
+
+.debug-btn-run:hover, .debug-btn-continue:hover {
+  background: #1177bb;
+  border-color: #1890d5;
+}
+
+.debug-btn-stop {
+  background: #a01212;
+  border-color: #c71616;
+}
+
+.debug-btn-stop:hover {
+  background: #c71616;
+  border-color: #e81717;
+}
+
+.debug-btn-pause {
+  background: #856404;
+  border-color: #a87c08;
+}
+
+.debug-btn-pause:hover {
+  background: #a87c08;
+  border-color: #ca9409;
+}
+
+.debug-separator {
+  width: 1px;
+  height: 24px;
+  background: #5a5a5a;
+  margin: 0 8px;
+}
+
+.debug-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.debug-info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-info-label {
+  color: #858585;
+  font-weight: 500;
+}
+
+.debug-info-value {
+  color: #4ec9b0;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.debug-state-badge {
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.debug-state-badge[data-state="stopped"] {
+  background: #5a5a5a;
+  color: #cccccc;
+}
+
+.debug-state-badge[data-state="running"] {
+  background: #0e639c;
+  color: #ffffff;
+}
+
+.debug-state-badge[data-state="paused"] {
+  background: #856404;
+  color: #ffffff;
+}
