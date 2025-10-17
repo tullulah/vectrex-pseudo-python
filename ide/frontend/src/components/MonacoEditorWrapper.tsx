@@ -593,19 +593,26 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     // Store the current doc URI in closure to avoid stale references
     const currentUri = doc.uri;
     
-    // F9: Toggle breakpoint
-    const f9Disposable = editor.addCommand(monaco.KeyCode.F9, () => {
-      const position = editor.getPosition();
-      if (position) {
-        toggleBreakpoint(currentUri, position.lineNumber);
-        logger.debug('App', `F9 pressed - toggled breakpoint at line ${position.lineNumber}`);
+    // F9: Toggle breakpoint using addAction (more reliable than addCommand)
+    const f9Action = editor.addAction({
+      id: 'vpy-toggle-breakpoint',
+      label: 'Toggle Breakpoint',
+      keybindings: [monaco.KeyCode.F9],
+      run: (ed: any) => {
+        const position = ed.getPosition();
+        if (position) {
+          toggleBreakpoint(currentUri, position.lineNumber);
+          logger.debug('App', `F9 pressed - toggled breakpoint at line ${position.lineNumber}`);
+        }
       }
     });
     
     // Ctrl+Shift+F9: Clear all breakpoints
-    const clearAllDisposable = editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F9,
-      () => {
+    const clearAllAction = editor.addAction({
+      id: 'vpy-clear-all-breakpoints',
+      label: 'Clear All Breakpoints',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F9],
+      run: (ed: any) => {
         const bps = breakpoints[currentUri] || new Set<number>();
         const count = bps.size;
         
@@ -623,13 +630,14 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
           }
         }
       }
-    );
+    });
     
-    // Cleanup: Monaco addCommand doesn't return disposable, but we log registration
-    logger.debug('App', `F9 shortcuts registered for ${currentUri}`);
+    logger.debug('App', `F9 shortcuts registered as actions for ${currentUri}`);
     
     return () => {
-      // No cleanup needed - Monaco commands are editor-scoped
+      // Dispose actions on cleanup
+      f9Action?.dispose();
+      clearAllAction?.dispose();
       logger.debug('App', `F9 shortcuts cleanup for ${currentUri}`);
     };
   }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
