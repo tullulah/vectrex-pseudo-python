@@ -121,6 +121,8 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const toggleBreakpoint = useEditorStore(s => s.toggleBreakpoint);
   const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
   const pdbData = useDebugStore(s => s.pdbData);
+  const currentVpyLine = useDebugStore(s => s.currentVpyLine); // Phase 6.1: Track current line
+  const debugState = useDebugStore(s => s.state); // Phase 6.1: Track debug state
 
   const targetUri = uri || active;
   const doc = documents.find(d => d.uri === targetUri);
@@ -131,6 +133,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const breakpointDecorationsRef = useRef<string[]>([]); // Track breakpoint decoration IDs
+  const currentLineDecorationsRef = useRef<string[]>([]); // Track current line highlight (Phase 6.1)
   const beforeMount: BeforeMount = (_monaco) => {
     (window as any).MonacoEnvironment = {
       getWorker: function (_moduleId: string, _label: string) {
@@ -704,6 +707,39 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       });
     }
   }, [doc?.diskPath]);
+
+  // Phase 6.1: Highlight current line when paused in debugger
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !doc) return;
+    
+    // Only show highlight when paused and we have a valid line number
+    if (debugState === 'paused' && currentVpyLine !== null) {
+      const decorations = [{
+        range: new monacoRef.current!.Range(currentVpyLine, 1, currentVpyLine, 1),
+        options: {
+          isWholeLine: true,
+          className: 'current-line-highlight', // Yellow background
+          glyphMarginClassName: 'current-line-arrow' // Optional: arrow in gutter
+        }
+      }];
+      
+      currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
+        currentLineDecorationsRef.current,
+        decorations
+      );
+      
+      // Scroll to the current line (reveal in center of viewport)
+      editorRef.current.revealLineInCenter(currentVpyLine);
+      
+      logger.debug('Debug', `Highlighted current line: ${currentVpyLine}`);
+    } else {
+      // Clear decorations when not paused or no line
+      currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
+        currentLineDecorationsRef.current,
+        []
+      );
+    }
+  }, [debugState, currentVpyLine, doc]);
 
   return (
     <Editor

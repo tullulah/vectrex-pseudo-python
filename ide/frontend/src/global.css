@@ -249,3 +249,16 @@ header button, header select { -webkit-app-region: no-drag; }
   box-shadow: 0 0 5px rgba(255, 31, 15, 1) !important;
 }
 
+/* Phase 6.1: Current line highlight when paused in debugger */
+.current-line-highlight {
+  background: rgba(255, 255, 0, 0.2) !important; /* Yellow transparent background */
+  border-left: 3px solid #ffeb3b !important; /* Yellow left border for emphasis */
+}
+
+.current-line-arrow {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="%23ffeb3b" d="M6 4l6 4-6 4z"/></svg>') center center no-repeat !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin-left: 2px !important;
+}
+
