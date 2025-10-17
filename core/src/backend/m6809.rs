@@ -1,7 +1,7 @@
 // (Removed duplicated legacy block above during refactor)
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::{DebugInfo, parse_asm_addresses};
+use super::debug_info::{DebugInfo, parse_asm_addresses, parse_native_call_comments};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -627,6 +627,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     
+    // Phase 4: Parse native call comments from ASM
+    let native_calls = parse_native_call_comments(&out);
+    for (line_num, function_name) in native_calls {
+        debug_info.add_native_call(line_num, function_name);
+    }
+    
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
 }
@@ -987,7 +993,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
-fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) -> bool {
+fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, line_info: Option<usize>) -> bool {
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
@@ -996,6 +1002,13 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
     "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
     );
+    
+    // Helper para agregar comentario de tracking cuando es una llamada nativa real
+    let add_native_call_comment = |out: &mut String, func_name: &str| {
+        if let Some(line) = line_info {
+            out.push_str(&format!("; NATIVE_CALL: {} at line {}\n", func_name, line));
+        }
+    };
     if up == "VECTREX_DRAW_VECTORLIST" { // alias to compact list runtime
         if args.len()==1 {
             if let Expr::StringLit(s) = &args[0] {
@@ -1212,7 +1225,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         let translated = resolve_function_name(&up);
         if let Some(new_up) = translated {
             // Re-dispatch using new name recursively (avoid infinite loop by guarding is set)
-            return emit_builtin_call(&new_up, args, out, fctx, string_map, opts);
+            return emit_builtin_call(&new_up, args, out, fctx, string_map, opts, line_info);
         }
         return false;
     }
@@ -1290,6 +1303,10 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("    LDD RESULT\n");
         out.push_str(&format!("    STD VAR_ARG{}\n", i));
     }
+    
+    // Add native call tracking comment before JSR
+    add_native_call_comment(out, &up);
+    
     if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", up)); } else { out.push_str(&format!("    JSR {}\n", up)); }
     // Return 0
     out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
@@ -1489,7 +1506,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.name.to_uppercase())); }
         }
         Expr::Call(ci) => {
-            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts) { return; }
+            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.line)) { return; }
             for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
                 emit_expr(arg, out, fctx, string_map, opts);

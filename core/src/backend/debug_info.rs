@@ -318,6 +318,33 @@ pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
     addresses
 }
 
+/// Parse native call comments from generated ASM
+/// Format: "; NATIVE_CALL: FUNCTION_NAME at line N"
+/// Returns: HashMap<line_number, function_name>
+pub fn parse_native_call_comments(asm: &str) -> HashMap<usize, String> {
+    let mut native_calls = HashMap::new();
+    
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Look for NATIVE_CALL comments
+        if trimmed.starts_with("; NATIVE_CALL:") {
+            // Parse: "; NATIVE_CALL: VECTREX_PRINT_TEXT at line 42"
+            if let Some(after_colon) = trimmed.strip_prefix("; NATIVE_CALL:") {
+                let parts: Vec<&str> = after_colon.trim().split(" at line ").collect();
+                if parts.len() == 2 {
+                    let function_name = parts[0].trim().to_string();
+                    if let Ok(line_num) = parts[1].trim().parse::<usize>() {
+                        native_calls.insert(line_num, function_name);
+                    }
+                }
+            }
+        }
+    }
+    
+    native_calls
+}
+
 /// Estimate the size in bytes of generated ASM code
 /// This is a rough approximation based on typical 6809 instruction sizes
 pub fn estimate_asm_size(asm: &str) -> u16 {
