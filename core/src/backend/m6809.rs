@@ -581,9 +581,49 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             if f.name != "main" && f.name != "loop" {
                 let label_name = f.name.to_uppercase();
                 if let Some(&addr) = label_addresses.get(&label_name) {
-                    debug_info.add_symbol(label_name, addr);
+                    debug_info.add_symbol(label_name.clone(), addr);
+                    
+                    // Add function metadata
+                    // Note: Line numbers will be 0 until AST is extended with line tracking
+                    let start_line = 0; // TODO: f.line when available
+                    let end_line = 0;   // TODO: Calculate from body when available
+                    debug_info.add_function(
+                        f.name.clone(),
+                        addr,
+                        start_line,
+                        end_line,
+                        "vpy"
+                    );
                 }
             }
+        }
+    }
+    
+    // Add function metadata for main() if present
+    if let Some(_) = user_main {
+        if main_has_content {
+            if let Some(&addr) = label_addresses.get("MAIN") {
+                debug_info.add_function(
+                    "main".to_string(),
+                    addr,
+                    0, // TODO: Get from AST when available
+                    0, // TODO: Calculate when available
+                    "vpy"
+                );
+            }
+        }
+    }
+    
+    // Add function metadata for loop() if present
+    if let Some(_) = user_loop {
+        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
+            debug_info.add_function(
+                "loop".to_string(),
+                addr,
+                0, // TODO: Get from AST when available
+                0, // TODO: Calculate when available
+                "vpy"
+            );
         }
     }
     
