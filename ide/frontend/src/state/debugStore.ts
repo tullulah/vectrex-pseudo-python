@@ -42,6 +42,7 @@ interface DebugStore extends LegacyDebugState {
   pdbData: PdbData | null;
   callStack: CallFrame[];
   currentFps: number;
+  loadingForDebug: boolean; // Flag to indicate loading binary for debug session (don't auto-start)
   
   // New actions
   setState: (state: ExecutionState) => void;
@@ -50,6 +51,7 @@ interface DebugStore extends LegacyDebugState {
   loadPdbData: (pdb: PdbData) => void;
   updateCallStack: (stack: CallFrame[]) => void;
   updateStats: (cycles: number, fps: number) => void;
+  setLoadingForDebug: (loading: boolean) => void;
   
   // Debug controls
   run: () => void;
@@ -90,11 +92,13 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   pdbData: null,
   callStack: [],
   currentFps: 0,
+  loadingForDebug: false,
   
   // New actions
   setState: (state) => set({ state }),
   setCurrentVpyLine: (line) => set({ currentVpyLine: line }),
   setCurrentAsmAddress: (address) => set({ currentAsmAddress: address }),
+  setLoadingForDebug: (loading) => set({ loadingForDebug: loading }),
   
   loadPdbData: (pdb) => {
     console.log('[DebugStore] Loaded .pdb:', pdb);

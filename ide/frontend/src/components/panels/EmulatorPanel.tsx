@@ -929,6 +929,10 @@ export const EmulatorPanel: React.FC = () => {
         useDebugStore.getState().loadPdbData(payload.pdbData);
       }
       
+      // Verificar si estamos cargando para debug session (no auto-start)
+      const { useDebugStore } = require('../../state/debugStore');
+      const loadingForDebug = useDebugStore.getState().loadingForDebug;
+      
       try {
         // Convertir base64 a bytes y cargar en JSVecX
         const binaryData = atob(payload.base64);
@@ -949,9 +953,18 @@ export const EmulatorPanel: React.FC = () => {
           console.log('[EmulatorPanel] ✓ Binary loaded into Globals.cartdata');
         }
         
-        // Reset y reiniciar
+        // Reset
         vecx.reset();
-        vecx.start();
+        
+        // Solo auto-iniciar si NO estamos en modo debug
+        if (!loadingForDebug) {
+          vecx.start();
+          console.log('[EmulatorPanel] ✓ Emulator started');
+        } else {
+          console.log('[EmulatorPanel] ✓ Binary loaded for debug (not started - use F5 to continue)');
+          // Limpiar flag
+          useDebugStore.getState().setLoadingForDebug(false);
+        }
         
         // Actualizar ROM cargada y buscar overlay
         const romName = payload.binPath.split(/[/\\]/).pop()?.replace(/\.(bin|BIN)$/, '') || 'compiled';

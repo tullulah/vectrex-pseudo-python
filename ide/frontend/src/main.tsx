@@ -11,6 +11,7 @@ import { deriveBinaryName } from './utils';
 import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus';
 import { useEditorStore } from './state/editorStore';
 import { useProjectStore } from './state/projectStore';
+import { useDebugStore } from './state/debugStore';
 import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem } from './components/MenuComponents';
 import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger';
 
@@ -387,6 +388,9 @@ function App() {
         logger.info('Debug', 'Starting debug session...');
         
         try {
+          // 0. Activar flag ANTES de compilar para que EmulatorPanel no auto-inicie
+          useDebugStore.getState().setLoadingForDebug(true);
+          
           // 1. Compilar sin auto-run (necesitamos el binario pero no ejecutarlo automáticamente)
           const editorState = useEditorStore.getState();
           const activeDoc = documents.find(d => d.uri === editorState.active);
@@ -461,7 +465,6 @@ function App() {
           // Pero el binario también se cargó y ejecutó. Para debugging necesitamos control.
           
           // 6. Entrar en modo debug (pausado en entry point)
-          const { useDebugStore } = await import('./state/debugStore');
           useDebugStore.getState().setState('paused');
           
           logger.info('Debug', '✓ Debug session started - paused at entry point');
@@ -476,8 +479,6 @@ function App() {
         logger.info('Debug', 'Stopping debug session...');
         
         try {
-          const { useDebugStore } = await import('./state/debugStore');
-          
           // Cambiar a estado stopped
           useDebugStore.getState().setState('stopped');
           
