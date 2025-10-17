@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
 import { useEmulatorSettings } from '../../state/emulatorSettings';
+import { useDebugStore } from '../../state/debugStore';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
 
@@ -216,6 +217,12 @@ export const EmulatorPanel: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
   const defaultOverlayLoaded = useRef<boolean>(false); // Flag para evitar recargar overlay por defecto
   
+  // Phase 3: Breakpoint system
+  const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
+  const debugState = useDebugStore(s => s.state);
+  const pdbData = useDebugStore(s => s.pdbData);
+  const breakpointCheckIntervalRef = useRef<number | null>(null);
+  
   // Hook editor store para documentos activos
   const editorActive = useEditorStore(s => s.active);
   const editorDocuments = useEditorStore(s => s.documents);
@@ -333,6 +340,59 @@ export const EmulatorPanel: React.FC = () => {
     }
   }, []); // sin dependencias
 
+  // Phase 3: Breakpoint management functions
+  const addBreakpoint = useCallback((address: number) => {
+    setBreakpoints(prev => {
+      const next = new Set(prev);
+      next.add(address);
+      console.log(`[EmulatorPanel] ✓ Breakpoint added at 0x${address.toString(16).padStart(4, '0')}`);
+      return next;
+    });
+  }, []);
+
+  const removeBreakpoint = useCallback((address: number) => {
+    setBreakpoints(prev => {
+      const next = new Set(prev);
+      next.delete(address);
+      console.log(`[EmulatorPanel] ✓ Breakpoint removed from 0x${address.toString(16).padStart(4, '0')}`);
+      return next;
+    });
+  }, []);
+
+  const toggleBreakpoint = useCallback((address: number) => {
+    setBreakpoints(prev => {
+      const next = new Set(prev);
+      if (next.has(address)) {
+        next.delete(address);
+        console.log(`[EmulatorPanel] ✓ Breakpoint removed from 0x${address.toString(16).padStart(4, '0')}`);
+      } else {
+        next.add(address);
+        console.log(`[EmulatorPanel] ✓ Breakpoint added at 0x${address.toString(16).padStart(4, '0')}`);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearAllBreakpoints = useCallback(() => {
+    setBreakpoints(new Set());
+    console.log('[EmulatorPanel] ✓ All breakpoints cleared');
+  }, []);
+
+  // Expose breakpoint functions globally for debugStore integration
+  useEffect(() => {
+    (window as any).emulatorDebug = {
+      addBreakpoint,
+      removeBreakpoint,
+      toggleBreakpoint,
+      clearAllBreakpoints,
+      getBreakpoints: () => Array.from(breakpoints)
+    };
+    
+    return () => {
+      delete (window as any).emulatorDebug;
+    };
+  }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
+
   // Helper function to apply audio state to vecx
   const applyAudioState = useCallback((enabled?: boolean) => {
     const vecx = (window as any).vecx;
@@ -397,6 +457,134 @@ export const EmulatorPanel: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [audioEnabled, status, setAudioEnabled]);
+
+  // Phase 3: Breakpoint checking system
+  const checkBreakpoint = useCallback(() => {
+    // Solo verificar si estamos en modo debug y running
+    if (debugState !== 'running') return;
+    
+    try {
+      const vecx = (window as any).vecx;
+      if (!vecx || !vecx.e6809) return;
+      
+      // Obtener PC actual
+      const currentPC = vecx.e6809.pc;
+      
+      // Verificar si hay breakpoint en esta dirección
+      if (breakpoints.has(currentPC)) {
+        console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: 0x${currentPC.toString(16).padStart(4, '0')}`);
+        
+        // Pausar emulador
+        if (vecx.running) {
+          vecx.stop();
+          console.log('[EmulatorPanel] ✓ Emulator paused by breakpoint');
+        }
+        
+        // Actualizar debug state
+        const { useDebugStore } = require('../../state/debugStore');
+        const debugStore = useDebugStore.getState();
+        
+        debugStore.setState('paused');
+        debugStore.setCurrentAsmAddress(`0x${currentPC.toString(16).padStart(4, '0')}`);
+        
+        // TODO Phase 5: Mapear address → VPy line usando pdbData
+        if (pdbData) {
+          // Por ahora solo log, en Phase 5 implementaremos el mapeo completo
+          console.log('[EmulatorPanel] PDB data available for address mapping');
+        }
+        
+        console.log('[EmulatorPanel] 🛑 Execution paused at breakpoint');
+      }
+    } catch (e) {
+      console.error('[EmulatorPanel] Error checking breakpoint:', e);
+    }
+  }, [debugState, breakpoints, pdbData]);
+
+  // Phase 3: Setup breakpoint checking interval
+  useEffect(() => {
+    // Limpiar interval previo
+    if (breakpointCheckIntervalRef.current !== null) {
+      clearInterval(breakpointCheckIntervalRef.current);
+      breakpointCheckIntervalRef.current = null;
+    }
+    
+    // Solo activar verificación cuando estamos en modo running
+    if (debugState === 'running') {
+      console.log('[EmulatorPanel] ✓ Starting breakpoint checking (every 50ms)');
+      breakpointCheckIntervalRef.current = window.setInterval(checkBreakpoint, 50);
+    } else {
+      console.log('[EmulatorPanel] Breakpoint checking disabled (not in running state)');
+    }
+    
+    return () => {
+      if (breakpointCheckIntervalRef.current !== null) {
+        clearInterval(breakpointCheckIntervalRef.current);
+        breakpointCheckIntervalRef.current = null;
+      }
+    };
+  }, [debugState, checkBreakpoint]);
+
+  // Phase 3: Listen for debug commands from debugStore
+  useEffect(() => {
+    const handleDebugMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      
+      const vecx = (window as any).vecx;
+      if (!vecx) return;
+      
+      const { type, targetAddress } = event.data;
+      
+      switch (type) {
+        case 'debug-continue':
+          console.log('[EmulatorPanel] 🟢 Debug: Continue execution');
+          if (!vecx.running) {
+            vecx.vecx_emuloop(); // Restart emulation loop
+          }
+          break;
+          
+        case 'debug-pause':
+          console.log('[EmulatorPanel] ⏸️  Debug: Pause execution');
+          if (vecx.running) {
+            vecx.stop();
+          }
+          break;
+          
+        case 'debug-stop':
+          console.log('[EmulatorPanel] 🛑 Debug: Stop execution');
+          if (vecx.running) {
+            vecx.stop();
+          }
+          vecx.reset();
+          break;
+          
+        case 'debug-step-over':
+          console.log('[EmulatorPanel] ⏭️  Debug: Step over to address:', targetAddress);
+          // TODO: Implement single-step execution
+          // For now, just continue and set a temporary breakpoint
+          if (targetAddress) {
+            const addr = parseInt(targetAddress, 16);
+            setBreakpoints(prev => new Set([...prev, addr]));
+            if (!vecx.running) {
+              vecx.vecx_emuloop();
+            }
+          }
+          break;
+          
+        case 'debug-step-into':
+          console.log('[EmulatorPanel] 🔽 Debug: Step into');
+          // TODO: Implement single-step execution
+          break;
+          
+        case 'debug-step-out':
+          console.log('[EmulatorPanel] 🔼 Debug: Step out');
+          // TODO: Implement step out (run until RTS)
+          break;
+      }
+    };
+    
+    window.addEventListener('message', handleDebugMessage);
+    return () => window.removeEventListener('message', handleDebugMessage);
+  }, []);
 
   // Función para cargar ROM desde dropdown (definida antes de useEffects que la usan)
   const loadROMFromDropdown = useCallback(async (romName: string) => {
