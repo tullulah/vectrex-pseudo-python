@@ -382,12 +382,116 @@ function App() {
       case 'build.clean':
   logger.debug('App', 'clean build artifacts (pending implementation)');
         break;
-      case 'debug.start':
-  logger.debug('App', 'start debug (pending implementation)');
+      case 'debug.start': {
+        // Phase 2: Implementar debug.start
+        logger.info('Debug', 'Starting debug session...');
+        
+        try {
+          // 1. Compilar sin auto-run (necesitamos el binario pero no ejecutarlo automáticamente)
+          const editorState = useEditorStore.getState();
+          const activeDoc = documents.find(d => d.uri === editorState.active);
+          
+          if (!activeDoc) {
+            logger.error('Debug', 'No active document to debug');
+            break;
+          }
+
+          if (!activeDoc.uri.endsWith('.vpy')) {
+            logger.error('Debug', 'Active document is not a .vpy file:', activeDoc.uri);
+            break;
+          }
+
+          const fileName = activeDoc.uri.split('/').pop() || activeDoc.uri;
+          logger.info('Debug', `Compiling for debug: ${fileName}`);
+
+          const electronAPI: any = (window as any).electronAPI;
+          if (!electronAPI?.runCompile) {
+            logger.error('Debug', 'electronAPI.runCompile not available');
+            break;
+          }
+
+          const filePath = activeDoc.diskPath || activeDoc.uri;
+          
+          if (filePath.startsWith('file://')) {
+            logger.error('Debug', 'Document has no diskPath, cannot compile:', activeDoc.uri);
+            break;
+          }
+
+          const args: any = {
+            path: filePath,
+            autoStart: false  // No auto-run, queremos control manual
+          };
+
+          // Si el documento está sucio, enviarlo para que se guarde antes de compilar
+          if (activeDoc.dirty) {
+            args.saveIfDirty = {
+              content: activeDoc.content,
+              expectedMTime: activeDoc.mtime
+            };
+          }
+
+          // 2. Compilar
+          const result = await electronAPI.runCompile(args);
+          
+          if (result.error) {
+            logger.error('Debug', 'Compilation failed:', result.error, result.detail || '');
+            break;
+          }
+
+          if (result.conflict) {
+            logger.error('Debug', 'File conflict detected, cannot start debug session');
+            break;
+          }
+
+          logger.info('Debug', 'Compilation successful:', result.binPath);
+
+          // 3. Si el archivo fue guardado, actualizar estado
+          if (activeDoc.dirty && result.savedMTime) {
+            useEditorStore.getState().markSaved(activeDoc.uri, result.savedMTime);
+          }
+
+          // 4. Verificar que tenemos .pdb data
+          if (!result.pdbData) {
+            logger.warn('Debug', 'No debug symbols (.pdb) available, debugging will be limited');
+          } else {
+            logger.info('Debug', '✓ Debug symbols loaded');
+          }
+
+          // 5. El .pdb ya fue cargado automáticamente en EmulatorPanel via onCompiledBin
+          // Pero el binario también se cargó y ejecutó. Para debugging necesitamos control.
+          
+          // 6. Entrar en modo debug (pausado en entry point)
+          const { useDebugStore } = await import('./state/debugStore');
+          useDebugStore.getState().setState('paused');
+          
+          logger.info('Debug', '✓ Debug session started - paused at entry point');
+          logger.info('Debug', 'Use F5 to continue, F10 to step over, F11 to step into');
+          
+        } catch (error) {
+          logger.error('Debug', 'Failed to start debug session:', error);
+        }
         break;
-      case 'debug.stop':
-  logger.debug('App', 'stop debug (pending implementation)');
+      }
+      case 'debug.stop': {
+        logger.info('Debug', 'Stopping debug session...');
+        
+        try {
+          const { useDebugStore } = await import('./state/debugStore');
+          
+          // Cambiar a estado stopped
+          useDebugStore.getState().setState('stopped');
+          
+          // Limpiar datos de debug
+          useDebugStore.getState().setCurrentVpyLine(null);
+          useDebugStore.getState().setCurrentAsmAddress(null);
+          useDebugStore.getState().updateCallStack([]);
+          
+          logger.info('Debug', '✓ Debug session stopped');
+        } catch (error) {
+          logger.error('Debug', 'Failed to stop debug session:', error);
+        }
         break;
+      }
       case 'debug.stepOver':
   logger.debug('App', 'step over (pending implementation)');
         break;

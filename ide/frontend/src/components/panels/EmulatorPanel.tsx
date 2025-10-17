@@ -725,8 +725,15 @@ export const EmulatorPanel: React.FC = () => {
     const electronAPI: any = (window as any).electronAPI;
     if (!electronAPI?.onCompiledBin) return;
 
-    const handleCompiledBin = (payload: { base64: string; size: number; binPath: string }) => {
+    const handleCompiledBin = (payload: { base64: string; size: number; binPath: string; pdbData?: any }) => {
       console.log(`[EmulatorPanel] Loading compiled binary: ${payload.binPath} (${payload.size} bytes)`);
+      
+      // Si hay datos de debug (.pdb), cargarlos en el debugStore
+      if (payload.pdbData) {
+        console.log('[EmulatorPanel] ✓ Debug symbols (.pdb) received');
+        const { useDebugStore } = require('../../state/debugStore');
+        useDebugStore.getState().loadPdbData(payload.pdbData);
+      }
       
       try {
         // Convertir base64 a bytes y cargar en JSVecX

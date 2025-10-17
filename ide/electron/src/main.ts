@@ -523,15 +523,35 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         mainWindow?.webContents.send('run://status', `✅ COMPILATION SUCCESS: ${binPath} (${buf.length} bytes)`);
         mainWindow?.webContents.send('run://stdout', `✅ Generated binary: ${buf.length} bytes`);
         
+        // Phase 3: Load .pdb debug symbols if available
+        const pdbPath = binPath.replace(/\.bin$/, '.pdb');
+        let pdbData: any = null;
+        
+        try {
+          const pdbExists = await fs.access(pdbPath).then(() => true).catch(() => false);
+          
+          if (pdbExists) {
+            const pdbContent = await fs.readFile(pdbPath, 'utf-8');
+            pdbData = JSON.parse(pdbContent);
+            mainWindow?.webContents.send('run://status', `✓ Phase 3 SUCCESS: Debug symbols loaded (.pdb)`);
+            mainWindow?.webContents.send('run://stdout', `✓ Debug symbols: ${pdbPath}`);
+          } else {
+            mainWindow?.webContents.send('run://status', `⚠ Phase 3 SKIPPED: No .pdb file found`);
+          }
+        } catch (e: any) {
+          mainWindow?.webContents.send('run://stderr', `⚠ Warning: Failed to load .pdb: ${e.message}`);
+        }
+        
         // Notify renderer to load binary
-        mainWindow?.webContents.send('emu://compiledBin', { base64, size: buf.length, binPath });
+        mainWindow?.webContents.send('emu://compiledBin', { base64, size: buf.length, binPath, pdbData });
         resolvePromise({ 
           ok: true, 
           binPath, 
           size: buf.length, 
           stdout: stdoutBuf, 
           stderr: stderrBuf,
-          savedMTime: savedMTime // Include the mtime if file was saved during compilation
+          savedMTime: savedMTime, // Include the mtime if file was saved during compilation
+          pdbData: pdbData // Include .pdb data if available
         });
         
       } catch (e: any) {
