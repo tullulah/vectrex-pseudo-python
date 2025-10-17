@@ -471,6 +471,11 @@ export const EmulatorPanel: React.FC = () => {
       // Obtener PC actual
       const currentPC = vecx.e6809.pc;
       
+      // DEBUG: Log PC y breakpoints cada 1 segundo (cada ~20 checks)
+      if (Math.random() < 0.05) { // ~1 de cada 20 veces
+        console.log(`[EmulatorPanel] Debug check - PC: ${formatAddress(currentPC)}, Breakpoints:`, Array.from(breakpoints));
+      }
+      
       // Verificar si hay breakpoint en esta dirección
       if (breakpoints.has(currentPC)) {
         console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: ${formatAddress(currentPC)}`);
@@ -542,8 +547,10 @@ export const EmulatorPanel: React.FC = () => {
       switch (type) {
         case 'debug-continue':
           console.log('[EmulatorPanel] 🟢 Debug: Continue execution');
+          console.log('[EmulatorPanel] Current vecx.running:', vecx.running);
           if (!vecx.running) {
-            vecx.vecx_emuloop(); // Restart emulation loop
+            vecx.start(); // Use start() instead of vecx_emuloop()
+            console.log('[EmulatorPanel] ✓ Emulator started');
           }
           break;
           

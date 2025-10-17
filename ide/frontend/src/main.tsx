@@ -493,6 +493,26 @@ function App() {
         }
         break;
       }
+      case 'debug.continue': {
+        logger.info('Debug', 'Continuing execution...');
+        try {
+          useDebugStore.getState().run();
+          logger.info('Debug', '✓ Execution resumed');
+        } catch (error) {
+          logger.error('Debug', 'Failed to continue execution:', error);
+        }
+        break;
+      }
+      case 'debug.pause': {
+        logger.info('Debug', 'Pausing execution...');
+        try {
+          useDebugStore.getState().pause();
+          logger.info('Debug', '✓ Execution paused');
+        } catch (error) {
+          logger.error('Debug', 'Failed to pause execution:', error);
+        }
+        break;
+      }
       case 'debug.stepOver':
   logger.debug('App', 'step over (pending implementation)');
         break;
@@ -521,7 +541,16 @@ function App() {
       else if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); commandExec('file.new'); }
       // Build / Run
       else if (e.key === 'F7') { e.preventDefault(); commandExec('build.build'); }
-      else if (e.key === 'F5' && !ctrl) { e.preventDefault(); commandExec('build.run'); }
+      else if (e.key === 'F5' && !ctrl) { 
+        e.preventDefault(); 
+        // Smart F5: If in debug session, continue. Otherwise, build and run.
+        const debugState = useDebugStore.getState().state;
+        if (debugState !== 'stopped') {
+          commandExec('debug.continue');
+        } else {
+          commandExec('build.run');
+        }
+      }
       // Debug
       else if (ctrl && e.key === 'F5') { e.preventDefault(); commandExec('debug.start'); }
       else if (e.key === 'F9') { e.preventDefault(); commandExec('debug.toggleBreakpoint'); }
