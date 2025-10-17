@@ -482,7 +482,6 @@ export const EmulatorPanel: React.FC = () => {
         }
         
         // Actualizar debug state
-        const { useDebugStore } = require('../../state/debugStore');
         const debugStore = useDebugStore.getState();
         
         debugStore.setState('paused');
@@ -925,12 +924,10 @@ export const EmulatorPanel: React.FC = () => {
       // Si hay datos de debug (.pdb), cargarlos en el debugStore
       if (payload.pdbData) {
         console.log('[EmulatorPanel] ✓ Debug symbols (.pdb) received');
-        const { useDebugStore } = require('../../state/debugStore');
         useDebugStore.getState().loadPdbData(payload.pdbData);
       }
       
       // Verificar si estamos cargando para debug session (no auto-start)
-      const { useDebugStore } = require('../../state/debugStore');
       const loadingForDebug = useDebugStore.getState().loadingForDebug;
       
       try {
