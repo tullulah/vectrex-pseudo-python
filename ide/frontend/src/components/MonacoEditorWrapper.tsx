@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../state/editorStore';
+import { useDebugStore } from '../state/debugStore';
 import Editor, { OnChange, Monaco, BeforeMount } from '@monaco-editor/react';
 // Import full ESM Monaco API and expose it globally so the react wrapper skips AMD loader.js
 import * as monacoApi from 'monaco-editor/esm/vs/editor/editor.api';
@@ -119,6 +120,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const breakpoints = useEditorStore(s => s.breakpoints);
   const toggleBreakpoint = useEditorStore(s => s.toggleBreakpoint);
   const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
+  const pdbData = useDebugStore(s => s.pdbData);
 
   const targetUri = uri || active;
   const doc = documents.find(d => d.uri === targetUri);
@@ -543,7 +545,40 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       breakpointDecorationsRef.current,
       decorations
     );
-  }, [breakpoints, doc?.uri]);
+    
+    // Phase 4: Sync breakpoints with emulator
+    const emulatorDebug = (window as any).emulatorDebug;
+    if (emulatorDebug && pdbData) {
+      // Get current emulator breakpoints
+      const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
+      
+      // Convert VPy lines to ASM addresses
+      const targetAddresses = new Set<number>();
+      for (const line of bps) {
+        const address = pdbData.lineMap?.[line.toString()];
+        if (address) {
+          const addr = parseInt(address, 16);
+          if (!isNaN(addr)) {
+            targetAddresses.add(addr);
+          }
+        }
+      }
+      
+      // Remove breakpoints that are no longer in Monaco
+      for (const addr of currentEmulatorBps) {
+        if (!targetAddresses.has(addr)) {
+          emulatorDebug.removeBreakpoint(addr);
+        }
+      }
+      
+      // Add breakpoints that are new in Monaco
+      for (const addr of targetAddresses) {
+        if (!currentEmulatorBps.has(addr)) {
+          emulatorDebug.addBreakpoint(addr);
+        }
+      }
+    }
+  }, [breakpoints, doc?.uri, pdbData]);
 
   // Keyboard shortcuts for breakpoints
   useEffect(() => {

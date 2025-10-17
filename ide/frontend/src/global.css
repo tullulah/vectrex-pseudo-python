@@ -232,3 +232,20 @@ header button, header select { -webkit-app-region: no-drag; }
 .splitter:active {
   background: #007acc;
 }
+
+/* Phase 4: Breakpoint glyph styling for Monaco editor */
+.breakpoint-glyph {
+  background: #e51400 !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  margin-left: 3px !important;
+  margin-top: 4px !important;
+  box-shadow: 0 0 3px rgba(229, 20, 0, 0.8) !important;
+}
+
+.breakpoint-glyph:hover {
+  background: #ff1f0f !important;
+  box-shadow: 0 0 5px rgba(255, 31, 15, 1) !important;
+}
+
