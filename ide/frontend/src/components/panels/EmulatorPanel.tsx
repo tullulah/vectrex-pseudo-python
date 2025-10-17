@@ -5,6 +5,7 @@ import { useEmulatorSettings } from '../../state/emulatorSettings';
 import { useDebugStore } from '../../state/debugStore';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
+import { asmAddressToVpyLine, formatAddress } from '../../utils/debugHelpers';
 
 // Tipos para JSVecX
 interface VecxMetrics {
@@ -345,7 +346,7 @@ export const EmulatorPanel: React.FC = () => {
     setBreakpoints(prev => {
       const next = new Set(prev);
       next.add(address);
-      console.log(`[EmulatorPanel] ✓ Breakpoint added at 0x${address.toString(16).padStart(4, '0')}`);
+      console.log(`[EmulatorPanel] ✓ Breakpoint added at ${formatAddress(address)}`);
       return next;
     });
   }, []);
@@ -354,7 +355,7 @@ export const EmulatorPanel: React.FC = () => {
     setBreakpoints(prev => {
       const next = new Set(prev);
       next.delete(address);
-      console.log(`[EmulatorPanel] ✓ Breakpoint removed from 0x${address.toString(16).padStart(4, '0')}`);
+      console.log(`[EmulatorPanel] ✓ Breakpoint removed from ${formatAddress(address)}`);
       return next;
     });
   }, []);
@@ -364,10 +365,10 @@ export const EmulatorPanel: React.FC = () => {
       const next = new Set(prev);
       if (next.has(address)) {
         next.delete(address);
-        console.log(`[EmulatorPanel] ✓ Breakpoint removed from 0x${address.toString(16).padStart(4, '0')}`);
+        console.log(`[EmulatorPanel] ✓ Breakpoint removed from ${formatAddress(address)}`);
       } else {
         next.add(address);
-        console.log(`[EmulatorPanel] ✓ Breakpoint added at 0x${address.toString(16).padStart(4, '0')}`);
+        console.log(`[EmulatorPanel] ✓ Breakpoint added at ${formatAddress(address)}`);
       }
       return next;
     });
@@ -472,7 +473,7 @@ export const EmulatorPanel: React.FC = () => {
       
       // Verificar si hay breakpoint en esta dirección
       if (breakpoints.has(currentPC)) {
-        console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: 0x${currentPC.toString(16).padStart(4, '0')}`);
+        console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: ${formatAddress(currentPC)}`);
         
         // Pausar emulador
         if (vecx.running) {
@@ -485,12 +486,17 @@ export const EmulatorPanel: React.FC = () => {
         const debugStore = useDebugStore.getState();
         
         debugStore.setState('paused');
-        debugStore.setCurrentAsmAddress(`0x${currentPC.toString(16).padStart(4, '0')}`);
+        debugStore.setCurrentAsmAddress(formatAddress(currentPC));
         
-        // TODO Phase 5: Mapear address → VPy line usando pdbData
+        // Phase 5.5: Map address → VPy line using helper
         if (pdbData) {
-          // Por ahora solo log, en Phase 5 implementaremos el mapeo completo
-          console.log('[EmulatorPanel] PDB data available for address mapping');
+          const vpyLine = asmAddressToVpyLine(currentPC, pdbData);
+          if (vpyLine !== null) {
+            debugStore.setCurrentVpyLine(vpyLine);
+            console.log(`[EmulatorPanel] ✓ Mapped to VPy line: ${vpyLine}`);
+          } else {
+            console.log(`[EmulatorPanel] ⚠️  No VPy line mapping for address ${formatAddress(currentPC)}`);
+          }
         }
         
         console.log('[EmulatorPanel] 🛑 Execution paused at breakpoint');
