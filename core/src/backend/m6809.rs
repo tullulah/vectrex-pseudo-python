@@ -1,7 +1,7 @@
 // (Removed duplicated legacy block above during refactor)
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::DebugInfo;
+use super::debug_info::{DebugInfo, parse_asm_addresses};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -546,29 +546,43 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     #[allow(unused_variables)]
     { let _vo = var_offset; }
     
-    // Populate debug info with function symbols
+    // Populate debug info with function symbols using REAL addresses from ASM parsing
+    // Parse the generated ASM to extract label addresses
+    let label_addresses = parse_asm_addresses(&out, 0x0000);
+    
     // Entry point is either START (if main has content) or main label
     debug_info.set_entry_point(0x0000); // Vectrex cartridges start at 0x0000
     
-    // Add symbols for main() and loop() functions
+    // Add symbols for main() and loop() functions with REAL addresses
     if user_main.is_some() {
         if main_has_content {
-            debug_info.add_symbol("START".to_string(), 0x0000);
-            debug_info.add_symbol("MAIN".to_string(), 0x0000); // Approximate - actual address calculation would need tracking
+            if let Some(&addr) = label_addresses.get("START") {
+                debug_info.add_symbol("START".to_string(), addr);
+            }
+            if let Some(&addr) = label_addresses.get("MAIN") {
+                debug_info.add_symbol("MAIN".to_string(), addr);
+            }
         } else {
-            debug_info.add_symbol("main".to_string(), 0x0000);
+            if let Some(&addr) = label_addresses.get("main") {
+                debug_info.add_symbol("main".to_string(), addr);
+            }
         }
     }
     
     if user_loop.is_some() {
-        debug_info.add_symbol("LOOP_BODY".to_string(), 0x0000); // Approximate
+        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
+            debug_info.add_symbol("LOOP_BODY".to_string(), addr);
+        }
     }
     
-    // Add symbols for all other functions
+    // Add symbols for all other functions with REAL addresses
     for item in &module.items {
         if let Item::Function(f) = item {
             if f.name != "main" && f.name != "loop" {
-                debug_info.add_symbol(f.name.to_uppercase(), 0x0000); // Approximate
+                let label_name = f.name.to_uppercase();
+                if let Some(&addr) = label_addresses.get(&label_name) {
+                    debug_info.add_symbol(label_name, addr);
+                }
             }
         }
     }
