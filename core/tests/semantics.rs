@@ -6,9 +6,9 @@ fn semantics_valid_decl_and_use() {
     let module = Module { items: vec![
         Item::Const { name: "C1".to_string(), value: Expr::Number(5) },
         Item::Function(Function { name: "main".to_string(), params: vec!["p".to_string()], body: vec![
-            Stmt::Let { name: "x".to_string(), value: Expr::Ident(IdentInfo { name: "p".into(), line:0, col:0 }) },
-            Stmt::Assign { target: AssignTarget { name: "x".to_string(), line:0, col:0 }, value: Expr::Binary { op: BinOp::Add, left: Box::new(Expr::Ident(IdentInfo { name:"x".into(), line:0, col:0 })), right: Box::new(Expr::Ident(IdentInfo { name:"C1".into(), line:0, col:0 })) } },
-            Stmt::Return(Some(Expr::Ident(IdentInfo { name:"x".into(), line:0, col:0 })))
+            Stmt::Let { name: "x".to_string(), value: Expr::Ident(IdentInfo { name: "p".into(), source_line: 0, col: 0 }), source_line: 0 },
+            Stmt::Assign { target: AssignTarget { name: "x".to_string(), source_line: 0, col: 0 }, value: Expr::Binary { op: BinOp::Add, left: Box::new(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), right: Box::new(Expr::Ident(IdentInfo { name:"C1".into(), source_line: 0, col: 0 })) }, source_line: 0 },
+            Stmt::Return(Some(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), 0)
         ]})
     ], meta: ModuleMeta::default() };
     // emit_asm should not panic
@@ -33,7 +33,7 @@ fn semantics_valid_decl_and_use() {
 fn semantics_undefined_use_reports_error() {
     let module = Module { items: vec![
         Item::Function(Function { name: "f".to_string(), params: vec![], body: vec![
-            Stmt::Expr(Expr::Ident(IdentInfo { name:"y".into(), line:0, col:0 }))
+            Stmt::Expr(Expr::Ident(IdentInfo { name:"y".into(), source_line: 0, col: 0 }), 0)
         ]})
     ], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
@@ -46,8 +46,8 @@ fn semantics_valid_builtin_arity() {
     // FRAME_BEGIN(intensity=Expr::Number)
     let module = Module { items: vec![
         Item::Function(Function { name: "g".to_string(), params: vec![], body: vec![
-            Stmt::Expr(Expr::Call(CallInfo { name: "FRAME_BEGIN".into(), line:0, col:0, args: vec![Expr::Number(10)] })),
-            Stmt::Return(None)
+            Stmt::Expr(Expr::Call(CallInfo { name: "FRAME_BEGIN".into(), source_line: 0, col: 0, args: vec![Expr::Number(10)] }), 0),
+            Stmt::Return(None, 0)
         ]})
     ], meta: ModuleMeta::default() };
     let _ = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
@@ -59,7 +59,7 @@ fn semantics_bad_builtin_arity_reports_error() {
     let module = Module { items: vec![
         Item::Function(Function { name: "h".to_string(), params: vec![], body: vec![
             // DRAW_LINE necesita 5 args; damos 4
-            Stmt::Expr(Expr::Call(CallInfo { name: "DRAW_LINE".into(), line:0, col:0, args: vec![Expr::Number(0),Expr::Number(0),Expr::Number(1),Expr::Number(1)] }))
+            Stmt::Expr(Expr::Call(CallInfo { name: "DRAW_LINE".into(), source_line: 0, col: 0, args: vec![Expr::Number(0),Expr::Number(0),Expr::Number(1),Expr::Number(1)] }), 0)
         ]})
     ], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
@@ -71,8 +71,8 @@ fn semantics_bad_builtin_arity_reports_error() {
 fn semantics_unused_var_warning() {
     let module = Module { items: vec![
         Item::Function(Function { name: "w".to_string(), params: vec![], body: vec![
-            Stmt::Let { name: "x".into(), value: Expr::Number(1) },
-            Stmt::Return(None)
+            Stmt::Let { name: "x".into(), value: Expr::Number(1), source_line: 0 },
+            Stmt::Return(None, 0)
         ]})
     ], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
