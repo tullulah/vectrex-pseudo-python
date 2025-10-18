@@ -639,8 +639,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         debug_info.add_native_call(line_num, function_name);
     }
     
-    // ✅ CRITICAL: Merge lineMap from tracker into debug_info
-    debug_info.line_map = tracker.debug_info.line_map;
+    // ✅ CRITICAL: Parse VPy_LINE markers from generated ASM to get REAL addresses
+    // This replaces the tracker lineMap (which has incorrect addresses due to no advance() calls)
+    // We parse the entire ASM to calculate actual addresses based on instruction sizes
+    use super::debug_info::parse_vpy_line_markers;
+    debug_info.line_map = parse_vpy_line_markers(&out, start_address);
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
@@ -1332,7 +1335,11 @@ impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter
 // emit_stmt: lower statements to 6809 instructions.
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker) {
     // ✅ CRITICAL: Record source line BEFORE emitting code
-    tracker.set_line(stmt.source_line());
+    let line = stmt.source_line();
+    tracker.set_line(line);
+    
+    // Emit line marker comment for ASM parsing to reconstruct accurate lineMap
+    out.push_str(&format!("    ; VPy_LINE:{}\n", line));
     
     match stmt {
         Stmt::Assign { target, value, .. } => {

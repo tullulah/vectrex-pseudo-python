@@ -31,11 +31,13 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
+    ; VPy_LINE:2
 ; NATIVE_CALL: VECTREX_WAIT_RECAL at line 2
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:3
     LDD #127
     STD RESULT
     LDD RESULT
@@ -57,6 +59,7 @@ MAIN:
 LOOP_BODY:
     ; DEBUG: Processing 2 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
+    ; VPy_LINE:7
     LDD #42
     STD RESULT
     LDD RESULT
@@ -67,6 +70,7 @@ LOOP_BODY:
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(6)
+    ; VPy_LINE:10
     LDD #65516
     STD RESULT
     LDD RESULT

@@ -318,6 +318,92 @@ pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
     addresses
 }
 
+/// Parse VPy line markers from ASM and build lineMap with real addresses
+/// Format: "    ; VPy_LINE:7"
+/// Returns: HashMap<line_number (as string), address (as "0xC800" hex string)>
+pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
+    let mut line_map = HashMap::new();
+    let mut current_address = org;
+    
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Check for VPy_LINE marker
+        if trimmed.starts_with("; VPy_LINE:") {
+            // Parse: "; VPy_LINE:7"
+            if let Some(line_num_str) = trimmed.strip_prefix("; VPy_LINE:") {
+                let line_num = line_num_str.trim().to_string();
+                // Record this line at current address
+                line_map.insert(line_num, format!("0x{:04X}", current_address));
+            }
+            continue;
+        }
+        
+        // Skip empty lines and pure comments
+        if trimmed.is_empty() || (trimmed.starts_with(';') && !trimmed.starts_with("; VPy_LINE:")) || trimmed.starts_with('*') {
+            continue;
+        }
+        
+        // Skip labels (lines ending with ':')
+        if trimmed.ends_with(':') {
+            continue;
+        }
+        
+        // Detect ORG directive (changes current address)
+        if trimmed.starts_with("ORG ") {
+            if let Some(addr_str) = trimmed.split_whitespace().nth(1) {
+                if let Ok(addr) = parse_hex_or_decimal(addr_str) {
+                    current_address = addr;
+                }
+            }
+            continue;
+        }
+        
+        // Skip non-code directives
+        if trimmed.starts_with("INCLUDE ") || trimmed.starts_with("EQU ") {
+            continue;
+        }
+        
+        // Data directives that add bytes
+        if trimmed.starts_with("FDB ") {
+            current_address += 2;
+            continue;
+        }
+        
+        if trimmed.starts_with("FCB ") {
+            current_address += 1;
+            continue;
+        }
+        
+        if trimmed.starts_with("FCC ") {
+            // FCC adds string length
+            if let Some(start) = trimmed.find('"') {
+                if let Some(end) = trimmed.rfind('"') {
+                    if end > start {
+                        current_address += (end - start - 1) as u16;
+                    }
+                }
+            }
+            continue;
+        }
+        
+        if trimmed.starts_with("RMB ") {
+            // RMB reserves bytes
+            if let Some(count_str) = trimmed.split_whitespace().nth(1) {
+                if let Ok(count) = parse_hex_or_decimal(count_str) {
+                    current_address += count;
+                }
+            }
+            continue;
+        }
+        
+        // Regular instruction - estimate size and advance address
+        current_address += estimate_instruction_size(line);
+    }
+    
+    line_map
+}
+
 /// Parse native call comments from generated ASM
 /// Format: "; NATIVE_CALL: FUNCTION_NAME at line N"
 /// Returns: HashMap<line_number, function_name>

@@ -5,36 +5,36 @@
   "binary": "test_debug_simple.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "MAIN": "0x0042",
+    "LOOP_BODY": "0x004E",
     "START": "0x001E",
-    "LOOP_BODY": "0x004E"
+    "MAIN": "0x0042"
   },
   "lineMap": {
-    "7": "0x0000",
-    "3": "0x0000",
-    "2": "0x0000",
-    "10": "0x0000"
+    "2": "0x0026",
+    "3": "0x002E",
+    "7": "0x004E",
+    "10": "0x0062"
   },
   "functions": {
-    "main": {
-      "name": "main",
-      "address": "0x0042",
-      "startLine": 0,
-      "endLine": 0,
-      "type": "vpy"
-    },
     "loop": {
       "name": "loop",
       "address": "0x004E",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
+    },
+    "main": {
+      "name": "main",
+      "address": "0x0042",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
     }
   },
   "nativeCalls": {
+    "10": "VECTREX_PRINT_TEXT",
     "7": "VECTREX_DEBUG_PRINT",
-    "2": "VECTREX_WAIT_RECAL",
     "3": "VECTREX_SET_INTENSITY",
-    "10": "VECTREX_PRINT_TEXT"
+    "2": "VECTREX_WAIT_RECAL"
   }
 }
