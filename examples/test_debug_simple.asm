@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='TEST_DEBUG_SIMPLE' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "UNTITLED"
+    FCC "TEST DEBUG SIMPLE"
     FCB $80
     FCB 0
 

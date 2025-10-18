@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DebugState as LegacyDebugState } from '../types/models';
+import { useEditorStore } from './editorStore';
 
 export type ExecutionState = 'stopped' | 'running' | 'paused';
 
@@ -101,8 +102,27 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   setLoadingForDebug: (loading) => set({ loadingForDebug: loading }),
   
   loadPdbData: (pdb) => {
-    console.log('[DebugStore] Loaded .pdb:', pdb);
+    console.log('[DebugStore] 📋 Loaded .pdb:', pdb);
     set({ pdbData: pdb });
+    
+    // Re-synchronize existing breakpoints from editorStore
+    const allBreakpoints = useEditorStore.getState().breakpoints;
+    console.log('[DebugStore] 🔄 Re-synchronizing breakpoints from editorStore:', allBreakpoints);
+    
+    // For each file's breakpoints, send add-breakpoint messages
+    Object.entries(allBreakpoints).forEach(([uri, lines]) => {
+      lines.forEach((line) => {
+        const address = pdb.lineMap[line.toString()];
+        if (address) {
+          console.log(`[DebugStore] ♻️  Re-sync breakpoint: ${uri}:${line} → ${address}`);
+          window.postMessage({
+            type: 'debug-add-breakpoint',
+            address,
+            line
+          }, '*');
+        }
+      });
+    });
   },
   
   updateCallStack: (stack) => set({ callStack: stack }),
@@ -172,31 +192,36 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   
   // Breakpoint synchronization
   onBreakpointAdded: (uri, line) => {
-    const { pdbData, state } = get();
+    const { pdbData } = get();
     
-    if (!pdbData) return;
+    if (!pdbData) {
+      console.warn(`[DebugStore] ⚠️ Cannot add breakpoint: no PDB data loaded yet`);
+      return;
+    }
     
     const address = pdbData.lineMap[line.toString()];
     
-    if (address && (state === 'running' || state === 'paused')) {
-      console.log(`[DebugStore] Breakpoint added: line ${line} → ${address}`);
+    if (address) {
+      console.log(`[DebugStore] ➕ Breakpoint added: line ${line} → ${address}`);
       window.postMessage({
         type: 'debug-add-breakpoint',
         address,
         line
       }, '*');
+    } else {
+      console.warn(`[DebugStore] ⚠️ No address mapping for VPy line ${line}`);
     }
   },
   
   onBreakpointRemoved: (uri, line) => {
-    const { pdbData, state } = get();
+    const { pdbData } = get();
     
     if (!pdbData) return;
     
     const address = pdbData.lineMap[line.toString()];
     
-    if (address && (state === 'running' || state === 'paused')) {
-      console.log(`[DebugStore] Breakpoint removed: line ${line} → ${address}`);
+    if (address) {
+      console.log(`[DebugStore] ➖ Breakpoint removed: line ${line} → ${address}`);
       window.postMessage({
         type: 'debug-remove-breakpoint',
         address,

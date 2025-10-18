@@ -564,9 +564,25 @@ export const EmulatorPanel: React.FC = () => {
       const vecx = (window as any).vecx;
       if (!vecx) return;
       
-      const { type, targetAddress } = event.data;
+      const { type, targetAddress, address, line } = event.data;
       
       switch (type) {
+        case 'debug-add-breakpoint':
+          console.log(`[EmulatorPanel] ➕ Adding breakpoint: line ${line} → ${address}`);
+          if (address) {
+            const numAddr = parseInt(address, 16);
+            addBreakpoint(numAddr);
+          }
+          break;
+          
+        case 'debug-remove-breakpoint':
+          console.log(`[EmulatorPanel] ➖ Removing breakpoint: line ${line} → ${address}`);
+          if (address) {
+            const numAddr = parseInt(address, 16);
+            removeBreakpoint(numAddr);
+          }
+          break;
+          
         case 'debug-continue':
           console.log('[EmulatorPanel] 🟢 Debug: Continue execution');
           console.log('[EmulatorPanel] Current vecx.running:', vecx.running);
@@ -618,7 +634,7 @@ export const EmulatorPanel: React.FC = () => {
     
     window.addEventListener('message', handleDebugMessage);
     return () => window.removeEventListener('message', handleDebugMessage);
-  }, []);
+  }, [addBreakpoint, removeBreakpoint]);
 
   // Función para cargar ROM desde dropdown (definida antes de useEffects que la usan)
   const loadROMFromDropdown = useCallback(async (romName: string) => {

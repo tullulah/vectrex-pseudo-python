@@ -5,27 +5,27 @@
   "binary": "test_debug_simple.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "START": "0x001E",
-    "MAIN": "0x0042",
-    "LOOP_BODY": "0x004E"
+    "LOOP_BODY": "0x0057",
+    "START": "0x0027",
+    "MAIN": "0x004B"
   },
   "lineMap": {
-    "10": "0x0062",
-    "7": "0x004E",
-    "2": "0x0026",
-    "3": "0x002E"
+    "7": "0x0057",
+    "2": "0x002F",
+    "10": "0x006B",
+    "3": "0x0037"
   },
   "functions": {
     "main": {
       "name": "main",
-      "address": "0x0042",
+      "address": "0x004B",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "loop": {
       "name": "loop",
-      "address": "0x004E",
+      "address": "0x0057",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
