@@ -535,9 +535,15 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
 
   // Update breakpoint decorations when breakpoints change
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !doc) return;
+    console.log('[Monaco] 🔄 Breakpoint sync useEffect RUNNING');
+    if (!editorRef.current || !monacoRef.current || !doc) {
+      console.log('[Monaco] ⚠️ Early return - missing editor/monaco/doc');
+      return;
+    }
     
     const bps = breakpoints[doc.uri] || new Set<number>();
+    logger.debug('Debug', `[Monaco] Breakpoint sync useEffect triggered - bps.size=${bps.size}, pdbData=${!!pdbData}`);
+    
     const decorations = Array.from(bps).map(lineNumber => ({
       range: new monacoRef.current!.Range(lineNumber, 1, lineNumber, 1),
       options: {
@@ -554,11 +560,76 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     
     // Phase 4: Sync breakpoints with emulator
     const emulatorDebug = (window as any).emulatorDebug;
+    
+    // DEBUG: Log sync attempt
+    console.log('[Monaco] 🔍 Sync check:', {
+      emulatorDebug: !!emulatorDebug,
+      pdbData: !!pdbData,
+      bpsSize: bps.size,
+      bpsArray: Array.from(bps)
+    });
+    
+    if (pdbData) {
+      console.log('[Monaco] 📋 PDB lineMap contents:', pdbData.lineMap);
+    }
+    
+    if (emulatorDebug && pdbData) {
+      console.log('[Monaco] ✅ Both emulatorDebug and pdbData available - proceeding with sync');
+      
+      // Get current emulator breakpoints
+      const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
+      console.log('[Monaco] Current emulator breakpoints:', Array.from(currentEmulatorBps));
+      
+      // Convert VPy lines to ASM addresses
+      const targetAddresses = new Set<number>();
+      for (const line of bps) {
+        const address = pdbData.lineMap?.[line.toString()];
+        console.log(`[Monaco] 🔍 VPy line ${line} → lineMap result: ${address}`);
+        if (address) {
+          const addr = parseInt(address, 16);
+          if (!isNaN(addr)) {
+            targetAddresses.add(addr);
+            console.log(`[Monaco] ✓ Added breakpoint target at 0x${addr.toString(16).toUpperCase()}`);
+          }
+        } else {
+          console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line} in lineMap`);
+        }
+      }
+      
+      console.log('[Monaco] Target addresses to sync:', Array.from(targetAddresses).map(a => '0x' + a.toString(16).toUpperCase()));
+    } else {
+      if (!emulatorDebug) console.warn('[Monaco] ⚠️ emulatorDebug not available');
+      if (!pdbData) console.warn('[Monaco] ⚠️ pdbData not available - compile first (Ctrl+F5)');
+    }
+    
     if (emulatorDebug && pdbData) {
       // Get current emulator breakpoints
       const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
       
       // Convert VPy lines to ASM addresses
+      const targetAddresses = new Set<number>();
+      for (const line of bps) {
+        const address = pdbData.lineMap?.[line.toString()];
+        logger.debug('Debug', `[Monaco] VPy line ${line} → ASM address ${address}`);
+        if (address) {
+          const addr = parseInt(address, 16);
+          if (!isNaN(addr)) {
+            targetAddresses.add(addr);
+            logger.debug('Debug', `[Monaco] ✓ Added breakpoint at 0x${addr.toString(16).toUpperCase()}`);
+          }
+        } else {
+          logger.warn('Debug', `[Monaco] ⚠️ No ASM mapping for VPy line ${line}`);
+        }
+      }
+      
+      logger.debug('Debug', `[Monaco] Sync: ${targetAddresses.size} target addresses, ${currentEmulatorBps.size} current emulator bps`);
+    } else {
+      if (!emulatorDebug) logger.warn('Debug', '[Monaco] ⚠️ emulatorDebug not available');
+      if (!pdbData) logger.warn('Debug', '[Monaco] ⚠️ pdbData not available');
+    }
+    
+    if (emulatorDebug && pdbData) {
+      const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
       const targetAddresses = new Set<number>();
       for (const line of bps) {
         const address = pdbData.lineMap?.[line.toString()];

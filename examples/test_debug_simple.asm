@@ -90,11 +90,11 @@ VECTREX_PRINT_TEXT:
     JSR Print_Str_d
     RTS
 VECTREX_DEBUG_PRINT:
-    ; Debug print to console - writes to pseudo debug area (illegal memory region)
+    ; Debug print to console - writes to end of RAM (safe area)
     LDA VAR_ARG0+1   ; Load value to debug print
-    STA $D800        ; Debug output value in pseudo debug area
+    STA $CF00        ; Debug output value at end of RAM
     LDA #$42         ; Debug marker
-    STA $D801        ; Debug marker to indicate new output
+    STA $CF01        ; Debug marker to indicate new output
     RTS
 VECTREX_SET_INTENSITY:
     LDA VAR_ARG0+1

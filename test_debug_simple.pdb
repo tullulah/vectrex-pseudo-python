@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "source": "test_debug_simple.vpy",
+  "binary": "test_debug_simple.bin",
+  "entry_point": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x0000",
+    "START": "0x0000",
+    "MAIN": "0x0000"
+  },
+  "lineMap": {}
+}

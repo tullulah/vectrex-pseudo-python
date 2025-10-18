@@ -468,12 +468,33 @@ export const EmulatorPanel: React.FC = () => {
       const vecx = (window as any).vecx;
       if (!vecx || !vecx.e6809) return;
       
-      // Obtener PC actual
-      const currentPC = vecx.e6809.pc;
+      // Obtener PC actual del emulador (reg_pc es el nombre real de la propiedad en JSVecx)
+      const currentPC = vecx.e6809?.reg_pc;
       
-      // DEBUG: Log PC y breakpoints cada 1 segundo (cada ~20 checks)
+      // DEBUG: Verificar estado del emulador y PC
       if (Math.random() < 0.05) { // ~1 de cada 20 veces
-        console.log(`[EmulatorPanel] Debug check - PC: ${formatAddress(currentPC)}, Breakpoints:`, Array.from(breakpoints));
+        console.log('[EmulatorPanel] Breakpoint check state:', {
+          vecxExists: !!vecx,
+          e6809Exists: !!vecx.e6809,
+          pc: currentPC,
+          pcHex: formatAddress(currentPC),
+          pcType: typeof currentPC,
+          running: vecx.running,
+          breakpointCount: breakpoints.size,
+          breakpointAddresses: Array.from(breakpoints).map(formatAddress)
+        });
+      }
+      
+      // Si PC es undefined/null, hay un problema más profundo
+      if (currentPC === undefined || currentPC === null) {
+        if (Math.random() < 0.01) { // Log ocasional
+          console.warn('[EmulatorPanel] ⚠️ PC is undefined/null - emulator not ready?', {
+            vecx: !!vecx,
+            e6809: !!vecx.e6809,
+            running: vecx.running
+          });
+        }
+        return;
       }
       
       // Verificar si hay breakpoint en esta dirección
@@ -518,12 +539,13 @@ export const EmulatorPanel: React.FC = () => {
       breakpointCheckIntervalRef.current = null;
     }
     
-    // Solo activar verificación cuando estamos en modo running
-    if (debugState === 'running') {
-      console.log('[EmulatorPanel] ✓ Starting breakpoint checking (every 50ms)');
+    // Activar verificación cuando estamos en debug session (running O paused)
+    // checkBreakpoint() internamente verifica que solo actúe cuando running
+    if (debugState === 'running' || debugState === 'paused') {
+      console.log(`[EmulatorPanel] ✓ Starting breakpoint checking (state=${debugState}, every 50ms)`);
       breakpointCheckIntervalRef.current = window.setInterval(checkBreakpoint, 50);
     } else {
-      console.log('[EmulatorPanel] Breakpoint checking disabled (not in running state)');
+      console.log('[EmulatorPanel] Breakpoint checking disabled (stopped)');
     }
     
     return () => {
@@ -948,7 +970,9 @@ export const EmulatorPanel: React.FC = () => {
         }
 
         // Detener emulador antes de cargar
+        console.log('[EmulatorPanel] Stopping emulator before load...');
         vecx.stop();
+        console.log('[EmulatorPanel] Emulator stopped');
         
         // Cargar el binario en la instancia global Globals.cartdata
         const Globals = (window as any).Globals;
@@ -958,16 +982,30 @@ export const EmulatorPanel: React.FC = () => {
         }
         
         // Reset
+        console.log('[EmulatorPanel] Resetting emulator...');
         vecx.reset();
+        console.log('[EmulatorPanel] Emulator reset complete');
         
-        // Solo auto-iniciar si NO estamos en modo debug
+        // Comportamiento de auto-start dependiendo del modo:
+        // - Normal compilation (F7): auto-start
+        // - Debug session (Ctrl+F5): ALWAYS auto-start in 'running' mode
+        console.log(`[EmulatorPanel] Binary load - loadingForDebug=${loadingForDebug}`);
+        
         if (!loadingForDebug) {
+          // Compilación normal → siempre auto-start
           vecx.start();
-          console.log('[EmulatorPanel] ✓ Emulator started');
+          console.log('[EmulatorPanel] ✓ Emulator started (normal mode)');
         } else {
-          console.log('[EmulatorPanel] ✓ Binary loaded for debug (not started - use F5 to continue)');
+          // Modo debug → SETEAR estado a 'running' e iniciar
+          const debugStore = useDebugStore.getState();
+          debugStore.setState('running');
+          console.log('[EmulatorPanel] ✓ Debug mode: state set to running');
+          
+          vecx.start();
+          console.log('[EmulatorPanel] ✓ Emulator started in debug mode (running until breakpoint)');
+          
           // Limpiar flag
-          useDebugStore.getState().setLoadingForDebug(false);
+          debugStore.setLoadingForDebug(false);
         }
         
         // Actualizar ROM cargada y buscar overlay

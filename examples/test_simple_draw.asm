@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='TEST_SIMPLE_DRAW' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "UNTITLED"
+    FCC "TEST SIMPLE DRAW"
     FCB $80
     FCB 0
 
@@ -102,4 +102,4 @@ LOOP_BODY:
 ; DATA SECTION
 ;***************************************************************************
 RESULT    EQU $C880
-VAR_BRIGHTNESS EQU $C900+0
+VAR_BRIGHTNESS EQU $CF00+0

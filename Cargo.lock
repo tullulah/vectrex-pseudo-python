@@ -1077,6 +1077,7 @@ dependencies = [
  "anyhow",
  "clap",
  "lazy_static",
+ "serde",
  "serde_json",
  "strum",
  "thiserror",
@@ -1105,8 +1106,6 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "rustversion",
- "serde",
- "serde_json",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
 ]

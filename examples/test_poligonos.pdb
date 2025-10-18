@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "source": "test_poligonos.vpy",
+  "asm": "test_poligonos.asm",
+  "binary": "test_poligonos.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x006E",
+    "START": "0x0024",
+    "MAIN": "0x0062"
+  },
+  "lineMap": {},
+  "functions": {
+    "loop": {
+      "name": "loop",
+      "address": "0x006E",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "main": {
+      "name": "main",
+      "address": "0x0062",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {}
+}

@@ -158,9 +158,11 @@ VECTREX_PRINT_TEXT:
     JSR Print_Str_d
     RTS
 VECTREX_DEBUG_PRINT:
-    ; Debug print to console - emulator intercepts special address
+    ; Debug print to console - writes to end of RAM (safe area)
     LDA VAR_ARG0+1   ; Load value to debug print
-    STA $DFFF        ; Special debug output address - emulator intercepts
+    STA $CF00        ; Debug output value at end of RAM
+    LDA #$42         ; Debug marker
+    STA $CF01        ; Debug marker to indicate new output
     RTS
 VECTREX_MOVE_TO:
     LDA VAR_ARG1+1 ; Y
@@ -187,7 +189,7 @@ RESULT    EQU $C880
 TMPLEFT   EQU RESULT+2
 TMPRIGHT  EQU RESULT+4
 TMPPTR    EQU RESULT+6
-VAR_X EQU $C900+0
+VAR_X EQU $CF00+0
 ; String literals (classic FCC + $80 terminator)
 STR_0:
     FCC "DEBUG TEST"

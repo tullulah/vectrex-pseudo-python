@@ -388,9 +388,9 @@ function App() {
         logger.info('Debug', 'Starting debug session...');
         
         try {
-          // 0. Activar flag ANTES de compilar para que EmulatorPanel no auto-inicie
+          // 0. Activar flag ANTES de compilar para que EmulatorPanel maneje el auto-start
           useDebugStore.getState().setLoadingForDebug(true);
-          useDebugStore.getState().setState('paused'); // Set to paused so F5 will continue
+          // NO setear estado aquí - lo hará EmulatorPanel después de cargar el binary
           
           // 1. Compilar sin auto-run (necesitamos el binario pero no ejecutarlo automáticamente)
           const editorState = useEditorStore.getState();

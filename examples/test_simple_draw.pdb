@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "source": "test_simple_draw.vpy",
+  "asm": "test_simple_draw.asm",
+  "binary": "test_simple_draw.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x0035",
+    "main": "0x0023"
+  },
+  "lineMap": {},
+  "functions": {
+    "loop": {
+      "name": "loop",
+      "address": "0x0035",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {}
+}

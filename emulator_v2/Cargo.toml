@@ -39,5 +39,3 @@ optional = true
 version = "0.2"
 optional = true
 
-[workspace]
-members = []

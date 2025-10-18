@@ -38,18 +38,37 @@ pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<Stri
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-	Assign { target: AssignTarget, value: Expr },
-	Let { name: String, value: Expr },
-	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt> },
-	While { cond: Expr, body: Vec<Stmt> },
-	Break,
-	Continue,
-	Expr(Expr),
-	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>> },
-	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>> },
-	Return(Option<Expr>),
+	Assign { target: AssignTarget, value: Expr, line: usize },
+	Let { name: String, value: Expr, line: usize },
+	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt>, line: usize },
+	While { cond: Expr, body: Vec<Stmt>, line: usize },
+	Break { line: usize },
+	Continue { line: usize },
+	Expr(Expr, usize), // (expression, line)
+	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>>, line: usize },
+	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>>, line: usize },
+	Return(Option<Expr>, usize), // (value, line)
 	// Operadores de asignación compuesta: var += expr
-	CompoundAssign { target: AssignTarget, op: BinOp, value: Expr },
+	CompoundAssign { target: AssignTarget, op: BinOp, value: Expr, line: usize },
+}
+
+impl Stmt {
+	/// Get the source line number for any statement
+	pub fn line(&self) -> usize {
+		match self {
+			Stmt::Assign { line, .. } => *line,
+			Stmt::Let { line, .. } => *line,
+			Stmt::For { line, .. } => *line,
+			Stmt::While { line, .. } => *line,
+			Stmt::Break { line } => *line,
+			Stmt::Continue { line } => *line,
+			Stmt::Expr(_, line) => *line,
+			Stmt::If { line, .. } => *line,
+			Stmt::Switch { line, .. } => *line,
+			Stmt::Return(_, line) => *line,
+			Stmt::CompoundAssign { line, .. } => *line,
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "source": "rotating_line_correct.vpy",
+  "binary": "rotating_line_correct.bin",
+  "entry_point": "0x0000",
+  "symbols": {
+    "START": "0x0000",
+    "LOOP_BODY": "0x0000",
+    "MAIN": "0x0000"
+  },
+  "lineMap": {}
+}

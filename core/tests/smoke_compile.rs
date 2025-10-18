@@ -29,7 +29,7 @@ def main():
         debug_init_draw: false,
         blink_intensity: false,
         exclude_ram_org: false,
-        fast_wait: false,
+        fast_wait: false, source_path: None,
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
     assert!(asm.contains("MAIN:"), "asm should contain function label MAIN");
