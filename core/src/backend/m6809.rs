@@ -1,7 +1,7 @@
 // (Removed duplicated legacy block above during refactor)
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::{DebugInfo, parse_asm_addresses, parse_native_call_comments};
+use super::debug_info::{DebugInfo, LineTracker, parse_asm_addresses, parse_native_call_comments};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -65,7 +65,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         .to_string();
     
     let binary_name = source_name.replace(".vpy", ".bin");
-    let mut debug_info = DebugInfo::new(source_name, binary_name);
+    let mut debug_info = DebugInfo::new(source_name.clone(), binary_name.clone());
+    
+    // Create LineTracker to populate lineMap during code generation  
+    // Start address: Parse from ti.origin or use Vectrex RAM start (0xC800)
+    let start_address = u16::from_str_radix(ti.origin.trim_start_matches("0x").trim_start_matches("$"), 16)
+        .unwrap_or(0xC800);
+    let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
     
     let mut out = String::new();
     let syms = collect_all_vars(module); // Use ALL vars (including locals) for assembly generation
@@ -198,7 +204,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             if let Some(main_func) = user_main {
                 let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                 for stmt in &main_func.body {
-                    emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts);
+                    emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker);
                 }
             }
         }
@@ -252,12 +258,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
-                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts);
+                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker);
                     }
                     out.push_str("    RTS\n\n");
                 } else {
                     // Emit other functions normally
-                    emit_function(f, &mut out, &string_map, opts);
+                    emit_function(f, &mut out, &string_map, opts, &mut tracker);
                 }
             }
                 Item::VectorList { name, entries } => {
@@ -633,6 +639,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         debug_info.add_native_call(line_num, function_name);
     }
     
+    // ✅ CRITICAL: Merge lineMap from tracker into debug_info
+    debug_info.line_map = tracker.debug_info.line_map;
+    
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
 }
@@ -854,7 +863,7 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
 }
 
 // emit_function: outputs code for a function.
-fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
+fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker) {
     // Reset end position tracking for each function
     LAST_END_SET.store(false, Ordering::Relaxed);
     
@@ -874,7 +883,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
         out.push_str(&format!("    LDD VAR_ARG{}\n    STD VAR_{}\n", i, p.to_uppercase()));
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
-    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts); }
+    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker); }
     if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }
         out.push_str("    RTS\n");
@@ -1321,7 +1330,10 @@ struct FuncCtx { locals: Vec<String>, frame_size: i32 }
 impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2) } }
 
 // emit_stmt: lower statements to 6809 instructions.
-fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
+fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker) {
+    // ✅ CRITICAL: Record source line BEFORE emitting code
+    tracker.set_line(stmt.source_line());
+    
     match stmt {
         Stmt::Assign { target, value, .. } => {
             emit_expr(value, out, fctx, string_map, opts);
@@ -1359,7 +1371,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             // Long branch to end
             out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", le));
             let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
-            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts); }
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker); }
             out.push_str(&format!("    LBRA {}\n{}: ; while end\n", ls, le));
         }
         Stmt::For { var, start, end, step, body, .. } => {
@@ -1376,7 +1388,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             out.push_str("    LDX RESULT\n    CPD RESULT\n");
             out.push_str(&format!("    LBCC {}\n", le)); // unsigned >= end => exit
             let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
-            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts); }
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker); }
             if let Some(se) = step {
                 emit_expr(se, out, fctx, string_map, opts);
                 out.push_str("    LDX RESULT\n");
@@ -1393,20 +1405,20 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             let simple_if = elifs.is_empty() && else_body.is_none();
             emit_expr(cond, out, fctx, string_map, opts);
             out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", next));
-            for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+            for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
             out.push_str(&format!("    LBRA {}\n", end));
             for (i, (c, b)) in elifs.iter().enumerate() {
                 out.push_str(&format!("{}:\n", next));
                 let new_next = if i == elifs.len() - 1 && else_body.is_none() { end.clone() } else { fresh_label("IF_NEXT") };
                 emit_expr(c, out, fctx, string_map, opts);
                 out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", new_next));
-                for s in b { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                for s in b { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
                 out.push_str(&format!("    LBRA {}\n", end));
                 next = new_next;
             }
             if let Some(eb) = else_body {
                 out.push_str(&format!("{}:\n", next));
-                for s in eb { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                for s in eb { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
             } else if !elifs.is_empty() || simple_if {
                 // Only emit next label if it's different from end
                 if next != end {
@@ -1444,12 +1456,12 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     for (val, body) in &numeric_cases {
                         let lbl = label_map.get(&(*val & 0xFFFF)).unwrap();
                         out.push_str(&format!("{}:\n", lbl));
-                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
                         out.push_str(&format!("    LBRA {}\n", end));
                     }
                     if let Some(dl) = &def_label {
                         out.push_str(&format!("{}:\n", dl));
-                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
                     }
                     out.push_str(&format!("{}:\n", end));
                     out.push_str(&format!("{}:\n", table_label));
@@ -1474,12 +1486,12 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             if let Some(dl) = &def_label { out.push_str(&format!("    LBRA {}\n", dl)); } else { out.push_str(&format!("    LBRA {}\n", end)); }
             for ((_, body), lbl) in cases.iter().zip(labels.iter()) {
                 out.push_str(&format!("{}:\n", lbl));
-                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
                 out.push_str(&format!("    LBRA {}\n", end));
             }
             if let Some(dl) = def_label {
                 out.push_str(&format!("{}:\n", dl));
-                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts); }
+                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
             }
             out.push_str(&format!("{}:\n", end));
         },

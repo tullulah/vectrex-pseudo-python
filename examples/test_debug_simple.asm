@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='TEST_DEBUG_SIMPLE' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "TEST DEBUG SIMPLE"
+    FCC "UNTITLED"
     FCB $80
     FCB 0
 
@@ -31,6 +31,7 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 2
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
@@ -39,6 +40,7 @@ START:
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 3
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -59,6 +61,7 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
+; NATIVE_CALL: VECTREX_DEBUG_PRINT at line 7
     JSR VECTREX_DEBUG_PRINT
     CLRA
     CLRB
@@ -76,6 +79,7 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 10
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
