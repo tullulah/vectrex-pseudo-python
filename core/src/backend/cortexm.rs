@@ -53,7 +53,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map); }
-    if !matches!(f.body.last(), Some(Stmt::Return(_))) {
+    if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
         if frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", frame_size)); }
         out.push_str("    BX LR\n");
     }
@@ -70,7 +70,7 @@ impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter
 // emit_stmt: lowers high-level statements to Cortex-M instructions.
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) {
     match stmt {
-        Stmt::Assign { target, value } => {
+        Stmt::Assign { target, value, .. } => {
             emit_expr(value, out, fctx, string_map);
             if let Some(off) = fctx.offset_of(&target.name) {
                 out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
@@ -78,29 +78,29 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 out.push_str(&format!("    LDR r1, =VAR_{}\n    STR r0, [r1]\n", target.name.to_uppercase()));
             }
         },
-        Stmt::Let { name, value } => {
+        Stmt::Let { name, value, .. } => {
             emit_expr(value, out, fctx, string_map);
             if let Some(off) = fctx.offset_of(name) {
                 out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
             }
         },
-        Stmt::Expr(e) => emit_expr(e, out, fctx, string_map),
-        Stmt::Return(o) => {
+        Stmt::Expr(e, _) => emit_expr(e, out, fctx, string_map),
+        Stmt::Return(o, _) => {
             if let Some(e) = o { emit_expr(e, out, fctx, string_map); }
             if fctx.frame_size > 0 { out.push_str(&format!("    ADD sp, sp, #{}\n", fctx.frame_size)); }
             out.push_str("    BX LR\n");
         },
-        Stmt::Break => {
+        Stmt::Break { .. } => {
             if let Some(end) = &loop_ctx.end {
                 out.push_str(&format!("    B {}\n", end));
             }
         },
-        Stmt::Continue => {
+        Stmt::Continue { .. } => {
             if let Some(st) = &loop_ctx.start {
                 out.push_str(&format!("    B {}\n", st));
             }
         },
-        Stmt::While { cond, body } => {
+        Stmt::While { cond, body, .. } => {
             let ls = fresh_label("WH");
             let le = fresh_label("WH_END");
             out.push_str(&format!("{}:\n", ls));
@@ -110,7 +110,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             for s in body { emit_stmt(s, out, &inner, fctx, string_map); }
             out.push_str(&format!("    B {}\n{}:\n", ls, le));
         },
-        Stmt::For { var, start, end, step, body } => {
+        Stmt::For { var, start, end, step, body, .. } => {
             let ls = fresh_label("FOR");
             let le = fresh_label("FOR_END");
             emit_expr(start, out, fctx, string_map);
@@ -137,7 +137,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("    B {}\n{}:\n", ls, le));
         },
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             let end = fresh_label("IF_END");
             let mut next = fresh_label("IF_NEXT");
             emit_expr(cond, out, fctx, string_map);
@@ -161,7 +161,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("{}:\n", end));
         },
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Switch { expr, cases, default, .. } => {
             emit_expr(expr, out, fctx, string_map);
             out.push_str("    MOV r4,r0\n");
             let end = fresh_label("SW_END");
@@ -432,25 +432,25 @@ fn collect_symbols(module: &Module) -> Vec<String> {
 // collect_stmt_syms: collect variable names in statement.
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
-    Stmt::Assign { target, value } => {
+    Stmt::Assign { target, value, .. } => {
             set.insert(target.name.clone());
             collect_expr_syms(value, set);
         }
-    Stmt::Let { name: _ , value } => { collect_expr_syms(value, set); } // locals excluded
-        Stmt::Expr(e) => collect_expr_syms(e, set),
-        Stmt::For { var: _, start, end, step, body } => {
+    Stmt::Let { name: _, value, .. } => { collect_expr_syms(value, set); } // locals excluded
+        Stmt::Expr(e, _) => collect_expr_syms(e, set),
+        Stmt::For { var: _, start, end, step, body, .. } => {
             collect_expr_syms(start, set);
             collect_expr_syms(end, set);
             if let Some(se) = step { collect_expr_syms(se, set); }
             for s in body { collect_stmt_syms(s, set); }
         }
-        Stmt::While { cond, body } => {
+        Stmt::While { cond, body, .. } => {
             collect_expr_syms(cond, set);
             for s in body {
                 collect_stmt_syms(s, set);
             }
         }
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             collect_expr_syms(cond, set);
             for s in body {
                 collect_stmt_syms(s, set);
@@ -467,17 +467,17 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
                 }
             }
         }
-        Stmt::Return(o) => {
+        Stmt::Return(o, _) => {
             if let Some(e) = o {
                 collect_expr_syms(e, set);
             }
         }
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Switch { expr, cases, default, .. } => {
             collect_expr_syms(expr, set);
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break | Stmt::Continue => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before collect_stmt_syms"),
     }
 }

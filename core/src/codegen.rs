@@ -319,13 +319,13 @@ fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut
     match e {
         Expr::Ident(info) => {
             if !is_declared(&info.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredVar, message: format!("SemanticsError: uso de variable no declarada '{}'.", info.name), line: Some(info.line), col: Some(info.col) }));
+                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredVar, message: format!("SemanticsError: uso de variable no declarada '{}'.", info.name), line: Some(info.source_line), col: Some(info.col) }));
             } else { reads.insert(info.name.clone()); }
         }
         Expr::Call(ci) => {
             if let Some(exp) = expected_builtin_arity(&ci.name) {
                 if ci.args.len() != exp {
-                    TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::ArityMismatch, message: format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", ci.name, ci.args.len(), exp), line: Some(ci.line), col: Some(ci.col) }));
+                    TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::ArityMismatch, message: format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", ci.name, ci.args.len(), exp), line: Some(ci.source_line), col: Some(ci.col) }));
                 }
             }
             for a in &ci.args { validate_expr_collect(a, scope, reads); }
@@ -365,7 +365,7 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             // Transformar x += expr en x = x + expr
             let var_expr = Expr::Ident(IdentInfo { 
                 name: target.name.clone(), 
-                line: target.source_line, 
+                source_line: target.source_line, 
                 col: target.col 
             });
             let combined_expr = Expr::Binary { 
@@ -384,7 +384,7 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             source_line,
         },
         Stmt::While { cond, body, .. } => Stmt::While { cond: opt_expr(cond), body: body.iter().map(opt_stmt).collect(), source_line },
-        Stmt::Expr(e, _) => Stmt::Expr(opt_expr(e, _), s.source_line()),
+        Stmt::Expr(e, _) => Stmt::Expr(opt_expr(e), source_line),
         Stmt::If { cond, body, elifs, else_body, .. } => Stmt::If {
             cond: opt_expr(cond),
             body: body.iter().map(opt_stmt).collect(),
@@ -392,7 +392,7 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             else_body: else_body.as_ref().map(|v| v.iter().map(opt_stmt).collect()),
             source_line,
         },
-        Stmt::Return(o, _) => Stmt::Return(o.as_ref(, _).map(opt_expr), s.source_line()),
+        Stmt::Return(o, _) => Stmt::Return(o.as_ref().map(opt_expr), source_line),
     Stmt::Break { .. } => Stmt::Break { source_line },
     Stmt::Continue { .. } => Stmt::Continue { source_line },
     Stmt::Switch { expr, cases, default, .. } => Stmt::Switch { expr: opt_expr(expr), cases: cases.iter().map(|(e,b)| (opt_expr(e), b.iter().map(opt_stmt).collect())).collect(), default: default.as_ref().map(|v| v.iter().map(opt_stmt).collect()), source_line },
@@ -504,7 +504,7 @@ fn opt_expr(e: &Expr) -> Expr {
                 Expr::Not(Box::new(ni))
             }
         }
-    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), line: ci.source_line, col: ci.col, args: ci.args.iter().map(opt_expr).collect() }),
+    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(opt_expr).collect() }),
     Expr::Ident(i) => Expr::Ident(i.clone()),
     Expr::Number(n) => Expr::Number(trunc16(*n)),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
@@ -536,6 +536,7 @@ fn dce_function(f: &Function) -> Function {
 }
 
 fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
+    let source_line = stmt.source_line();  // Capture before match
     match stmt {
         Stmt::If { cond, body, elifs, else_body, .. } => match cond {
             Expr::Number(n) => {
@@ -573,20 +574,20 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
                     for s in v { dce_stmt(s, &mut vv, terminated); }
                     vv
                 });
-                out.push(Stmt::If { cond: cond.clone(), body: nb, elifs: nelifs, else_body: nelse , source_line: s.source_line() });
+                out.push(Stmt::If { cond: cond.clone(), body: nb, elifs: nelifs, else_body: nelse , source_line: source_line });
             }
         },
         Stmt::While { cond, body, .. } => {
             if let Expr::Number(0) = cond { return; }
             let mut nb = Vec::new();
             for s in body { dce_stmt(s, &mut nb, terminated); }
-            out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: s.source_line() });
+            out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: source_line });
         }
         Stmt::For { var, start, end, step, body, .. } => {
             if let (Expr::Number(sv), Expr::Number(ev)) = (start, end) { if sv >= ev { return; } }
             let mut nb = Vec::new();
             for s in body { dce_stmt(s, &mut nb, terminated); }
-            out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: s.source_line() });
+            out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line });
         }
         Stmt::Switch { expr, cases, default, .. } => {
             // Keep all arms; could prune unreachable constant-match arms later
@@ -601,13 +602,13 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
                 for s in db { dce_stmt(s, &mut nb, terminated); }
                 Some(nb)
             } else { None };
-            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default , source_line: s.source_line() });
+            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default , source_line: source_line });
         }
-        Stmt::Return(e, _) => { out.push(Stmt::Return(e.clone(), _, s.source_line())); *terminated = true; }
-        Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: s.source_line() }),
-        Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: s.source_line() }),
+        Stmt::Return(e, _) => { out.push(Stmt::Return(e.clone(), source_line)); *terminated = true; }
+        Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: source_line }),
+        Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: source_line }),
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
-        Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), _, s.source_line())),
+        Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), source_line)),
         Stmt::Break { .. } | Stmt::Continue { .. } => out.push(stmt.clone()),
     }
 }
@@ -780,38 +781,39 @@ fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<St
 
 #[allow(dead_code)]
 fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
+    let source_line = stmt.source_line(); // Capture before match
     match stmt {
         Stmt::Assign { target, value, .. } => {
             let v2 = cp_expr(value, env);
             if let Expr::Number(n) = v2 {
                 env.insert(target.name.clone(), n);
-                Stmt::Assign { target: target.clone(), value: Expr::Number(n) , .. }
+                Stmt::Assign { target: target.clone(), value: Expr::Number(n), source_line }
             } else {
                 env.remove(&target.name);
-                Stmt::Assign { target: target.clone(), value: v2, source_line: s.source_line() }
+                Stmt::Assign { target: target.clone(), value: v2, source_line }
             }
         }
         Stmt::Let { name, value, .. } => {
             let v2 = cp_expr(value, env);
             if let Expr::Number(n) = v2 {
                 env.insert(name.clone(), n);
-                Stmt::Let { name: name.clone(), value: Expr::Number(n) , .. }
+                Stmt::Let { name: name.clone(), value: Expr::Number(n), source_line }
             } else {
                 env.remove(name);
-                Stmt::Let { name: name.clone(), value: v2, source_line: s.source_line() }
+                Stmt::Let { name: name.clone(), value: v2, source_line }
             }
         }
-        Stmt::Expr(e, _) => Stmt::Expr(cp_expr(e, env), s.source_line()),
-        Stmt::Return(o, _) => Stmt::Return(o.as_ref(, _).map(|e| cp_expr(e, env))),
-        Stmt::Break { .. } => Stmt::Break { .. },
-        Stmt::Continue { .. } => Stmt::Continue { .. },
+        Stmt::Expr(e, _) => Stmt::Expr(cp_expr(e, env), source_line),
+        Stmt::Return(o, _) => Stmt::Return(o.as_ref().map(|e| cp_expr(e, env)), source_line),
+        Stmt::Break { .. } => Stmt::Break { source_line },
+        Stmt::Continue { .. } => Stmt::Continue { source_line },
         Stmt::While { cond, body, .. } => {
             let c = cp_expr(cond, env);
             let saved = env.clone();
             let mut nb = Vec::new();
             for s in body { nb.push(cp_stmt(s, env)); }
             *env = saved;
-            Stmt::While { cond: c, body: nb , .. }
+            Stmt::While { cond: c, body: nb, source_line }
         }
         Stmt::For { var, start, end, step, body, .. } => {
             let s = cp_expr(start, env);
@@ -822,7 +824,7 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
             let mut nb = Vec::new();
             for sstmt in body { nb.push(cp_stmt(sstmt, env)); }
             *env = saved;
-            Stmt::For { var: var.clone(), start: s, end: e, step: st, body: nb , .. }
+            Stmt::For { var: var.clone(), start: s, end: e, step: st, body: nb, source_line }
         }
         Stmt::If { cond, body, elifs, else_body, .. } => {
             let c = cp_expr(cond, env);
@@ -860,7 +862,7 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
                 }
                 *env = merged;
             }
-            Stmt::If { cond: c, body: nb, elifs: new_elifs, else_body: new_else , .. }
+            Stmt::If { cond: c, body: nb, elifs: new_elifs, else_body: new_else, source_line }
         }
         Stmt::Switch { expr, cases, default, .. } => {
             let se = cp_expr(expr, env);
@@ -880,7 +882,7 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
                 *env = saved;
                 Some(nb)
             } else { None };
-            Stmt::Switch { expr: se, cases: new_cases, default: new_default , .. }
+            Stmt::Switch { expr: se, cases: new_cases, default: new_default, source_line }
         }
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
     }
@@ -895,7 +897,7 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
         Expr::Logic { op, left, right } => Expr::Logic { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
     Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
     Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
-    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
+    Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
     }
@@ -923,6 +925,7 @@ fn fold_const_switches_function(f: &Function) -> Function {
 }
 
 fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
+    let source_line = s.source_line(); // Capture before match
     match s {
         Stmt::Switch { expr, cases, default, .. } => {
             if let Expr::Number(v) = expr {
@@ -950,22 +953,22 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
                 for cs in db { fold_const_switch_stmt(cs, &mut nb); }
                 Some(nb)
             } else { None };
-            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default , source_line: s.source_line() });
+            out.push(Stmt::Switch { expr: expr.clone(), cases: new_cases, default: new_default , source_line: source_line });
         }
         Stmt::If { cond, body, elifs, else_body, .. } => {
             let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); }
             let mut nelifs = Vec::new(); for (ec, eb) in elifs { let mut nb2 = Vec::new(); for cs in eb { fold_const_switch_stmt(cs, &mut nb2); } nelifs.push((ec.clone(), nb2)); }
             let nelse = if let Some(eb) = else_body { let mut nb3 = Vec::new(); for cs in eb { fold_const_switch_stmt(cs, &mut nb3); } Some(nb3) } else { None };
-            out.push(Stmt::If { cond: cond.clone(), body: nb, elifs: nelifs, else_body: nelse , source_line: s.source_line() });
+            out.push(Stmt::If { cond: cond.clone(), body: nb, elifs: nelifs, else_body: nelse , source_line: source_line });
         }
-        Stmt::While { cond, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: s.source_line() }); }
-        Stmt::For { var, start, end, step, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: s.source_line() }); }
-    Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: s.source_line() }),
-        Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: s.source_line() }),
-        Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), _, s.source_line())),
-        Stmt::Return(o, _) => out.push(Stmt::Return(o.clone(), _, s.source_line())),
-        Stmt::Break { .. } => out.push(Stmt::Break { .. }),
-        Stmt::Continue { .. } => out.push(Stmt::Continue { .. }),
+        Stmt::While { cond, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: source_line }); }
+        Stmt::For { var, start, end, step, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line }); }
+    Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: source_line }),
+        Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: source_line }),
+        Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), source_line)),
+        Stmt::Return(o, _) => out.push(Stmt::Return(o.clone(), source_line)),
+        Stmt::Break { .. } => out.push(Stmt::Break { source_line }),
+        Stmt::Continue { .. } => out.push(Stmt::Continue { source_line }),
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before fold_const_switch_stmt"),
     }
 }

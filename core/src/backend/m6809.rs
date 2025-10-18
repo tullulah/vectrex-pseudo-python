@@ -663,13 +663,13 @@ fn stmt_has_trig(s: &Stmt) -> bool {
     match s {
         Stmt::Assign { value, .. } => expr_has_trig(value),
         Stmt::Let { value, .. } => expr_has_trig(value),
-        Stmt::Expr(e) => expr_has_trig(e),
+        Stmt::Expr(e, _) => expr_has_trig(e),
     Stmt::For { start, end, step, body, .. } => expr_has_trig(start) || expr_has_trig(end) || step.as_ref().map(expr_has_trig).unwrap_or(false) || body.iter().any(stmt_has_trig),
-        Stmt::While { cond, body } => expr_has_trig(cond) || body.iter().any(stmt_has_trig),
-        Stmt::If { cond, body, elifs, else_body } => expr_has_trig(cond) || body.iter().any(stmt_has_trig) || elifs.iter().any(|(c,b)| expr_has_trig(c) || b.iter().any(stmt_has_trig)) || else_body.as_ref().map(|eb| eb.iter().any(stmt_has_trig)).unwrap_or(false),
-        Stmt::Return(o) => o.as_ref().map(expr_has_trig).unwrap_or(false),
-        Stmt::Switch { expr, cases, default } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
-        Stmt::Break | Stmt::Continue => false,
+        Stmt::While { cond, body, .. } => expr_has_trig(cond) || body.iter().any(stmt_has_trig),
+        Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig(cond) || body.iter().any(stmt_has_trig) || elifs.iter().any(|(c,b)| expr_has_trig(c) || b.iter().any(stmt_has_trig)) || else_body.as_ref().map(|eb| eb.iter().any(stmt_has_trig)).unwrap_or(false),
+        Stmt::Return(o, _) => o.as_ref().map(expr_has_trig).unwrap_or(false),
+        Stmt::Switch { expr, cases, default, .. } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
+        Stmt::Break { .. } | Stmt::Continue { .. } => false,
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before stmt_has_trig"),
     }
 }
@@ -688,33 +688,33 @@ fn compute_max_args_used(module: &Module) -> usize {
 
 fn scan_stmt_args(s: &Stmt) -> usize {
     match s {
-        Stmt::Assign { value, .. } | Stmt::Let { value, .. } | Stmt::Expr(value) => scan_expr_args(value),
+        Stmt::Assign { value, .. } | Stmt::Let { value, .. } | Stmt::Expr(value, _) => scan_expr_args(value),
         Stmt::For { start, end, step, body, .. } => {
             let mut m = scan_expr_args(start).max(scan_expr_args(end));
             if let Some(se) = step { m = m.max(scan_expr_args(se)); }
             for st in body { m = m.max(scan_stmt_args(st)); }
             m
         }
-        Stmt::While { cond, body } => {
+        Stmt::While { cond, body, .. } => {
             let mut m = scan_expr_args(cond);
             for st in body { m = m.max(scan_stmt_args(st)); }
             m
         }
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             let mut m = scan_expr_args(cond);
             for st in body { m = m.max(scan_stmt_args(st)); }
             for (c, b) in elifs { m = m.max(scan_expr_args(c)); for st in b { m = m.max(scan_stmt_args(st)); } }
             if let Some(eb) = else_body { for st in eb { m = m.max(scan_stmt_args(st)); } }
             m
         }
-        Stmt::Return(o) => o.as_ref().map(scan_expr_args).unwrap_or(0),
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Return(o, _) => o.as_ref().map(scan_expr_args).unwrap_or(0),
+        Stmt::Switch { expr, cases, default, .. } => {
             let mut m = scan_expr_args(expr);
             for (ce, cb) in cases { m = m.max(scan_expr_args(ce)); for st in cb { m = m.max(scan_stmt_args(st)); } }
             if let Some(db) = default { for st in db { m = m.max(scan_stmt_args(st)); } }
             m
         }
-        Stmt::Break | Stmt::Continue => 0,
+        Stmt::Break { .. } | Stmt::Continue { .. } => 0,
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_args"),
     }
 }
@@ -779,28 +779,28 @@ fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
     match s {
         Stmt::Assign { value, .. } => { usage.needs_tmp_ptr = true; scan_expr_runtime(value, usage); },
         Stmt::Let { value, .. } => scan_expr_runtime(value, usage),
-        Stmt::Expr(value) => scan_expr_runtime(value, usage),
+        Stmt::Expr(value, _) => scan_expr_runtime(value, usage),
         Stmt::For { start, end, step, body, .. } => {
             scan_expr_runtime(start, usage);
             scan_expr_runtime(end, usage);
             if let Some(se) = step { scan_expr_runtime(se, usage); }
             for st in body { scan_stmt_runtime(st, usage); }
         }
-        Stmt::While { cond, body } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage); } }
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::While { cond, body, .. } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage); } }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             scan_expr_runtime(cond, usage);
             for st in body { scan_stmt_runtime(st, usage); }
             for (c, b) in elifs { scan_expr_runtime(c, usage); for st in b { scan_stmt_runtime(st, usage); } }
             if let Some(eb) = else_body { for st in eb { scan_stmt_runtime(st, usage); } }
         }
-        Stmt::Return(o) => { if let Some(e) = o { scan_expr_runtime(e, usage); } }
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Return(o, _) => { if let Some(e) = o { scan_expr_runtime(e, usage); } }
+        Stmt::Switch { expr, cases, default, .. } => {
             scan_expr_runtime(expr, usage);
             for (ce, cb) in cases { scan_expr_runtime(ce, usage); for st in cb { scan_stmt_runtime(st, usage); } }
             if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage); } }
             usage.needs_tmp_left = true; usage.needs_tmp_right = true; // switch lowering uses TMPLEFT
         }
-        Stmt::Break | Stmt::Continue => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_runtime"),
     }
 }
@@ -875,7 +875,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts); }
-    if !matches!(f.body.last(), Some(Stmt::Return(_))) {
+    if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }
         out.push_str("    RTS\n");
     }
@@ -1323,7 +1323,7 @@ impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter
 // emit_stmt: lower statements to 6809 instructions.
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
     match stmt {
-        Stmt::Assign { target, value } => {
+        Stmt::Assign { target, value, .. } => {
             emit_expr(value, out, fctx, string_map, opts);
             if let Some(off) = fctx.offset_of(&target.name) {
                 out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
@@ -1331,27 +1331,27 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", target.name.to_uppercase()));
             }
         }
-        Stmt::Let { name, value } => {
+        Stmt::Let { name, value, .. } => {
             emit_expr(value, out, fctx, string_map, opts);
             if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off)); }
         }
-    Stmt::Expr(e) => emit_expr(e, out, fctx, string_map, opts),
-        Stmt::Return(o) => {
+    Stmt::Expr(e, _) => emit_expr(e, out, fctx, string_map, opts),
+        Stmt::Return(o, _) => {
             if let Some(e) = o { emit_expr(e, out, fctx, string_map, opts); }
             if fctx.frame_size > 0 { out.push_str(&format!("    LEAS {} ,S ; free locals\n", fctx.frame_size)); }
             out.push_str("    RTS\n");
         }
-        Stmt::Break => {
+        Stmt::Break { .. } => {
             if let Some(end) = &loop_ctx.end {
                 out.push_str(&format!("    BRA {}\n", end));
             }
         }
-        Stmt::Continue => {
+        Stmt::Continue { .. } => {
             if let Some(st) = &loop_ctx.start {
                 out.push_str(&format!("    BRA {}\n", st));
             }
         }
-        Stmt::While { cond, body } => {
+        Stmt::While { cond, body, .. } => {
             let ls = fresh_label("WH");
             let le = fresh_label("WH_END");
             out.push_str(&format!("{}: ; while start\n", ls));
@@ -1362,7 +1362,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts); }
             out.push_str(&format!("    LBRA {}\n{}: ; while end\n", ls, le));
         }
-        Stmt::For { var, start, end, step, body } => {
+        Stmt::For { var, start, end, step, body, .. } => {
             let ls = fresh_label("FOR");
             let le = fresh_label("FOR_END");
             emit_expr(start, out, fctx, string_map, opts);
@@ -1387,7 +1387,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             else { out.push_str(&format!("    LDD VAR_{}\n    ADDD ,X\n    STD VAR_{}\n", var.to_uppercase(), var.to_uppercase())); }
             out.push_str(&format!("    LBRA {}\n{}: ; for end\n", ls, le));
         }
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             let end = fresh_label("IF_END");
             let mut next = fresh_label("IF_NEXT");
             let simple_if = elifs.is_empty() && else_body.is_none();
@@ -1415,7 +1415,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             }
             out.push_str(&format!("{}:\n", end));
         }
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Switch { expr, cases, default, .. } => {
             emit_expr(expr, out, fctx, string_map, opts);
             out.push_str("    LDD RESULT\n    STD TMPLEFT ; switch value\n");
             let end = fresh_label("SW_END");
@@ -1506,7 +1506,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.name.to_uppercase())); }
         }
         Expr::Call(ci) => {
-            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.line)) { return; }
+            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.source_line)) { return; }
             for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
                 emit_expr(arg, out, fctx, string_map, opts);
@@ -1706,24 +1706,24 @@ fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
 // collect_stmt_syms: process statement symbols.
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
-    Stmt::Assign { target, value } => {
+    Stmt::Assign { target, value, .. } => {
             set.insert(target.name.clone());
             collect_expr_syms(value, set);
         }
-    Stmt::Let { name: _ , value } => { collect_expr_syms(value, set); } // exclude locals
-        Stmt::Expr(e) => collect_expr_syms(e, set),
-    Stmt::For { var: _, start, end, step, body } => {
+    Stmt::Let { name: _, value, .. } => { collect_expr_syms(value, set); } // exclude locals
+        Stmt::Expr(e, _) => collect_expr_syms(e, set),
+    Stmt::For { var: _, start, end, step, body, .. } => {
             // treat induction var as global only if not a local (decision deferred to emit)
             collect_expr_syms(start, set);
             collect_expr_syms(end, set);
             if let Some(se) = step { collect_expr_syms(se, set); }
             for s in body { collect_stmt_syms(s, set); }
         }
-        Stmt::While { cond, body } => {
+        Stmt::While { cond, body, .. } => {
             collect_expr_syms(cond, set);
             for s in body { collect_stmt_syms(s, set); }
         }
-        Stmt::If { cond, body, elifs, else_body } => {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
             collect_expr_syms(cond, set);
             for s in body { collect_stmt_syms(s, set); }
             for (c, b) in elifs {
@@ -1734,13 +1734,13 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
                 for s in eb { collect_stmt_syms(s, set); }
             }
         }
-        Stmt::Return(o) => { if let Some(e) = o { collect_expr_syms(e, set); } }
-        Stmt::Switch { expr, cases, default } => {
+        Stmt::Return(o, _) => { if let Some(e) = o { collect_expr_syms(e, set); } }
+        Stmt::Switch { expr, cases, default, .. } => {
             collect_expr_syms(expr, set);
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break | Stmt::Continue => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } => {},
         Stmt::CompoundAssign { target, value, .. } => {
             set.insert(target.name.clone());
             collect_expr_syms(value, set);

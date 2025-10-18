@@ -405,7 +405,7 @@ impl<'a> Parser<'a> {
     }
 
     fn while_stmt(&mut self, source_line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} Ok(Stmt::While { cond, body, source_line }) }
-    fn return_stmt(&mut self, source_line: usize) -> Result<Stmt> { if self.check(TokenKind::Newline) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Return(None, line)); } let expr=self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Return(Some(expr), line)) }
+    fn return_stmt(&mut self, source_line: usize) -> Result<Stmt> { if self.check(TokenKind::Newline) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Return(None, source_line)); } let expr=self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Return(Some(expr), source_line)) }
     fn for_stmt(&mut self, source_line: usize) -> Result<Stmt> { 
         let var=self.identifier()?; 
         self.consume(TokenKind::In)?; 
