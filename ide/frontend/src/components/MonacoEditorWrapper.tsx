@@ -613,8 +613,9 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       label: 'Clear All Breakpoints',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F9],
       run: (ed: any) => {
-        const bps = breakpoints[currentUri] || new Set<number>();
-        const count = bps.size;
+        // Get breakpoints from store directly (avoid closure staleness)
+        const currentBps = (useEditorStore.getState().breakpoints[currentUri]) || new Set<number>();
+        const count = currentBps.size;
         
         if (count === 0) {
           logger.debug('App', 'Ctrl+Shift+F9 pressed - no breakpoints to clear');
@@ -640,7 +641,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       clearAllAction?.dispose();
       logger.debug('App', `F9 shortcuts cleanup for ${currentUri}`);
     };
-  }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
+  }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints]); // Removed 'breakpoints' - causes unnecessary re-registration
 
   // Gutter (margin) click handler for breakpoints
   useEffect(() => {
