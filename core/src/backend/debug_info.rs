@@ -380,7 +380,8 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             if let Some(start) = trimmed.find('"') {
                 if let Some(end) = trimmed.rfind('"') {
                     if end > start {
-                        current_address += (end - start - 1) as u16;
+                        let len = (end - start - 1) as u16;
+                        current_address += len;
                     }
                 }
             }
