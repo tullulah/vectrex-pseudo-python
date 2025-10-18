@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../state/editorStore';
 import { useDebugStore } from '../state/debugStore';
@@ -134,6 +134,8 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const monacoRef = useRef<Monaco | null>(null);
   const breakpointDecorationsRef = useRef<string[]>([]); // Track breakpoint decoration IDs
   const currentLineDecorationsRef = useRef<string[]>([]); // Track current line highlight (Phase 6.1)
+  const [editorReady, setEditorReady] = useState(false); // Track when editor is mounted and ready
+  
   const beforeMount: BeforeMount = (_monaco) => {
     (window as any).MonacoEnvironment = {
       getWorker: function (_moduleId: string, _label: string) {
@@ -152,6 +154,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     ensureLanguage(monaco);
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditorReady(true); // Signal that editor is ready for F9 registration
     monaco.editor.setTheme('vpy-dark');
     
     // Debug: Check if editor is read-only
@@ -585,7 +588,10 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
 
   // Keyboard shortcuts for breakpoints
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !doc) return;
+    if (!editorRef.current || !monacoRef.current || !doc) {
+      logger.debug('App', 'F9 useEffect: Waiting for editor/monaco/doc');
+      return;
+    }
     
     const editor = editorRef.current;
     const monaco = monacoRef.current;
@@ -641,7 +647,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       clearAllAction?.dispose();
       logger.debug('App', `F9 shortcuts cleanup for ${currentUri}`);
     };
-  }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints]); // Removed 'breakpoints' - causes unnecessary re-registration
+  }, [doc?.uri, toggleBreakpoint, clearAllBreakpoints, editorReady]); // Added editorReady to ensure registration on mount
 
   // Gutter (margin) click handler for breakpoints
   useEffect(() => {
