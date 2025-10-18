@@ -346,29 +346,29 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt> {
-        let start_line = self.peek().line; // Capturar línea del statement
+        let start_source_line = self.peek().line; // Capturar línea del statement
         
         if self.match_kind(&TokenKind::Let) { 
             let name=self.identifier()?; 
             self.consume(TokenKind::Equal)?; 
             let value=self.expression()?; 
             self.consume(TokenKind::Newline)?; 
-            return Ok(Stmt::Let { name, value, line: start_line }); 
+            return Ok(Stmt::Let { name, value, source_line: start_source_line }); 
         }
-        if self.match_kind(&TokenKind::For) { return self.for_stmt(start_line); }
-        if self.match_kind(&TokenKind::While) { return self.while_stmt(start_line); }
-        if self.match_kind(&TokenKind::If) { return self.if_stmt(start_line); }
-        if self.match_kind(&TokenKind::Switch) { return self.switch_stmt(start_line); }
-        if self.match_kind(&TokenKind::Return) { return self.return_stmt(start_line); }
-        if self.match_kind(&TokenKind::Break) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Break { line: start_line }); }
-        if self.match_kind(&TokenKind::Continue) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Continue { line: start_line }); }
+        if self.match_kind(&TokenKind::For) { return self.for_stmt(start_source_line); }
+        if self.match_kind(&TokenKind::While) { return self.while_stmt(start_source_line); }
+        if self.match_kind(&TokenKind::If) { return self.if_stmt(start_source_line); }
+        if self.match_kind(&TokenKind::Switch) { return self.switch_stmt(start_source_line); }
+        if self.match_kind(&TokenKind::Return) { return self.return_stmt(start_source_line); }
+        if self.match_kind(&TokenKind::Break) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Break { source_line: start_source_line }); }
+        if self.match_kind(&TokenKind::Continue) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Continue { source_line: start_source_line }); }
         if let Some(name)=self.try_identifier() {
             // Hemos consumido un identificador potencialmente para asignación. Guardar token previo.
             let ident_tok = self.tokens[self.pos-1].clone();
             if self.match_kind(&TokenKind::Equal) {
                 let expr = self.expression()?;
                 self.consume(TokenKind::Newline)?;
-                return Ok(Stmt::Assign { target: crate::ast::AssignTarget { name, line: ident_tok.line, col: ident_tok.col }, value: expr, line: start_line });
+                return Ok(Stmt::Assign { target: crate::ast::AssignTarget { name, source_line: ident_tok.line, col: ident_tok.col }, value: expr, source_line: start_source_line });
             } else if self.check(TokenKind::PlusEqual) || self.check(TokenKind::MinusEqual) || 
                       self.check(TokenKind::StarEqual) || self.check(TokenKind::SlashEqual) || 
                       self.check(TokenKind::SlashSlashEqual) || self.check(TokenKind::PercentEqual) {
@@ -384,16 +384,16 @@ impl<'a> Parser<'a> {
                 };
                 let expr = self.expression()?;
                 self.consume(TokenKind::Newline)?;
-                return Ok(Stmt::CompoundAssign { target: crate::ast::AssignTarget { name, line: ident_tok.line, col: ident_tok.col }, op, value: expr, line: start_line });
+                return Ok(Stmt::CompoundAssign { target: crate::ast::AssignTarget { name, source_line: ident_tok.line, col: ident_tok.col }, op, value: expr, source_line: start_source_line });
             } else {
                 // No era asignación, revertir.
                 self.unread_identifier(name);
             }
         }
-        let expr = self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Expr(expr, start_line))
+        let expr = self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Expr(expr, start_source_line))
     }
 
-    fn switch_stmt(&mut self, line: usize) -> Result<Stmt> {
+    fn switch_stmt(&mut self, source_line: usize) -> Result<Stmt> {
         let expr = self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?;
         let mut cases = Vec::new(); let mut default_block=None;
         while !self.match_kind(&TokenKind::Dedent) {
@@ -401,12 +401,12 @@ impl<'a> Parser<'a> {
             else if self.match_kind(&TokenKind::Default) { self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); } default_block=Some(body); }
             else { bail!("Expected 'case' or 'default' in switch block"); }
         }
-        Ok(Stmt::Switch { expr, cases, default: default_block, line })
+        Ok(Stmt::Switch { expr, cases, default: default_block, source_line })
     }
 
-    fn while_stmt(&mut self, line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} Ok(Stmt::While { cond, body, line }) }
-    fn return_stmt(&mut self, line: usize) -> Result<Stmt> { if self.check(TokenKind::Newline) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Return(None, line)); } let expr=self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Return(Some(expr), line)) }
-    fn for_stmt(&mut self, line: usize) -> Result<Stmt> { 
+    fn while_stmt(&mut self, source_line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} Ok(Stmt::While { cond, body, source_line }) }
+    fn return_stmt(&mut self, source_line: usize) -> Result<Stmt> { if self.check(TokenKind::Newline) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Return(None, line)); } let expr=self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Return(Some(expr), line)) }
+    fn for_stmt(&mut self, source_line: usize) -> Result<Stmt> { 
         let var=self.identifier()?; 
         self.consume(TokenKind::In)?; 
         self.consume(TokenKind::Range)?; 
@@ -431,9 +431,9 @@ impl<'a> Parser<'a> {
         while !self.match_kind(&TokenKind::Dedent){ 
             body.push(self.statement()?);
         } 
-        Ok(Stmt::For { var, start, end, step, body, line }) 
+        Ok(Stmt::For { var, start, end, step, body, source_line }) 
     }
-    fn if_stmt(&mut self, line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} let mut elifs=Vec::new(); while self.match_kind(&TokenKind::Elif){ let ec=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut ebody=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ ebody.push(self.statement()?);} elifs.push((ec,ebody)); } let else_body= if self.match_kind(&TokenKind::Else){ self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut eb=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ eb.push(self.statement()?);} Some(eb)} else {None}; Ok(Stmt::If { cond, body, elifs, else_body, line }) }
+    fn if_stmt(&mut self, source_line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} let mut elifs=Vec::new(); while self.match_kind(&TokenKind::Elif){ let ec=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut ebody=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ ebody.push(self.statement()?);} elifs.push((ec,ebody)); } let else_body= if self.match_kind(&TokenKind::Else){ self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut eb=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ eb.push(self.statement()?);} Some(eb)} else {None}; Ok(Stmt::If { cond, body, elifs, else_body, source_line }) }
 
     // --- expressions ---
     fn expression(&mut self) -> Result<Expr> { self.logic_or() }
@@ -498,9 +498,9 @@ impl<'a> Parser<'a> {
                 }
                 self.skip_newlines(); // Allow newlines before closing paren
                 self.consume(TokenKind::RParen)?;
-                return Ok(Expr::Call(crate::ast::CallInfo { name: full, line: ident_token.line, col: ident_token.col, args }));
+                return Ok(Expr::Call(crate::ast::CallInfo { name: full, source_line: ident_token.line, col: ident_token.col, args }));
             }
-            return Ok(Expr::Ident(crate::ast::IdentInfo { name: full, line: ident_token.line, col: ident_token.col }));
+            return Ok(Expr::Ident(crate::ast::IdentInfo { name: full, source_line: ident_token.line, col: ident_token.col }));
         } else if self.match_kind(&TokenKind::LParen) {
             self.skip_newlines(); // Allow newlines after opening paren
             let e = self.expression()?;

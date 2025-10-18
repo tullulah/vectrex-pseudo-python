@@ -38,49 +38,49 @@ pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<Stri
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-	Assign { target: AssignTarget, value: Expr, line: usize },
-	Let { name: String, value: Expr, line: usize },
-	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt>, line: usize },
-	While { cond: Expr, body: Vec<Stmt>, line: usize },
-	Break { line: usize },
-	Continue { line: usize },
+	Assign { target: AssignTarget, value: Expr, source_line: usize },
+	Let { name: String, value: Expr, source_line: usize },
+	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt>, source_line: usize },
+	While { cond: Expr, body: Vec<Stmt>, source_line: usize },
+	Break { source_line: usize },
+	Continue { source_line: usize },
 	Expr(Expr, usize), // (expression, line)
-	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>>, line: usize },
-	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>>, line: usize },
+	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>>, source_line: usize },
+	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>>, source_line: usize },
 	Return(Option<Expr>, usize), // (value, line)
 	// Operadores de asignación compuesta: var += expr
-	CompoundAssign { target: AssignTarget, op: BinOp, value: Expr, line: usize },
+	CompoundAssign { target: AssignTarget, op: BinOp, value: Expr, source_line: usize },
 }
 
 impl Stmt {
 	/// Get the source line number for any statement
-	pub fn line(&self) -> usize {
+	pub fn source_line(&self) -> usize {
 		match self {
-			Stmt::Assign { line, .. } => *line,
-			Stmt::Let { line, .. } => *line,
-			Stmt::For { line, .. } => *line,
-			Stmt::While { line, .. } => *line,
-			Stmt::Break { line } => *line,
-			Stmt::Continue { line } => *line,
-			Stmt::Expr(_, line) => *line,
-			Stmt::If { line, .. } => *line,
-			Stmt::Switch { line, .. } => *line,
-			Stmt::Return(_, line) => *line,
-			Stmt::CompoundAssign { line, .. } => *line,
+			Stmt::Assign { source_line, .. } => *source_line,
+			Stmt::Let { source_line, .. } => *source_line,
+			Stmt::For { source_line, .. } => *source_line,
+			Stmt::While { source_line, .. } => *source_line,
+			Stmt::Break { source_line } => *source_line,
+			Stmt::Continue { source_line } => *source_line,
+			Stmt::Expr(_, source_line) => *source_line,
+			Stmt::If { source_line, .. } => *source_line,
+			Stmt::Switch { source_line, .. } => *source_line,
+			Stmt::Return(_, source_line) => *source_line,
+			Stmt::CompoundAssign { source_line, .. } => *source_line,
 		}
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IdentInfo { pub name: String, pub line: usize, pub col: usize }
+pub struct IdentInfo { pub name: String, pub source_line: usize, pub col: usize }
 
 // Nuevo: información de asignación con span para el identificador del LHS.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssignTarget { pub name: String, pub line: usize, pub col: usize }
+pub struct AssignTarget { pub name: String, pub source_line: usize, pub col: usize }
 
 // Información de llamadas con span del identificador (primer segmento calificado).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CallInfo { pub name: String, pub line: usize, pub col: usize, pub args: Vec<Expr> }
+pub struct CallInfo { pub name: String, pub source_line: usize, pub col: usize, pub args: Vec<Expr> }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
