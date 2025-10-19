@@ -324,6 +324,7 @@ pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
 pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
     let mut line_map = HashMap::new();
     let mut current_address = org;
+    let mut pending_marker: Option<String> = None;
     
     for line in asm.lines() {
         let trimmed = line.trim();
@@ -333,8 +334,8 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             // Parse: "; VPy_LINE:7"
             if let Some(line_num_str) = trimmed.strip_prefix("; VPy_LINE:") {
                 let line_num = line_num_str.trim().to_string();
-                // Record this line at current address
-                line_map.insert(line_num, format!("0x{:04X}", current_address));
+                // Don't record yet - wait for next instruction
+                pending_marker = Some(line_num);
             }
             continue;
         }
@@ -396,6 +397,11 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
                 }
             }
             continue;
+        }
+        
+        // If we have a pending marker, record it at current address (next instruction)
+        if let Some(line_num) = pending_marker.take() {
+            line_map.insert(line_num, format!("0x{:04X}", current_address));
         }
         
         // Regular instruction - estimate size and advance address

@@ -463,13 +463,13 @@ function App() {
           }
 
           // 5. El .pdb ya fue cargado automáticamente en EmulatorPanel via onCompiledBin
-          // Pero el binario también se cargó y ejecutó. Para debugging necesitamos control.
+          // El binario también se cargó y EmulatorPanel ya seteó el estado a 'running'
           
-          // 6. Entrar en modo debug (pausado en entry point)
-          useDebugStore.getState().setState('paused');
+          // 6. Debug session ya está en modo 'running' (seteado por EmulatorPanel)
+          // NO sobrescribir el estado aquí - dejar que corra hasta breakpoint
           
-          logger.info('Debug', '✓ Debug session started - paused at entry point');
-          logger.info('Debug', 'Use F5 to continue, F10 to step over, F11 to step into');
+          logger.info('Debug', '✓ Debug session started - running until breakpoint');
+          logger.info('Debug', 'Use F9 to toggle breakpoints, F5 to continue when paused');
           
         } catch (error) {
           logger.error('Debug', 'Failed to start debug session:', error);

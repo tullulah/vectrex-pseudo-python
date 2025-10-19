@@ -105,6 +105,10 @@ const MiniChart: React.FC<{
 const EmulatorOutputInfo: React.FC = () => {
   const [metrics, setMetrics] = useState<VecxMetrics | null>(null);
   const [regs, setRegs] = useState<VecxRegs | null>(null);
+  const [vecxRunning, setVecxRunning] = useState<boolean>(false);
+  
+  // Get debug state from debugStore
+  const debugState = useDebugStore(s => s.state);
 
   const fetchStats = () => {
     try {
@@ -112,6 +116,7 @@ const EmulatorOutputInfo: React.FC = () => {
       if (!vecx) {
         setMetrics(null);
         setRegs(null);
+        setVecxRunning(false);
         return;
       }
       
@@ -120,9 +125,11 @@ const EmulatorOutputInfo: React.FC = () => {
       
       setMetrics(fetchedMetrics || null);
       setRegs(fetchedRegs || null);
+      setVecxRunning(vecx.running || false);
     } catch (e) {
       setMetrics(null);
       setRegs(null);
+      setVecxRunning(false);
     }
   };
 
@@ -163,6 +170,21 @@ const EmulatorOutputInfo: React.FC = () => {
       
       <div style={{ marginBottom: '2px' }}>
         PC: {hex16(regs?.PC)}
+      </div>
+      
+      <div style={{ marginBottom: '2px' }}>
+        Debug State: <span style={{ 
+          color: debugState === 'running' ? '#0f0' : debugState === 'paused' ? '#ff0' : '#f00',
+          fontWeight: 'bold'
+        }}>{debugState.toUpperCase()}</span>
+        {' | '}
+        JSVecx: <span style={{ 
+          color: vecxRunning ? '#0f0' : '#f00',
+          fontWeight: 'bold'
+        }}>{vecxRunning ? 'RUNNING' : 'STOPPED'}</span>
+        {debugState !== (vecxRunning ? 'running' : 'stopped') && (
+          <span style={{ color: '#f00', marginLeft: '8px' }}>⚠️ MISMATCH</span>
+        )}
       </div>
       
       <div style={{ marginBottom: '2px' }}>
@@ -343,10 +365,13 @@ export const EmulatorPanel: React.FC = () => {
 
   // Phase 3: Breakpoint management functions
   const addBreakpoint = useCallback((address: number) => {
+    console.log(`[EmulatorPanel] addBreakpoint called with:`, address, `type: ${typeof address}`);
     setBreakpoints(prev => {
       const next = new Set(prev);
       next.add(address);
       console.log(`[EmulatorPanel] ✓ Breakpoint added at ${formatAddress(address)}`);
+      console.log(`[EmulatorPanel] 📍 Total breakpoints: ${next.size}, addresses: [${Array.from(next).map(formatAddress).join(', ')}]`);
+      console.log(`[EmulatorPanel] 📍 Raw Set contents:`, Array.from(next));
       return next;
     });
   }, []);
@@ -356,6 +381,7 @@ export const EmulatorPanel: React.FC = () => {
       const next = new Set(prev);
       next.delete(address);
       console.log(`[EmulatorPanel] ✓ Breakpoint removed from ${formatAddress(address)}`);
+      console.log(`[EmulatorPanel] 📍 Total breakpoints: ${next.size}, addresses: [${Array.from(next).map(formatAddress).join(', ')}]`);
       return next;
     });
   }, []);
@@ -498,7 +524,14 @@ export const EmulatorPanel: React.FC = () => {
       }
       
       // Verificar si hay breakpoint en esta dirección
-      if (breakpoints.has(currentPC)) {
+      const hasBreakpoint = breakpoints.has(currentPC);
+      
+      // Log detallado cuando PC está en CUALQUIER rango de usuario (0x0000-0x0FFF)
+      if (currentPC < 0x1000) {
+        console.log(`[EmulatorPanel] 🎯 PC in ROM range: ${formatAddress(currentPC)}, hasBreakpoint: ${hasBreakpoint}, breakpoints Set:`, Array.from(breakpoints));
+      }
+      
+      if (hasBreakpoint) {
         console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: ${formatAddress(currentPC)}`);
         
         // Pausar emulador
@@ -525,6 +558,12 @@ export const EmulatorPanel: React.FC = () => {
         }
         
         console.log('[EmulatorPanel] 🛑 Execution paused at breakpoint');
+      } else {
+        // Log cuando PC está cerca de un breakpoint (para debugging)
+        const nearBreakpoint = Array.from(breakpoints).some(bp => Math.abs(bp - currentPC) < 10);
+        if (nearBreakpoint && Math.random() < 0.1) {
+          console.log(`[EmulatorPanel] 🔍 PC near breakpoint: ${formatAddress(currentPC)}, breakpoints: ${Array.from(breakpoints).map(formatAddress).join(', ')}`);
+        }
       }
     } catch (e) {
       console.error('[EmulatorPanel] Error checking breakpoint:', e);

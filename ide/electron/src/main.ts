@@ -401,6 +401,11 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   }
   const compiler = resolveCompilerPath();
   if (!compiler) return { error: 'compiler_not_found' };
+  
+  // CRITICAL: Always log compiler path for debugging binary resolution
+  console.log('[RUN] ✓ Resolved compiler:', compiler);
+  mainWindow?.webContents.send('run://stdout', `[Compiler] Using: ${compiler}\n`);
+  
   const verbose = process.env.VPY_IDE_VERBOSE_RUN === '1';
   if (verbose) console.log('[RUN] spawning compiler', compiler, fsPath);
   mainWindow?.webContents.send('run://status', `Starting compilation: ${targetDisplay}`);
@@ -409,6 +414,15 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
     const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
     // Set working directory to project root (three levels up from ide/electron/dist/)
     const projectRoot = join(__dirname, '..', '..', '..');
+    
+    // CRITICAL DEBUG: Log EXACT command being executed
+    const fullCommand = `"${compiler}" ${argsv.join(' ')}`;
+    console.log('[RUN] 🔧 FULL COMMAND:', fullCommand);
+    console.log('[RUN] 📁 Working directory:', projectRoot);
+    console.log('[RUN] 📝 Input file (absolute):', fsPath);
+    mainWindow?.webContents.send('run://stdout', `[Compiler] Full command: ${fullCommand}\n`);
+    mainWindow?.webContents.send('run://stdout', `[Compiler] Working dir: ${projectRoot}\n`);
+    
     const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'], cwd: projectRoot });
     let stdoutBuf = '';
     let stderrBuf = '';
