@@ -201,34 +201,79 @@ fn estimate_instruction_size(line: &str) -> u16 {
     
     let instr = parts[0].to_uppercase();
     
-    // Estimate size based on instruction type
-    // This is approximate - real sizes depend on addressing modes
+    // Get operand (everything after first whitespace, before any comment)
+    let operand = if parts.len() > 1 {
+        // Join remaining parts and strip inline comments
+        let rest = trimmed[trimmed.find(parts[0]).unwrap() + parts[0].len()..].trim();
+        rest.split(';').next().unwrap_or("").trim()
+    } else {
+        ""
+    };
+    
+    // Determine addressing mode by examining operand
+    let is_immediate = operand.starts_with('#');
+    let is_indexed = operand.contains(',');
+    
+    // Estimate size based on instruction type and addressing mode
     match instr.as_str() {
-        // 1-byte instructions (inherent/implied)
+        // 1-byte instructions (inherent/implied) - no operand or register-only
         "NOP" | "INCA" | "INCB" | "DECA" | "DECB" | 
         "CLRA" | "CLRB" | "COMA" | "COMB" | "NEGA" | "NEGB" |
         "RTS" | "RTI" | "PULS" | "PSHS" | "PULU" | "PSHU" |
         "ABX" | "DAA" | "SEX" | "MUL" | "SWI" | "SWI2" | "SWI3" |
         "SYNC" | "CWAI" => 1,
         
-        // 2-byte instructions (immediate/direct/indexed simple)
-        "LDA" | "LDB" | "STA" | "STB" | "ADDA" | "ADDB" | "SUBA" | "SUBB" |
-        "CMPA" | "CMPB" | "ANDA" | "ANDB" | "ORA" | "ORB" | "EORA" | "EORB" |
-        "BITA" | "BITB" | "LDX" | "LDY" | "LDU" | "LDS" |
-        "STX" | "STY" | "STU" | "STS" | "LEAX" | "LEAY" | "LEAU" | "LEAS" |
+        // TFR, EXG (register transfer) - always 2 bytes
+        "TFR" | "EXG" => 2,
+        
+        // Branch instructions - always 2 bytes (relative)
         "BRA" | "BEQ" | "BNE" | "BCC" | "BCS" | "BPL" | "BMI" | "BVC" | "BVS" |
         "BHI" | "BLS" | "BGE" | "BLT" | "BGT" | "BLE" | "BSR" => 2,
         
-        // 3-byte instructions (16-bit immediate/extended/long branches)
-        "LDD" | "STD" | "ADDD" | "SUBD" | "CMPD" | "CMPX" | "CMPY" | "CMPU" | "CMPS" |
-        "JSR" | "JMP" | "LBRA" | "LBEQ" | "LBNE" | "LBCC" | "LBCS" | "LBPL" | "LBMI" |
-        "LBVC" | "LBVS" | "LBHI" | "LBLS" | "LBGE" | "LBLT" | "LBGT" | "LBLE" | "LBSR" => 3,
+        // Long branches - always 4 bytes
+        "LBRA" | "LBEQ" | "LBNE" | "LBCC" | "LBCS" | "LBPL" | "LBMI" |
+        "LBVC" | "LBVS" | "LBHI" | "LBLS" | "LBGE" | "LBLT" | "LBGT" | "LBLE" | "LBSR" => 4,
         
-        // TFR, EXG (register transfer) - 2 bytes
-        "TFR" | "EXG" => 2,
+        // JSR, JMP - always 3 bytes (extended addressing)
+        "JSR" | "JMP" => 3,
         
-        // Default: assume 2 bytes for unknown instructions
-        _ => 2,
+        // 8-bit accumulator instructions (LDA, STA, etc.)
+        "LDA" | "LDB" | "STA" | "STB" | "ADDA" | "ADDB" | "SUBA" | "SUBB" |
+        "CMPA" | "CMPB" | "ANDA" | "ANDB" | "ORA" | "ORB" | "EORA" | "EORB" |
+        "BITA" | "BITB" => {
+            if is_immediate {
+                2  // Immediate: opcode + byte
+            } else if is_indexed {
+                2  // Indexed: opcode + postbyte (simplified, can be more)
+            } else {
+                3  // Extended: opcode + address (most common for labels)
+            }
+        }
+        
+        // 16-bit register instructions (LDD, STD, LDX, etc.)
+        "LDD" | "STD" | "ADDD" | "SUBD" | "CMPD" |
+        "LDX" | "LDY" | "LDU" | "LDS" | "STX" | "STY" | "STU" | "STS" |
+        "CMPX" | "CMPY" | "CMPU" | "CMPS" => {
+            if is_immediate {
+                3  // Immediate 16-bit: opcode + word
+            } else if is_indexed {
+                2  // Indexed: opcode + postbyte (simplified)
+            } else {
+                3  // Extended: opcode + address
+            }
+        }
+        
+        // LEA instructions - usually indexed
+        "LEAX" | "LEAY" | "LEAU" | "LEAS" => {
+            if is_indexed {
+                2  // Indexed: opcode + postbyte
+            } else {
+                3  // Extended (rare but possible)
+            }
+        }
+        
+        // Default: assume 3 bytes for safety (extended addressing)
+        _ => 3,
     }
 }
 

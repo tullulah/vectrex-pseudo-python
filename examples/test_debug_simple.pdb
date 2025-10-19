@@ -6,26 +6,26 @@
   "entryPoint": "0x0000",
   "symbols": {
     "START": "0x0027",
-    "MAIN": "0x004B",
-    "LOOP_BODY": "0x0057"
+    "MAIN": "0x004D",
+    "LOOP_BODY": "0x005A"
   },
   "lineMap": {
-    "2": "0x002F",
-    "7": "0x0057",
-    "10": "0x006B",
-    "3": "0x0037"
+    "7": "0x005A",
+    "10": "0x006E",
+    "3": "0x0039",
+    "2": "0x0031"
   },
   "functions": {
     "main": {
       "name": "main",
-      "address": "0x004B",
+      "address": "0x004D",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "loop": {
       "name": "loop",
-      "address": "0x0057",
+      "address": "0x005A",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
@@ -34,7 +34,7 @@
   "nativeCalls": {
     "2": "VECTREX_WAIT_RECAL",
     "3": "VECTREX_SET_INTENSITY",
-    "7": "VECTREX_DEBUG_PRINT",
-    "10": "VECTREX_PRINT_TEXT"
+    "10": "VECTREX_PRINT_TEXT",
+    "7": "VECTREX_DEBUG_PRINT"
   }
 }
