@@ -65,6 +65,7 @@ interface DebugStore extends LegacyDebugState {
   // Breakpoint synchronization
   onBreakpointAdded: (uri: string, line: number) => void;
   onBreakpointRemoved: (uri: string, line: number) => void;
+  syncBreakpointsToWasm: (pdb: PdbData, breakpoints: Record<string, number[]>) => void;
 }
 
 const initial: LegacyDebugState = {
@@ -109,17 +110,38 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
     const allBreakpoints = useEditorStore.getState().breakpoints;
     console.log('[DebugStore] 🔄 Re-synchronizing breakpoints from editorStore:', allBreakpoints);
     
-    // For each file's breakpoints, send add-breakpoint messages
-    Object.entries(allBreakpoints).forEach(([uri, lines]) => {
+    // Convert Set<number> to number[] for each file
+    const breakpointsArray: Record<string, number[]> = {};
+    Object.entries(allBreakpoints).forEach(([uri, lineSet]) => {
+      breakpointsArray[uri] = Array.from(lineSet);
+    });
+    
+    // Sync breakpoints to WASM emulator
+    get().syncBreakpointsToWasm(pdb, breakpointsArray);
+  },
+  
+  // Synchronize breakpoints from editor to WASM emulator
+  syncBreakpointsToWasm: (pdb: PdbData, breakpoints: Record<string, number[]>) => {
+    console.log('[DebugStore] 🎯 Syncing breakpoints to WASM...');
+    
+    // Send message to clear all breakpoints first
+    window.postMessage({ type: 'debug-clear-breakpoints' }, '*');
+    
+    // For each file's breakpoints, convert line → address and send to WASM
+    Object.entries(breakpoints).forEach(([uri, lines]) => {
       lines.forEach((line) => {
-        const address = pdb.lineMap[line.toString()];
-        if (address) {
-          console.log(`[DebugStore] ♻️  Re-sync breakpoint: ${uri}:${line} → ${address}`);
+        const addressHex = pdb.lineMap[line.toString()];
+        if (addressHex) {
+          const address = parseInt(addressHex, 16);
+          console.log(`[DebugStore] 📍 Breakpoint: ${uri}:${line} → ${addressHex} (${address})`);
           window.postMessage({
             type: 'debug-add-breakpoint',
             address,
-            line
+            line,
+            uri
           }, '*');
+        } else {
+          console.warn(`[DebugStore] ⚠️  No address found for line ${line} in .pdb`);
         }
       });
     });

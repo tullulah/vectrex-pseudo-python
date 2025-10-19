@@ -485,54 +485,21 @@ export const EmulatorPanel: React.FC = () => {
     return () => clearInterval(interval);
   }, [audioEnabled, status, setAudioEnabled]);
 
-  // Phase 3: Breakpoint checking system
-  const checkBreakpoint = useCallback(() => {
-    // Solo verificar si estamos en modo debug y running
+  // Phase 3: Breakpoint detection system (REACTIVE - no polling)
+  // The WASM emulator checks breakpoints after EVERY instruction
+  // We just need to detect when it has paused
+  const checkBreakpointHit = useCallback(() => {
+    // Solo verificar si estamos en modo debug
     if (debugState !== 'running') return;
     
     try {
       const vecx = (window as any).vecx;
       if (!vecx || !vecx.e6809) return;
       
-      // Obtener PC actual del emulador (reg_pc es el nombre real de la propiedad en JSVecx)
-      const currentPC = vecx.e6809?.reg_pc;
-      
-      // DEBUG: Verificar estado del emulador y PC
-      if (Math.random() < 0.05) { // ~1 de cada 20 veces
-        console.log('[EmulatorPanel] Breakpoint check state:', {
-          vecxExists: !!vecx,
-          e6809Exists: !!vecx.e6809,
-          pc: currentPC,
-          pcHex: formatAddress(currentPC),
-          pcType: typeof currentPC,
-          running: vecx.running,
-          breakpointCount: breakpoints.size,
-          breakpointAddresses: Array.from(breakpoints).map(formatAddress)
-        });
-      }
-      
-      // Si PC es undefined/null, hay un problema más profundo
-      if (currentPC === undefined || currentPC === null) {
-        if (Math.random() < 0.01) { // Log ocasional
-          console.warn('[EmulatorPanel] ⚠️ PC is undefined/null - emulator not ready?', {
-            vecx: !!vecx,
-            e6809: !!vecx.e6809,
-            running: vecx.running
-          });
-        }
-        return;
-      }
-      
-      // Verificar si hay breakpoint en esta dirección
-      const hasBreakpoint = breakpoints.has(currentPC);
-      
-      // Log detallado cuando PC está en CUALQUIER rango de usuario (0x0000-0x0FFF)
-      if (currentPC < 0x1000) {
-        console.log(`[EmulatorPanel] 🎯 PC in ROM range: ${formatAddress(currentPC)}, hasBreakpoint: ${hasBreakpoint}, breakpoints Set:`, Array.from(breakpoints));
-      }
-      
-      if (hasBreakpoint) {
-        console.log(`[EmulatorPanel] 🔴 Breakpoint hit at PC: ${formatAddress(currentPC)}`);
+      // Check if WASM paused by breakpoint (reactive check)
+      if (vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint()) {
+        const currentPC = vecx.e6809?.reg_pc;
+        console.log(`[EmulatorPanel] 🔴 Breakpoint hit detected at PC: ${formatAddress(currentPC)}`);
         
         // Pausar emulador
         if (vecx.running) {
@@ -542,11 +509,10 @@ export const EmulatorPanel: React.FC = () => {
         
         // Actualizar debug state
         const debugStore = useDebugStore.getState();
-        
         debugStore.setState('paused');
         debugStore.setCurrentAsmAddress(formatAddress(currentPC));
         
-        // Phase 5.5: Map address → VPy line using helper
+        // Map address → VPy line using helper
         if (pdbData) {
           const vpyLine = asmAddressToVpyLine(currentPC, pdbData);
           if (vpyLine !== null) {
@@ -558,17 +524,11 @@ export const EmulatorPanel: React.FC = () => {
         }
         
         console.log('[EmulatorPanel] 🛑 Execution paused at breakpoint');
-      } else {
-        // Log cuando PC está cerca de un breakpoint (para debugging)
-        const nearBreakpoint = Array.from(breakpoints).some(bp => Math.abs(bp - currentPC) < 10);
-        if (nearBreakpoint && Math.random() < 0.1) {
-          console.log(`[EmulatorPanel] 🔍 PC near breakpoint: ${formatAddress(currentPC)}, breakpoints: ${Array.from(breakpoints).map(formatAddress).join(', ')}`);
-        }
       }
     } catch (e) {
       console.error('[EmulatorPanel] Error checking breakpoint:', e);
     }
-  }, [debugState, breakpoints, pdbData]);
+  }, [debugState, pdbData]);
 
   // Phase 3: Setup breakpoint checking interval
   useEffect(() => {
@@ -579,10 +539,10 @@ export const EmulatorPanel: React.FC = () => {
     }
     
     // Activar verificación cuando estamos en debug session (running O paused)
-    // checkBreakpoint() internamente verifica que solo actúe cuando running
+    // checkBreakpointHit() internamente verifica que solo actúe cuando running
     if (debugState === 'running' || debugState === 'paused') {
-      console.log(`[EmulatorPanel] ✓ Starting breakpoint checking (state=${debugState}, every 50ms)`);
-      breakpointCheckIntervalRef.current = window.setInterval(checkBreakpoint, 50);
+      console.log(`[EmulatorPanel] ✓ Starting reactive breakpoint checking (state=${debugState})`);
+      breakpointCheckIntervalRef.current = window.setInterval(checkBreakpointHit, 50);
     } else {
       console.log('[EmulatorPanel] Breakpoint checking disabled (stopped)');
     }
@@ -593,7 +553,7 @@ export const EmulatorPanel: React.FC = () => {
         breakpointCheckIntervalRef.current = null;
       }
     };
-  }, [debugState, checkBreakpoint]);
+  }, [debugState, checkBreakpointHit]);
 
   // Phase 3: Listen for debug commands from debugStore
   useEffect(() => {
@@ -603,30 +563,54 @@ export const EmulatorPanel: React.FC = () => {
       const vecx = (window as any).vecx;
       if (!vecx) return;
       
-      const { type, targetAddress, address, line } = event.data;
+      const { type, address, line } = event.data;
       
       switch (type) {
         case 'debug-add-breakpoint':
-          console.log(`[EmulatorPanel] ➕ Adding breakpoint: line ${line} → ${address}`);
-          if (address) {
-            const numAddr = parseInt(address, 16);
-            addBreakpoint(numAddr);
+          console.log(`[EmulatorPanel] ➕ Adding breakpoint: line ${line} → address ${address}`);
+          if (address !== undefined) {
+            // Call WASM API directly
+            if (vecx.addBreakpoint) {
+              vecx.addBreakpoint(address);
+              console.log(`[EmulatorPanel] ✓ Breakpoint added at 0x${address.toString(16)}`);
+            } else {
+              console.error('[EmulatorPanel] ❌ vecx.addBreakpoint not available');
+            }
           }
           break;
           
         case 'debug-remove-breakpoint':
-          console.log(`[EmulatorPanel] ➖ Removing breakpoint: line ${line} → ${address}`);
-          if (address) {
-            const numAddr = parseInt(address, 16);
-            removeBreakpoint(numAddr);
+          console.log(`[EmulatorPanel] ➖ Removing breakpoint: line ${line} → address ${address}`);
+          if (address !== undefined) {
+            // Call WASM API directly
+            if (vecx.removeBreakpoint) {
+              vecx.removeBreakpoint(address);
+              console.log(`[EmulatorPanel] ✓ Breakpoint removed at 0x${address.toString(16)}`);
+            } else {
+              console.error('[EmulatorPanel] ❌ vecx.removeBreakpoint not available');
+            }
+          }
+          break;
+          
+        case 'debug-clear-breakpoints':
+          console.log('[EmulatorPanel] 🗑️  Clearing all breakpoints');
+          if (vecx.clearBreakpoints) {
+            vecx.clearBreakpoints();
+            console.log('[EmulatorPanel] ✓ All breakpoints cleared');
           }
           break;
           
         case 'debug-continue':
           console.log('[EmulatorPanel] 🟢 Debug: Continue execution');
-          console.log('[EmulatorPanel] Current vecx.running:', vecx.running);
+          // Resume from breakpoint if paused by one
+          if (vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint()) {
+            console.log('[EmulatorPanel] 🔓 Resuming from breakpoint');
+            if (vecx.resumeFromBreakpoint) {
+              vecx.resumeFromBreakpoint();
+            }
+          }
           if (!vecx.running) {
-            vecx.start(); // Use start() instead of vecx_emuloop()
+            vecx.start();
             console.log('[EmulatorPanel] ✓ Emulator started');
           }
           break;
@@ -647,16 +631,8 @@ export const EmulatorPanel: React.FC = () => {
           break;
           
         case 'debug-step-over':
-          console.log('[EmulatorPanel] ⏭️  Debug: Step over to address:', targetAddress);
-          // TODO: Implement single-step execution
-          // For now, just continue and set a temporary breakpoint
-          if (targetAddress) {
-            const addr = parseInt(targetAddress, 16);
-            setBreakpoints(prev => new Set([...prev, addr]));
-            if (!vecx.running) {
-              vecx.vecx_emuloop();
-            }
-          }
+          console.log('[EmulatorPanel] ⏭️  Debug: Step over');
+          // TODO: Implement proper step-over with temporary breakpoint
           break;
           
         case 'debug-step-into':
