@@ -621,6 +621,14 @@ function VecX()
             this.instructionCount++; // Contar instrucciones ejecutadas
             this.totalCycles += icycles; // Contar cycles totales
             
+            // CRITICAL: Check breakpoint AFTER instruction execution (PC may have changed)
+            var newPC = e6809.reg_pc;
+            if (this.debugState === 'running' && this.breakpoints.has(newPC)) {
+                console.log('[JSVecx Debug] 🔴 Breakpoint hit at PC: 0x' + newPC.toString(16).toUpperCase());
+                this.pauseDebugger('breakpoint', newPC);
+                return; // Stop execution immediately
+            }
+            
             // Debug: Track call stack depth para step out
             if (this.stepMode === 'out') {
                 var opcode = this.read8(currentPC);
