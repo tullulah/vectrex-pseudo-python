@@ -602,6 +602,12 @@ export const EmulatorPanel: React.FC = () => {
           
         case 'debug-continue':
           console.log('[EmulatorPanel] 🟢 Debug: Continue execution');
+          
+          // Clear current line highlight
+          const debugStoreForContinue = useDebugStore.getState();
+          debugStoreForContinue.setCurrentVpyLine(null);
+          debugStoreForContinue.setState('running');
+          
           // Resume from breakpoint if paused by one
           if (vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint()) {
             console.log('[EmulatorPanel] 🔓 Resuming from breakpoint');
@@ -609,6 +615,10 @@ export const EmulatorPanel: React.FC = () => {
               vecx.resumeFromBreakpoint();
             }
           }
+          // CRITICAL: Set debugState to 'running' when continuing
+          vecx.debugState = 'running';
+          console.log('[EmulatorPanel] ✓ JSVecx debugState set to running');
+          
           if (!vecx.running) {
             vecx.start();
             console.log('[EmulatorPanel] ✓ Emulator started');
@@ -632,24 +642,101 @@ export const EmulatorPanel: React.FC = () => {
           
         case 'debug-step-over':
           console.log('[EmulatorPanel] ⏭️  Debug: Step over');
-          // TODO: Implement proper step-over with temporary breakpoint
+          
+          // Clear current line highlight before stepping
+          const debugStoreForStepOver = useDebugStore.getState();
+          debugStoreForStepOver.setCurrentVpyLine(null);
+          debugStoreForStepOver.setState('running');
+          
+          if (vecx.debugStepOver) {
+            // Calculate target address (next line after current)
+            const currentPC = vecx.e6809?.reg_pc;
+            if (currentPC && pdbData) {
+              // Find current line
+              let currentLine: number | null = null;
+              const currentPCHex = '0x' + currentPC.toString(16).padStart(4, '0').toLowerCase();
+              for (const [line, addr] of Object.entries(pdbData.lineMap)) {
+                if (addr.toLowerCase() === currentPCHex) {
+                  currentLine = parseInt(line, 10);
+                  break;
+                }
+              }
+              
+              if (currentLine !== null) {
+                // Find next line with address
+                const sortedLines = Object.keys(pdbData.lineMap).map(l => parseInt(l, 10)).sort((a, b) => a - b);
+                const nextLine = sortedLines.find(l => l > currentLine!);
+                if (nextLine && pdbData.lineMap[nextLine]) {
+                  const targetAddr = parseInt(pdbData.lineMap[nextLine], 16);
+                  console.log(`[EmulatorPanel] Step Over: line ${currentLine} → ${nextLine} (0x${targetAddr.toString(16)})`);
+                  vecx.debugStepOver(targetAddr);
+                } else {
+                  // No next line - find SMALLEST line that creates a valid loop cycle
+                  // (avoid jumping to setup code before loop, find actual loop entry point)
+                  // Strategy: Find the smallest line that's >= 50% of current line
+                  // This assumes loop() starts around halfway through the file
+                  const loopStartThreshold = Math.floor(currentLine! * 0.5);
+                  const loopStartLine = sortedLines.find(l => l >= loopStartThreshold) || sortedLines[0];
+                  
+                  if (loopStartLine && pdbData.lineMap[loopStartLine]) {
+                    const targetAddr = parseInt(pdbData.lineMap[loopStartLine], 16);
+                    console.log(`[EmulatorPanel] Step Over: wrapping from line ${currentLine} → ${loopStartLine} (loop entry at 0x${targetAddr.toString(16)})`);
+                    vecx.debugStepOver(targetAddr);
+                  }
+                }
+              }
+            }
+          }
           break;
           
         case 'debug-step-into':
           console.log('[EmulatorPanel] 🔽 Debug: Step into');
-          // TODO: Implement single-step execution
+          
+          // Clear current line highlight before stepping
+          const debugStoreForStepInto = useDebugStore.getState();
+          debugStoreForStepInto.setCurrentVpyLine(null);
+          debugStoreForStepInto.setState('running');
+          
+          if (vecx.debugStepInto) {
+            vecx.debugStepInto(false); // Not a native call
+            console.log('[EmulatorPanel] ✓ Step into executed');
+          }
           break;
           
         case 'debug-step-out':
           console.log('[EmulatorPanel] 🔼 Debug: Step out');
-          // TODO: Implement step out (run until RTS)
+          if (vecx.debugStepOut) {
+            vecx.debugStepOut();
+            console.log('[EmulatorPanel] ✓ Step out executed');
+          }
+          break;
+          
+        case 'debugger-paused':
+          console.log('[EmulatorPanel] 🔴 Debugger paused:', event.data);
+          // Update debugStore state to 'paused'
+          const debugStore = useDebugStore.getState();
+          debugStore.setState('paused');
+          // Notify editor to highlight current line
+          if (event.data.pc && pdbData) {
+            const pcHex = event.data.pc.replace('0x', '').toLowerCase();
+            // Find line number from PDB lineMap
+            for (const [line, addr] of Object.entries(pdbData.lineMap)) {
+              if (addr.toLowerCase() === `0x${pcHex}`) {
+                const lineNumber = parseInt(line, 10);
+                console.log(`[EmulatorPanel] 📍 Highlighting line ${lineNumber} (PC: ${event.data.pc})`);
+                // Set current line in debugStore - Monaco will react to this
+                debugStore.setCurrentVpyLine(lineNumber);
+                break;
+              }
+            }
+          }
           break;
       }
     };
     
     window.addEventListener('message', handleDebugMessage);
     return () => window.removeEventListener('message', handleDebugMessage);
-  }, [addBreakpoint, removeBreakpoint]);
+  }, [addBreakpoint, removeBreakpoint, pdbData]);
 
   // Función para cargar ROM desde dropdown (definida antes de useEffects que la usan)
   const loadROMFromDropdown = useCallback(async (romName: string) => {
@@ -1031,6 +1118,10 @@ export const EmulatorPanel: React.FC = () => {
           const debugStore = useDebugStore.getState();
           debugStore.setState('running');
           console.log('[EmulatorPanel] ✓ Debug mode: state set to running');
+          
+          // CRITICAL: Sync debugState to JSVecx
+          vecx.debugState = 'running';
+          console.log('[EmulatorPanel] ✓ JSVecx debugState set to running');
           
           vecx.start();
           console.log('[EmulatorPanel] ✓ Emulator started in debug mode (running until breakpoint)');

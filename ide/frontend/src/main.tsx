@@ -515,13 +515,16 @@ function App() {
         break;
       }
       case 'debug.stepOver':
-  logger.debug('App', 'step over (pending implementation)');
+        logger.debug('App', 'step over');
+        window.postMessage({ type: 'debug-step-over' }, '*');
         break;
       case 'debug.stepInto':
-  logger.debug('App', 'step into (pending implementation)');
+        logger.debug('App', 'step into');
+        window.postMessage({ type: 'debug-step-into' }, '*');
         break;
       case 'debug.stepOut':
-  logger.debug('App', 'step out (pending implementation)');
+        logger.debug('App', 'step out');
+        window.postMessage({ type: 'debug-step-out' }, '*');
         break;
       case 'debug.toggleBreakpoint':
   logger.debug('App', 'toggle breakpoint (pending implementation)');

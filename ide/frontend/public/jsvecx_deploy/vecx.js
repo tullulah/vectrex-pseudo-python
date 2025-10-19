@@ -589,8 +589,9 @@ function VecX()
         while( cycles > 0 )
         {
             // Debug: Check breakpoint ANTES de ejecutar la instrucción
+            // BUT: skip breakpoint check if in step mode (step handles pause itself)
             var currentPC = e6809.reg_pc;
-            if (this.debugState === 'running' && this.breakpoints.has(currentPC)) {
+            if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(currentPC)) {
                 this.pauseDebugger('breakpoint', currentPC);
                 return; // Detener ejecución inmediatamente
             }
@@ -623,10 +624,30 @@ function VecX()
             
             // CRITICAL: Check breakpoint AFTER instruction execution (PC may have changed)
             var newPC = e6809.reg_pc;
-            if (this.debugState === 'running' && this.breakpoints.has(newPC)) {
+            
+            // TEMP DEBUG: Log when passing through target addresses
+            if (newPC === 0x006E || newPC === 0x005A) {
+                console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
+                           ', debugState=' + this.debugState + 
+                           ', hasBreakpoint=' + this.breakpoints.has(newPC) +
+                           ', stepMode=' + this.stepMode +
+                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
+            }
+            
+            // Check breakpoint ONLY if not in step mode (step modes handle pause themselves)
+            if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(newPC)) {
                 console.log('[JSVecx Debug] 🔴 Breakpoint hit at PC: 0x' + newPC.toString(16).toUpperCase());
                 this.pauseDebugger('breakpoint', newPC);
                 return; // Stop execution immediately
+            }
+            
+            // CRITICAL: Check step target AFTER instruction execution (PC may have changed)
+            if (this.stepMode === 'over' && newPC === this.stepTargetAddress) {
+                console.log('[JSVecx Debug] ✅ Step Over reached target: 0x' + newPC.toString(16).toUpperCase());
+                this.pauseDebugger('step', newPC);
+                this.stepMode = null;
+                this.stepTargetAddress = null;
+                return;
             }
             
             // Debug: Track call stack depth para step out
@@ -1124,21 +1145,20 @@ function VecX()
     // Pausar el debugger y notificar al IDE
     this.pauseDebugger = function(mode, pc) {
         this.debugState = 'paused';
+        this.running = false; // CRITICAL: Stop the emulation loop
         
         var registers = this.getRegisters();
         var callStack = this.buildCallStack(); // TODO: Implementar call stack real
         
         // Enviar evento al IDE vía postMessage
-        if (window.parent !== window) {
-            window.parent.postMessage({
-                type: 'debugger-paused',
-                pc: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'),
-                mode: mode, // 'breakpoint' | 'step'
-                registers: registers,
-                callStack: callStack,
-                cycles: this.totalCycles
-            }, '*');
-        }
+        window.postMessage({
+            type: 'debugger-paused',
+            pc: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'),
+            mode: mode, // 'breakpoint' | 'step'
+            registers: registers,
+            callStack: callStack,
+            cycles: this.totalCycles
+        }, '*');
         
         console.log('[JSVecx Debug] Paused at PC=' + pc.toString(16) + ', mode=' + mode);
     }
