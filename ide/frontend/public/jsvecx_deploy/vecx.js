@@ -669,6 +669,15 @@ function VecX()
                 return;
             }
             
+            // Step Into AFTER instruction: Pause now that we've executed the JSR
+            if (this.stepMode === 'into') {
+                console.log('[JSVecx Debug] ✅ Step Into reached target: 0x' + newPC.toString(16).toUpperCase());
+                this.pauseDebugger('step', newPC);
+                this.stepMode = null;
+                this.isNativeCallStepInto = false;
+                return;
+            }
+            
             // Debug: Track call stack depth para step out
             if (this.stepMode === 'out') {
                 var opcode = this.read8(currentPC);
