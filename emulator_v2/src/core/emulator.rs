@@ -43,6 +43,7 @@ use crate::core::{
 };
 use crate::types::Cycles;
 use std::cell::UnsafeCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 macro_rules! unsafe_ref {
@@ -66,6 +67,10 @@ pub struct Emulator {
     unmapped: Rc<UnsafeCell<UnmappedMemoryDevice>>,
     dev: Rc<UnsafeCell<DevMemoryDevice>>,
     cartridge: Rc<UnsafeCell<Cartridge>>,
+    
+    // Breakpoint support
+    breakpoints: HashSet<u16>,
+    paused_by_breakpoint: bool,
 }
 
 impl Emulator {
@@ -81,6 +86,8 @@ impl Emulator {
             unmapped: Rc::new(UnsafeCell::new(UnmappedMemoryDevice::new())),
             dev: Rc::new(UnsafeCell::new(DevMemoryDevice::new())),
             cartridge: Rc::new(UnsafeCell::new(Cartridge::new())),
+            breakpoints: HashSet::new(),
+            paused_by_breakpoint: false,
         }
     }
 
@@ -141,6 +148,12 @@ impl Emulator {
         )?;
 
         self.cpu.memory_bus_mut().sync();
+        
+        // CRITICAL: Check breakpoints after instruction execution
+        let pc = self.cpu.registers.pc;
+        if self.breakpoints.contains(&pc) {
+            self.paused_by_breakpoint = true;
+        }
 
         Ok(cpu_cycles)
     }
@@ -163,5 +176,26 @@ impl Emulator {
 
     pub fn get_via(&self) -> Rc<UnsafeCell<Via6522>> {
         self.via.clone()
+    }
+    
+    // Breakpoint management
+    pub fn add_breakpoint(&mut self, address: u16) {
+        self.breakpoints.insert(address);
+    }
+    
+    pub fn remove_breakpoint(&mut self, address: u16) {
+        self.breakpoints.remove(&address);
+    }
+    
+    pub fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+    }
+    
+    pub fn is_paused_by_breakpoint(&self) -> bool {
+        self.paused_by_breakpoint
+    }
+    
+    pub fn resume_from_breakpoint(&mut self) {
+        self.paused_by_breakpoint = false;
     }
 }

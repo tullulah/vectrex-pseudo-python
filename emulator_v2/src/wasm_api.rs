@@ -216,6 +216,16 @@ impl VectrexEmulator {
         // Execute instructions for the frame
         let mut cycles_remaining = cycles;
         while cycles_remaining > 0 && self.running {
+            // CRITICAL: Stop immediately if breakpoint was hit
+            if self.emulator.is_paused_by_breakpoint() {
+                self.running = false;
+                console::log_1(&format!(
+                    "[WASM] 🔴 Breakpoint hit at PC: 0x{:04X}",
+                    self.emulator.get_cpu().registers.pc
+                ).into());
+                break;
+            }
+            
             let cpu_cycles = match self.emulator.execute_instruction(
                 &self.input,
                 &mut self.render_context,
@@ -623,6 +633,46 @@ impl VectrexEmulator {
             })
             .collect();
         format!("[{}]", history.join(","))
+    }
+    
+    // ========================================================================
+    // BREAKPOINT SUPPORT - Reactive architecture
+    // ========================================================================
+    
+    /// Add a breakpoint at the specified address
+    /// When PC reaches this address, emulator will pause automatically
+    #[wasm_bindgen(js_name = addBreakpoint)]
+    pub fn add_breakpoint(&mut self, address: u16) {
+        self.emulator.add_breakpoint(address);
+        console::log_1(&format!("[WASM] Breakpoint added at 0x{:04X}", address).into());
+    }
+    
+    /// Remove a breakpoint at the specified address
+    #[wasm_bindgen(js_name = removeBreakpoint)]
+    pub fn remove_breakpoint(&mut self, address: u16) {
+        self.emulator.remove_breakpoint(address);
+        console::log_1(&format!("[WASM] Breakpoint removed at 0x{:04X}", address).into());
+    }
+    
+    /// Clear all breakpoints
+    #[wasm_bindgen(js_name = clearBreakpoints)]
+    pub fn clear_breakpoints(&mut self) {
+        self.emulator.clear_breakpoints();
+        console::log_1(&"[WASM] All breakpoints cleared".into());
+    }
+    
+    /// Check if emulator is paused by a breakpoint
+    #[wasm_bindgen(js_name = isPausedByBreakpoint)]
+    pub fn is_paused_by_breakpoint(&self) -> bool {
+        self.emulator.is_paused_by_breakpoint()
+    }
+    
+    /// Resume execution from a breakpoint
+    /// Must be called before continuing execution after hitting a breakpoint
+    #[wasm_bindgen(js_name = resumeFromBreakpoint)]
+    pub fn resume_from_breakpoint(&mut self) {
+        self.emulator.resume_from_breakpoint();
+        console::log_1(&"[WASM] Resumed from breakpoint".into());
     }
 }
 

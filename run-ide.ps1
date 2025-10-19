@@ -1,5 +1,5 @@
 param(
-  [switch]$DevTools,
+  [switch]$NoDevTools,   # deshabilita DevTools (por defecto están habilitados)
   [switch]$StrictCSP,    # ahora la relajación es por defecto; usar -StrictCSP para política estricta
   [switch]$NoRustBuild,
   [switch]$NoWasmBuild,  # omite wasm build
@@ -13,12 +13,12 @@ Script simplificado (con dependencias automáticas):
   1. Verifica npm
   2. Instala (si faltan) dependencias en ide/frontend y ide/electron
   3. Lanza: powershell -NoLogo -NoProfile -Command "Set-Location ide/electron; npm run dev"
-  4. Si se pasa -DevTools exporta VPY_IDE_DEVTOOLS=1
+  4. DevTools habilitados por defecto (usar -NoDevTools para deshabilitarlos)
 
 Compilación Rust: manual (cargo build --workspace) si la quieres antes del LSP.
 Uso:
-  .\run-ide.ps1            # normal
-  .\run-ide.ps1 -DevTools  # con devtools permitidos
+  .\run-ide.ps1              # normal (con DevTools)
+  .\run-ide.ps1 -NoDevTools  # sin DevTools
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -30,7 +30,8 @@ if(-not (Get-Command npm -ErrorAction SilentlyContinue)){
   exit 1
 }
 
-if($DevTools){ $env:VPY_IDE_DEVTOOLS = '1' } else { Remove-Item Env:VPY_IDE_DEVTOOLS -ErrorAction SilentlyContinue | Out-Null }
+# DevTools habilitados por defecto (deshabilitar con -NoDevTools)
+if(-not $NoDevTools){ $env:VPY_IDE_DEVTOOLS = '1' } else { Remove-Item Env:VPY_IDE_DEVTOOLS -ErrorAction SilentlyContinue | Out-Null }
 # Relajado por defecto (para permitir React Fast Refresh y estilos inline de desarrollo). Si se pasa -StrictCSP se limpia.
 if(-not $StrictCSP){ $env:VPY_IDE_RELAX_CSP = '1' } else { Remove-Item Env:VPY_IDE_RELAX_CSP -ErrorAction SilentlyContinue | Out-Null }
 if($NoClear){ $env:VPY_IDE_NO_CLEAR = '1' } else { Remove-Item Env:VPY_IDE_NO_CLEAR -ErrorAction SilentlyContinue | Out-Null }

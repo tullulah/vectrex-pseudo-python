@@ -10,10 +10,10 @@
     "LOOP_BODY": "0x005A"
   },
   "lineMap": {
-    "7": "0x005A",
-    "10": "0x006E",
+    "2": "0x0031",
     "3": "0x0039",
-    "2": "0x0031"
+    "7": "0x005A",
+    "10": "0x006E"
   },
   "functions": {
     "main": {
@@ -32,9 +32,9 @@
     }
   },
   "nativeCalls": {
-    "2": "VECTREX_WAIT_RECAL",
-    "3": "VECTREX_SET_INTENSITY",
+    "7": "VECTREX_DEBUG_PRINT",
     "10": "VECTREX_PRINT_TEXT",
-    "7": "VECTREX_DEBUG_PRINT"
+    "3": "VECTREX_SET_INTENSITY",
+    "2": "VECTREX_WAIT_RECAL"
   }
 }
