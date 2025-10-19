@@ -716,17 +716,92 @@ export const EmulatorPanel: React.FC = () => {
           // Update debugStore state to 'paused'
           const debugStore = useDebugStore.getState();
           debugStore.setState('paused');
-          // Notify editor to highlight current line
+          
           if (event.data.pc && pdbData) {
             const pcHex = event.data.pc.replace('0x', '').toLowerCase();
-            // Find line number from PDB lineMap
+            
+            // Check if PC is in VPy code range (lineMap)
+            let foundInVpy = false;
             for (const [line, addr] of Object.entries(pdbData.lineMap)) {
               if (addr.toLowerCase() === `0x${pcHex}`) {
                 const lineNumber = parseInt(line, 10);
-                console.log(`[EmulatorPanel] 📍 Highlighting line ${lineNumber} (PC: ${event.data.pc})`);
-                // Set current line in debugStore - Monaco will react to this
+                console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} (PC: ${event.data.pc})`);
                 debugStore.setCurrentVpyLine(lineNumber);
+                foundInVpy = true;
                 break;
+              }
+            }
+            
+            // If not in VPy range, we're in ASM (native call or generated code)
+            if (!foundInVpy && event.data.mode === 'step') {
+              console.log(`[EmulatorPanel] 🔧 Step Into entered ASM code at PC: ${event.data.pc}`);
+              
+              // Open ASM file in new editor and highlight the line
+              if (pdbData.asm) {
+                const asmFileName = pdbData.asm;
+                
+                // Get directory of current VPy file
+                const editorStore = useEditorStore.getState();
+                const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
+                
+                if (activeDoc) {
+                  const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
+                  const asmPath = `${dirPath}/${asmFileName}`.replace(/^file:\/\/\//, '');
+                  
+                  console.log(`[EmulatorPanel] 📂 Opening ASM file: ${asmPath}`);
+                  
+                  // Read ASM file
+                  (window as any).electron.file.read(asmPath).then((content: string) => {
+                    // Find the line number in ASM that corresponds to this PC
+                    const lines = content.split('\n');
+                    let targetLine = 0;
+                    
+                    // Strategy: Look for VPy_LINE comments near this PC address
+                    // Or look for ORG directives
+                    const pcHexUpper = event.data.pc.replace('0x', '').padStart(4, '0').toUpperCase();
+                    
+                    // First, try to find the closest VPy line mapping from lineMap
+                    // to give context of where we are in the ASM
+                    console.log(`[EmulatorPanel] 🔍 Searching ASM for PC: $${pcHexUpper}`);
+                    
+                    // Simple strategy: search for the address in comments or labels
+                    for (let i = 0; i < lines.length; i++) {
+                      const line = lines[i];
+                      // Look for address in various formats
+                      if (line.includes(`$${pcHexUpper}`) || 
+                          line.includes(`0x${pcHexUpper}`) ||
+                          line.match(new RegExp(`\\b${pcHexUpper}\\b`))) {
+                        targetLine = i + 1;
+                        console.log(`[EmulatorPanel] ✅ Found address at line ${targetLine}: ${line.trim()}`);
+                        break;
+                      }
+                    }
+                    
+                    // Fallback: just show the file from the top
+                    if (targetLine === 0) {
+                      targetLine = 1;
+                      console.log(`[EmulatorPanel] ⚠️ Address not found, showing ASM from top`);
+                    }
+                    
+                    // Open ASM file in editor
+                    const asmUri = `file:///${asmPath}`;
+                    editorStore.openDocument({
+                      uri: asmUri,
+                      content: content,
+                      language: 'vpy', // Monaco will use generic highlighting
+                      dirty: false,
+                      mtime: Date.now(),
+                      diagnostics: []
+                    });
+                    
+                    // Set as active and navigate to line
+                    editorStore.setActive(asmUri);
+                    editorStore.gotoLocation(asmUri, targetLine, 1);
+                    
+                  }).catch((err: any) => {
+                    console.error(`[EmulatorPanel] ❌ Failed to read ASM file: ${err}`);
+                  });
+                }
               }
             }
           }

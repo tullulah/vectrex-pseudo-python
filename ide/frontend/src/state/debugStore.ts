@@ -7,6 +7,7 @@ export type ExecutionState = 'stopped' | 'running' | 'paused';
 export interface PdbData {
   version: string;
   source: string;
+  asm?: string;  // Path to generated ASM file
   binary: string;
   entry_point: string;
   symbols: Record<string, string>;
