@@ -34,6 +34,7 @@ function VecX()
     this.stepMode = null; // null | 'over' | 'into' | 'out'
     this.stepTargetAddress = null; // Dirección objetivo para step over
     this.callStackDepth = 0; // Profundidad de la pila de llamadas (para step out)
+    this.isNativeCallStepInto = false; // Flag para saltar JSR en step into de native calls
     this.via_ora = 0;
     this.via_orb = 0;
     this.via_ddra = 0;
@@ -606,9 +607,27 @@ function VecX()
             
             if (this.stepMode === 'into') {
                 // Step into pausa en CADA instrucción
-                this.pauseDebugger('step', currentPC);
-                this.stepMode = null;
-                return;
+                // EXCEPT: If this is a native call step, skip the JSR and pause at the target
+                if (this.isNativeCallStepInto) {
+                    // Read opcode to check if it's JSR
+                    var opcode = this.read8(currentPC);
+                    if (opcode === 0xBD || opcode === 0x9D || opcode === 0xAD || opcode === 0x8D) { // JSR variants
+                        console.log('[JSVecx Debug] Skipping JSR instruction, will pause at target');
+                        this.isNativeCallStepInto = false; // Only skip once
+                        // Don't pause - continue to next instruction (inside the function)
+                    } else {
+                        // Not a JSR? Pause normally
+                        this.pauseDebugger('step', currentPC);
+                        this.stepMode = null;
+                        this.isNativeCallStepInto = false;
+                        return;
+                    }
+                } else {
+                    // Normal step into - pause immediately
+                    this.pauseDebugger('step', currentPC);
+                    this.stepMode = null;
+                    return;
+                }
             }
             
             if (this.stepMode === 'out' && this.callStackDepth === 0) {
@@ -1249,8 +1268,16 @@ function VecX()
     this.debugStepInto = function(isNativeCall) {
         this.stepMode = 'into';
         this.debugState = 'running';
+        this.isNativeCallStepInto = isNativeCall;
         
         console.log('[JSVecx Debug] Step Into (native=' + isNativeCall + ')');
+        
+        // If native call, we need to step TWICE:
+        // 1st step: Execute JSR instruction (jumps to native)
+        // 2nd step: Pause at first instruction of native function
+        if (isNativeCall) {
+            console.log('[JSVecx Debug] Native call detected - will step through JSR');
+        }
         
         // Ejecutar UNA instrucción y pausar
         if (!this.running) {

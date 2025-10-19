@@ -694,12 +694,23 @@ export const EmulatorPanel: React.FC = () => {
           
           // Clear current line highlight before stepping
           const debugStoreForStepInto = useDebugStore.getState();
+          const currentVpyLine = debugStoreForStepInto.currentVpyLine;
           debugStoreForStepInto.setCurrentVpyLine(null);
           debugStoreForStepInto.setState('running');
           
           if (vecx.debugStepInto) {
-            vecx.debugStepInto(false); // Not a native call
-            console.log('[EmulatorPanel] ✓ Step into executed');
+            // Check if current line has a native call
+            let isNativeCall = false;
+            if (currentVpyLine && pdbData?.nativeCalls) {
+              const nativeCallName = pdbData.nativeCalls[currentVpyLine.toString()];
+              if (nativeCallName) {
+                console.log(`[EmulatorPanel] 🔧 Step Into on native call: ${nativeCallName} at line ${currentVpyLine}`);
+                isNativeCall = true;
+              }
+            }
+            
+            vecx.debugStepInto(isNativeCall);
+            console.log('[EmulatorPanel] ✓ Step into executed (native=' + isNativeCall + ')');
           }
           break;
           
