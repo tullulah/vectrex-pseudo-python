@@ -44,7 +44,7 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 	(Si divergen, actualizar ambas o unificar mediante script de build.)
 - Si se necesita ruta en WASM/frontend, exponer una única función helper (pending) o documentar claramente.
 - **CRÍTICO**: NUNCA usar rutas absolutas (C:\Users\...) ni fuera del workspace (Desktop, HOME). Proyecto debe ser autocontenido.
-- Backup BIOS: usar carpeta `backup/` en workspace root (ej: `backup/bios.bin`), NO rutas externas.
+- **bios.bin YA ESTÁ VERSIONADO en git** - No necesita backup manual. Al clonar el repositorio, el archivo ya está incluido.
 
 ## 2. Call Stack / BIOS Tracing
 - Registrar llamadas BIOS reales via `record_bios_call` únicamente en JSR/BSR hacia >= 0xF000.

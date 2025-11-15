@@ -21,30 +21,25 @@ git commit -m "Pre-migration checkpoint"
 git push origin master  # ⚠️ RAMA ES master, NO main
 ```
 
-### 3. Backup de Archivos Críticos
+### 3. Verificar Archivos Versionados
 
-**Archivos NO en git que DEBES copiar:**
+**✅ TODO está en Git - No necesitas backup manual:**
 ```
-✅ ide/frontend/dist/bios.bin         (8192 bytes - BIOS Vectrex)
-✅ ide/frontend/src/assets/bios.bin   (backup)
-⚠️ target/release/vectrexc.exe       (opcional - se puede recompilar)
-⚠️ ide/frontend/node_modules/        (NO copiar - reinstalar)
-⚠️ ide/electron/node_modules/        (NO copiar - reinstalar)
-⚠️ target/                           (NO copiar - recompilar)
+✅ bios.bin                          (YA en git: ide/frontend/src/assets/bios.bin)
+✅ Código fuente                     (todo en git)
+✅ Configuraciones del proyecto      (package.json, Cargo.toml, etc.)
 ```
 
-**Comando para backup:**
-```bash
-# Windows PowerShell:
-mkdir backup
-Copy-Item ide\frontend\dist\bios.bin backup\
-Copy-Item ide\frontend\src\assets\bios.bin backup\
-
-# Linux/macOS:
-mkdir backup
-cp ide/frontend/dist/bios.bin backup/
-cp ide/frontend/src/assets/bios.bin backup/
+**❌ NO copiar (se regeneran automáticamente):**
 ```
+⚠️ target/                           (builds de Rust - recompilar)
+⚠️ ide/frontend/node_modules/        (dependencias npm - reinstalar)
+⚠️ ide/electron/node_modules/        (dependencias npm - reinstalar)
+⚠️ ide/frontend/dist/                (build frontend - regenerar)
+⚠️ *.bin, *.asm generados            (outputs del compilador)
+```
+
+**El proyecto es 100% autocontenido - solo necesitas git clone.**
 
 ### 4. Documentar Configuración Personal (Opcional)
 ```bash
@@ -105,24 +100,19 @@ rustup update
 rustup target add wasm32-unknown-unknown
 ```
 
-### 3. Restaurar BIOS
+### 3. Verificar BIOS (Ya está en Git)
 ```bash
-# Copiar el bios.bin del backup:
+# ✅ BIOS ya está versionado en git - no necesitas restaurar nada
+# Verificar que existe y tiene el tamaño correcto:
+
 # Windows:
-Copy-Item backup\bios.bin ide\frontend\dist\bios.bin
-Copy-Item backup\bios.bin ide\frontend\src\assets\bios.bin
+(Get-Item ide\frontend\src\assets\bios.bin).Length  # Debe ser 8192
 
 # Linux/macOS:
-cp backup/bios.bin ide/frontend/dist/bios.bin
-cp backup/bios.bin ide/frontend/src/assets/bios.bin
-
-# Verificar tamaño (DEBE ser 8192 bytes):
-# Windows:
-(Get-Item ide\frontend\dist\bios.bin).Length
-
-# Linux/macOS:
-wc -c ide/frontend/dist/bios.bin  # Debe mostrar 8192
+ls -lh ide/frontend/src/assets/bios.bin  # Debe mostrar 8.0K
 ```
+
+**Si falta el archivo:** El build del frontend lo copia automáticamente a `dist/`.
 
 ### 4. Compilar Proyecto
 ```bash
@@ -389,23 +379,20 @@ tar -tzf vectrex-backup-*.tar.gz | less
 # - Rust (rustup.rs)
 # - Node.js 18+ (nodejs.org)
 
-# 2. Clonar repo
+# 2. Clonar repo (incluye bios.bin automáticamente)
 git clone https://github.com/tullulah/vectrex-pseudo-python.git
 cd vectrex-pseudo-python
 
-# 3. Restaurar BIOS (desde backup)
-cp backup/bios.bin ide/frontend/dist/bios.bin
-
-# 4. Compilar todo
+# 3. Compilar todo
 cargo build --workspace
 cd ide/frontend && npm install && cd ../..
 cd ide/electron && npm install && cd ../..
 
-# 5. Verificar
+# 4. Verificar
 ./target/debug/vectrexc --help  # Debe mostrar ayuda
 cargo test --workspace            # Tests deben pasar
 
-# 6. Ejecutar IDE
+# 5. Ejecutar IDE
 ./run-ide.ps1  # Windows
 # O manual: cd ide/frontend && npm run dev, luego cd ../electron && npm start
 
@@ -414,6 +401,6 @@ cargo test --workspace            # Tests deben pasar
 
 ---
 
-**Versión:** 1.0  
+**Versión:** 2.0  
 **Fecha:** Noviembre 15, 2025  
-**Tiempo estimado de migración:** 30-60 minutos (primera vez), 15-30 minutos (posteriores)
+**Tiempo estimado de migración:** 20-40 minutos (ya no necesitas backup manual)

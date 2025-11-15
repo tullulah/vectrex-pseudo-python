@@ -1,27 +1,32 @@
 # Backup Directory
 
-Esta carpeta se utiliza para almacenar copias de seguridad de archivos críticos que **NO están en git**.
+Esta carpeta es para **archivos temporales de trabajo** que NO deben estar en git.
 
-## Propósito
+## ⚠️ Nota Importante
 
-Mantener el proyecto **autocontenido** - todos los backups dentro del workspace, no en rutas externas (Desktop, HOME, etc.).
+**NO necesitas hacer backup de archivos del proyecto** - todo está versionado en git:
+- ✅ `bios.bin` - Ya está en git (`ide/frontend/src/assets/bios.bin`)
+- ✅ Código fuente - Todo en git
+- ✅ Configuraciones - package.json, Cargo.toml, etc. en git
 
-## Archivos Típicos
+## Uso Legítimo
 
-### bios.bin (8192 bytes)
+Esta carpeta es útil para:
+
+### Archivos de Trabajo Temporal
+- Compilaciones experimentales (.bin, .asm)
+- Debug outputs (.pdb con datos sensibles)
+- Snapshots de estado durante debugging
+- ROMs de prueba personales
+
+### Ejemplo
 ```bash
-# Backup antes de migración:
-Copy-Item ide\frontend\dist\bios.bin backup\bios.bin
+# Guardar output experimental:
+Copy-Item build\experiment.bin backup\experiment_nov15.bin
 
-# Restaurar después de migración:
-Copy-Item backup\bios.bin ide\frontend\dist\bios.bin
-Copy-Item backup\bios.bin ide\frontend\src\assets\bios.bin
+# Comparar con versión anterior:
+fc /b backup\experiment_nov14.bin backup\experiment_nov15.bin
 ```
-
-### Otros archivos temporales
-- Compilaciones de prueba (.bin, .pdb)
-- Configuraciones personales
-- Snapshots de estado
 
 ## ⚠️ Nota Importante
 
