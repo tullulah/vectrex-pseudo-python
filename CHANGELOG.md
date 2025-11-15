@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Pendiente
+- Resolver símbolos BIOS en second pass (Vec_Misc_Count)
+- Implementar LEA instructions (LEAX, LEAY, LEAU, LEAS)
+- Indexed addressing con offsets numéricos (5,X, -2,Y)
+- Auto-increment/decrement (,X+, ,-X)
+
+## [November 15, 2025] - Native M6809 Assembler - Massive Implementation 🚀
+
+### Major Achievement: 23 New MC6809 Instructions
+
+#### Added - Load/Store 16-bit Operations
+- **LDU** (Load U register): immediate (0xCE), extended (0xFE)
+- **STU** (Store U register): extended (0xFF)
+- **LDD indexed** (0xEC + postbyte): Support for ,X ,Y ,U ,S without offset
+
+#### Added - 16-bit Arithmetic
+- **ADDD** (Add to D): immediate (0xC3), extended (0xF3)
+- **SUBD** (Subtract from D): immediate (0x83), extended (0xB3)
+- **ABX** (Add B to X): 0x3A
+- **CMPD** (Compare D): immediate (0x1083), extended (0x10B3)
+
+#### Added - 8-bit Logic & Shifts
+- **ANDB** (AND B): immediate (0xC4)
+- **ASLA/ASLB** (Arithmetic Shift Left): 0x48/0x58
+- **ROLA/ROLB** (Rotate Left through Carry): 0x49/0x59
+- **LSRA/LSRB** (Logical Shift Right): 0x44/0x54
+- **RORA/RORB** (Rotate Right through Carry): 0x46/0x56
+
+#### Added - Long Branches (16-bit offset)
+- **LBRA** (Long Branch Always): 0x16
+- **LBEQ, LBNE, LBCS, LBCC**: 0x1027, 0x1026, 0x1025, 0x1024
+- **LBLT, LBGE, LBGT, LBLE**: 0x102D, 0x102C, 0x102E, 0x102F
+- **LBMI, LBPL**: 0x102B, 0x102A
+
+#### Added - Aliases & Memory
+- **BLO/BHS**: Aliases for BCS/BCC (0x25/0x24)
+- **CLR extended**: Clear memory (0x7F)
+
+### Fixed
+- **BCS/BCC**: Now support labels, not just numeric offsets
+- **parse_indexed_postbyte**: Corrected parameter mismatch
+- **emit_ldd**: Added indexed mode support (,X ,Y ,U ,S)
+
+### Documentation
+- **Added**: SETUP.md - Complete setup guide from scratch
+- **Added**: INDEX.md - Navigable documentation index
+- **Updated**: COMPILER_STATUS.md - Complete native assembler section with roadmap
+- **Updated**: README.md - Quick start and SETUP.md references
+
+### Metrics
+- **Instructions**: 40 → 63 (+57.5%)
+- **rotating_line_correct.vpy**: 40 → 242 lines processed (+505%)
+- **MC6809 Coverage**: ~35% → ~55%
+
+### Performance
+- **3-Phase Architecture**: PRE-PASS (INCLUDE + EQU) → PASS1 (code + placeholders) → PASS2 (symbol resolution)
+- **258 BIOS Symbols**: Loaded from VECTREX.I
+- **Case-insensitive**: Symbol lookup with automatic uppercase conversion
+- **Expressions**: Recursive evaluation (VAR+1, LABEL-2)
+
 ## [September 26, 2025] - Test Infrastructure Consolidation & Organization 🧪
 
 ### Test Infrastructure Overhaul

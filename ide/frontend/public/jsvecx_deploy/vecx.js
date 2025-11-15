@@ -606,24 +606,22 @@ function VecX()
             }
             
             if (this.stepMode === 'into') {
-                // Step into pausa en CADA instrucción
-                // EXCEPT: If this is a native call step, skip the JSR and pause at the target
+                // Step into: When stepping into native calls, skip instructions until we reach the JSR
                 if (this.isNativeCallStepInto) {
-                    // Read opcode to check if it's JSR
                     var opcode = this.read8(currentPC);
+                    // console.log('[JSVecx Debug] Native call mode: opcode 0x' + opcode.toString(16) + ' at PC=0x' + currentPC.toString(16));
                     if (opcode === 0xBD || opcode === 0x9D || opcode === 0xAD || opcode === 0x8D) { // JSR variants
-                        console.log('[JSVecx Debug] Skipping JSR instruction, will pause at target');
+                        console.log('[JSVecx Debug] ✅ Found JSR! Will execute and pause at target');
                         this.isNativeCallStepInto = false; // Only skip once
-                        // Don't pause - continue to next instruction (inside the function)
+                        // Don't pause - continue to execute JSR and pause at target
                     } else {
-                        // Not a JSR? Pause normally
-                        this.pauseDebugger('step', currentPC);
-                        this.stepMode = null;
-                        this.isNativeCallStepInto = false;
-                        return;
+                        // Not JSR yet - keep stepping through setup code (LDD, STD, etc.)
+                        // console.log('[JSVecx Debug] Not JSR yet, continuing to next instruction');
+                        // Don't pause - keep stepping until we find the JSR
                     }
                 } else {
                     // Normal step into - pause immediately
+                    // console.log('[JSVecx Debug] Normal step into - pausing at PC=0x' + currentPC.toString(16));
                     this.pauseDebugger('step', currentPC);
                     this.stepMode = null;
                     return;
@@ -644,14 +642,14 @@ function VecX()
             // CRITICAL: Check breakpoint AFTER instruction execution (PC may have changed)
             var newPC = e6809.reg_pc;
             
-            // TEMP DEBUG: Log when passing through target addresses
-            if (newPC === 0x006E || newPC === 0x005A) {
-                console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
-                           ', debugState=' + this.debugState + 
-                           ', hasBreakpoint=' + this.breakpoints.has(newPC) +
-                           ', stepMode=' + this.stepMode +
-                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
-            }
+            // TEMP DEBUG: Log when passing through target addresses (DISABLED - too verbose)
+            // if (newPC === 0x006E || newPC === 0x005A) {
+            //     console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
+            //                ', debugState=' + this.debugState + 
+            //                ', hasBreakpoint=' + this.breakpoints.has(newPC) +
+            //                ', stepMode=' + this.stepMode +
+            //                ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
+            // }
             
             // Check breakpoint ONLY if not in step mode (step modes handle pause themselves)
             if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(newPC)) {
@@ -1319,7 +1317,7 @@ function VecX()
             var msg = event.data;
             if (!msg || !msg.type) return;
             
-            console.log('[JSVecx Debug] Received message:', msg.type);
+            // console.log('[JSVecx Debug] Received message:', msg.type);
             
             switch (msg.type) {
                 case 'debug-continue':
@@ -1362,6 +1360,10 @@ function VecX()
                     
                 case 'debug-clear-breakpoints':
                     vecx.clearBreakpoints();
+                    break;
+                    
+                case 'debugger-paused':
+                    // Internal message sent by JSVecx itself when paused - handled elsewhere
                     break;
                     
                 default:

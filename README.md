@@ -1,5 +1,86 @@
 # vectrex-pseudo-python
 
+**Lenguaje DSL y entorno de desarrollo para Vectrex (Motorola 6809)**
+
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Node](https://img.shields.io/badge/node-18.x-green.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> **Nota:** Para configuración completa desde cero, ver [SETUP.md](SETUP.md)
+
+## Quick Start
+
+### Requisitos Previos
+- Rust 1.70+ ([instalar](https://rustup.rs/))
+- Node.js 18+ ([instalar](https://nodejs.org/))
+- BIOS Vectrex (8KB) en `ide/frontend/dist/bios.bin`
+
+### Compilar y Ejecutar
+
+```bash
+# 1. Compilar compilador VPy
+cargo build --bin vectrexc --release
+
+# 2. Instalar dependencias IDE
+cd ide/frontend && npm install
+cd ../electron && npm install
+cd ../..
+
+# 3. Iniciar IDE
+./run-ide.ps1  # Windows
+# O manualmente: cd ide/frontend && npm run dev, luego cd ../electron && npm start
+```
+
+**Ver [SETUP.md](SETUP.md) para instrucciones completas paso a paso.**
+
+---
+
+## 📚 Documentación
+
+### Para Empezar
+- 📦 **[SETUP.md](SETUP.md)** - Setup completo desde cero
+- 🔄 **[MIGRATION_CHECKLIST.md](MIGRATION_CHECKLIST.md)** - Migración a nueva máquina
+- 📑 **[INDEX.md](INDEX.md)** - Índice completo de documentación
+
+### Desarrollo
+- 🔧 **[COMPILER_STATUS.md](COMPILER_STATUS.md)** - Estado del compilador e instrucciones
+- 📚 **[SUPER_SUMMARY.md](SUPER_SUMMARY.md)** - Documentación técnica detallada
+- 📝 **[CHANGELOG.md](CHANGELOG.md)** - Historial de cambios
+
+**¿Primera vez?** → Empieza por [SETUP.md](SETUP.md)  
+**¿Cambio de máquina?** → Sigue [MIGRATION_CHECKLIST.md](MIGRATION_CHECKLIST.md)  
+**¿Buscas algo específico?** → Consulta [INDEX.md](INDEX.md)
+
+---
+
+## Estado del Proyecto (Noviembre 2025)
+
+### ✅ Completado
+- **Compilador VPy completo** con lexer, parser y backend M6809
+- **Ensamblador nativo M6809** con 63+ instrucciones implementadas
+- **Emulador 6809** en Rust/WASM con ciclo-precisión
+- **IDE completa** (Electron + React + Monaco)
+- **Sistema de vectores** con integrador analógico simplificado
+- **Arquitectura de subrutinas** (JSR/RTS) para programas grandes
+- **Procesamiento INCLUDE** con 258 símbolos BIOS
+- **Pipeline de optimización** (constant folding, dead code elimination)
+- **Soporte long branches** (LBEQ, LBNE, LBRA, etc.) para saltos 16-bit
+- **Operaciones 16-bit completas** (ADDD, SUBD, CMPD, LDD indexed)
+
+### 🚧 En Progreso
+- **Indexed addressing avanzado** (offsets numéricos: 5,X, -2,Y)
+- **LEA instructions** (LEAX, LEAY, LEAU, LEAS)
+- **Resolución símbolos BIOS** en second pass (Vec_Misc_Count, etc.)
+- **Tests de integración** para programas complejos
+
+### 📋 Próximos Pasos
+- Implementar indexed con acumuladores (A,X, B,Y, D,X)
+- Auto-increment/decrement (,X+, ,-X, ,X++, ,--X)
+- PC-relative addressing (label,PCR)
+- Paridad completa con lwasm (eliminar fallback)
+
+**Documentación técnica detallada:** [COMPILER_STATUS.md](COMPILER_STATUS.md)
+
 ## IDE (Electron Shell)
 
 Para arrancar la IDE de escritorio (Electron + React + Monaco + LSP):
@@ -9,7 +90,7 @@ Para arrancar la IDE de escritorio (Electron + React + Monaco + LSP):
 ```
 
 Esto levanta:
-- Vite (frontend React) en `ide/frontend`
+- Vite (frontend React) en `ide/frontend` (puerto 5173)
 - Electron shell en `ide/electron` (menú nativo oculto; la UI expone su propio menú)
 
 El antiguo runtime Tauri ha sido eliminado; Electron es ahora el único shell soportado.

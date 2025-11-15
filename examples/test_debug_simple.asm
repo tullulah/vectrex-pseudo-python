@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='TEST_DEBUG_SIMPLE' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='DEBUG DEMO' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -10,12 +10,12 @@
 ;***************************************************************************
     FCC "g GCE 1982"
     FCB $80
-    FDB music1
+    FDB $0000
     FCB $F8
     FCB $50
     FCB $20
     FCB $BB
-    FCC "TEST DEBUG SIMPLE"
+    FCC "DEBUG DEMO"
     FCB $80
     FCB 0
 
@@ -31,18 +31,18 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:2
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 2
+    ; VPy_LINE:6
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 6
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:3
+    ; VPy_LINE:7
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 3
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -57,20 +57,20 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 2 statements in loop() body
+    ; DEBUG: Processing 3 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
-    ; VPy_LINE:7
+    ; VPy_LINE:11
     LDD #42
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_DEBUG_PRINT at line 7
+; NATIVE_CALL: VECTREX_DEBUG_PRINT at line 11
     JSR VECTREX_DEBUG_PRINT
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(6)
-    ; VPy_LINE:10
+    ; VPy_LINE:14
     LDD #65516
     STD RESULT
     LDD RESULT
@@ -83,7 +83,26 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 10
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 14
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 2 - Discriminant(6)
+    ; VPy_LINE:16
+    LDD #65456
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_0
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 16
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB

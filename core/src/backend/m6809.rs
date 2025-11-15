@@ -432,7 +432,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if !suppress_runtime {
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-        emit_builtin_helpers(&mut out, &rt_usage, opts);
+        emit_builtin_helpers(&mut out, &rt_usage, opts, &mut debug_info);
     }
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     // Align ROM size to next 4K boundary: compute remainder via assembler can't do complex IF here, approximate with macro-style logic.
@@ -895,7 +895,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
 }
 
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
-fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions) {
+fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions, debug_info: &mut DebugInfo) {
     let w = &usage.wrappers_used;
     // Only emit vector phase helper if referenced
     if w.contains("VECTREX_VECTOR_PHASE_BEGIN") {
@@ -918,13 +918,33 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         out.push_str("VECTREX_SILENCE:\n    LDA #0\n    STA $D001\n    CLR $D000\n    LDA #1\n    STA $D001\n    CLR $D000\n    LDA #2\n    STA $D001\n    CLR $D000\n    LDA #3\n    STA $D001\n    CLR $D000\n    LDA #4\n    STA $D001\n    CLR $D000\n    LDA #5\n    STA $D001\n    CLR $D000\n    LDA #6\n    STA $D001\n    CLR $D000\n    LDA #7\n    STA $D001\n    LDA #$3F\n    STA $D000\n    LDA #8\n    STA $D001\n    CLR $D000\n    LDA #9\n    STA $D001\n    CLR $D000\n    LDA #10\n    STA $D001\n    CLR $D000\n    RTS\n");
     }
     if w.contains("VECTREX_PRINT_TEXT") {
-        out.push_str(
-            "VECTREX_PRINT_TEXT:\n    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS\n    LDU VAR_ARG2   ; string pointer (high-bit terminated)\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Print_Str_d\n    RTS\n"
+        let start_line = out.lines().count() + 1;
+        let function_code = "VECTREX_PRINT_TEXT:\n    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS\n    LDU VAR_ARG2   ; string pointer (high-bit terminated)\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Print_Str_d\n    RTS\n";
+        out.push_str(function_code);
+        let end_line = out.lines().count();
+        
+        // Register ASM function location for debugging
+        debug_info.add_asm_function(
+            "VECTREX_PRINT_TEXT".to_string(),
+            debug_info.asm.clone(),
+            start_line,
+            end_line,
+            "native"
         );
     }
     if w.contains("VECTREX_DEBUG_PRINT") {
-        out.push_str(
-            "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to end of RAM (safe area)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$42         ; Debug marker\n    STA $CF01        ; Debug marker to indicate new output\n    RTS\n"
+        let start_line = out.lines().count() + 1;
+        let function_code = "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to end of RAM (safe area)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$42         ; Debug marker\n    STA $CF01        ; Debug marker to indicate new output\n    RTS\n";
+        out.push_str(function_code);
+        let end_line = out.lines().count();
+        
+        // Register ASM function location for debugging  
+        debug_info.add_asm_function(
+            "VECTREX_DEBUG_PRINT".to_string(),
+            debug_info.asm.clone(),
+            start_line,
+            end_line,
+            "native"
         );
     }
     if w.contains("VECTREX_DEBUG_PRINT_LABELED") {

@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "source": "rotating_line_correct.vpy",
+  "asm": "rotating_line_correct.asm",
+  "binary": "rotating_line_correct.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x0051",
+    "START": "0x0023",
+    "MAIN": "0x0044"
+  },
+  "lineMap": {
+    "19": "0x0051",
+    "20": "0x007B",
+    "10": "0x0033",
+    "28": "0x0101",
+    "29": "0x0136",
+    "27": "0x00D5",
+    "24": "0x00A2"
+  },
+  "functions": {
+    "loop": {
+      "name": "loop",
+      "address": "0x0051",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "main": {
+      "name": "main",
+      "address": "0x0044",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {},
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

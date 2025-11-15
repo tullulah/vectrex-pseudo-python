@@ -160,22 +160,30 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
         
         // Phase 5.5: Write .pdb file if debug info available
-        if let Some(dbg) = debug_info {
+        let mut debug_info_mut = debug_info;
+        if let Some(ref mut dbg) = debug_info_mut {
             eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
             let pdb_path = out_path.with_extension("pdb");
-            match dbg.to_json() {
-                Ok(json) => {
-                    fs::write(&pdb_path, json).map_err(|e| {
-                        eprintln!("⚠ Warning: Cannot write debug symbols file");
-                        eprintln!("   Output path: {}", pdb_path.display());
-                        eprintln!("   Error: {}", e);
-                        e
-                    })?;
-                    eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
-                },
-                Err(e) => {
-                    eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+            
+            // If binary generation is requested, we'll update the PDB after Phase 6.5
+            // Otherwise, write it now
+            if !(bin && tgt == target::Target::Vectrex) {
+                match dbg.to_json() {
+                    Ok(json) => {
+                        fs::write(&pdb_path, json).map_err(|e| {
+                            eprintln!("⚠ Warning: Cannot write debug symbols file");
+                            eprintln!("   Output path: {}", pdb_path.display());
+                            eprintln!("   Error: {}", e);
+                            e
+                        })?;
+                        eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                    },
+                    Err(e) => {
+                        eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                    }
                 }
+            } else {
+                eprintln!("Phase 5.5: Debug symbols write deferred until after binary generation");
             }
         } else {
             eprintln!("Phase 5.5: Debug symbols generation skipped (not supported for target={})", tgt);
@@ -190,6 +198,41 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 e
             })?; 
             eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
+            
+            // Phase 6.5: Generate ASM address mapping (if debug info exists)
+            if let Some(ref mut dbg) = debug_info_mut {
+                eprintln!("Phase 6.5: Generating ASM address mapping...");
+                let bin_path = out_path.with_extension("bin");
+                
+                match backend::asm_address_mapper::generate_asm_address_map(&out_path, &bin_path, dbg) {
+                    Ok(()) => {
+                        eprintln!("✓ Phase 6.5 SUCCESS: ASM address mapping complete");
+                        
+                        // Write updated PDB with address mappings
+                        let pdb_path = out_path.with_extension("pdb");
+                        match dbg.to_json() {
+                            Ok(json) => {
+                                fs::write(&pdb_path, json).map_err(|e| {
+                                    eprintln!("⚠ Warning: Cannot write updated debug symbols file");
+                                    eprintln!("   Output path: {}", pdb_path.display());
+                                    eprintln!("   Error: {}", e);
+                                    e
+                                })?;
+                                eprintln!("✓ Updated debug symbols with ASM address mappings: {}", pdb_path.display());
+                            },
+                            Err(e) => {
+                                eprintln!("⚠ Warning: Failed to serialize updated debug symbols: {}", e);
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("⚠ Phase 6.5 WARNING: ASM address mapping failed: {}", e);
+                        eprintln!("   Debugging will work but without precise ASM line mapping");
+                    }
+                }
+            } else {
+                eprintln!("Phase 6.5: ASM address mapping skipped (no debug info available)");
+            }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");
         }
@@ -205,6 +248,38 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     eprintln!("ASM input: {}", asm_path.display());
     eprintln!("BIN output: {}", bin_path.display());
     
+    // PRIORITY 1: Try native M6809 assembler (integrated, no external dependencies)
+    eprintln!("Attempting native M6809 assembler...");
+    
+    // Read ASM source
+    let asm_source = fs::read_to_string(asm_path).map_err(|e| {
+        eprintln!("❌ Failed to read ASM file: {}", e);
+        e
+    })?;
+    
+    // Extract ORG directive (default to Vectrex RAM start 0xC800)
+    let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
+    eprintln!("Detected ORG address: 0x{:04X}", org);
+    
+    // Attempt native assembly
+    match backend::asm_to_binary::assemble_m6809(&asm_source, org) {
+        Ok((binary, _line_map)) => {
+            // Write binary file
+            fs::write(&bin_path, &binary).map_err(|e| {
+                eprintln!("❌ Failed to write binary file: {}", e);
+                e
+            })?;
+            eprintln!("✓ NATIVE ASSEMBLER SUCCESS: Generated {} bytes -> {}", 
+                binary.len(), bin_path.display());
+            return Ok(());
+        },
+        Err(e) => {
+            eprintln!("⚠ Native assembler failed: {}", e);
+            eprintln!("  Falling back to lwasm...");
+        }
+    }
+    
+    // FALLBACK: Use lwasm (original behavior)
     // Find project root by looking for Cargo.toml
     let project_root = find_project_root()?;
     eprintln!("Project root detected: {}", project_root.display());
@@ -349,4 +424,34 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
     }
     
     Ok(())
+}
+
+/// Extrae directiva ORG del código ASM (formato: ORG $C800 o ORG 0xC800)
+fn extract_org_directive(asm: &str) -> Option<u16> {
+    for line in asm.lines() {
+        let trimmed = line.trim().to_uppercase();
+        if trimmed.starts_with("ORG") {
+            let addr_part = trimmed.trim_start_matches("ORG").trim();
+            
+            // Probar formato hex con $
+            if let Some(hex_part) = addr_part.strip_prefix('$') {
+                if let Ok(addr) = u16::from_str_radix(hex_part, 16) {
+                    return Some(addr);
+                }
+            }
+            
+            // Probar formato hex con 0x
+            if let Some(hex_part) = addr_part.strip_prefix("0X") {
+                if let Ok(addr) = u16::from_str_radix(hex_part, 16) {
+                    return Some(addr);
+                }
+            }
+            
+            // Probar formato decimal
+            if let Ok(addr) = addr_part.parse::<u16>() {
+                return Some(addr);
+            }
+        }
+    }
+    None
 }

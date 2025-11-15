@@ -24,6 +24,28 @@ pub struct FunctionInfo {
     pub func_type: String,
 }
 
+/// ASM file function location for debugging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsmFunctionLocation {
+    /// Function name
+    pub name: String,
+    
+    /// File name (e.g., "main.asm")
+    pub file: String,
+    
+    /// Start line in ASM file
+    #[serde(rename = "startLine")]
+    pub start_line: usize,
+    
+    /// End line in ASM file
+    #[serde(rename = "endLine")]
+    pub end_line: usize,
+    
+    /// Function type: "vpy", "native", or "bios"
+    #[serde(rename = "type")]
+    pub func_type: String,
+}
+
 /// Debug information collected during compilation for mapping VPy source to binary
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DebugInfo {
@@ -56,6 +78,14 @@ pub struct DebugInfo {
     /// Native function calls mapping: VPy line (as string) -> native function name
     #[serde(rename = "nativeCalls")]
     pub native_calls: HashMap<String, String>,
+    
+    /// ASM file function locations: function name -> location info
+    #[serde(rename = "asmFunctions")]
+    pub asm_functions: HashMap<String, AsmFunctionLocation>,
+    
+    /// ASM address mapping: ASM line number (as string) -> binary address in hex
+    #[serde(rename = "asmAddressMap")]
+    pub asm_address_map: HashMap<String, String>,
 }
 
 impl DebugInfo {
@@ -71,6 +101,8 @@ impl DebugInfo {
             line_map: HashMap::new(),
             functions: HashMap::new(),
             native_calls: HashMap::new(),
+            asm_functions: HashMap::new(),
+            asm_address_map: HashMap::new(),
         }
     }
     
@@ -104,6 +136,23 @@ impl DebugInfo {
     /// Add a native function call at specific VPy line
     pub fn add_native_call(&mut self, line: usize, function_name: String) {
         self.native_calls.insert(line.to_string(), function_name);
+    }
+    
+    /// Add ASM function location information
+    pub fn add_asm_function(&mut self, name: String, file: String, start_line: usize, end_line: usize, func_type: &str) {
+        let location = AsmFunctionLocation {
+            name: name.clone(),
+            file,
+            start_line,
+            end_line,
+            func_type: func_type.to_string(),
+        };
+        self.asm_functions.insert(name, location);
+    }
+    
+    /// Add ASM line address mapping 
+    pub fn add_asm_address(&mut self, line_number: usize, address: u16) {
+        self.asm_address_map.insert(line_number.to_string(), format!("0x{:04X}", address));
     }
     
     /// Serialize to JSON string

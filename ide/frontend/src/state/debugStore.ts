@@ -19,6 +19,14 @@ export interface PdbData {
     type: 'vpy' | 'native';
   }>;
   nativeCalls?: Record<string, string>;
+  asmFunctions?: Record<string, {
+    name: string;
+    file: string;
+    startLine: number;
+    endLine: number;
+    type: 'vpy' | 'native' | 'bios';
+  }>;
+  asmAddressMap?: Record<string, string>; // ASM line number -> binary address
 }
 
 export interface CallFrame {

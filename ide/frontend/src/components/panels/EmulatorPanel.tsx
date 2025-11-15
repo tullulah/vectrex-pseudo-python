@@ -643,19 +643,69 @@ export const EmulatorPanel: React.FC = () => {
         case 'debug-step-over':
           console.log('[EmulatorPanel] ⏭️  Debug: Step over');
           
-          // Clear current line highlight before stepping
+          // Get debug store first
           const debugStoreForStepOver = useDebugStore.getState();
+          
+          // Check if we're in ASM debugging mode
+          const asmDebuggingMode = (window as any).asmDebuggingMode;
+          if (asmDebuggingMode) {
+            console.log('[EmulatorPanel] 🔧 ASM debugging mode - calculating next instruction address for step over');
+            
+            // In ASM mode, calculate the next instruction address based on current PC
+            const currentDebugState = useDebugStore.getState();
+            const currentPCString = currentDebugState.currentAsmAddress;
+            const currentPdbData = currentDebugState.pdbData;
+            
+            if (currentPCString && currentPdbData?.asmAddressMap) {
+              const currentPC = parseInt(currentPCString, 16);
+              
+              // Find next address in the mapping
+              let nextAddress = null;
+              const sortedAddresses = Object.entries(currentPdbData.asmAddressMap)
+                .map(([line, addr]) => ({ line: parseInt(line, 10), addr: parseInt(addr, 16) }))
+                .sort((a, b) => a.addr - b.addr);
+              
+              for (let i = 0; i < sortedAddresses.length - 1; i++) {
+                if (sortedAddresses[i].addr === currentPC) {
+                  nextAddress = sortedAddresses[i + 1].addr;
+                  console.log(`[EmulatorPanel] 🎯 Next instruction address: 0x${nextAddress.toString(16).padStart(4, '0').toUpperCase()}`);
+                  break;
+                }
+              }
+              
+              if (nextAddress) {
+                debugStoreForStepOver.setState('running');
+                if (vecx.debugStepOver) {
+                  vecx.debugStepOver(nextAddress); // Use real step over with calculated target
+                }
+                return;
+              } else {
+                console.log('[EmulatorPanel] ⚠️ Could not calculate next address, falling back to step into');
+              }
+            }
+            
+            // Fallback to step into if we can't calculate next address
+            console.log('[EmulatorPanel] 🔧 ASM debugging mode - fallback to step into');
+            debugStoreForStepOver.setState('running');
+            if (vecx.debugStepInto) {
+              vecx.debugStepInto(false); // Step one instruction
+            }
+            return; // Skip normal step over logic
+          }
+          
+          // Clear current line highlight before stepping
           debugStoreForStepOver.setCurrentVpyLine(null);
           debugStoreForStepOver.setState('running');
           
           if (vecx.debugStepOver) {
             // Calculate target address (next line after current)
             const currentPC = vecx.e6809?.reg_pc;
-            if (currentPC && pdbData) {
+            const stepOverPdbData = useDebugStore.getState().pdbData;
+            if (currentPC && stepOverPdbData) {
               // Find current line
               let currentLine: number | null = null;
               const currentPCHex = '0x' + currentPC.toString(16).padStart(4, '0').toLowerCase();
-              for (const [line, addr] of Object.entries(pdbData.lineMap)) {
+              for (const [line, addr] of Object.entries(stepOverPdbData.lineMap)) {
                 if (addr.toLowerCase() === currentPCHex) {
                   currentLine = parseInt(line, 10);
                   break;
@@ -664,10 +714,10 @@ export const EmulatorPanel: React.FC = () => {
               
               if (currentLine !== null) {
                 // Find next line with address
-                const sortedLines = Object.keys(pdbData.lineMap).map(l => parseInt(l, 10)).sort((a, b) => a - b);
+                const sortedLines = Object.keys(stepOverPdbData.lineMap).map(l => parseInt(l, 10)).sort((a, b) => a - b);
                 const nextLine = sortedLines.find(l => l > currentLine!);
-                if (nextLine && pdbData.lineMap[nextLine]) {
-                  const targetAddr = parseInt(pdbData.lineMap[nextLine], 16);
+                if (nextLine && stepOverPdbData.lineMap[nextLine]) {
+                  const targetAddr = parseInt(stepOverPdbData.lineMap[nextLine], 16);
                   console.log(`[EmulatorPanel] Step Over: line ${currentLine} → ${nextLine} (0x${targetAddr.toString(16)})`);
                   vecx.debugStepOver(targetAddr);
                 } else {
@@ -678,8 +728,8 @@ export const EmulatorPanel: React.FC = () => {
                   const loopStartThreshold = Math.floor(currentLine! * 0.5);
                   const loopStartLine = sortedLines.find(l => l >= loopStartThreshold) || sortedLines[0];
                   
-                  if (loopStartLine && pdbData.lineMap[loopStartLine]) {
-                    const targetAddr = parseInt(pdbData.lineMap[loopStartLine], 16);
+                  if (loopStartLine && stepOverPdbData.lineMap[loopStartLine]) {
+                    const targetAddr = parseInt(stepOverPdbData.lineMap[loopStartLine], 16);
                     console.log(`[EmulatorPanel] Step Over: wrapping from line ${currentLine} → ${loopStartLine} (loop entry at 0x${targetAddr.toString(16)})`);
                     vecx.debugStepOver(targetAddr);
                   }
@@ -692,20 +742,37 @@ export const EmulatorPanel: React.FC = () => {
         case 'debug-step-into':
           console.log('[EmulatorPanel] 🔽 Debug: Step into');
           
-          // Clear current line highlight before stepping
+          // Get debug store and current line first
           const debugStoreForStepInto = useDebugStore.getState();
           const currentVpyLine = debugStoreForStepInto.currentVpyLine;
+          
+          // Check if we're in ASM debugging mode
+          const asmDebuggingModeStepInto = (window as any).asmDebuggingMode;
+          if (asmDebuggingModeStepInto) {
+            console.log('[EmulatorPanel] 🔧 ASM debugging mode - continuing with instruction step');
+            debugStoreForStepInto.setState('running');
+            if (vecx.debugStepInto) {
+              vecx.debugStepInto(false); // Step one instruction
+            }
+            return; // Skip normal step into logic
+          }
+          
+          // Clear current line highlight before stepping
           debugStoreForStepInto.setCurrentVpyLine(null);
           debugStoreForStepInto.setState('running');
           
           if (vecx.debugStepInto) {
             // Check if current line has a native call
             let isNativeCall = false;
-            if (currentVpyLine && pdbData?.nativeCalls) {
-              const nativeCallName = pdbData.nativeCalls[currentVpyLine.toString()];
+            const stepIntoPdbData = useDebugStore.getState().pdbData;
+            if (currentVpyLine && stepIntoPdbData?.nativeCalls) {
+              const nativeCallName = stepIntoPdbData.nativeCalls[currentVpyLine.toString()];
               if (nativeCallName) {
                 console.log(`[EmulatorPanel] 🔧 Step Into on native call: ${nativeCallName} at line ${currentVpyLine}`);
                 isNativeCall = true;
+                
+                // Store the native function name temporarily as a window property
+                (window as any).lastStepIntoNativeFunction = nativeCallName;
               }
             }
             
@@ -728,28 +795,155 @@ export const EmulatorPanel: React.FC = () => {
           const debugStore = useDebugStore.getState();
           debugStore.setState('paused');
           
-          if (event.data.pc && pdbData) {
+          // Get pdbData from store directly (not from hook)
+          const currentPdbData = debugStore.pdbData;
+          
+          if (event.data.pc && currentPdbData) {
             const pcHex = event.data.pc.replace('0x', '').toLowerCase();
+            
+            // Check if we're in ASM debugging mode
+            const asmDebuggingMode = (window as any).asmDebuggingMode;
+            if (asmDebuggingMode) {
+              console.log(`[EmulatorPanel] 🔧 ASM debugging mode - checking if PC is back in VPy code: ${event.data.pc}`);
+              
+              // Check if PC is back in VPy code range - if so, exit ASM mode and switch to VPy file
+              let backInVpy = false;
+              let vpyLine = null;
+              for (const [line, addr] of Object.entries(currentPdbData.lineMap)) {
+                if (addr.toLowerCase() === `0x${pcHex}`) {
+                  vpyLine = parseInt(line, 10);
+                  console.log(`[EmulatorPanel] 🔄 PC back in VPy code at line ${vpyLine} - exiting ASM debugging mode`);
+                  (window as any).asmDebuggingMode = false;
+                  (window as any).asmDebuggingFile = null;
+                  backInVpy = true;
+                  
+                  // CRITICAL: Switch back to VPy file automatically
+                  const editorStore = useEditorStore.getState();
+                  const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
+                  
+                  if (activeDoc) {
+                    // Extract VPy file path from current PDB data
+                    const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
+                    const vpyFileName = currentPdbData.source;
+                    const vpyPath = `file:///${dirPath}/${vpyFileName}`.replace(/\/+/g, '/');
+                    
+                    console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyPath}`);
+                    editorStore.gotoLocation(vpyPath, vpyLine, 1);
+                  }
+                  break;
+                }
+              }
+              
+              // If still in ASM, try to find the exact ASM line using asmAddressMap
+              if (!backInVpy) {
+                console.log(`[EmulatorPanel] 🔧 Still in ASM debugging mode - looking for ASM line at PC: ${event.data.pc}`);
+                console.log(`[EmulatorPanel] 🔍 Debug mode: ${event.data.mode}, expecting step navigation`);
+                
+                // Use asmAddressMap to find the ASM line corresponding to this address
+                if (currentPdbData.asmAddressMap) {
+                  let foundAsmLine = null;
+                  const currentPC = parseInt(event.data.pc, 16);
+                  
+                  // Try exact match first
+                  for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
+                    if (addr.toLowerCase() === `0x${pcHex}`) {
+                      foundAsmLine = parseInt(lineNum, 10);
+                      console.log(`[EmulatorPanel] 📍 Found exact ASM line ${foundAsmLine} for address ${event.data.pc}`);
+                      break;
+                    }
+                  }
+                  
+                  // If no exact match, find the closest previous address (for multi-byte instructions)
+                  if (!foundAsmLine) {
+                    let closestLine = null;
+                    let closestAddr = -1;
+                    
+                    for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
+                      const mappedAddr = parseInt(addr, 16);
+                      if (mappedAddr <= currentPC && mappedAddr > closestAddr) {
+                        closestAddr = mappedAddr;
+                        closestLine = parseInt(lineNum, 10);
+                      }
+                    }
+                    
+                    if (closestLine) {
+                      foundAsmLine = closestLine;
+                      console.log(`[EmulatorPanel] 📍 Found closest ASM line ${foundAsmLine} for address ${event.data.pc} (closest mapped: 0x${closestAddr.toString(16).padStart(4, '0').toUpperCase()})`);
+                    }
+                  }
+                  
+                  // If we found the ASM line, navigate to it
+                  if (foundAsmLine && (window as any).asmDebuggingFile) {
+                    const editorStore = useEditorStore.getState();
+                    editorStore.gotoLocation((window as any).asmDebuggingFile, foundAsmLine, 1);
+                    console.log(`[EmulatorPanel] ✅ Navigated to ASM line ${foundAsmLine} in ${(window as any).asmDebuggingFile}`);
+                  } else {
+                    console.log(`[EmulatorPanel] ⚠ Could not find ASM line for address ${event.data.pc} - no mapping available`);
+                    
+                    // DEBUG: Show nearby addresses to help diagnose the issue
+                    const currentPC = parseInt(event.data.pc, 16);
+                    const nearbyAddresses = Object.entries(currentPdbData.asmAddressMap)
+                      .map(([line, addr]) => ({ line: parseInt(line, 10), addr: parseInt(addr, 16) }))
+                      .filter(entry => Math.abs(entry.addr - currentPC) <= 5)
+                      .sort((a, b) => a.addr - b.addr);
+                    
+                    if (nearbyAddresses.length > 0) {
+                      console.log(`[EmulatorPanel] 🔍 Nearby addresses:`, nearbyAddresses.map(e => 
+                        `Line ${e.line}: 0x${e.addr.toString(16).padStart(4, '0').toUpperCase()}`).join(', '));
+                    }
+                  }
+                }
+                return;
+              }
+            }
             
             // Check if PC is in VPy code range (lineMap)
             let foundInVpy = false;
-            for (const [line, addr] of Object.entries(pdbData.lineMap)) {
+            for (const [line, addr] of Object.entries(currentPdbData.lineMap)) {
               if (addr.toLowerCase() === `0x${pcHex}`) {
                 const lineNumber = parseInt(line, 10);
                 console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} (PC: ${event.data.pc})`);
                 debugStore.setCurrentVpyLine(lineNumber);
+                
+                // CRITICAL: Auto-switch to VPy file if we're not already in it (for F5 continue, etc.)
+                const editorStore = useEditorStore.getState();
+                const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
+                
+                if (activeDoc && currentPdbData.source) {
+                  const activeFileName = activeDoc.uri.split('/').pop() || '';
+                  const vpyFileName = currentPdbData.source;
+                  
+                  // If we're not in the VPy file, switch to it
+                  if (activeFileName !== vpyFileName) {
+                    const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
+                    const vpyPath = `file:///${dirPath}/${vpyFileName}`.replace(/\/+/g, '/');
+                    
+                    console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyPath} (was in ${activeFileName})`);
+                    editorStore.gotoLocation(vpyPath, lineNumber, 1);
+                  }
+                }
+                
                 foundInVpy = true;
                 break;
               }
             }
             
             // If not in VPy range, we're in ASM (native call or generated code)
-            if (!foundInVpy && event.data.mode === 'step') {
-              console.log(`[EmulatorPanel] 🔧 Step Into entered ASM code at PC: ${event.data.pc}`);
+            if (!foundInVpy && (event.data.mode === 'step' || event.data.mode === 'breakpoint')) {
+              const modeText = event.data.mode === 'step' ? 'Step Into entered' : 'Breakpoint hit in';
+              console.log(`[EmulatorPanel] 🔧 ${modeText} ASM code at PC: ${event.data.pc}`);
+              
+              // Get the native function we're stepping into (stored temporarily during step-into)
+              const targetNativeFunction = (window as any).lastStepIntoNativeFunction;
+              if (targetNativeFunction) {
+                console.log(`[EmulatorPanel] 🎯 Stepping into native function: ${targetNativeFunction}`);
+                // Clear the temporary storage
+                (window as any).lastStepIntoNativeFunction = null;
+              }
               
               // Open ASM file in new editor and highlight the line
-              if (pdbData.asm) {
-                const asmFileName = pdbData.asm;
+              if (currentPdbData.asm) {
+                const asmFileName = currentPdbData.asm;
                 
                 // Get directory of current VPy file
                 const editorStore = useEditorStore.getState();
@@ -761,30 +955,99 @@ export const EmulatorPanel: React.FC = () => {
                   
                   console.log(`[EmulatorPanel] 📂 Opening ASM file: ${asmPath}`);
                   
+                  // Check if Electron API is available
+                  if (!(window as any).files?.readFile) {
+                    console.warn(`[EmulatorPanel] ⚠️ Electron file API not available - cannot open ASM file`);
+                    return;
+                  }
+                  
                   // Read ASM file
-                  (window as any).electron.file.read(asmPath).then((content: string) => {
+                  (window as any).files.readFile(asmPath).then((result: {content?: string; error?: string}) => {
+                    if (result.error) {
+                      console.error(`[EmulatorPanel] ❌ Error reading ASM file: ${result.error}`);
+                      return;
+                    }
+                    const content = result.content;
+                    if (!content) {
+                      console.error(`[EmulatorPanel] ❌ No content in ASM file`);
+                      return;
+                    }
                     // Find the line number in ASM that corresponds to this PC
-                    const lines = content.split('\n');
                     let targetLine = 0;
-                    
-                    // Strategy: Look for VPy_LINE comments near this PC address
-                    // Or look for ORG directives
                     const pcHexUpper = event.data.pc.replace('0x', '').padStart(4, '0').toUpperCase();
                     
-                    // First, try to find the closest VPy line mapping from lineMap
-                    // to give context of where we are in the ASM
-                    console.log(`[EmulatorPanel] 🔍 Searching ASM for PC: $${pcHexUpper}`);
+                    // Strategy 1: Use asmAddressMap for precise line mapping (PREFERRED)
+                    if (currentPdbData.asmAddressMap) {
+                      const currentPC = parseInt(event.data.pc, 16);
+                      
+                      // Try exact match first
+                      for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
+                        if (addr.toLowerCase() === event.data.pc.toLowerCase()) {
+                          targetLine = parseInt(lineNum, 10);
+                          console.log(`[EmulatorPanel] ✅ Found exact ASM line ${targetLine} for address ${event.data.pc} using asmAddressMap`);
+                          break;
+                        }
+                      }
+                      
+                      // If no exact match, find the closest previous address (for multi-byte instructions)
+                      if (targetLine === 0) {
+                        let closestLine = 0;
+                        let closestAddr = -1;
+                        
+                        for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
+                          const mappedAddr = parseInt(addr, 16);
+                          if (mappedAddr <= currentPC && mappedAddr > closestAddr) {
+                            closestAddr = mappedAddr;
+                            closestLine = parseInt(lineNum, 10);
+                          }
+                        }
+                        
+                        if (closestLine > 0) {
+                          targetLine = closestLine;
+                          console.log(`[EmulatorPanel] ✅ Found closest ASM line ${targetLine} for address ${event.data.pc} (closest mapped: 0x${closestAddr.toString(16).padStart(4, '0').toUpperCase()})`);
+                        }
+                      }
+                    }
                     
-                    // Simple strategy: search for the address in comments or labels
-                    for (let i = 0; i < lines.length; i++) {
-                      const line = lines[i];
-                      // Look for address in various formats
-                      if (line.includes(`$${pcHexUpper}`) || 
-                          line.includes(`0x${pcHexUpper}`) ||
-                          line.match(new RegExp(`\\b${pcHexUpper}\\b`))) {
-                        targetLine = i + 1;
-                        console.log(`[EmulatorPanel] ✅ Found address at line ${targetLine}: ${line.trim()}`);
-                        break;
+                    // Strategy 2: If we know the native function name, find first executable line in function
+                    if (targetNativeFunction && currentPdbData.asmFunctions) {
+                      const asmFunction = currentPdbData.asmFunctions[targetNativeFunction];
+                      if (asmFunction) {
+                        // Look for the first executable line after the function label
+                        const lines = content.split('\n');
+                        let executableLine = asmFunction.startLine;
+                        
+                        // Start from the function start line and find the first non-comment, non-empty line
+                        for (let i = asmFunction.startLine - 1; i < Math.min(asmFunction.endLine, lines.length); i++) {
+                          const line = lines[i].trim();
+                          // Skip empty lines, comments, and labels
+                          if (line && !line.startsWith(';') && !line.startsWith('*') && !line.endsWith(':')) {
+                            executableLine = i + 1; // Convert to 1-based line number
+                            console.log(`[EmulatorPanel] ✅ Found first executable line ${executableLine} in function ${targetNativeFunction}: ${line}`);
+                            break;
+                          }
+                        }
+                        
+                        targetLine = executableLine;
+                        console.log(`[EmulatorPanel] ✅ Using native function executable line: ${targetNativeFunction} at line ${targetLine}`);
+                      } else {
+                        console.log(`[EmulatorPanel] ⚠️ Native function ${targetNativeFunction} not found in PDB asmFunctions`);
+                      }
+                    }
+                    
+                    // Strategy 3: Fallback - text search in ASM content
+                    if (targetLine === 0) {
+                      console.log(`[EmulatorPanel] 🔍 Using fallback text search for PC address: $${pcHexUpper}`);
+                      const lines = content.split('\n');
+                      for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (line.includes(`$${pcHexUpper}`) || 
+                            line.includes(`0x${pcHexUpper}`) ||
+                            line.match(new RegExp(`\\b${pcHexUpper}\\b`))) {
+                          targetLine = i + 1;
+                          console.log(`[EmulatorPanel] ✅ Found address at line ${targetLine}: ${line.trim()}`);
+                          break;
+                        }
                       }
                     }
                     
@@ -807,7 +1070,33 @@ export const EmulatorPanel: React.FC = () => {
                     
                     // Set as active and navigate to line
                     editorStore.setActive(asmUri);
+                    console.log(`[EmulatorPanel] 🔍 Navigating to line ${targetLine} in ${asmUri}`);
                     editorStore.gotoLocation(asmUri, targetLine, 1);
+                    
+                    // Verify navigation worked
+                    setTimeout(() => {
+                      const currentActive = useEditorStore.getState().active;
+                      console.log(`[EmulatorPanel] 📍 After navigation - active: ${currentActive}`);
+                    }, 200);
+                    
+                    // Update debug store to indicate we're now debugging ASM
+                    debugStore.setCurrentVpyLine(null); // Clear VPy line
+                    debugStore.setState('paused'); // Keep debugger paused, but ready for ASM stepping
+                    
+                    // Set a flag to indicate we're in ASM debugging mode
+                    (window as any).asmDebuggingMode = true;
+                    (window as any).asmDebuggingFile = asmUri;
+                    
+                    console.log(`[EmulatorPanel] 🔧 Switched to ASM debugging mode at line ${targetLine}`);
+                    
+                    // TODO: Auto-continue disabled for debugging navigation issues
+                    // setTimeout(() => {
+                    //   console.log(`[EmulatorPanel] 🔄 Auto-continuing step into for ASM debugging`);
+                    //   const vecxInstance = (window as any).vecx;
+                    //   if (vecxInstance && vecxInstance.debugStepInto) {
+                    //     vecxInstance.debugStepInto(false); // Continue stepping, but not as native call anymore
+                    //   }
+                    // }, 100);
                     
                   }).catch((err: any) => {
                     console.error(`[EmulatorPanel] ❌ Failed to read ASM file: ${err}`);
