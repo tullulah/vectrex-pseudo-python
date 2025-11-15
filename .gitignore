@@ -25,6 +25,10 @@ Thumbs.db
 *~
 *.tmp
 
+# Backup directory (local files, not versioned)
+backup/*
+!backup/README.md
+
 # Logs
 *.log
 

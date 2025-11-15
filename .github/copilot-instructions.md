@@ -38,11 +38,13 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 
 ## 1. BIOS Usage
 - Nunca generar BIOS sintética en tests ni código de ejemplo.
-- Rutas válidas (mantenidas en sincronía, preferir la de assets para futuras referencias):
-	- Primaria (assets): `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\ide\frontend\src\assets\bios.bin`
-	- Legacy (dist empaquetado actual): `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\ide\frontend\dist\bios.bin`
+- Rutas válidas (RELATIVAS al workspace root, autocontenidas):
+	- Primaria (assets): `ide/frontend/src/assets/bios.bin`
+	- Legacy (dist empaquetado actual): `ide/frontend/dist/bios.bin`
 	(Si divergen, actualizar ambas o unificar mediante script de build.)
 - Si se necesita ruta en WASM/frontend, exponer una única función helper (pending) o documentar claramente.
+- **CRÍTICO**: NUNCA usar rutas absolutas (C:\Users\...) ni fuera del workspace (Desktop, HOME). Proyecto debe ser autocontenido.
+- Backup BIOS: usar carpeta `backup/` en workspace root (ej: `backup/bios.bin`), NO rutas externas.
 
 ## 2. Call Stack / BIOS Tracing
 - Registrar llamadas BIOS reales via `record_bios_call` únicamente en JSR/BSR hacia >= 0xF000.
@@ -198,7 +200,7 @@ fn test_[opcode]_[mode]_0x[hexcode]() {  // Nombre con código hex
 
 ## 7.1. emulator_v2 - Port 1:1 desde Vectrexy
 - **REGLA CRÍTICA**: NUNCA inventar implementación propia. TODO debe ser port línea-por-línea desde Vectrexy C++.
-- **Referencia obligatoria**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\emulator\` (archivos .h/.cpp)
+- **Referencia obligatoria**: `vectrexy/libs/emulator/` (archivos .h/.cpp en workspace)
 - **IMPORTANTE**: Usar `vectrexy` NO `vectrexy` - la carpeta `vectrexy` puede haber sido modificada por nosotros.
 - **Formato mandatorio**: Cada método/función debe incluir comentario `// C++ Original:` con código fuente real.
 - **Verificación**: Antes de implementar, leer el archivo C++ correspondiente para entender comportamiento exacto.
@@ -270,7 +272,7 @@ En caso de cualquier duda sobre:
 - Secuencias de inicialización BIOS que dependan de timing real
 
 La referencia primaria de comparación (solo lectura, para validar comportamiento, NO copiar código) es el código de la implementación de referencia localizada en:
-`C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\vectrexy\libs\vectrexy`
+`vectrexy/libs/vectrexy` (dentro del workspace)
 
 Política:
 1. Usar esta referencia únicamente para confirmar orden y efectos (nunca portar bloques de código textualmente — mantener originalidad y evitar problemas de copyright).
@@ -284,7 +286,7 @@ Política:
 Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 
 #### A) test_f4eb_detailed_js.js (F4EB Loop Analysis)
-- **Ubicación**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\test_f4eb_detailed_js.js`
+- **Ubicación**: `test_f4eb_detailed_js.js` (workspace root)
 - **Propósito**: Análisis específico del bucle infinito F4EB con detección automática y captura de estado VIA
 - **Uso**: `node test_f4eb_detailed_js.js`
 - **Características**:
@@ -295,7 +297,7 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
   - Comparación directa con baseline Rust (Timer2=0xFF, Cycles=5342)
 
 #### B) jsvecx_comparison.js (General Comparison Framework)
-- **Ubicación**: `C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\jsvecx_comparison.js`
+- **Ubicación**: `jsvecx_comparison.js` (workspace root)
 - **Propósito**: Framework general para comparaciones Rust vs JSVecx en diferentes tamaños de test
 - **Uso**: `node jsvecx_comparison.js` (ejecuta tests de 100, 500, 1000, 2000, 5000 pasos)
 - **Características**:
