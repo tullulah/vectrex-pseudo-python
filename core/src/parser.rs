@@ -322,6 +322,7 @@ impl<'a> Parser<'a> {
 
     // --- functions / statements ---
     fn function(&mut self) -> Result<Item> {
+        let func_line = self.peek().line;  // Capture function definition line
         self.consume(TokenKind::Def)?;
         let name = self.identifier()?;
         self.consume(TokenKind::LParen)?;
@@ -342,7 +343,7 @@ impl<'a> Parser<'a> {
         self.consume(TokenKind::RParen)?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?;
         let mut body = Vec::new();
         while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
-        Ok(Item::Function(Function { name, params, body }))
+        Ok(Item::Function(Function { name, line: func_line, params, body }))
     }
 
     fn statement(&mut self) -> Result<Stmt> {

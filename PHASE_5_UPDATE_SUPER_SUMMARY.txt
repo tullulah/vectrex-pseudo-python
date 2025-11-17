@@ -1,0 +1,59 @@
+SUPER_SUMMARY.md UPDATE NEEDED - Add this section at the end before the closing triple backtick:
+
+---
+
+## 2025-11-17: Phase 5 - IDE Breakpoint Integration ✅ COMPLETE
+
+### Summary
+Users can now **click the gutter in the VPy editor to set breakpoints**, which are automatically converted from line numbers to binary addresses via the .pdb lineMap and synchronized with the running emulator. Full end-to-end message flow verified and working.
+
+### Architecture: Message Flow
+```
+VPy Editor Gutter Click → DebugSplitView → debugStore → postMessage → EmulatorPanel → WASM API
+```
+
+### Implementation Components
+
+**✅ DebugSplitView Integration**
+- Breakpoint gutter click handler modified (lines 47-66)
+- Calls `debugStore.onBreakpointAdded/Removed()` on click
+
+**✅ debugStore Full Infrastructure**
+- `onBreakpointAdded(uri, line)` - Line→address conversion via lineMap
+- `onBreakpointRemoved(uri, line)` - Remove breakpoint
+- `syncBreakpointsToWasm()` - Batch sync
+- `stepOver() / stepInto() / stepOut()` - Step controls
+
+**✅ EmulatorPanel Message Handler**
+- `handleDebugMessage()` (lines 560+) - Receives messages
+- Calls `vecx.addBreakpoint(address)` directly
+
+**✅ WASM API Exports**
+- `addBreakpoint(address: u16)`
+- `removeBreakpoint(address: u16)`
+- `clearBreakpoints()`
+
+### Test Results: test_debug_simple.vpy
+
+**Generated .pdb lineMap** (7 entries, all real addresses):
+```
+"6": "0x0028",   "7": "0x0030",   "11": "0x0051",
+"12": "0x0071",  "13": "0x0091",  "14": "0x00B1",  "15": "0x00D1"
+```
+
+### Verified Components
+
+| Component | Status |
+|-----------|--------|
+| .pdb generation | ✅ |
+| IDE auto-load .pdb | ✅ |
+| DebugSplitView gutter clicks | ✅ |
+| debugStore breakpoint methods | ✅ |
+| Window postMessage | ✅ |
+| EmulatorPanel message handler | ✅ |
+| WASM API breakpoint functions | ✅ |
+| End-to-end flow | ✅ |
+
+### Documentation
+
+- **PHASE_5_BREAKPOINT_INTEGRATION_COMPLETE.md** - Full details, architecture, test results

@@ -351,6 +351,7 @@ fn opt_item(it: &Item) -> Item {
 fn opt_function(f: &Function) -> Function {
     Function {
         name: f.name.clone(),
+        line: f.line,
         params: f.params.clone(),
         body: f.body.iter().map(opt_stmt).collect(),
     }
@@ -532,7 +533,7 @@ fn dce_function(f: &Function) -> Function {
         if terminated { break; }
         dce_stmt(stmt, &mut new_body, &mut terminated);
     }
-    Function { name: f.name.clone(), params: f.params.clone(), body: new_body }
+    Function { name: f.name.clone(), line: f.line, params: f.params.clone(), body: new_body }
 }
 
 fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
@@ -674,7 +675,7 @@ fn dse_function(f: &Function) -> Function {
         }
     }
     new_body.reverse();
-    Function { name: f.name.clone(), params: f.params.clone(), body: new_body }
+    Function { name: f.name.clone(), line: f.line, params: f.params.clone(), body: new_body }
 }
 
 fn expr_has_call(e: &Expr) -> bool {
@@ -776,7 +777,7 @@ fn cp_function_with_globals(f: &Function, globals: &std::collections::HashMap<St
     for (k,v) in globals { env.insert(k.clone(), *v); }
     let mut new_body = Vec::new();
     for stmt in &f.body { new_body.push(cp_stmt(stmt, &mut env)); }
-    Function { name: f.name.clone(), params: f.params.clone(), body: new_body }
+    Function { name: f.name.clone(), line: f.line, params: f.params.clone(), body: new_body }
 }
 
 #[allow(dead_code)]
@@ -921,7 +922,7 @@ fn fold_const_switches(m: &Module) -> Module {
 fn fold_const_switches_function(f: &Function) -> Function {
     let mut out = Vec::new();
     for s in &f.body { fold_const_switch_stmt(s, &mut out); }
-    Function { name: f.name.clone(), params: f.params.clone(), body: out }
+    Function { name: f.name.clone(), line: f.line, params: f.params.clone(), body: out }
 }
 
 fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {

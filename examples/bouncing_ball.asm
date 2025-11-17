@@ -41,30 +41,35 @@ START:
     STD VAR_VEL_Y
     LDD #0
     STD VAR_FRAME_COUNT
+    ; VPy_LINE:84
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_BALL_X
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:85
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_BALL_Y
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:86
     LDD #3
     STD RESULT
     LDX RESULT
     LDU #VAR_VEL_X
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:87
     LDD #2
     STD RESULT
     LDX RESULT
     LDU #VAR_VEL_Y
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:88
     LDD #0
     STD RESULT
     LDX RESULT
@@ -96,6 +101,7 @@ DRAW_BALL: ; function
     STD VAR_Y
     LDD VAR_ARG2
     STD VAR_INTENSITY
+    ; VPy_LINE:33
     LDD VAR_X
     STD RESULT
     LDD RESULT
@@ -117,6 +123,7 @@ DRAW_BALL: ; function
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:36
     LDD VAR_X
     STD RESULT
     LDD RESULT
@@ -158,6 +165,7 @@ DRAW_BALL: ; function
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; VPy_LINE:37
     LDD VAR_X
     STD RESULT
     LDD RESULT
@@ -203,6 +211,7 @@ DRAW_BALL: ; function
 
 UPDATE_BALL_POSITION: ; function
 ; --- function update_ball_position ---
+    ; VPy_LINE:41
     LDD VAR_BALL_X
     STD RESULT
     LDD RESULT
@@ -218,6 +227,7 @@ UPDATE_BALL_POSITION: ; function
     LDU #VAR_BALL_X
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:42
     LDD VAR_BALL_Y
     STD RESULT
     LDD RESULT
@@ -233,6 +243,7 @@ UPDATE_BALL_POSITION: ; function
     LDU #VAR_BALL_Y
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:45
     LDD VAR_BALL_X
     STD RESULT
     LDD RESULT
@@ -262,6 +273,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
+    ; VPy_LINE:46
     LDD VAR_SCREEN_LEFT
     STD RESULT
     LDD RESULT
@@ -277,6 +289,7 @@ CE_3:
     LDU #VAR_BALL_X
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:47
     LDD #0
     STD RESULT
     LDD RESULT
@@ -295,6 +308,7 @@ CE_3:
     LBRA IF_END_0
 IF_NEXT_1:
 IF_END_0:
+    ; VPy_LINE:49
     LDD VAR_BALL_X
     STD RESULT
     LDD RESULT
@@ -324,6 +338,7 @@ CT_6:
 CE_7:
     LDD RESULT
     LBEQ IF_NEXT_5
+    ; VPy_LINE:50
     LDD VAR_SCREEN_RIGHT
     STD RESULT
     LDD RESULT
@@ -339,6 +354,7 @@ CE_7:
     LDU #VAR_BALL_X
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:51
     LDD #0
     STD RESULT
     LDD RESULT
@@ -357,6 +373,7 @@ CE_7:
     LBRA IF_END_4
 IF_NEXT_5:
 IF_END_4:
+    ; VPy_LINE:54
     LDD VAR_BALL_Y
     STD RESULT
     LDD RESULT
@@ -386,6 +403,7 @@ CT_10:
 CE_11:
     LDD RESULT
     LBEQ IF_NEXT_9
+    ; VPy_LINE:55
     LDD VAR_SCREEN_TOP
     STD RESULT
     LDD RESULT
@@ -401,6 +419,7 @@ CE_11:
     LDU #VAR_BALL_Y
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:56
     LDD #0
     STD RESULT
     LDD RESULT
@@ -419,6 +438,7 @@ CE_11:
     LBRA IF_END_8
 IF_NEXT_9:
 IF_END_8:
+    ; VPy_LINE:58
     LDD VAR_BALL_Y
     STD RESULT
     LDD RESULT
@@ -448,6 +468,7 @@ CT_14:
 CE_15:
     LDD RESULT
     LBEQ IF_NEXT_13
+    ; VPy_LINE:59
     LDD VAR_SCREEN_BOTTOM
     STD RESULT
     LDD RESULT
@@ -463,6 +484,7 @@ CE_15:
     LDU #VAR_BALL_Y
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:60
     LDD #0
     STD RESULT
     LDD RESULT
@@ -485,6 +507,7 @@ IF_END_12:
 
 DRAW_BORDERS: ; function
 ; --- function draw_borders ---
+    ; VPy_LINE:65
     LDD VAR_SCREEN_LEFT
     STD RESULT
     LDD RESULT
@@ -508,6 +531,7 @@ DRAW_BORDERS: ; function
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; VPy_LINE:67
     LDD VAR_SCREEN_LEFT
     STD RESULT
     LDD RESULT
@@ -531,6 +555,7 @@ DRAW_BORDERS: ; function
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; VPy_LINE:69
     LDD VAR_SCREEN_LEFT
     STD RESULT
     LDD RESULT
@@ -554,6 +579,7 @@ DRAW_BORDERS: ; function
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; VPy_LINE:71
     LDD VAR_SCREEN_RIGHT
     STD RESULT
     LDD RESULT
@@ -581,6 +607,7 @@ DRAW_BORDERS: ; function
 
 DRAW_INFO: ; function
 ; --- function draw_info ---
+    ; VPy_LINE:75
     LDD #65446
     STD RESULT
     LDD RESULT
@@ -598,6 +625,7 @@ DRAW_INFO: ; function
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:76
     LDD #65446
     STD RESULT
     LDD RESULT
@@ -615,6 +643,7 @@ DRAW_INFO: ; function
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:79
     LDD VAR_FRAME_COUNT
     STD RESULT
     LDD RESULT
@@ -645,6 +674,7 @@ CT_18:
 CE_19:
     LDD RESULT
     LBEQ IF_NEXT_17
+    ; VPy_LINE:80
     LDD #50
     STD RESULT
     LDD RESULT
@@ -670,6 +700,7 @@ IF_END_16:
 LOOP_BODY:
     ; DEBUG: Processing 7 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(0)
+    ; VPy_LINE:91
     LDD VAR_FRAME_COUNT
     STD RESULT
     LDD RESULT
@@ -686,15 +717,20 @@ LOOP_BODY:
     STU TMPPTR
     STX ,U
     ; DEBUG: Statement 1 - Discriminant(6)
+    ; VPy_LINE:94
     JSR UPDATE_BALL_POSITION
     ; DEBUG: Statement 2 - Discriminant(6)
+    ; VPy_LINE:97
     JSR DRAW_BORDERS
     ; DEBUG: Statement 3 - Discriminant(6)
+    ; VPy_LINE:98
     JSR DRAW_INFO
     ; DEBUG: Statement 4 - Discriminant(1)
+    ; VPy_LINE:101
     LDD VAR_I_BRIGHT
     STD RESULT
     ; DEBUG: Statement 5 - Discriminant(7)
+    ; VPy_LINE:102
     LDD VAR_VEL_X
     STD RESULT
     LDD RESULT
@@ -802,6 +838,7 @@ OR_TRUE_22:
 OR_END_23:
     LDD RESULT
     LBEQ IF_NEXT_21
+    ; VPy_LINE:103
     LDD VAR_I_MEDIUM
     STD RESULT
     LDX RESULT
@@ -812,6 +849,7 @@ OR_END_23:
 IF_NEXT_21:
 IF_END_20:
     ; DEBUG: Statement 6 - Discriminant(6)
+    ; VPy_LINE:106
     LDD VAR_BALL_X
     STD RESULT
     LDD RESULT

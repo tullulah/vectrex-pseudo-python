@@ -272,6 +272,23 @@ function App() {
 
       logger.info('Build', 'Compilation successful:', result.binPath, `(${result.size} bytes)`);
       
+      // Load debug symbols (.pdb file) if available
+      if (result.binPath) {
+        try {
+          const pdbPath = result.binPath.replace(/\.bin$/, '.pdb');
+          const pdbRes = await electronAPI.readFile(pdbPath);
+          if ('error' in pdbRes) {
+            logger.warn('Build', 'No .pdb file found:', pdbPath);
+          } else {
+            const pdbData = JSON.parse(pdbRes.content);
+            useDebugStore.getState().loadPdbData(pdbData);
+            logger.info('Build', 'Loaded debug symbols from:', pdbPath);
+          }
+        } catch (pdbError) {
+          logger.warn('Build', 'Failed to load .pdb:', pdbError);
+        }
+      }
+      
       // Si el archivo fue guardado durante la compilación, actualizar el estado del editor
       if (activeDoc.dirty && result.savedMTime) {
         useEditorStore.getState().markSaved(activeDoc.uri, result.savedMTime);

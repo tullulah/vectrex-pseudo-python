@@ -34,7 +34,12 @@ pub enum VlEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Function { pub name: String, #[allow(dead_code)] pub params: Vec<String>, pub body: Vec<Stmt> }
+pub struct Function { 
+	pub name: String, 
+	pub line: usize,  // Starting line number of function definition
+	#[allow(dead_code)] pub params: Vec<String>, 
+	pub body: Vec<Stmt> 
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {

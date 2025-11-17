@@ -49,13 +49,25 @@ export function DebugSplitView({ vpyContent, asmContent, currentDocument }: Debu
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const lineNumber = e.target.position?.lineNumber;
         if (lineNumber && currentDocument) {
+          // Toggle breakpoint in editor store (visual)
           toggleBreakpoint(currentDocument.uri, lineNumber);
+          
+          // Also notify debug store to sync with emulator (if breakpoint was added)
+          const isAdding = !(breakpoints[currentDocument.uri]?.has(lineNumber) ?? false);
+          if (isAdding) {
+            const debugStore = useDebugStore.getState();
+            debugStore.onBreakpointAdded(currentDocument.uri, lineNumber);
+          } else {
+            // Breakpoint was removed
+            const debugStore = useDebugStore.getState();
+            debugStore.onBreakpointRemoved(currentDocument.uri, lineNumber);
+          }
         }
       }
     });
     
     return () => editor.dispose();
-  }, [vpyContent, debugState]);
+  }, [vpyContent, debugState, breakpoints, currentDocument]);
 
   // Initialize ASM editor
   useEffect(() => {
