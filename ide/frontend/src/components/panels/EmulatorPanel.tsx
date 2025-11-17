@@ -1268,7 +1268,8 @@ export const EmulatorPanel: React.FC = () => {
     if (vecx) {
       vecx.start();
       setStatus('running');
-      console.log('[EmulatorPanel] JSVecX started');
+      useDebugStore.getState().setState('running');
+      console.log('[EmulatorPanel] JSVecX started, debugStore.state set to running');
     }
   };
   
@@ -1277,7 +1278,8 @@ export const EmulatorPanel: React.FC = () => {
     if (vecx) {
       vecx.stop();
       setStatus('paused');
-      console.log('[EmulatorPanel] JSVecX paused');
+      useDebugStore.getState().setState('paused');
+      console.log('[EmulatorPanel] JSVecX paused, debugStore.state set to paused');
     }
   };
   
@@ -1286,7 +1288,8 @@ export const EmulatorPanel: React.FC = () => {
     if (vecx) {
       vecx.stop();
       setStatus('stopped');
-      console.log('[EmulatorPanel] JSVecX stopped');
+      useDebugStore.getState().setState('stopped');
+      console.log('[EmulatorPanel] JSVecX stopped, debugStore.state set to stopped');
     }
   };
   

@@ -7,5 +7,7 @@
   "symbols": {},
   "lineMap": {},
   "functions": {},
-  "nativeCalls": {}
+  "nativeCalls": {},
+  "asmFunctions": {},
+  "asmAddressMap": {}
 }

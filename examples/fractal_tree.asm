@@ -45,24 +45,28 @@ START:
     STD VAR_SCALE_FACTOR
     LDD #0
     STD VAR_ANGLE_OFFSET
+    ; VPy_LINE:17
     LDD #4
     STD RESULT
     LDX RESULT
     LDU #VAR_TREE_DEPTH
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:18
     LDD #50
     STD RESULT
     LDX RESULT
     LDU #VAR_BASE_LENGTH
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:19
     LDD #25
     STD RESULT
     LDX RESULT
     LDU #VAR_ANGLE_DELTA
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:20
     LDD #120
     STD RESULT
     LDX RESULT
@@ -81,6 +85,7 @@ MAIN:
 LOOP_BODY:
     ; DEBUG: Processing 100 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(0)
+    ; VPy_LINE:24
     LDD VAR_ANIMATION_FRAME
     STD RESULT
     LDD RESULT
@@ -97,6 +102,7 @@ LOOP_BODY:
     STU TMPPTR
     STX ,U
     ; DEBUG: Statement 1 - Discriminant(7)
+    ; VPy_LINE:25
     LDD VAR_ANIMATION_FRAME
     STD RESULT
     LDD RESULT
@@ -117,6 +123,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
+    ; VPy_LINE:26
     LDD #0
     STD RESULT
     LDX RESULT
@@ -127,6 +134,7 @@ CE_3:
 IF_NEXT_1:
 IF_END_0:
     ; DEBUG: Statement 2 - Discriminant(0)
+    ; VPy_LINE:29
     LDD VAR_ANIMATION_FRAME
     STD RESULT
     LDD RESULT
@@ -138,6 +146,7 @@ IF_END_0:
     STU TMPPTR
     STX ,U
     ; DEBUG: Statement 3 - Discriminant(0)
+    ; VPy_LINE:30
     LDD #80
     STD RESULT
     LDD RESULT
@@ -180,6 +189,7 @@ IF_END_0:
     STU TMPPTR
     STX ,U
     ; DEBUG: Statement 4 - Discriminant(6)
+    ; VPy_LINE:33
     LDA #-120
     LDB #-120
     JSR Moveto_d
@@ -190,6 +200,7 @@ IF_END_0:
     LDB #-16
     JSR Draw_Line_d
     ; DEBUG: Statement 5 - Discriminant(6)
+    ; VPy_LINE:34
     LDA #-120
     LDB #120
     JSR Moveto_d
@@ -200,6 +211,7 @@ IF_END_0:
     LDB #0
     JSR Draw_Line_d
     ; DEBUG: Statement 6 - Discriminant(6)
+    ; VPy_LINE:35
     LDA #120
     LDB #120
     JSR Moveto_d
@@ -210,6 +222,7 @@ IF_END_0:
     LDB #16
     JSR Draw_Line_d
     ; DEBUG: Statement 7 - Discriminant(6)
+    ; VPy_LINE:36
     LDA #120
     LDB #-120
     JSR Moveto_d
@@ -220,15 +233,19 @@ IF_END_0:
     LDB #0
     JSR Draw_Line_d
     ; DEBUG: Statement 8 - Discriminant(1)
+    ; VPy_LINE:40
     LDD #0
     STD RESULT
     ; DEBUG: Statement 9 - Discriminant(1)
+    ; VPy_LINE:41
     LDD #65476
     STD RESULT
     ; DEBUG: Statement 10 - Discriminant(1)
+    ; VPy_LINE:42
     LDD #0
     STD RESULT
     ; DEBUG: Statement 11 - Discriminant(1)
+    ; VPy_LINE:43
     LDD VAR_Y1
     STD RESULT
     LDD RESULT
@@ -241,6 +258,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 12 - Discriminant(6)
+    ; VPy_LINE:44
     LDD VAR_X1
     STD RESULT
     LDD RESULT
@@ -265,6 +283,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 13 - Discriminant(1)
+    ; VPy_LINE:47
     LDD VAR_BASE_LENGTH
     STD RESULT
     LDD RESULT
@@ -290,6 +309,7 @@ IF_END_0:
     STD DIV_B
     JSR DIV16
     ; DEBUG: Statement 14 - Discriminant(1)
+    ; VPy_LINE:48
     LDD #270
     STD RESULT
     LDD RESULT
@@ -305,10 +325,12 @@ IF_END_0:
     ADDD RESULT
     STD RESULT
     ; DEBUG: Statement 15 - Discriminant(1)
+    ; VPy_LINE:49
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 16 - Discriminant(1)
+    ; VPy_LINE:52
     LDD VAR_ANGLE1_LEFT
     STD RESULT
     LDD RESULT
@@ -322,6 +344,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 17 - Discriminant(1)
+    ; VPy_LINE:53
     LDD VAR_ANGLE1_LEFT
     STD RESULT
     LDD RESULT
@@ -334,6 +357,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 18 - Discriminant(1)
+    ; VPy_LINE:54
     LDD VAR_X2
     STD RESULT
     LDD RESULT
@@ -368,6 +392,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 19 - Discriminant(1)
+    ; VPy_LINE:55
     LDD VAR_Y2
     STD RESULT
     LDD RESULT
@@ -402,6 +427,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 20 - Discriminant(6)
+    ; VPy_LINE:56
     LDD VAR_X2
     STD RESULT
     LDD RESULT
@@ -435,6 +461,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 21 - Discriminant(1)
+    ; VPy_LINE:59
     LDD VAR_ANGLE1_RIGHT
     STD RESULT
     LDD RESULT
@@ -448,6 +475,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 22 - Discriminant(1)
+    ; VPy_LINE:60
     LDD VAR_ANGLE1_RIGHT
     STD RESULT
     LDD RESULT
@@ -460,6 +488,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 23 - Discriminant(1)
+    ; VPy_LINE:61
     LDD VAR_X2
     STD RESULT
     LDD RESULT
@@ -494,6 +523,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 24 - Discriminant(1)
+    ; VPy_LINE:62
     LDD VAR_Y2
     STD RESULT
     LDD RESULT
@@ -528,6 +558,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 25 - Discriminant(6)
+    ; VPy_LINE:63
     LDD VAR_X2
     STD RESULT
     LDD RESULT
@@ -561,6 +592,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 26 - Discriminant(1)
+    ; VPy_LINE:66
     LDD VAR_LENGTH1
     STD RESULT
     LDD RESULT
@@ -586,6 +618,7 @@ IF_END_0:
     STD DIV_B
     JSR DIV16
     ; DEBUG: Statement 27 - Discriminant(1)
+    ; VPy_LINE:69
     LDD VAR_ANGLE1_LEFT
     STD RESULT
     LDD RESULT
@@ -598,6 +631,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 28 - Discriminant(1)
+    ; VPy_LINE:70
     LDD VAR_ANGLE1_LEFT
     STD RESULT
     LDD RESULT
@@ -610,6 +644,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 29 - Discriminant(1)
+    ; VPy_LINE:72
     LDD VAR_ANGLE2_LL
     STD RESULT
     LDD RESULT
@@ -623,6 +658,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 30 - Discriminant(1)
+    ; VPy_LINE:73
     LDD VAR_ANGLE2_LL
     STD RESULT
     LDD RESULT
@@ -635,6 +671,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 31 - Discriminant(1)
+    ; VPy_LINE:74
     LDD VAR_X2_LEFT
     STD RESULT
     LDD RESULT
@@ -669,6 +706,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 32 - Discriminant(1)
+    ; VPy_LINE:75
     LDD VAR_Y2_LEFT
     STD RESULT
     LDD RESULT
@@ -703,6 +741,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 33 - Discriminant(6)
+    ; VPy_LINE:76
     LDD VAR_X2_LEFT
     STD RESULT
     LDD RESULT
@@ -736,6 +775,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 34 - Discriminant(1)
+    ; VPy_LINE:78
     LDD VAR_ANGLE2_LR
     STD RESULT
     LDD RESULT
@@ -749,6 +789,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 35 - Discriminant(1)
+    ; VPy_LINE:79
     LDD VAR_ANGLE2_LR
     STD RESULT
     LDD RESULT
@@ -761,6 +802,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 36 - Discriminant(1)
+    ; VPy_LINE:80
     LDD VAR_X2_LEFT
     STD RESULT
     LDD RESULT
@@ -795,6 +837,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 37 - Discriminant(1)
+    ; VPy_LINE:81
     LDD VAR_Y2_LEFT
     STD RESULT
     LDD RESULT
@@ -829,6 +872,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 38 - Discriminant(6)
+    ; VPy_LINE:82
     LDD VAR_X2_LEFT
     STD RESULT
     LDD RESULT
@@ -862,6 +906,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 39 - Discriminant(1)
+    ; VPy_LINE:85
     LDD VAR_ANGLE1_RIGHT
     STD RESULT
     LDD RESULT
@@ -874,6 +919,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 40 - Discriminant(1)
+    ; VPy_LINE:86
     LDD VAR_ANGLE1_RIGHT
     STD RESULT
     LDD RESULT
@@ -886,6 +932,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 41 - Discriminant(1)
+    ; VPy_LINE:88
     LDD VAR_ANGLE2_RL
     STD RESULT
     LDD RESULT
@@ -899,6 +946,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 42 - Discriminant(1)
+    ; VPy_LINE:89
     LDD VAR_ANGLE2_RL
     STD RESULT
     LDD RESULT
@@ -911,6 +959,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 43 - Discriminant(1)
+    ; VPy_LINE:90
     LDD VAR_X2_RIGHT
     STD RESULT
     LDD RESULT
@@ -945,6 +994,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 44 - Discriminant(1)
+    ; VPy_LINE:91
     LDD VAR_Y2_RIGHT
     STD RESULT
     LDD RESULT
@@ -979,6 +1029,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 45 - Discriminant(6)
+    ; VPy_LINE:92
     LDD VAR_X2_RIGHT
     STD RESULT
     LDD RESULT
@@ -1012,6 +1063,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 46 - Discriminant(1)
+    ; VPy_LINE:94
     LDD VAR_ANGLE2_RR
     STD RESULT
     LDD RESULT
@@ -1025,6 +1077,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 47 - Discriminant(1)
+    ; VPy_LINE:95
     LDD VAR_ANGLE2_RR
     STD RESULT
     LDD RESULT
@@ -1037,6 +1090,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 48 - Discriminant(1)
+    ; VPy_LINE:96
     LDD VAR_X2_RIGHT
     STD RESULT
     LDD RESULT
@@ -1071,6 +1125,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 49 - Discriminant(1)
+    ; VPy_LINE:97
     LDD VAR_Y2_RIGHT
     STD RESULT
     LDD RESULT
@@ -1105,6 +1160,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 50 - Discriminant(6)
+    ; VPy_LINE:98
     LDD VAR_X2_RIGHT
     STD RESULT
     LDD RESULT
@@ -1138,6 +1194,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 51 - Discriminant(1)
+    ; VPy_LINE:101
     LDD VAR_LENGTH2
     STD RESULT
     LDD RESULT
@@ -1163,6 +1220,7 @@ IF_END_0:
     STD DIV_B
     JSR DIV16
     ; DEBUG: Statement 52 - Discriminant(1)
+    ; VPy_LINE:104
     LDD VAR_ANGLE2_LL
     STD RESULT
     LDD RESULT
@@ -1179,6 +1237,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 53 - Discriminant(1)
+    ; VPy_LINE:105
     LDD VAR_ANGLE2_LL
     STD RESULT
     LDD RESULT
@@ -1195,6 +1254,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 54 - Discriminant(1)
+    ; VPy_LINE:107
     LDD VAR_ANGLE3_LLL
     STD RESULT
     LDD RESULT
@@ -1208,6 +1268,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 55 - Discriminant(1)
+    ; VPy_LINE:108
     LDD VAR_ANGLE3_LLL
     STD RESULT
     LDD RESULT
@@ -1220,6 +1281,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 56 - Discriminant(1)
+    ; VPy_LINE:109
     LDD VAR_X3_LL
     STD RESULT
     LDD RESULT
@@ -1254,6 +1316,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 57 - Discriminant(1)
+    ; VPy_LINE:110
     LDD VAR_Y3_LL
     STD RESULT
     LDD RESULT
@@ -1288,6 +1351,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 58 - Discriminant(6)
+    ; VPy_LINE:111
     LDD VAR_X3_LL
     STD RESULT
     LDD RESULT
@@ -1321,6 +1385,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 59 - Discriminant(1)
+    ; VPy_LINE:113
     LDD VAR_ANGLE3_LLR
     STD RESULT
     LDD RESULT
@@ -1334,6 +1399,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 60 - Discriminant(1)
+    ; VPy_LINE:114
     LDD VAR_ANGLE3_LLR
     STD RESULT
     LDD RESULT
@@ -1346,6 +1412,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 61 - Discriminant(1)
+    ; VPy_LINE:115
     LDD VAR_X3_LL
     STD RESULT
     LDD RESULT
@@ -1380,6 +1447,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 62 - Discriminant(1)
+    ; VPy_LINE:116
     LDD VAR_Y3_LL
     STD RESULT
     LDD RESULT
@@ -1414,6 +1482,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 63 - Discriminant(6)
+    ; VPy_LINE:117
     LDD VAR_X3_LL
     STD RESULT
     LDD RESULT
@@ -1447,6 +1516,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 64 - Discriminant(1)
+    ; VPy_LINE:120
     LDD VAR_ANGLE2_LR
     STD RESULT
     LDD RESULT
@@ -1463,6 +1533,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 65 - Discriminant(1)
+    ; VPy_LINE:121
     LDD VAR_ANGLE2_LR
     STD RESULT
     LDD RESULT
@@ -1479,6 +1550,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 66 - Discriminant(1)
+    ; VPy_LINE:123
     LDD VAR_ANGLE3_LRL
     STD RESULT
     LDD RESULT
@@ -1492,6 +1564,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 67 - Discriminant(1)
+    ; VPy_LINE:124
     LDD VAR_ANGLE3_LRL
     STD RESULT
     LDD RESULT
@@ -1504,6 +1577,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 68 - Discriminant(1)
+    ; VPy_LINE:125
     LDD VAR_X3_LR
     STD RESULT
     LDD RESULT
@@ -1538,6 +1612,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 69 - Discriminant(1)
+    ; VPy_LINE:126
     LDD VAR_Y3_LR
     STD RESULT
     LDD RESULT
@@ -1572,6 +1647,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 70 - Discriminant(6)
+    ; VPy_LINE:127
     LDD VAR_X3_LR
     STD RESULT
     LDD RESULT
@@ -1605,6 +1681,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 71 - Discriminant(1)
+    ; VPy_LINE:129
     LDD VAR_ANGLE3_LRR
     STD RESULT
     LDD RESULT
@@ -1618,6 +1695,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 72 - Discriminant(1)
+    ; VPy_LINE:130
     LDD VAR_ANGLE3_LRR
     STD RESULT
     LDD RESULT
@@ -1630,6 +1708,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 73 - Discriminant(1)
+    ; VPy_LINE:131
     LDD VAR_X3_LR
     STD RESULT
     LDD RESULT
@@ -1664,6 +1743,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 74 - Discriminant(1)
+    ; VPy_LINE:132
     LDD VAR_Y3_LR
     STD RESULT
     LDD RESULT
@@ -1698,6 +1778,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 75 - Discriminant(6)
+    ; VPy_LINE:133
     LDD VAR_X3_LR
     STD RESULT
     LDD RESULT
@@ -1731,6 +1812,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 76 - Discriminant(1)
+    ; VPy_LINE:136
     LDD VAR_ANGLE2_RL
     STD RESULT
     LDD RESULT
@@ -1747,6 +1829,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 77 - Discriminant(1)
+    ; VPy_LINE:137
     LDD VAR_ANGLE2_RL
     STD RESULT
     LDD RESULT
@@ -1763,6 +1846,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 78 - Discriminant(1)
+    ; VPy_LINE:139
     LDD VAR_ANGLE3_RLL
     STD RESULT
     LDD RESULT
@@ -1776,6 +1860,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 79 - Discriminant(1)
+    ; VPy_LINE:140
     LDD VAR_ANGLE3_RLL
     STD RESULT
     LDD RESULT
@@ -1788,6 +1873,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 80 - Discriminant(1)
+    ; VPy_LINE:141
     LDD VAR_X3_RL
     STD RESULT
     LDD RESULT
@@ -1822,6 +1908,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 81 - Discriminant(1)
+    ; VPy_LINE:142
     LDD VAR_Y3_RL
     STD RESULT
     LDD RESULT
@@ -1856,6 +1943,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 82 - Discriminant(6)
+    ; VPy_LINE:143
     LDD VAR_X3_RL
     STD RESULT
     LDD RESULT
@@ -1889,6 +1977,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 83 - Discriminant(1)
+    ; VPy_LINE:145
     LDD VAR_ANGLE3_RLR
     STD RESULT
     LDD RESULT
@@ -1902,6 +1991,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 84 - Discriminant(1)
+    ; VPy_LINE:146
     LDD VAR_ANGLE3_RLR
     STD RESULT
     LDD RESULT
@@ -1914,6 +2004,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 85 - Discriminant(1)
+    ; VPy_LINE:147
     LDD VAR_X3_RL
     STD RESULT
     LDD RESULT
@@ -1948,6 +2039,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 86 - Discriminant(1)
+    ; VPy_LINE:148
     LDD VAR_Y3_RL
     STD RESULT
     LDD RESULT
@@ -1982,6 +2074,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 87 - Discriminant(6)
+    ; VPy_LINE:149
     LDD VAR_X3_RL
     STD RESULT
     LDD RESULT
@@ -2015,6 +2108,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 88 - Discriminant(1)
+    ; VPy_LINE:152
     LDD VAR_ANGLE2_RR
     STD RESULT
     LDD RESULT
@@ -2031,6 +2125,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 89 - Discriminant(1)
+    ; VPy_LINE:153
     LDD VAR_ANGLE2_RR
     STD RESULT
     LDD RESULT
@@ -2047,6 +2142,7 @@ IF_END_0:
     SUBD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 90 - Discriminant(1)
+    ; VPy_LINE:155
     LDD VAR_ANGLE3_RRL
     STD RESULT
     LDD RESULT
@@ -2060,6 +2156,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 91 - Discriminant(1)
+    ; VPy_LINE:156
     LDD VAR_ANGLE3_RRL
     STD RESULT
     LDD RESULT
@@ -2072,6 +2169,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 92 - Discriminant(1)
+    ; VPy_LINE:157
     LDD VAR_X3_RR
     STD RESULT
     LDD RESULT
@@ -2106,6 +2204,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 93 - Discriminant(1)
+    ; VPy_LINE:158
     LDD VAR_Y3_RR
     STD RESULT
     LDD RESULT
@@ -2140,6 +2239,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 94 - Discriminant(6)
+    ; VPy_LINE:159
     LDD VAR_X3_RR
     STD RESULT
     LDD RESULT
@@ -2173,6 +2273,7 @@ IF_END_0:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 95 - Discriminant(1)
+    ; VPy_LINE:161
     LDD VAR_ANGLE3_RRR
     STD RESULT
     LDD RESULT
@@ -2186,6 +2287,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 96 - Discriminant(1)
+    ; VPy_LINE:162
     LDD VAR_ANGLE3_RRR
     STD RESULT
     LDD RESULT
@@ -2198,6 +2300,7 @@ IF_END_0:
     LDD ,X
     STD RESULT
     ; DEBUG: Statement 97 - Discriminant(1)
+    ; VPy_LINE:163
     LDD VAR_X3_RR
     STD RESULT
     LDD RESULT
@@ -2232,6 +2335,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 98 - Discriminant(1)
+    ; VPy_LINE:164
     LDD VAR_Y3_RR
     STD RESULT
     LDD RESULT
@@ -2266,6 +2370,7 @@ IF_END_0:
     ADDD TMPRIGHT
     STD RESULT
     ; DEBUG: Statement 99 - Discriminant(6)
+    ; VPy_LINE:165
     LDD VAR_X3_RR
     STD RESULT
     LDD RESULT
@@ -2498,23 +2603,100 @@ DIV_A   EQU RESULT+18
 DIV_B   EQU RESULT+20
 DIV_Q   EQU RESULT+22
 DIV_R   EQU RESULT+24
-VAR_ANGLE_DELTA EQU $C900+0
-VAR_ANGLE_OFFSET EQU $C900+2
-VAR_ANIMATION_FRAME EQU $C900+4
-VAR_BASE_LENGTH EQU $C900+6
-VAR_INTENSITY_ EQU $C900+8
-VAR_SCALE_FACTOR EQU $C900+10
-VAR_TREE_DEPTH EQU $C900+12
+VAR_ANGLE1_LEFT EQU $CF00+0
+VAR_ANGLE1_RIGHT EQU $CF00+2
+VAR_ANGLE2_LL EQU $CF00+4
+VAR_ANGLE2_LR EQU $CF00+6
+VAR_ANGLE2_RL EQU $CF00+8
+VAR_ANGLE2_RR EQU $CF00+10
+VAR_ANGLE3_LLL EQU $CF00+12
+VAR_ANGLE3_LLR EQU $CF00+14
+VAR_ANGLE3_LRL EQU $CF00+16
+VAR_ANGLE3_LRR EQU $CF00+18
+VAR_ANGLE3_RLL EQU $CF00+20
+VAR_ANGLE3_RLR EQU $CF00+22
+VAR_ANGLE3_RRL EQU $CF00+24
+VAR_ANGLE3_RRR EQU $CF00+26
+VAR_ANGLE_DELTA EQU $CF00+28
+VAR_ANGLE_OFFSET EQU $CF00+30
+VAR_ANIMATION_FRAME EQU $CF00+32
+VAR_BASE_LENGTH EQU $CF00+34
+VAR_COS1_LEFT EQU $CF00+36
+VAR_COS1_RIGHT EQU $CF00+38
+VAR_COS2_LL EQU $CF00+40
+VAR_COS2_LR EQU $CF00+42
+VAR_COS2_RL EQU $CF00+44
+VAR_COS2_RR EQU $CF00+46
+VAR_COS3_LLL EQU $CF00+48
+VAR_COS3_LLR EQU $CF00+50
+VAR_COS3_LRL EQU $CF00+52
+VAR_COS3_LRR EQU $CF00+54
+VAR_COS3_RLL EQU $CF00+56
+VAR_COS3_RLR EQU $CF00+58
+VAR_COS3_RRL EQU $CF00+60
+VAR_COS3_RRR EQU $CF00+62
+VAR_INTENSITY_ EQU $CF00+64
+VAR_LENGTH1 EQU $CF00+66
+VAR_LENGTH2 EQU $CF00+68
+VAR_LENGTH3 EQU $CF00+70
+VAR_SCALE_FACTOR EQU $CF00+72
+VAR_SIN1_LEFT EQU $CF00+74
+VAR_SIN1_RIGHT EQU $CF00+76
+VAR_SIN2_LL EQU $CF00+78
+VAR_SIN2_LR EQU $CF00+80
+VAR_SIN2_RL EQU $CF00+82
+VAR_SIN2_RR EQU $CF00+84
+VAR_SIN3_LLL EQU $CF00+86
+VAR_SIN3_LLR EQU $CF00+88
+VAR_SIN3_LRL EQU $CF00+90
+VAR_SIN3_LRR EQU $CF00+92
+VAR_SIN3_RLL EQU $CF00+94
+VAR_SIN3_RLR EQU $CF00+96
+VAR_SIN3_RRL EQU $CF00+98
+VAR_SIN3_RRR EQU $CF00+100
+VAR_TREE_DEPTH EQU $CF00+102
+VAR_X1 EQU $CF00+104
+VAR_X2 EQU $CF00+106
+VAR_X2_LEFT EQU $CF00+108
+VAR_X2_RIGHT EQU $CF00+110
+VAR_X3_LL EQU $CF00+112
+VAR_X3_LR EQU $CF00+114
+VAR_X3_RL EQU $CF00+116
+VAR_X3_RR EQU $CF00+118
+VAR_X4_LLL EQU $CF00+120
+VAR_X4_LLR EQU $CF00+122
+VAR_X4_LRL EQU $CF00+124
+VAR_X4_LRR EQU $CF00+126
+VAR_X4_RLL EQU $CF00+128
+VAR_X4_RLR EQU $CF00+130
+VAR_X4_RRL EQU $CF00+132
+VAR_X4_RRR EQU $CF00+134
+VAR_Y1 EQU $CF00+136
+VAR_Y2 EQU $CF00+138
+VAR_Y2_LEFT EQU $CF00+140
+VAR_Y2_RIGHT EQU $CF00+142
+VAR_Y3_LL EQU $CF00+144
+VAR_Y3_LR EQU $CF00+146
+VAR_Y3_RL EQU $CF00+148
+VAR_Y3_RR EQU $CF00+150
+VAR_Y4_LLL EQU $CF00+152
+VAR_Y4_LLR EQU $CF00+154
+VAR_Y4_LRL EQU $CF00+156
+VAR_Y4_LRR EQU $CF00+158
+VAR_Y4_RLL EQU $CF00+160
+VAR_Y4_RLR EQU $CF00+162
+VAR_Y4_RRL EQU $CF00+164
+VAR_Y4_RRR EQU $CF00+166
 ; Call argument scratch space
 VAR_ARG0 EQU RESULT+26
 VAR_ARG1 EQU RESULT+28
 VAR_ARG2 EQU RESULT+30
 VAR_ARG3 EQU RESULT+32
 VAR_ARG4 EQU RESULT+34
-VLINE_DX EQU RESULT+14
-VLINE_DY EQU RESULT+15
-VLINE_STEPS EQU RESULT+16
-VLINE_LIST EQU RESULT+17
+VLINE_DX EQU RESULT+168
+VLINE_DY EQU RESULT+169
+VLINE_STEPS EQU RESULT+170
+VLINE_LIST EQU RESULT+171
 ; Trig tables (shared)
 SIN_TABLE:
     FDB 0
