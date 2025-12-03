@@ -134,17 +134,17 @@ jobs:
       - name: Package Electron (Linux)
         if: matrix.platform == 'linux'
         working-directory: ide/electron
-        run: npx electron-builder --linux AppImage deb
+        run: npx electron-builder --linux AppImage deb --publish never
 
       - name: Package Electron (macOS)
         if: matrix.platform == 'mac'
         working-directory: ide/electron
-        run: npx electron-builder --mac dmg zip
+        run: npx electron-builder --mac dmg zip --publish never
 
       - name: Package Electron (Windows)
         if: matrix.platform == 'win'
         working-directory: ide/electron
-        run: npx electron-builder --win nsis portable
+        run: npx electron-builder --win nsis portable --publish never
 
       # Upload artifacts
       - name: Upload artifacts
@@ -181,6 +181,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
