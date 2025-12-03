@@ -37,6 +37,7 @@ main:
 LOOP_BODY:
     ; DEBUG: Processing 6 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
+    ; VPy_LINE:13
     LDA #0
     LDB #-50
     JSR Moveto_d
@@ -47,6 +48,7 @@ LOOP_BODY:
     LDB #100
     JSR Draw_Line_d
     ; DEBUG: Statement 1 - Discriminant(6)
+    ; VPy_LINE:16
     LDA #-50
     LDB #0
     JSR Moveto_d
@@ -57,6 +59,7 @@ LOOP_BODY:
     LDB #0
     JSR Draw_Line_d
     ; DEBUG: Statement 2 - Discriminant(6)
+    ; VPy_LINE:19
     LDA #-30
     LDB #-30
     JSR Moveto_d
@@ -67,6 +70,7 @@ LOOP_BODY:
     LDB #60
     JSR Draw_Line_d
     ; DEBUG: Statement 3 - Discriminant(6)
+    ; VPy_LINE:20
     LDA #-30
     LDB #30
     JSR Moveto_d
@@ -77,6 +81,7 @@ LOOP_BODY:
     LDB #0
     JSR Draw_Line_d
     ; DEBUG: Statement 4 - Discriminant(6)
+    ; VPy_LINE:21
     LDA #30
     LDB #30
     JSR Moveto_d
@@ -87,6 +92,7 @@ LOOP_BODY:
     LDB #-60
     JSR Draw_Line_d
     ; DEBUG: Statement 5 - Discriminant(6)
+    ; VPy_LINE:22
     LDA #30
     LDB #-30
     JSR Moveto_d

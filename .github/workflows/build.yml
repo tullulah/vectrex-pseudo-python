@@ -1,0 +1,188 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [master]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: '22'
+
+jobs:
+  # ============================================
+  # Job 1: Tests Rust
+  # ============================================
+  test-rust:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run tests (core)
+        run: cargo test -p vectrex_lang --verbose
+
+      - name: Build binaries
+        run: cargo build --release -p vectrex_lang
+
+  # ============================================
+  # Job 2: Build Electron App (matrix)
+  # ============================================
+  build-electron:
+    name: Build ${{ matrix.os }}
+    needs: test-rust
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            ide/frontend/package-lock.json
+            ide/electron/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+
+      # Build Rust LSP binary
+      - name: Build LSP & Compiler
+        run: cargo build --release -p vectrex_lang
+
+      # Copy LSP binary to electron resources
+      - name: Copy LSP binary (Unix)
+        if: matrix.platform != 'win'
+        run: |
+          mkdir -p ide/electron/resources
+          cp target/release/vpy_lsp ide/electron/resources/
+          cp target/release/vectrexc ide/electron/resources/
+
+      - name: Copy LSP binary (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ide/electron/resources
+          Copy-Item target/release/vpy_lsp.exe ide/electron/resources/
+          Copy-Item target/release/vectrexc.exe ide/electron/resources/
+
+      # Install dependencies
+      - name: Install frontend dependencies
+        working-directory: ide/frontend
+        run: npm ci
+
+      - name: Install electron dependencies
+        working-directory: ide/electron
+        run: npm ci
+
+      # Build frontend
+      - name: Build frontend
+        working-directory: ide/frontend
+        run: npm run build
+
+      # Package Electron app
+      - name: Package Electron (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: ide/electron
+        run: npx electron-builder --linux AppImage deb
+
+      - name: Package Electron (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: ide/electron
+        run: npx electron-builder --mac dmg zip
+
+      - name: Package Electron (Windows)
+        if: matrix.platform == 'win'
+        working-directory: ide/electron
+        run: npx electron-builder --win nsis portable
+
+      # Upload artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpy-ide-${{ matrix.platform }}
+          path: |
+            ide/electron/dist/*.dmg
+            ide/electron/dist/*.zip
+            ide/electron/dist/*.AppImage
+            ide/electron/dist/*.deb
+            ide/electron/dist/*.exe
+          if-no-files-found: error
+
+  # ============================================
+  # Job 3: Create Release (only on tags)
+  # ============================================
+  release:
+    name: Create Release
+    needs: build-electron
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.exe

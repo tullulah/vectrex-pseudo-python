@@ -1,7 +1,10 @@
 {
-  "name": "vpy-ide-electron",
+  "name": "vpy-ide",
   "version": "0.1.0",
   "private": true,
+  "description": "Vectrex Pseudo-Python IDE - A visual programming environment for Vectrex game development",
+  "author": "Daniel Ferrer",
+  "license": "MIT",
   "main": "dist/main.js",
   "type": "commonjs",
   "scripts": {
@@ -10,7 +13,7 @@
     "dev": "concurrently -k -n renderer,types,electron -c auto \"npm:renderer\" \"npm:watch\" \"npm:electron-start\"",
     "start": "npm run build && electron .",
     "renderer": "cd ../frontend && npm run dev",
-    "electron-start": "wait-on tcp:5173 && wait-on file:dist/main.js && echo ELECTRON_START && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron . && echo ELECTRON_END",
+    "electron-start": "wait-on tcp:5184 && wait-on file:dist/main.js && echo ELECTRON_START && cross-env VITE_DEV_SERVER_URL=http://localhost:5184 electron . && echo ELECTRON_END",
     "package": "npm run build && electron-builder",
     "headless": "npm run build && node dist/headless.js --",
     "harness-test": "npm run build && node dist/harness_tests.js"
@@ -27,5 +30,52 @@
   "dependencies": {
     "electron": "^29.0.0",
     "pseudo-python": "file:../.."
+  },
+  "build": {
+    "appId": "com.vectrex.vpy-ide",
+    "productName": "VPy IDE",
+    "copyright": "Copyright © 2025 Daniel Ferrer",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "frontend",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "icon": "build/icons"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

@@ -60,6 +60,6 @@ export default defineConfig({
     include: ['monaco-editor/esm/vs/editor/editor.api']
   },
   server: {
-    port: 5173
+    port: 5184
   }
 });
