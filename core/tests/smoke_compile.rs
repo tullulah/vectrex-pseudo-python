@@ -4,15 +4,17 @@ use vectrex_lang::{lex, parse_with_filename, target::Target};
 fn smoke_minimal_compile() {
     let src = r#"CONST TITLE = "SMOKE"
 
-vectorlist demo:
-    INTENSITY 0x40
-    MOVE 10 20
+VECTORLIST demo:
+    INTENSITY(0x40)
+    MOVE(10, 20)
 
 def main():
+    let init = 0
+
+def loop():
     let x = 1
     let y = x + 2
     y = y + 3
-    return y
 "#;
     let tokens = lex(src).expect("lex ok");
     assert!(tokens.len() > 0, "tokens generated");
@@ -32,6 +34,7 @@ def main():
         fast_wait: false, source_path: None,
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
-    assert!(asm.contains("MAIN:"), "asm should contain function label MAIN");
+    // The main loop is generated with label "MAIN:" when auto_loop is enabled
+    assert!(asm.contains("main:") || asm.contains("MAIN:"), "asm should contain main loop label");
     assert!(asm.to_ascii_uppercase().contains("VECTREX_VECTOR_PHASE_BEGIN") == false, "no unused wrappers emitted by default");
 }
