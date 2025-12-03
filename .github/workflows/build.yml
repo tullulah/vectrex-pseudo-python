@@ -125,6 +125,11 @@ jobs:
         working-directory: ide/frontend
         run: npm run build
 
+      # Build Electron TypeScript
+      - name: Build Electron
+        working-directory: ide/electron
+        run: npm run build
+
       # Package Electron app
       - name: Package Electron (Linux)
         if: matrix.platform == 'linux'
