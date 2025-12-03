@@ -3,7 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "description": "Vectrex Pseudo-Python IDE - A visual programming environment for Vectrex game development",
-  "author": "Daniel Ferrer",
+  "author": {
+    "name": "Daniel Ferrer",
+    "email": "tullulah@gmail.com"
+  },
+  "homepage": "https://github.com/tullulah/vectrex-pseudo-python",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tullulah/vectrex-pseudo-python.git"
+  },
   "license": "MIT",
   "main": "dist/main.js",
   "type": "commonjs",
@@ -69,7 +77,8 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Development",
-      "icon": "build/icons"
+      "icon": "build/icons",
+      "maintainer": "Daniel Ferrer <tullulah@gmail.com>"
     },
     "nsis": {
       "oneClick": false,
