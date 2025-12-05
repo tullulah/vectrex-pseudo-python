@@ -79,8 +79,19 @@ async function createWindow() {
     if (verbose) console.log('[IDE] loading dev URL', devUrl);
     await mainWindow.loadURL(devUrl);
   } else {
-    if (verbose) console.log('[IDE] loading file index.html');
-    await mainWindow.loadFile(join(__dirname, '../../frontend/dist/index.html'));
+    // In packaged app, frontend is in resources/frontend/
+    // In dev/unpackaged, it's at ../../frontend/dist/
+    const isPackaged = app.isPackaged;
+    let indexPath: string;
+    if (isPackaged) {
+      // Packaged: resources are in process.resourcesPath
+      indexPath = join(process.resourcesPath, 'frontend', 'index.html');
+    } else {
+      // Development: relative to compiled main.js in dist/
+      indexPath = join(__dirname, '../../frontend/dist/index.html');
+    }
+    if (verbose) console.log('[IDE] loading file', indexPath, 'isPackaged=', isPackaged);
+    await mainWindow.loadFile(indexPath);
   }
   // Bloquear apertura automática salvo flag explícita
   if (process.env.VPY_IDE_DEVTOOLS === '1') {
@@ -108,6 +119,8 @@ function resolveLspPath(): string | null {
   const cwd = process.cwd();
   // Posibles ubicaciones (orden de prioridad):
   const candidates = [
+    // Packaged app: resources directory
+    join(process.resourcesPath, exeName),
     // Ejecución desde root (run-ide.ps1 hace Set-Location root antes de lanzar)
     join(cwd, 'target', 'debug', exeName),
     join(cwd, 'target', 'release', exeName),
