@@ -21,29 +21,71 @@ import { TracePanel } from './panels/TracePanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
 import { AiAssistantPanel } from './panels/AiAssistantPanel';
 
-// Bumped to v2 to force layout refresh including new 'Errors' tab for users with persisted v1 layout
-const STORAGE_KEY = 'vpy_dock_model_v2';
+// Bumped to v3 to force layout refresh with improved default layout
+const STORAGE_KEY = 'vpy_dock_model_v3';
 const STORAGE_HIDDEN_KEY = 'vpy_hidden_panels_v1';
 const STORAGE_PINNED_KEY = 'vpy_pinned_panels_v1';
 
 const defaultJson = {
-  global: { 
-    tabEnableClose: true,
-    tabEnableDrag: true,
-    tabSetEnableDrop: true
-  },
-  layout: {
-    type: 'row',
-    weight: 100,
-    children: [
-      { type: 'tabset', weight: 20, children: [ { type: 'tab', name: 'Files', component: 'files' } ] },
-  // Central editor tabset initially contains a placeholder tab (component editor-placeholder)
-  { type: 'tabset', id: 'editor-host', weight: 50, children: [ { type: 'tab', name: 'Editor', component: 'editor-placeholder', enableClose: false } ] },
-    { type: 'tabset', weight: 20, children: [ 
-      { type: 'tab', name: 'Emulator', component: 'emulator' },
-      { type: 'tab', name: 'PyPilot', component: 'ai-assistant' }
-    ] },
-  { type: 'tabset', weight: 30, children: [ { type: 'tab', name: 'Debug', component: 'debug' }, { type: 'tab', name: 'Errors', component: 'errors' }, { type: 'tab', name: 'Emulator Stats', component: 'output' }, { type: 'tab', name: 'Build Output', component: 'build-output' } ], location: 'bottom' }
+  "global": {},
+  "borders": [],
+  "layout": {
+    "type": "row",
+    "children": [
+      {
+        "type": "tabset",
+        "weight": 13.81,
+        "children": [
+          { "type": "tab", "name": "Files", "component": "files" },
+          { "type": "tab", "name": "PyPilot", "component": "ai-assistant" }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 64.71,
+        "children": [
+          {
+            "type": "tabset",
+            "id": "editor-host",
+            "weight": 76.04,
+            "children": [
+              { "type": "tab", "name": "Editor", "component": "editor-placeholder", "enableClose": false }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 23.96,
+            "children": [
+              { "type": "tab", "name": "Debug", "component": "debug" },
+              { "type": "tab", "name": "Errors", "component": "errors" },
+              { "type": "tab", "name": "Build Output", "component": "build-output" },
+              { "type": "tab", "name": "Memory", "component": "memory" },
+              { "type": "tab", "name": "Trace", "component": "trace" },
+              { "type": "tab", "name": "BIOS Calls", "component": "bioscalls" }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "weight": 21.48,
+        "children": [
+          {
+            "type": "tabset",
+            "weight": 81.30,
+            "children": [
+              { "type": "tab", "name": "Emulator", "component": "emulator" }
+            ]
+          },
+          {
+            "type": "tabset",
+            "weight": 18.70,
+            "children": [
+              { "type": "tab", "name": "Emulator Stats", "component": "output" }
+            ]
+          }
+        ]
+      }
     ]
   }
 };

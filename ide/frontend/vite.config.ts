@@ -49,6 +49,8 @@ const stripRefreshPlugin = () => ({
 
 export default defineConfig({
   plugins: [reactPlugin, stripRefreshPlugin()],
+  // Use relative paths for assets so Electron can load them from file://
+  base: './',
   resolve: {
     alias: {
   'vs': path.resolve(__dirname, 'node_modules/monaco-editor/min/vs')
