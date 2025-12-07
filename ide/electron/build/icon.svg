@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Strong glow filter for vector lines -->
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark background -->
+  <rect width="512" height="512" rx="90" ry="90" fill="#0a0a12"/>
+  
+  <!-- Python logo - geometric/angular version with straight lines only -->
+  <g filter="url(#glow)" transform="translate(256, 256)">
+    <!-- Top snake (angular version) -->
+    <!-- Head -->
+    <polygon points="-20,-180 -100,-180 -100,-100 -140,-100 -140,20 -100,20 -100,60 20,60 20,20 60,20 60,-100 20,-100 20,-180" 
+             fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="miter"/>
+    <!-- Top eye -->
+    <rect x="-80" y="-160" width="30" height="30" fill="none" stroke="#ffffff" stroke-width="6"/>
+    
+    <!-- Bottom snake (angular version, rotated 180) -->
+    <polygon points="20,180 100,180 100,100 140,100 140,-20 100,-20 100,-60 -20,-60 -20,-20 -60,-20 -60,100 -20,100 -20,180" 
+             fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="miter"/>
+    <!-- Bottom eye -->
+    <rect x="50" y="130" width="30" height="30" fill="none" stroke="#ffffff" stroke-width="6"/>
+  </g>
+</svg>
