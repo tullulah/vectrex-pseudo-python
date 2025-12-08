@@ -1,7 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useProjectStore } from '../../state/projectStore';
 import { useEditorStore } from '../../state/editorStore';
 import type { FileNode } from '../../types/models';
+
+// Helper function to detect language from file extension
+function getLanguageFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  switch (ext) {
+    case 'vpy': return 'vpy';
+    case 'c': return 'c';
+    case 'cpp': case 'cc': case 'cxx': return 'cpp';
+    case 'h': case 'hpp': return 'cpp';
+    case 'asm': case 's': return 'asm';
+    case 'json': case 'vec': return 'json';
+    case 'js': return 'javascript';
+    case 'ts': return 'typescript';
+    case 'md': return 'markdown';
+    case 'toml': return 'toml';
+    case 'yaml': case 'yml': return 'yaml';
+    default: return 'plaintext';
+  }
+}
 
 // Helper function to normalize file paths to proper file:// URIs (same logic as File > Open)
 function normalizeFileUri(path: string): string {
@@ -26,7 +45,7 @@ function normalizeFileUri(path: string): string {
 }
 
 export const FileTreePanel: React.FC = () => {
-  const { project, workspaceName, selectFile, hasWorkspace, refreshWorkspace } = useProjectStore();
+  const { project, workspaceName, selectFile, hasWorkspace, refreshWorkspace, vpyProject } = useProjectStore();
   const { openDocument, closeDocument, documents, active } = useEditorStore();
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -34,65 +53,76 @@ export const FileTreePanel: React.FC = () => {
   const [hoveredFile, setHoveredFile] = useState<string | null>(null);
   const [draggedFiles, setDraggedFiles] = useState<Set<string>>(new Set());
 
+  // Determine display name - prefer .vpyproj project name
+  const displayName = vpyProject?.config?.project?.name || workspaceName || 'Workspace';
+  const isVpyProject = !!vpyProject;
+  const projectVersion = vpyProject?.config?.project?.version;
+
   // Helper function to convert file:// URI back to relative path within workspace
   const uriToRelativePath = (uri: string, workspaceRoot: string): string => {
     // First convert URI to absolute filesystem path
     let absolutePath: string;
     if (uri.startsWith('file:///')) {
-      // file:///C:/path/file.ext -> C:/path/file.ext
-      absolutePath = uri.slice(8); // Remove 'file:///'
-      if (absolutePath.match(/^[A-Za-z]:/)) {
-        // Windows path - convert forward slashes back to backslashes
-        absolutePath = absolutePath.replace(/\//g, '\\');
+      // file:///C:/path/file.ext -> C:/path/file.ext (Windows)
+      // file:///path/file.ext -> /path/file.ext (macOS/Linux)
+      absolutePath = uri.slice(7); // Remove 'file://' keeping the leading /
+      // On Windows, we have file:///C:/... so we need to remove one more /
+      if (absolutePath.match(/^\/[A-Za-z]:\//)) {
+        absolutePath = absolutePath.slice(1); // Remove leading / for Windows paths
       }
     } else if (uri.startsWith('file://')) {
-      // file://path/file.ext -> /path/file.ext  
       absolutePath = uri.slice(7); // Remove 'file://'
     } else {
       absolutePath = uri; // fallback
     }
     
-    // Now convert absolute path to relative path within workspace
-    const normalizedWorkspace = workspaceRoot.replace(/\//g, '\\');
-    const normalizedAbsolute = absolutePath.replace(/\//g, '\\');
+    // Normalize all paths to forward slashes for comparison
+    const normalizedWorkspace = workspaceRoot.replace(/\\/g, '/');
+    const normalizedAbsolute = absolutePath.replace(/\\/g, '/');
     
     if (normalizedAbsolute.startsWith(normalizedWorkspace)) {
-      // Remove workspace root and leading slash/backslash
+      // Remove workspace root and leading slash
       let relativePath = normalizedAbsolute.slice(normalizedWorkspace.length);
-      if (relativePath.startsWith('\\') || relativePath.startsWith('/')) {
+      if (relativePath.startsWith('/')) {
         relativePath = relativePath.slice(1);
       }
-      // Convert to forward slashes for consistency with TreeView paths
-      return relativePath.replace(/\\/g, '/');
+      return relativePath;
     }
     
-    // If not within workspace, return the original path
-    return absolutePath;
+    // If not within workspace, return the normalized absolute path
+    return normalizedAbsolute;
   };
 
   // Sync TreeView selection with active document tab
+  // Use a ref to access project without causing re-renders
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  
   useEffect(() => {
-    console.log('[TreeView] useEffect triggered - active:', active, 'project files:', !!project?.files, 'workspace root:', project?.rootPath);
+    const currentProject = projectRef.current;
+    console.log('[FileTree Sync] active:', active, 'rootPath:', currentProject?.rootPath);
     
-    if (!project?.files || !project?.rootPath) {
-      console.log('[TreeView] No project files or workspace root available');
+    if (!currentProject?.files || !currentProject?.rootPath) {
+      console.log('[FileTree Sync] No project files or rootPath');
       return;
     }
     
-    // If no active document, clear selection
+    // If no active document, clear selection but keep expanded dirs
     if (!active) {
-      console.log('[TreeView] No active document - clearing selection');
       setSelectedFiles(new Set());
       return;
     }
     
-    const activePath = uriToRelativePath(active, project.rootPath);
-    console.log('[TreeView] Syncing selection - active URI:', active, 'workspace root:', project.rootPath, 'converted relative path:', activePath);
+    const activePath = uriToRelativePath(active, currentProject.rootPath);
+    console.log('[FileTree Sync] Converted path:', activePath);
     
     // Find the file node that matches the active document
     const findFileInTree = (files: any[], targetPath: string): any => {
       for (const file of files) {
-        if (file.path === targetPath) {
+        // Normalize paths for comparison
+        const normalizedFilePath = file.path.replace(/\\/g, '/');
+        const normalizedTarget = targetPath.replace(/\\/g, '/');
+        if (normalizedFilePath === normalizedTarget) {
           return file;
         }
         if (file.children) {
@@ -103,26 +133,29 @@ export const FileTreePanel: React.FC = () => {
       return null;
     };
 
-    const activeFile = findFileInTree(project.files, activePath);
+    const activeFile = findFileInTree(currentProject.files, activePath);
+    console.log('[FileTree Sync] Found file:', activeFile?.path);
+    
     if (activeFile) {
-      console.log('[TreeView] Found active file in tree:', activeFile.path);
       setSelectedFiles(new Set([activeFile.path]));
       
       // Auto-expand parent directories to make the selected file visible
-      const parts = activeFile.path.split(/[/\\]/);
-      const newExpanded = new Set(expandedDirs);
-      let currentPath = '';
-      for (let i = 0; i < parts.length - 1; i++) {
-        currentPath += (i === 0 ? '' : '\\') + parts[i];
-        newExpanded.add(currentPath);
-      }
-      setExpandedDirs(newExpanded);
+      // Use functional update to preserve existing expanded dirs
+      setExpandedDirs(prev => {
+        const parts = activeFile.path.replace(/\\/g, '/').split('/');
+        const newExpanded = new Set(prev);
+        let currentPath = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+          newExpanded.add(currentPath);
+        }
+        return newExpanded;
+      });
     } else {
-      console.log('[TreeView] Active file not found in tree:', activePath);
-      // Clear selection if active file is not in the tree
-      setSelectedFiles(new Set());
+      // File not in tree - might be an in-memory file, don't change selection
+      console.log('[FileTree Sync] File not found in tree');
     }
-  }, [active, project?.files]);
+  }, [active]); // Only depend on active to avoid resetting on refresh
 
   // Auto-expand root directory when workspace loads
   useEffect(() => {
@@ -371,7 +404,7 @@ export const FileTreePanel: React.FC = () => {
             // Fallback to placeholder if file can't be loaded
             const newDoc = {
               uri: fileUri,
-              language: 'vpy' as const,
+              language: getLanguageFromFilename(node.name),
               content: `// Error loading file: ${fileResult.error}\n// File: ${node.path}`,
               dirty: false,
               diagnostics: [],
@@ -385,7 +418,7 @@ export const FileTreePanel: React.FC = () => {
           // Create document with real file content
           const newDoc = {
             uri: fileUri,
-            language: 'vpy' as const,
+            language: getLanguageFromFilename(node.name),
             content: fileResult.content || '',
             dirty: false,
             diagnostics: [],
@@ -410,16 +443,23 @@ export const FileTreePanel: React.FC = () => {
     
     const ext = node.name.split('.').pop()?.toLowerCase() || '';
     switch (ext) {
-      case 'vpy': return '�';
-      case 'py': return '�';
-      case 'js': case 'ts': return '�';
-      case 'json': return '📄';
-      case 'md': return '�';
+      case 'vpy': return '🐍';
+      case 'py': return '🐍';
+      case 'vec': return '🎨';
+      case 'anim': return '🎬';
+      case 'c': case 'cpp': case 'h': case 'hpp': return '⚙️';
+      case 'asm': case 's': return '📜';
+      case 'js': case 'ts': return '📦';
+      case 'json': return '📋';
+      case 'toml': return '⚙️';
+      case 'md': return '📝';
       case 'txt': return '📄';
-      case 'css': case 'scss': return '📄';
-      case 'html': case 'htm': return '📄';
-      case 'asm': return '📄';
-      case 'bin': return '�';
+      case 'css': case 'scss': return '🎨';
+      case 'html': case 'htm': return '🌐';
+      case 'bin': return '💾';
+      case 'mus': return '🎵';
+      case 'sfx': return '🔊';
+      case 'vox': return '🗣️';
       default: return '📄';
     }
   };
@@ -639,13 +679,16 @@ export const FileTreePanel: React.FC = () => {
         gap: 8,
         flexShrink: 0
       }}>
-        <span>📁</span>
+        <span>{isVpyProject ? '📦' : '📁'}</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, color: '#569cd6' }}>
-            {workspaceName}
+          <div style={{ fontWeight: 600, color: isVpyProject ? '#4ec9b0' : '#569cd6', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {displayName}
+            {projectVersion && (
+              <span style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>v{projectVersion}</span>
+            )}
           </div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
-            {project?.rootPath}
+            {isVpyProject ? 'VPy Project' : project?.rootPath}
           </div>
         </div>
         <button
@@ -666,7 +709,6 @@ export const FileTreePanel: React.FC = () => {
           title="Actualizar archivos"
         >
           {isRefreshing ? '🔄' : '↻'}
-          {isRefreshing ? 'Actualizando...' : 'Actualizar'}
         </button>
       </div>
 

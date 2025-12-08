@@ -44,4 +44,32 @@ contextBridge.exposeInMainWorld('recents', {
   write: (list: Array<{ path: string; lastOpened: number; kind: 'file' | 'folder' }>) => ipcRenderer.invoke('recents:write', list) as Promise<{ ok: boolean }>,
 });
 
+// Project management API
+contextBridge.exposeInMainWorld('project', {
+  // Open project file dialog
+  open: () => ipcRenderer.invoke('project:open') as Promise<{
+    path: string;
+    config: any;
+    rootDir: string;
+  } | { error: string } | null>,
+  
+  // Read project file directly
+  read: (path: string) => ipcRenderer.invoke('project:read', path) as Promise<{
+    path: string;
+    config: any;
+    rootDir: string;
+  } | { error: string }>,
+  
+  // Create new project
+  create: (args: { name: string; location?: string }) => ipcRenderer.invoke('project:create', args) as Promise<{
+    ok: boolean;
+    projectFile: string;
+    projectDir: string;
+    name: string;
+  } | { canceled: true } | { error: string }>,
+  
+  // Find project file in directory or parents
+  find: (startDir: string) => ipcRenderer.invoke('project:find', startDir) as Promise<{ path: string | null }>,
+});
+
 export {};

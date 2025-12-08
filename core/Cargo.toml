@@ -16,6 +16,7 @@ tokio = { version = "1.47", features = ["rt-multi-thread","macros","io-std"] }
 lazy_static = "1.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.8"  # For .vpyproj files
 
 [features]
 default = []

@@ -379,9 +379,9 @@ function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ f
   return diags;
 }
 
-// args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number } }
-ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean }) => {
-  const { path, saveIfDirty, autoStart } = args || {} as any;
+// args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; outputPath?: string }
+ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string }) => {
+  const { path, saveIfDirty, autoStart, outputPath } = args || {} as any;
   if (!path) return { error: 'no_path' };
   // Normalize potential file:// URI to local filesystem path (especially on Windows)
   let fsPath = path;
@@ -425,6 +425,22 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   return new Promise(async (resolvePromise) => {
     const outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
     const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
+    
+    // If outputPath is provided (from project), add --out argument
+    // Note: --out specifies the ASM output path, binary is derived from it
+    let finalBinPath = outAsm.replace(/\.asm$/, '.bin');
+    if (outputPath) {
+      // outputPath is the .bin path, derive .asm from it
+      const outAsmFromProject = outputPath.replace(/\.bin$/, '.asm');
+      argsv.push('--out', outAsmFromProject);
+      finalBinPath = outputPath;
+      // Ensure output directory exists
+      const outputDir = join(outputPath, '..');
+      try {
+        await fs.mkdir(outputDir, { recursive: true });
+      } catch {}
+    }
+    
     // Set working directory to project root (three levels up from ide/electron/dist/)
     const projectRoot = join(__dirname, '..', '..', '..');
     
@@ -454,7 +470,8 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         return resolvePromise({ error: 'compile_failed', code, stdout: stdoutBuf, stderr: stderrBuf });
       }
       // Check compilation phases: ASM generation + binary assembly
-      const binPath = outAsm.replace(/\.asm$/, '.bin');
+      // Use finalBinPath which accounts for project output path
+      const binPath = finalBinPath;
       
       // Phase 1: Check if ASM was generated
       mainWindow?.webContents.send('run://status', `✓ Compilation Phase 1: Checking ASM generation...`);
@@ -779,6 +796,186 @@ ipcMain.handle('recents:write', async (_e, list: any[]) => {
   recentsCache = Array.isArray(list) ? list : [];
   await persistRecents();
   return { ok: true };
+});
+
+// ============================================
+// Project Management
+// ============================================
+
+// Open project dialog - returns .vpyproj file path
+ipcMain.handle('project:open', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    title: 'Open Project',
+    filters: [
+      { name: 'VPy Project', extensions: ['vpyproj'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  const projectPath = result.filePaths[0];
+  try {
+    const content = await fs.readFile(projectPath, 'utf-8');
+    // Parse TOML to validate
+    const toml = await import('toml');
+    const parsed = toml.parse(content);
+    return {
+      path: projectPath,
+      config: parsed,
+      rootDir: join(projectPath, '..')
+    };
+  } catch (e: any) {
+    return { error: e.message || 'Failed to parse project file' };
+  }
+});
+
+// Read project file
+ipcMain.handle('project:read', async (_e, projectPath: string) => {
+  try {
+    const content = await fs.readFile(projectPath, 'utf-8');
+    const toml = await import('toml');
+    const parsed = toml.parse(content);
+    return {
+      path: projectPath,
+      config: parsed,
+      rootDir: join(projectPath, '..')
+    };
+  } catch (e: any) {
+    return { error: e.message || 'Failed to read project file' };
+  }
+});
+
+// Create new project
+ipcMain.handle('project:create', async (_e, args: { name: string; location?: string }) => {
+  try {
+    let targetDir: string;
+    
+    if (args.location) {
+      targetDir = args.location;
+    } else {
+      // Ask user for location
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        title: 'Select Project Location',
+        properties: ['openDirectory', 'createDirectory']
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true };
+      }
+      targetDir = result.filePaths[0];
+    }
+    
+    const projectDir = join(targetDir, args.name);
+    const srcDir = join(projectDir, 'src');
+    const assetsDir = join(projectDir, 'assets');
+    const buildDir = join(projectDir, 'build');
+    
+    // Create directories
+    await fs.mkdir(srcDir, { recursive: true });
+    await fs.mkdir(join(assetsDir, 'vectors'), { recursive: true });     // Vector graphics (.vec)
+    await fs.mkdir(join(assetsDir, 'animations'), { recursive: true });  // Animated vector sequences
+    await fs.mkdir(join(assetsDir, 'music'), { recursive: true });       // Music data
+    await fs.mkdir(join(assetsDir, 'sfx'), { recursive: true });         // Sound effects
+    await fs.mkdir(join(assetsDir, 'voices'), { recursive: true });      // Voice samples (AtariVox)
+    await fs.mkdir(buildDir, { recursive: true });
+    
+    // Create project file (TOML)
+    const projectContent = `[project]
+name = "${args.name}"
+version = "0.1.0"
+entry = "src/main.vpy"
+
+[build]
+output = "build/${args.name}.bin"
+optimization = 2
+debug_symbols = true
+
+[sources]
+vpy = ["src/**/*.vpy"]
+
+[resources]
+vectors = ["assets/vectors/*.vec"]
+animations = ["assets/animations/*.anim"]
+music = ["assets/music/*.mus"]
+sfx = ["assets/sfx/*.sfx"]
+voices = ["assets/voices/*.vox"]
+`;
+    const projectFile = join(projectDir, `${args.name}.vpyproj`);
+    await fs.writeFile(projectFile, projectContent, 'utf-8');
+    
+    // Create main.vpy with valid VPy syntax
+    const mainContent = `# ${args.name} - Main entry point
+# VPy game for Vectrex
+
+META TITLE = "${args.name}"
+
+def main():
+    # Called once at startup
+    Set_Intensity(127)
+
+def loop():
+    # Game loop - called every frame
+    Wait_Recal()
+    
+    # Draw something to show it works
+    Move(0, 0)
+    Draw_To(50, 50)
+    Draw_To(-50, 50)
+    Draw_To(-50, -50)
+    Draw_To(50, -50)
+    Draw_To(50, 50)
+`;
+    await fs.writeFile(join(srcDir, 'main.vpy'), mainContent, 'utf-8');
+    
+    // Create .gitignore
+    const gitignore = `# Build artifacts
+/build/
+*.bin
+*.o
+
+# IDE
+.vscode/
+*.swp
+*~
+`;
+    await fs.writeFile(join(projectDir, '.gitignore'), gitignore, 'utf-8');
+    
+    return {
+      ok: true,
+      projectFile,
+      projectDir,
+      name: args.name
+    };
+  } catch (e: any) {
+    return { error: e.message || 'Failed to create project' };
+  }
+});
+
+// Find project file in directory or parents
+ipcMain.handle('project:find', async (_e, startDir: string) => {
+  let current = startDir;
+  const maxDepth = 10; // Prevent infinite loop
+  
+  for (let i = 0; i < maxDepth; i++) {
+    try {
+      const entries = await fs.readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.vpyproj')) {
+          return { path: join(current, entry.name) };
+        }
+      }
+    } catch {
+      // Directory not readable, stop
+      break;
+    }
+    
+    const parent = join(current, '..');
+    if (parent === current) break; // Reached root
+    current = parent;
+  }
+  
+  return { path: null };
 });
 
 // File watcher system

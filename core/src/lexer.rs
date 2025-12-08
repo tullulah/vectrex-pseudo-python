@@ -19,6 +19,8 @@ pub enum TokenKind {
     EqEq, NotEq, Lt, Le, Gt, Ge,
     // Operadores de asignación compuesta
     PlusEqual, MinusEqual, StarEqual, SlashEqual, SlashSlashEqual, PercentEqual,
+    // Multi-archivo e imports
+    From, Import, As, Export,
     Eof,
 }
 
@@ -299,6 +301,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "not" => TokenKind::Not,
                     "True" => TokenKind::True,
                     "False" => TokenKind::False,
+                    "from" => TokenKind::From,
+                    "import" => TokenKind::Import,
+                    "as" => TokenKind::As,
+                    "export" => TokenKind::Export,
                     _ => TokenKind::Identifier(ident.to_string()),
                 };
                 out.push(tok(kind, line_no, start));

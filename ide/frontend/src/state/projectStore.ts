@@ -3,31 +3,96 @@ import { persist } from 'zustand/middleware';
 import type { Project, FileNode } from '../types/models';
 import { logger } from '../utils/logger';
 
+// Lazy import to avoid circular dependency
+let editorStoreRef: any = null;
+const getEditorStore = () => {
+  if (!editorStoreRef) {
+    // Dynamic import would be better but for sync access we use a setter
+  }
+  return editorStoreRef;
+};
+export const setEditorStoreRef = (store: any) => { editorStoreRef = store; };
 interface WorkspaceEntry {
   path: string;
   name: string;
   lastOpened: number;
+  isProject?: boolean; // true if .vpyproj, false if just folder
+  openFiles?: string[]; // List of open file URIs for this project
+  activeFile?: string; // Last active file URI
+}
+
+/**
+ * Project configuration structure (matches .vpyproj TOML)
+ */
+export interface ProjectConfig {
+  project: {
+    name: string;
+    version: string;
+    author?: string;
+    description?: string;
+    entry: string;
+  };
+  build: {
+    output: string;
+    target?: string;
+    optimization?: number;
+    debug_symbols?: boolean;
+  };
+  sources?: {
+    vpy?: string[];
+    c?: string[];
+    asm?: string[];
+  };
+  resources?: {
+    vectors?: string[];
+    data?: string[];
+  };
+  dependencies?: Record<string, string | { path?: string; version?: string }>;
+}
+
+/**
+ * Loaded .vpyproj project
+ */
+export interface LoadedVpyProject {
+  projectFile: string;
+  rootDir: string;
+  config: ProjectConfig;
 }
 
 interface ProjectState {
-  // Current workspace
+  // Current workspace (folder-based, legacy)
   project?: Project;
   selected?: string; // path
   workspaceName?: string;
   
-  // Recent workspaces
+  // Current .vpyproj project (new system)
+  vpyProject?: LoadedVpyProject;
+  
+  // Recent workspaces/projects
   recentWorkspaces: WorkspaceEntry[];
   lastWorkspacePath?: string; // Remember last opened workspace
   
   // Actions
   setProject: (rootPath: string, files: FileNode[], name?: string) => void;
   selectFile: (path: string) => void;
-  addRecentWorkspace: (path: string, name: string) => void;
+  addRecentWorkspace: (path: string, name: string, isProject?: boolean) => void;
   clearWorkspace: () => void;
   clearRecentWorkspaces: () => void;
   hasWorkspace: () => boolean;
   refreshWorkspace: () => Promise<void>;
   restoreLastWorkspace: () => Promise<void>;
+  
+  // New project actions
+  setVpyProject: (project: LoadedVpyProject | undefined) => void;
+  openVpyProject: (projectFile: string) => Promise<boolean>;
+  closeVpyProject: () => void;
+  hasVpyProject: () => boolean;
+  getEntryPath: () => string | null;
+  getOutputPath: () => string | null;
+  
+  // Project state persistence
+  saveProjectState: (projectPath: string, openFiles: string[], activeFile?: string) => void;
+  getProjectState: (projectPath: string) => { openFiles: string[]; activeFile?: string } | null;
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -37,6 +102,7 @@ export const useProjectStore = create<ProjectState>()(
       project: undefined,
       selected: undefined,
       workspaceName: undefined,
+      vpyProject: undefined,
       recentWorkspaces: [],
       lastWorkspacePath: undefined,
       
@@ -51,15 +117,15 @@ export const useProjectStore = create<ProjectState>()(
           selected: undefined,
           lastWorkspacePath: rootPath // Save as last workspace
         });
-        get().addRecentWorkspace(rootPath, workspaceName);
+        get().addRecentWorkspace(rootPath, workspaceName, false);
       },
       
       selectFile: (path) => set({ selected: path }),
       
-      addRecentWorkspace: (path, name) => {
+      addRecentWorkspace: (path, name, isProject = false) => {
         const recent = get().recentWorkspaces;
         const filtered = recent.filter(w => w.path !== path);
-        const newEntry: WorkspaceEntry = { path, name, lastOpened: Date.now() };
+        const newEntry: WorkspaceEntry = { path, name, lastOpened: Date.now(), isProject };
         logger.debug('Project', 'Adding recent workspace', newEntry);
         set({ 
           recentWorkspaces: [newEntry, ...filtered].slice(0, 10) // Keep last 10
@@ -102,6 +168,24 @@ export const useProjectStore = create<ProjectState>()(
       
       restoreLastWorkspace: async () => {
         const lastPath = get().lastWorkspacePath;
+        const recentWorkspaces = get().recentWorkspaces;
+        
+        // First, check if there's a recent .vpyproj project to restore
+        const lastProject = recentWorkspaces.find(w => w.isProject);
+        if (lastProject) {
+          logger.debug('Project', 'Restoring last project:', lastProject.path);
+          try {
+            const success = await get().openVpyProject(lastProject.path);
+            if (success) {
+              logger.info('Project', 'Successfully restored project:', lastProject.name);
+              return;
+            }
+          } catch (error) {
+            logger.warn('Project', 'Failed to restore project, trying workspace fallback');
+          }
+        }
+        
+        // Fallback to regular workspace
         if (!lastPath) return;
         
         try {
@@ -126,11 +210,152 @@ export const useProjectStore = create<ProjectState>()(
           set({ lastWorkspacePath: undefined });
         }
       },
+      
+      // New .vpyproj project functions
+      setVpyProject: (project) => {
+        set({ vpyProject: project });
+        if (project) {
+          // Update window title
+          document.title = `${project.config.project.name} - VPy IDE`;
+          // Add to recents
+          get().addRecentWorkspace(project.projectFile, project.config.project.name, true);
+        } else {
+          document.title = 'VPy IDE';
+        }
+      },
+      
+      openVpyProject: async (projectFile: string) => {
+        const projectAPI = (window as any).project;
+        if (!projectAPI) {
+          logger.error('Project', 'Project API not available');
+          return false;
+        }
+        
+        try {
+          const result = await projectAPI.read(projectFile);
+          
+          if ('error' in result) {
+            logger.error('Project', 'Failed to open project:', result.error);
+            return false;
+          }
+          
+          const loaded: LoadedVpyProject = {
+            projectFile: result.path,
+            rootDir: result.rootDir,
+            config: result.config as ProjectConfig,
+          };
+          
+          get().setVpyProject(loaded);
+          
+          // Also set as workspace for file explorer
+          const files = await (window as any).files?.readDirectory?.(loaded.rootDir);
+          if (files?.files) {
+            set({
+              project: { rootPath: loaded.rootDir, files: files.files },
+              workspaceName: loaded.config.project.name,
+              lastWorkspacePath: loaded.rootDir
+            });
+          }
+          
+          logger.info('Project', 'Opened project:', loaded.config.project.name);
+          return true;
+        } catch (e: any) {
+          logger.error('Project', 'Failed to open project:', e.message);
+          return false;
+        }
+      },
+      
+      closeVpyProject: () => {
+        const { vpyProject, saveProjectState } = get();
+        
+        // Save current open files before closing
+        if (vpyProject && editorStoreRef) {
+          const { documents, active } = editorStoreRef.getState();
+          const openFiles = documents
+            .filter((d: any) => d.diskPath) // Only files on disk
+            .map((d: any) => d.uri);
+          saveProjectState(vpyProject.projectFile, openFiles, active);
+        }
+        
+        // Clear both vpyProject and the workspace/file tree
+        set({ 
+          vpyProject: undefined,
+          project: { rootPath: '', files: [] },
+          workspaceName: undefined,
+          selected: undefined,
+        });
+        document.title = 'VPy IDE';
+        logger.info('Project', 'Project and workspace closed');
+      },
+      
+      hasVpyProject: () => !!get().vpyProject,
+      
+      getEntryPath: () => {
+        const { vpyProject } = get();
+        if (!vpyProject) return null;
+        
+        const entry = vpyProject.config.project.entry;
+        const rootDir = vpyProject.rootDir.replace(/\\/g, '/');
+        const entryPath = entry.replace(/\\/g, '/');
+        
+        if (entryPath.startsWith('/') || entryPath.match(/^[A-Z]:/i)) {
+          return entryPath;
+        }
+        
+        return `${rootDir}/${entryPath}`;
+      },
+      
+      getOutputPath: () => {
+        const { vpyProject } = get();
+        if (!vpyProject) return null;
+        
+        const output = vpyProject.config.build.output;
+        const rootDir = vpyProject.rootDir.replace(/\\/g, '/');
+        const outputPath = output.replace(/\\/g, '/');
+        
+        if (outputPath.startsWith('/') || outputPath.match(/^[A-Z]:/i)) {
+          return outputPath;
+        }
+        
+        return `${rootDir}/${outputPath}`;
+      },
+      
+      // Save open files state for a project
+      saveProjectState: (projectPath: string, openFiles: string[], activeFile?: string) => {
+        const recents = get().recentWorkspaces;
+        const updated = recents.map(w => 
+          w.path === projectPath 
+            ? { ...w, openFiles, activeFile, lastOpened: Date.now() }
+            : w
+        );
+        set({ recentWorkspaces: updated });
+        logger.debug('Project', 'Saved project state', { projectPath, openFiles: openFiles.length, activeFile });
+      },
+      
+      // Get saved state for a project
+      getProjectState: (projectPath: string) => {
+        const recents = get().recentWorkspaces;
+        const project = recents.find(w => w.path === projectPath);
+        if (project?.openFiles) {
+          return { 
+            openFiles: project.openFiles, 
+            activeFile: project.activeFile 
+          };
+        }
+        return null;
+      },
     }),
     {
       name: 'vpy-workspace-storage',
       partialize: (state) => ({ 
-        recentWorkspaces: state.recentWorkspaces,
+        recentWorkspaces: state.recentWorkspaces.map(w => ({
+          path: w.path,
+          name: w.name,
+          lastOpened: w.lastOpened,
+          isProject: w.isProject,
+          openFiles: w.openFiles,
+          activeFile: w.activeFile
+        })),
         lastWorkspacePath: state.lastWorkspacePath
       })
     }

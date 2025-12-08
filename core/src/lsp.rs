@@ -296,6 +296,140 @@ fn parse_lexer_error(msg: &str) -> Option<(u32, u32, String)> {
     None
 }
 
+/// Validate import statements and report errors for unresolved modules
+fn validate_import_statement(uri: &Url, line: &str, line_num: u32, _locale: &str, diags: &mut Vec<Diagnostic>) {
+    let trimmed = line.trim();
+    
+    // Check "from X import Y" syntax
+    if trimmed.starts_with("from ") {
+        if let Some(after_from) = trimmed.strip_prefix("from ") {
+            let parts: Vec<&str> = after_from.splitn(2, " import ").collect();
+            if parts.len() == 2 {
+                let module_path = parts[0].trim();
+                
+                // Try to resolve the module
+                if let Ok(current_path) = uri.to_file_path() {
+                    if let Some(current_dir) = current_path.parent() {
+                        let resolved = resolve_module_path_for_diagnostic(module_path, current_dir);
+                        if !resolved {
+                            diags.push(Diagnostic {
+                                range: Range {
+                                    start: Position { line: line_num, character: 5 },
+                                    end: Position { line: line_num, character: 5 + module_path.len() as u32 },
+                                },
+                                severity: Some(DiagnosticSeverity::ERROR),
+                                code: None,
+                                code_description: None,
+                                source: Some("vpy".into()),
+                                message: format!("Cannot resolve module '{}'. Check that the file exists.", module_path),
+                                related_information: None,
+                                tags: None,
+                                data: None,
+                            });
+                        }
+                    }
+                }
+            } else if !after_from.contains(" import ") {
+                // Missing "import" keyword
+                diags.push(Diagnostic {
+                    range: Range {
+                        start: Position { line: line_num, character: 0 },
+                        end: Position { line: line_num, character: line.len() as u32 },
+                    },
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: None,
+                    code_description: None,
+                    source: Some("vpy".into()),
+                    message: "Invalid import syntax. Use: from module import symbol".to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
+        }
+    }
+    
+    // Check "import X" syntax
+    if trimmed.starts_with("import ") && !trimmed.contains(" as ") {
+        // Simple import validation
+        if let Some(module_name) = trimmed.strip_prefix("import ") {
+            let module_name = module_name.trim();
+            if module_name.is_empty() {
+                diags.push(Diagnostic {
+                    range: Range {
+                        start: Position { line: line_num, character: 0 },
+                        end: Position { line: line_num, character: line.len() as u32 },
+                    },
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: None,
+                    code_description: None,
+                    source: Some("vpy".into()),
+                    message: "Missing module name after 'import'".to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
+        }
+    }
+}
+
+/// Helper to resolve module path for diagnostic purposes
+fn resolve_module_path_for_diagnostic(module_path: &str, current_dir: &std::path::Path) -> bool {
+    // Handle relative imports (starting with .)
+    let (is_relative, clean_path) = if module_path.starts_with('.') {
+        let level = module_path.chars().take_while(|c| *c == '.').count();
+        let rest = module_path.trim_start_matches('.');
+        (true, (level, rest))
+    } else {
+        (false, (0, module_path))
+    };
+    
+    let (level, path_str) = clean_path;
+    let mut target_dir = current_dir.to_path_buf();
+    
+    if is_relative {
+        // Go up directories based on level
+        for _ in 1..level {
+            if let Some(parent) = target_dir.parent() {
+                target_dir = parent.to_path_buf();
+            } else {
+                return false;
+            }
+        }
+    } else {
+        // Absolute import - try from src/ directory
+        let mut search_dir = current_dir.to_path_buf();
+        while !search_dir.ends_with("src") && search_dir.parent().is_some() {
+            search_dir = search_dir.parent().unwrap().to_path_buf();
+        }
+        if search_dir.ends_with("src") {
+            target_dir = search_dir;
+        }
+    }
+    
+    // Add module path components
+    for part in path_str.split('.') {
+        if !part.is_empty() {
+            target_dir = target_dir.join(part);
+        }
+    }
+    
+    // Try with .vpy extension
+    let with_ext = target_dir.with_extension("vpy");
+    if with_ext.exists() {
+        return true;
+    }
+    
+    // Try as directory with __init__.vpy
+    let init_file = target_dir.join("__init__.vpy");
+    if init_file.exists() {
+        return true;
+    }
+    
+    false
+}
+
 // Function call parser for arity validation - VPy uses Python-style syntax with parentheses
 fn validate_function_arity(original_line: &str, line_num: u32, locale: &str, diags: &mut Vec<Diagnostic>) {
     // VPy should use Python-style function calls: FUNCTION(arg1, arg2, ...)
@@ -498,6 +632,9 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
             
             // Additional validation only if lexing succeeded
             for (i, line_txt) in text.lines().enumerate() {
+                // Validate import statements
+                validate_import_statement(uri, line_txt, i as u32, locale, &mut diags);
+                
                 // Specific POLYGON count 2 warning
                 if line_txt.contains("POLYGON") && line_txt.contains(" 2") {
                     diags.push(Diagnostic { 
@@ -553,6 +690,119 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
     diags
 }
 
+impl Backend {
+    /// Resolve an import target - find the file and symbol location for an imported name
+    fn resolve_import_target(&self, text: &str, symbol_name: &str, current_uri: &Url) -> Option<Location> {
+        // Parse import statements from the current file
+        // Look for: from X import Y or from X import Y as Z
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("from ") { continue; }
+            
+            // Parse: from module import symbol1, symbol2 as alias
+            let after_from = trimmed.strip_prefix("from ")?;
+            let parts: Vec<&str> = after_from.splitn(2, " import ").collect();
+            if parts.len() != 2 { continue; }
+            
+            let module_path = parts[0].trim();
+            let imports_str = parts[1].trim();
+            
+            // Check if our symbol is in the import list
+            for import_item in imports_str.split(',') {
+                let import_item = import_item.trim();
+                // Handle "X as Y" syntax
+                let (original_name, alias) = if import_item.contains(" as ") {
+                    let as_parts: Vec<&str> = import_item.splitn(2, " as ").collect();
+                    (as_parts[0].trim(), Some(as_parts[1].trim()))
+                } else {
+                    (import_item, None)
+                };
+                
+                // Check if this matches our symbol (either by alias or original name)
+                let matches = alias.map(|a| a == symbol_name).unwrap_or(original_name == symbol_name);
+                if !matches { continue; }
+                
+                // Resolve module path to file
+                if let Some(target_uri) = self.resolve_module_to_uri(module_path, current_uri) {
+                    // Look for the symbol definition in the target file
+                    let symbols = SYMBOLS.lock().unwrap();
+                    if let Some(def) = symbols.iter().find(|d| d.name == original_name && d.uri == target_uri) {
+                        return Some(Location { uri: def.uri.clone(), range: def.range.clone() });
+                    }
+                    // If symbol not found in SYMBOLS, return start of file
+                    return Some(Location {
+                        uri: target_uri,
+                        range: Range {
+                            start: Position { line: 0, character: 0 },
+                            end: Position { line: 0, character: 0 },
+                        },
+                    });
+                }
+            }
+        }
+        None
+    }
+    
+    /// Resolve a module path (like "utils" or "utils.math") to a file URI
+    fn resolve_module_to_uri(&self, module_path: &str, current_uri: &Url) -> Option<Url> {
+        // Get the directory of the current file
+        let current_path = current_uri.to_file_path().ok()?;
+        let current_dir = current_path.parent()?;
+        
+        // Handle relative imports (starting with .)
+        let (is_relative, clean_path) = if module_path.starts_with('.') {
+            let level = module_path.chars().take_while(|c| *c == '.').count();
+            let rest = module_path.trim_start_matches('.');
+            (true, (level, rest))
+        } else {
+            (false, (0, module_path))
+        };
+        
+        let (level, path_str) = clean_path;
+        
+        // Build the target path
+        let mut target_dir = current_dir.to_path_buf();
+        
+        if is_relative {
+            // Go up directories based on level
+            for _ in 1..level {
+                target_dir = target_dir.parent()?.to_path_buf();
+            }
+        } else {
+            // Absolute import - try from src/ directory
+            // Go up until we find src/ or use current dir
+            let mut search_dir = current_dir.to_path_buf();
+            while !search_dir.ends_with("src") && search_dir.parent().is_some() {
+                search_dir = search_dir.parent().unwrap().to_path_buf();
+            }
+            if search_dir.ends_with("src") {
+                target_dir = search_dir;
+            }
+        }
+        
+        // Add module path components
+        for part in path_str.split('.') {
+            if !part.is_empty() {
+                target_dir = target_dir.join(part);
+            }
+        }
+        
+        // Try with .vpy extension
+        let with_ext = target_dir.with_extension("vpy");
+        if with_ext.exists() {
+            return Url::from_file_path(&with_ext).ok();
+        }
+        
+        // Try as directory with __init__.vpy
+        let init_file = target_dir.join("__init__.vpy");
+        if init_file.exists() {
+            return Url::from_file_path(&init_file).ok();
+        }
+        
+        None
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
@@ -580,7 +830,12 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> LspResult<()> { Ok(()) }
     async fn did_open(&self, params: DidOpenTextDocumentParams) { let uri = params.text_document.uri; let text = params.text_document.text; self.docs.lock().unwrap().insert(uri.clone(), text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; }
     async fn did_change(&self, params: DidChangeTextDocumentParams) { let uri = params.text_document.uri; if let Some(change) = params.content_changes.into_iter().last() { self.docs.lock().unwrap().insert(uri.clone(), change.text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &change.text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; } }
-    async fn completion(&self, _params: CompletionParams) -> LspResult<Option<CompletionResponse>> { 
+    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> { 
+        let uri = params.text_document_position.text_document.uri;
+        let docs = self.docs.lock().unwrap();
+        let text = docs.get(&uri).cloned().unwrap_or_default();
+        drop(docs);
+        
         // Funciones unificadas (global + vectorlist) y palabras clave VPy
         let unified_items = [ 
             // Funciones unificadas (funcionan en ambos contextos)
@@ -591,7 +846,9 @@ impl LanguageServer for Backend {
             // Declaraciones y estructuras VPy
             "VECTORLIST","CONST","VAR","META","TITLE","MUSIC","COPYRIGHT",
             // Palabras clave de control
-            "def","for","while","if","switch"
+            "def","for","while","if","switch",
+            // Import keywords
+            "from","import","export","as"
         ];
         
         // Funciones específicas de vectorlist
@@ -624,6 +881,63 @@ impl LanguageServer for Backend {
             });
         }
         
+        // Add user-defined functions from current file and all open files
+        let symbols = SYMBOLS.lock().unwrap();
+        for def in symbols.iter() {
+            // Add all known user functions
+            items.push(CompletionItem {
+                label: def.name.clone(),
+                kind: Some(CompletionItemKind::FUNCTION),
+                insert_text: Some(format!("{}($0)", def.name)),
+                insert_text_format: Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET),
+                detail: if def.uri == uri {
+                    Some("Function (current file)".to_string())
+                } else {
+                    Some(format!("Function ({})", def.uri.path().rsplit('/').next().unwrap_or("")))
+                },
+                ..Default::default()
+            });
+        }
+        drop(symbols);
+        
+        // Add symbols from imports
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("from ") { continue; }
+            
+            // Parse: from module import symbol1, symbol2 as alias
+            if let Some(after_from) = trimmed.strip_prefix("from ") {
+                let parts: Vec<&str> = after_from.splitn(2, " import ").collect();
+                if parts.len() != 2 { continue; }
+                
+                let module_name = parts[0].trim();
+                let imports_str = parts[1].trim();
+                
+                // Add imported symbols to completions
+                for import_item in imports_str.split(',') {
+                    let import_item = import_item.trim();
+                    // Handle "X as Y" syntax - use alias as label
+                    let label = if import_item.contains(" as ") {
+                        import_item.split(" as ").last().unwrap_or(import_item).trim()
+                    } else {
+                        import_item
+                    };
+                    
+                    // Only add if not already in items
+                    if !items.iter().any(|i| i.label == label) {
+                        items.push(CompletionItem {
+                            label: label.to_string(),
+                            kind: Some(CompletionItemKind::FUNCTION),
+                            insert_text: Some(format!("{}($0)", label)),
+                            insert_text_format: Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET),
+                            detail: Some(format!("Imported from {}", module_name)),
+                            ..Default::default()
+                        });
+                    }
+                }
+            }
+        }
+        
         Ok(Some(CompletionResponse::Array(items))) 
     }
     async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> LspResult<Option<SemanticTokensResult>> {
@@ -631,20 +945,116 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
         eprintln!("[vpy_lsp][hover] request pos= {:?} uri= {}", params.text_document_position_params.position, params.text_document_position_params.text_document.uri);
         let pos = params.text_document_position_params.position; let uri = params.text_document_position_params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t)=>t.clone(), None=>return Ok(None) }; drop(docs); let line = text.lines().nth(pos.line as usize).unwrap_or(""); let chars: Vec<char> = line.chars().collect(); if (pos.character as usize) > chars.len() { return Ok(None); } let mut start = pos.character as isize; let mut end = pos.character as usize; while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; } while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; } if start as usize >= end { return Ok(None); } let word = &line[start as usize .. end]; let upper = word.to_ascii_uppercase(); let loc = self.locale.lock().unwrap().clone(); if let Some(doc) = builtin_doc(&loc, &upper) { return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: doc }), range: None })); } if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) { let template = tr(&loc, "hover.user_function.line"); let value = template.replacen("{}", &def.name, 1).replacen("{}", &(def.range.start.line + 1).to_string(), 1); return Ok(Some(Hover { contents: HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value }), range: Some(def.range.clone()) })); } Ok(None) }
-    async fn goto_definition(&self, params: GotoDefinitionParams) -> LspResult<Option<GotoDefinitionResponse>> { let pos = params.text_document_position_params.position; let uri = params.text_document_position_params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t)=>t.clone(), None=>return Ok(None) }; drop(docs); let line = text.lines().nth(pos.line as usize).unwrap_or(""); let chars: Vec<char> = line.chars().collect(); if (pos.character as usize) > chars.len() { return Ok(None); } let mut start = pos.character as isize; let mut end = pos.character as usize; while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; } while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; } if start as usize >= end { return Ok(None); } let word = &line[start as usize .. end]; if let Some(def) = SYMBOLS.lock().unwrap().iter().find(|d| d.name == word && d.uri == uri) { return Ok(Some(GotoDefinitionResponse::Scalar(Location { uri: def.uri.clone(), range: def.range.clone() }))); } Ok(None) }
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> LspResult<Option<GotoDefinitionResponse>> {
+        let pos = params.text_document_position_params.position;
+        let uri = params.text_document_position_params.text_document.uri;
+        let docs = self.docs.lock().unwrap();
+        let text = match docs.get(&uri) { Some(t) => t.clone(), None => return Ok(None) };
+        drop(docs);
+        
+        let line = text.lines().nth(pos.line as usize).unwrap_or("");
+        let chars: Vec<char> = line.chars().collect();
+        if (pos.character as usize) > chars.len() { return Ok(None); }
+        
+        let mut start = pos.character as isize;
+        let mut end = pos.character as usize;
+        while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; }
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; }
+        if start as usize >= end { return Ok(None); }
+        
+        let word = &line[start as usize .. end];
+        let symbols = SYMBOLS.lock().unwrap();
+        
+        // First, try to find in current file
+        if let Some(def) = symbols.iter().find(|d| d.name == word && d.uri == uri) {
+            return Ok(Some(GotoDefinitionResponse::Scalar(Location { uri: def.uri.clone(), range: def.range.clone() })));
+        }
+        
+        // Then, try to find in any other file (cross-file navigation)
+        if let Some(def) = symbols.iter().find(|d| d.name == word) {
+            return Ok(Some(GotoDefinitionResponse::Scalar(Location { uri: def.uri.clone(), range: def.range.clone() })));
+        }
+        
+        // Check if this is an imported symbol - try to resolve from import statement
+        if let Some(import_target) = self.resolve_import_target(&text, word, &uri) {
+            return Ok(Some(GotoDefinitionResponse::Scalar(import_target)));
+        }
+        
+        Ok(None)
+    }
 
-    async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> { let pos = params.text_document_position.position; let uri = params.text_document_position.text_document.uri; let new_name = params.new_name; let docs_guard = self.docs.lock().unwrap(); let text = match docs_guard.get(&uri) { Some(t)=>t.clone(), None=>return Ok(None) }; drop(docs_guard); let line = text.lines().nth(pos.line as usize).unwrap_or(""); let chars: Vec<char> = line.chars().collect(); if (pos.character as usize) > chars.len() { return Ok(None); } let mut start = pos.character as isize; let mut end = pos.character as usize; while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; } while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; } if start as usize >= end { return Ok(None); } let original = &line[start as usize .. end]; if original.is_empty() || new_name.is_empty() { return Ok(None); } // restrict: only rename if it's a recorded function symbol
-        let symbols = SYMBOLS.lock().unwrap(); let maybe_def = symbols.iter().find(|d| d.name == original && d.uri == uri); if maybe_def.is_none() { return Ok(None); } drop(symbols); // compute all ranges in doc exactly matching original
-        let mut edits: Vec<TextEdit> = Vec::new(); for (line_idx, line_txt) in text.lines().enumerate() { let mut search_idx: usize = 0; let bytes = line_txt.as_bytes(); while search_idx < bytes.len() { if line_txt[search_idx..].starts_with(original) { // boundary check
-                    let before_ok = if search_idx==0 { true } else { !line_txt.as_bytes()[search_idx-1].is_ascii_alphanumeric() && line_txt.as_bytes()[search_idx-1] != b'_' };
-                    let after_pos = search_idx + original.len(); let after_ok = if after_pos>=bytes.len() { true } else { !line_txt.as_bytes()[after_pos].is_ascii_alphanumeric() && line_txt.as_bytes()[after_pos] != b'_' };
-                    if before_ok && after_ok { edits.push(TextEdit { range: Range { start: Position { line: line_idx as u32, character: search_idx as u32 }, end: Position { line: line_idx as u32, character: (search_idx + original.len()) as u32 } }, new_text: new_name.clone() }); }
-                    search_idx += original.len();
-                } else { search_idx += 1; }
+    async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
+        let pos = params.text_document_position.position;
+        let uri = params.text_document_position.text_document.uri;
+        let new_name = params.new_name;
+        let docs_guard = self.docs.lock().unwrap();
+        let all_docs: Vec<(Url, String)> = docs_guard.iter().map(|(u, t)| (u.clone(), t.clone())).collect();
+        let text = match docs_guard.get(&uri) { Some(t) => t.clone(), None => return Ok(None) };
+        drop(docs_guard);
+        
+        let line = text.lines().nth(pos.line as usize).unwrap_or("");
+        let chars: Vec<char> = line.chars().collect();
+        if (pos.character as usize) > chars.len() { return Ok(None); }
+        
+        let mut start = pos.character as isize;
+        let mut end = pos.character as usize;
+        while start > 0 && (chars[(start-1) as usize].is_alphanumeric() || chars[(start-1) as usize]=='_') { start -= 1; }
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end]=='_') { end += 1; }
+        if start as usize >= end { return Ok(None); }
+        
+        let original = &line[start as usize .. end];
+        if original.is_empty() || new_name.is_empty() { return Ok(None); }
+        
+        // Check if it's a recorded function symbol (in any file)
+        let symbols = SYMBOLS.lock().unwrap();
+        let maybe_def = symbols.iter().find(|d| d.name == original);
+        if maybe_def.is_none() { return Ok(None); }
+        drop(symbols);
+        
+        // Collect edits for ALL open files that reference this symbol
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        
+        for (doc_uri, doc_text) in &all_docs {
+            let mut edits: Vec<TextEdit> = Vec::new();
+            
+            for (line_idx, line_txt) in doc_text.lines().enumerate() {
+                let mut search_idx: usize = 0;
+                let bytes = line_txt.as_bytes();
+                
+                while search_idx < bytes.len() {
+                    if line_txt[search_idx..].starts_with(original) {
+                        // Boundary check
+                        let before_ok = if search_idx == 0 { true } 
+                            else { !line_txt.as_bytes()[search_idx-1].is_ascii_alphanumeric() && line_txt.as_bytes()[search_idx-1] != b'_' };
+                        let after_pos = search_idx + original.len();
+                        let after_ok = if after_pos >= bytes.len() { true } 
+                            else { !line_txt.as_bytes()[after_pos].is_ascii_alphanumeric() && line_txt.as_bytes()[after_pos] != b'_' };
+                        
+                        if before_ok && after_ok {
+                            edits.push(TextEdit {
+                                range: Range {
+                                    start: Position { line: line_idx as u32, character: search_idx as u32 },
+                                    end: Position { line: line_idx as u32, character: (search_idx + original.len()) as u32 }
+                                },
+                                new_text: new_name.clone()
+                            });
+                        }
+                        search_idx += original.len();
+                    } else {
+                        search_idx += 1;
+                    }
+                }
+            }
+            
+            if !edits.is_empty() {
+                changes.insert(doc_uri.clone(), edits);
             }
         }
-        if edits.is_empty() { return Ok(None); }
-        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new(); changes.insert(uri.clone(), edits); Ok(Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None })) }
+        
+        if changes.is_empty() { return Ok(None); }
+        
+        Ok(Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }))
+    }
 
     async fn signature_help(&self, params: SignatureHelpParams) -> LspResult<Option<SignatureHelp>> { let pos = params.text_document_position_params.position; let uri = params.text_document_position_params.text_document.uri; let docs = self.docs.lock().unwrap(); let text = match docs.get(&uri) { Some(t)=>t.clone(), None=>return Ok(None) }; drop(docs); // Find the current line up to cursor and count commas after last '('
         let line = text.lines().nth(pos.line as usize).unwrap_or(""); let prefix = &line[..std::cmp::min(pos.character as usize, line.len())]; // Find last '('

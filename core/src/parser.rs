@@ -63,6 +63,10 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::SlashEqual => "'/='".to_string(),
         TokenKind::SlashSlashEqual => "'//='".to_string(),
         TokenKind::PercentEqual => "'%='".to_string(),
+        TokenKind::From => "'from'".to_string(),
+        TokenKind::Import => "'import'".to_string(),
+        TokenKind::As => "'as'".to_string(),
+        TokenKind::Export => "'export'".to_string(),
         TokenKind::Identifier(_) => "identifier".to_string(),
         TokenKind::Number(_) => "number".to_string(),
         TokenKind::StringLit(_) => "string".to_string(),
@@ -109,6 +113,7 @@ impl<'a> Parser<'a> {
     fn parse_module(&mut self) -> Result<Module> {
         let mut items = Vec::new();
         let mut meta = ModuleMeta::default();
+        let mut imports = Vec::new();
     while !self.check(TokenKind::Eof) {
             // skip structural noise
             while self.match_kind(&TokenKind::Newline) {}
@@ -146,6 +151,21 @@ impl<'a> Parser<'a> {
                 // if keyword matched as identifier the token already consumed. If actual keyword token kind consumed above.
                 let vl = self.parse_vectorlist()?; items.push(vl); continue;
             }
+            
+            // Import statements: from X import Y, import X
+            if self.check(TokenKind::From) || self.check(TokenKind::Import) {
+                let import_decl = self.parse_import()?;
+                imports.push(import_decl);
+                continue;
+            }
+            
+            // Export statement: export symbol1, symbol2
+            if self.check(TokenKind::Export) {
+                let export = self.parse_export()?;
+                items.push(export);
+                continue;
+            }
+            
             if self.check(TokenKind::Def) { items.push(self.function()?); continue; }
             
             // Permitir expression statements en top-level (llamadas a funciones, etc.)
@@ -158,7 +178,7 @@ impl<'a> Parser<'a> {
             
             return self.err_here(&format!("Unexpected token {:?} at top-level", self.peek().kind));
         }
-        Ok(Module { items, meta })
+        Ok(Module { items, meta, imports })
     }
 
     // --- vectorlist ---
@@ -544,4 +564,126 @@ impl<'a> Parser<'a> {
         while self.match_kind(&TokenKind::Newline) {}
     }
     fn err_here<T>(&self, msg:&str) -> Result<T> { let tk=self.peek(); bail!("{}:{}:{}: error: {}", self.filename, tk.line, tk.col, msg) }
+    
+    // --- Import parsing ---
+    // Supports:
+    //   from module.path import symbol1, symbol2 as alias
+    //   from .relative import symbol
+    //   from ..parent import symbol
+    //   import module
+    //   import module as alias
+    fn parse_import(&mut self) -> Result<crate::ast::ImportDecl> {
+        use crate::ast::{ImportDecl, ImportSymbols, ImportedSymbol};
+        
+        let source_line = self.peek().line;
+        let mut is_relative = false;
+        let mut relative_level = 0;
+        let mut module_path = Vec::new();
+        
+        if self.match_kind(&TokenKind::From) {
+            // from X import Y
+            
+            // Check for relative imports (. or ..)
+            while self.check(TokenKind::Dot) {
+                self.advance();
+                is_relative = true;
+                relative_level += 1;
+            }
+            
+            // Parse module path (module.submodule.etc)
+            if let Some(first) = self.try_identifier() {
+                module_path.push(first);
+                while self.match_kind(&TokenKind::Dot) {
+                    let part = self.identifier()?;
+                    module_path.push(part);
+                }
+            }
+            
+            // Consume 'import'
+            self.consume(TokenKind::Import)?;
+            
+            // Check for 'import *'
+            if self.match_kind(&TokenKind::Star) {
+                self.consume(TokenKind::Newline)?;
+                return Ok(ImportDecl {
+                    module_path,
+                    symbols: ImportSymbols::All,
+                    source_line,
+                    is_relative,
+                    relative_level,
+                });
+            }
+            
+            // Parse named imports: symbol1, symbol2 as alias, ...
+            let mut symbols = Vec::new();
+            loop {
+                let name = self.identifier()?;
+                let alias = if self.match_kind(&TokenKind::As) {
+                    Some(self.identifier()?)
+                } else {
+                    None
+                };
+                symbols.push(ImportedSymbol { name, alias });
+                
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            
+            self.consume(TokenKind::Newline)?;
+            Ok(ImportDecl {
+                module_path,
+                symbols: ImportSymbols::Named(symbols),
+                source_line,
+                is_relative,
+                relative_level,
+            })
+        } else if self.match_kind(&TokenKind::Import) {
+            // import module as alias
+            let first = self.identifier()?;
+            module_path.push(first);
+            while self.match_kind(&TokenKind::Dot) {
+                let part = self.identifier()?;
+                module_path.push(part);
+            }
+            
+            let alias = if self.match_kind(&TokenKind::As) {
+                Some(self.identifier()?)
+            } else {
+                None
+            };
+            
+            self.consume(TokenKind::Newline)?;
+            Ok(ImportDecl {
+                module_path,
+                symbols: ImportSymbols::Module { alias },
+                source_line,
+                is_relative: false,
+                relative_level: 0,
+            })
+        } else {
+            self.err_here("Expected 'from' or 'import'")
+        }
+    }
+    
+    // --- Export parsing ---
+    // Supports: export symbol1, symbol2, ...
+    fn parse_export(&mut self) -> Result<Item> {
+        use crate::ast::ExportDecl;
+        
+        let source_line = self.peek().line;
+        self.consume(TokenKind::Export)?;
+        
+        let mut symbols = Vec::new();
+        loop {
+            let name = self.identifier()?;
+            symbols.push(name);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        
+        self.consume(TokenKind::Newline)?;
+        Ok(Item::Export(ExportDecl { symbols, source_line }))
+    }
 }

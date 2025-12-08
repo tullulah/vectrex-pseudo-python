@@ -109,27 +109,83 @@ const openWorkspaceDialog = async (setProject: any) => {
 const QuickActions: React.FC = () => {
   const { setProject } = useProjectStore();
   
-  const newFile = () => {
+  const newVpyFile = () => {
     try {
       const st = (useEditorStore as any).getState();
       let idx = 1; let uri: string;
       while (true) { uri = `inmemory://untitled-${idx}.vpy`; if (!st.documents.some((d:any)=>d.uri===uri)) break; idx++; }
-      st.openDocument({ uri, language:'vpy', content:'', dirty:false, diagnostics:[], lastSavedContent:'' });
+      st.openDocument({ uri, language:'vpy', content:'# New VPy file\n\ndef main():\n    # Initialization\n    Set_Intensity(127)\n\ndef loop():\n    # Game loop\n    Wait_Recal()\n', dirty:true, diagnostics:[], lastSavedContent:'' });
+    } catch {}
+  };
+
+  const newVecFile = () => {
+    try {
+      const st = (useEditorStore as any).getState();
+      let idx = 1; let uri: string;
+      while (true) { uri = `inmemory://untitled-${idx}.vec`; if (!st.documents.some((d:any)=>d.uri===uri)) break; idx++; }
+      const defaultVec = {
+        version: '1.0',
+        name: 'untitled',
+        author: '',
+        created: new Date().toISOString(),
+        canvas: { width: 256, height: 256, origin: 'center' },
+        layers: [{ name: 'drawing', visible: true, paths: [] }],
+        animations: [],
+        metadata: { hitbox: null, origin: null, tags: [] },
+      };
+      st.openDocument({ uri, language:'json', content: JSON.stringify(defaultVec, null, 2), dirty:true, diagnostics:[], lastSavedContent:'' });
+    } catch {}
+  };
+
+  const newMusicFile = () => {
+    try {
+      const st = (useEditorStore as any).getState();
+      let idx = 1; let uri: string;
+      while (true) { uri = `inmemory://untitled-${idx}.vmus`; if (!st.documents.some((d:any)=>d.uri===uri)) break; idx++; }
+      const defaultMusic = {
+        version: '1.0',
+        name: 'Untitled',
+        author: '',
+        tempo: 120,
+        ticksPerBeat: 24,
+        totalTicks: 384,
+        notes: [],
+        noise: [],
+        loopStart: 0,
+        loopEnd: 384,
+      };
+      st.openDocument({ uri, language:'json', content: JSON.stringify(defaultMusic, null, 2), dirty:true, diagnostics:[], lastSavedContent:'' });
     } catch {}
   };
 
   const openWorkspace = () => openWorkspaceDialog(setProject);
+  
+  const newProject = () => {
+    // Dispatch command to open new project dialog
+    window.dispatchEvent(new CustomEvent('vpy-command', { detail: { command: 'project.new' } }));
+  };
+  
+  const openProject = () => {
+    window.dispatchEvent(new CustomEvent('vpy-command', { detail: { command: 'project.open' } }));
+  };
 
   return (
     <div className="vpy-welcome-actions">
       <div className="vpy-action-group">
+        <div className="group-title">Proyecto</div>
+        <button className="vpy-btn primary" onClick={newProject}>🎮 Nuevo Proyecto...</button>
+        <button className="vpy-btn" onClick={openProject}>📂 Abrir Proyecto...</button>
+      </div>
+      <div className="vpy-action-group">
         <div className="group-title">Workspace</div>
-        <button className="vpy-btn primary" onClick={openWorkspace}>📁 Abrir Workspace...</button>
+        <button className="vpy-btn" onClick={openWorkspace}>📁 Abrir Carpeta...</button>
       </div>
       <div className="vpy-action-group">
         <div className="group-title">Archivo</div>
-        <button className="vpy-btn" onClick={() => { try { (window as any).api?.files?.openFile?.(); } catch {} }}>📄 Abrir archivo...</button>
-        <button className="vpy-btn" onClick={newFile}>✨ Nuevo archivo</button>
+        <button className="vpy-btn" onClick={() => { try { (window as any).files?.openFile?.(); } catch {} }}>📄 Abrir archivo...</button>
+        <button className="vpy-btn" onClick={newVpyFile}>✨ Nuevo archivo VPy</button>
+        <button className="vpy-btn" onClick={newVecFile}>🎨 Nuevo archivo Vector</button>
+        <button className="vpy-btn" onClick={newMusicFile}>🎵 Nuevo archivo Música</button>
       </div>
     </div>
   );

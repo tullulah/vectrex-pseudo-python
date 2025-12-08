@@ -37,7 +37,8 @@
     "wait-on": "^7.0.1"
   },
   "dependencies": {
-    "pseudo-python": "file:../.."
+    "pseudo-python": "file:../..",
+    "toml": "^3.0.0"
   },
   "build": {
     "appId": "com.vectrex.vpy-ide",
@@ -55,27 +56,40 @@
       {
         "from": "resources",
         "to": ".",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../frontend/dist",
         "to": "frontend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.ico"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development",
       "icon": "build/icons",
       "maintainer": "Daniel Ferrer <tullulah@gmail.com>"

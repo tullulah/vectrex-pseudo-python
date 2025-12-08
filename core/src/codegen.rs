@@ -188,7 +188,7 @@ fn optimize_module(m: &Module) -> Module {
     // Enable ONLY safe optimizations - disable problematic ones that eliminate arithmetic operations
     let mut current = m.clone();
     for _ in 0..5 {
-        let folded: Module = Module { items: current.items.iter().map(opt_item).collect(), meta: current.meta.clone() };
+        let folded: Module = Module { items: current.items.iter().map(opt_item).collect(), meta: current.meta.clone(), imports: current.imports.clone() };
         let dce = dead_code_elim(&folded);
         // DISABLE propagate_constants - eliminates arithmetic operations incorrectly
         let cp = dce; // Skip constant propagation
@@ -219,6 +219,7 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
             Item::VectorList { .. } => {},
             Item::Function(_) => {},
             Item::ExprStatement(_) => {}, // Expression statements no definen globals
+            Item::Export(_) => {}, // Export declarations don't define globals
         }
     }
     // Validar cada función independientemente.
@@ -345,6 +346,7 @@ fn opt_item(it: &Item) -> Item {
         Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, 
         Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
         Item::ExprStatement(expr) => Item::ExprStatement(opt_expr(expr)),
+        Item::Export(e) => Item::Export(e.clone()),
     } 
 }
 
@@ -521,8 +523,10 @@ fn dead_code_elim(m: &Module) -> Module {
             Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+            Item::Export(e) => Item::Export(e.clone()),
         }).collect(), 
-        meta: m.meta.clone() 
+        meta: m.meta.clone(),
+        imports: m.imports.clone()
     }
 }
 
@@ -765,8 +769,10 @@ fn propagate_constants(m: &Module) -> Module {
             Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+            Item::Export(e) => Item::Export(e.clone()),
         }).collect(), 
-        meta: m.meta.clone() 
+        meta: m.meta.clone(),
+        imports: m.imports.clone()
     }
 }
 
@@ -914,8 +920,10 @@ fn fold_const_switches(m: &Module) -> Module {
             Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
+            Item::Export(e) => Item::Export(e.clone()),
         }).collect(), 
-        meta: m.meta.clone() 
+        meta: m.meta.clone(),
+        imports: m.imports.clone()
     }
 }
 

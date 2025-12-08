@@ -419,6 +419,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 // For now, these would need to be executed in a generated main function
                 // or as part of initialization code. Skip for now.
             }
+            Item::Export(_) => {
+                // Export declarations are metadata for multi-file compilation.
+                // No code generation needed at this stage.
+            }
         }
     }
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference

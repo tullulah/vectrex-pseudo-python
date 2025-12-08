@@ -21,6 +21,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             Item::GlobalLet { name, value } => if let Expr::Number(n) = value { out.push_str(&format!("GVAR_{}: .word {}\n", name.to_uppercase(), n & 0xFFFF)); } else { out.push_str(&format!("GVAR_{}: .word 0\n", name.to_uppercase())); },
             Item::VectorList { name, .. } => { out.push_str(&format!("; vectorlist {} ignored on ARM backend (NYI)\n", name)); },
             Item::ExprStatement(_) => { out.push_str("; ExprStatement ignored on ARM backend (TODO: implement top-level execution)\n"); },
+            Item::Export(_) => { /* Export declarations are metadata, no code needed */ },
         }
     }
     out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");

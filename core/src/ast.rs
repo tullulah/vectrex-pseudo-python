@@ -2,6 +2,8 @@
 pub struct Module {
 	pub items: Vec<Item>,
 	pub meta: ModuleMeta,
+	/// Imports declarados en este módulo
+	pub imports: Vec<ImportDecl>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -12,6 +14,46 @@ pub struct ModuleMeta {
 	pub copyright_override: Option<String>,
 }
 
+/// Declaración de import
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportDecl {
+	/// Ruta del módulo (ej: ["utils", "math"] para "from utils.math import X")
+	pub module_path: Vec<String>,
+	/// Símbolos importados
+	pub symbols: ImportSymbols,
+	/// Línea fuente
+	pub source_line: usize,
+	/// Es import relativo (empieza con . o ..)
+	pub is_relative: bool,
+	/// Nivel de relatividad (0 = absoluto, 1 = ., 2 = .., etc)
+	pub relative_level: usize,
+}
+
+/// Símbolos importados
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportSymbols {
+	/// import module - importa el módulo completo
+	Module { alias: Option<String> },
+	/// from module import * - importa todo
+	All,
+	/// from module import a, b as c - símbolos específicos
+	Named(Vec<ImportedSymbol>),
+}
+
+/// Un símbolo importado con alias opcional
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportedSymbol {
+	pub name: String,
+	pub alias: Option<String>,
+}
+
+/// Declaración de export
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportDecl {
+	pub symbols: Vec<String>,
+	pub source_line: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item { 
     Function(Function), 
@@ -19,6 +61,8 @@ pub enum Item {
     GlobalLet { name: String, value: Expr }, 
     VectorList { name: String, entries: Vec<VlEntry> },
     ExprStatement(Expr),  // Para permitir expresiones ejecutables en top-level
+    /// Declaración de export explícita
+    Export(ExportDecl),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -10,10 +10,15 @@ import { restoreEditorState, ensureEditorPersistence } from './state/editorPersi
 import { deriveBinaryName } from './utils';
 import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus';
 import { useEditorStore } from './state/editorStore';
-import { useProjectStore } from './state/projectStore';
+import { useProjectStore, setEditorStoreRef } from './state/projectStore';
 import { useDebugStore } from './state/debugStore';
-import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem } from './components/MenuComponents';
+import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem, SubMenu } from './components/MenuComponents';
+import { NewProjectDialog } from './components/dialogs/NewProjectDialog';
+import { InputDialog } from './components/dialogs/InputDialog';
 import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger';
+
+// Initialize store reference for cross-store access
+setEditorStoreRef(useEditorStore);
 
 function App() {
   const { t, i18n } = useTranslation(['common']);
@@ -137,6 +142,12 @@ function App() {
   // Auto-restore last workspace on app startup
   const restoreLastWorkspace = useProjectStore(s => s.restoreLastWorkspace);
   const hasWorkspace = useProjectStore(s => s.hasWorkspace);
+  const vpyProject = useProjectStore(s => s.vpyProject);
+  const recentWorkspaces = useProjectStore(s => s.recentWorkspaces);
+  const openVpyProject = useProjectStore(s => s.openVpyProject);
+  const closeVpyProject = useProjectStore(s => s.closeVpyProject);
+  const saveProjectState = useProjectStore(s => s.saveProjectState);
+  const getProjectState = useProjectStore(s => s.getProjectState);
   
   useEffect(() => {
     if (!initializedRef.current && !hasWorkspace()) {
@@ -146,8 +157,37 @@ function App() {
     }
   }, [restoreLastWorkspace, hasWorkspace]);
 
+  // Save project state on window unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const projectState = useProjectStore.getState();
+      const editorState = useEditorStore.getState();
+      
+      if (projectState.vpyProject) {
+        const openFiles = editorState.documents
+          .filter(d => d.diskPath)
+          .map(d => d.uri);
+        saveProjectState(
+          projectState.vpyProject.projectFile, 
+          openFiles, 
+          editorState.active
+        );
+        logger.debug('App', 'Saved project state before unload');
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveProjectState]);
+
   // Track which menu is open
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  // New Project dialog state
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [defaultProjectLocation, setDefaultProjectLocation] = useState('');
+  // New File dialog state (for .vec files that need a name)
+  const [showNewFileDialog, setShowNewFileDialog] = useState(false);
+  const [newFileType, setNewFileType] = useState<'vec' | 'c' | 'vpy' | 'vmus'>('vec');
   const diags = allDiagnostics || [];
   const errCount = diags.filter((d: any)=>d.severity==='error').length;
   const warnCount = diags.filter((d: any)=>d.severity==='warning').length;
@@ -202,24 +242,53 @@ function App() {
     }
 
     const editorState = useEditorStore.getState();
-    const activeDoc = documents.find(d => d.uri === editorState.active);
+    const projectState = useProjectStore.getState();
+    
+    // If we have a project, use project entry point
+    let activeDoc;
+    let buildFromProject = false;
+    
+    if (projectState.vpyProject) {
+      // Build from project - use entry file
+      const entryPath = projectState.getEntryPath();
+      if (entryPath) {
+        // Find if entry file is already open
+        activeDoc = documents.find(d => d.diskPath === entryPath);
+        if (!activeDoc) {
+          // Entry file not open - build directly from path
+          buildFromProject = true;
+          activeDoc = { 
+            uri: entryPath, 
+            diskPath: entryPath, 
+            dirty: false,
+            content: '' 
+          };
+        }
+        logger.info('Build', `Building project: ${projectState.vpyProject.config.project.name}`);
+      }
+    } else {
+      // No project - use active document
+      activeDoc = documents.find(d => d.uri === editorState.active);
+    }
+    
     if (!activeDoc) {
       logger.warn('Build', 'No active document to build');
       return;
     }
 
-    if (!activeDoc.uri.endsWith('.vpy')) {
-      logger.warn('Build', 'Active document is not a .vpy file:', activeDoc.uri);
+    const filePath = activeDoc.diskPath || activeDoc.uri;
+    
+    if (!filePath.endsWith('.vpy') && !buildFromProject) {
+      logger.warn('Build', 'Active document is not a .vpy file:', filePath);
       return;
     }
 
-    const fileName = activeDoc.uri.split('/').pop() || activeDoc.uri;
+    const fileName = filePath.split('/').pop() || filePath;
     logger.info('Build', `${autoRun ? 'Build & Run' : 'Build'} starting: ${fileName}`);
 
     try {
       // Preparar argumentos para runCompile
-      // Use diskPath (real file system path) instead of uri (which is a file:// URI)
-      const filePath = activeDoc.diskPath || activeDoc.uri;
+      // filePath is already set above from project or active doc
       
       if (filePath.startsWith('file://')) {
         logger.error('Build', 'Document has no diskPath, cannot compile:', activeDoc.uri);
@@ -232,9 +301,18 @@ function App() {
         path: filePath,
         autoStart: autoRun
       };
+      
+      // If building from project, include output path
+      if (projectState.vpyProject) {
+        const outputPath = projectState.getOutputPath();
+        if (outputPath) {
+          args.outputPath = outputPath;
+          logger.debug('Build', 'Project output path:', outputPath);
+        }
+      }
 
       // Si el documento está sucio, enviarlo para que se guarde antes de compilar
-      if (activeDoc.dirty) {
+      if (activeDoc.dirty && !buildFromProject) {
         args.saveIfDirty = {
           content: activeDoc.content,
           expectedMTime: activeDoc.mtime
@@ -306,16 +384,51 @@ function App() {
   const commandExec = useCallback(async (id: string) => {
     const apiFiles: any = (window as any).files;
     switch (id) {
-      case 'file.new': {
-        const idx = documents.filter(d => d.uri.startsWith('inmemory://untitled')).length + 1;
+      case 'file.new': 
+      case 'file.new.vpy': {
+        const idx = documents.filter(d => d.uri.startsWith('inmemory://untitled') && d.uri.endsWith('.vpy')).length + 1;
         const uri = `inmemory://untitled${idx}.vpy`;
-        openDocument({ uri, language: 'vpy', content: '', dirty: false, diagnostics: [] });
-        // If LSP not initialized yet, defer; the init effect will pick it up. If initialized, send didOpen.
+        const content = `# New VPy file
+
+def main():
+    # Initialization
+    Set_Intensity(127)
+
+def loop():
+    # Game loop
+    Wait_Recal()
+`;
+        openDocument({ uri, language: 'vpy', content, dirty: true, diagnostics: [] });
         try {
           if ((window as any)._lspInit) {
-            lspClient.didOpen(uri, 'vpy', '');
+            lspClient.didOpen(uri, 'vpy', content);
           }
         } catch {}
+        break; }
+      case 'file.new.c': {
+        const idx = documents.filter(d => d.uri.match(/untitled.*\.(c|cpp|h)$/)).length + 1;
+        const uri = `inmemory://untitled${idx}.c`;
+        const content = `/* ${uri.split('/').pop()} - C source file */
+
+#include <vectrex.h>
+
+// Your C code here
+`;
+        openDocument({ uri, language: 'c', content, dirty: true, diagnostics: [] });
+        break; }
+      case 'file.new.vec': {
+        // Open dialog to ask for filename
+        setNewFileType('vec');
+        setShowNewFileDialog(true);
+        break; }
+      case 'file.new.vec.create': {
+        // This is called after the dialog confirms with a name
+        // The actual creation is handled in handleNewFileConfirm
+        break; }
+      case 'file.new.vmus': {
+        // Open dialog to ask for filename
+        setNewFileType('vmus');
+        setShowNewFileDialog(true);
         break; }
       case 'file.open': {
         if (!apiFiles?.openFile) { logger.warn('File', 'files API missing'); break; }
@@ -375,7 +488,10 @@ function App() {
         const active = st.documents.find(d => d.uri === st.active);
         if (!active) break;
         if (!apiFiles?.saveFileAs) break;
-        apiFiles.saveFileAs({ suggestedName: active.diskPath ? undefined : 'untitled.vpy', content: active.content }).then((res: any) => {
+        // Detect file extension from URI
+        const ext = active.uri.match(/\.(vpy|vec|vmus|c|cpp|h)$/)?.[1] || 'vpy';
+        const defaultName = active.diskPath ? undefined : `untitled.${ext}`;
+        apiFiles.saveFileAs({ suggestedName: defaultName, content: active.content }).then((res: any) => {
           if (!res || res.canceled || res.error) return;
           const { path, mtime, name } = res;
           const normPath = path.replace(/\\/g,'/');
@@ -546,10 +662,142 @@ function App() {
       case 'debug.toggleBreakpoint':
   logger.debug('App', 'toggle breakpoint (pending implementation)');
         break;
+      
+      // Project commands
+      case 'project.new': {
+        // Set default location - try from current project, recent projects, or empty
+        const projectState = useProjectStore.getState();
+        let defaultLocation = '';
+        
+        // First try: current open project's parent directory
+        if (projectState.vpyProject?.rootDir) {
+          const parts = projectState.vpyProject.rootDir.replace(/\\/g, '/').split('/');
+          parts.pop(); // Get parent directory
+          defaultLocation = parts.join('/');
+        }
+        // Second try: parent directory of most recent project
+        else if (projectState.recentWorkspaces.length > 0) {
+          const lastProject = projectState.recentWorkspaces.find(w => w.isProject);
+          if (lastProject) {
+            const parts = lastProject.path.replace(/\\/g, '/').split('/');
+            parts.pop(); // Remove project file name
+            parts.pop(); // Get parent of project directory
+            defaultLocation = parts.join('/');
+          }
+        }
+        
+        setDefaultProjectLocation(defaultLocation);
+        // Show the new project dialog
+        setShowNewProjectDialog(true);
+        break;
+      }
+      case 'project.open': {
+        const projectAPI = (window as any).project;
+        if (!projectAPI) {
+          logger.error('Project', 'Project API not available');
+          break;
+        }
+        const result = await projectAPI.open();
+        if (result && !('error' in result) && result !== null) {
+          // Use store to handle project state
+          const success = await openVpyProject(result.path);
+          if (success) {
+            const apiFiles: any = (window as any).files;
+            
+            // Try to restore previously open files
+            const savedState = useProjectStore.getState().getProjectState(result.path);
+            if (savedState && savedState.openFiles.length > 0) {
+              logger.info('Project', `Restoring ${savedState.openFiles.length} open files`);
+              
+              for (const uri of savedState.openFiles) {
+                // Extract disk path from URI
+                let diskPath = uri.replace('file:///', '').replace('file://', '');
+                if (diskPath.match(/^[A-Za-z]:\//)) {
+                  // Windows path - keep as is
+                } else if (!diskPath.startsWith('/')) {
+                  diskPath = '/' + diskPath;
+                }
+                
+                if (apiFiles?.readFile) {
+                  try {
+                    const fileResult = await apiFiles.readFile(diskPath);
+                    if (fileResult && !fileResult.error) {
+                      openDocument({
+                        uri,
+                        language: diskPath.endsWith('.vpy') ? 'vpy' : 'plaintext',
+                        content: fileResult.content,
+                        dirty: false,
+                        diagnostics: [],
+                        diskPath,
+                        mtime: fileResult.mtime,
+                        lastSavedContent: fileResult.content
+                      });
+                    }
+                  } catch (e) {
+                    logger.warn('Project', `Could not restore file: ${diskPath}`);
+                  }
+                }
+              }
+              
+              // Set the last active file
+              if (savedState.activeFile) {
+                useEditorStore.getState().setActive(savedState.activeFile);
+              }
+            } else {
+              // No saved state - just open entry file
+              const entryPath = useProjectStore.getState().getEntryPath();
+              if (entryPath && apiFiles?.readFile) {
+                const fileResult = await apiFiles.readFile(entryPath);
+                if (fileResult && !fileResult.error) {
+                  const normPath = entryPath.replace(/\\/g, '/');
+                  const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                  openDocument({
+                    uri,
+                    language: 'vpy',
+                    content: fileResult.content,
+                    dirty: false,
+                    diagnostics: [],
+                    diskPath: entryPath,
+                    mtime: fileResult.mtime,
+                    lastSavedContent: fileResult.content
+                  });
+                }
+              }
+            }
+          }
+        } else if (result && 'error' in result) {
+          logger.error('Project', result.error);
+        }
+        break;
+      }
+      case 'project.close': {
+        // Check for unsaved files
+        const unsavedDocs = documents.filter(d => d.dirty);
+        if (unsavedDocs.length > 0) {
+          const names = unsavedDocs.map(d => d.uri.split('/').pop()).join(', ');
+          if (!window.confirm(`You have ${unsavedDocs.length} unsaved file(s): ${names}\n\nClose project anyway?`)) {
+            break;
+          }
+        }
+        
+        // Close the project (saves state)
+        closeVpyProject();
+        
+        // Close all open documents to show welcome screen
+        const editorState = useEditorStore.getState();
+        const allDocs = [...editorState.documents];
+        for (const doc of allDocs) {
+          editorState.closeDocument(doc.uri);
+        }
+        
+        logger.info('Project', 'Project closed, all files closed');
+        break;
+      }
+      
       default:
         logger.warn('App', 'unknown command:', id);
     }
-  }, [documents, openDocument, activeBinName]);
+  }, [documents, openDocument, activeBinName, openVpyProject, closeVpyProject]);
 
   // Keyboard shortcuts mapping (similar to VS conventions)
   useEffect(() => {
@@ -558,11 +806,12 @@ function App() {
       // File
       if (ctrl && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); commandExec('file.save'); }
       else if (ctrl && e.key.toLowerCase() === 's' && e.shiftKey) { e.preventDefault(); commandExec('file.saveAs'); }
-      else if (ctrl && e.key.toLowerCase() === 'o') { e.preventDefault(); commandExec('file.open'); }
-      else if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); commandExec('file.new'); }
+      else if (ctrl && e.key.toLowerCase() === 'o' && !e.shiftKey) { e.preventDefault(); commandExec('file.open'); }
+      else if (ctrl && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); commandExec('project.open'); }
+      else if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); commandExec('file.new.vpy'); }
       // Build / Run
       else if (e.key === 'F7') { e.preventDefault(); commandExec('build.build'); }
-      else if (e.key === 'F5' && !ctrl) { 
+      else if (e.key === 'F5' && !ctrl && !e.shiftKey) { 
         e.preventDefault(); 
         // Smart F5: If in debug session, continue. Otherwise, build and run.
         const debugState = useDebugStore.getState().state;
@@ -572,8 +821,9 @@ function App() {
           commandExec('build.run');
         }
       }
-      // Debug
+      // Debug - Ctrl+F5 on Windows, Cmd+D on macOS (Cmd+F5 triggers VoiceOver)
       else if (ctrl && e.key === 'F5') { e.preventDefault(); commandExec('debug.start'); }
+      else if (ctrl && e.key.toLowerCase() === 'd' && !e.shiftKey) { e.preventDefault(); commandExec('debug.start'); }
       else if (e.key === 'F9') { e.preventDefault(); commandExec('debug.toggleBreakpoint'); }
       else if (e.key === 'F10') { e.preventDefault(); commandExec('debug.stepOver'); }
       else if (e.key === 'F11' && !e.shiftKey) { e.preventDefault(); commandExec('debug.stepInto'); }
@@ -582,6 +832,18 @@ function App() {
     };
     window.addEventListener('keydown', handler, { capture: true });
     return () => window.removeEventListener('keydown', handler, { capture: true } as any);
+  }, [commandExec]);
+
+  // Listen for vpy-command events from WelcomeView and other components
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const cmd = e.detail?.command;
+      if (cmd) {
+        commandExec(cmd);
+      }
+    };
+    window.addEventListener('vpy-command', handler as EventListener);
+    return () => window.removeEventListener('vpy-command', handler as EventListener);
   }, [commandExec]);
 
   // Auto-initialize LSP once when first document becomes available (or language changes with no init yet)
@@ -603,17 +865,36 @@ function App() {
       <header style={{padding:'2px 8px', background:'#222', color:'#eee', display:'flex', alignItems:'stretch', userSelect:'none'}}
         onMouseLeave={()=>setOpenMenu(null)}>
         <div style={{display:'flex', gap:0}}>
-          {/* File menu */}
+          {/* File menu (merged with Project) */}
           <MenuRoot label={t('menu.file')} open={openMenu==='file'} setOpen={()=>setOpenMenu(openMenu==='file'?null:'file')}>
-            <MenuItem label={`${t('file.new', 'New')}	Ctrl+N`} onClick={()=>{ commandExec('file.new'); setOpenMenu(null); }} />
-            <MenuItem label={`${t('file.open', 'Open...')}	Ctrl+O`} onClick={()=>{ commandExec('file.open'); setOpenMenu(null); }} />
+            <SubMenu label={t('file.new', 'New')}>
+              <MenuItem label={`${t('project.new', 'Project...')}`} onClick={()=>{ commandExec('project.new'); setOpenMenu(null); }} />
+              <MenuSeparator />
+              <MenuItem label={`${t('file.new.vpy', 'VPy File')}	Ctrl+N`} onClick={()=>{ commandExec('file.new.vpy'); setOpenMenu(null); }} />
+              <MenuItem label={`${t('file.new.c', 'C/C++ File')}`} onClick={()=>{ commandExec('file.new.c'); setOpenMenu(null); }} />
+              <MenuItem label={`${t('file.new.vec', 'Vector List (.vec)')}`} onClick={()=>{ commandExec('file.new.vec'); setOpenMenu(null); }} />
+              <MenuItem label={`${t('file.new.vmus', 'Music File (.vmus)')}`} onClick={()=>{ commandExec('file.new.vmus'); setOpenMenu(null); }} />
+            </SubMenu>
+            <SubMenu label={t('file.open', 'Open')}>
+              <MenuItem label={`${t('project.open', 'Project...')}	Ctrl+Shift+O`} onClick={()=>{ commandExec('project.open'); setOpenMenu(null); }} />
+              <MenuItem label={`${t('file.openFile', 'File...')}	Ctrl+O`} onClick={()=>{ commandExec('file.open'); setOpenMenu(null); }} />
+            </SubMenu>
             <MenuSeparator />
             <MenuItem label={activeDoc?.dirty? `${t('file.save', 'Save')} *	Ctrl+S` : `${t('file.save', 'Save')}	Ctrl+S`} disabled={!activeDoc} onClick={()=>{ commandExec('file.save'); setOpenMenu(null); }} />
             <MenuItem label={`${t('file.saveAs', 'Save As...')}	Ctrl+Shift+S`} disabled={!activeDoc} onClick={()=>{ commandExec('file.saveAs'); setOpenMenu(null); }} />
-            <MenuItem label={t('file.close', 'Close File')} disabled={!activeDoc} onClick={()=>{ commandExec('file.close'); setOpenMenu(null); }} />
             <MenuSeparator />
-            <MenuItem label={t('file.recent.placeholder', 'Recent Files (coming soon)')} disabled />
-            {/* Future: dynamically inject recent file entries here using recents.load() */}
+            <MenuItem label={t('file.close', 'Close File')} disabled={!activeDoc} onClick={()=>{ commandExec('file.close'); setOpenMenu(null); }} />
+            <MenuItem label={t('project.close', 'Close Project')} disabled={!vpyProject} onClick={()=>{ commandExec('project.close'); setOpenMenu(null); }} />
+            <MenuSeparator />
+            {/* Recent projects */}
+            <SubMenu label={t('file.recentProjects', 'Recent Projects')} disabled={recentWorkspaces.filter(w => w.isProject).length === 0}>
+              {recentWorkspaces.filter(w => w.isProject).slice(0, 5).map((w, i) => (
+                <MenuItem key={i} label={w.name} onClick={async () => {
+                  await openVpyProject(w.path);
+                  setOpenMenu(null);
+                }} />
+              ))}
+            </SubMenu>
             <MenuSeparator />
             <MenuItem label={t('layout.reset', 'Reset Layout')} onClick={()=>{ resetLayout(); setOpenMenu(null); }} />
             <MenuSeparator />
@@ -719,6 +1000,183 @@ function App() {
       <div style={{flex:1, position:'relative'}}>
         <DockWorkspace />
       </div>
+      
+      {/* New Project Dialog */}
+      <NewProjectDialog
+        isOpen={showNewProjectDialog}
+        onClose={() => setShowNewProjectDialog(false)}
+        defaultLocation={defaultProjectLocation}
+        onCreate={async (options) => {
+          logger.info('Project', `Creating ${options.type}: ${options.name} at ${options.location}`);
+          const projectAPI = (window as any).project;
+          if (!projectAPI) {
+            logger.error('Project', 'Project API not available');
+            return;
+          }
+          try {
+            const result = await projectAPI.create({
+              name: options.name,
+              location: options.location,
+              type: options.type,
+              template: options.template,
+            });
+            if (result && 'ok' in result && result.ok) {
+              logger.info('Project', `Created project: ${result.name}`);
+              // Open the created project
+              const success = await openVpyProject(result.projectFile);
+              if (success) {
+                const entryPath = useProjectStore.getState().getEntryPath();
+                if (entryPath) {
+                  const apiFiles: any = (window as any).files;
+                  if (apiFiles?.readFile) {
+                    const fileResult = await apiFiles.readFile(entryPath);
+                    if (fileResult && !fileResult.error) {
+                      const normPath = entryPath.replace(/\\/g, '/');
+                      const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                      openDocument({
+                        uri,
+                        language: 'vpy',
+                        content: fileResult.content,
+                        dirty: false,
+                        diagnostics: [],
+                        diskPath: entryPath,
+                        mtime: fileResult.mtime,
+                        lastSavedContent: fileResult.content
+                      });
+                    }
+                  }
+                }
+              }
+            } else if (result && 'error' in result) {
+              logger.error('Project', result.error);
+            }
+          } catch (error) {
+            logger.error('Project', 'Failed to create project:', error);
+          }
+        }}
+      />
+      
+      {/* New File Dialog (for .vec and .vmus files) */}
+      <InputDialog
+        isOpen={showNewFileDialog}
+        title={newFileType === 'vec' ? 'New Vector List' : newFileType === 'vmus' ? 'New Music File' : 'New File'}
+        message={newFileType === 'vec' ? 'Enter a name for the vector list (without extension):' : newFileType === 'vmus' ? 'Enter a name for the music file (without extension):' : 'Enter filename:'}
+        placeholder={newFileType === 'vec' ? 'my_sprite' : newFileType === 'vmus' ? 'my_music' : 'filename'}
+        defaultValue=""
+        validateFn={(value) => {
+          if (!value.trim()) return 'Name is required';
+          if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(value)) {
+            return 'Name must start with a letter and contain only letters, numbers, hyphens, and underscores';
+          }
+          return null;
+        }}
+        onCancel={() => setShowNewFileDialog(false)}
+        onConfirm={async (name) => {
+          setShowNewFileDialog(false);
+          
+          const vpyProject = useProjectStore.getState().vpyProject;
+          const apiFiles = (window as any).files;
+          
+          if (newFileType === 'vec') {
+            const content = JSON.stringify({
+              version: "1.0",
+              name: name,
+              canvas: { width: 256, height: 256, origin: "center" },
+              layers: [{
+                name: "default",
+                visible: true,
+                paths: [{
+                  name: "shape",
+                  intensity: 127,
+                  closed: true,
+                  points: [
+                    { x: 0, y: 20 },
+                    { x: -15, y: -10 },
+                    { x: 15, y: -10 }
+                  ]
+                }]
+              }]
+            }, null, 2);
+            
+            // If we have a project, save to assets/vectors/
+            if (vpyProject?.rootDir && apiFiles?.saveFile) {
+              const filePath = `${vpyProject.rootDir}/assets/vectors/${name}.vec`.replace(/\\/g, '/');
+              try {
+                const result = await apiFiles.saveFile({ path: filePath, content });
+                if (result && !result.error) {
+                  const normPath = filePath.replace(/\\/g, '/');
+                  const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                  openDocument({
+                    uri,
+                    language: 'json',
+                    content,
+                    dirty: false,
+                    diagnostics: [],
+                    diskPath: filePath,
+                    mtime: result.mtime,
+                    lastSavedContent: content
+                  });
+                  // Refresh workspace to show new file
+                  useProjectStore.getState().refreshWorkspace();
+                  logger.info('File', `Created ${filePath}`);
+                  return;
+                }
+              } catch (e) {
+                logger.warn('File', 'Failed to save to project folder, creating in-memory');
+              }
+            }
+            
+            // Fallback: create in-memory
+            const uri = `inmemory://${name}.vec`;
+            openDocument({ uri, language: 'json', content, dirty: true, diagnostics: [] });
+          } else if (newFileType === 'vmus') {
+            const content = JSON.stringify({
+              version: "1.0",
+              name: name,
+              author: "",
+              tempo: 120,
+              ticksPerBeat: 24,
+              totalTicks: 384,
+              notes: [],
+              noise: [],
+              loopStart: 0,
+              loopEnd: 384
+            }, null, 2);
+            
+            // If we have a project, save to assets/music/
+            if (vpyProject?.rootDir && apiFiles?.saveFile) {
+              const filePath = `${vpyProject.rootDir}/assets/music/${name}.vmus`.replace(/\\/g, '/');
+              try {
+                const result = await apiFiles.saveFile({ path: filePath, content });
+                if (result && !result.error) {
+                  const normPath = filePath.replace(/\\/g, '/');
+                  const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                  openDocument({
+                    uri,
+                    language: 'json',
+                    content,
+                    dirty: false,
+                    diagnostics: [],
+                    diskPath: filePath,
+                    mtime: result.mtime,
+                    lastSavedContent: content
+                  });
+                  // Refresh workspace to show new file
+                  useProjectStore.getState().refreshWorkspace();
+                  logger.info('File', `Created ${filePath}`);
+                  return;
+                }
+              } catch (e) {
+                logger.warn('File', 'Failed to save to project folder, creating in-memory');
+              }
+            }
+            
+            // Fallback: create in-memory
+            const uri = `inmemory://${name}.vmus`;
+            openDocument({ uri, language: 'json', content, dirty: true, diagnostics: [] });
+          }
+        }}
+      />
     </div>
   );
 }
