@@ -13,6 +13,7 @@ import {
 
 export class MCPServer {
   private tools: Map<string, MCPToolHandler> = new Map();
+  private toolSchemas: Map<string, MCPTool> = new Map();
   private mainWindow: BrowserWindow | null = null;
 
   constructor() {
@@ -255,6 +256,7 @@ export class MCPServer {
 
   private registerTool(name: string, handler: MCPToolHandler, schema: MCPTool) {
     this.tools.set(name, handler);
+    this.toolSchemas.set(name, schema);
   }
 
   // Handle incoming JSON-RPC request
@@ -297,8 +299,8 @@ export class MCPServer {
 
   // Tool implementations
   private async listTools(): Promise<{ tools: MCPTool[] }> {
-    console.log('[MCP Server] listTools() called - registered tools:', this.toolDefinitions.size);
-    const tools = Array.from(this.toolDefinitions.values());
+    console.log('[MCP Server] listTools() called - registered tools:', this.toolSchemas.size);
+    const tools = Array.from(this.toolSchemas.values());
     console.log('[MCP Server] Returning', tools.length, 'tools:', tools.map(t => t.name));
     return { tools };
   }
