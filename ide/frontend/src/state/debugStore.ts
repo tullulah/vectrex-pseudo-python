@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { DebugState as LegacyDebugState } from '../types/models';
-import { useEditorStore } from './editorStore';
+import type { DebugState as LegacyDebugState } from '../types/models.js';
+import { useEditorStore } from './editorStore.js';
 
 export type ExecutionState = 'stopped' | 'running' | 'paused';
 

@@ -1,8 +1,8 @@
 // Singleton compartido de IEmulatorCore para toda la UI.
 // Selecciona backend según preferencia persistida (localStorage ?emu_backend=jsvecx).
 // Expone window.emuCore (y alias transitional window.globalEmu) para debugging manual.
-import { createEmulatorCore } from './emulatorFactory';
-import type { IEmulatorCore } from './emulatorCore';
+import { createEmulatorCore } from './emulatorFactory.js';
+import type { IEmulatorCore } from './emulatorCore.js';
 
 export const emuCore: IEmulatorCore = createEmulatorCore();
 

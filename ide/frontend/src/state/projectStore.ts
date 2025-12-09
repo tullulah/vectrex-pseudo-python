@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Project, FileNode } from '../types/models';
-import { logger } from '../utils/logger';
+import type { Project, FileNode } from '../types/models.js';
+import { logger } from '../utils/logger.js';
 
 // Lazy import to avoid circular dependency
 let editorStoreRef: any = null;

@@ -2,6 +2,7 @@
 set -e
 
 # Script de ejecución IDE para macOS/Linux
+
 # Traducción de run-ide.ps1 compatible con Bash/Zsh
 
 # Parse de argumentos

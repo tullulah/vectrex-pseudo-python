@@ -1,5 +1,5 @@
-import type { IAiProvider, AiProviderConfig, AiRequest, AiResponse } from '../../types/aiProvider';
-import { getVPyContext, getProjectContext } from '../contexts/VPyContext';
+import type { IAiProvider, AiProviderConfig, AiRequest, AiResponse } from '../../types/aiProvider.js';
+import { getVPyContext, getProjectContext } from '../contexts/VPyContext.js';
 
 export abstract class BaseAiProvider implements IAiProvider {
   public abstract readonly name: string;

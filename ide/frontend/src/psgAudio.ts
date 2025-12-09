@@ -2,7 +2,7 @@
 // Política: No reprocesar ni sintetizar; simplemente convertir i16 -> Float32 y empujar a un AudioWorklet o fallback ScriptProcessor.
 // Si el navegador no soporta AudioWorklet, se usa un nodo ScriptProcessor con pequeño buffer.
 
-import { emuCore } from './emulatorCoreSingleton';
+import { emuCore } from './emulatorCoreSingleton.js';
 
 class RingBufferF32 {
   private buf: Float32Array;

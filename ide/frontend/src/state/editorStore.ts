@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import type { DocumentModel, DiagnosticModel } from '../types/models';
-import { lspClient } from '../lspClient';
-import { logger } from '../utils/logger';
-import { useDebugStore } from './debugStore';
+import type { DocumentModel, DiagnosticModel } from '../types/models.js';
+import { lspClient } from '../lspClient.js';
+import { logger } from '../utils/logger.js';
+import { useDebugStore } from './debugStore.js';
 
 interface FlatDiag { uri: string; file: string; line: number; column: number; severity: DiagnosticModel['severity']; message: string; source?: string; }
 

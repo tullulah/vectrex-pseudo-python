@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EmulatorState } from '../types/models';
+import type { EmulatorState } from '../types/models.js';
 
 interface EmulatorStore extends EmulatorState {
   setStatus: (s: EmulatorState['status']) => void;

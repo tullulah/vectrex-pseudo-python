@@ -1,5 +1,5 @@
-import { EmulatorBackend, IEmulatorCore } from './emulatorCore';
-import { JsVecxEmulatorCore } from './jsvecxCore';
+import type { EmulatorBackend, IEmulatorCore } from './emulatorCore.js';
+import { JsVecxEmulatorCore } from './jsvecxCore.js';
 
 export function createEmulatorCore(preferred?: EmulatorBackend): IEmulatorCore {
   const backend = preferred || readPreference();

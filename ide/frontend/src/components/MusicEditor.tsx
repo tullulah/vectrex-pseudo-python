@@ -1,3 +1,18 @@
+// Helpers dummy para evitar errores de compilación
+function isBlackKey(note: number): boolean {
+  // C, D, E, F, G, A, B (C=0)
+  return [1, 3, 6, 8, 10].includes(note % 12);
+}
+
+function noteToString(note: number): string {
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const octave = Math.floor(note / 12) - 1;
+  return `${names[note % 12]}${octave}`;
+}
+
+function generateId(): string {
+  return Math.random().toString(36).substr(2, 9);
+}
 // Interface para notas escaladas usadas en mergedTracksToVmus
 interface ScaledNote {
   note: number;
@@ -10,47 +25,51 @@ interface ScaledNote {
 /**
  * MusicEditor - AY-3-8910 PSG Music Editor for Vectrex
  * Piano Roll style editor with timeline view
- * 
+ *
  * AY-3-8910 capabilities:
  * - 3 tone channels (A, B, C) - square waves
  * - 1 noise generator (can be mixed with any channel)
  * - 1 envelope generator (shared)
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  MidiService,
+  MusicConversionService,
+  PSGAudioService,
+  MusicResourceService,
+  type NoteEvent,
+  type MusicResource
+} from '../services';
 
-// ============================================
-// Types
-// ============================================
-
-interface NoteEvent {
-  id: string;
-  note: number;      // MIDI note (0-127)
-  start: number;     // Start time in ticks
-  duration: number;  // Duration in ticks
-  velocity: number;  // Volume 0-15
-  channel: number;   // 0=A, 1=B, 2=C
-}
-
-interface NoiseEvent {
-  id: string;
+// Tipos locales para evitar errores de importación
+interface MidiNote {
+  note: number;
   start: number;
   duration: number;
-  period: number;    // 0-31
-  channels: number;  // Bitmask: which channels use noise
+  velocity: number;
+  channel: number;
+  track: number;
 }
 
-interface MusicResource {
-  version: string;
-  name: string;
-  author: string;
+interface MidiTrackInfo {
+  key: string;
+  track: number;
+  channel: number;
+  noteCount: number;
+  notes: MidiNote[];
+  signature: string;
+  minNote: number;
+  maxNote: number;
+  startBeat: number;
+  isDuplicate: boolean;
+}
+
+interface MidiImportData {
+  tracks: MidiTrackInfo[];
   tempo: number;
   ticksPerBeat: number;
   totalTicks: number;
-  notes: NoteEvent[];
-  noise: NoiseEvent[];
-  loopStart: number;
-  loopEnd: number;
 }
 
 interface MusicEditorProps {
@@ -79,501 +98,13 @@ const TICKS_PER_BEAT = 24;  // Higher resolution for better MIDI import (24 = co
 
 const CHANNEL_COLORS = ['#ff6b6b', '#51cf66', '#339af0']; // A=red, B=green, C=blue
 
-const isBlackKey = (note: number) => {
-  const n = note % 12;
-  return n === 1 || n === 3 || n === 6 || n === 8 || n === 10;
-};
-
-const noteToString = (note: number): string => {
-  const octave = Math.floor(note / 12) - 1;
-  const noteName = NOTE_NAMES[note % 12];
-  return `${noteName}${octave}`;
-};
-
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
-// Default resource
-const createDefaultResource = (): MusicResource => ({
-  version: '1.0',
-  name: 'Untitled',
-  author: '',
-  tempo: 120,
-  ticksPerBeat: TICKS_PER_BEAT,
-  totalTicks: DEFAULT_TICKS,
-  notes: [],
-  noise: [],
-  loopStart: 0,
-  loopEnd: DEFAULT_TICKS,
-});
-
-// ============================================
-// MIDI Import Dialog Types
-// ============================================
-
-interface MidiTrackInfo {
-  key: string;           // "track-channel" identifier
-  track: number;
-  channel: number;
-  noteCount: number;
-  notes: MidiNote[];
-  signature: string;     // For duplicate detection
-  minNote: number;       // Lowest note (for range display)
-  maxNote: number;       // Highest note
-  startBeat: number;     // When first note starts (in beats)
-  isDuplicate: boolean;
-}
-
-interface MidiImportData {
-  tracks: MidiTrackInfo[];
-  tempo: number;
-  ticksPerBeat: number;
-  totalTicks: number;
-}
-
-// ============================================
-// MIDI Parser (Robust implementation)
-// ============================================
-
-interface MidiNote {
-  note: number;
-  start: number;  // in MIDI ticks
-  duration: number;
-  velocity: number;
-  channel: number; // MIDI channel (0-15)
-  track: number;   // Track number
-}
-
-function parseMidi(arrayBuffer: ArrayBuffer): { notes: MidiNote[]; tempo: number; ticksPerBeat: number; totalTicks: number } {
-  const data = new Uint8Array(arrayBuffer);
-  let pos = 0;
-  
-  const readUint16 = () => { const v = (data[pos] << 8) | data[pos + 1]; pos += 2; return v; };
-  const readUint32 = () => { const v = (data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3]; pos += 4; return v; };
-  const readVarLen = () => { 
-    let v = 0; 
-    let b; 
-    let count = 0;
-    do { 
-      b = data[pos++]; 
-      v = (v << 7) | (b & 0x7f); 
-      count++;
-      if (count > 4) break; // Safety: max 4 bytes for variable length
-    } while (b & 0x80); 
-    return v; 
-  };
-  
-  // Read header
-  const headerChunk = String.fromCharCode(data[0], data[1], data[2], data[3]);
-  if (headerChunk !== 'MThd') throw new Error('Not a valid MIDI file');
-  pos = 4;
-  const headerLength = readUint32();
-  const format = readUint16();
-  const numTracks = readUint16();
-  const ticksPerBeat = readUint16();
-  pos = 8 + headerLength;
-  
-  console.log(`MIDI: Format ${format}, ${numTracks} tracks, ${ticksPerBeat} ticks/beat`);
-  
-  const allNotes: MidiNote[] = [];
-  let tempo = 120;
-  let maxTick = 0;
-  
-  // Read all tracks
-  for (let t = 0; t < numTracks; t++) {
-    if (pos + 8 > data.length) break;
-    
-    const trackChunk = String.fromCharCode(data[pos], data[pos + 1], data[pos + 2], data[pos + 3]);
-    if (trackChunk !== 'MTrk') { 
-      console.warn(`Track ${t}: Invalid header, skipping`);
-      pos += 8; 
-      continue; 
-    }
-    pos += 4;
-    const trackLength = readUint32();
-    const trackEnd = pos + trackLength;
-    
-    const activeNotes: Map<string, { note: number; start: number; velocity: number; channel: number }> = new Map();
-    let tick = 0;
-    let runningStatus = 0;
-    let trackNoteCount = 0;
-    
-    while (pos < trackEnd && pos < data.length) {
-      const delta = readVarLen();
-      tick += delta;
-      maxTick = Math.max(maxTick, tick);
-      
-      if (pos >= data.length) break;
-      
-      let status = data[pos];
-      if (status < 0x80) {
-        // Running status - use previous status
-        status = runningStatus;
-      } else {
-        pos++;
-        if (status >= 0x80 && status < 0xf0) {
-          runningStatus = status;
-        }
-      }
-      
-      const type = status & 0xf0;
-      const ch = status & 0x0f;
-      
-      if (type === 0x90) { // Note on
-        const note = data[pos++];
-        const velocity = data[pos++];
-        const key = `${t}-${ch}-${note}`;
-        
-        if (velocity > 0) {
-          activeNotes.set(key, { note, start: tick, velocity, channel: ch });
-        } else {
-          // Velocity 0 = note off
-          const active = activeNotes.get(key);
-          if (active) {
-            allNotes.push({
-              note: active.note,
-              start: active.start,
-              duration: Math.max(1, tick - active.start),
-              velocity: Math.round(active.velocity / 8),
-              channel: active.channel,
-              track: t,
-            });
-            activeNotes.delete(key);
-            trackNoteCount++;
-          }
-        }
-      } else if (type === 0x80) { // Note off
-        const note = data[pos++];
-        pos++; // velocity (ignored for note off)
-        const key = `${t}-${ch}-${note}`;
-        
-        const active = activeNotes.get(key);
-        if (active) {
-          allNotes.push({
-            note: active.note,
-            start: active.start,
-            duration: Math.max(1, tick - active.start),
-            velocity: Math.round(active.velocity / 8),
-            channel: active.channel,
-            track: t,
-          });
-          activeNotes.delete(key);
-          trackNoteCount++;
-        }
-      } else if (type === 0xa0) { pos += 2; } // Aftertouch
-      else if (type === 0xb0) { pos += 2; } // Control change
-      else if (type === 0xc0) { pos += 1; } // Program change
-      else if (type === 0xd0) { pos += 1; } // Channel pressure
-      else if (type === 0xe0) { pos += 2; } // Pitch bend
-      else if (status === 0xff) { // Meta event
-        const metaType = data[pos++];
-        const metaLen = readVarLen();
-        if (metaType === 0x51 && metaLen === 3) { // Tempo
-          const microsPerBeat = (data[pos] << 16) | (data[pos + 1] << 8) | data[pos + 2];
-          tempo = Math.round(60000000 / microsPerBeat);
-          console.log(`MIDI: Tempo ${tempo} BPM`);
-        }
-        pos += metaLen;
-      } else if (status === 0xf0 || status === 0xf7) { // SysEx
-        const len = readVarLen();
-        pos += len;
-      }
-    }
-    
-    // Close any notes still active at end of track
-    for (const [key, active] of activeNotes) {
-      allNotes.push({
-        note: active.note,
-        start: active.start,
-        duration: Math.max(1, tick - active.start),
-        velocity: Math.round(active.velocity / 8),
-        channel: active.channel,
-        track: t,
-      });
-      trackNoteCount++;
-    }
-    
-    console.log(`Track ${t}: ${trackNoteCount} notes`);
-    pos = trackEnd;
-  }
-  
-  console.log(`MIDI: Total ${allNotes.length} notes, max tick ${maxTick}`);
-  return { notes: allNotes, tempo, ticksPerBeat, totalTicks: maxTick };
-}
-
-// Analyze MIDI and return track information for selection dialog
-function analyzeMidi(arrayBuffer: ArrayBuffer): MidiImportData {
-  const midiData = parseMidi(arrayBuffer);
-  
-  // Group notes by track+channel
-  const trackChannelNotes: Map<string, MidiNote[]> = new Map();
-  for (const note of midiData.notes) {
-    const key = `${note.track}-${note.channel}`;
-    if (!trackChannelNotes.has(key)) trackChannelNotes.set(key, []);
-    trackChannelNotes.get(key)!.push(note);
-  }
-  
-  // Create signatures and detect duplicates
-  const signatureToFirst: Map<string, string> = new Map();
-  const tracks: MidiTrackInfo[] = [];
-  
-  for (const [key, notes] of trackChannelNotes) {
-    if (notes.length === 0) continue;
-    
-    const [trackStr, channelStr] = key.split('-');
-    const sig = notes.slice(0, 20).map(n => `${n.start}-${n.note}`).join(',');
-    
-    const isDuplicate = signatureToFirst.has(sig);
-    if (!isDuplicate) signatureToFirst.set(sig, key);
-    
-    const noteValues = notes.map(n => n.note);
-    const firstNoteStart = notes[0].start;
-    
-    tracks.push({
-      key,
-      track: parseInt(trackStr),
-      channel: parseInt(channelStr),
-      noteCount: notes.length,
-      notes,
-      signature: sig,
-      minNote: Math.min(...noteValues),
-      maxNote: Math.max(...noteValues),
-      startBeat: firstNoteStart / midiData.ticksPerBeat,
-      isDuplicate,
-    });
-  }
-  
-  // Sort by note count (most notes first)
-  tracks.sort((a, b) => b.noteCount - a.noteCount);
-  
-  return {
-    tracks,
-    tempo: midiData.tempo,
-    ticksPerBeat: midiData.ticksPerBeat,
-    totalTicks: midiData.totalTicks,
-  };
-}
-
-// Convert selected tracks to vmus format
-function selectedTracksToVmus(
-  importData: MidiImportData, 
-  selectedTracks: string[]  // Array of track keys to import (max 3)
-): MusicResource {
-  const vmusNotes: NoteEvent[] = [];
-  const tickScale = TICKS_PER_BEAT / importData.ticksPerBeat;
-  selectedTracks.slice(0, 3).forEach((trackKey, psgChannel) => {
-    const trackInfo = importData.tracks.find(t => t.key === trackKey);
-    if (!trackInfo) return;
-    for (const note of trackInfo.notes) {
-      vmusNotes.push({
-        id: generateId(),
-        note: note.note,
-        start: Math.round(note.start * tickScale),
-        duration: Math.max(1, Math.round(note.duration * tickScale)),
-        velocity: Math.min(15, Math.max(1, note.velocity)),
-        channel: psgChannel,
-      });
-    }
-  });
-  // Eliminar espacio en blanco inicial
-  shiftNotesToZero(vmusNotes);
-  // El totalTicks debe ser el máximo entre el final de la última nota y el totalTicks original
-  const lastNoteEnd = vmusNotes.length ? Math.max(...vmusNotes.map(n => n.start + n.duration)) : 0;
-  const totalTicks = Math.max(DEFAULT_TICKS, Math.round(importData.totalTicks * tickScale) + 16, lastNoteEnd + 8);
-  return {
-    version: '1.0',
-    name: 'Imported MIDI',
-    author: '',
-    tempo: importData.tempo,
-    ticksPerBeat: TICKS_PER_BEAT,
-    totalTicks,
-    notes: vmusNotes,
-    noise: [],
-    loopStart: 0,
-    loopEnd: totalTicks,
-  };
-}
-
-// NEW: Merge all MIDI tracks into PSG channels based on polyphony
-// All notes go into a single timeline, then dynamically assigned to A/B/C based on overlap
-function mergedTracksToVmus(
-  importData: MidiImportData,
-  selectedTracks: string[]
-): MusicResource {
-  const tickScale = TICKS_PER_BEAT / importData.ticksPerBeat;
-  const allNotes: ScaledNote[] = [];
-  for (const trackKey of selectedTracks) {
-    const trackInfo = importData.tracks.find(t => t.key === trackKey);
-    if (!trackInfo) continue;
-    for (const note of trackInfo.notes) {
-      const start = Math.round(note.start * tickScale);
-      const duration = Math.max(1, Math.round(note.duration * tickScale));
-      allNotes.push({
-        note: note.note,
-        start,
-        end: start + duration,
-        duration,
-        velocity: Math.min(15, Math.max(1, note.velocity)),
-        originalTrack: trackKey,
-      });
-    }
-  }
-  // Eliminar espacio en blanco inicial
-  shiftNotesToZero(allNotes);
-  // Sort by start time, then by pitch (higher notes have priority for melody)
-  allNotes.sort((a, b) => a.start - b.start || b.note - a.note);
-  // Assign notes to PSG channels dinámicamente
-  const channelEndTime: number[] = [0, 0, 0];
-  const vmusNotes: NoteEvent[] = [];
-  let discardedNotes = 0;
-  for (const note of allNotes) {
-    let assignedChannel = -1;
-    for (let ch = 0; ch < 3; ch++) {
-      if (channelEndTime[ch] <= note.start) {
-        assignedChannel = ch;
-        break;
-      }
-    }
-    if (assignedChannel === -1) {
-      discardedNotes++;
-      continue;
-    }
-    channelEndTime[assignedChannel] = note.end;
-    vmusNotes.push({
-      id: generateId(),
-      note: note.note,
-      start: note.start,
-      duration: note.duration,
-      velocity: note.velocity,
-      channel: assignedChannel,
-    });
-  }
-  if (discardedNotes > 0) {
-    console.log(`Merged import: ${discardedNotes} notes discarded (>3 simultaneous)`);
-  }
-  // El totalTicks debe ser el máximo entre el final de la última nota y el totalTicks original
-  const lastNoteEnd = vmusNotes.length ? Math.max(...vmusNotes.map(n => n.start + n.duration)) : 0;
-  const totalTicks = Math.max(DEFAULT_TICKS, Math.round(importData.totalTicks * tickScale) + 16, lastNoteEnd + 8);
-  return {
-    version: '1.0',
-    name: 'Imported MIDI',
-    author: '',
-    tempo: importData.tempo,
-    ticksPerBeat: TICKS_PER_BEAT,
-    totalTicks,
-    notes: vmusNotes,
-    noise: [],
-    loopStart: 0,
-    loopEnd: totalTicks,
-  };
-}
-
-function midiToVmus(midiData: { notes: MidiNote[]; tempo: number; ticksPerBeat: number; totalTicks: number }): MusicResource {
-  // Group notes by track+channel combination
-  const trackChannelNotes: Map<string, MidiNote[]> = new Map();
-  
-  for (const note of midiData.notes) {
-    const key = `${note.track}-${note.channel}`;
-    if (!trackChannelNotes.has(key)) trackChannelNotes.set(key, []);
-    trackChannelNotes.get(key)!.push(note);
-  }
-  
-  // Create signature for each track (first 20 notes) to detect duplicates
-  const trackSignatures: Map<string, string> = new Map();
-  const signatureToTracks: Map<string, string[]> = new Map();
-  
-  for (const [key, notes] of trackChannelNotes) {
-    // Create signature from first 20 notes (start time + note number)
-    const sig = notes.slice(0, 20).map(n => `${n.start}-${n.note}`).join(',');
-    trackSignatures.set(key, sig);
-    
-    if (!signatureToTracks.has(sig)) signatureToTracks.set(sig, []);
-    signatureToTracks.get(sig)!.push(key);
-  }
-  
-  // Filter out duplicate tracks (keep only one per unique signature)
-  const uniqueTracks: Array<[string, MidiNote[]]> = [];
-  const usedSignatures = new Set<string>();
-  
-  // Sort by note count first, so we keep the "best" version of each pattern
-  const sortedTracks = Array.from(trackChannelNotes.entries())
-    .sort((a, b) => b[1].length - a[1].length);
-  
-  for (const [key, notes] of sortedTracks) {
-    const sig = trackSignatures.get(key)!;
-    if (!usedSignatures.has(sig)) {
-      usedSignatures.add(sig);
-      uniqueTracks.push([key, notes]);
-    } else {
-      console.log(`MIDI: Skipping duplicate track ${key} (same pattern as another)`);
-    }
-  }
-  
-  // Take top 3 unique tracks
-  const selectedChannels = uniqueTracks.slice(0, 3);
-  
-  console.log('Selected unique channels:', selectedChannels.map(([k, n]) => `${k}: ${n.length} notes`));
-  
-  // Create mapping from track-channel to PSG channel (0, 1, 2)
-  const channelMap = new Map<string, number>();
-  selectedChannels.forEach(([key], index) => channelMap.set(key, index));
-  
-  const vmusNotes: NoteEvent[] = [];
-  
-  // Scale ticks to our resolution (TICKS_PER_BEAT = 4)
-  const tickScale = TICKS_PER_BEAT / midiData.ticksPerBeat;
-  
-  // Only include notes from the top 3 channels
-  for (const note of midiData.notes) {
-    const key = `${note.track}-${note.channel}`;
-    const psgChannel = channelMap.get(key);
-    if (psgChannel === undefined) continue; // Skip notes from other channels
-    
-    vmusNotes.push({
-      id: generateId(),
-      note: note.note,
-      start: Math.round(note.start * tickScale),
-      duration: Math.max(1, Math.round(note.duration * tickScale)),
-      velocity: Math.min(15, Math.max(1, note.velocity)),
-      channel: psgChannel,
-    });
-  }
-  
-  const totalTicks = Math.max(DEFAULT_TICKS, Math.round(midiData.totalTicks * tickScale) + 16);
-  
-  return {
-    version: '1.0',
-    name: 'Imported MIDI',
-    author: '',
-    tempo: midiData.tempo,
-    ticksPerBeat: TICKS_PER_BEAT,
-    totalTicks,
-    notes: vmusNotes,
-    noise: [],
-    loopStart: 0,
-    loopEnd: totalTicks,
-  };
-}
-
-// Helper para eliminar espacio en blanco inicial en arrays de notas
-function shiftNotesToZero<T extends { start: number; end?: number }>(notes: T[]): number {
-  if (!notes.length) return 0;
-  const minStart = Math.min(...notes.map(n => n.start));
-  if (minStart > 0) {
-    for (const n of notes) {
-      n.start -= minStart;
-      if (typeof n.end === 'number') n.end -= minStart;
-    }
-  }
-  return minStart;
-}
-
 // ============================================
 // MIDI Import Dialog Component
 // ============================================
 
 interface MidiImportDialogProps {
   importData: MidiImportData;
-  onImport: (selectedTracks: string[], mergeMode: boolean) => void;
+  onImport: (selectedTracks: string[], mergeMode: boolean, multiplexMode: boolean, trackModes: Map<string, 'tone' | 'noise'>) => void;
   onCancel: () => void;
 }
 
@@ -581,13 +112,25 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [previewTrack, setPreviewTrack] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [mergeMode, setMergeMode] = useState(true); // NEW: merge all tracks by default
-  const psgRef = useRef<PSGEngine | null>(null);
+  const [mergeMode, setMergeMode] = useState(true); // merge all tracks by default
+  const [multiplexMode, setMultiplexMode] = useState(false); // Tim Follin multiplex
+  const [trackModes, setTrackModes] = useState<Map<string, 'tone' | 'noise'>>(new Map()); // tone or noise per track
+  const psgRef = useRef<PSGAudioService | null>(null);
   const playIntervalRef = useRef<number | null>(null);
+  // Debug solo si necesario
+  // console.log('🎵 MidiImportDialog rendering with:', { 
+  //   hasImportData: !!importData, 
+  //   tracksCount: importData?.tracks?.length,
+  //   mode: multiplexMode ? 'multiplex' : mergeMode ? 'merge' : 'separate'
+  // });
   
   useEffect(() => {
-    psgRef.current = new PSGEngine();
-    psgRef.current.init();
+    const initAudio = async () => {
+      const audioService = new PSGAudioService();
+      await audioService.init();
+      psgRef.current = audioService;
+    };
+    initAudio();
     
     // Auto-select top 3 non-duplicate tracks (or more in merge mode)
     const autoSelected = importData.tracks
@@ -596,11 +139,27 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
       .map(t => t.key);
     setSelectedTracks(autoSelected);
     
+    // Auto-detect percussion tracks (channel 10 or low notes < MIDI 36)
+    const modes = new Map<string, 'tone' | 'noise'>();
+    importData.tracks.forEach(t => {
+      const isPercussion = t.channel === 10 || (t.minNote < 36 && t.maxNote < 48);
+      modes.set(t.key, isPercussion ? 'noise' : 'tone');
+    });
+    setTrackModes(modes);
+    
     return () => {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
       psgRef.current?.destroy();
     };
   }, [importData]);
+  
+  // Multiplex mode disables merge/separate selection (always merge all)
+  useEffect(() => {
+    if (multiplexMode) {
+      const allTracks = importData.tracks.filter(t => !t.isDuplicate).map(t => t.key);
+      setSelectedTracks(allTracks);
+    }
+  }, [multiplexMode, importData]);
   
   // Update selection when merge mode changes
   const handleMergeModeChange = (newMergeMode: boolean) => {
@@ -618,8 +177,10 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
   const toggleTrack = (key: string) => {
     setSelectedTracks(prev => {
       if (prev.includes(key)) {
+        // Don't allow deselection in multiplex mode
+        if (multiplexMode) return prev;
         return prev.filter(k => k !== key);
-      } else if (mergeMode || prev.length < 3) {
+      } else if (multiplexMode || mergeMode || prev.length < 3) {
         return [...prev, key];
       }
       return prev; // Max 3 in separate mode
@@ -646,6 +207,9 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
     const tickScale = TICKS_PER_BEAT / importData.ticksPerBeat;
     const msPerTick = (60000 / importData.tempo) / TICKS_PER_BEAT;
     
+    // Check if this track should be played as noise
+    const isNoiseTrack = trackModes.get(trackInfo.key) === 'noise';
+    
     // Start from where the notes actually begin
     const firstNoteStart = trackInfo.notes.length > 0 ? 
       Math.round(trackInfo.notes[0].start * tickScale) : 0;
@@ -662,14 +226,25 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
       for (const note of trackInfo.notes) {
         const scaledStart = Math.round(note.start * tickScale);
         if (scaledStart === pos && !playing.has(`${note.start}-${note.note}`)) {
-          psgRef.current?.playNote(0, note.note, note.velocity);
+          if (isNoiseTrack) {
+            // Play as noise
+            const period = Math.max(0, Math.min(31, Math.round(31 - (note.note - 24) / 2)));
+            psgRef.current?.playNoise(period, note.velocity);
+          } else {
+            // Play as tone
+            psgRef.current?.playNote(0, note.note, note.velocity);
+          }
           playing.set(`${note.start}-${note.note}`, note);
         }
       }
       for (const [id, note] of playing) {
         const scaledEnd = Math.round((note.start + note.duration) * tickScale);
         if (pos >= scaledEnd) {
-          psgRef.current?.stopChannel(0);
+          if (isNoiseTrack) {
+            psgRef.current?.stopNoise();
+          } else {
+            psgRef.current?.stopChannel(0);
+          }
           playing.delete(id);
         }
       }
@@ -719,42 +294,77 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
   };
   
   return (
-    <div style={dialogStyle} onClick={onCancel}>
-      <div style={panelStyle} onClick={e => e.stopPropagation()}>
-        <h2 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>🎵 Import MIDI - Select Channels</h2>
+    <>
+      {console.log('🎵 MidiImportDialog JSX rendering')}
+      <div style={dialogStyle} onClick={onCancel}>
+        <div style={panelStyle} onClick={e => e.stopPropagation()}>
+          <h2 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>🎵 Import MIDI - Select Channels</h2>
         
         {/* Mode selector */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', padding: '12px', background: '#2a2a3e', borderRadius: '6px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <input 
-              type="radio" 
-              checked={mergeMode} 
-              onChange={() => handleMergeModeChange(true)}
-              style={{ accentColor: '#4a4' }}
-            />
-            <div>
-              <div style={{ fontWeight: '500', color: '#fff' }}>🔀 Merge Mode (Recommended)</div>
-              <div style={{ fontSize: '11px', color: '#888' }}>All tracks → dynamic A/B/C based on polyphony</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px', padding: '16px', background: '#ff6b35', borderRadius: '8px', border: '3px solid #fff' }}>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#000', textAlign: 'center', marginBottom: '8px' }}>
+            🎵 SELECT IMPORT MODE
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: '#fff', padding: '8px', borderRadius: '6px', flex: 1, minWidth: '200px' }}>
+                <input 
+                  type="radio" 
+                  checked={mergeMode && !multiplexMode} 
+                  onChange={() => {
+                    setMergeMode(true);
+                    setMultiplexMode(false);
+                    handleMergeModeChange(true);
+                    console.log('🔀 Mode changed to: MERGE');
+                  }}
+                  style={{ accentColor: '#4a4', width: '20px', height: '20px' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 'bold', color: '#000' }}>🔀 Merge Mode</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>Dynamic A/B/C assignment</div>
+                </div>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: '#fff', padding: '8px', borderRadius: '6px', flex: 1, minWidth: '200px' }}>
+                <input 
+                  type="radio" 
+                  checked={!mergeMode && !multiplexMode} 
+                  onChange={() => {
+                    setMergeMode(false);
+                    setMultiplexMode(false);
+                    handleMergeModeChange(false);
+                    console.log('📊 Mode changed to: SEPARATE');
+                  }}
+                  style={{ accentColor: '#4a4', width: '20px', height: '20px' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 'bold', color: '#000' }}>📊 Separate Mode pepe</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>Fixed channels (max 3)</div>
+                </div>
+              </label>
             </div>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <input 
-              type="radio" 
-              checked={!mergeMode} 
-              onChange={() => handleMergeModeChange(false)}
-              style={{ accentColor: '#4a4' }}
-            />
-            <div>
-              <div style={{ fontWeight: '500', color: '#fff' }}>📊 Separate Mode</div>
-              <div style={{ fontSize: '11px', color: '#888' }}>Each track → fixed channel (max 3)</div>
-            </div>
-          </label>
-        </div>
-        
-        <p style={{ color: '#888', fontSize: '13px', margin: '0 0 8px 0' }}>
-          {mergeMode 
-            ? 'Select tracks to merge. Notes will be dynamically assigned to A/B/C.' 
-            : 'Select up to 3 tracks. Each becomes a fixed channel.'}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: '#fff', padding: '8px', borderRadius: '6px', flex: 1, minWidth: '200px', marginTop: '12px' }}>
+              <input 
+                type="radio" 
+                checked={multiplexMode} 
+                onChange={() => {
+                  setMultiplexMode(true);
+                  setMergeMode(true); // Multiplex always uses merge internally
+                  console.log('🎚 Mode changed to: MULTIPLEX');
+                }}
+                style={{ accentColor: '#4a4', width: '20px', height: '20px' }}
+              />
+              <div>
+                <div style={{ fontWeight: 'bold', color: '#000' }}>🎚 Multiplex Mode</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Tim Follin: 6 virtual channels</div>
+              </div>
+            </label>
+          </div>
+        </div>        <p style={{ color: '#888', fontSize: '13px', margin: '0 0 8px 0' }}>
+          {multiplexMode
+            ? 'Multiplex: hasta 6 canales virtuales, sin descartar notas.'
+            : mergeMode 
+              ? 'Select tracks to merge. Notes will be dynamically assigned to A/B/C.' 
+              : 'Select up to 3 tracks. Each becomes a fixed channel.'}
         </p>
         <p style={{ color: '#6a8', fontSize: '12px', margin: '0 0 12px 0' }}>
           Tempo: {importData.tempo} BPM | Tracks: {importData.tracks.length} | 
@@ -787,6 +397,29 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
                     {track.startBeat > 0 && <span style={{ color: '#a8a', marginLeft: '6px' }}>| Starts at beat {Math.round(track.startBeat)}</span>}
                   </div>
                 </div>
+                <select
+                  value={trackModes.get(track.key) || 'tone'}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    const newModes = new Map(trackModes);
+                    newModes.set(track.key, e.target.value as 'tone' | 'noise');
+                    setTrackModes(newModes);
+                  }}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #666',
+                    background: trackModes.get(track.key) === 'noise' ? '#d84' : '#48c',
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    marginRight: '8px'
+                  }}
+                >
+                  <option value="tone">🎵 Tone</option>
+                  <option value="noise">🥁 Noise</option>
+                </select>
                 <button 
                   onClick={(e) => { e.stopPropagation(); previewPlay(track); }}
                   style={{ ...btnStyle, background: previewTrack === track.key ? '#c44' : '#4a4', minWidth: '50px' }}
@@ -801,18 +434,21 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
         <div style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{ ...btnStyle, background: '#555' }}>Cancel</button>
           <button 
-            onClick={() => onImport(selectedTracks, mergeMode)} 
+            onClick={() => onImport(selectedTracks, mergeMode, multiplexMode, trackModes)} 
             disabled={selectedTracks.length === 0}
             style={{ ...btnStyle, background: selectedTracks.length > 0 ? '#4a4' : '#333' }}
           >
-            {mergeMode 
-              ? `🔀 Merge ${selectedTracks.length} Track${selectedTracks.length !== 1 ? 's' : ''}`
-              : `Import ${selectedTracks.length} Channel${selectedTracks.length !== 1 ? 's' : ''}`
+            {multiplexMode
+              ? `🎚 Multiplex (${selectedTracks.length} canales)`
+              : mergeMode 
+                ? `🔀 Merge ${selectedTracks.length} Track${selectedTracks.length !== 1 ? 's' : ''}`
+                : `Import ${selectedTracks.length} Channel${selectedTracks.length !== 1 ? 's' : ''}`
             }
           </button>
         </div>
       </div>
     </div>
+    </>
   );
 };
 
@@ -820,82 +456,9 @@ const MidiImportDialog: React.FC<MidiImportDialogProps> = ({ importData, onImpor
 // PSG Audio Engine
 // ============================================
 
-class PSGEngine {
-  private ctx: AudioContext | null = null;
-  private oscillators: OscillatorNode[] = [];
-  private gains: GainNode[] = [];
-  private masterGain: GainNode | null = null;
-  
-  async init() {
-    if (this.ctx) return;
-    this.ctx = new AudioContext();
-    
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.2;
-    this.masterGain.connect(this.ctx.destination);
-    
-    for (let i = 0; i < 3; i++) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = 440;
-      gain.gain.value = 0;
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start();
-      this.oscillators.push(osc);
-      this.gains.push(gain);
-    }
-  }
-  
-  noteToFrequency(note: number): number {
-    return 440 * Math.pow(2, (note - 69) / 12);
-  }
-  
-  playNote(channel: number, note: number, velocity: number) {
-    if (!this.ctx || channel < 0 || channel > 2) return;
-    const freq = this.noteToFrequency(note);
-    this.oscillators[channel].frequency.setValueAtTime(freq, this.ctx.currentTime);
-    this.gains[channel].gain.setValueAtTime(velocity / 15 * 0.3, this.ctx.currentTime);
-  }
-  
-  stopChannel(channel: number) {
-    if (channel >= 0 && channel < 3 && this.gains[channel]) {
-      this.gains[channel].gain.value = 0;
-    }
-  }
-  
-  stopAll() {
-    this.gains.forEach(g => { if (g) g.gain.value = 0; });
-  }
-  
-  destroy() {
-    this.oscillators.forEach(o => { try { o.stop(); } catch {} });
-    this.ctx?.close();
-  }
-}
-
 // ============================================
 // Main Component
 // ============================================
-
-// Ensure resource has all required fields with defaults
-const ensureValidResource = (r?: Partial<MusicResource>): MusicResource => {
-  const defaults = createDefaultResource();
-  if (!r) return defaults;
-  return {
-    version: r.version || defaults.version,
-    name: r.name || defaults.name,
-    author: r.author || defaults.author,
-    tempo: r.tempo || defaults.tempo,
-    ticksPerBeat: r.ticksPerBeat || defaults.ticksPerBeat,
-    totalTicks: r.totalTicks || defaults.totalTicks,
-    notes: Array.isArray(r.notes) ? r.notes : defaults.notes,
-    noise: Array.isArray(r.noise) ? r.noise : defaults.noise,
-    loopStart: r.loopStart ?? defaults.loopStart,
-    loopEnd: r.loopEnd ?? defaults.loopEnd,
-  };
-};
 
 export const MusicEditor: React.FC<MusicEditorProps> = ({
   resource: initialResource,
@@ -903,20 +466,20 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
   width: propWidth,
   height: propHeight,
 }) => {
-  const [resource, setResource] = useState<MusicResource>(() => ensureValidResource(initialResource));
+  const [resource, setResource] = useState<MusicResource>(() => MusicResourceService.ensureValidResource(initialResource));
   const [currentChannel, setCurrentChannel] = useState(0);
-  const [viewChannel, setViewChannel] = useState<number | 'all'>('all'); // Filter: 'all' or 0/1/2
+  const [viewChannel, setViewChannel] = useState<number | 'all' | 'noise'>('all'); // Filter: 'all', 0/1/2, or 'noise'
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPosition, setPlayheadPosition] = useState(0);
   const [scrollX, setScrollX] = useState(0);
   const [scrollY, setScrollY] = useState(NOTES_COUNT * PIANO_KEY_HEIGHT / 2 - 200);
-  const [tool, setTool] = useState<'draw' | 'select' | 'erase'>('draw');
+  const [tool, setTool] = useState<'draw' | 'select' | 'erase' | 'pan'>('pan');
   const [containerSize, setContainerSize] = useState({ width: propWidth || 1000, height: propHeight || 600 });
 
   // Sync with external resource changes (e.g., file loaded from disk)
   useEffect(() => {
     if (initialResource) {
-      const validated = ensureValidResource(initialResource);
+      const validated = MusicResourceService.ensureValidResource(initialResource);
       // Only update if notes array is different (avoid loops)
       if (JSON.stringify(validated.notes) !== JSON.stringify(resource.notes) ||
           validated.tempo !== resource.tempo ||
@@ -932,15 +495,46 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState(100); // Percentage: 100 = normal, 50 = half speed
   const [autoScroll, setAutoScroll] = useState(true);
   
+  const maxReachedBarsRef = useRef(0); // Memorizar el máximo de compases alcanzado
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const psgRef = useRef<PSGEngine | null>(null);
+  const psgRef = useRef<PSGAudioService | null>(null);
   const playIntervalRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Calcular rango de compases VISIBLES para renderizado eficiente
+  const visibleBarRange = useMemo(() => {
+    const lastNoteEnd = resource.notes.length ? Math.max(...resource.notes.map((n: NoteEvent) => n.start + n.duration)) : 0;
+    const tickWidth = TICK_WIDTH * zoom;
+    const currentVisibleWidth = containerSize.width - PIANO_KEY_WIDTH - 20;
+    const ticksPerBar = TICKS_PER_BEAT * 4;
+    const barWidth = ticksPerBar * tickWidth;
+    
+    // Calcular qué compases están visibles en pantalla
+    const firstVisibleBar = Math.floor(scrollX / barWidth);
+    const visibleBarsCount = Math.ceil(currentVisibleWidth / barWidth);
+    const lastVisibleBar = firstVisibleBar + visibleBarsCount;
+    
+    // Buffer: renderizar 20 compases antes y 100 después
+    const startBar = Math.max(0, firstVisibleBar - 20);
+    const contentBars = Math.ceil(lastNoteEnd / ticksPerBar);
+    const farthestNeeded = Math.max(
+      lastVisibleBar + 100,
+      contentBars,
+      Math.ceil(playheadPosition / ticksPerBar) + 100
+    );
+    
+    return { startBar, endBar: farthestNeeded };
+  }, [scrollX, zoom, containerSize.width, resource.notes, playheadPosition]);
+
   // Initialize audio
   useEffect(() => {
-    psgRef.current = new PSGEngine();
-    psgRef.current.init();
+    const initAudio = async () => {
+      const audioService = new PSGAudioService();
+      await audioService.init();
+      psgRef.current = audioService;
+    };
+    initAudio();
     return () => psgRef.current?.destroy();
   }, []);
 
@@ -1024,7 +618,9 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
     // Draw notes (filtered by viewChannel)
     const visibleNotes = viewChannel === 'all' 
       ? resource.notes 
-      : resource.notes.filter(n => n.channel === viewChannel);
+      : viewChannel === 'noise'
+        ? [] // Don't show tone notes when viewing noise
+        : resource.notes.filter((n: NoteEvent) => n.channel === viewChannel);
     
     for (const note of visibleNotes) {
       const noteIndex = NOTES_COUNT - 1 - (note.note - START_NOTE);
@@ -1055,6 +651,48 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
       }
     }
 
+    // Draw noise events (as a separate track at the bottom) - only if viewing 'all' or 'noise'
+    const shouldShowNoise = viewChannel === 'all' || viewChannel === 'noise';
+    if (shouldShowNoise && resource.noise && Array.isArray(resource.noise) && resource.noise.length > 0) {
+      const noiseTrackY = visibleHeight - 40;
+      const noiseTrackHeight = 30;
+      
+      // Draw noise track background
+      ctx.fillStyle = 'rgba(255, 100, 50, 0.1)';
+      ctx.fillRect(0, noiseTrackY, visibleWidth, noiseTrackHeight);
+      
+      // Draw noise label
+      ctx.fillStyle = '#d84';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText('🥁 NOISE', 5, noiseTrackY + 20);
+      
+      // Draw noise events
+      for (const noise of resource.noise) {
+        const x = noise.start * tickW - scrollX;
+        const w = noise.duration * tickW;
+        
+        if (x + w < 0 || x > visibleWidth) continue;
+        
+        // Color based on period (lower period = brighter)
+        const brightness = 255 - (noise.period / 31) * 100;
+        ctx.fillStyle = `rgb(${brightness}, ${brightness * 0.5}, ${brightness * 0.3})`;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        ctx.roundRect(x + 1, noiseTrackY + 5, Math.max(w - 2, 4), noiseTrackHeight - 10, 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Show period value if wide enough
+        if (w > 20) {
+          ctx.fillStyle = '#000';
+          ctx.font = '9px monospace';
+          ctx.fillText(`P${noise.period}`, x + 4, noiseTrackY + 20);
+        }
+      }
+    }
+    
     // Draw playhead
     const playX = playheadPosition * tickW - scrollX;
     if (playX >= 0 && playX <= visibleWidth) {
@@ -1083,6 +721,11 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     
+    if (tool === 'pan') {
+      setDragStart({ tick: scrollX, note: scrollY }); // Reutilizar dragStart para guardar scroll inicial
+      return;
+    }
+    
     const x = e.clientX - rect.left + scrollX;
     const y = e.clientY - rect.top + scrollY;
     const tickW = TICK_WIDTH * zoom;
@@ -1097,12 +740,12 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
       setDragStart({ tick, note });
       psgRef.current?.playNote(currentChannel, note, 15);
     } else if (tool === 'erase') {
-      const newNotes = resource.notes.filter(n => 
+      const newNotes = resource.notes.filter((n: NoteEvent) => 
         !(n.note === note && n.start <= tick && n.start + n.duration > tick)
       );
       updateResource({ ...resource, notes: newNotes });
     } else if (tool === 'select') {
-      const clickedNote = resource.notes.find(n =>
+      const clickedNote = resource.notes.find((n: NoteEvent) =>
         n.note === note && n.start <= tick && n.start + n.duration > tick
       );
       if (clickedNote) {
@@ -1115,6 +758,18 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
         }
       } else {
         setSelectedNotes(new Set());
+      }
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (dragStart && tool === 'pan') {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const deltaX = e.movementX;
+        const deltaY = e.movementY;
+        setScrollX(Math.max(0, scrollX - deltaX));
+        setScrollY(Math.max(0, scrollY - deltaY));
       }
     }
   };
@@ -1159,12 +814,17 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
       // Filter notes based on viewChannel
       const notesToPlay = viewChannel === 'all' 
         ? resource.notes 
-        : resource.notes.filter(n => n.channel === viewChannel);
+        : viewChannel === 'noise'
+          ? [] // Don't play tone notes when viewing noise only
+          : resource.notes.filter((n: NoteEvent) => n.channel === viewChannel);
+      
+      const shouldPlayNoise = viewChannel === 'all' || viewChannel === 'noise';
       
       const tickWidth = TICK_WIDTH * zoom;
       
       // Track active notes per channel (only one note per channel at a time)
       const activeNotePerChannel: (NoteEvent | null)[] = [null, null, null];
+      let activeNoiseEvent: any = null;
       
       playIntervalRef.current = window.setInterval(() => {
         // Find notes that start at current position
@@ -1176,12 +836,31 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
           }
         }
         
+        // Process noise events (only if viewing noise or all channels)
+        if (shouldPlayNoise && resource.noise && Array.isArray(resource.noise)) {
+          for (const noise of resource.noise) {
+            if (noise.start === pos) {
+              psgRef.current?.playNoise(noise.period, 15);
+              activeNoiseEvent = noise;
+            }
+          }
+          
+          // Check if active noise has ended
+          if (activeNoiseEvent && pos >= activeNoiseEvent.start + activeNoiseEvent.duration) {
+            const newNoise = resource.noise.find((n: any) => n.start === pos);
+            if (!newNoise) {
+              psgRef.current?.stopNoise();
+              activeNoiseEvent = null;
+            }
+          }
+        }
+        
         // Check if any active notes have ended
         for (let ch = 0; ch < 3; ch++) {
           const activeNote = activeNotePerChannel[ch];
           if (activeNote && pos >= activeNote.start + activeNote.duration) {
             // Check if there's another note starting at this exact tick
-            const newNote = notesToPlay.find(n => n.channel === ch && n.start === pos);
+            const newNote = notesToPlay.find((n: NoteEvent) => n.channel === ch && n.start === pos);
             if (!newNote) {
               psgRef.current?.stopChannel(ch);
               activeNotePerChannel[ch] = null;
@@ -1210,7 +889,7 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
   useEffect(() => () => { if (playIntervalRef.current) clearInterval(playIntervalRef.current); }, []);
 
   const deleteSelected = useCallback(() => {
-    updateResource({ ...resource, notes: resource.notes.filter(n => !selectedNotes.has(n.id)) });
+    updateResource({ ...resource, notes: resource.notes.filter((n: NoteEvent) => !selectedNotes.has(n.id)) });
     setSelectedNotes(new Set());
   }, [resource, selectedNotes, updateResource]);
 
@@ -1220,6 +899,7 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
     else if (e.key === '1') setCurrentChannel(0);
     else if (e.key === '2') setCurrentChannel(1);
     else if (e.key === '3') setCurrentChannel(2);
+    else if (e.key === 'p') setTool('pan');
     else if (e.key === 'd') setTool('draw');
     else if (e.key === 's') setTool('select');
     else if (e.key === 'e') setTool('erase');
@@ -1241,7 +921,7 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
       if (!file) return;
       try {
         const arrayBuffer = await file.arrayBuffer();
-        const importData = analyzeMidi(arrayBuffer);
+        const importData = MidiService.analyzeMidi(arrayBuffer);
         console.log('MIDI analyzed:', importData.tracks.length, 'tracks');
         setMidiImportData(importData);
       } catch (err) {
@@ -1253,21 +933,26 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
   }, []);
 
   // Handle import from dialog
-  const handleMidiImport = useCallback((selectedTracks: string[], mergeMode: boolean) => {
+  const handleMidiImport = useCallback((selectedTracks: string[], mergeMode: boolean, multiplexMode: boolean, trackModes: Map<string, 'tone' | 'noise'>) => {
     if (!midiImportData) return;
-    
-    const vmusData = mergeMode 
-      ? mergedTracksToVmus(midiImportData, selectedTracks)
-      : selectedTracksToVmus(midiImportData, selectedTracks);
-    
-    console.log('Imported:', vmusData.notes.length, 'notes', mergeMode ? '(merged)' : '(separate)');
-    
+
+    let vmusData;
+    if (multiplexMode) {
+      vmusData = MusicConversionService.multiplexedTracksToVmus(midiImportData, selectedTracks, trackModes);
+      console.log('Imported:', vmusData.notes.length, 'notes (multiplex)');
+    } else if (mergeMode) {
+      vmusData = MusicConversionService.mergedTracksToVmus(midiImportData, selectedTracks, trackModes);
+      console.log('Imported:', vmusData.notes.length, 'notes (merged)');
+    } else {
+      vmusData = MusicConversionService.selectedTracksToVmus(midiImportData, selectedTracks, trackModes);
+      console.log('Imported:', vmusData.notes.length, 'notes (separate)');
+    }
     // Show summary
-    const chA = vmusData.notes.filter(n => n.channel === 0).length;
-    const chB = vmusData.notes.filter(n => n.channel === 1).length;
-    const chC = vmusData.notes.filter(n => n.channel === 2).length;
-    console.log(`Channels: A=${chA}, B=${chB}, C=${chC}`);
-    
+    const chA = vmusData.notes.filter((n: NoteEvent) => n.channel === 0).length;
+    const chB = vmusData.notes.filter((n: NoteEvent) => n.channel === 1).length;
+    const chC = vmusData.notes.filter((n: NoteEvent) => n.channel === 2).length;
+    const noiseCount = vmusData.noise.length;
+    console.log(`Channels: A=${chA}, B=${chB}, C=${chC}, Noise=${noiseCount}`);
     updateResource(vmusData);
     setScrollX(0);
     setScrollY(NOTES_COUNT * PIANO_KEY_HEIGHT / 2 - 200);
@@ -1321,6 +1006,7 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
         
         <div style={{ width: '1px', height: '24px', background: '#4a4a6e' }} />
         
+        <button onClick={() => setTool('pan')} style={{ ...btnStyle, background: tool === 'pan' ? '#5a5a8e' : '#3a3a5e' }}>✋ Pan</button>
         <button onClick={() => setTool('draw')} style={{ ...btnStyle, background: tool === 'draw' ? '#5a5a8e' : '#3a3a5e' }}>✏️ Draw</button>
         <button onClick={() => setTool('select')} style={{ ...btnStyle, background: tool === 'select' ? '#5a5a8e' : '#3a3a5e' }}>⬚ Select</button>
         <button onClick={() => setTool('erase')} style={{ ...btnStyle, background: tool === 'erase' ? '#5a5a8e' : '#3a3a5e' }}>🗑 Erase</button>
@@ -1348,6 +1034,10 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
             {ch}
           </button>
         ))}
+        <button onClick={() => setViewChannel('noise')}
+          style={{ ...btnStyle, background: viewChannel === 'noise' ? '#d84' : '#3a3a5e', fontWeight: viewChannel === 'noise' ? 'bold' : 'normal', minWidth: '52px', padding: '6px 8px' }}>
+          🥁 N
+        </button>
         
         <div style={{ width: '1px', height: '24px', background: '#4a4a6e' }} />
         
@@ -1382,39 +1072,37 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
       {/* Timeline header */}
       <div style={{ height: '20px', marginLeft: PIANO_KEY_WIDTH, background: '#252530', borderBottom: '1px solid #444', overflow: 'hidden', flexShrink: 0 }}>
         <div style={{ transform: `translateX(${-scrollX}px)`, display: 'flex' }}>
-          {(() => {
-            // Calcular el número de compases hasta el final real de la canción
-            const lastNoteEnd = resource.notes.length ? Math.max(...resource.notes.map(n => n.start + n.duration)) : 0;
-            const bars = Math.ceil(Math.max(resource.totalTicks, lastNoteEnd) / (TICKS_PER_BEAT * 4));
-            return Array.from({ length: bars }, (_, i) => {
-              const tick = i * TICKS_PER_BEAT * 4;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    width: TICKS_PER_BEAT * 4 * TICK_WIDTH * zoom,
-                    color: '#888', fontSize: '10px', paddingLeft: '4px', borderLeft: '1px solid #555',
-                    cursor: 'pointer', userSelect: 'none',
-                    background: playheadPosition >= tick && playheadPosition < tick + TICKS_PER_BEAT * 4 ? '#2a2a3e' : undefined
-                  }}
-                  onClick={() => {
-                    setPlayheadPosition(tick);
-                    if (isPlaying) {
-                      if (playIntervalRef.current) clearInterval(playIntervalRef.current);
-                      setTimeout(() => togglePlay(), 0);
-                    }
-                  }}
-                  title={`Bar ${i + 1} (tick ${tick})`}
-                >
-                  {i + 1}
-                </div>
-              );
-            });
-          })()}
+          {/* Spacer para compensar compases no renderizados al inicio */}
+          {visibleBarRange.startBar > 0 && (
+            <div style={{ width: visibleBarRange.startBar * TICKS_PER_BEAT * 4 * TICK_WIDTH * zoom, flexShrink: 0 }} />
+          )}
+          {Array.from({ length: visibleBarRange.endBar - visibleBarRange.startBar }, (_, idx) => {
+            const i = visibleBarRange.startBar + idx;
+            const tick = i * TICKS_PER_BEAT * 4;
+            return (
+              <div
+                key={i}
+                style={{
+                  width: TICKS_PER_BEAT * 4 * TICK_WIDTH * zoom,
+                  color: '#888', fontSize: '10px', paddingLeft: '4px', borderLeft: '1px solid #555',
+                  cursor: 'pointer', userSelect: 'none',
+                  background: playheadPosition >= tick && playheadPosition < tick + TICKS_PER_BEAT * 4 ? '#2a2a3e' : undefined
+                }}
+                onClick={() => {
+                  setPlayheadPosition(tick);
+                  if (isPlaying) {
+                    if (playIntervalRef.current) clearInterval(playIntervalRef.current);
+                    setTimeout(() => togglePlay(), 0);
+                  }
+                }}
+                title={`Bar ${i + 1} (tick ${tick})`}
+              >
+                {i + 1}
+              </div>
+            );
+          })}
         </div>
-      </div>
-
-      {/* Main area */}
+      </div>      {/* Main area */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
         {/* Piano keys */}
         <div style={{ width: PIANO_KEY_WIDTH, flexShrink: 0, overflow: 'hidden', background: '#1a1a2e', borderRight: '2px solid #333' }}>
@@ -1443,7 +1131,7 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
 
         {/* Canvas */}
         <canvas ref={canvasRef} width={visibleWidth} height={visibleHeight}
-          onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onWheel={handleWheel}
+          onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onWheel={handleWheel}
           style={{ flex: 1, cursor: tool === 'draw' ? 'crosshair' : tool === 'erase' ? 'not-allowed' : 'default' }} />
       </div>
 
@@ -1489,9 +1177,11 @@ export const MusicEditor: React.FC<MusicEditorProps> = ({
         <span><b>Del</b>: Delete</span>
         <span><b>Scroll</b>: V | <b>Shift+Scroll</b>: H</span>
       </div>
-      {/* MIDI Import Dialog */}
       {midiImportData && (
-        <MidiImportDialog importData={midiImportData} onImport={handleMidiImport} onCancel={() => setMidiImportData(null)} />
+        <>
+          {console.log('🎵 Rendering MidiImportDialog with data:', midiImportData)}
+          <MidiImportDialog importData={midiImportData} onImport={handleMidiImport} onCancel={() => setMidiImportData(null)} />
+        </>
       )}
     </div>
   );

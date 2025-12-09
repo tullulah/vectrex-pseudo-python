@@ -1,12 +1,12 @@
-import { AiProviderFactory } from './AiProviderFactory';
+import { AiProviderFactory } from './AiProviderFactory.js';
 import type { 
   IAiProvider, 
   AiProviderType, 
   AiProviderConfig, 
   AiRequest, 
   AiResponse 
-} from '../types/aiProvider';
-import { logger } from '../utils/logger';
+} from '../types/aiProvider.js';
+import { logger } from '../utils/logger.js';
 
 export class AiService {
   private currentProvider: IAiProvider | null = null;

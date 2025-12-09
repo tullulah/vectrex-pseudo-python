@@ -1,4 +1,4 @@
-import { MetricsSnapshot, RegistersSnapshot, Segment, IEmulatorCore } from './emulatorCore';
+import type { MetricsSnapshot, RegistersSnapshot, Segment, IEmulatorCore } from './emulatorCore.js';
 
 export class JsVecxEmulatorCore implements IEmulatorCore {
   private mod: any = null;

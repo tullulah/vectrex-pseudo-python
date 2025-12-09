@@ -1,5 +1,5 @@
-import { BaseAiProvider } from './BaseAiProvider';
-import { AiProviderConfig, AiRequest, AiResponse } from '../../types/aiProvider';
+import { BaseAiProvider } from './BaseAiProvider.js';
+import type { AiProviderConfig, AiRequest, AiResponse } from '../../types/aiProvider.js';
 
 export class GroqProvider extends BaseAiProvider {
   public readonly name = 'Groq (Free)';

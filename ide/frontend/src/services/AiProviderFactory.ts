@@ -1,10 +1,10 @@
-import type { IAiProvider, AiProviderConfig, AiProviderType } from '../types/aiProvider';
-import { MockProvider } from './providers/MockProvider';
-import { DeepSeekProvider } from './providers/DeepSeekProvider';
-import { OpenAiProvider } from './providers/OpenAiProvider';
-import { AnthropicProvider } from './providers/AnthropicProvider';
-import { GitHubModelsProvider } from './providers/GitHubModelsProvider';
-import { GroqProvider } from './providers/GroqProvider';
+import type { IAiProvider, AiProviderConfig, AiProviderType } from '../types/aiProvider.js';
+import { MockProvider } from './providers/MockProvider.js';
+import { DeepSeekProvider } from './providers/DeepSeekProvider.js';
+import { OpenAiProvider } from './providers/OpenAiProvider.js';
+import { AnthropicProvider } from './providers/AnthropicProvider.js';
+import { GitHubModelsProvider } from './providers/GitHubModelsProvider.js';
+import { GroqProvider } from './providers/GroqProvider.js';
 
 export class AiProviderFactory {
   private static instances: Map<AiProviderType, IAiProvider> = new Map();

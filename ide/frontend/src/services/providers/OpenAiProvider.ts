@@ -1,5 +1,5 @@
-import { BaseAiProvider } from './BaseAiProvider';
-import type { AiRequest, AiResponse } from '../../types/aiProvider';
+import { BaseAiProvider } from './BaseAiProvider.js';
+import type { AiRequest, AiResponse } from '../../types/aiProvider.js';
 
 export class OpenAiProvider extends BaseAiProvider {
   public readonly name = 'OpenAI';

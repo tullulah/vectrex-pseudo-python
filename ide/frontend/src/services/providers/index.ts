@@ -1,11 +1,11 @@
 // Export all providers and factory
-export { AiProviderFactory } from '../AiProviderFactory';
-export { BaseAiProvider } from './BaseAiProvider';
-export { MockProvider } from './MockProvider';
-export { DeepSeekProvider } from './DeepSeekProvider';
-export { OpenAiProvider } from './OpenAiProvider';
-export { AnthropicProvider } from './AnthropicProvider';
-export { GitHubModelsProvider } from './GitHubModelsProvider';
+export { AiProviderFactory } from '../AiProviderFactory.js';
+export { BaseAiProvider } from './BaseAiProvider.js';
+export { MockProvider } from './MockProvider.js';
+export { DeepSeekProvider } from './DeepSeekProvider.js';
+export { OpenAiProvider } from './OpenAiProvider.js';
+export { AnthropicProvider } from './AnthropicProvider.js';
+export { GitHubModelsProvider } from './GitHubModelsProvider.js';
 
 // Re-export types for convenience
 export type {
@@ -14,4 +14,4 @@ export type {
   AiProviderType,
   AiRequest,
   AiResponse
-} from '../../types/aiProvider';
+} from '../../types/aiProvider.js';

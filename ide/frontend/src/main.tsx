@@ -1,21 +1,21 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import './i18n';
+import './i18n.js';
 import './global.css';
 import { useTranslation } from 'react-i18next';
 // (import eliminado duplicado) 
-import { initLsp, lspClient } from './lspClient';
-import { DockWorkspace } from './components/DockWorkspace';
-import { restoreEditorState, ensureEditorPersistence } from './state/editorPersistence';
-import { deriveBinaryName } from './utils';
-import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus';
-import { useEditorStore } from './state/editorStore';
-import { useProjectStore, setEditorStoreRef } from './state/projectStore';
-import { useDebugStore } from './state/debugStore';
-import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem, SubMenu } from './components/MenuComponents';
-import { NewProjectDialog } from './components/dialogs/NewProjectDialog';
-import { InputDialog } from './components/dialogs/InputDialog';
-import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger';
+import { initLsp, lspClient } from './lspClient.js';
+import { DockWorkspace } from './components/DockWorkspace.js';
+import { restoreEditorState, ensureEditorPersistence } from './state/editorPersistence.js';
+import { deriveBinaryName } from './utils/index.js';
+import { toggleComponent, resetLayout, ensureComponent } from './state/dockBus.js';
+import { useEditorStore } from './state/editorStore.js';
+import { useProjectStore, setEditorStoreRef } from './state/projectStore.js';
+import { useDebugStore } from './state/debugStore.js';
+import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem, SubMenu } from './components/MenuComponents.js';
+import { NewProjectDialog } from './components/dialogs/NewProjectDialog.js';
+import { InputDialog } from './components/dialogs/InputDialog.js';
+import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger.js';
 
 // Initialize store reference for cross-store access
 setEditorStoreRef(useEditorStore);

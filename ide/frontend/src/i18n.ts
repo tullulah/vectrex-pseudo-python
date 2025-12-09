@@ -1,10 +1,10 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-import common_en from './locales/en/common.json';
-import editor_en from './locales/en/editor.json';
-import common_es from './locales/es/common.json';
-import editor_es from './locales/es/editor.json';
+import common_en from './locales/en/common.json' with { type: 'json' };
+import editor_en from './locales/en/editor.json' with { type: 'json' };
+import common_es from './locales/es/common.json' with { type: 'json' };
+import editor_es from './locales/es/editor.json' with { type: 'json' };
 
 void i18n
   .use(initReactI18next)

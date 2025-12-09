@@ -1,4 +1,4 @@
-import { MetricsSnapshot, RegistersSnapshot, Segment } from './types';
+import type { MetricsSnapshot, RegistersSnapshot, Segment } from './types.js';
 
 export class JsVecxCore {
   private mod: any = null;

@@ -122,9 +122,9 @@ function gaussianBlur(imageData: ImageData): ImageData {
         for (let kx = -2; kx <= 2; kx++) {
           const idx = ((y + ky) * width + (x + kx)) * 4;
           const k = kernel[(ky + 2) * 5 + (kx + 2)];
-          r += src[idx] * k;
-          g += src[idx + 1] * k;
-          b += src[idx + 2] * k;
+          if (src[idx] !== undefined && k !== undefined) r += src[idx] * k;
+          if (src[idx + 1] !== undefined && k !== undefined) g += src[idx + 1] * k;
+          if (src[idx + 2] !== undefined && k !== undefined) b += src[idx + 2] * k;
         }
       }
       const dstIdx = (y * width + x) * 4;
@@ -158,10 +158,10 @@ function sobelEdgeDetection(imageData: ImageData): { magnitude: Float32Array; di
       for (let ky = -1; ky <= 1; ky++) {
         for (let kx = -1; kx <= 1; kx++) {
           const idx = ((y + ky) * width + (x + kx)) * 4;
-          const gray = src[idx] * 0.299 + src[idx + 1] * 0.587 + src[idx + 2] * 0.114;
+          const gray = (src[idx] ?? 0) * 0.299 + (src[idx + 1] ?? 0) * 0.587 + (src[idx + 2] ?? 0) * 0.114;
           const kernelIdx = (ky + 1) * 3 + (kx + 1);
-          gx += gray * sobelX[kernelIdx];
-          gy += gray * sobelY[kernelIdx];
+          gx += gray * (sobelX[kernelIdx] ?? 0);
+          gy += gray * (sobelY[kernelIdx] ?? 0);
         }
       }
       
@@ -193,38 +193,38 @@ function nonMaximumSuppression(
       
       // Determine gradient direction (0, 45, 90, 135 degrees)
       let neighbor1 = 0, neighbor2 = 0;
-      const absAngle = Math.abs(angle);
+      const absAngle = Math.abs(angle ?? 0);
       
       if (absAngle < Math.PI / 8 || absAngle > 7 * Math.PI / 8) {
         // Horizontal edge - compare with left/right
-        neighbor1 = magnitude[idx - 1];
-        neighbor2 = magnitude[idx + 1];
+        neighbor1 = magnitude[idx - 1] ?? 0;
+        neighbor2 = magnitude[idx + 1] ?? 0;
       } else if (absAngle < 3 * Math.PI / 8) {
-        // Diagonal edge (45 or -45)
-        if (angle > 0) {
-          neighbor1 = magnitude[(y - 1) * width + (x + 1)];
-          neighbor2 = magnitude[(y + 1) * width + (x - 1)];
+        // Diagonal edge (45 o -45)
+        if ((angle ?? 0) > 0) {
+          neighbor1 = magnitude[(y - 1) * width + (x + 1)] ?? 0;
+          neighbor2 = magnitude[(y + 1) * width + (x - 1)] ?? 0;
         } else {
-          neighbor1 = magnitude[(y - 1) * width + (x - 1)];
-          neighbor2 = magnitude[(y + 1) * width + (x + 1)];
+          neighbor1 = magnitude[(y - 1) * width + (x - 1)] ?? 0;
+          neighbor2 = magnitude[(y + 1) * width + (x + 1)] ?? 0;
         }
       } else if (absAngle < 5 * Math.PI / 8) {
         // Vertical edge - compare with top/bottom
-        neighbor1 = magnitude[(y - 1) * width + x];
-        neighbor2 = magnitude[(y + 1) * width + x];
+        neighbor1 = magnitude[(y - 1) * width + x] ?? 0;
+        neighbor2 = magnitude[(y + 1) * width + x] ?? 0;
       } else {
         // Other diagonal
-        if (angle > 0) {
-          neighbor1 = magnitude[(y - 1) * width + (x - 1)];
-          neighbor2 = magnitude[(y + 1) * width + (x + 1)];
+        if ((angle ?? 0) > 0) {
+          neighbor1 = magnitude[(y - 1) * width + (x - 1)] ?? 0;
+          neighbor2 = magnitude[(y + 1) * width + (x + 1)] ?? 0;
         } else {
-          neighbor1 = magnitude[(y - 1) * width + (x + 1)];
-          neighbor2 = magnitude[(y + 1) * width + (x - 1)];
+          neighbor1 = magnitude[(y - 1) * width + (x + 1)] ?? 0;
+          neighbor2 = magnitude[(y + 1) * width + (x - 1)] ?? 0;
         }
       }
       
       // Keep pixel only if it's a local maximum
-      if (mag >= neighbor1 && mag >= neighbor2) {
+      if (mag !== undefined && mag >= neighbor1 && mag >= neighbor2) {
         output[idx] = mag;
       }
     }
@@ -250,9 +250,9 @@ function hysteresisThreshold(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const mag = magnitude[y * width + x];
-      if (mag >= highThreshold) {
-        strong[y][x] = true;
-        edges[y][x] = true;
+      if (mag !== undefined && mag >= highThreshold) {
+        if (strong[y]) strong[y][x] = true;
+        if (edges[y]) edges[y][x] = true;
       }
     }
   }
@@ -263,21 +263,20 @@ function hysteresisThreshold(
     changed = false;
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
-        if (edges[y][x]) continue;
-        
+        if (!edges[y] || edges[y][x]) continue;
         const mag = magnitude[y * width + x];
-        if (mag < lowThreshold) continue;
+        if (mag === undefined || mag < lowThreshold) continue;
         
         // Check if connected to an edge
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
-            if (edges[y + dy][x + dx]) {
+            if (edges[y + dy] && edges[y + dy][x + dx]) {
               edges[y][x] = true;
               changed = true;
               break;
             }
           }
-          if (edges[y][x]) break;
+          if (edges[y] && edges[y][x]) break;
         }
       }
     }
@@ -302,6 +301,7 @@ function traceEdgesToPaths(
   resourceWidth: number,
   resourceHeight: number
 ): VecPath[] {
+  if (!edges || edges.length === 0 || !edges[0]) return [];
   const height = edges.length;
   const width = edges[0].length;
   const visited: boolean[][] = Array(height).fill(null).map(() => Array(width).fill(false));
@@ -330,13 +330,14 @@ function traceEdgesToPaths(
 
   for (let startY = 0; startY < height; startY++) {
     for (let startX = 0; startX < width; startX++) {
-      if (!edges[startY][startX] || visited[startY][startX]) continue;
+      if (!edges[startY]?.[startX] || visited[startY]?.[startX]) continue;
 
       // Start a new path
       const pathPixels: Array<{x: number, y: number}> = [];
       let x = startX, y = startY;
 
       while (true) {
+        if (!visited[y]) break;
         visited[y][x] = true;
         pathPixels.push({ x, y });
 
@@ -346,7 +347,7 @@ function traceEdgesToPaths(
           const nx = x + dx[d];
           const ny = y + dy[d];
           if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
-              edges[ny][nx] && !visited[ny][nx]) {
+              edges[ny]?.[nx] && !visited[ny]?.[nx]) {
             x = nx;
             y = ny;
             found = true;
@@ -363,16 +364,20 @@ function traceEdgesToPaths(
         const sampleRate = Math.max(1, Math.floor(pathPixels.length / 100));
         const sampledPoints: Point[] = [];
         for (let i = 0; i < pathPixels.length; i += sampleRate) {
-          sampledPoints.push(pixelToResource(pathPixels[i].x, pathPixels[i].y));
+          const px = pathPixels[i];
+          if (!px) continue;
+          sampledPoints.push(pixelToResource(px.x, px.y));
         }
         // Always include last point
         if (pathPixels.length > 0) {
           const last = pathPixels[pathPixels.length - 1];
-          const lastPoint = pixelToResource(last.x, last.y);
-          if (sampledPoints.length > 0) {
-            const prevLast = sampledPoints[sampledPoints.length - 1];
-            if (prevLast.x !== lastPoint.x || prevLast.y !== lastPoint.y) {
-              sampledPoints.push(lastPoint);
+          if (last) {
+            const lastPoint = pixelToResource(last.x, last.y);
+            if (sampledPoints.length > 0) {
+              const prevLast = sampledPoints[sampledPoints.length - 1];
+              if (prevLast && (prevLast.x !== lastPoint.x || prevLast.y !== lastPoint.y)) {
+                sampledPoints.push(lastPoint);
+              }
             }
           }
         }
@@ -402,10 +407,12 @@ function simplifyPath(points: Point[], tolerance: number): Point[] {
   let maxDist = 0;
   let maxIdx = 0;
   const start = points[0];
-  const end = points[points.length - 1];
+  const end = points.length > 0 ? points[points.length - 1] : start;
 
   for (let i = 1; i < points.length - 1; i++) {
-    const dist = perpendicularDistance(points[i], start, end);
+    const pt = points[i];
+    if (!pt) continue;
+    const dist = perpendicularDistance(pt, start, end);
     if (dist > maxDist) {
       maxDist = dist;
       maxIdx = i;
@@ -418,7 +425,8 @@ function simplifyPath(points: Point[], tolerance: number): Point[] {
     const right = simplifyPath(points.slice(maxIdx), tolerance);
     return [...left.slice(0, -1), ...right];
   } else {
-    return [start, end];
+    // Solo devolver puntos definidos
+    return [start, end].filter(Boolean) as Point[];
   }
 }
 
@@ -449,10 +457,10 @@ function detectEdgesFromImage(
   options: EdgeDetectionOptions = defaultEdgeOptions
 ): VecPath[] {
   // Calculate image draw position (same as in the draw function)
+  if (!img.width || !img.height) return [];
   const imgAspect = img.width / img.height;
   const canvasAspect = canvasWidth / canvasHeight;
   let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
-  
   if (imgAspect > canvasAspect) {
     drawWidth = canvasWidth;
     drawHeight = canvasWidth / imgAspect;
@@ -730,11 +738,11 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     // Draw paths
     for (let layerIdx = 0; layerIdx < resource.layers.length; layerIdx++) {
       const layer = resource.layers[layerIdx];
-      if (!layer.visible) continue;
+      if (!layer || !layer.visible || !Array.isArray(layer.paths)) continue;
 
       for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
         const path = layer.paths[pathIdx];
-        if (path.points.length < 2) continue;
+        if (!path || !Array.isArray(path.points) || path.points.length < 2) continue;
 
         const intensity = path.intensity / 127;
         const green = Math.floor(200 + 55 * intensity);
@@ -742,12 +750,15 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         ctx.lineWidth = 2;
 
         ctx.beginPath();
-        const start = resourceToCanvas(path.points[0]);
+        const startPt = path.points[0];
+        if (!startPt) continue;
+        const start = resourceToCanvas(startPt);
         ctx.moveTo(start.x, start.y);
-
         for (let i = 1; i < path.points.length; i++) {
-          const pt = resourceToCanvas(path.points[i]);
-          ctx.lineTo(pt.x, pt.y);
+          const pt = path.points[i];
+          if (!pt) continue;
+          const ptCanvas = resourceToCanvas(pt);
+          ctx.lineTo(ptCanvas.x, ptCanvas.y);
         }
 
         if (path.closed) {
@@ -758,10 +769,12 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         if (layerIdx === currentLayerIndex && pathIdx === currentPathIndex) {
           ctx.fillStyle = '#ffff00';
           for (let i = 0; i < path.points.length; i++) {
-            const pt = resourceToCanvas(path.points[i]);
+            const pt = path.points[i];
+            if (!pt) continue;
+            const ptCanvas = resourceToCanvas(pt);
             const isSelected = selectedPoints.has(`${pathIdx}-${i}`);
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, i === selectedPointIndex || isSelected ? 6 : 4, 0, Math.PI * 2);
+            ctx.arc(ptCanvas.x, ptCanvas.y, i === selectedPointIndex || isSelected ? 6 : 4, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -770,10 +783,12 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         if (layerIdx === currentLayerIndex) {
           for (let i = 0; i < path.points.length; i++) {
             if (selectedPoints.has(`${pathIdx}-${i}`)) {
-              const pt = resourceToCanvas(path.points[i]);
+              const pt = path.points[i];
+              if (!pt) continue;
+              const ptCanvas = resourceToCanvas(pt);
               ctx.fillStyle = '#ff6600';
               ctx.beginPath();
-              ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+              ctx.arc(ptCanvas.x, ptCanvas.y, 6, 0, Math.PI * 2);
               ctx.fill();
             }
           }
@@ -787,11 +802,16 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      const start = resourceToCanvas(tempPoints[0]);
-      ctx.moveTo(start.x, start.y);
-      for (let i = 1; i < tempPoints.length; i++) {
-        const pt = resourceToCanvas(tempPoints[i]);
-        ctx.lineTo(pt.x, pt.y);
+      const startPt = tempPoints[0];
+      if (startPt) {
+        const start = resourceToCanvas(startPt);
+        ctx.moveTo(start.x, start.y);
+        for (let i = 1; i < tempPoints.length; i++) {
+          const pt = tempPoints[i];
+          if (!pt) continue;
+          const ptCanvas = resourceToCanvas(pt);
+          ctx.lineTo(ptCanvas.x, ptCanvas.y);
+        }
       }
       ctx.stroke();
       ctx.setLineDash([]);
@@ -831,12 +851,15 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         if (path.points.length < 2) continue;
         
         ctx.beginPath();
-        const start = resourceToCanvas(path.points[0]);
+        const startPt = path.points[0];
+        if (!startPt) continue;
+        const start = resourceToCanvas(startPt);
         ctx.moveTo(start.x, start.y);
-        
         for (let i = 1; i < path.points.length; i++) {
-          const pt = resourceToCanvas(path.points[i]);
-          ctx.lineTo(pt.x, pt.y);
+          const pt = path.points[i];
+          if (!pt) continue;
+          const ptCanvas = resourceToCanvas(pt);
+          ctx.lineTo(ptCanvas.x, ptCanvas.y);
         }
         
         if (path.closed) {
@@ -947,10 +970,14 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       let closestPoint = -1;
 
       const layer = resource.layers[currentLayerIndex];
+      if (!layer || !Array.isArray(layer.paths)) return;
       for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
         const path = layer.paths[pathIdx];
+        if (!path || !Array.isArray(path.points)) continue;
         for (let pointIdx = 0; pointIdx < path.points.length; pointIdx++) {
-          const pt = resourceToCanvas(path.points[pointIdx]);
+          const ptRaw = path.points[pointIdx];
+          if (!ptRaw) continue;
+          const pt = resourceToCanvas(ptRaw);
           const dist = Math.sqrt((pt.x - canvasX) ** 2 + (pt.y - canvasY) ** 2);
           if (dist < closestDist && dist < 10) {
             closestDist = dist;

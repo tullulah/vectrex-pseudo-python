@@ -1,8 +1,8 @@
 // Persistence layer for editor documents (open tabs, order, pinned, hidden, active)
 // Uses localStorage for now. Could be swapped to filesystem (Electron userData) later.
 
-import { useEditorStore } from './editorStore';
-import type { DocumentModel } from '../types/models';
+import { useEditorStore } from './editorStore.js';
+import type { DocumentModel } from '../types/models.js';
 
 const LS_KEY = 'vpy.editor.state.v1';
 

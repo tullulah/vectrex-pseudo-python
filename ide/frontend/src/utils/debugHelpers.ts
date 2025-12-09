@@ -1,7 +1,7 @@
 // debugHelpers.ts - Debug utilities for address/line mapping
 // Phase 5: Centralized helper functions for debugging operations
 
-import type { PdbData } from '../state/debugStore';
+import type { PdbData } from '../state/debugStore.js';
 
 /**
  * Convert VPy source line to ASM address using .pdb lineMap

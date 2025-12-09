@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DiagnosticModel } from '../types/models';
+import type { DiagnosticModel } from '../types/models.js';
 
 interface LspState {
   connected: boolean;

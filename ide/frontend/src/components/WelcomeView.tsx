@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useEditorStore } from '../state/editorStore';
-import { useProjectStore } from '../state/projectStore';
-import type { FileNode } from '../types/models';
+import { useEditorStore } from '../state/editorStore.js';
+import { useProjectStore } from '../state/projectStore.js';
+import type { FileNode } from '../types/models.js';
 
 interface RecentEntry { path: string; mtime?: number; }
 
