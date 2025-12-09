@@ -127,7 +127,10 @@ ${JSON.stringify(tool.inputSchema.properties, null, 2)}
 ${tool.inputSchema.required ? `**Required:** ${tool.inputSchema.required.join(', ')}` : ''}
 `).join('\n')}
 
-To use a tool, respond with a JSON function call like:
+## How to Use Tools:
+
+To use a tool, respond with a JSON function call in a code block:
+
 \`\`\`json
 {
   "tool": "editor_list_documents",
@@ -135,15 +138,51 @@ To use a tool, respond with a JSON function call like:
 }
 \`\`\`
 
-Or for tools with parameters:
+### File Editing Tools:
+
+**To replace text in a file:**
 \`\`\`json
 {
-  "tool": "editor_read_document",
+  "tool": "editor_replace_range",
   "arguments": {
-    "uri": "file:///path/to/file.vpy"
+    "uri": "file:///path/to/file.vpy",
+    "startLine": 10,
+    "startColumn": 1,
+    "endLine": 15,
+    "endColumn": 20,
+    "newText": "def new_function():\\n    pass"
   }
 }
 \`\`\`
+
+**To insert text:**
+\`\`\`json
+{
+  "tool": "editor_insert_at",
+  "arguments": {
+    "uri": "file:///path/to/file.vpy",
+    "line": 5,
+    "column": 1,
+    "text": "# New comment\\n"
+  }
+}
+\`\`\`
+
+**To delete text:**
+\`\`\`json
+{
+  "tool": "editor_delete_range",
+  "arguments": {
+    "uri": "file:///path/to/file.vpy",
+    "startLine": 10,
+    "startColumn": 1,
+    "endLine": 10,
+    "endColumn": 50
+  }
+}
+\`\`\`
+
+**IMPORTANT:** Line and column numbers are 1-indexed (first line is 1, not 0).
 `;
   }
 
@@ -183,6 +222,15 @@ Or for tools with parameters:
     for (const call of calls) {
       try {
         console.log(`[MCP Tools] Executing ${call.tool}`, call.arguments);
+        
+        // Check if this is an editing operation
+        const isEdit = call.tool.includes('replace') || call.tool.includes('insert') || call.tool.includes('delete');
+        
+        if (isEdit) {
+          // Show what will be changed
+          results.push(`🔧 **${call.tool}**\nAplicando cambios...`);
+        }
+        
         const result = await this.callTool(call.tool, call.arguments);
         
         // Extract text content from MCP response
@@ -196,13 +244,39 @@ Or for tools with parameters:
           resultText = JSON.stringify(result, null, 2);
         }
 
-        results.push(`✅ **${call.tool}**:\n${resultText}`);
+        if (isEdit) {
+          results.push(`✅ Cambios aplicados correctamente\n${resultText}`);
+        } else {
+          results.push(`✅ **${call.tool}**:\n${resultText}`);
+        }
       } catch (error) {
         results.push(`❌ **${call.tool}**: ${error instanceof Error ? error.message : 'Failed'}`);
       }
     }
 
     return results.join('\n\n');
+  }
+
+  /**
+   * Preview what an edit operation will do
+   */
+  async previewEdit(tool: string, args: Record<string, any>): Promise<string> {
+    const { uri, startLine, endLine, startColumn, endColumn, newText, text } = args;
+    
+    let preview = `📝 **Preview de cambio:**\n\n`;
+    preview += `**Archivo:** ${uri.split('/').pop()}\n`;
+    
+    if (tool.includes('replace')) {
+      preview += `**Líneas:** ${startLine}:${startColumn} → ${endLine}:${endColumn}\n`;
+      preview += `**Nuevo texto:**\n\`\`\`\n${newText}\n\`\`\``;
+    } else if (tool.includes('insert')) {
+      preview += `**Insertar en:** Línea ${args.line}, Columna ${args.column}\n`;
+      preview += `**Texto:**\n\`\`\`\n${text}\n\`\`\``;
+    } else if (tool.includes('delete')) {
+      preview += `**Eliminar:** Líneas ${startLine}:${startColumn} → ${endLine}:${endColumn}`;
+    }
+    
+    return preview;
   }
 }
 

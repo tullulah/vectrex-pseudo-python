@@ -71,6 +71,54 @@ export class MCPServer {
       },
     });
 
+    this.registerTool('editor/replace_range', this.replaceRange.bind(this), {
+      name: 'editor/replace_range',
+      description: 'Replace text in a specific range of a document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uri: { type: 'string', description: 'Document URI' },
+          startLine: { type: 'number', description: 'Start line (1-indexed)' },
+          startColumn: { type: 'number', description: 'Start column (1-indexed)' },
+          endLine: { type: 'number', description: 'End line (1-indexed)' },
+          endColumn: { type: 'number', description: 'End column (1-indexed)' },
+          newText: { type: 'string', description: 'New text to insert' },
+        },
+        required: ['uri', 'startLine', 'startColumn', 'endLine', 'endColumn', 'newText'],
+      },
+    });
+
+    this.registerTool('editor/insert_at', this.insertAt.bind(this), {
+      name: 'editor/insert_at',
+      description: 'Insert text at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uri: { type: 'string', description: 'Document URI' },
+          line: { type: 'number', description: 'Line number (1-indexed)' },
+          column: { type: 'number', description: 'Column number (1-indexed)' },
+          text: { type: 'string', description: 'Text to insert' },
+        },
+        required: ['uri', 'line', 'column', 'text'],
+      },
+    });
+
+    this.registerTool('editor/delete_range', this.deleteRange.bind(this), {
+      name: 'editor/delete_range',
+      description: 'Delete text in a specific range',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uri: { type: 'string', description: 'Document URI' },
+          startLine: { type: 'number', description: 'Start line (1-indexed)' },
+          startColumn: { type: 'number', description: 'Start column (1-indexed)' },
+          endLine: { type: 'number', description: 'End line (1-indexed)' },
+          endColumn: { type: 'number', description: 'End column (1-indexed)' },
+        },
+        required: ['uri', 'startLine', 'startColumn', 'endLine', 'endColumn'],
+      },
+    });
+
     // Compiler tools
     this.registerTool('compiler/build', this.compilerBuild.bind(this), {
       name: 'compiler/build',
@@ -287,6 +335,123 @@ export class MCPServer {
     `);
 
     return { success: true };
+  }
+
+  private async replaceRange(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { uri, startLine, startColumn, endLine, endColumn, newText } = params;
+    
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) throw new Error('Editor store not available');
+        const state = store.getState();
+        const doc = state.documents.find(d => d.uri === '${uri}');
+        if (!doc) throw new Error('Document not found: ${uri}');
+        
+        const lines = doc.content.split('\\n');
+        const startIdx = ${startLine - 1};
+        const endIdx = ${endLine - 1};
+        
+        if (startIdx === endIdx) {
+          // Same line replacement
+          const line = lines[startIdx];
+          lines[startIdx] = line.substring(0, ${startColumn - 1}) + 
+                           ${JSON.stringify(newText)} + 
+                           line.substring(${endColumn - 1});
+        } else {
+          // Multi-line replacement
+          const firstLine = lines[startIdx].substring(0, ${startColumn - 1}) + ${JSON.stringify(newText)};
+          const lastLine = lines[endIdx].substring(${endColumn - 1});
+          lines.splice(startIdx, endIdx - startIdx + 1, firstLine + lastLine);
+        }
+        
+        const newContent = lines.join('\\n');
+        store.getState().updateContent('${uri}', newContent);
+        return { success: true, linesChanged: endIdx - startIdx + 1 };
+      })()
+    `);
+
+    return result;
+  }
+
+  private async insertAt(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { uri, line, column, text } = params;
+    
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) throw new Error('Editor store not available');
+        const state = store.getState();
+        const doc = state.documents.find(d => d.uri === '${uri}');
+        if (!doc) throw new Error('Document not found: ${uri}');
+        
+        const lines = doc.content.split('\\n');
+        const lineIdx = ${line - 1};
+        const colIdx = ${column - 1};
+        
+        if (lineIdx < 0 || lineIdx >= lines.length) {
+          throw new Error('Line out of range: ' + ${line});
+        }
+        
+        const currentLine = lines[lineIdx];
+        lines[lineIdx] = currentLine.substring(0, colIdx) + 
+                        ${JSON.stringify(text)} + 
+                        currentLine.substring(colIdx);
+        
+        const newContent = lines.join('\\n');
+        store.getState().updateContent('${uri}', newContent);
+        return { success: true, insertedLength: ${JSON.stringify(text)}.length };
+      })()
+    `);
+
+    return result;
+  }
+
+  private async deleteRange(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { uri, startLine, startColumn, endLine, endColumn } = params;
+    
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) throw new Error('Editor store not available');
+        const state = store.getState();
+        const doc = state.documents.find(d => d.uri === '${uri}');
+        if (!doc) throw new Error('Document not found: ${uri}');
+        
+        const lines = doc.content.split('\\n');
+        const startIdx = ${startLine - 1};
+        const endIdx = ${endLine - 1};
+        
+        if (startIdx === endIdx) {
+          // Same line deletion
+          const line = lines[startIdx];
+          lines[startIdx] = line.substring(0, ${startColumn - 1}) + line.substring(${endColumn - 1});
+        } else {
+          // Multi-line deletion
+          const firstPart = lines[startIdx].substring(0, ${startColumn - 1});
+          const lastPart = lines[endIdx].substring(${endColumn - 1});
+          lines.splice(startIdx, endIdx - startIdx + 1, firstPart + lastPart);
+        }
+        
+        const newContent = lines.join('\\n');
+        store.getState().updateContent('${uri}', newContent);
+        return { success: true, linesDeleted: endIdx - startIdx + 1 };
+      })()
+    `);
+
+    return result;
   }
 
   private async getDiagnostics(params: any): Promise<any> {
