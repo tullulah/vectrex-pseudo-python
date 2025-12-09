@@ -72,4 +72,10 @@ contextBridge.exposeInMainWorld('project', {
   find: (startDir: string) => ipcRenderer.invoke('project:find', startDir) as Promise<{ path: string | null }>,
 });
 
+// MCP Server API for AI agents
+contextBridge.exposeInMainWorld('mcp', {
+  // Send JSON-RPC request to MCP server
+  request: (request: any) => ipcRenderer.invoke('mcp:request', request),
+});
+
 export {};

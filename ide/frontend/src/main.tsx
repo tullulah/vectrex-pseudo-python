@@ -20,6 +20,13 @@ import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/l
 // Initialize store reference for cross-store access
 setEditorStoreRef(useEditorStore);
 
+// Expose stores globally for MCP server access (Electron main process)
+if (typeof window !== 'undefined') {
+  (window as any).__editorStore__ = useEditorStore;
+  (window as any).__projectStore__ = useProjectStore;
+  (window as any).__debugStore__ = useDebugStore;
+}
+
 function App() {
   const { t, i18n } = useTranslation(['common']);
   // IMPORTANT: Avoid grouping multiple fields into a new object each render (React 19 strict external store snapshot loop)
