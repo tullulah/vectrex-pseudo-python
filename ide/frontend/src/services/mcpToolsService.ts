@@ -192,7 +192,7 @@ To use a tool, respond with a JSON function call in a code block:
   parseToolCalls(response: string): Array<{ tool: string; arguments: Record<string, any> }> {
     const calls: Array<{ tool: string; arguments: Record<string, any> }> = [];
     
-    // Look for JSON code blocks
+    // Method 1: Look for JSON code blocks with backticks
     const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/g;
     let match;
 
@@ -206,10 +206,34 @@ To use a tool, respond with a JSON function call in a code block:
           });
         }
       } catch (e) {
-        console.warn('[MCP Tools] Failed to parse tool call:', e);
+        console.warn('[MCP Tools] Failed to parse tool call from code block:', e);
       }
     }
 
+    // Method 2: Look for JSON objects without code blocks (plain text)
+    // Pattern: "json\n{...}\n" or just "{...}" with "tool" property
+    const plainJsonRegex = /(?:json\s*\n)?(\{[^}]*"tool"\s*:\s*"[^"]+"[^}]*\})/g;
+    
+    while ((match = plainJsonRegex.exec(response)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (parsed.tool) {
+          // Check if not already added (from code block)
+          const exists = calls.some(c => c.tool === parsed.tool && 
+            JSON.stringify(c.arguments) === JSON.stringify(parsed.arguments));
+          if (!exists) {
+            calls.push({
+              tool: parsed.tool,
+              arguments: parsed.arguments || {}
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[MCP Tools] Failed to parse plain JSON tool call:', e);
+      }
+    }
+
+    console.log('[MCP Tools] Parsed', calls.length, 'tool calls from response');
     return calls;
   }
 

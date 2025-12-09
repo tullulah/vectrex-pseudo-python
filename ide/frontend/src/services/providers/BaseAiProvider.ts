@@ -97,7 +97,14 @@ VPy IDE FEATURES & EDITORS:
 \`\`\`json
 {"tool": "project_open", "arguments": {"path": "/path/to/test_mcp"}}
 \`\`\`
-Then say: "✅ Proyecto 'test2' cerrado. Proyecto 'test_mcp' abierto."
+Then say: "✅ Ejecutando herramientas..." 
+
+**CRITICAL: You MUST use triple backticks around JSON:**
+- ✅ CORRECT: \`\`\`json\\n{"tool": "..."}\\n\`\`\`
+- ❌ WRONG: json\\n{"tool": "..."}  (missing backticks)
+- ❌ WRONG: {"tool": "..."} (no code block)
+
+**The tools will execute automatically if properly formatted.**
 
 **When to use MCP tools:**
 - User says "cierra", "abre", "crea", "lista", "muestra" → USE TOOLS
