@@ -217,6 +217,40 @@ export class MCPServer {
         required: ['path'],
       },
     });
+
+    this.registerTool('project/close', this.closeProject.bind(this), {
+      name: 'project/close',
+      description: 'Close the currently open project',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('project/open', this.openProject.bind(this), {
+      name: 'project/open',
+      description: 'Open a project by path',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Full path to .vpyproj file' },
+        },
+        required: ['path'],
+      },
+    });
+
+    this.registerTool('project/create', this.createProject.bind(this), {
+      name: 'project/create',
+      description: 'Create a new VPy project',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Directory path for new project' },
+          name: { type: 'string', description: 'Project name' },
+        },
+        required: ['path', 'name'],
+      },
+    });
   }
 
   private registerTool(name: string, handler: MCPToolHandler, schema: MCPTool) {
@@ -575,6 +609,58 @@ export class MCPServer {
   private async readProjectFile(params: any): Promise<any> {
     // Will use fs to read file
     return { path: params.path, content: '' };
+  }
+
+  private async closeProject(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__projectStore__;
+        if (!store) throw new Error('Project store not available');
+        const currentProject = store.getState().workspaceName || 'Unknown';
+        store.getState().closeProject();
+        return { success: true, closedProject: currentProject };
+      })()
+    `);
+
+    return result;
+  }
+
+  private async openProject(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { path } = params;
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__projectStore__;
+        if (!store) throw new Error('Project store not available');
+        store.getState().openProject('${path}');
+        return { success: true, openedProject: '${path}' };
+      })()
+    `);
+
+    return result;
+  }
+
+  private async createProject(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { path, name } = params;
+    
+    // This would need IPC to main process to create file system structure
+    // For now, return not implemented
+    return { 
+      success: false, 
+      message: 'Project creation requires file system access - use project/open with existing path instead',
+      suggestion: `Create project folder manually at ${path}, then use project/open`
+    };
   }
 }
 

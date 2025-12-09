@@ -378,6 +378,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 • \`/generate [descripción]\` - Genera código VPy
 • \`/optimize\` - Optimiza código seleccionado  
 • \`/vectrex [comando]\` - Info sobre comandos Vectrex
+• \`/assets\` - Guía de uso de .vec y .vmus assets
 • \`/examples\` - Ver ejemplos de código
 • \`/clear\` - Limpiar conversación
 • \`/settings\` - Configurar IA
@@ -385,7 +386,8 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 **Ejemplo de uso:**
 \`/generate una pelota que rebote en los bordes\`
 \`/explain\` (con código seleccionado)
-\`/fix\` (cuando hay errores en el panel)`);
+\`/fix\` (cuando hay errores en el panel)
+\`/assets\` (para aprender sobre vectores y música)`);
         break;
         
       case '/clear':
@@ -436,6 +438,10 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
         
       case '/examples':
         showCodeExamples();
+        break;
+        
+      case '/assets':
+        showAssetsHelp();
         break;
         
       default:
@@ -644,6 +650,101 @@ def main():
 \`\`\`
 
 ¿Quieres ver ejemplos de algo específico?`);
+  };
+
+  const showAssetsHelp = () => {
+    addMessage('assistant', `🎨 **Usando Assets en VPy**
+
+## 📁 Estructura de Proyecto
+
+\`\`\`
+proyecto/
+├── src/
+│   └── main.vpy          # Tu código
+├── assets/
+│   ├── vectors/          # Gráficos 3D (.vec)
+│   ├── music/            # Música (.vmus)
+│   ├── sfx/              # Efectos de sonido (.vmus)
+│   ├── voices/           # Samples de voz
+│   └── animations/       # Animaciones
+└── build/                # ROMs compiladas
+\`\`\`
+
+## 🎨 Editor de Vectores 3D (.vec)
+
+**Crear gráficos:**
+1. Abre/crea archivo .vec en el IDE
+2. Usa el ViewCube para navegar en 3D (estilo Fusion 360)
+3. Dibuja vectores en el espacio 3D (-127 a +127)
+4. Guarda y referencia en VPy
+
+**Usar en código:**
+\`\`\`vpy
+def setup():
+    # Cargar un gráfico vectorial
+    nave = load_vec("assets/vectors/spaceship.vec")
+
+def loop():
+    INTENSITY(255)
+    # Dibujar el gráfico en posición x=0, y=0
+    draw_vec(nave, 0, 0, scale=1.0)
+\`\`\`
+
+## 🎵 Editor de Música (.vmus)
+
+**Componer música:**
+1. Crea archivo .vmus en el IDE
+2. Piano roll: 3 canales cuadrados + 1 ruido
+3. Coloca notas con el ratón
+4. Preview en tiempo real con el PSG emulador
+5. Exporta para tu juego
+
+**Usar en código:**
+\`\`\`vpy
+def setup():
+    # Cargar y reproducir música de fondo
+    tema = load_music("assets/music/theme.vmus")
+    play_music(tema, loop=True)
+    
+    # Cargar efectos de sonido
+    explosion = load_sfx("assets/sfx/boom.vmus")
+
+def on_collision():
+    # Reproducir efecto
+    play_sfx(explosion)
+\`\`\`
+
+## 🎮 Ejemplo Completo
+
+\`\`\`vpy
+# Cargar assets en setup
+def setup():
+    nave = load_vec("assets/vectors/player.vec")
+    enemigo = load_vec("assets/vectors/enemy.vec")
+    musica = load_music("assets/music/game.vmus")
+    disparo = load_sfx("assets/sfx/shoot.vmus")
+    
+    play_music(musica, loop=True)
+
+def loop():
+    INTENSITY(255)
+    
+    # Dibujar nave del jugador
+    draw_vec(nave, player_x, player_y, scale=1.0)
+    
+    # Dibujar enemigos
+    draw_vec(enemigo, enemy_x, enemy_y, scale=0.8)
+    
+    if button_pressed(1):
+        play_sfx(disparo)
+\`\`\`
+
+**Comandos relacionados:**
+• \`/examples\` - Ver más ejemplos de código
+• \`/vectrex\` - Info sobre hardware Vectrex
+• \`/generate\` - Generar código con assets
+
+💡 **Tip:** El editor 3D tiene ViewCube para rotar la cámara - click en caras/bordes para vistas preestablecidas!`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
