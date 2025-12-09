@@ -5,6 +5,7 @@ import type { AiMessage } from '../../types/ai';
 import type { AiProviderType, AiProviderConfig } from '../../types/aiProvider';
 import { aiService } from '../../services/aiService';
 import { logger } from '../../utils/logger';
+import { mcpTools } from '../../services/mcpToolsService';
 
 // Base de conocimiento de comandos Vectrex
 const VECTREX_COMMANDS = [
@@ -66,6 +67,7 @@ export const AiAssistantPanel: React.FC = () => {
   const [manualContext, setManualContext] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -214,9 +216,22 @@ export const AiAssistantPanel: React.FC = () => {
     return items.length > 0 ? items.join(' • ') : 'Sin contexto';
   };
 
+  // Initialize MCP tools on mount
+  useEffect(() => {
+    mcpTools.initialize().then(() => {
+      if (mcpTools.isAvailable()) {
+        setMcpEnabled(true);
+        console.log('[PyPilot] MCP tools enabled:', mcpTools.getAvailableTools().length, 'tools');
+      }
+    });
+  }, []);
+
   // Add system message on first load
   useEffect(() => {
     if (messages.length === 0) {
+      const mcpStatus = mcpEnabled ? 
+        '\n\n🔧 **MCP Tools Enabled** - Puedo controlar el IDE directamente' : '';
+      
       addMessage('system', `🤖 **PyPilot** activado
 
 Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte con:
@@ -225,18 +240,18 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 • 🐛 **Analizar errores** - Explica problemas en tu código  
 • 📚 **Explicar sintaxis** - Aprende comandos VPy/Vectrex
 • ⚡ **Optimizar código** - Mejora performance y legibilidad
-• 🎮 **Ideas de juegos** - Sugiere mecánicas para Vectrex
+• 🎮 **Ideas de juegos** - Sugiere mecánicas para Vectrex${mcpEnabled ? '\n• 🎛️ **Controlar IDE** - Abrir/cerrar proyectos, crear archivos, etc.' : ''}
 
 **Comandos rápidos:**
 \`/explain\` - Explica el código seleccionado
 \`/fix\` - Sugiere fixes para errores
 \`/generate\` - Genera código desde descripción
 \`/optimize\` - Optimiza código seleccionado
-\`/help\` - Ver todos los comandos
+\`/help\` - Ver todos los comandos${mcpStatus}
 
 ¿En qué puedo ayudarte hoy?`);
     }
-  }, []);
+  }, [mcpEnabled]);
 
   const addMessage = (role: AiMessage['role'], content: string, context?: AiMessage['context']) => {
     const newMessage: AiMessage = {
@@ -430,15 +445,38 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 
   const sendToAI = async (message: string, context: any) => {
     try {
+      // Add MCP tools to context if available
+      const enhancedContext = mcpEnabled ? {
+        ...context,
+        errors: [], // TODO: Get real errors from editor
+        mcpTools: mcpTools.getToolsContext()
+      } : {
+        ...context,
+        errors: []
+      };
+
       const response = await aiService.sendRequest({
         message,
-        context: {
-          ...context,
-          errors: [] // TODO: Get real errors from editor
-        }
+        context: enhancedContext
       });
 
       addMessage('assistant', response.content);
+      
+      // Check if response contains MCP tool calls
+      if (mcpEnabled) {
+        const toolCalls = mcpTools.parseToolCalls(response.content);
+        if (toolCalls.length > 0) {
+          addMessage('system', '⚙️ Ejecutando herramientas MCP...');
+          
+          try {
+            const results = await mcpTools.executeToolCalls(toolCalls);
+            addMessage('system', results);
+          } catch (error) {
+            logger.error('AI', 'MCP tool execution error:', error);
+            addMessage('system', `❌ Error ejecutando herramientas: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+      }
       
       // Handle suggestions if any
       if (response.suggestions?.length) {
