@@ -537,8 +537,8 @@ function detectEdgesFromImage(
 export const VectorEditor: React.FC<VectorEditorProps> = ({
   resource: initialResource,
   onChange,
-  width = 512,
-  height = 512,
+  width = 480,
+  height = 640,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1249,6 +1249,21 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // View switching shortcuts
+    if (e.key === '1') {
+      setViewMode('xy');
+      return;
+    } else if (e.key === '2') {
+      setViewMode('xz');
+      return;
+    } else if (e.key === '3') {
+      setViewMode('yz');
+      return;
+    } else if (e.key === '4') {
+      setViewMode('3d');
+      return;
+    }
+    
     if (e.key === 'Escape') {
       setTempPoints([]);
       setSelectedPointIndex(-1);
@@ -1271,30 +1286,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   // UI Components
   const Toolbar = () => (
     <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', padding: '4px', background: '#2a2a4e', borderRadius: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-      {/* View Mode Selector */}
-      <div style={{ display: 'flex', gap: '2px', marginRight: '8px', background: '#1a1a2e', padding: '2px', borderRadius: '4px' }}>
-        {(['xy', 'xz', 'yz', '3d'] as ViewMode[]).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => setViewMode(mode)}
-            style={{
-              padding: '6px 10px',
-              background: viewMode === mode ? '#4a4a8e' : 'transparent',
-              color: viewMode === mode ? 'white' : '#888',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: viewMode === mode ? 'bold' : 'normal',
-            }}
-            title={`View ${mode.toUpperCase()} plane${mode === '3d' ? ' (free rotation)' : ''}`}
-          >
-            {mode.toUpperCase()}
-          </button>
-        ))}
-      </div>
-      
-      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 4px' }} />
       <button
         onClick={() => setCurrentTool('select')}
         style={{
@@ -1694,206 +1685,226 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     );
   };
 
-  // Mini view component for non-active views
-  const MiniView = ({ view }: { view: ViewMode }) => {
-    const miniCanvasRef = useRef<HTMLCanvasElement>(null);
-    const miniSize = 180;
+  // ViewCube component - 3D cube visualization like Fusion 360
+  const ViewCube = () => {
+    const cubeCanvasRef = useRef<HTMLCanvasElement>(null);
+    const cubeSize = 100;
+    const [hoveredFace, setHoveredFace] = useState<ViewMode | null>(null);
     
-    // Draw mini view
+    // Draw the 3D cube
     useEffect(() => {
-      const canvas = miniCanvasRef.current;
+      const canvas = cubeCanvasRef.current;
       if (!canvas) return;
       
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       
       // Clear
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, miniSize, miniSize);
+      ctx.clearRect(0, 0, cubeSize, cubeSize);
       
-      // Draw grid (simplified)
-      ctx.strokeStyle = '#2a2a4e';
-      ctx.lineWidth = 1;
-      const gridSize = 16;
-      const centerX = miniSize / 2;
-      const centerY = miniSize / 2;
+      const centerX = cubeSize / 2;
+      const centerY = cubeSize / 2;
+      const size = 30;
       
-      for (let x = centerX % gridSize; x < miniSize; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, miniSize);
-        ctx.stroke();
-      }
-      for (let y = centerY % gridSize; y < miniSize; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(miniSize, y);
-        ctx.stroke();
-      }
+      // Calculate cube rotation based on current view
+      let rotX = 30, rotY = 30;
+      if (viewMode === 'xy') { rotX = 0; rotY = 0; }
+      else if (viewMode === 'xz') { rotX = 90; rotY = 0; }
+      else if (viewMode === 'yz') { rotX = 0; rotY = 90; }
+      else { rotX = rotation3D.pitch; rotY = rotation3D.yaw; }
       
-      // Draw axes
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = '#a44';
-      ctx.beginPath();
-      ctx.moveTo(0, centerY);
-      ctx.lineTo(miniSize, centerY);
-      ctx.stroke();
+      const rad = Math.PI / 180;
+      const cosX = Math.cos(rotX * rad);
+      const sinX = Math.sin(rotX * rad);
+      const cosY = Math.cos(rotY * rad);
+      const sinY = Math.sin(rotY * rad);
       
-      ctx.strokeStyle = view === 'xz' || view === 'yz' ? '#44a' : '#4a4';
-      ctx.beginPath();
-      ctx.moveTo(centerX, 0);
-      ctx.lineTo(centerX, miniSize);
-      ctx.stroke();
+      // Project 3D point to 2D
+      const project = (x: number, y: number, z: number) => {
+        // Rotate Y
+        let x1 = x * cosY - z * sinY;
+        let z1 = x * sinY + z * cosY;
+        // Rotate X
+        let y1 = y * cosX - z1 * sinX;
+        let z2 = y * sinX + z1 * cosX;
+        // Project
+        return { x: centerX + x1, y: centerY - y1, z: z2 };
+      };
       
-      // Helper function for mini view projection
-      const miniProject3DTo2D = (point: Point): { x: number; y: number } => {
-        const x = point.x || 0;
-        const y = point.y || 0;
-        const z = point.z || 0;
+      // Cube vertices
+      const vertices = [
+        project(-size, -size, -size),
+        project(size, -size, -size),
+        project(size, size, -size),
+        project(-size, size, -size),
+        project(-size, -size, size),
+        project(size, -size, size),
+        project(size, size, size),
+        project(-size, size, size),
+      ];
+      
+      // Define faces with their view mode
+      const faces = [
+        { indices: [4, 5, 6, 7], color: '#4a4a8e', view: 'xy' as ViewMode, label: 'TOP', normal: [0, 0, 1] },
+        { indices: [0, 1, 2, 3], color: '#3a3a6e', view: 'xy' as ViewMode, label: 'BOT', normal: [0, 0, -1] },
+        { indices: [0, 1, 5, 4], color: '#4a6a4e', view: 'xz' as ViewMode, label: 'FRT', normal: [0, -1, 0] },
+        { indices: [3, 2, 6, 7], color: '#3a5a3e', view: 'xz' as ViewMode, label: 'BAK', normal: [0, 1, 0] },
+        { indices: [1, 2, 6, 5], color: '#6a4a4e', view: 'yz' as ViewMode, label: 'RGT', normal: [1, 0, 0] },
+        { indices: [0, 3, 7, 4], color: '#5a3a3e', view: 'yz' as ViewMode, label: 'LFT', normal: [-1, 0, 0] },
+      ];
+      
+      // Sort faces by average Z (painter's algorithm)
+      faces.sort((a, b) => {
+        const avgZa = a.indices.reduce((sum, i) => sum + vertices[i].z, 0) / 4;
+        const avgZb = b.indices.reduce((sum, i) => sum + vertices[i].z, 0) / 4;
+        return avgZa - avgZb;
+      });
+      
+      // Draw faces
+      faces.forEach(face => {
+        const isActive = face.view === viewMode;
+        const isHovered = face.view === hoveredFace;
         
-        if (view === 'xy') {
-          return { x, y };
-        } else if (view === 'xz') {
-          return { x, y: z };
-        } else if (view === 'yz') {
-          return { x: y, y: z };
-        } else { // 3d
-          const pitch = (rotation3D.pitch * Math.PI) / 180;
-          const yaw = (rotation3D.yaw * Math.PI) / 180;
-          const x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
-          const z1 = x * Math.sin(yaw) + z * Math.cos(yaw);
-          const y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
-          return { x: x1, y: y2 };
+        ctx.beginPath();
+        const first = vertices[face.indices[0]];
+        ctx.moveTo(first.x, first.y);
+        for (let i = 1; i < face.indices.length; i++) {
+          const v = vertices[face.indices[i]];
+          ctx.lineTo(v.x, v.y);
         }
-      };
+        ctx.closePath();
+        
+        // Fill
+        ctx.fillStyle = isActive ? '#6a6aae' : isHovered ? '#5a5a8e' : face.color;
+        ctx.fill();
+        
+        // Stroke
+        ctx.strokeStyle = isActive ? '#8a8ace' : '#2a2a4e';
+        ctx.lineWidth = isActive ? 2 : 1;
+        ctx.stroke();
+        
+        // Label
+        const centerFaceX = face.indices.reduce((sum, i) => sum + vertices[i].x, 0) / 4;
+        const centerFaceY = face.indices.reduce((sum, i) => sum + vertices[i].y, 0) / 4;
+        ctx.fillStyle = isActive ? 'white' : '#aaa';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(face.label, centerFaceX, centerFaceY);
+      });
       
-      const miniResourceToCanvas = (point: Point): { x: number; y: number } => {
-        const scale = miniSize / resource.canvas.width;
-        const projected = miniProject3DTo2D(point);
-        return {
-          x: centerX + projected.x * scale,
-          y: centerY - projected.y * scale,
-        };
-      };
+    }, [viewMode, rotation3D, hoveredFace]);
+    
+    // Detect clicks on cube faces
+    const handleCubeClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = cubeCanvasRef.current;
+      if (!canvas) return;
       
-      // Draw paths
-      for (let layerIdx = 0; layerIdx < resource.layers.length; layerIdx++) {
-        const layer = resource.layers[layerIdx];
-        if (!layer || !layer.visible || !Array.isArray(layer.paths)) continue;
-
-        for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
-          const path = layer.paths[pathIdx];
-          if (!path || !Array.isArray(path.points) || path.points.length < 2) continue;
-
-          const intensity = path.intensity / 127;
-          const green = Math.floor(200 + 55 * intensity);
-          ctx.strokeStyle = `#00${green.toString(16).padStart(2, '0')}00`;
-          ctx.lineWidth = 1;
-
-          ctx.beginPath();
-          const startPt = path.points[0];
-          if (!startPt) continue;
-          const start = miniResourceToCanvas(startPt);
-          ctx.moveTo(start.x, start.y);
-          for (let i = 1; i < path.points.length; i++) {
-            const pt = path.points[i];
-            if (!pt) continue;
-            const ptCanvas = miniResourceToCanvas(pt);
-            ctx.lineTo(ptCanvas.x, ptCanvas.y);
-          }
-
-          if (path.closed) {
-            ctx.closePath();
-          }
-          ctx.stroke();
-        }
-      }
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
       
-      // Draw view label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.font = 'bold 14px monospace';
-      ctx.fillText(view.toUpperCase(), 8, miniSize - 8);
+      // Simple click detection based on regions (could be improved with actual face hit testing)
+      const centerX = cubeSize / 2;
+      const centerY = cubeSize / 2;
       
-    }, [view, resource, rotation3D]);
+      if (y < centerY - 10) setViewMode('xy'); // Top
+      else if (y > centerY + 10) setViewMode('xz'); // Front
+      else if (x > centerX + 10) setViewMode('yz'); // Right
+      else setViewMode('3d'); // Center = 3D
+    };
     
     return (
       <div
-        onClick={() => setViewMode(view)}
         style={{
-          cursor: 'pointer',
-          border: '2px solid #3a3a5e',
-          borderRadius: '4px',
-          overflow: 'hidden',
-          transition: 'border-color 0.2s',
+          position: 'absolute',
+          top: '16px',
+          right: '16px',
+          background: 'rgba(26, 26, 46, 0.95)',
+          border: '2px solid #4a4a6e',
+          borderRadius: '8px',
+          padding: '8px',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4a4a8e'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
-        title={`Switch to ${view.toUpperCase()} view`}
       >
         <canvas
-          ref={miniCanvasRef}
-          width={miniSize}
-          height={miniSize}
-          style={{ display: 'block' }}
+          ref={cubeCanvasRef}
+          width={cubeSize}
+          height={cubeSize}
+          onClick={handleCubeClick}
+          onMouseMove={(e) => {
+            // Simplified hover detection
+            const rect = e.currentTarget.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            const x = e.clientX - rect.left;
+            const centerY = cubeSize / 2;
+            const centerX = cubeSize / 2;
+            
+            if (y < centerY - 10) setHoveredFace('xy');
+            else if (y > centerY + 10) setHoveredFace('xz');
+            else if (x > centerX + 10) setHoveredFace('yz');
+            else setHoveredFace('3d');
+          }}
+          onMouseLeave={() => setHoveredFace(null)}
+          style={{
+            cursor: 'pointer',
+            display: 'block',
+          }}
         />
+        <div style={{ 
+          marginTop: '4px',
+          fontSize: '9px', 
+          color: '#666',
+          textAlign: 'center',
+        }}>
+          1-4 keys
+        </div>
       </div>
     );
   };
 
-  // Right side panel - combines mini views, layers and edge settings
-  const RightPanel = () => {
-    const allViews: ViewMode[] = ['xy', 'xz', 'yz', '3d'];
-    const otherViews = allViews.filter(v => v !== viewMode);
-    
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
-        {/* Mini views */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#2a2a4e', padding: '8px', borderRadius: '4px' }}>
-          <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 'bold' }}>
-            OTHER VIEWS
-          </div>
-          {otherViews.map(view => (
-            <MiniView key={view} view={view} />
-          ))}
-        </div>
-        
-        <div style={{ width: '100%', height: '1px', background: '#4a4a6e', margin: '8px 0' }} />
-        
-        <LayersPanel />
-        <EdgeSettingsPanel />
-      </div>
-    );
-  };
+  // Right side panel - simplified for single view layout
+  const RightPanel = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+      <LayersPanel />
+      <EdgeSettingsPanel />
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <Toolbar />
       <div style={{ display: 'flex', gap: '8px' }}>
-        <canvas
-          ref={canvasRef}
-          width={width}
-          height={height}
-          tabIndex={0}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onDoubleClick={handleDoubleClick}
-          onKeyDown={handleKeyDown}
-          onWheel={handleWheel}
-          style={{
-            border: '2px solid #4a4a8e',
-            borderRadius: '4px',
-            cursor: currentTool === 'pen' 
-              ? 'crosshair' 
-              : currentTool === 'pan' && viewMode === '3d' && isDrawing
-              ? 'grabbing'
-              : currentTool === 'pan' && viewMode === '3d'
-              ? 'grab'
-              : currentTool === 'pan'
-              ? 'move'
-              : 'default',
-          }}
-        />
+        <div style={{ position: 'relative' }}>
+          <canvas
+            ref={canvasRef}
+            width={width}
+            height={height}
+            tabIndex={0}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onDoubleClick={handleDoubleClick}
+            onKeyDown={handleKeyDown}
+            onWheel={handleWheel}
+            style={{
+              border: '2px solid #4a4a8e',
+              borderRadius: '4px',
+              display: 'block',
+              cursor: currentTool === 'pen' 
+                ? 'crosshair' 
+                : currentTool === 'pan' && viewMode === '3d' && isDrawing
+                ? 'grabbing'
+                : currentTool === 'pan' && viewMode === '3d'
+                ? 'grab'
+                : currentTool === 'pan'
+                ? 'move'
+                : 'default',
+            }}
+          />
+          <ViewCube />
+        </div>
         <RightPanel />
       </div>
       <div style={{ color: '#888', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
