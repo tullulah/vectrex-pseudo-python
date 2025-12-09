@@ -470,9 +470,12 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
       
       // Check if response contains MCP tool calls
       if (mcpEnabled) {
+        console.log('[PyPilot] Parsing response for MCP tool calls...');
         const toolCalls = mcpTools.parseToolCalls(response.content);
+        console.log('[PyPilot] Found', toolCalls.length, 'tool calls:', toolCalls);
+        
         if (toolCalls.length > 0) {
-          addMessage('system', '⚙️ Ejecutando herramientas MCP...');
+          addMessage('system', `⚙️ Ejecutando ${toolCalls.length} herramienta(s) MCP...`);
           
           try {
             const results = await mcpTools.executeToolCalls(toolCalls);
@@ -481,6 +484,8 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
             logger.error('AI', 'MCP tool execution error:', error);
             addMessage('system', `❌ Error ejecutando herramientas: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
+        } else {
+          console.log('[PyPilot] No tool calls detected in response');
         }
       }
       

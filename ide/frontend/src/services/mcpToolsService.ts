@@ -211,29 +211,38 @@ To use a tool, respond with a JSON function call in a code block:
     }
 
     // Method 2: Look for JSON objects without code blocks (plain text)
-    // Pattern: "json\n{...}\n" or just "{...}" with "tool" property
-    const plainJsonRegex = /(?:json\s*\n)?(\{[^}]*"tool"\s*:\s*"[^"]+"[^}]*\})/g;
+    // Pattern: "json\n{...}" or just "{...}" with "tool" property
+    // More robust regex that handles multiline JSON
+    const plainJsonRegex = /(?:json\s*\n)?(\{(?:[^{}]|\{[^{}]*\})*"tool"\s*:\s*"[^"]+"(?:[^{}]|\{[^{}]*\})*\})/g;
     
     while ((match = plainJsonRegex.exec(response)) !== null) {
       try {
-        const parsed = JSON.parse(match[1]);
+        const jsonStr = match[1].trim();
+        console.log('[MCP Tools] Attempting to parse plain JSON:', jsonStr);
+        const parsed = JSON.parse(jsonStr);
         if (parsed.tool) {
           // Check if not already added (from code block)
           const exists = calls.some(c => c.tool === parsed.tool && 
             JSON.stringify(c.arguments) === JSON.stringify(parsed.arguments));
           if (!exists) {
+            console.log('[MCP Tools] Successfully parsed tool:', parsed.tool);
             calls.push({
               tool: parsed.tool,
               arguments: parsed.arguments || {}
             });
+          } else {
+            console.log('[MCP Tools] Duplicate tool call detected, skipping');
           }
         }
       } catch (e) {
-        console.warn('[MCP Tools] Failed to parse plain JSON tool call:', e);
+        console.warn('[MCP Tools] Failed to parse plain JSON tool call:', match[1], e);
       }
     }
 
     console.log('[MCP Tools] Parsed', calls.length, 'tool calls from response');
+    if (calls.length > 0) {
+      console.log('[MCP Tools] Tool calls:', JSON.stringify(calls, null, 2));
+    }
     return calls;
   }
 
