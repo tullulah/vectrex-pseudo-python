@@ -297,10 +297,9 @@ export class MCPServer {
 
   // Tool implementations
   private async listTools(): Promise<{ tools: MCPTool[] }> {
-    const tools: MCPTool[] = [
-      // Will be populated from registered tools
-      // For now, return basic list
-    ];
+    console.log('[MCP Server] listTools() called - registered tools:', this.toolDefinitions.size);
+    const tools = Array.from(this.toolDefinitions.values());
+    console.log('[MCP Server] Returning', tools.length, 'tools:', tools.map(t => t.name));
     return { tools };
   }
 
