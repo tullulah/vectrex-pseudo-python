@@ -10,10 +10,13 @@ import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
 import { watch } from 'fs';
 import * as crypto from 'crypto';
+import * as net from 'net';
 import { getMCPServer } from './mcp/server.js';
 import type { MCPRequest } from './mcp/types.js';
 
 let mainWindow: BrowserWindow | null = null;
+let mcpIpcServer: net.Server | null = null;
+const MCP_IPC_PORT = 9123;
 
 // --- Emulator load helpers (shared by emu:load and run:compile) -----------------
 // Removed cpuColdReset/loadBinaryBase64IntoEmu: renderer now responsible for loading programs
@@ -118,6 +121,72 @@ async function createWindow() {
   const mcpServer = getMCPServer();
   mcpServer.setMainWindow(mainWindow);
   if (verbose) console.log('[MCP] Server initialized and connected to main window');
+  
+  // Start MCP IPC server for external MCP stdio process
+  startMCPIpcServer();
+}
+
+// Start TCP server for MCP stdio process to communicate with IDE
+function startMCPIpcServer() {
+  if (mcpIpcServer) return;
+  
+  const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
+  
+  mcpIpcServer = net.createServer((socket) => {
+    if (verbose) console.log('[MCP IPC] Client connected');
+    
+    let buffer = '';
+    
+    socket.on('data', async (chunk) => {
+      buffer += chunk.toString();
+      
+      // Split by newlines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const request: MCPRequest = JSON.parse(line);
+            if (verbose) console.log('[MCP IPC] Request:', request.method);
+            
+            const mcpServer = getMCPServer();
+            const response = await mcpServer.handleRequest(request);
+            
+            // Send response back
+            socket.write(JSON.stringify(response) + '\n');
+          } catch (e: any) {
+            if (verbose) console.error('[MCP IPC] Error:', e.message);
+            socket.write(JSON.stringify({
+              jsonrpc: '2.0',
+              id: null,
+              error: { code: -32603, message: e.message }
+            }) + '\n');
+          }
+        }
+      }
+    });
+    
+    socket.on('error', (err) => {
+      if (verbose) console.error('[MCP IPC] Socket error:', err.message);
+    });
+    
+    socket.on('close', () => {
+      if (verbose) console.log('[MCP IPC] Client disconnected');
+    });
+  });
+  
+  mcpIpcServer.listen(MCP_IPC_PORT, 'localhost', () => {
+    if (verbose) console.log(`[MCP IPC] Server listening on port ${MCP_IPC_PORT}`);
+  });
+  
+  mcpIpcServer.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[MCP IPC] Port ${MCP_IPC_PORT} already in use`);
+    } else {
+      console.error('[MCP IPC] Server error:', err);
+    }
+  });
 }
 
 let lspPathWarned = false;
