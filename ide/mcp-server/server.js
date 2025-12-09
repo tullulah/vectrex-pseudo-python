@@ -294,7 +294,7 @@ class StdioTransport {
     log('Tool call:', name, args);
     
     // Convert tool name to method (editor_list_documents -> editor/list_documents)
-    const method = name.replace(/_/g, '/');
+    const method = name.replace('_', '/');
     
     // Forward to IDE via IPC
     const result = await sendToIDE({
