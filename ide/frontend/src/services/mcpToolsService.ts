@@ -94,17 +94,20 @@ export class MCPToolsService {
     }
 
     try {
+      console.log('[MCP Tools] Calling tool:', name, 'with args:', args);
+      
+      // Call the tool directly by its name (e.g., "project/close", "editor/list_documents")
       const response: MCPResponse = await (window as any).mcp.request({
         jsonrpc: '2.0',
         id: Date.now(),
-        method: 'tools/call',
-        params: {
-          name,
-          arguments: args
-        }
+        method: name,  // Tool name IS the method
+        params: args    // Arguments directly as params
       });
 
+      console.log('[MCP Tools] Tool response:', response);
+
       if (response.error) {
+        console.error('[MCP Tools] Tool error:', response.error);
         throw new Error(response.error.message);
       }
 
@@ -143,9 +146,26 @@ To use a tool, respond with a JSON function call in a code block:
 
 \`\`\`json
 {
-  "tool": "editor_list_documents",
+  "tool": "editor/list_documents",
   "arguments": {}
 }
+\`\`\`
+
+### Common Tools Examples:
+
+**List documents:**
+\`\`\`json
+{"tool": "editor/list_documents", "arguments": {}}
+\`\`\`
+
+**Close project:**
+\`\`\`json
+{"tool": "project/close", "arguments": {}}
+\`\`\`
+
+**Open project:**
+\`\`\`json
+{"tool": "project/open", "arguments": {"projectPath": "/path/to/project.vpyproj"}}
 \`\`\`
 
 ### File Editing Tools:
@@ -153,7 +173,7 @@ To use a tool, respond with a JSON function call in a code block:
 **To replace text in a file:**
 \`\`\`json
 {
-  "tool": "editor_replace_range",
+  "tool": "editor/replace_range",
   "arguments": {
     "uri": "file:///path/to/file.vpy",
     "startLine": 10,
@@ -168,7 +188,7 @@ To use a tool, respond with a JSON function call in a code block:
 **To insert text:**
 \`\`\`json
 {
-  "tool": "editor_insert_at",
+  "tool": "editor/insert_at",
   "arguments": {
     "uri": "file:///path/to/file.vpy",
     "line": 5,
@@ -181,7 +201,7 @@ To use a tool, respond with a JSON function call in a code block:
 **To delete text:**
 \`\`\`json
 {
-  "tool": "editor_delete_range",
+  "tool": "editor/delete_range",
   "arguments": {
     "uri": "file:///path/to/file.vpy",
     "startLine": 10,
@@ -210,8 +230,10 @@ To use a tool, respond with a JSON function call in a code block:
       try {
         const parsed = JSON.parse(match[1]);
         if (parsed.tool) {
+          // Convert underscore to slash (e.g., "project_close" -> "project/close")
+          const toolName = parsed.tool.replace(/_/g, '/');
           calls.push({
-            tool: parsed.tool,
+            tool: toolName,
             arguments: parsed.arguments || {}
           });
         }
@@ -235,9 +257,11 @@ To use a tool, respond with a JSON function call in a code block:
           const exists = calls.some(c => c.tool === parsed.tool && 
             JSON.stringify(c.arguments) === JSON.stringify(parsed.arguments));
           if (!exists) {
-            console.log('[MCP Tools] Successfully parsed tool:', parsed.tool);
+            // Convert underscore to slash (e.g., "project_close" -> "project/close")
+            const toolName = parsed.tool.replace(/_/g, '/');
+            console.log('[MCP Tools] Successfully parsed tool:', parsed.tool, '->', toolName);
             calls.push({
-              tool: parsed.tool,
+              tool: toolName,
               arguments: parsed.arguments || {}
             });
           } else {
