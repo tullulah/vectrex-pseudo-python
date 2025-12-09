@@ -34,14 +34,24 @@ export class MCPToolsService {
    * Initialize MCP connection and fetch available tools
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    console.log('[MCP Tools] initialize() called - isInitialized:', this.isInitialized);
+    
+    if (this.isInitialized) {
+      console.log('[MCP Tools] Already initialized - skipping');
+      return;
+    }
 
     try {
       // Check if MCP is available
+      console.log('[MCP Tools] Checking window.mcp availability...');
+      console.log('[MCP Tools] window.mcp exists:', !!(window as any).mcp);
+      
       if (!(window as any).mcp) {
-        console.warn('[MCP Tools] window.mcp not available');
+        console.error('[MCP Tools] ❌ window.mcp NOT AVAILABLE - MCP server may not be running');
         return;
       }
+      
+      console.log('[MCP Tools] ✅ window.mcp is available');
 
       // Fetch available tools from MCP server
       const response: MCPResponse = await (window as any).mcp.request({

@@ -218,12 +218,24 @@ export const AiAssistantPanel: React.FC = () => {
 
   // Initialize MCP tools on mount
   useEffect(() => {
-    mcpTools.initialize().then(() => {
-      if (mcpTools.isAvailable()) {
-        setMcpEnabled(true);
-        console.log('[PyPilot] MCP tools enabled:', mcpTools.getAvailableTools().length, 'tools');
-      }
-    });
+    console.log('[PyPilot] Initializing MCP tools...');
+    mcpTools.initialize()
+      .then(() => {
+        console.log('[PyPilot] MCP initialize completed');
+        const available = mcpTools.isAvailable();
+        console.log('[PyPilot] MCP isAvailable:', available);
+        if (available) {
+          const tools = mcpTools.getAvailableTools();
+          console.log('[PyPilot] Available tools:', tools.length, tools);
+          setMcpEnabled(true);
+          console.log('[PyPilot] ✅ MCP ENABLED - mcpEnabled state set to true');
+        } else {
+          console.warn('[PyPilot] ⚠️ MCP not available - mcpEnabled remains false');
+        }
+      })
+      .catch(err => {
+        console.error('[PyPilot] ❌ MCP initialization failed:', err);
+      });
   }, []);
 
   // Add system message on first load
@@ -451,6 +463,8 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 
   const sendToAI = async (message: string, context: any) => {
     try {
+      console.log('[PyPilot] sendToAI called - mcpEnabled:', mcpEnabled);
+      
       // Add MCP tools to context if available
       const enhancedContext = mcpEnabled ? {
         ...context,
@@ -460,6 +474,8 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
         ...context,
         errors: []
       };
+      
+      console.log('[PyPilot] Enhanced context has mcpTools:', !!enhancedContext.mcpTools);
 
       const response = await aiService.sendRequest({
         message,
