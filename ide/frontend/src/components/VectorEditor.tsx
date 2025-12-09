@@ -15,6 +15,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 interface Point {
   x: number;
   y: number;
+  z?: number; // Optional Z coordinate for 3D vectors
 }
 
 interface VecPath {
@@ -63,6 +64,7 @@ interface VectorEditorProps {
 }
 
 type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'pan';
+type ViewMode = 'xy' | 'xz' | 'yz' | '3d';
 
 const defaultResource: VecResource = {
   version: '1.0',
@@ -566,6 +568,8 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [selectedPoints, setSelectedPoints] = useState<Set<string>>(new Set()); // "pathIdx-pointIdx" format
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [viewMode, setViewMode] = useState<ViewMode>('xy');
+  const [rotation3D, setRotation3D] = useState({ pitch: 30, yaw: 45 }); // degrees
   const [isDrawing, setIsDrawing] = useState(false);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   
@@ -644,29 +648,70 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     };
   }, [edgeOptions, backgroundImage, showEdgeSettings, width, height, resource.canvas.width, resource.canvas.height]);
 
-  // Convert canvas coordinates to resource coordinates
+  // Convert canvas coordinates to resource coordinates (2D projection)
   const canvasToResource = useCallback((canvasX: number, canvasY: number): Point => {
     const centerX = width / 2;
     const centerY = height / 2;
     const scale = Math.min(width, height) / resource.canvas.width;
     
-    return {
-      x: Math.round((canvasX - centerX - pan.x) / (scale * zoom)),
-      y: Math.round((centerY - canvasY + pan.y) / (scale * zoom)),
-    };
-  }, [width, height, resource.canvas.width, pan, zoom]);
+    const x = (canvasX - centerX - pan.x) / (scale * zoom);
+    const y = (centerY - canvasY + pan.y) / (scale * zoom);
+    
+    // For 3D views, we need to consider which plane we're drawing on
+    if (viewMode === 'xy') {
+      return { x: Math.round(x), y: Math.round(y), z: 0 };
+    } else if (viewMode === 'xz') {
+      return { x: Math.round(x), y: 0, z: Math.round(y) };
+    } else if (viewMode === 'yz') {
+      return { x: 0, y: Math.round(x), z: Math.round(y) };
+    } else {
+      // 3D view - not editable directly
+      return { x: Math.round(x), y: Math.round(y), z: 0 };
+    }
+  }, [width, height, resource.canvas.width, pan, zoom, viewMode]);
 
+  // Project 3D point to 2D based on current view
+  const project3DTo2D = useCallback((point: Point): { x: number; y: number } => {
+    const x = point.x || 0;
+    const y = point.y || 0;
+    const z = point.z || 0;
+    
+    if (viewMode === 'xy') {
+      return { x, y };
+    } else if (viewMode === 'xz') {
+      return { x, y: z };
+    } else if (viewMode === 'yz') {
+      return { x: y, y: z };
+    } else { // 3D perspective
+      const pitch = (rotation3D.pitch * Math.PI) / 180;
+      const yaw = (rotation3D.yaw * Math.PI) / 180;
+      
+      // Rotate around Y axis (yaw)
+      const x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
+      const z1 = x * Math.sin(yaw) + z * Math.cos(yaw);
+      
+      // Rotate around X axis (pitch)
+      const y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
+      const z2 = y * Math.sin(pitch) + z1 * Math.cos(pitch);
+      
+      // Simple orthographic projection (ignore z2 for depth)
+      return { x: x1, y: y2 };
+    }
+  }, [viewMode, rotation3D]);
+  
   // Convert resource coordinates to canvas coordinates
   const resourceToCanvas = useCallback((point: Point): { x: number; y: number } => {
     const centerX = width / 2;
     const centerY = height / 2;
     const scale = Math.min(width, height) / resource.canvas.width;
     
+    const projected = project3DTo2D(point);
+    
     return {
-      x: centerX + point.x * scale * zoom + pan.x,
-      y: centerY - point.y * scale * zoom + pan.y,
+      x: centerX + projected.x * scale * zoom + pan.x,
+      y: centerY - projected.y * scale * zoom + pan.y,
     };
-  }, [width, height, resource.canvas.width, pan, zoom]);
+  }, [width, height, resource.canvas.width, pan, zoom, project3DTo2D]);
 
   // Draw the canvas
   const draw = useCallback(() => {
@@ -725,15 +770,30 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       ctx.stroke();
     }
 
-    // Draw axes
-    ctx.strokeStyle = '#4a4a6e';
+    // Draw axes with labels based on view mode
     ctx.lineWidth = 2;
+    
+    // X axis (red)
+    ctx.strokeStyle = '#a44';
     ctx.beginPath();
     ctx.moveTo(0, centerY);
     ctx.lineTo(width, centerY);
+    ctx.stroke();
+    
+    // Y/Z axis (green/blue depending on view)
+    ctx.strokeStyle = viewMode === 'xz' || viewMode === 'yz' ? '#44a' : '#4a4';
+    ctx.beginPath();
     ctx.moveTo(centerX, 0);
     ctx.lineTo(centerX, height);
     ctx.stroke();
+    
+    // Axis labels
+    ctx.fillStyle = '#888';
+    ctx.font = '12px monospace';
+    const labelX = viewMode === 'yz' ? 'Y' : 'X';
+    const labelY = viewMode === 'xy' ? 'Y' : 'Z';
+    ctx.fillText(`+${labelX}`, width - 30, centerY - 10);
+    ctx.fillText(`+${labelY}`, centerX + 10, 20);
 
     // Draw paths
     for (let layerIdx = 0; layerIdx < resource.layers.length; layerIdx++) {
@@ -951,6 +1011,9 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     }
   };
 
+  // Track mouse drag for 3D rotation and panning
+  const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  
   // Mouse event handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -958,6 +1021,14 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
 
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
+    
+    // With pan tool, allow rotation in 3D or panning in ortho views
+    if (currentTool === 'pan') {
+      dragStartRef.current = { x: canvasX, y: canvasY, panX: pan.x, panY: pan.y };
+      setIsDrawing(true);
+      return;
+    }
+    
     const point = canvasToResource(canvasX, canvasY);
 
     if (currentTool === 'pen') {
@@ -1020,6 +1091,28 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
     
+    // Handle rotation/panning with pan tool
+    if (currentTool === 'pan' && isDrawing && dragStartRef.current) {
+      const deltaX = canvasX - dragStartRef.current.x;
+      const deltaY = canvasY - dragStartRef.current.y;
+      
+      if (viewMode === '3d') {
+        // 3D rotation
+        setRotation3D({
+          pitch: Math.max(-89, Math.min(89, rotation3D.pitch - deltaY * 0.5)),
+          yaw: (rotation3D.yaw + deltaX * 0.5) % 360,
+        });
+        dragStartRef.current = { ...dragStartRef.current, x: canvasX, y: canvasY };
+      } else {
+        // Ortho view panning
+        setPan({
+          x: dragStartRef.current.panX + deltaX,
+          y: dragStartRef.current.panY + deltaY,
+        });
+      }
+      return;
+    }
+    
     if (isBoxSelecting && currentTool === 'select') {
       // Update box selection
       setBoxEnd({ x: canvasX, y: canvasY });
@@ -1038,6 +1131,9 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   };
 
   const handleMouseUp = () => {
+    // Clear drag state for 3D rotation
+    dragStartRef.current = null;
+    
     // Complete box selection
     if (isBoxSelecting && boxStart && boxEnd) {
       const minX = Math.min(boxStart.x, boxEnd.x);
@@ -1068,6 +1164,38 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     
     setIsDrawing(false);
   };
+  
+  // Handle mouse wheel for zoom (zoom to cursor position)
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Get mouse position relative to canvas
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Calculate world position before zoom
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const scale = Math.min(width, height) / resource.canvas.width;
+    
+    const worldX = (mouseX - centerX - pan.x) / (scale * zoom);
+    const worldY = (mouseY - centerY - pan.y) / (scale * zoom);
+    
+    // Calculate new zoom
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    const newZoom = Math.max(0.1, Math.min(10, zoom * zoomFactor));
+    
+    // Calculate new pan to keep world position under cursor
+    const newPanX = mouseX - centerX - worldX * scale * newZoom;
+    const newPanY = mouseY - centerY - worldY * scale * newZoom;
+    
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
+  }, [zoom, pan, width, height, resource.canvas.width]);
   
   // Delete selected points
   const handleDeleteSelected = useCallback(() => {
@@ -1143,6 +1271,30 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   // UI Components
   const Toolbar = () => (
     <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', padding: '4px', background: '#2a2a4e', borderRadius: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* View Mode Selector */}
+      <div style={{ display: 'flex', gap: '2px', marginRight: '8px', background: '#1a1a2e', padding: '2px', borderRadius: '4px' }}>
+        {(['xy', 'xz', 'yz', '3d'] as ViewMode[]).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            style={{
+              padding: '6px 10px',
+              background: viewMode === mode ? '#4a4a8e' : 'transparent',
+              color: viewMode === mode ? 'white' : '#888',
+              border: 'none',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: viewMode === mode ? 'bold' : 'normal',
+            }}
+            title={`View ${mode.toUpperCase()} plane${mode === '3d' ? ' (free rotation)' : ''}`}
+          >
+            {mode.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      
+      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 4px' }} />
       <button
         onClick={() => setCurrentTool('select')}
         style={{
@@ -1170,6 +1322,20 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         title="Pen tool - click to add points, double-click to finish path"
       >
         ✏️ Pen
+      </button>
+      <button
+        onClick={() => setCurrentTool('pan')}
+        style={{
+          padding: '8px 12px',
+          background: currentTool === 'pan' ? '#4a4a8e' : '#3a3a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title={viewMode === '3d' ? 'Pan/Rotate - drag to rotate 3D view' : 'Pan - drag to move view'}
+      >
+        {viewMode === '3d' ? '🔄 Rotate' : '✋ Pan'}
       </button>
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
@@ -1528,13 +1694,176 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     );
   };
 
-  // Right side panel - combines layers and edge settings
-  const RightPanel = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '200px' }}>
-      <LayersPanel />
-      <EdgeSettingsPanel />
-    </div>
-  );
+  // Mini view component for non-active views
+  const MiniView = ({ view }: { view: ViewMode }) => {
+    const miniCanvasRef = useRef<HTMLCanvasElement>(null);
+    const miniSize = 180;
+    
+    // Draw mini view
+    useEffect(() => {
+      const canvas = miniCanvasRef.current;
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      // Clear
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, miniSize, miniSize);
+      
+      // Draw grid (simplified)
+      ctx.strokeStyle = '#2a2a4e';
+      ctx.lineWidth = 1;
+      const gridSize = 16;
+      const centerX = miniSize / 2;
+      const centerY = miniSize / 2;
+      
+      for (let x = centerX % gridSize; x < miniSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, miniSize);
+        ctx.stroke();
+      }
+      for (let y = centerY % gridSize; y < miniSize; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(miniSize, y);
+        ctx.stroke();
+      }
+      
+      // Draw axes
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#a44';
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(miniSize, centerY);
+      ctx.stroke();
+      
+      ctx.strokeStyle = view === 'xz' || view === 'yz' ? '#44a' : '#4a4';
+      ctx.beginPath();
+      ctx.moveTo(centerX, 0);
+      ctx.lineTo(centerX, miniSize);
+      ctx.stroke();
+      
+      // Helper function for mini view projection
+      const miniProject3DTo2D = (point: Point): { x: number; y: number } => {
+        const x = point.x || 0;
+        const y = point.y || 0;
+        const z = point.z || 0;
+        
+        if (view === 'xy') {
+          return { x, y };
+        } else if (view === 'xz') {
+          return { x, y: z };
+        } else if (view === 'yz') {
+          return { x: y, y: z };
+        } else { // 3d
+          const pitch = (rotation3D.pitch * Math.PI) / 180;
+          const yaw = (rotation3D.yaw * Math.PI) / 180;
+          const x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
+          const z1 = x * Math.sin(yaw) + z * Math.cos(yaw);
+          const y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
+          return { x: x1, y: y2 };
+        }
+      };
+      
+      const miniResourceToCanvas = (point: Point): { x: number; y: number } => {
+        const scale = miniSize / resource.canvas.width;
+        const projected = miniProject3DTo2D(point);
+        return {
+          x: centerX + projected.x * scale,
+          y: centerY - projected.y * scale,
+        };
+      };
+      
+      // Draw paths
+      for (let layerIdx = 0; layerIdx < resource.layers.length; layerIdx++) {
+        const layer = resource.layers[layerIdx];
+        if (!layer || !layer.visible || !Array.isArray(layer.paths)) continue;
+
+        for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
+          const path = layer.paths[pathIdx];
+          if (!path || !Array.isArray(path.points) || path.points.length < 2) continue;
+
+          const intensity = path.intensity / 127;
+          const green = Math.floor(200 + 55 * intensity);
+          ctx.strokeStyle = `#00${green.toString(16).padStart(2, '0')}00`;
+          ctx.lineWidth = 1;
+
+          ctx.beginPath();
+          const startPt = path.points[0];
+          if (!startPt) continue;
+          const start = miniResourceToCanvas(startPt);
+          ctx.moveTo(start.x, start.y);
+          for (let i = 1; i < path.points.length; i++) {
+            const pt = path.points[i];
+            if (!pt) continue;
+            const ptCanvas = miniResourceToCanvas(pt);
+            ctx.lineTo(ptCanvas.x, ptCanvas.y);
+          }
+
+          if (path.closed) {
+            ctx.closePath();
+          }
+          ctx.stroke();
+        }
+      }
+      
+      // Draw view label
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText(view.toUpperCase(), 8, miniSize - 8);
+      
+    }, [view, resource, rotation3D]);
+    
+    return (
+      <div
+        onClick={() => setViewMode(view)}
+        style={{
+          cursor: 'pointer',
+          border: '2px solid #3a3a5e',
+          borderRadius: '4px',
+          overflow: 'hidden',
+          transition: 'border-color 0.2s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4a4a8e'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#3a3a5e'; }}
+        title={`Switch to ${view.toUpperCase()} view`}
+      >
+        <canvas
+          ref={miniCanvasRef}
+          width={miniSize}
+          height={miniSize}
+          style={{ display: 'block' }}
+        />
+      </div>
+    );
+  };
+
+  // Right side panel - combines mini views, layers and edge settings
+  const RightPanel = () => {
+    const allViews: ViewMode[] = ['xy', 'xz', 'yz', '3d'];
+    const otherViews = allViews.filter(v => v !== viewMode);
+    
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+        {/* Mini views */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#2a2a4e', padding: '8px', borderRadius: '4px' }}>
+          <div style={{ color: '#aaa', fontSize: '11px', fontWeight: 'bold' }}>
+            OTHER VIEWS
+          </div>
+          {otherViews.map(view => (
+            <MiniView key={view} view={view} />
+          ))}
+        </div>
+        
+        <div style={{ width: '100%', height: '1px', background: '#4a4a6e', margin: '8px 0' }} />
+        
+        <LayersPanel />
+        <EdgeSettingsPanel />
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1550,18 +1879,41 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
           onMouseUp={handleMouseUp}
           onDoubleClick={handleDoubleClick}
           onKeyDown={handleKeyDown}
+          onWheel={handleWheel}
           style={{
             border: '2px solid #4a4a8e',
             borderRadius: '4px',
-            cursor: currentTool === 'pen' ? 'crosshair' : 'default',
+            cursor: currentTool === 'pen' 
+              ? 'crosshair' 
+              : currentTool === 'pan' && viewMode === '3d' && isDrawing
+              ? 'grabbing'
+              : currentTool === 'pan' && viewMode === '3d'
+              ? 'grab'
+              : currentTool === 'pan'
+              ? 'move'
+              : 'default',
           }}
         />
         <RightPanel />
       </div>
-      <div style={{ color: '#888', fontSize: '12px' }}>
-        {currentTool === 'pen' && 'Click to add points. Double-click to finish path.'}
-        {currentTool === 'select' && 'Click to select points. Drag to move.'}
-        {backgroundImage && ' | 📷 Background image loaded - use Auto-Trace to detect edges.'}
+      <div style={{ color: '#888', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>
+          {currentTool === 'pen' && viewMode !== '3d' && `Drawing on ${viewMode.toUpperCase()} plane. Click to add points. Double-click to finish path.`}
+          {currentTool === 'pen' && viewMode === '3d' && 'Switch to XY/XZ/YZ view to draw. 3D view is for visualization only.'}
+          {currentTool === 'select' && 'Click to select points. Drag to move.'}
+          {currentTool === 'pan' && viewMode === '3d' && '🔄 Drag to rotate 3D view. Scroll to zoom.'}
+          {currentTool === 'pan' && viewMode !== '3d' && '✋ Drag to pan. Scroll to zoom.'}
+          {backgroundImage && ' | 📷 Background image loaded - use Auto-Trace to detect edges.'}
+        </span>
+        <span style={{ display: 'flex', gap: '16px', fontSize: '11px' }}>
+          <span>View: <strong>{viewMode.toUpperCase()}</strong></span>
+          {viewMode === '3d' && (
+            <span>
+              Rotation: Pitch={rotation3D.pitch.toFixed(0)}° Yaw={rotation3D.yaw.toFixed(0)}°
+            </span>
+          )}
+          <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
+        </span>
       </div>
     </div>
   );
