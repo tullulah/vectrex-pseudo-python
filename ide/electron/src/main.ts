@@ -10,6 +10,8 @@ import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
 import { watch } from 'fs';
 import * as crypto from 'crypto';
+import { getMCPServer } from './mcp/server.js';
+import type { MCPRequest } from './mcp/types.js';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -111,6 +113,11 @@ async function createWindow() {
     });
   }
   if (verbose) console.log('[IDE] createWindow() end');
+  
+  // Initialize MCP server with main window reference
+  const mcpServer = getMCPServer();
+  mcpServer.setMainWindow(mainWindow);
+  if (verbose) console.log('[MCP] Server initialized and connected to main window');
 }
 
 let lspPathWarned = false;
@@ -233,6 +240,29 @@ ipcMain.handle('lsp_send', async (_e, payload: string) => {
   const header = `Content-Length: ${bytes.length}\r\n\r\n`;
   lsp.stdin.write(header);
   lsp.stdin.write(bytes);
+});
+
+// MCP Server handler - Handle JSON-RPC requests from AI agents
+ipcMain.handle('mcp:request', async (_e, request: MCPRequest) => {
+  const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
+  if (verbose) console.log('[MCP] Received request:', request.method);
+  try {
+    const mcpServer = getMCPServer();
+    const response = await mcpServer.handleRequest(request);
+    if (verbose) console.log('[MCP] Response:', response.result ? 'success' : 'error');
+    return response;
+  } catch (error: any) {
+    console.error('[MCP] Error handling request:', error);
+    return {
+      jsonrpc: '2.0' as const,
+      id: request.id,
+      error: {
+        code: -32603,
+        message: error.message || 'Internal error',
+        data: error,
+      },
+    };
+  }
 });
 
 let recentsCache: Array<{ path: string; lastOpened: number; kind: 'file' | 'folder' }> | null = null;

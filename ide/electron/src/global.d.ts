@@ -5,4 +5,15 @@ interface ElectronAPI {
   onLspStdout(cb: (line: string) => void): void;
   onLspStderr(cb: (line: string) => void): void;
 }
-interface Window { electronAPI?: ElectronAPI }
+
+interface MCPAPI {
+  request(request: any): Promise<any>;
+}
+
+interface Window { 
+  electronAPI?: ElectronAPI;
+  mcp?: MCPAPI;
+  __editorStore__?: any;
+  __projectStore__?: any;
+  __debugStore__?: any;
+}
