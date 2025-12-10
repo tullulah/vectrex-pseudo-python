@@ -82,7 +82,43 @@ export class OllamaProvider extends BaseAiProvider {
         throw new Error('Ollama is not running. Please start Ollama: brew services start ollama');
       }
 
-      const systemPrompt = this.buildSystemPrompt();
+      // Enhanced system prompt for local models with explicit tool calling instructions
+      const baseSystemPrompt = this.buildSystemPrompt();
+      const systemPrompt = baseSystemPrompt + `
+
+**CRITICAL: When you need to use a tool, you MUST respond with ONLY the JSON tool call, nothing else.**
+
+Example responses:
+
+User: "cierra el proyecto"
+Assistant response (EXACTLY like this):
+\`\`\`json
+{"tool": "project/close", "arguments": {}}
+\`\`\`
+
+User: "lista los archivos"  
+Assistant response (EXACTLY like this):
+\`\`\`json
+{"tool": "editor/list_documents", "arguments": {}}
+\`\`\`
+
+User: "crea un proyecto llamado test en /path/to/project"
+Assistant response (EXACTLY like this):
+\`\`\`json
+{"tool": "project/create", "arguments": {"path": "/path/to/project", "name": "test"}}
+\`\`\`
+
+**DO NOT add explanations before or after the JSON. ONLY the JSON block.**
+
+When user says:
+- "cierra" or "close" → use project/close
+- "abre" or "open" → use project/open
+- "lista" or "list" → use editor/list_documents
+- "muestra" or "show" → use editor/read_document
+- "crea" or "create" → use project/create
+
+ALWAYS use the \`\`\`json code block format.`;
+
       const userPrompt = this.buildUserPrompt(request);
 
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
@@ -96,9 +132,13 @@ export class OllamaProvider extends BaseAiProvider {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: this.config.temperature || 0.7,
+          temperature: this.config.temperature || 0.1, // Lower temperature for more deterministic tool calling
           max_tokens: this.config.maxTokens || 2000,
-          stream: false
+          stream: false,
+          // Additional parameters for better tool calling
+          top_p: 0.9,
+          frequency_penalty: 0.0,
+          presence_penalty: 0.0
         })
       });
 
