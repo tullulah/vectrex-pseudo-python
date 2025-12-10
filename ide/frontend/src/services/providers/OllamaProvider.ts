@@ -81,21 +81,31 @@ export class OllamaProvider extends BaseAiProvider {
   private detectDirectCommand(message: string): any | null {
     const msg = message.toLowerCase().trim();
     
-    // Close project commands
-    if (msg.match(/^(cierra|cerrar|close)\s*(el\s*)?(proyecto|project)?$/)) {
-      return { tool: 'project/close', arguments: {} };
+    console.log('[Ollama] Checking direct command:', msg);
+    
+    // Close project commands - more flexible pattern
+    if (msg.includes('cierra') || msg.includes('cerrar') || msg.includes('close')) {
+      if (msg.includes('proyecto') || msg.includes('project')) {
+        console.log('[Ollama] ✅ Direct command detected: project/close');
+        return { tool: 'project/close', arguments: {} };
+      }
     }
     
     // List documents commands
-    if (msg.match(/^(lista|listar|list|muestra|show)\s*(los\s*)?(archivos|documentos|files|documents)?$/)) {
+    if ((msg.includes('lista') || msg.includes('listar') || msg.includes('list') || msg.includes('muestra') || msg.includes('show')) &&
+        (msg.includes('archivos') || msg.includes('documentos') || msg.includes('files') || msg.includes('documents'))) {
+      console.log('[Ollama] ✅ Direct command detected: editor/list_documents');
       return { tool: 'editor/list_documents', arguments: {} };
     }
     
     // Get project structure
-    if (msg.match(/^(estructura|structure)\s*(del\s*)?(proyecto|project)?$/)) {
+    if ((msg.includes('estructura') || msg.includes('structure')) && 
+        (msg.includes('proyecto') || msg.includes('project'))) {
+      console.log('[Ollama] ✅ Direct command detected: project/get_structure');
       return { tool: 'project/get_structure', arguments: {} };
     }
     
+    console.log('[Ollama] ❌ No direct command match, using LLM');
     return null;
   }
 
