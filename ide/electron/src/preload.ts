@@ -78,4 +78,13 @@ contextBridge.exposeInMainWorld('mcp', {
   request: (request: any) => ipcRenderer.invoke('mcp:request', request),
 });
 
+// Shell command execution (for Ollama installation)
+contextBridge.exposeInMainWorld('electron', {
+  runCommand: (command: string) => ipcRenderer.invoke('shell:runCommand', command) as Promise<{
+    success: boolean;
+    output: string;
+    exitCode: number;
+  }>,
+});
+
 export {};

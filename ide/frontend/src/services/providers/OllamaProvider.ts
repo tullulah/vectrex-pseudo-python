@@ -24,43 +24,51 @@ export class OllamaProvider extends BaseAiProvider {
   // Recommended models for tool calling and code generation
   private readonly recommendedModels: OllamaModelInfo[] = [
     {
-      name: 'qwen2.5:7b',
-      displayName: 'Qwen 2.5 7B',
-      description: 'Excellent for tool calling and code generation (RECOMMENDED)',
-      size: '4.7 GB',
-      parameters: '7B',
+      name: 'qwen2.5:72b',
+      displayName: 'Qwen 2.5 72B ⭐',
+      description: 'Most capable - Best for tool calling and complex reasoning (RECOMMENDED)',
+      size: '41 GB',
+      parameters: '72B',
       recommended: true
     },
     {
-      name: 'llama3.2:3b',
-      displayName: 'Llama 3.2 3B',
-      description: 'Fast and lightweight for quick responses',
-      size: '2.0 GB',
-      parameters: '3B',
+      name: 'qwen2.5:32b',
+      displayName: 'Qwen 2.5 32B',
+      description: 'Excellent balance - Great tool calling, manageable size',
+      size: '19 GB',
+      parameters: '32B',
       recommended: true
     },
     {
       name: 'qwen2.5:14b',
       displayName: 'Qwen 2.5 14B',
-      description: 'Higher quality, requires more RAM (16GB+)',
+      description: 'Good quality, lighter weight (requires 16GB+ RAM)',
       size: '9.0 GB',
       parameters: '14B',
-      recommended: false
+      recommended: true
     },
     {
-      name: 'codellama:7b',
-      displayName: 'Code Llama 7B',
-      description: 'Specialized for code generation',
-      size: '3.8 GB',
+      name: 'qwen2.5:7b',
+      displayName: 'Qwen 2.5 7B',
+      description: 'Lightweight, faster but less capable for tool calling',
+      size: '4.7 GB',
       parameters: '7B',
       recommended: false
     },
     {
-      name: 'deepseek-coder:6.7b',
-      displayName: 'DeepSeek Coder 6.7B',
-      description: 'Excellent for code understanding',
-      size: '3.8 GB',
-      parameters: '6.7B',
+      name: 'llama3.1:70b',
+      displayName: 'Llama 3.1 70B',
+      description: 'Alternative flagship model, excellent instruction following',
+      size: '40 GB',
+      parameters: '70B',
+      recommended: false
+    },
+    {
+      name: 'deepseek-coder-v2:16b',
+      displayName: 'DeepSeek Coder V2 16B',
+      description: 'Specialized for code generation and understanding',
+      size: '9.0 GB',
+      parameters: '16B',
       recommended: false
     }
   ];
@@ -225,7 +233,7 @@ IMPORTANT:
     }
   }
 
-  public async pullModel(modelName: string, onProgress?: (progress: string) => void): Promise<void> {
+  public async pullModel(modelName: string, onProgress?: (progress: number) => void): Promise<void> {
     try {
       const response = await fetch(`${this.baseUrl}/api/pull`, {
         method: 'POST',
@@ -254,11 +262,13 @@ IMPORTANT:
         for (const line of lines) {
           try {
             const progress = JSON.parse(line);
-            if (onProgress && progress.status) {
-              const percentage = progress.completed && progress.total 
-                ? `${Math.round((progress.completed / progress.total) * 100)}%`
-                : '';
-              onProgress(`${progress.status}${percentage ? ' - ' + percentage : ''}`);
+            if (onProgress) {
+              if (progress.completed && progress.total) {
+                const percentage = Math.round((progress.completed / progress.total) * 100);
+                onProgress(percentage);
+              } else if (progress.status === 'success') {
+                onProgress(100);
+              }
             }
           } catch (e) {
             // Ignore JSON parse errors

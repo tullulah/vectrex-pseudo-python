@@ -6,6 +6,7 @@ import type { AiProviderType, AiProviderConfig } from '../../types/aiProvider';
 import { aiService } from '../../services/aiService';
 import { logger } from '../../utils/logger';
 import { mcpTools } from '../../services/mcpToolsService';
+import { OllamaManagerDialog } from '../dialogs/OllamaManagerDialog';
 
 // Base de conocimiento de comandos Vectrex
 const VECTREX_COMMANDS = [
@@ -68,6 +69,7 @@ export const AiAssistantPanel: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [showOllamaManager, setShowOllamaManager] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -958,32 +960,53 @@ def loop():
                     Modelo:
                     {isLoadingModels && <span style={{ color: '#6b7280', marginLeft: '8px' }}>Cargando...</span>}
                   </label>
-                  <select
-                    value={providerConfig.model || ''}
-                    onChange={(e) => setProviderConfig(prev => ({ ...prev, model: e.target.value }))}
-                    disabled={isLoadingModels}
-                    style={{
-                      background: '#1e1e1e',
-                      border: '1px solid #3c3c3c',
-                      color: '#cccccc',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      width: '100%',
-                      opacity: isLoadingModels ? 0.6 : 1
-                    }}
-                  >
-                    <option value="">Seleccionar modelo...</option>
-                    {availableModels.map(model => (
-                      <option key={model} value={model}>
-                        {model}
-                        {model.includes('gpt-5') && ' ⭐ (Nuevo)'}
-                        {model.includes('claude-4') && ' ⭐ (Nuevo)'}
-                        {model.includes('gpt-4o') && !model.includes('mini') && ' 🚀 (Recomendado)'}
-                        {model.includes('mini') && ' ⚡ (Rápido)'}
-                        {model.includes('free') && ' 🆓 (Gratis)'}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                    <select
+                      value={providerConfig.model || ''}
+                      onChange={(e) => setProviderConfig(prev => ({ ...prev, model: e.target.value }))}
+                      disabled={isLoadingModels}
+                      style={{
+                        background: '#1e1e1e',
+                        border: '1px solid #3c3c3c',
+                        color: '#cccccc',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        flex: 1,
+                        opacity: isLoadingModels ? 0.6 : 1
+                      }}
+                    >
+                      <option value="">Seleccionar modelo...</option>
+                      {availableModels.map(model => (
+                        <option key={model} value={model}>
+                          {model}
+                          {model.includes('gpt-5') && ' ⭐ (Nuevo)'}
+                          {model.includes('claude-4') && ' ⭐ (Nuevo)'}
+                          {model.includes('gpt-4o') && !model.includes('mini') && ' 🚀 (Recomendado)'}
+                          {model.includes('mini') && ' ⚡ (Rápido)'}
+                          {model.includes('free') && ' 🆓 (Gratis)'}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {currentProviderType === 'ollama' && (
+                      <button
+                        onClick={() => setShowOllamaManager(true)}
+                        style={{
+                          background: '#374151',
+                          border: '1px solid #4b5563',
+                          color: '#e5e7eb',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title="Manage Ollama models"
+                      >
+                        🏠 Manage
+                      </button>
+                    )}
+                  </div>
                   
                   {providerConfig.model && (
                     <div style={{ 
@@ -1293,6 +1316,16 @@ Check browser console for detailed error messages.`);
         }}>
         </div>
       </div>
+      
+      {/* Ollama Manager Dialog */}
+      <OllamaManagerDialog
+        isOpen={showOllamaManager}
+        onClose={() => setShowOllamaManager(false)}
+        onModelSelected={(modelName) => {
+          setProviderConfig(prev => ({ ...prev, model: modelName }));
+        }}
+        currentModel={providerConfig.model}
+      />
     </div>
   );
 };

@@ -898,6 +898,31 @@ ipcMain.handle('recents:write', async (_e, list: any[]) => {
 });
 
 // ============================================
+// Shell Command Execution (for Ollama installation)
+// ============================================
+
+ipcMain.handle('shell:runCommand', async (_e, command: string) => {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        resolve({
+          success: false,
+          output: stderr || error.message,
+          exitCode: error.code || 1
+        });
+      } else {
+        resolve({
+          success: true,
+          output: stdout,
+          exitCode: 0
+        });
+      }
+    });
+  });
+});
+
+// ============================================
 // Project Management
 // ============================================
 
