@@ -619,16 +619,28 @@ export class MCPServer {
 
     const result = await this.mainWindow.webContents.executeJavaScript(`
       (function() {
-        const store = window.__projectStore__;
-        if (!store) throw new Error('Project store not available');
-        const state = store.getState();
-        const currentProject = state.workspaceName || state.vpyProject?.config.project.name || 'Unknown';
+        const projectStore = window.__projectStore__;
+        const editorStore = window.__editorStore__;
         
-        // Close both workspace and VPy project
-        state.closeVpyProject();
-        state.clearWorkspace();
+        if (!projectStore) throw new Error('Project store not available');
+        if (!editorStore) throw new Error('Editor store not available');
         
-        return { success: true, closedProject: currentProject };
+        const projectState = projectStore.getState();
+        const editorState = editorStore.getState();
+        
+        const currentProject = projectState.workspaceName || projectState.vpyProject?.config.project.name || 'Unknown';
+        
+        // Close all open documents first
+        const allDocs = [...editorState.documents];
+        for (const doc of allDocs) {
+          editorState.closeDocument(doc.uri);
+        }
+        
+        // Then close both workspace and VPy project
+        projectState.closeVpyProject();
+        projectState.clearWorkspace();
+        
+        return { success: true, closedProject: currentProject, closedFiles: allDocs.length };
       })()
     `);
 

@@ -205,3 +205,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   })
 }));
+
+// Expose store globally for MCP server access
+if (typeof window !== 'undefined') {
+  (window as any).__editorStore__ = useEditorStore;
+}
