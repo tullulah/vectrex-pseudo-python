@@ -608,8 +608,36 @@ export class MCPServer {
   }
 
   private async readProjectFile(params: any): Promise<any> {
-    // Will use fs to read file
-    return { path: params.path, content: '' };
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    // Get project root from store
+    const projectRoot = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__projectStore__;
+        if (!store) throw new Error('Project store not available');
+        const state = store.getState();
+        return state.project?.rootPath || state.vpyProject?.rootDir;
+      })()
+    `);
+
+    if (!projectRoot) {
+      throw new Error('No project open');
+    }
+
+    const { path: relativePath } = params;
+    const fullPath = path.join(projectRoot, relativePath);
+    
+    try {
+      const content = await fs.readFile(fullPath, 'utf-8');
+      return { path: relativePath, fullPath, content };
+    } catch (error: any) {
+      throw new Error(`Failed to read file ${relativePath}: ${error.message}`);
+    }
   }
 
   private async closeProject(params: any): Promise<any> {
@@ -670,15 +698,92 @@ export class MCPServer {
       throw new Error('No main window available');
     }
 
-    const { path, name } = params;
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { path: projectPath, name } = params;
     
-    // This would need IPC to main process to create file system structure
-    // For now, return not implemented
-    return { 
-      success: false, 
-      message: 'Project creation requires file system access - use project/open with existing path instead',
-      suggestion: `Create project folder manually at ${path}, then use project/open`
-    };
+    try {
+      // Create project directory structure
+      await fs.mkdir(projectPath, { recursive: true });
+      await fs.mkdir(path.join(projectPath, 'src'), { recursive: true });
+      await fs.mkdir(path.join(projectPath, 'assets'), { recursive: true });
+      await fs.mkdir(path.join(projectPath, 'assets', 'vectors'), { recursive: true });
+      await fs.mkdir(path.join(projectPath, 'assets', 'music'), { recursive: true });
+      await fs.mkdir(path.join(projectPath, 'build'), { recursive: true });
+
+      // Create .vpyproj file
+      const projectFile = path.join(projectPath, `${name}.vpyproj`);
+      const projectConfig = `[project]
+name = "${name}"
+version = "0.1.0"
+author = ""
+description = ""
+entry = "src/main.vpy"
+
+[build]
+output = "build/${name}.bin"
+target = "vectrex"
+optimization = 0
+debug_symbols = true
+
+[sources]
+vpy = ["src/**/*.vpy"]
+
+[resources]
+vectors = ["assets/vectors/**/*.vec"]
+music = ["assets/music/**/*.vmus"]
+`;
+      await fs.writeFile(projectFile, projectConfig, 'utf-8');
+
+      // Create main.vpy
+      const mainFile = path.join(projectPath, 'src', 'main.vpy');
+      const mainContent = `# ${name} - VPy Project
+# Created by PyPilot
+
+def setup():
+    # Initialization code here
+    pass
+
+def loop():
+    # Main loop code here
+    pass
+`;
+      await fs.writeFile(mainFile, mainContent, 'utf-8');
+
+      // Create .gitignore
+      const gitignore = path.join(projectPath, '.gitignore');
+      const gitignoreContent = `build/
+*.bin
+*.lst
+*.sym
+.DS_Store
+`;
+      await fs.writeFile(gitignore, gitignoreContent, 'utf-8');
+
+      // Open the created project
+      await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__projectStore__;
+          if (!store) throw new Error('Project store not available');
+          store.getState().openVpyProject('${projectFile.replace(/\\/g, '\\\\')}');
+          return true;
+        })()
+      `);
+
+      return { 
+        success: true, 
+        projectPath,
+        projectFile,
+        message: `Project '${name}' created successfully`,
+        files: [
+          projectFile,
+          mainFile,
+          gitignore
+        ]
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to create project: ${error.message}`);
+    }
   }
 }
 
