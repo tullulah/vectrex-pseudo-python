@@ -8,6 +8,7 @@ export { AnthropicProvider } from './AnthropicProvider.js';
 export { GitHubModelsProvider } from './GitHubModelsProvider.js';
 export { GroqProvider } from './GroqProvider.js';
 export { OllamaProvider } from './OllamaProvider.js';
+export { GeminiProvider } from './GeminiProvider.js';
 
 // Re-export types for convenience
 export type {

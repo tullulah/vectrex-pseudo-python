@@ -6,6 +6,7 @@ import { AnthropicProvider } from './providers/AnthropicProvider.js';
 import { GitHubModelsProvider } from './providers/GitHubModelsProvider.js';
 import { GroqProvider } from './providers/GroqProvider.js';
 import { OllamaProvider } from './providers/OllamaProvider.js';
+import { GeminiProvider } from './providers/GeminiProvider.js';
 
 export class AiProviderFactory {
   private static instances: Map<AiProviderType, IAiProvider> = new Map();
@@ -75,6 +76,12 @@ export class AiProviderFactory {
         // Ollama doesn't require API key, just needs to be running locally
         return new OllamaProvider(config || {});
       
+      case 'gemini':
+        if (!config.apiKey) {
+          throw new Error('Gemini API key is required');
+        }
+        return new GeminiProvider(config);
+      
       default:
         throw new Error(`Unknown provider type: ${type}`);
     }
@@ -141,6 +148,13 @@ export class AiProviderFactory {
         description: 'Modelos locales en tu Mac - 100% privado, sin API key',
         requiresApiKey: false,
         isConfigured: true // Always configured, just needs Ollama running
+      },
+      {
+        type: 'gemini',
+        name: 'Google Gemini',
+        description: 'Gemini 1.5 Pro/Flash - Multimodal avanzado',
+        requiresApiKey: true,
+        isConfigured: false
       }
     ];
   }

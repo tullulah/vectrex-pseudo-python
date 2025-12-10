@@ -14,4 +14,19 @@ interface Window {
       exitCode: number;
     }>;
   };
+  aiProxy: {
+    request: (request: {
+      provider: 'anthropic' | 'deepseek';
+      apiKey: string;
+      endpoint: string;
+      method: string;
+      body: any;
+      headers?: Record<string, string>;
+    }) => Promise<{
+      success: boolean;
+      data?: any;
+      error?: string;
+      status?: number;
+    }>;
+  };
 }

@@ -80,8 +80,22 @@ export class PSGAudioService {
   playNote(channel: number, note: number, velocity: number): void {
     if (!this.ctx || channel < 0 || channel > 2) return;
     const freq = this.noteToFrequency(note);
+    
+    // Validate frequency is finite and in valid range
+    if (!isFinite(freq) || freq <= 0 || freq > 20000) {
+      console.warn('[PSG] Invalid frequency:', freq, 'for note:', note);
+      return;
+    }
+    
+    // Validate velocity is finite and in valid range
+    const gain = velocity / 15 * 0.3;
+    if (!isFinite(gain) || gain < 0 || gain > 1) {
+      console.warn('[PSG] Invalid gain:', gain, 'for velocity:', velocity);
+      return;
+    }
+    
     this.oscillators[channel].frequency.setValueAtTime(freq, this.ctx.currentTime);
-    this.gains[channel].gain.setValueAtTime(velocity / 15 * 0.3, this.ctx.currentTime);
+    this.gains[channel].gain.setValueAtTime(gain, this.ctx.currentTime);
   }
 
   stopChannel(channel: number): void {
@@ -102,8 +116,21 @@ export class PSGAudioService {
     const maxFreq = 16000; // Highest frequency (period 0)
     const freq = minFreq + (maxFreq - minFreq) * Math.pow((31 - period) / 31, 2);
     
+    // Validate frequency is finite and in valid range
+    if (!isFinite(freq) || freq <= 0 || freq > 20000) {
+      console.warn('[PSG] Invalid noise frequency:', freq, 'for period:', period);
+      return;
+    }
+    
+    // Validate velocity is finite and in valid range
+    const gain = velocity / 15 * 0.6;
+    if (!isFinite(gain) || gain < 0 || gain > 1) {
+      console.warn('[PSG] Invalid noise gain:', gain, 'for velocity:', velocity);
+      return;
+    }
+    
     this.noiseFilter.frequency.setValueAtTime(freq, this.ctx.currentTime);
-    this.noiseGain.gain.setValueAtTime(velocity / 15 * 0.6, this.ctx.currentTime);
+    this.noiseGain.gain.setValueAtTime(gain, this.ctx.currentTime);
   }
   
   stopNoise(): void {

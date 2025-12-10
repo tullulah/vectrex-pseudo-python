@@ -13,6 +13,7 @@ import * as crypto from 'crypto';
 import * as net from 'net';
 import { getMCPServer } from './mcp/server.js';
 import type { MCPRequest } from './mcp/types.js';
+import { registerAIProxyHandlers } from './ai-proxy.js';
 
 let mainWindow: BrowserWindow | null = null;
 let mcpIpcServer: net.Server | null = null;
@@ -1257,6 +1258,11 @@ app.whenReady().then(() => {
     callback({ cancel: false, responseHeaders: headers });
   });
   if (verbose) console.log('[IDE] CSP applied');
+  
+  // Register AI proxy handlers
+  registerAIProxyHandlers();
+  if (verbose) console.log('[IDE] AI Proxy registered');
+  
   createWindow();
   // Defer BIOS load slightly until window exists to allow status message.
   setTimeout(()=>{ tryLoadBiosOnce(); }, 500);

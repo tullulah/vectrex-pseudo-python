@@ -94,13 +94,17 @@ export class MCPToolsService {
     }
 
     try {
-      console.log('[MCP Tools] Calling tool:', name, 'with args:', args);
+      // Normalize tool name: convert all slashes to underscores
+      // editor/read/document → editor_read_document
+      // project/create/vector → project_create_vector
+      const normalizedName = name.replace(/\//g, '_');
+      console.log('[MCP Tools] Calling tool:', name, '→', normalizedName, 'with args:', args);
       
-      // Call the tool directly by its name (e.g., "project/close", "editor/list_documents")
+      // Call the tool by its normalized name
       const response: MCPResponse = await (window as any).mcp.request({
         jsonrpc: '2.0',
         id: Date.now(),
-        method: name,  // Tool name IS the method
+        method: normalizedName,  // Normalized tool name
         params: args    // Arguments directly as params
       });
 

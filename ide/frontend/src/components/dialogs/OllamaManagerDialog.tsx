@@ -191,17 +191,31 @@ export const OllamaManagerDialog: React.FC<OllamaManagerDialogProps> = ({
 
   if (!isOpen) return null;
 
+  const dialogStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.8)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+    <div style={dialogStyle} onClick={onClose}>
+      <div className="bg-gray-800 rounded-lg shadow-xl border border-gray-600 max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-white">
             🏠 Ollama Model Manager
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors text-2xl leading-none"
+            title="Close"
           >
             ✕
           </button>
@@ -247,45 +261,60 @@ export const OllamaManagerDialog: React.FC<OllamaManagerDialogProps> = ({
               {installedModels.length > 0 && (
                 <div>
                   <h3 className="text-lg font-bold text-white mb-3">📦 Installed Models</h3>
-                  <div className="space-y-2">
-                    {installedModels.map(model => (
-                      <div
-                        key={model.name}
-                        className={`p-4 rounded-lg border ${
-                          currentModel === model.name
-                            ? 'border-blue-500 bg-blue-500 bg-opacity-10'
-                            : 'border-gray-700 bg-gray-750'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="font-medium text-white">{model.name}</div>
-                            <div className="text-sm text-gray-400">
-                              Size: {formatSize(model.size)} • Modified: {new Date(model.modified_at).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => selectModel(model.name)}
-                              className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                                currentModel === model.name
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-700 hover:bg-gray-600 text-white'
-                              }`}
-                            >
-                              {currentModel === model.name ? '✓ Active' : 'Select'}
-                            </button>
-                            <button
-                              onClick={() => deleteModel(model.name)}
-                              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                              title="Delete model"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-300">Model</th>
+                          <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Size</th>
+                          <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Modified</th>
+                          <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {installedModels.map(model => (
+                          <tr
+                            key={model.name}
+                            className={`border-b border-gray-700 hover:bg-gray-750 ${
+                              currentModel === model.name ? 'bg-blue-500 bg-opacity-10' : ''
+                            }`}
+                          >
+                            <td className="py-3 px-3">
+                              <span className="font-medium text-white">{model.name}</span>
+                              {currentModel === model.name && (
+                                <span className="ml-2 text-xs bg-blue-600 px-2 py-0.5 rounded font-medium">ACTIVE</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-sm text-gray-300 text-right">{formatSize(model.size)}</td>
+                            <td className="py-3 px-3 text-sm text-gray-400 text-right">
+                              {new Date(model.modified_at).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={() => selectModel(model.name)}
+                                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                    currentModel === model.name
+                                      ? 'bg-blue-600 text-white cursor-default'
+                                      : 'bg-gray-700 hover:bg-gray-600 text-white'
+                                  }`}
+                                  disabled={currentModel === model.name}
+                                >
+                                  {currentModel === model.name ? '✓ Active' : 'Select'}
+                                </button>
+                                <button
+                                  onClick={() => deleteModel(model.name)}
+                                  className="px-2 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+                                  title="Delete model"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -293,58 +322,68 @@ export const OllamaManagerDialog: React.FC<OllamaManagerDialogProps> = ({
               {/* Recommended Models */}
               <div>
                 <h3 className="text-lg font-bold text-white mb-3">⭐ Recommended Models</h3>
-                <div className="space-y-2">
-                  {recommendedModels.map(model => {
-                    const installed = isModelInstalled(model.name);
-                    const isDownloading = downloadingModel === model.name;
-                    const progress = downloadProgress[model.name] || 0;
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-2 px-3 text-sm font-semibold text-gray-300">Model</th>
+                        <th className="text-left py-2 px-3 text-sm font-semibold text-gray-300">Description</th>
+                        <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Size</th>
+                        <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Parameters</th>
+                        <th className="text-right py-2 px-3 text-sm font-semibold text-gray-300">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recommendedModels.map(model => {
+                        const installed = isModelInstalled(model.name);
+                        const isDownloading = downloadingModel === model.name;
+                        const progress = downloadProgress[model.name] || 0;
 
-                    return (
-                      <div
-                        key={model.name}
-                        className="p-4 rounded-lg border border-gray-700 bg-gray-750"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="font-medium text-white flex items-center gap-2">
-                              {model.displayName}
-                              {model.recommended && <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">RECOMMENDED</span>}
-                            </div>
-                            <div className="text-sm text-gray-400 mt-1">{model.description}</div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Size: {model.size} • Parameters: {model.parameters}
-                            </div>
-                          </div>
-                          
-                          {installed ? (
-                            <button
-                              onClick={() => selectModel(model.name)}
-                              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
-                            >
-                              Select
-                            </button>
-                          ) : isDownloading ? (
-                            <div className="w-32">
-                              <div className="text-xs text-gray-400 mb-1">{progress}%</div>
-                              <div className="w-full bg-gray-600 rounded-full h-2">
-                                <div
-                                  className="bg-blue-500 h-2 rounded-full transition-all"
-                                  style={{ width: `${progress}%` }}
-                                />
+                        return (
+                          <tr key={model.name} className="border-b border-gray-700 hover:bg-gray-750">
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-white">{model.displayName}</span>
+                                {model.recommended && (
+                                  <span className="text-xs bg-blue-600 px-2 py-0.5 rounded font-medium">RECOMMENDED</span>
+                                )}
                               </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => downloadModel(model.name)}
-                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
-                            >
-                              Download
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                            </td>
+                            <td className="py-3 px-3 text-sm text-gray-400">{model.description}</td>
+                            <td className="py-3 px-3 text-sm text-gray-300 text-right">{model.size}</td>
+                            <td className="py-3 px-3 text-sm text-gray-300 text-right">{model.parameters}</td>
+                            <td className="py-3 px-3 text-right">
+                              {installed ? (
+                                <button
+                                  onClick={() => selectModel(model.name)}
+                                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium transition-colors"
+                                >
+                                  Select
+                                </button>
+                              ) : isDownloading ? (
+                                <div className="w-24 inline-block">
+                                  <div className="text-xs text-gray-400 mb-1">{progress}%</div>
+                                  <div className="w-full bg-gray-600 rounded-full h-1.5">
+                                    <div
+                                      className="bg-blue-500 h-1.5 rounded-full transition-all"
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => downloadModel(model.name)}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+                                >
+                                  Download
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

@@ -325,5 +325,196 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - **Node.js requirement**: Compatible con Node.js estándar, sin dependencias externas
 - **Cross-platform**: Scripts funcionan en Windows PowerShell y Linux/macOS
 
+## 17. MCP (Model Context Protocol) Integration
+
+### 17.1 Arquitectura General
+- **Propósito**: Exponer IDE y emulador a agentes AI (PyPilot, Copilot, etc.)
+- **Implementación Dual**:
+  - **Electron Backend**: `ide/electron/src/mcp/server.ts` - Servidor interno IPC
+  - **External Server**: `ide/mcp-server/server.js` - Servidor stdio para AIs externos
+- **Comunicación**: External server → IPC (puerto 9123) → Electron → IDE state
+- **Total de herramientas**: 22 tools (7 editor, 2 compiler, 3 emulator, 2 debugger, 8 project)
+
+### 17.2 Convenciones de Naming
+- **Tool Names en External Server**: snake_case (`editor_write_document`, `project_create_vector`)
+- **Tool Names en Electron Server**: slash-separated (`editor/write_document`, `project/create_vector`)
+- **Conversión automática**: External server convierte **PRIMER guión bajo** a slash: `editor_write_document` → `editor/write_document`
+- **CRÍTICO**: NO convertir todos los guiones bajos - solo el primero (ej: `project_create_vector` → `project/create_vector`, NO `project/create/vector`)
+
+### 17.3 Herramientas Disponibles
+
+#### Editor (7 tools)
+- `editor/list_documents`: Lista documentos abiertos
+- `editor/read_document`: Lee contenido de documento
+- `editor/write_document`: **Crea O actualiza** documento (auto-abre en editor si es nuevo)
+- `editor/get_diagnostics`: Obtiene errores de compilación/lint
+- `editor/replace_range`: Reemplaza texto en rango específico
+- `editor/insert_at`: Inserta texto en posición
+- `editor/delete_range`: Elimina texto en rango
+
+#### Compiler (2 tools)
+- `compiler/build`: Compila programa VPy
+- `compiler/get_errors`: Obtiene últimos errores de compilación
+
+#### Emulator (3 tools)
+- `emulator/run`: Ejecuta ROM compilada
+- `emulator/get_state`: Estado actual (PC, registros, cycles)
+- `emulator/stop`: Detiene ejecución
+
+#### Debugger (2 tools)
+- `debugger/add_breakpoint`: Añade breakpoint en línea
+- `debugger/get_callstack`: Obtiene call stack actual
+
+#### Project (8 tools)
+- `project/get_structure`: Estructura del proyecto
+- `project/read_file`: Lee archivo del proyecto
+- `project/write_file`: Escribe archivo general
+- `project/create`: Crea nuevo proyecto (muestra dialog si no hay path)
+- `project/close`: Cierra proyecto actual
+- `project/open`: Abre proyecto existente
+- `project/create_vector`: **Crea archivo .vec con validación JSON**
+- `project/create_music`: **Crea archivo .vmus con validación JSON**
+
+### 17.4 Validación JSON para Assets
+
+#### Vector Files (.vec) - FORMATO OBLIGATORIO JSON
+```json
+{
+  "version": "1.0",
+  "name": "shape",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "line1",
+      "intensity": 127,
+      "closed": false,
+      "points": [{"x": 0, "y": 0}, {"x": 10, "y": 10}]
+    }]
+  }]
+}
+```
+
+**Ejemplo triángulo cerrado**:
+```json
+{
+  "layers": [{
+    "paths": [{
+      "closed": true,
+      "points": [
+        {"x": 0, "y": 20},
+        {"x": -15, "y": -10},
+        {"x": 15, "y": -10}
+      ]
+    }]
+  }]
+}
+```
+
+#### Music Files (.vmus) - FORMATO OBLIGATORIO JSON
+```json
+{
+  "version": "1.0",
+  "name": "My Song",
+  "author": "Composer Name",
+  "tempo": 120,
+  "ticksPerBeat": 24,
+  "totalTicks": 384,
+  "notes": [
+    {
+      "id": "note1",
+      "note": 60,
+      "start": 0,
+      "duration": 48,
+      "velocity": 12,
+      "channel": 0
+    }
+  ],
+  "noise": [
+    {
+      "id": "noise1",
+      "start": 0,
+      "duration": 24,
+      "period": 15,
+      "channels": 1
+    }
+  ],
+  "loopStart": 0,
+  "loopEnd": 384
+}
+```
+
+**CAMPOS OBLIGATORIOS**:
+- **note**: Número MIDI (0-127, 60=Do central, 72=Do5)
+- **velocity**: Volumen (0-15, 15=máximo)
+- **period**: Período de ruido (0-31, menor=tono más alto)
+- **channels**: Máscara de bits para ruido (1=A, 2=B, 4=C, 7=todos)
+- **id**: Identificador único para cada nota/evento de ruido
+
+**LÍMITES DE TAMAÑO (ACTUALIZADO)**:
+✅ **Límite ampliado**: max_tokens aumentado de 2000 a 8000 (hasta ~100 notas aprox)
+⚠️ **Recomendación**: Mantener canciones bajo ~80-100 notas totales para evitar truncamiento
+💡 **Mejor práctica**: Para canciones largas, usar loops cortos + loopStart/loopEnd para repetición
+💡 **Ventaja de loops**: Archivos más pequeños, más eficientes, mismo efecto musical
+
+#### Validación Implementada
+- **`project/create_vector`**: Valida JSON antes de crear archivo
+  - Verifica campos obligatorios: `version`, `layers` (array)
+  - Rechaza formatos inventados (VECTOR_START, MOVE, DRAW_TO, etc.)
+  - Error muestra formato correcto con ejemplo
+  
+- **`project/create_music`**: Valida JSON antes de crear archivo
+  - Verifica campos obligatorios: `version`, `tempo`, `notes` (array)
+  - Rechaza formatos no-JSON
+  - Error muestra formato correcto con ejemplo
+
+### 17.5 Comportamiento de Creación de Archivos
+- **Auto-apertura**: Todos los archivos creados se abren automáticamente en el editor
+- **Auto-detección de lenguaje**: `.vpy` → VPy, `.vec`/`.vmus`/`.json` → JSON
+- **Creación de directorios**: Automática si no existen (`assets/vectors/`, `assets/music/`)
+- **Normalización de URI**: Helper `normalizeUri()` maneja:
+  - Nombres de archivo simples (`"game.vpy"`)
+  - Rutas relativas (`"src/main.vpy"`)
+  - Rutas absolutas (`"/Users/.../file.vpy"`)
+  - URIs completos (`"file:///path/to/file"`)
+
+### 17.6 Guías para AI Integration
+
+#### Creating New Files:
+✅ **Use `editor/write_document`**: Create .vpy files, general text files (creates + opens automatically)
+✅ **Use `project/create_vector`**: Create .vec files (validates JSON structure)
+✅ **Use `project/create_music`**: Create .vmus files (validates JSON structure)
+❌ **Don't use `editor/read_document`**: Fails if file doesn't exist yet ("Document not found")
+❌ **Don't use `editor/replace_range`**: Requires file to be open first + requires LINES not offsets
+
+#### Editing Existing Files:
+1. **For complete replacement**: Use **`editor/write_document`** (replaces entire content, works always)
+2. **For partial edits**:
+   - First: **`editor/list_documents`** (verify file is open)
+   - Then: **`editor/replace_range`** (requires `startLine`/`endLine`, NOT character offsets)
+   - Or: **`editor/insert_at`** / **`editor/delete_range`**
+
+#### Common Mistakes:
+❌ Calling `editor/read_document` on file that isn't open → "Document not found: game.vmus. Use editor/write_document to CREATE new files"
+❌ Calling `editor/replace_range` with `start`/`end` offsets → "Missing line parameters (startLine/endLine REQUIRED, NOT character offsets)"
+❌ Inventing text formats for .vec/.vmus → "Rejected: Must be valid JSON"
+✅ Using `editor/write_document` for new OR existing files → Always works
+✅ Using `project/create_music` for .vmus → JSON validated automatically, helpful error messages
+
+#### Tool Rules:
+- **NO inventar herramientas**: Solo usar las 22 herramientas registradas
+- **NO inventar formatos**: Archivos .vec y .vmus son SIEMPRE JSON
+- **Usar herramientas especializadas**: `project/create_vector` en lugar de `editor/write_document` para vectores (valida JSON)
+- **Aprender de errores**: La validación JSON enseña el formato correcto mediante feedback
+- **Nombres correctos**: Verificar con `tools/list` antes de llamar herramientas
+
+### 17.7 Debugging MCP
+- **Logs External Server**: `ide/mcp-server/server.js` escribe a stderr
+- **Logs Electron**: `ide/electron/src/mcp/server.ts` usa console.log
+- **Test IPC**: Puerto 9123 debe estar disponible
+- **Tool not found**: Verificar conversión de nombre (snake_case → slash-separated)
+- **JSON validation errors**: Verificar estructura completa en mensaje de error
+
 ---
-Última actualización: (auto) mantener este archivo conforme se completen los TODOs listados.
+Última actualización: 2025-12-10 - Añadida sección 17 (MCP Integration completa)

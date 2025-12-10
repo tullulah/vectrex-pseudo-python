@@ -170,6 +170,8 @@ export const FileTreePanel: React.FC = () => {
     
     let isSubscribed = true;
     
+    let cleanupListener: (() => void) | null = null;
+    
     const setupWatcher = async () => {
       try {
         const w = window as any;
@@ -191,7 +193,8 @@ export const FileTreePanel: React.FC = () => {
             }, 200);
           };
           
-          w.files.onFileChanged(handleFileChange);
+          // onFileChanged now returns a cleanup function
+          cleanupListener = w.files.onFileChanged(handleFileChange);
         }
       } catch (error) {
         console.error('FileTreePanel: Failed to set up file watcher:', error);
@@ -202,6 +205,13 @@ export const FileTreePanel: React.FC = () => {
     
     return () => {
       isSubscribed = false;
+      
+      // Remove event listener (check if it's a function)
+      if (cleanupListener && typeof cleanupListener === 'function') {
+        cleanupListener();
+        cleanupListener = null;
+      }
+      
       // Clean up watcher when component unmounts or workspace changes
       const w = window as any;
       if (w.files?.unwatchDirectory && project?.rootPath) {

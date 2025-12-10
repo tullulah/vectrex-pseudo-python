@@ -36,7 +36,12 @@ contextBridge.exposeInMainWorld('files', {
   moveFile: (args: { sourcePath: string; targetDir: string }) => ipcRenderer.invoke('file:move', args) as Promise<{ success: boolean; sourcePath: string; targetPath: string } | { error: string; targetPath?: string }>,
   watchDirectory: (path: string) => ipcRenderer.invoke('file:watchDirectory', path) as Promise<{ ok: boolean; error?: string }>,
   unwatchDirectory: (path: string) => ipcRenderer.invoke('file:unwatchDirectory', path) as Promise<{ ok: boolean }>,
-  onFileChanged: (cb: (event: { type: 'added' | 'removed' | 'changed'; path: string; isDir: boolean }) => void) => ipcRenderer.on('file://changed', (_e: IpcRendererEvent, data) => cb(data)),
+  onFileChanged: (cb: (event: { type: 'added' | 'removed' | 'changed'; path: string; isDir: boolean }) => void) => {
+    const handler = (_e: IpcRendererEvent, data: any) => cb(data);
+    ipcRenderer.on('file://changed', handler);
+    // Return cleanup function to remove listener
+    return () => ipcRenderer.removeListener('file://changed', handler);
+  },
 });
 
 contextBridge.exposeInMainWorld('recents', {
@@ -84,6 +89,23 @@ contextBridge.exposeInMainWorld('electron', {
     success: boolean;
     output: string;
     exitCode: number;
+  }>,
+});
+
+// AI Provider Proxy (for CORS-blocked APIs like Anthropic, DeepSeek)
+contextBridge.exposeInMainWorld('aiProxy', {
+  request: (request: {
+    provider: 'anthropic' | 'deepseek';
+    apiKey: string;
+    endpoint: string;
+    method: string;
+    body: any;
+    headers?: Record<string, string>;
+  }) => ipcRenderer.invoke('ai-proxy-request', request) as Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+    status?: number;
   }>,
 });
 

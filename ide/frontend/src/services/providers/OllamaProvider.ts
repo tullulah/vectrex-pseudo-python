@@ -152,7 +152,7 @@ IMPORTANT:
             { role: 'user', content: request.message }
           ],
           temperature: this.config.temperature || 0.1, // Lower temperature for more deterministic tool calling
-          max_tokens: this.config.maxTokens || 2000,
+          max_tokens: this.config.maxTokens || 8000,
           stream: false,
           // Additional parameters for better tool calling
           top_p: 0.9,

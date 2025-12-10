@@ -175,9 +175,10 @@ export const AiAssistantPanel: React.FC = () => {
       'ollama': [], // Handled above with dynamic patterns
       'github': ['gpt-4o', 'claude-3-5-sonnet', 'gpt-4o-mini'],
       'openai': ['gpt-4o', 'gpt-4o-mini'],
-      'anthropic': ['claude-3-5-sonnet', 'claude-3-haiku'],
+      'anthropic': ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022'],
       'deepseek': ['deepseek-chat', 'deepseek-coder'],
-      'groq': ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+      'groq': ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+      'gemini': []
     };
 
     const preferred = defaults[type] || [];
@@ -893,13 +894,14 @@ def loop():
                 fontSize: '12px'
               }}
             >
+              <option value="gemini">Google Gemini</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="openai">OpenAI GPT</option>
+              <option value="groq">Groq (Free & Fast)</option>
+              <option value="deepseek">DeepSeek (Free)</option>
+              <option value="github">GitHub Models (Copilot)</option>
               <option value="ollama">🏠 Ollama (Local - Privado)</option>
               <option value="mock">Mock (Testing)</option>
-              <option value="deepseek">DeepSeek (Free)</option>
-              <option value="groq">Groq (Free & Fast)</option>
-              <option value="github">GitHub Models (Copilot)</option>
-              <option value="openai">OpenAI GPT</option>
-              <option value="anthropic">Anthropic Claude</option>
             </select>
           </div>
 
@@ -1072,24 +1074,31 @@ def loop():
                     console.log('Connection test result:', isConnected);
                     
                     if (!isConnected) {
-                      alert(`❌ Failed to connect to ${currentProviderType}.
+                      const shouldSave = confirm(`⚠️ Connection test failed for ${currentProviderType}.
 
 Possible issues:
 • Check your API key is correct
-• Verify you have access to the service
-• For GitHub Models: may be in limited beta
-• For Groq: get free API key at console.groq.com
-• Try a different provider (Groq/DeepSeek are free)
+• Rate limit exceeded (wait a moment)
+• Service temporarily unavailable
 
-Check browser console for detailed error messages.`);
-                      return;
+Do you want to save the configuration anyway?
+You can try sending a message to test if it works.`);
+                      
+                      if (!shouldSave) {
+                        return;
+                      }
                     } else {
                       alert(`✅ Successfully connected to ${currentProviderType}!`);
                     }
                   } catch (error) {
                     console.error('Connection test error:', error);
-                    alert(`❌ Error testing connection: ${error}`);
-                    return;
+                    const shouldSave = confirm(`⚠️ Error testing connection: ${error}
+
+Do you want to save the configuration anyway?`);
+                    
+                    if (!shouldSave) {
+                      return;
+                    }
                   }
                 }
                 setShowSettings(false);

@@ -22,22 +22,39 @@ export class AnthropicProvider extends BaseAiProvider {
       const systemPrompt = this.buildSystemPrompt();
       const userPrompt = this.buildUserPrompt(request);
 
-      const response = await fetch(`${this.baseUrl}/messages`, {
+      // Get MCP tools if available
+      const mcpTools = (window as any).mcpTools?.getTools?.() || [];
+      const anthropicTools = mcpTools.map((tool: any) => ({
+        name: tool.name.replace(/\//g, '_'), // editor/write_document → editor_write_document
+        description: tool.description || 'No description',
+        input_schema: tool.inputSchema || { type: 'object', properties: {} }
+      }));
+
+      // Use Electron proxy to bypass CORS
+      const proxyResponse = await (window as any).aiProxy.request({
+        provider: 'anthropic',
+        apiKey: this.config.apiKey!,
+        endpoint: '/v1/messages',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.config.apiKey!,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
+        body: {
           model: this.config.model || 'claude-3-haiku-20240307',
-          max_tokens: this.config.maxTokens || 2000,
+          max_tokens: this.config.maxTokens || 8000,
           system: systemPrompt,
           messages: [
             { role: 'user', content: userPrompt }
-          ]
-        })
+          ],
+          tools: anthropicTools.length > 0 ? anthropicTools : undefined
+        }
       });
+
+      if (!proxyResponse.success) {
+        throw new Error(`Anthropic API error: ${proxyResponse.status} - ${proxyResponse.error || 'Unknown error'}`);
+      }
+
+      const response = {
+        ok: true,
+        json: async () => proxyResponse.data
+      } as Response;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -63,14 +80,44 @@ export class AnthropicProvider extends BaseAiProvider {
   }
 
   public async getModels(): Promise<string[]> {
-    // Anthropic Claude models
-    return [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
-      'claude-3-haiku-20240307'
-    ];
+    if (!this.isConfigured()) {
+      return [];
+    }
+
+    try {
+      // Use beta models API endpoint
+      const proxyResponse = await (window as any).aiProxy.request({
+        provider: 'anthropic',
+        apiKey: this.config.apiKey!,
+        endpoint: '/v1/models',
+        method: 'GET',
+        body: {},
+        headers: {
+          'anthropic-beta': 'models-2024-08-01'
+        }
+      });
+
+      if (!proxyResponse.success) {
+        throw new Error(`Failed to fetch models: ${proxyResponse.status}`);
+      }
+
+      const models = proxyResponse.data?.data
+        ?.filter((model: any) => model.type === 'model')
+        .map((model: any) => model.id)
+        .sort((a: string, b: string) => {
+          // Prioritize newer models
+          if (a.includes('sonnet-4')) return -1;
+          if (b.includes('sonnet-4')) return 1;
+          if (a.includes('3-5')) return -1;
+          if (b.includes('3-5')) return 1;
+          return b.localeCompare(a); // Newer dates first
+        }) || [];
+
+      return models;
+    } catch (error) {
+      console.error('Failed to fetch Anthropic models:', error);
+      throw error;
+    }
   }
 
   public async testConnection(): Promise<boolean> {
@@ -79,23 +126,22 @@ export class AnthropicProvider extends BaseAiProvider {
     }
 
     try {
-      // Anthropic doesn't have a models endpoint, so we'll try a simple completion
-      const response = await fetch(`${this.baseUrl}/messages`, {
+      // Use Electron proxy for test connection
+      const proxyResponse = await (window as any).aiProxy.request({
+        provider: 'anthropic',
+        apiKey: this.config.apiKey!,
+        endpoint: '/v1/messages',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.config.apiKey!,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
+        body: {
           model: 'claude-3-haiku-20240307',
           max_tokens: 10,
           messages: [
             { role: 'user', content: 'test' }
           ]
-        })
+        }
       });
-      return response.ok;
+      
+      return proxyResponse.success;
     } catch {
       return false;
     }

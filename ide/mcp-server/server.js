@@ -260,6 +260,63 @@ class StdioTransport {
           }
         },
         {
+          name: 'editor_write_document',
+          description: 'Create OR update a document (automatically opens in editor if new). Use this to create any text file. For .vec and .vmus files, prefer project_create_vector/project_create_music which validate JSON format.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI or relative path (e.g., "src/game.vpy", "README.md")' },
+              content: { type: 'string', description: 'Complete file content' }
+            },
+            required: ['uri', 'content']
+          }
+        },
+        {
+          name: 'editor_replace_range',
+          description: 'Replace text in a specific range of a document',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI' },
+              startLine: { type: 'number', description: 'Start line (1-indexed)' },
+              startColumn: { type: 'number', description: 'Start column (1-indexed)' },
+              endLine: { type: 'number', description: 'End line (1-indexed)' },
+              endColumn: { type: 'number', description: 'End column (1-indexed)' },
+              newText: { type: 'string', description: 'New text to insert' }
+            },
+            required: ['uri', 'startLine', 'startColumn', 'endLine', 'endColumn', 'newText']
+          }
+        },
+        {
+          name: 'editor_insert_at',
+          description: 'Insert text at a specific position',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI' },
+              line: { type: 'number', description: 'Line number (1-indexed)' },
+              column: { type: 'number', description: 'Column number (1-indexed)' },
+              text: { type: 'string', description: 'Text to insert' }
+            },
+            required: ['uri', 'line', 'column', 'text']
+          }
+        },
+        {
+          name: 'editor_delete_range',
+          description: 'Delete text in a specific range',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI' },
+              startLine: { type: 'number', description: 'Start line (1-indexed)' },
+              startColumn: { type: 'number', description: 'Start column (1-indexed)' },
+              endLine: { type: 'number', description: 'End line (1-indexed)' },
+              endColumn: { type: 'number', description: 'End column (1-indexed)' }
+            },
+            required: ['uri', 'startLine', 'startColumn', 'endLine', 'endColumn']
+          }
+        },
+        {
           name: 'editor_get_diagnostics',
           description: 'Get compilation/lint diagnostics',
           inputSchema: {
@@ -270,8 +327,67 @@ class StdioTransport {
           }
         },
         {
+          name: 'compiler_build',
+          description: 'Compile a VPy program',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              entryFile: { type: 'string', description: 'Entry VPy file path' }
+            },
+            required: ['entryFile']
+          }
+        },
+        {
+          name: 'compiler_get_errors',
+          description: 'Get latest compilation errors',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'emulator_run',
+          description: 'Run a compiled ROM in the emulator',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              romPath: { type: 'string', description: 'Path to .bin ROM file' },
+              breakOnEntry: { type: 'boolean', description: 'Pause at entry point' }
+            },
+            required: ['romPath']
+          }
+        },
+        {
           name: 'emulator_get_state',
           description: 'Get current emulator state (PC, registers, cycles)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'emulator_stop',
+          description: 'Stop emulator execution',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_add_breakpoint',
+          description: 'Add a breakpoint at a specific line',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI' },
+              line: { type: 'number', description: 'Line number (1-indexed)' }
+            },
+            required: ['uri', 'line']
+          }
+        },
+        {
+          name: 'debugger_get_callstack',
+          description: 'Get current call stack',
           inputSchema: {
             type: 'object',
             properties: {}
@@ -284,6 +400,84 @@ class StdioTransport {
             type: 'object',
             properties: {}
           }
+        },
+        {
+          name: 'project_read_file',
+          description: 'Read any file from the project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'File path relative to project root' }
+            },
+            required: ['path']
+          }
+        },
+        {
+          name: 'project_write_file',
+          description: 'Write any file in the project (VPy code, config, text files, etc.). For .vec or .vmus files, prefer project_create_vector/project_create_music which validate JSON format and provide templates. Automatically opens file in editor.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'File path relative to project root (e.g., "src/main.vpy", "README.md", "config.json")' },
+              content: { type: 'string', description: 'Complete file content' }
+            },
+            required: ['path', 'content']
+          }
+        },
+        {
+          name: 'project_create',
+          description: 'Create a new VPy project. If path is not provided, a folder selection dialog will be shown to the user.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Project name' },
+              path: { type: 'string', description: 'Project directory path (optional, will prompt user if not provided)' }
+            },
+            required: ['name']
+          }
+        },
+        {
+          name: 'project_close',
+          description: 'Close the current project',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'project_open',
+          description: 'Open an existing VPy project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Project directory path' }
+            },
+            required: ['path']
+          }
+        },
+        {
+          name: 'project_create_vector',
+          description: 'Create .vec vector graphics file (JSON format ONLY). Structure: {"version":"1.0","name":"shape","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"line1","intensity":127,"closed":false,"points":[{"x":0,"y":0},{"x":10,"y":10}]}]}]}. Each path has points array with x,y coordinates. Triangle example: points:[{"x":0,"y":20},{"x":-15,"y":-10},{"x":15,"y":-10}], closed:true. NO text format - JSON only.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Vector file name (without .vec extension)' },
+              content: { type: 'string', description: 'Valid JSON string matching exact format: {"version":"1.0","name":"...","canvas":{...},"layers":[{"paths":[{"points":[...]}]}]}. Leave empty for template.' }
+            },
+            required: ['name']
+          }
+        },
+        {
+          name: 'project_create_music',
+          description: 'Create .vmus music file (JSON format ONLY). Structure: {"version":"1.0","tempo":120,"notes":[{"pitch":440,"duration":500,"start":0}],"noise":[{"frequency":1000,"duration":100,"start":1000}]}. Each note: pitch (Hz), duration (ms), start (ms). Each noise: frequency, duration, start. Example melody: [{"pitch":523,"duration":250,"start":0},{"pitch":587,"duration":250,"start":250}]. NO text format - JSON only.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Music file name (without .vmus extension)' },
+              content: { type: 'string', description: 'Valid JSON string matching exact format: {"version":"1.0","tempo":120,"notes":[...],"noise":[...]}. Leave empty for template.' }
+            },
+            required: ['name']
+          }
         }
       ]
     };
@@ -291,16 +485,21 @@ class StdioTransport {
   
   async handleToolCall(params) {
     const { name, arguments: args } = params;
-    log('Tool call:', name, args);
+    log('Tool call:', name, 'Arguments:', JSON.stringify(args));
     
     // Convert tool name to method (editor_list_documents -> editor/list_documents)
+    // Only replace first underscore with slash to match Electron server naming
     const method = name.replace('_', '/');
+    
+    // Ensure args is an object (MCP spec may send undefined for no arguments)
+    const toolParams = args || {};
+    log('Forwarding to IDE - Method:', method, 'Params:', JSON.stringify(toolParams));
     
     // Forward to IDE via IPC
     const result = await sendToIDE({
       jsonrpc: '2.0',
       method,
-      params: args || {}
+      params: toolParams
     });
     
     return {

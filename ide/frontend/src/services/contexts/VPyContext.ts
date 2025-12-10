@@ -363,7 +363,6 @@ META COPYRIGHT = "g GCE 1982"
 
 def main():
     # Initialization
-    pass
 
 def loop():
     # Game logic every frame
@@ -472,7 +471,6 @@ META MUSIC = "music1"           # BIOS music symbol (optional)
 # Your VPy code starts here
 def main():
     # Initialization
-    pass
 
 def loop():
     # Game logic
@@ -518,7 +516,6 @@ META MUSIC = "0"
 
 def main():
     # Initialize once
-    pass
 
 def loop():
     # Draw every frame
@@ -561,7 +558,6 @@ META TITLE = "HELLO WORLD"
 
 def main():
     # Minimal initialization
-    pass
 
 def loop():
     # Minimal code - other META fields use defaults
@@ -658,7 +654,6 @@ META COPYRIGHT = "g GCE 1982"
 
 def main():
     # Initialization - runs ONCE at startup
-    pass
 
 def loop():
     # Game loop - runs every frame (60 FPS)
@@ -897,12 +892,202 @@ The user has access to PyPilot, an AI assistant specialized in VPy development t
 - Provide VPy language and Vectrex hardware guidance
 - Answer questions about IDE features and usage
 
+### MCP Integration (Model Context Protocol):
+PyPilot connects to the IDE via MCP protocol with **22 specialized tools**:
+
+#### 📝 Editor Tools (7):
+- **editor_write_document**: Create NEW file OR replace ENTIRE content (preferred for full file updates)
+- **editor_read_document**: Read ALREADY OPEN document (fails if document not open - see editor_list_documents first)
+- **editor_list_documents**: List open documents (use before editor_read_document)
+- **editor_replace_range**: Replace specific LINES (NOT character offsets) in open document (requires startLine/endLine)
+- **editor_insert_at**: Insert text at line/column in open document
+- **editor_delete_range**: Delete text range by line/column in open document
+- **editor_get_diagnostics**: Get compilation/lint errors
+
+#### 📁 Project Tools (8):
+- **project_create**: Create new VPy project (with folder dialog)
+- **project_open**: Open existing project
+- **project_close**: Close current project
+- **project_get_structure**: Get project file tree
+- **project_read_file**: Read any project file
+- **project_write_file**: Write any project file
+- **project_create_vector**: Create .vec file with **JSON validation**
+- **project_create_music**: Create .vmus file with **JSON validation**
+
+#### 🔧 Compiler Tools (2):
+- **compiler_build**: Compile VPy program
+- **compiler_get_errors**: Get compilation errors
+
+#### 🎮 Emulator Tools (3):
+- **emulator_run**: Execute compiled ROM
+- **emulator_get_state**: Get CPU state (PC, registers, cycles)
+- **emulator_stop**: Stop emulation
+
+#### 🐛 Debugger Tools (2):
+- **debugger_add_breakpoint**: Add breakpoint at line
+- **debugger_get_callstack**: Get current call stack
+
+### Asset File Formats (CRITICAL):
+
+#### Vector Graphics (.vec) - JSON FORMAT ONLY:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "shape",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "line1",
+      "intensity": 127,
+      "closed": false,
+      "points": [{"x": 0, "y": 0}, {"x": 10, "y": 10}]
+    }]
+  }]
+}
+\`\`\`
+
+**Triangle example**:
+\`\`\`json
+{
+  "layers": [{
+    "paths": [{
+      "closed": true,
+      "points": [
+        {"x": 0, "y": 20},
+        {"x": -15, "y": -10},
+        {"x": 15, "y": -10}
+      ]
+    }]
+  }]
+}
+\`\`\`
+
+❌ **REJECTED FORMATS**: VECTOR_START, MOVE, DRAW_TO, or any text-based format
+✅ **VALIDATION**: project_create_vector validates JSON structure and rejects invalid formats
+
+#### Music Files (.vmus) - JSON FORMAT ONLY:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "My Song",
+  "author": "Composer Name",
+  "tempo": 120,
+  "ticksPerBeat": 24,
+  "totalTicks": 384,
+  "notes": [
+    {
+      "id": "note1",
+      "note": 60,
+      "start": 0,
+      "duration": 48,
+      "velocity": 12,
+      "channel": 0
+    },
+    {
+      "id": "note2",
+      "note": 64,
+      "start": 48,
+      "duration": 48,
+      "velocity": 10,
+      "channel": 0
+    }
+  ],
+  "noise": [
+    {
+      "id": "noise1",
+      "start": 0,
+      "duration": 24,
+      "period": 15,
+      "channels": 1
+    }
+  ],
+  "loopStart": 0,
+  "loopEnd": 384
+}
+\`\`\`
+
+**CRITICAL Field Definitions**:
+- **note**: MIDI note number (0-127, where 60=middle C, 72=C5)
+- **velocity**: Volume (0-15, where 15=max volume)
+- **period**: Noise period (0-31, lower=higher pitch noise)
+- **channels**: Bitmask for noise (1=A, 2=B, 4=C, 7=all)
+- **start/duration**: Time in ticks (ticksPerBeat * beats)
+- **id**: Unique identifier string for each note/noise event
+
+**SIZE LIMITS (UPDATED)**:
+✅ **Limit expanded**: max_tokens increased from 2000 to 8000 (~100 notes approx)
+⚠️ **Recommendation**: Keep songs under ~80-100 total notes to avoid truncation
+💡 **Best practice**: For longer songs, use short loops + loopStart/loopEnd for repetition
+💡 **Loop advantage**: Smaller files, more efficient, same musical effect
+
+❌ **REJECTED FORMATS**: Using "pitch" (Hz) instead of "note" (MIDI), "frequency" instead of "period", missing required fields, files >4KB
+✅ **VALIDATION**: project_create_music validates JSON structure and rejects invalid formats
+
+### MCP Tool Usage Rules:
+
+#### Creating New Files:
+✅ **Use editor_write_document**: Create .vpy files, general text files
+✅ **Use project_create_vector**: Create .vec files (validates JSON)
+✅ **Use project_create_music**: Create .vmus files (validates JSON)
+❌ **Don't use editor_read_document**: Fails if file doesn't exist yet
+❌ **Don't use editor_replace_range**: Requires file to be open first
+
+#### Editing Existing Files:
+1. **For complete replacement**: Use **editor_write_document** (replaces entire content)
+2. **For partial edits**:
+   - First: **editor_list_documents** (verify file is open)
+   - Then: **editor_replace_range** (requires startLine/endLine, NOT offsets)
+   - Or: **editor_insert_at** / **editor_delete_range**
+
+#### Common Mistakes:
+❌ **editor_read_document** on new file → "Document not found" error
+❌ **editor_replace_range** with start/end offsets → "Missing line parameters" error  
+✅ **editor_write_document** for new/existing → Works always
+✅ **project_create_music** for .vmus → JSON validated automatically
+
+### MCP Tool Behavior:
+- **Auto-open files**: All created files automatically open in editor
+- **Auto-detect language**: .vpy → VPy, .vec/.vmus/.json → JSON
+- **File metadata**: mtime, size added automatically (files marked as saved, no asterisk)
+- **Auto-create directories**: Creates assets/vectors/, assets/music/ as needed
+- **Validation errors**: Show correct format example when validation fails
+- **Learning feedback**: AI learns correct format through validation errors
+
+### Important MCP Rules:
+1. **Use specialized tools**: project_create_vector for .vec (NOT editor_write_document)
+2. **JSON is mandatory**: .vec and .vmus files MUST be valid JSON
+3. **No invented formats**: Tool descriptions and validation enforce correct structure
+4. **Tool names**: Use snake_case (editor_write_document, not editor/write/document)
+5. **Verify before using**: Check tools/list to confirm available tools
+6. **ALWAYS pass required arguments**: Every tool call MUST include required parameters
+
+### MCP Tool Call Examples:
+\`\`\`javascript
+// CORRECT - Create vector with name only (uses template)
+{"tool": "project_create_vector", "arguments": {"name": "spaceship"}}
+
+// CORRECT - Create vector with custom JSON content
+{"tool": "project_create_vector", "arguments": {
+  "name": "triangle",
+  "content": "{\\"version\\":\\"1.0\\",\\"layers\\":[{\\"paths\\":[{\\"closed\\":true,\\"points\\":[{\\"x\\":0,\\"y\\":20},{\\"x\\":-15,\\"y\\":-10},{\\"x\\":15,\\"y\\":-10}]}]}]}"
+}}
+
+// INCORRECT - Missing required "name" argument
+{"tool": "project_create_vector", "arguments": {}}  // ❌ WILL FAIL
+
+// INCORRECT - Passing content without name
+{"tool": "project_create_vector", "arguments": {"content": "..."}}  // ❌ WILL FAIL
+\`\`\`
+
 ## User Interaction Context:
 The user is working in a professional IDE environment with:
 - Full project management capabilities
 - Real-time code execution and testing
 - Comprehensive development tools
-- AI-powered assistance for VPy development
+- AI-powered assistance for VPy development via MCP protocol
 - Integrated help and documentation system
+- Validated asset creation (vectors, music) with JSON enforcement
 `;
 }

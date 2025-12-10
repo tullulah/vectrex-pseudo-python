@@ -22,23 +22,32 @@ export class DeepSeekProvider extends BaseAiProvider {
       const systemPrompt = this.buildSystemPrompt();
       const userPrompt = this.buildUserPrompt(request);
 
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      // Use Electron proxy to bypass CORS
+      const proxyResponse = await (window as any).aiProxy.request({
+        provider: 'deepseek',
+        apiKey: this.config.apiKey!,
+        endpoint: '/v1/chat/completions',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`
-        },
-        body: JSON.stringify({
+        body: {
           model: this.config.model || 'deepseek-chat',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
           temperature: this.config.temperature || 0.7,
-          max_tokens: this.config.maxTokens || 2000,
+          max_tokens: this.config.maxTokens || 8000,
           stream: false
-        })
+        }
       });
+
+      if (!proxyResponse.success) {
+        throw new Error(`DeepSeek API error: ${proxyResponse.status} - ${proxyResponse.error || 'Unknown error'}`);
+      }
+
+      const response = {
+        ok: true,
+        json: async () => proxyResponse.data
+      } as Response;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -78,12 +87,16 @@ export class DeepSeekProvider extends BaseAiProvider {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/models`, {
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`
-        }
+      // Use Electron proxy for test connection
+      const proxyResponse = await (window as any).aiProxy.request({
+        provider: 'deepseek',
+        apiKey: this.config.apiKey!,
+        endpoint: '/v1/models',
+        method: 'GET',
+        body: {}
       });
-      return response.ok;
+
+      return proxyResponse.success;
     } catch {
       return false;
     }

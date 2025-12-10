@@ -140,13 +140,11 @@ pub fn create_project(name: &str, dir: &Path) -> Result<PathBuf, ProjectError> {
 # VPy game for Vectrex
 
 def setup():
-    """Called once at startup"""
-    pass
+    #Called once at startup
 
 def loop():
-    """Called every frame"""
+    #Called every frame
     # Your game logic here
-    pass
 "#);
     fs::write(src_dir.join("main.vpy"), main_content)?;
     

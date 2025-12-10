@@ -67,7 +67,7 @@ export interface AiProviderConfig {
 }
 
 // Provider types
-export type AiProviderType = 'openai' | 'anthropic' | 'deepseek' | 'github' | 'groq' | 'ollama' | 'mock';
+export type AiProviderType = 'openai' | 'anthropic' | 'deepseek' | 'github' | 'groq' | 'ollama' | 'gemini' | 'mock';
 
 export interface VectrexCommandInfo {
   name: string;

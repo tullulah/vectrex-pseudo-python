@@ -41,7 +41,7 @@ export class GitHubModelsProvider extends BaseAiProvider {
             { role: 'user', content: userPrompt }
           ],
           temperature: this.config.temperature || 0.7,
-          max_tokens: this.config.maxTokens || 2000,
+          max_tokens: this.config.maxTokens || 8000,
           stream: false
         })
       });

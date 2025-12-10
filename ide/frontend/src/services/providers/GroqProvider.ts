@@ -98,8 +98,8 @@ export class GroqProvider extends BaseAiProvider {
         body: JSON.stringify({
           model: this.config.model || 'llama-3.1-8b-instant',
           messages,
-          max_tokens: 1000,
-          temperature: 0.7
+          max_tokens: this.config.maxTokens || 8000,
+          temperature: this.config.temperature || 0.7
         })
       });
 
