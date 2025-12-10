@@ -361,3 +361,8 @@ export const useProjectStore = create<ProjectState>()(
     }
   )
 );
+
+// Expose store globally for MCP server access
+if (typeof window !== 'undefined') {
+  (window as any).__projectStore__ = useProjectStore;
+}

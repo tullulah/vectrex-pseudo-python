@@ -621,8 +621,13 @@ export class MCPServer {
       (function() {
         const store = window.__projectStore__;
         if (!store) throw new Error('Project store not available');
-        const currentProject = store.getState().workspaceName || 'Unknown';
-        store.getState().closeProject();
+        const state = store.getState();
+        const currentProject = state.workspaceName || state.vpyProject?.config.project.name || 'Unknown';
+        
+        // Close both workspace and VPy project
+        state.closeVpyProject();
+        state.clearWorkspace();
+        
         return { success: true, closedProject: currentProject };
       })()
     `);
