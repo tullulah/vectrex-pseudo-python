@@ -140,12 +140,39 @@ export const AiAssistantPanel: React.FC = () => {
     };
 
     loadModels();
-  }, [currentProviderType, providerConfig.apiKey]);
+  }, [currentProviderType, providerConfig.apiKey, providerConfig.endpoint]);
 
   // Helper function to get default model for each provider
+  // Uses heuristics to pick the best model based on naming patterns
   const getDefaultModelForProvider = (type: AiProviderType, models: string[]): string => {
+    if (models.length === 0) return '';
+    
+    // For Ollama: prioritize by parameter count (72b > 32b > 14b > 7b)
+    // and by family (qwen2.5 > llama3.1 > others)
+    if (type === 'ollama') {
+      // Priority patterns (in order of preference)
+      const patterns = [
+        /qwen.*72b/i,      // qwen2.5:72b
+        /llama.*70b/i,     // llama3.1:70b
+        /qwen.*32b/i,      // qwen2.5:32b
+        /qwen.*14b/i,      // qwen2.5:14b
+        /deepseek.*16b/i,  // deepseek-coder-v2:16b
+        /qwen.*7b/i,       // qwen2.5:7b
+      ];
+      
+      for (const pattern of patterns) {
+        const match = models.find(m => pattern.test(m));
+        if (match) return match;
+      }
+      
+      // Fallback: pick first model
+      return models[0];
+    }
+    
+    // For other providers: use hardcoded preferences (these are stable API names)
     const defaults: Record<AiProviderType, string[]> = {
       'mock': [],
+      'ollama': [], // Handled above with dynamic patterns
       'github': ['gpt-4o', 'claude-3-5-sonnet', 'gpt-4o-mini'],
       'openai': ['gpt-4o', 'gpt-4o-mini'],
       'anthropic': ['claude-3-5-sonnet', 'claude-3-haiku'],
@@ -876,30 +903,7 @@ def loop():
             </select>
           </div>
 
-          {currentProviderType === 'ollama' && (
-            <div style={{ 
-              marginBottom: '12px',
-              padding: '8px',
-              background: '#2d2d30',
-              border: '1px solid #3c3c3c',
-              borderRadius: '4px',
-              fontSize: '11px',
-              lineHeight: '1.5'
-            }}>
-              <div style={{ marginBottom: '4px', fontWeight: 'bold', color: '#4ec9b0' }}>
-                🏠 Modelo Local (Ollama)
-              </div>
-              <div style={{ color: '#cccccc' }}>
-                • No requiere API key<br/>
-                • 100% privado (corre en tu Mac)<br/>
-                • Sin límites de uso<br/>
-                • Requiere Ollama instalado y corriendo
-              </div>
-              <div style={{ marginTop: '6px', fontSize: '10px', color: '#858585' }}>
-                Para instalar: <code style={{ background: '#1e1e1e', padding: '2px 4px' }}>brew install ollama</code>
-              </div>
-            </div>
-          )}
+          {/* Info box removed - now handled in OllamaManagerDialog */}
           
           {currentProviderType !== 'mock' && currentProviderType !== 'ollama' && (
             <>

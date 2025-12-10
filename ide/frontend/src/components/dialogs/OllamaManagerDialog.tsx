@@ -143,6 +143,38 @@ export const OllamaManagerDialog: React.FC<OllamaManagerDialogProps> = ({
     }
   };
 
+  const deleteModel = async (modelName: string) => {
+    if (!confirm(`¿Eliminar modelo ${modelName}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:11434/api/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name: modelName })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete model: ${response.statusText}`);
+      }
+
+      // Refresh installed models list
+      const models = await fetchInstalledModels();
+      setInstalledModels(models);
+      
+      // If deleted model was selected, clear selection
+      if (currentModel === modelName) {
+        onModelSelected('');
+      }
+    } catch (error) {
+      console.error('Model deletion failed:', error);
+      alert(`Failed to delete ${modelName}: ${error}`);
+    }
+  };
+
   const selectModel = (modelName: string) => {
     onModelSelected(modelName);
     onClose();
@@ -225,23 +257,32 @@ export const OllamaManagerDialog: React.FC<OllamaManagerDialogProps> = ({
                             : 'border-gray-700 bg-gray-750'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex-1">
                             <div className="font-medium text-white">{model.name}</div>
                             <div className="text-sm text-gray-400">
                               Size: {formatSize(model.size)} • Modified: {new Date(model.modified_at).toLocaleDateString()}
                             </div>
                           </div>
-                          <button
-                            onClick={() => selectModel(model.name)}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                              currentModel === model.name
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 hover:bg-gray-600 text-white'
-                            }`}
-                          >
-                            {currentModel === model.name ? '✓ Active' : 'Select'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => selectModel(model.name)}
+                              className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                                currentModel === model.name
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+                              }`}
+                            >
+                              {currentModel === model.name ? '✓ Active' : 'Select'}
+                            </button>
+                            <button
+                              onClick={() => deleteModel(model.name)}
+                              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                              title="Delete model"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
