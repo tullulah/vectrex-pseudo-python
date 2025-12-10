@@ -25,6 +25,11 @@ export interface AiRequest {
     projectFiles?: string[];
   };
   command?: string;
+  availableTools?: Array<{
+    name: string;
+    description: string;
+    inputSchema?: any;
+  }>;
 }
 
 export interface AiResponse {
