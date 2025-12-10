@@ -5,6 +5,7 @@ import { OpenAiProvider } from './providers/OpenAiProvider.js';
 import { AnthropicProvider } from './providers/AnthropicProvider.js';
 import { GitHubModelsProvider } from './providers/GitHubModelsProvider.js';
 import { GroqProvider } from './providers/GroqProvider.js';
+import { OllamaProvider } from './providers/OllamaProvider.js';
 
 export class AiProviderFactory {
   private static instances: Map<AiProviderType, IAiProvider> = new Map();
@@ -70,6 +71,10 @@ export class AiProviderFactory {
         }
         return new GroqProvider(config);
       
+      case 'ollama':
+        // Ollama doesn't require API key, just needs to be running locally
+        return new OllamaProvider(config || {});
+      
       default:
         throw new Error(`Unknown provider type: ${type}`);
     }
@@ -129,6 +134,13 @@ export class AiProviderFactory {
         description: 'API gratuita con Llama 3 - Ultrarrápida inferencia',
         requiresApiKey: true,
         isConfigured: false
+      },
+      {
+        type: 'ollama',
+        name: 'Ollama (Local)',
+        description: 'Modelos locales en tu Mac - 100% privado, sin API key',
+        requiresApiKey: false,
+        isConfigured: true // Always configured, just needs Ollama running
       }
     ];
   }
