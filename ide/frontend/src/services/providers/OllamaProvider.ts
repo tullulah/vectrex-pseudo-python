@@ -74,41 +74,6 @@ export class OllamaProvider extends BaseAiProvider {
     return this.config.endpoint || this.defaultBaseUrl;
   }
 
-  /**
-   * Detect direct commands and map them to tool calls
-   * This bypasses LLM inference for simple commands
-   */
-  private detectDirectCommand(message: string): any | null {
-    const msg = message.toLowerCase().trim();
-    
-    console.log('[Ollama] Checking direct command:', msg);
-    
-    // Close project commands - more flexible pattern
-    if (msg.includes('cierra') || msg.includes('cerrar') || msg.includes('close')) {
-      if (msg.includes('proyecto') || msg.includes('project')) {
-        console.log('[Ollama] ✅ Direct command detected: project/close');
-        return { tool: 'project/close', arguments: {} };
-      }
-    }
-    
-    // List documents commands
-    if ((msg.includes('lista') || msg.includes('listar') || msg.includes('list') || msg.includes('muestra') || msg.includes('show')) &&
-        (msg.includes('archivos') || msg.includes('documentos') || msg.includes('files') || msg.includes('documents'))) {
-      console.log('[Ollama] ✅ Direct command detected: editor/list_documents');
-      return { tool: 'editor/list_documents', arguments: {} };
-    }
-    
-    // Get project structure
-    if ((msg.includes('estructura') || msg.includes('structure')) && 
-        (msg.includes('proyecto') || msg.includes('project'))) {
-      console.log('[Ollama] ✅ Direct command detected: project/get_structure');
-      return { tool: 'project/get_structure', arguments: {} };
-    }
-    
-    console.log('[Ollama] ❌ No direct command match, using LLM');
-    return null;
-  }
-
   public async sendRequest(request: AiRequest): Promise<AiResponse> {
     try {
       // Check if Ollama is running
@@ -117,57 +82,55 @@ export class OllamaProvider extends BaseAiProvider {
         throw new Error('Ollama is not running. Please start Ollama: brew services start ollama');
       }
 
-      // Direct command detection for better tool calling
-      const message = request.message.toLowerCase().trim();
-      const directToolCall = this.detectDirectCommand(message);
-      
-      if (directToolCall) {
-        // Return the tool call directly without LLM inference
-        return {
-          content: `\`\`\`json\n${JSON.stringify(directToolCall, null, 2)}\n\`\`\``,
-          suggestions: []
-        };
-      }
-
-      // Enhanced system prompt for local models with explicit tool calling instructions
+      // Build system prompt with tool definitions
       const baseSystemPrompt = this.buildSystemPrompt();
+      
+      // Get tool list from request if available
+      const toolsList = request.availableTools?.map(t => 
+        `- ${t.name}: ${t.description}`
+      ).join('\n') || 'Loading tools...';
+      
       const systemPrompt = `${baseSystemPrompt}
 
-🔧 **TOOL CALLING MODE ACTIVATED**
+# Tool Calling Mode
 
-You MUST respond with ONLY a JSON tool call when the user wants to perform an action.
+When the user wants to perform an action, respond with a JSON tool call in ONE of these formats:
 
-**FORMAT (MANDATORY):**
+**Format 1 (Preferred):**
 \`\`\`json
-{"tool": "tool/name", "arguments": {...}}
+{"tool": "namespace/action", "arguments": {}}
 \`\`\`
 
-**AVAILABLE TOOLS:**
-- project/close: Close current project
-- project/open: Open a project (needs "path")  
-- project/create: Create new project (needs "path" and "name")
-- editor/list_documents: List open files
-- editor/read_document: Read file content (needs "uri")
+**Format 2 (Also accepted):**
+\`\`\`json
+{"tool_calls": [{"name": "namespace/action", "params": {}}]}
+\`\`\`
 
-**EXAMPLES:**
+## Available Tools:
+${toolsList}
 
-INPUT: "cierra el proyecto"
-OUTPUT:
+## Examples:
+
+User: "close the current project"
 \`\`\`json
 {"tool": "project/close", "arguments": {}}
 \`\`\`
 
-INPUT: "lista archivos"
-OUTPUT:
+User: "list all open files"
 \`\`\`json
 {"tool": "editor/list_documents", "arguments": {}}
 \`\`\`
 
-⚠️ **DO NOT WRITE TEXT EXPLANATIONS - ONLY JSON**`;
+User: "show project structure"
+\`\`\`json
+{"tool": "project/get_structure", "arguments": {}}
+\`\`\`
 
-      const userPrompt = `USER REQUEST: ${request.message}
-
-RESPOND WITH THE JSON TOOL CALL ONLY.`;
+IMPORTANT: 
+- Understand the user's intent naturally
+- Tool names use forward slash: "namespace/action"
+- Use {} for empty arguments
+- Respond with JSON only when the user wants an action`;
 
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -178,7 +141,7 @@ RESPOND WITH THE JSON TOOL CALL ONLY.`;
           model: this.config.model || 'qwen2.5:7b',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
+            { role: 'user', content: request.message }
           ],
           temperature: this.config.temperature || 0.1, // Lower temperature for more deterministic tool calling
           max_tokens: this.config.maxTokens || 2000,

@@ -218,6 +218,10 @@ To use a tool, respond with a JSON function call in a code block:
 
   /**
    * Parse tool calls from LLM response
+   * Supports multiple formats:
+   * 1. {"tool": "...", "arguments": {}}
+   * 2. {"tool_calls": [{"name": "...", "params": {}}]}
+   * 3. {"tool_calls": [{"name": "...", "arguments": {}}]}
    */
   parseToolCalls(response: string): Array<{ tool: string; arguments: Record<string, any> }> {
     const calls: Array<{ tool: string; arguments: Record<string, any> }> = [];
@@ -229,13 +233,24 @@ To use a tool, respond with a JSON function call in a code block:
     while ((match = jsonBlockRegex.exec(response)) !== null) {
       try {
         const parsed = JSON.parse(match[1]);
+        
+        // Format 1: Direct tool call {"tool": "...", "arguments": {}}
         if (parsed.tool) {
-          // Convert underscore to slash (e.g., "project_close" -> "project/close")
           const toolName = parsed.tool.replace(/_/g, '/');
           calls.push({
             tool: toolName,
             arguments: parsed.arguments || {}
           });
+        }
+        // Format 2: Array format {"tool_calls": [{"name": "..."}]}
+        else if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+          for (const toolCall of parsed.tool_calls) {
+            const toolName = (toolCall.name || toolCall.tool || '').replace(/_/g, '/');
+            const args = toolCall.params || toolCall.arguments || {};
+            if (toolName) {
+              calls.push({ tool: toolName, arguments: args });
+            }
+          }
         }
       } catch (e) {
         console.warn('[MCP Tools] Failed to parse tool call from code block:', e);
@@ -243,33 +258,42 @@ To use a tool, respond with a JSON function call in a code block:
     }
 
     // Method 2: Look for JSON objects without code blocks (plain text)
-    // Pattern: "json\n{...}" or just "{...}" with "tool" property
-    // More robust regex that handles multiline JSON
-    const plainJsonRegex = /(?:json\s*\n)?(\{(?:[^{}]|\{[^{}]*\})*"tool"\s*:\s*"[^"]+"(?:[^{}]|\{[^{}]*\})*\})/g;
+    // Try to parse any JSON object in the response
+    const jsonObjectRegex = /\{(?:[^{}]|\{[^{}]*\})*\}/g;
     
-    while ((match = plainJsonRegex.exec(response)) !== null) {
+    while ((match = jsonObjectRegex.exec(response)) !== null) {
       try {
-        const jsonStr = match[1].trim();
-        console.log('[MCP Tools] Attempting to parse plain JSON:', jsonStr);
+        const jsonStr = match[0].trim();
         const parsed = JSON.parse(jsonStr);
+        
+        // Format 1: Direct tool call
         if (parsed.tool) {
-          // Check if not already added (from code block)
           const exists = calls.some(c => c.tool === parsed.tool && 
             JSON.stringify(c.arguments) === JSON.stringify(parsed.arguments));
           if (!exists) {
-            // Convert underscore to slash (e.g., "project_close" -> "project/close")
             const toolName = parsed.tool.replace(/_/g, '/');
-            console.log('[MCP Tools] Successfully parsed tool:', parsed.tool, '->', toolName);
             calls.push({
               tool: toolName,
               arguments: parsed.arguments || {}
             });
-          } else {
-            console.log('[MCP Tools] Duplicate tool call detected, skipping');
+          }
+        }
+        // Format 2: Array format
+        else if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+          for (const toolCall of parsed.tool_calls) {
+            const toolName = (toolCall.name || toolCall.tool || '').replace(/_/g, '/');
+            const args = toolCall.params || toolCall.arguments || {};
+            if (toolName) {
+              const exists = calls.some(c => c.tool === toolName && 
+                JSON.stringify(c.arguments) === JSON.stringify(args));
+              if (!exists) {
+                calls.push({ tool: toolName, arguments: args });
+              }
+            }
           }
         }
       } catch (e) {
-        console.warn('[MCP Tools] Failed to parse plain JSON tool call:', match[1], e);
+        // Not valid JSON, skip
       }
     }
 
