@@ -864,6 +864,7 @@ def loop():
                 fontSize: '12px'
               }}
             >
+              <option value="ollama">🏠 Ollama (Local - Privado)</option>
               <option value="mock">Mock (Testing)</option>
               <option value="deepseek">DeepSeek (Free)</option>
               <option value="groq">Groq (Free & Fast)</option>
@@ -872,8 +873,33 @@ def loop():
               <option value="anthropic">Anthropic Claude</option>
             </select>
           </div>
+
+          {currentProviderType === 'ollama' && (
+            <div style={{ 
+              marginBottom: '12px',
+              padding: '8px',
+              background: '#2d2d30',
+              border: '1px solid #3c3c3c',
+              borderRadius: '4px',
+              fontSize: '11px',
+              lineHeight: '1.5'
+            }}>
+              <div style={{ marginBottom: '4px', fontWeight: 'bold', color: '#4ec9b0' }}>
+                🏠 Modelo Local (Ollama)
+              </div>
+              <div style={{ color: '#cccccc' }}>
+                • No requiere API key<br/>
+                • 100% privado (corre en tu Mac)<br/>
+                • Sin límites de uso<br/>
+                • Requiere Ollama instalado y corriendo
+              </div>
+              <div style={{ marginTop: '6px', fontSize: '10px', color: '#858585' }}>
+                Para instalar: <code style={{ background: '#1e1e1e', padding: '2px 4px' }}>brew install ollama</code>
+              </div>
+            </div>
+          )}
           
-          {currentProviderType !== 'mock' && (
+          {currentProviderType !== 'mock' && currentProviderType !== 'ollama' && (
             <>
               <div style={{ marginBottom: '8px' }}>
                 <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
