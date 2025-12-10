@@ -74,6 +74,31 @@ export class OllamaProvider extends BaseAiProvider {
     return this.config.endpoint || this.defaultBaseUrl;
   }
 
+  /**
+   * Detect direct commands and map them to tool calls
+   * This bypasses LLM inference for simple commands
+   */
+  private detectDirectCommand(message: string): any | null {
+    const msg = message.toLowerCase().trim();
+    
+    // Close project commands
+    if (msg.match(/^(cierra|cerrar|close)\s*(el\s*)?(proyecto|project)?$/)) {
+      return { tool: 'project/close', arguments: {} };
+    }
+    
+    // List documents commands
+    if (msg.match(/^(lista|listar|list|muestra|show)\s*(los\s*)?(archivos|documentos|files|documents)?$/)) {
+      return { tool: 'editor/list_documents', arguments: {} };
+    }
+    
+    // Get project structure
+    if (msg.match(/^(estructura|structure)\s*(del\s*)?(proyecto|project)?$/)) {
+      return { tool: 'project/get_structure', arguments: {} };
+    }
+    
+    return null;
+  }
+
   public async sendRequest(request: AiRequest): Promise<AiResponse> {
     try {
       // Check if Ollama is running
@@ -82,44 +107,57 @@ export class OllamaProvider extends BaseAiProvider {
         throw new Error('Ollama is not running. Please start Ollama: brew services start ollama');
       }
 
+      // Direct command detection for better tool calling
+      const message = request.message.toLowerCase().trim();
+      const directToolCall = this.detectDirectCommand(message);
+      
+      if (directToolCall) {
+        // Return the tool call directly without LLM inference
+        return {
+          content: `\`\`\`json\n${JSON.stringify(directToolCall, null, 2)}\n\`\`\``,
+          suggestions: []
+        };
+      }
+
       // Enhanced system prompt for local models with explicit tool calling instructions
       const baseSystemPrompt = this.buildSystemPrompt();
-      const systemPrompt = baseSystemPrompt + `
+      const systemPrompt = `${baseSystemPrompt}
 
-**CRITICAL: When you need to use a tool, you MUST respond with ONLY the JSON tool call, nothing else.**
+🔧 **TOOL CALLING MODE ACTIVATED**
 
-Example responses:
+You MUST respond with ONLY a JSON tool call when the user wants to perform an action.
 
-User: "cierra el proyecto"
-Assistant response (EXACTLY like this):
+**FORMAT (MANDATORY):**
+\`\`\`json
+{"tool": "tool/name", "arguments": {...}}
+\`\`\`
+
+**AVAILABLE TOOLS:**
+- project/close: Close current project
+- project/open: Open a project (needs "path")  
+- project/create: Create new project (needs "path" and "name")
+- editor/list_documents: List open files
+- editor/read_document: Read file content (needs "uri")
+
+**EXAMPLES:**
+
+INPUT: "cierra el proyecto"
+OUTPUT:
 \`\`\`json
 {"tool": "project/close", "arguments": {}}
 \`\`\`
 
-User: "lista los archivos"  
-Assistant response (EXACTLY like this):
+INPUT: "lista archivos"
+OUTPUT:
 \`\`\`json
 {"tool": "editor/list_documents", "arguments": {}}
 \`\`\`
 
-User: "crea un proyecto llamado test en /path/to/project"
-Assistant response (EXACTLY like this):
-\`\`\`json
-{"tool": "project/create", "arguments": {"path": "/path/to/project", "name": "test"}}
-\`\`\`
+⚠️ **DO NOT WRITE TEXT EXPLANATIONS - ONLY JSON**`;
 
-**DO NOT add explanations before or after the JSON. ONLY the JSON block.**
+      const userPrompt = `USER REQUEST: ${request.message}
 
-When user says:
-- "cierra" or "close" → use project/close
-- "abre" or "open" → use project/open
-- "lista" or "list" → use editor/list_documents
-- "muestra" or "show" → use editor/read_document
-- "crea" or "create" → use project/create
-
-ALWAYS use the \`\`\`json code block format.`;
-
-      const userPrompt = this.buildUserPrompt(request);
+RESPOND WITH THE JSON TOOL CALL ONLY.`;
 
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
