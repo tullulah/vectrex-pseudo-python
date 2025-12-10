@@ -906,59 +906,60 @@ def loop():
           {/* Info box removed - now handled in OllamaManagerDialog */}
           
           {currentProviderType !== 'mock' && currentProviderType !== 'ollama' && (
-            <>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
-                  API Key:
-                </label>
-                <input
-                  type="password"
-                  value={providerConfig.apiKey || ''}
-                  onChange={(e) => {
-                    const newApiKey = e.target.value;
-                    console.log('🔑 API Key input changed:', {
-                      newValue: newApiKey.substring(0, 10) + '...',
-                      length: newApiKey.length,
-                      currentProvider: currentProviderType
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+                API Key:
+              </label>
+              <input
+                type="password"
+                value={providerConfig.apiKey || ''}
+                onChange={(e) => {
+                  const newApiKey = e.target.value;
+                  console.log('🔑 API Key input changed:', {
+                    newValue: newApiKey.substring(0, 10) + '...',
+                    length: newApiKey.length,
+                    currentProvider: currentProviderType
+                  });
+                  
+                  setProviderConfig(prev => {
+                    const newConfig = { ...prev, apiKey: newApiKey };
+                    console.log('🔄 Setting new config:', {
+                      ...newConfig,
+                      apiKey: newConfig.apiKey?.substring(0, 10) + '...'
                     });
-                    
-                    setProviderConfig(prev => {
-                      const newConfig = { ...prev, apiKey: newApiKey };
-                      console.log('🔄 Setting new config:', {
-                        ...newConfig,
-                        apiKey: newConfig.apiKey?.substring(0, 10) + '...'
-                      });
-                      return newConfig;
-                    });
-                  }}
-                  placeholder={currentProviderType === 'groq' ? 'gsk_...' : currentProviderType === 'github' ? 'github_pat_...' : 'sk-...'}
-                  style={{
-                    background: '#1e1e1e',
-                    border: '1px solid #3c3c3c',
-                    color: '#cccccc',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
-                    width: '100%',
-                    maxWidth: '100%',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                    boxSizing: 'border-box',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}
-                  onFocus={(e) => {
-                    console.log('🔑 API Key field focused');
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    console.log('🔑 API Key field clicked');
-                    e.stopPropagation();
-                    e.currentTarget.focus();
-                  }}
-                />
-              </div>
-              
-              {availableModels.length > 0 && (
+                    return newConfig;
+                  });
+                }}
+                placeholder={currentProviderType === 'groq' ? 'gsk_...' : currentProviderType === 'github' ? 'github_pat_...' : 'sk-...'}
+                style={{
+                  background: '#1e1e1e',
+                  border: '1px solid #3c3c3c',
+                  color: '#cccccc',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  width: '100%',
+                  maxWidth: '100%',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+                onFocus={(e) => {
+                  console.log('🔑 API Key field focused');
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  console.log('🔑 API Key field clicked');
+                  e.stopPropagation();
+                  e.currentTarget.focus();
+                }}
+              />
+            </div>
+          )}
+          
+          {/* Model selector - shown for all providers except mock */}
+          {currentProviderType !== 'mock' && availableModels.length > 0 && (
                 <div style={{ marginBottom: '8px' }}>
                   <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
                     Modelo:
@@ -1035,7 +1036,7 @@ def loop():
                         setIsLoadingModels(false);
                       }
                     }}
-                    disabled={isLoadingModels || !providerConfig.apiKey}
+                    disabled={isLoadingModels || (currentProviderType !== 'ollama' && !providerConfig.apiKey)}
                     style={{
                       background: 'transparent',
                       border: '1px solid #3c3c3c',
@@ -1045,15 +1046,13 @@ def loop():
                       cursor: 'pointer',
                       fontSize: '10px',
                       marginTop: '4px',
-                      opacity: isLoadingModels || !providerConfig.apiKey ? 0.5 : 1
+                      opacity: isLoadingModels || (currentProviderType !== 'ollama' && !providerConfig.apiKey) ? 0.5 : 1
                     }}
                   >
                     🔄 {isLoadingModels ? 'Cargando...' : 'Recargar modelos'}
                   </button>
                 </div>
               )}
-            </>
-          )}
           
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button
