@@ -19,7 +19,7 @@ export class DeepSeekProvider extends BaseAiProvider {
     }
 
     try {
-      const systemPrompt = this.buildSystemPrompt();
+      const systemPrompt = this.buildSystemPrompt(request.concise ?? false);
       const userPrompt = this.buildUserPrompt(request);
 
       // Use Electron proxy to bypass CORS

@@ -11,7 +11,7 @@ fn constant_folding_add_mul_identities() {
         Stmt::Let { name: "b".into(), value: Expr::Binary { op: BinOp::Mul, left: Box::new(Expr::Number(1)), right: Box::new(Expr::Ident(IdentInfo { name:"a".into(), source_line: 0, col: 0 })) }, source_line: 0 },
         Stmt::Return(Some(Expr::Ident(IdentInfo { name:"b".into(), source_line: 0, col: 0 })), 0)
     ]};
-    let m = Module { items: vec![Item::Function(f)], meta: ModuleMeta::default() };
+    let m = Module { items: vec![Item::Function(f)], imports: vec![], meta: ModuleMeta::default() };
     let opt = debug_optimize_module_for_tests(&m);
     // With DSE disabled, statements remain but expressions should be folded
     if let Item::Function(fun) = &opt.items[0] {
@@ -35,7 +35,7 @@ fn dead_store_elimination_basic() {
         Stmt::Assign { target: AssignTarget { name: "x".into(), source_line: 0, col: 0 }, value: Expr::Number(2), source_line: 0 },
         Stmt::Return(Some(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), 0)
     ]};
-    let m = Module { items: vec![Item::Function(f)], meta: ModuleMeta::default() };
+    let m = Module { items: vec![Item::Function(f)], imports: vec![], meta: ModuleMeta::default() };
     let opt = debug_optimize_module_for_tests(&m);
     if let Item::Function(fun) = &opt.items[0] {
         // DSE is disabled, so all 3 statements should remain

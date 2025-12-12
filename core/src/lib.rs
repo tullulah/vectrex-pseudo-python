@@ -9,6 +9,7 @@ pub mod resolver; // Multi-file import resolution
 pub mod unifier;  // AST unification for multi-file projects
 pub mod library;  // VPy library system (.vpylib)
 pub mod vecres;   // Vector resource format (.vec)
+pub mod musres;   // Music resource format (.vmus)
 // Legacy emulator module removed; use vectrex_emulator crate instead.
 // pub mod emulator; // intentionally disabled
 #[cfg(not(target_arch = "wasm32"))]

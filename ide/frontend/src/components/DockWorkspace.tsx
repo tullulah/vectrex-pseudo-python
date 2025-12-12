@@ -111,7 +111,8 @@ export const DockWorkspace: React.FC = () => {
   trace: { json: null as any },
   bioscalls: { json: null as any },
   output: { json: null as any },
-  'build-output': { json: null as any }
+  'build-output': { json: null as any },
+  'ai-assistant': { json: null as any }
   });
   // Extra metadata to preserve docking edge for panels so re-pin restores original side
   const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, memory:{edge:'right'}, trace:{edge:'right'}, bioscalls:{edge:'right'}, 'build-output':{edge:'bottom'} });

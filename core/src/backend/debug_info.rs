@@ -191,21 +191,25 @@ impl LineTracker {
     }
     
     /// Add bytes to current address (track code generation progress)
+    #[allow(dead_code)]
     pub fn advance(&mut self, bytes: u16) {
         self.current_address = self.current_address.wrapping_add(bytes);
     }
     
     /// Add a symbol at current address
+    #[allow(dead_code)]
     pub fn add_symbol(&mut self, name: String) {
         self.debug_info.add_symbol(name, self.current_address);
     }
     
     /// Add a function at current address
+    #[allow(dead_code)]
     pub fn add_function(&mut self, name: String, start_line: usize, end_line: usize, func_type: &str) {
         self.debug_info.add_function(name, self.current_address, start_line, end_line, func_type);
     }
     
     /// Add a native function call at current line
+    #[allow(dead_code)]
     pub fn add_native_call(&mut self, function_name: String) {
         if let Some(line) = self.current_line {
             self.debug_info.add_native_call(line, function_name);
@@ -213,11 +217,13 @@ impl LineTracker {
     }
     
     /// Get current address
+    #[allow(dead_code)]
     pub fn address(&self) -> u16 {
         self.current_address
     }
     
     /// Consume tracker and return debug info
+    #[allow(dead_code)]
     pub fn finish(self) -> DebugInfo {
         self.debug_info
     }
@@ -534,6 +540,7 @@ pub fn parse_native_call_comments(asm: &str) -> HashMap<usize, String> {
 
 /// Estimate the size in bytes of generated ASM code
 /// This is a rough approximation based on typical 6809 instruction sizes
+#[allow(dead_code)]
 pub fn estimate_asm_size(asm: &str) -> u16 {
     let mut size = 0u16;
     

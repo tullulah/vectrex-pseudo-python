@@ -178,6 +178,49 @@ export const useProjectStore = create<ProjectState>()(
             const success = await get().openVpyProject(lastProject.path);
             if (success) {
               logger.info('Project', 'Successfully restored project:', lastProject.name);
+              
+              // CRITICAL: Restore previously open files after project loads
+              const savedState = get().getProjectState(lastProject.path);
+              if (savedState && savedState.openFiles.length > 0 && editorStoreRef) {
+                logger.info('Project', `Restoring ${savedState.openFiles.length} open files from last session`);
+                
+                const apiFiles = (window as any).files;
+                if (apiFiles?.readFile) {
+                  for (const uri of savedState.openFiles) {
+                    // Extract disk path from URI
+                    let diskPath = uri.replace('file:///', '').replace('file://', '');
+                    if (diskPath.match(/^[A-Za-z]:\//)) {
+                      // Windows path - keep as is
+                    } else if (!diskPath.startsWith('/')) {
+                      diskPath = '/' + diskPath;
+                    }
+                    
+                    try {
+                      const fileResult = await apiFiles.readFile(diskPath);
+                      if (fileResult && !fileResult.error) {
+                        editorStoreRef.getState().openDocument({
+                          uri,
+                          language: diskPath.endsWith('.vpy') ? 'vpy' : 'plaintext',
+                          content: fileResult.content,
+                          dirty: false,
+                          diagnostics: [],
+                          diskPath,
+                          mtime: fileResult.mtime,
+                          lastSavedContent: fileResult.content
+                        });
+                      }
+                    } catch (e) {
+                      logger.warn('Project', `Could not restore file: ${diskPath}`);
+                    }
+                  }
+                  
+                  // Set the last active file
+                  if (savedState.activeFile) {
+                    editorStoreRef.getState().setActive(savedState.activeFile);
+                  }
+                }
+              }
+              
               return;
             }
           } catch (error) {

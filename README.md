@@ -61,6 +61,8 @@ cd ../..
 - **Emulador 6809** en Rust/WASM con ciclo-precisión
 - **IDE completa** (Electron + React + Monaco)
 - **Sistema de vectores** con integrador analógico simplificado
+  - ⚠️ Limitación conocida: Multi-path positioning acumula (ver [VECTOR_MULTIPATH_LIMITATION.md](VECTOR_MULTIPATH_LIMITATION.md))
+  - Workaround: Usar single-path vectors o múltiples llamadas DRAW_VECTOR
 - **Arquitectura de subrutinas** (JSR/RTS) para programas grandes
 - **Procesamiento INCLUDE** con 258 símbolos BIOS
 - **Pipeline de optimización** (constant folding, dead code elimination)

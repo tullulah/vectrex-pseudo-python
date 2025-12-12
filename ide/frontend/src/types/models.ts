@@ -14,7 +14,7 @@ export interface Project {
 
 export interface DocumentModel {
   uri: string;
-  language: 'vpy';
+  language: 'vpy' | 'c' | 'cpp' | 'json' | 'plaintext' | 'asm' | 'javascript' | 'typescript' | 'markdown';
   content: string;
   dirty: boolean;
   diagnostics: DiagnosticModel[];

@@ -209,6 +209,43 @@ fn test_[opcode]_[mode]_0x[hexcode]() {  // Nombre con código hex
 - **Algoritmos**: Port exacto de lógica (ej: `assert(cycles == 1)` en DelayedValueStore, `--m_rampDelay` en Screen).
 - **Excepciones permitidas**: Solo adaptaciones de sintaxis Rust (ownership, borrowing) manteniendo semántica idéntica.
 
+## 7.2. Validación Semántica - Variable Scope (COMPLETADO 2025-12-10)
+- **Estado**: Sistema de validación mejorado implementado y funcionando
+- **Ubicación**: `core/src/codegen.rs` - funciones `validate_semantics`, `validate_function`, `validate_stmt_collect`, `validate_expr_collect`
+- **Capacidades**:
+  - Detecta variables declaradas en una función pero usadas en otra
+  - Mensajes de error descriptivos con línea/columna exacta
+  - Explica por qué el error ocurre (scopes separados entre funciones)
+  - Sugiere solución (declarar variable en función donde se usa)
+  - Detecta variables no declaradas en general
+  - Validación de aridad de funciones builtin
+
+### Ejemplo de Error Mejorado:
+```
+❌ PHASE 4 FAILED: Semantic errors detected:
+   error 24:5 - SemanticsError: variable 'player_x' declarada en función 'main' no es accesible en 'loop'. 
+   Las funciones en VPy tienen scopes separados (no comparten variables). 
+   Solución: declara 'player_x' dentro de 'loop' donde la necesitas.
+```
+
+### Implementación Técnica:
+1. **Phase 1 (Discovery)**: `collect_function_locals()` recorre todas las funciones y recolecta variables locales declaradas
+2. **Phase 2 (Validation)**: `validate_function()` valida cada función independientemente con su propio scope
+3. **Phase 3 (Cross-Function Check)**: `validate_expr_collect()` detecta cuando una variable de otra función se intenta usar
+4. **Phase 4 (Reporting)**: `main.rs` imprime errores semánticos antes de mostrar "empty assembly"
+
+### Integración con IDE:
+- Los diagnostics se exponen en `emit_asm_with_debug()` retornando `Vec<Diagnostic>`
+- LSP puede consumir estos diagnostics para mostrar errores en tiempo real en el editor
+- Cada diagnostic incluye: severity, code, message, line, col
+- Compatible con sistema MCP para reportar errores a PyPilot y otros agentes AI
+
+### Testing:
+- `examples/test_scope.vpy`: Caso mínimo que reproduce el error
+- `examples/user_test_fixed.vpy`: Versión corregida (variables en loop, no en main)
+- Tests verifican que código correcto sigue compilando sin errores
+
+
 ## 8. Documentación
 - Actualizar `SUPER_SUMMARY.md` cuando se introduce o cambia: tracing, nuevas etiquetas BIOS, métricas, o comportamiento de integrator.
 - Añadir nota de migración en `MIGRATION_WASM.md` si se modifica la superficie WASM.
@@ -222,11 +259,22 @@ Estado IDs previos:
 - (ID 11) Mapeo completo BIOS / etiquetas → COMPLETADO 2025-09-20 (incluye Init_OS y loops intro).
 - (ID 13) Export WASM `bios_calls_json()` → COMPLETADO 2025-09-19.
 - (ID 5) Resumen estado compilador (`COMPILER_STATUS.md`) → COMPLETADO 2025-09-20.
+- S3 Verificación semántica variables → COMPLETADO 2025-12-10 (cross-function scope detection).
+- S7 PyPilot conversation persistence → COMPLETADO 2025-12-10 (localStorage integration).
+- S8 PyPilot concise mode → COMPLETADO 2025-12-10 (system prompt injection).
+- S9 MCP compiler/build store access → COMPLETADO 2025-12-10 (backend project tracker).
 
 Nuevos focos (short):
-S3 Verificación semántica básica variables (en progreso planificación).
 S4 Tests constant folding / dead store.
 S5 Documentar truncamiento entero 16-bit en SUPER_SUMMARY.
+S6 LSP integration para reportar semantic diagnostics en tiempo real (exponer `Vec<Diagnostic>`).
+S10 Multi-path vector positioning investigation (ver VECTOR_MULTIPATH_LIMITATION.md):
+  - Estudiar Moveto_d_7F requirements completos
+  - Probar delta calculation entre paths (relative offsets)
+  - Investigar integrator settling time para Reset0Ref
+  - Comparar con implementación de referencia (Vectrexy vector drawing)
+  - Documentar findings en SUPER_SUMMARY.md sección Vector Drawing
+
 
 ## 11. Seguridad / Pureza de Entorno
 - No escribir en la BIOS cargada (bus lo marca read-only); tests deben respetar esto.
@@ -325,9 +373,264 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - **Node.js requirement**: Compatible con Node.js estándar, sin dependencias externas
 - **Cross-platform**: Scripts funcionan en Windows PowerShell y Linux/macOS
 
-## 17. MCP (Model Context Protocol) Integration
+## 17. Sistema de Assets (Vectores y Música)
 
 ### 17.1 Arquitectura General
+- **Propósito**: Permitir que juegos VPy embeben recursos gráficos (.vec) y música (.vmus) como datos en ROM
+- **Ubicación**: Archivos en `assets/vectors/*.vec` y `assets/music/*.vmus` dentro del proyecto
+- **Descubrimiento automático**: Fase 0 de compilación escanea directorio assets/ y detecta recursos
+- **Embedding**: Fase 5 embebe datos convertidos en sección DATA del ASM generado
+- **Acceso en código**: Funciones builtin `DRAW_VECTOR("nombre")` y `PLAY_MUSIC("nombre")`
+
+### 17.2 Formato de Archivos Vector (.vec)
+
+```json
+{
+  "version": "1.0",
+  "name": "player",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "ship",
+      "intensity": 127,
+      "closed": true,
+      "points": [
+        {"x": 0, "y": 20},
+        {"x": -15, "y": -10},
+        {"x": 15, "y": -10}
+      ]
+    }]
+  }]
+}
+```
+
+**Campos importantes**:
+- **name** (top-level): Nombre del asset (usado en `DRAW_VECTOR("name")`)
+- **paths[].name**: Nombre del path individual (genera label `_NAME_PATHID_VECTORS`)
+- **paths[].intensity**: 0-255, brillo del vector
+- **paths[].closed**: true = polígono cerrado, false = línea abierta
+- **points**: Array de {x, y} en coordenadas canvas (-127 a 127)
+
+**Generación ASM**:
+```asm
+_PLAYER_SHIP_VECTORS:
+    FCB 3              ; num_points
+    FCB 127            ; intensity
+    FCB 20, 0          ; point 0 (y, x)
+    FCB -10, -15       ; point 1
+    FCB -10, 15        ; point 2
+    FCB $01            ; closed path
+
+_PLAYER_VECTORS:       ; Alias principal (apunta a primer path)
+    FCB 3, FCB 127
+    FCB 20, 0, FCB -10, -15, FCB -10, 15
+    FCB $01
+```
+
+### 17.3 Formato de Archivos Música (.vmus)
+
+```json
+{
+  "version": "1.0",
+  "name": "theme",
+  "author": "Composer",
+  "tempo": 120,
+  "ticksPerBeat": 24,
+  "totalTicks": 384,
+  "notes": [
+    {"id": "note1", "note": 60, "start": 0, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "note2", "note": 64, "start": 48, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "note3", "note": 67, "start": 96, "duration": 48, "velocity": 12, "channel": 0}
+  ],
+  "noise": [
+    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1}
+  ],
+  "loopStart": 0,
+  "loopEnd": 384
+}
+```
+
+**Campos importantes**:
+- **note**: Número MIDI (0-127, donde 60=Do central/C4, 69=La/A4 440Hz)
+- **velocity**: Volumen PSG (0-15, donde 15=máximo)
+- **channel**: Canal PSG (0=A, 1=B, 2=C)
+- **period**: Período de ruido (0-31, valores menores = tono más agudo)
+- **channels**: Máscara de bits para ruido (1=A, 2=B, 4=C, 7=todos)
+
+**Conversión MIDI a PSG**:
+- Fórmula: `period = 1_500_000 / (32 * freq_hz)`
+- Frecuencia MIDI: `freq = 440 * 2^((note - 69) / 12)`
+- Ejemplo: MIDI 60 (C4, 261.63Hz) → PSG period 179
+
+**Generación ASM** (placeholder actual):
+```asm
+_THEME_MUSIC:
+    FCB 0 ; Placeholder (PSG player completo pendiente)
+```
+
+### 17.4 Funciones Builtin en VPy
+
+#### DRAW_VECTOR(nombre: str)
+Dibuja un vector asset embebido en ROM.
+
+```python
+def loop():
+    WAIT_RECAL()
+    DRAW_VECTOR("player")  # Dibuja el sprite del jugador
+```
+
+**Código ASM generado**:
+```asm
+    LDX #_PLAYER_VECTORS   ; Cargar puntero a datos del vector
+    JSR Draw_VLc           ; Llamar BIOS para dibujar
+    LDD #0
+    STD RESULT
+```
+
+**Verificación en compilación**:
+- Comprueba que el asset existe en `opts.assets`
+- Error si el archivo .vec no se encuentra o el nombre no coincide
+- Genera comentario de error en ASM si falla
+
+#### PLAY_MUSIC(nombre: str)
+Inicia reproducción de música embebida en ROM.
+
+```python
+def loop():
+    PLAY_MUSIC("theme")  # Reproduce música de fondo
+```
+
+**Código ASM generado**:
+```asm
+    LDX #_THEME_MUSIC        ; Cargar puntero a datos de música
+    JSR PLAY_MUSIC_RUNTIME   ; Llamar player de música
+    LDD #0
+    STD RESULT
+```
+
+**Estado actual**: Placeholder implementado, PSG player completo pendiente.
+
+### 17.5 Pipeline de Compilación
+
+#### Fase 0: Asset Discovery
+```rust
+fn discover_assets(source_path: &Path) -> Vec<AssetInfo>
+```
+
+1. Determina project root (parent de src/ o directorio del archivo)
+2. Busca `project_root/assets/vectors/*.vec`
+3. Busca `project_root/assets/music/*.vmus`
+4. Retorna `Vec<AssetInfo>` con nombre, path, tipo de cada asset
+5. Log: `✓ Discovered N asset(s): - name (Type)`
+
+#### Fase 5: Asset Embedding
+En `emit_with_debug()` después de parsear lineMap:
+
+```rust
+for asset in &opts.assets {
+    match asset.asset_type {
+        AssetType::Vector => {
+            let resource = VecResource::load(&asset.path)?;
+            let asm = resource.compile_to_asm();
+            out.push_str(&asm);
+        },
+        AssetType::Music => {
+            // Deserializa JSON inline
+            // Genera label _NAME_MUSIC con datos placeholder
+        }
+    }
+}
+```
+
+#### Variables RAM Necesarias
+Si hay assets de música, se define automáticamente:
+```asm
+MUSIC_PTR:  FDB 0   ; Storage para puntero de música actual
+```
+
+### 17.6 Compatibilidad con Ensamblador Nativo
+
+El ensamblador nativo M6809 de VPy **NO soporta**:
+- ❌ Directiva `EQU` (debe usar labels duplicados con datos reales)
+- ❌ Directiva `RMB` (debe usar FDB/FCB o definir en sección RAM con EQU)
+- ✅ Labels estándar (termina con `:`)
+- ✅ Directivas FCB, FDB, ORG
+
+**Soluciones implementadas**:
+- `_PLAYER_VECTORS` genera label duplicado con datos completos (no EQU)
+- `MUSIC_PTR` definida en sección RAM con EQU a RESULT+26
+- `PLAY_MUSIC_RUNTIME` helper emitido automáticamente si hay assets música
+
+### 17.7 Módulos de Código Relevantes
+
+**core/src/vecres.rs**: Vector resource handling
+- `VecResource::load(path)` - Carga .vec desde disco
+- `compile_to_asm()` - Genera ASM con FCB data + label principal
+- Genera `_NAME_PATHID_VECTORS` por cada path
+- Genera `_NAME_VECTORS` apuntando al primer path (alias principal)
+
+**core/src/musres.rs**: Music resource handling
+- `MusicResource::load(path)` - Carga .vmus desde disco
+- `compile_to_asm()` - Genera ASM con tempo header, eventos ordenados, loops
+- `midi_to_psg_period(note)` - Convierte MIDI a período PSG
+- Tests de conversión MIDI: note 60→179, note 69→106
+
+**core/src/main.rs**: Compilation pipeline
+- `discover_assets(source_path)` - Fase 0 de descubrimiento
+- Pasa `assets: Vec<AssetInfo>` a `CodegenOptions`
+
+**core/src/backend/m6809.rs**: Assembly generation
+- Fase 5: Embedding de assets en DATA section
+- `emit_builtin_call()`: DRAW_VECTOR y PLAY_MUSIC code generation
+- `emit_builtin_helpers()`: Emite PLAY_MUSIC_RUNTIME si hay música
+- Define MUSIC_PTR en sección RAM si necesario
+
+**core/src/codegen.rs**: Types and options
+- `AssetInfo { name, path, asset_type }`
+- `AssetType` enum: Vector, Music
+- `CodegenOptions.assets: Vec<AssetInfo>`
+- `BUILTIN_ARITIES`: DRAW_VECTOR(1), PLAY_MUSIC(1)
+
+### 17.8 Ejemplo Completo
+
+**examples/test_assets.vpy**:
+```python
+META TITLE = "Asset Demo"
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    DRAW_VECTOR("player")
+    PLAY_MUSIC("theme")
+```
+
+**examples/assets/vectors/player.vec**: Triángulo de nave (3 puntos)
+**examples/assets/music/theme.vmus**: Melodía C-E-G (3 notas)
+
+**Resultado**:
+- Compilación exitosa: `✓ Discovered 2 asset(s)`
+- ASM generado: 3.5KB con datos embebidos
+- Binario: 156 bytes de código máquina
+- Ensamblador nativo: Procesa correctamente sin lwasm
+
+### 17.9 TODO Pendientes
+- [ ] Implementar PSG music player completo en PLAY_MUSIC_RUNTIME
+- [ ] Validación semántica: error en tiempo de compilación si asset no existe
+- [ ] LSP autocomplete para nombres de assets en DRAW_VECTOR/PLAY_MUSIC
+- [ ] Soporte multi-path: `DRAW_VECTOR("player.ship")` para paths específicos
+- [ ] Documentación en VPyContext.ts para IDE integration
+- [ ] Tests de integración con emulador (verificar rendering/playback)
+
+---
+Última actualización: 2025-12-10 - Añadida sección 17 (Sistema de Assets completo)
+
+## 18. MCP (Model Context Protocol) Integration
+
+### 18.1 Arquitectura General
 - **Propósito**: Exponer IDE y emulador a agentes AI (PyPilot, Copilot, etc.)
 - **Implementación Dual**:
   - **Electron Backend**: `ide/electron/src/mcp/server.ts` - Servidor interno IPC
@@ -335,13 +638,13 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - **Comunicación**: External server → IPC (puerto 9123) → Electron → IDE state
 - **Total de herramientas**: 22 tools (7 editor, 2 compiler, 3 emulator, 2 debugger, 8 project)
 
-### 17.2 Convenciones de Naming
+### 18.2 Convenciones de Naming
 - **Tool Names en External Server**: snake_case (`editor_write_document`, `project_create_vector`)
 - **Tool Names en Electron Server**: slash-separated (`editor/write_document`, `project/create_vector`)
 - **Conversión automática**: External server convierte **PRIMER guión bajo** a slash: `editor_write_document` → `editor/write_document`
 - **CRÍTICO**: NO convertir todos los guiones bajos - solo el primero (ej: `project_create_vector` → `project/create_vector`, NO `project/create/vector`)
 
-### 17.3 Herramientas Disponibles
+### 18.3 Herramientas Disponibles
 
 #### Editor (7 tools)
 - `editor/list_documents`: Lista documentos abiertos
@@ -375,7 +678,7 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - `project/create_vector`: **Crea archivo .vec con validación JSON**
 - `project/create_music`: **Crea archivo .vmus con validación JSON**
 
-### 17.4 Validación JSON para Assets
+### 18.4 Validación JSON para Assets
 
 #### Vector Files (.vec) - FORMATO OBLIGATORIO JSON
 ```json
@@ -469,7 +772,7 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
   - Rechaza formatos no-JSON
   - Error muestra formato correcto con ejemplo
 
-### 17.5 Comportamiento de Creación de Archivos
+### 18.5 Comportamiento de Creación de Archivos
 - **Auto-apertura**: Todos los archivos creados se abren automáticamente en el editor
 - **Auto-detección de lenguaje**: `.vpy` → VPy, `.vec`/`.vmus`/`.json` → JSON
 - **Creación de directorios**: Automática si no existen (`assets/vectors/`, `assets/music/`)
@@ -479,7 +782,7 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
   - Rutas absolutas (`"/Users/.../file.vpy"`)
   - URIs completos (`"file:///path/to/file"`)
 
-### 17.6 Guías para AI Integration
+### 18.6 Guías para AI Integration
 
 #### Creating New Files:
 ✅ **Use `editor/write_document`**: Create .vpy files, general text files (creates + opens automatically)
@@ -509,7 +812,16 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - **Aprender de errores**: La validación JSON enseña el formato correcto mediante feedback
 - **Nombres correctos**: Verificar con `tools/list` antes de llamar herramientas
 
-### 17.7 Debugging MCP
+#### Asset System Integration:
+- **Assets ubicación**: `assets/vectors/*.vec` y `assets/music/*.vmus` en project root
+- **Compilación automática**: Los assets se descubren y embeben automáticamente (Fase 0 + Fase 5)
+- **Uso en código VPy**: `DRAW_VECTOR("nombre")` y `PLAY_MUSIC("nombre")`
+- **Creación recomendada**: Usar `project/create_vector` y `project/create_music` (validan JSON)
+- **Formato verificado**: Ver sección 17 para estructura JSON completa de .vec y .vmus
+- **Ensamblador nativo**: El compilador usa ensamblador M6809 propio (NO lwasm)
+- **Compilación end-to-end**: `cargo run --bin vectrexc -- build programa.vpy --bin`
+
+### 18.7 Debugging MCP
 - **Logs External Server**: `ide/mcp-server/server.js` escribe a stderr
 - **Logs Electron**: `ide/electron/src/mcp/server.ts` usa console.log
 - **Test IPC**: Puerto 9123 debe estar disponible
@@ -517,4 +829,4 @@ Para evitar pérdida de contexto y mantener comparaciones Rust vs JavaScript:
 - **JSON validation errors**: Verificar estructura completa en mensaje de error
 
 ---
-Última actualización: 2025-12-10 - Añadida sección 17 (MCP Integration completa)
+Última actualización: 2025-12-10 - Sistema de Assets completado + MCP Integration (secciones 17 y 18)

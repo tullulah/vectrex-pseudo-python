@@ -10,7 +10,7 @@ fn semantics_valid_decl_and_use() {
             Stmt::Assign { target: AssignTarget { name: "x".to_string(), source_line: 0, col: 0 }, value: Expr::Binary { op: BinOp::Add, left: Box::new(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), right: Box::new(Expr::Ident(IdentInfo { name:"C1".into(), source_line: 0, col: 0 })) }, source_line: 0 },
             Stmt::Return(Some(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), 0)
         ]})
-    ], meta: ModuleMeta::default() };
+    ], imports: vec![], meta: ModuleMeta::default() };
     // emit_asm should not panic
     let asm = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
         title: "t".into(),
@@ -24,6 +24,7 @@ fn semantics_valid_decl_and_use() {
         exclude_ram_org: false,
         fast_wait: false,
         source_path: None,
+        assets: vec![],
     });
     // El módulo requiere loop() pero no lo tiene, así que debe contener ERROR
     assert!(asm.contains("ERROR") || asm.contains("MAIN") || asm.to_uppercase().contains("MAIN"));
@@ -35,9 +36,9 @@ fn semantics_undefined_use_reports_error() {
         Item::Function(Function { name: "f".to_string(), line: 0, params: vec![], body: vec![
             Stmt::Expr(Expr::Ident(IdentInfo { name:"y".into(), source_line: 0, col: 0 }), 0)
         ]})
-    ], meta: ModuleMeta::default() };
+    ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UndeclaredVar)), "expected undeclared variable error, got: {:?}", diags);
 }
 
@@ -49,9 +50,9 @@ fn semantics_valid_builtin_arity() {
             Stmt::Expr(Expr::Call(CallInfo { name: "FRAME_BEGIN".into(), source_line: 0, col: 0, args: vec![Expr::Number(10)] }), 0),
             Stmt::Return(None, 0)
         ]})
-    ], meta: ModuleMeta::default() };
+    ], imports: vec![], meta: ModuleMeta::default() };
     let _ = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
 }
 
 #[test]
@@ -61,9 +62,9 @@ fn semantics_bad_builtin_arity_reports_error() {
             // DRAW_LINE necesita 5 args; damos 4
             Stmt::Expr(Expr::Call(CallInfo { name: "DRAW_LINE".into(), source_line: 0, col: 0, args: vec![Expr::Number(0),Expr::Number(0),Expr::Number(1),Expr::Number(1)] }), 0)
         ]})
-    ], meta: ModuleMeta::default() };
+    ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::ArityMismatch)), "expected arity error, got: {:?}", diags);
 }
 
@@ -74,8 +75,8 @@ fn semantics_unused_var_warning() {
             Stmt::Let { name: "x".into(), value: Expr::Number(1), source_line: 0 },
             Stmt::Return(None, 0)
         ]})
-    ], meta: ModuleMeta::default() };
+    ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UnusedVar)), "expected unused var warning, got: {:?}", diags);
 }

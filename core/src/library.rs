@@ -60,6 +60,7 @@ pub struct ExportsConfig {
 }
 
 /// Dependency specification
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DependencySpec {
@@ -82,6 +83,7 @@ pub struct Library {
     /// Parsed manifest
     pub manifest: LibraryManifest,
     /// Cached list of available modules
+    #[allow(dead_code)]
     pub modules: Vec<String>,
 }
 
@@ -142,6 +144,7 @@ impl Library {
     }
     
     /// Check if a module is exported (public)
+    #[allow(dead_code)]
     pub fn is_module_exported(&self, module_name: &str) -> bool {
         if self.manifest.exports.modules.is_empty() {
             // If no explicit exports, all modules are public
@@ -157,6 +160,7 @@ impl Library {
     }
     
     /// Get the library version
+    #[allow(dead_code)]
     pub fn version(&self) -> &str {
         &self.manifest.library.version
     }
@@ -193,6 +197,7 @@ impl LibraryRegistry {
     }
     
     /// Find a library by name
+    #[allow(dead_code)]
     pub fn find_library(&self, name: &str) -> Option<&Library> {
         // First check already loaded
         if let Some(lib) = self.libraries.get(name) {
@@ -220,11 +225,13 @@ impl LibraryRegistry {
     }
     
     /// List all loaded libraries
+    #[allow(dead_code)]
     pub fn list_libraries(&self) -> Vec<&Library> {
         self.libraries.values().collect()
     }
     
     /// Get the module path for a library module
+    #[allow(dead_code)]
     pub fn resolve_module(&self, library_name: &str, module_name: &str) -> Option<PathBuf> {
         self.libraries.get(library_name)
             .and_then(|lib| lib.module_path(module_name))

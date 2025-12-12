@@ -186,16 +186,19 @@ impl VpyProject {
     }
     
     /// Get the project name
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.project.name
     }
     
     /// Get the entry point path
+    #[allow(dead_code)]
     pub fn entry(&self) -> &str {
         &self.project.entry
     }
     
     /// Get the output binary path
+    #[allow(dead_code)]
     pub fn output(&self) -> &str {
         &self.build.output
     }

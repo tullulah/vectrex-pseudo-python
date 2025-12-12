@@ -1,0 +1,1 @@
+{"version":"1.0","name":"triangle","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"triangle_shape","intensity":127,"closed":true,"points":[{"x":0,"y":30},{"x":-25,"y":-15},{"x":25,"y":-15}]}]}]}

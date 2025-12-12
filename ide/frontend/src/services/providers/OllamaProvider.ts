@@ -91,7 +91,7 @@ export class OllamaProvider extends BaseAiProvider {
       }
 
       // Build system prompt with tool definitions
-      const baseSystemPrompt = this.buildSystemPrompt();
+      const baseSystemPrompt = this.buildSystemPrompt(request.concise ?? false);
       
       // Get tool list from request if available
       const toolsList = request.availableTools?.map(t => 

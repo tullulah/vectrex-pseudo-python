@@ -49,9 +49,28 @@ const VECTREX_COMMANDS = [
 
 export const AiAssistantPanel: React.FC = () => {
   const { t } = useTranslation();
-  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [messages, setMessages] = useState<AiMessage[]>(() => {
+    const saved = localStorage.getItem('pypilot_conversation');
+    if (!saved) return [];
+    
+    try {
+      const parsed = JSON.parse(saved);
+      // Convert timestamp strings back to Date objects
+      return parsed.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }));
+    } catch (error) {
+      console.error('[PyPilot] Error loading conversation:', error);
+      return [];
+    }
+  });
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [conciseMode, setConciseMode] = useState(() => {
+    const saved = localStorage.getItem('pypilot_concise');
+    return saved === 'true';
+  });
   
   // Load persisted settings
   const [currentProviderType, setCurrentProviderType] = useState<AiProviderType>(() => {
@@ -98,6 +117,16 @@ export const AiAssistantPanel: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(`pypilot_config_${currentProviderType}`, JSON.stringify(providerConfig));
   }, [providerConfig, currentProviderType]);
+
+  // Persist conversation history
+  useEffect(() => {
+    localStorage.setItem('pypilot_conversation', JSON.stringify(messages));
+  }, [messages]);
+
+  // Persist concise mode
+  useEffect(() => {
+    localStorage.setItem('pypilot_concise', conciseMode.toString());
+  }, [conciseMode]);
 
   // Sync provider with AI service
   useEffect(() => {
@@ -509,6 +538,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 
       const response = await aiService.sendRequest({
         message,
+        concise: conciseMode,
         context: enhancedContext
       });
 
@@ -549,6 +579,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
     try {
       const response = await aiService.sendRequest({
         message: `/generate ${description}`,
+        concise: conciseMode,
         context: {
           ...context,
           errors: []
@@ -567,6 +598,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
     try {
       const response = await aiService.sendRequest({
         message: '/explain',
+        concise: conciseMode,
         context: {
           ...context,
           selectedCode: code,
@@ -835,20 +867,62 @@ def loop():
           </span>
         </div>
         
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          style={{
-            background: 'transparent',
-            border: '1px solid #3c3c3c',
-            color: '#cccccc',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          ⚙️ Config
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Concise Mode Toggle */}
+          <button
+            onClick={() => setConciseMode(!conciseMode)}
+            title={conciseMode ? 'Modo conciso activado' : 'Modo conciso desactivado'}
+            style={{
+              background: conciseMode ? '#10b981' : 'transparent',
+              border: '1px solid #3c3c3c',
+              color: conciseMode ? 'white' : '#cccccc',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⚡ Conciso
+          </button>
+
+          {/* Clear History */}
+          <button
+            onClick={() => {
+              if (confirm('¿Borrar todo el historial de conversación?')) {
+                setMessages([]);
+                localStorage.removeItem('pypilot_conversation');
+              }
+            }}
+            title="Borrar historial"
+            style={{
+              background: 'transparent',
+              border: '1px solid #3c3c3c',
+              color: '#cccccc',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🗑️
+          </button>
+
+          {/* Settings */}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #3c3c3c',
+              color: '#cccccc',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⚙️ Config
+          </button>
+        </div>
       </div>
 
       {/* Settings Panel */}

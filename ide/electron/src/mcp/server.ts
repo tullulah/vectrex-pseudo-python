@@ -123,13 +123,11 @@ export class MCPServer {
     // Compiler tools
     this.registerTool('compiler/build', this.compilerBuild.bind(this), {
       name: 'compiler/build',
-      description: 'Compile a VPy program',
+      description: 'Build the current project (same as F7). Compiles the project entry file. No parameters needed - uses current project configuration.',
       inputSchema: {
         type: 'object',
-        properties: {
-          entryFile: { type: 'string', description: 'Entry VPy file path' },
-        },
-        required: ['entryFile'],
+        properties: {},
+        required: [],
       },
     });
 
@@ -738,9 +736,98 @@ export class MCPServer {
   }
 
   private async compilerBuild(params: any): Promise<any> {
-    // Will trigger build through IPC
-    // For now, placeholder
-    return { success: false, errors: [{ file: params.entryFile, line: 1, column: 1, message: 'Not implemented yet' }] };
+    if (!this.mainWindow) {
+      return { 
+        success: false, 
+        errors: [{ line: 1, column: 1, message: 'IDE window not available' }] 
+      };
+    }
+
+    try {
+      // Get current project from backend tracker (no need to access Redux store)
+      const { getCurrentProject } = await import('../main.js');
+      const project = getCurrentProject();
+      
+      if (!project?.entryFile) {
+        return {
+          success: false,
+          errors: [{ 
+            line: 1, 
+            column: 1, 
+            message: 'No project loaded. Open a project first (File → Open Project).' 
+          }]
+        };
+      }
+
+      // Execute compilation via IPC (same as F7 key)
+      const entryPath = project.entryFile.replace(/\\/g, '\\\\');
+      const result = await this.mainWindow.webContents.executeJavaScript(`
+        (async () => {
+          try {
+            const compileResult = await window.electron.ipcRenderer.invoke('run:compile', {
+              path: '${entryPath}',
+              autoStart: false
+            });
+            return compileResult;
+          } catch (error) {
+            return { error: 'build_failed', detail: error.message };
+          }
+        })()
+      `);
+
+      // Check if compilation was successful
+      if (result.error) {
+        // Parse error details
+        const errors = [];
+        
+        if (result.error === 'compile_failed' && result.stderr) {
+          // Extract error messages from stderr
+          const lines = result.stderr.split('\n');
+          for (const line of lines) {
+            // Match error patterns like "error 24:5 - SemanticsError: ..."
+            const match = line.match(/error (\d+):(\d+) - (.+)/);
+            if (match) {
+              errors.push({
+                line: parseInt(match[1]),
+                column: parseInt(match[2]),
+                message: match[3]
+              });
+            }
+          }
+        }
+        
+        // If no specific errors found, return generic error
+        if (errors.length === 0) {
+          errors.push({
+            line: 1,
+            column: 1,
+            message: result.detail || result.error || 'Compilation failed'
+          });
+        }
+
+        return {
+          success: false,
+          errors
+        };
+      }
+
+      // Success
+      return {
+        success: true,
+        binPath: result.binPath,
+        asmPath: result.asmPath,
+        pdbPath: result.pdbPath
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        errors: [{
+          line: 1,
+          column: 1,
+          message: `Internal error: ${error.message}`
+        }]
+      };
+    }
   }
 
   private async getCompilerErrors(params: any): Promise<any> {

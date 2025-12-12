@@ -80,7 +80,7 @@ export class GroqProvider extends BaseAiProvider {
     const messages = [
       {
         role: 'system',
-        content: this.buildSystemPrompt()
+        content: this.buildSystemPrompt(request.concise ?? false)
       },
       {
         role: 'user',

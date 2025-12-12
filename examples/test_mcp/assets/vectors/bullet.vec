@@ -1,0 +1,1 @@
+{"version":"1.0","name":"bullet","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"projectile","intensity":255,"closed":true,"points":[{"x":0,"y":8},{"x":-2,"y":-8},{"x":2,"y":-8}]}]}]}

@@ -4,7 +4,7 @@ import { useEditorStore } from '../../state/editorStore';
 import type { FileNode } from '../../types/models';
 
 // Helper function to detect language from file extension
-function getLanguageFromFilename(filename: string): string {
+function getLanguageFromFilename(filename: string): 'vpy' | 'c' | 'cpp' | 'json' | 'plaintext' | 'asm' | 'javascript' | 'typescript' | 'markdown' {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
   switch (ext) {
     case 'vpy': return 'vpy';
@@ -12,12 +12,10 @@ function getLanguageFromFilename(filename: string): string {
     case 'cpp': case 'cc': case 'cxx': return 'cpp';
     case 'h': case 'hpp': return 'cpp';
     case 'asm': case 's': return 'asm';
-    case 'json': case 'vec': return 'json';
+    case 'json': case 'vec': case 'vmus': return 'json';
     case 'js': return 'javascript';
     case 'ts': return 'typescript';
     case 'md': return 'markdown';
-    case 'toml': return 'toml';
-    case 'yaml': case 'yml': return 'yaml';
     default: return 'plaintext';
   }
 }

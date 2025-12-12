@@ -13,6 +13,7 @@ use crate::parser;
 use crate::library::LibraryRegistry;
 
 /// Resolved symbol from an imported module
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ResolvedSymbol {
     /// Original name in the source module
@@ -66,11 +67,13 @@ impl ModuleResolver {
     }
     
     /// Add a library search path
+    #[allow(dead_code)]
     pub fn add_library_path(&mut self, path: PathBuf) {
         self.libraries.add_search_path(path);
     }
     
     /// Load a library by path
+    #[allow(dead_code)]
     pub fn load_library(&mut self, path: &Path) -> Result<()> {
         self.libraries.load_library(path)
     }
@@ -239,6 +242,7 @@ impl ModuleResolver {
     }
     
     /// Resolve all imports for a module
+    #[allow(dead_code)]
     pub fn resolve_imports(
         &mut self,
         module: &Module,
@@ -360,7 +364,7 @@ mod tests {
         fs::create_dir_all(&src).unwrap();
         fs::write(src.join("utils.vpy"), "def clamp(x, lo, hi):\n    return x\n").unwrap();
         
-        let resolver = ModuleResolver::new(temp.path().to_path_buf());
+        let mut resolver = ModuleResolver::new(temp.path().to_path_buf());
         let result = resolver.resolve_absolute_import(&["utils".to_string()]);
         
         assert!(result.is_ok());

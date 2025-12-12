@@ -48,6 +48,102 @@ fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
     "runtime/vectorlist_runtime.asm".to_string()
 }
 
+// analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
+// Returns set of asset names that are actually used in the code
+fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
+    use std::collections::HashSet;
+    let mut used = HashSet::new();
+    
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>) {
+        match expr {
+            Expr::Call(call_info) => {
+                let name_upper = call_info.name.to_uppercase();
+                // Check for DRAW_VECTOR("asset_name") or PLAY_MUSIC("asset_name")
+                if (name_upper == "DRAW_VECTOR" || name_upper == "PLAY_MUSIC") && call_info.args.len() == 1 {
+                    if let Expr::StringLit(asset_name) = &call_info.args[0] {
+                        used.insert(asset_name.clone());
+                    }
+                }
+                // Recursively scan arguments
+                for arg in &call_info.args {
+                    scan_expr(arg, used);
+                }
+            },
+            Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+                scan_expr(left, used);
+                scan_expr(right, used);
+            },
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used),
+            // NOTE: No hay Expr::Index en ast.rs actual
+            _ => {}
+        }
+    }
+    
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>) {
+        match stmt {
+            Stmt::Assign { value, .. } => scan_expr(value, used),
+            Stmt::Let { value, .. } => scan_expr(value, used),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used),
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                scan_expr(cond, used);
+                for s in body { scan_stmt(s, used); }
+                for (elif_cond, elif_body) in elifs {
+                    scan_expr(elif_cond, used);
+                    for s in elif_body { scan_stmt(s, used); }
+                }
+                if let Some(els) = else_body {
+                    for s in els { scan_stmt(s, used); }
+                }
+            },
+            Stmt::While { cond, body, .. } => {
+                scan_expr(cond, used);
+                for s in body { scan_stmt(s, used); }
+            },
+            Stmt::For { start, end, step, body, .. } => {
+                scan_expr(start, used);
+                scan_expr(end, used);
+                if let Some(step_expr) = step {
+                    scan_expr(step_expr, used);
+                }
+                for s in body { scan_stmt(s, used); }
+            },
+            Stmt::Switch { expr, cases, default, .. } => {
+                scan_expr(expr, used);
+                for (case_expr, case_body) in cases {
+                    scan_expr(case_expr, used);
+                    for s in case_body { scan_stmt(s, used); }
+                }
+                if let Some(default_body) = default {
+                    for s in default_body { scan_stmt(s, used); }
+                }
+            },
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used),
+            _ => {}
+        }
+    }
+    
+    // Scan all functions and top-level items in module
+    for item in &module.items {
+        match item {
+            Item::Function(func) => {
+                for stmt in &func.body {
+                    scan_stmt(stmt, &mut used);
+                }
+            },
+            Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
+                scan_expr(value, &mut used);
+            },
+            Item::ExprStatement(expr) => {
+                scan_expr(expr, &mut used);
+            },
+            _ => {}
+        }
+    }
+    
+    used
+}
+
 // emit: entry point for Motorola 6809 backend assembly generation.
 // Produces a simple Vectrex-style header, calls platform init + MAIN, then infinite loop.
 pub fn emit(module: &Module, t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> String {
@@ -170,7 +266,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if main_has_content {
         // main() has real content - use START structure
         out.push_str("    JMP START\n\n");
-        out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
+        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
     }
     
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
@@ -477,6 +573,39 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if opts.exclude_ram_org { out.push_str("DIV_A   EQU RESULT+18\nDIV_B   EQU RESULT+20\nDIV_Q   EQU RESULT+22\nDIV_R   EQU RESULT+24\n"); }
         else { out.push_str("DIV_A:    FDB 0\nDIV_B:    FDB 0\nDIV_Q:   FDB 0\nDIV_R:   FDB 0\n"); }
     }
+    
+    // MUSIC_PTR: Storage for current music asset pointer (if music assets exist)
+    let has_music_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Music)
+    });
+    if has_music_assets {
+        if opts.exclude_ram_org {
+            out.push_str("MUSIC_PTR     EQU RESULT+26\n");
+            out.push_str("MUSIC_TICK    EQU RESULT+28   ; 32-bit tick counter\n");
+            out.push_str("MUSIC_EVENT   EQU RESULT+32   ; Current event pointer\n");
+            out.push_str("MUSIC_ACTIVE  EQU RESULT+34   ; Playback state (1 byte)\n");
+        } else {
+            out.push_str("MUSIC_PTR:     FDB 0   ; Current music pointer\n");
+            out.push_str("MUSIC_TICK:    FDB 0,0  ; Current playback tick (32-bit)\n");
+            out.push_str("MUSIC_EVENT:   FDB 0   ; Pointer to current event\n");
+            out.push_str("MUSIC_ACTIVE:  FCB 0   ; 0=stopped, 1=playing\n");
+        }
+    }
+    
+    // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
+    // Always define if any code might use DRAW_VECTOR_LIST
+    if opts.exclude_ram_org {
+        out.push_str("VL_PTR     EQU $CF80      ; Current position in vector list\n");
+        out.push_str("VL_Y       EQU $CF82      ; Y position (1 byte)\n");
+        out.push_str("VL_X       EQU $CF83      ; X position (1 byte)\n");
+        out.push_str("VL_SCALE   EQU $CF84      ; Scale factor (1 byte)\n");
+    } else {
+        out.push_str("VL_PTR:    FDB 0    ; Current position in vector list\n");
+        out.push_str("VL_Y:      FCB 0    ; Y position\n");
+        out.push_str("VL_X:      FCB 0    ; X position\n");
+        out.push_str("VL_SCALE:  FCB 0    ; Scale factor\n");
+    }
+    
     let mut var_offset = 0; // Variables start at separate base, not after RESULT temps
     for v in syms {
         if opts.exclude_ram_org {
@@ -532,6 +661,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str(&format!("VLINE_LIST EQU RESULT+{}\n", var_offset)); var_offset += 2; // 2 bytes
         } else { out.push_str("; Line drawing temps\nVLINE_DX: FCB 0\nVLINE_DY: FCB 0\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
     }
+    // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
+    // Now using inline code with BIOS Draw_VLc function
+    
     // Blink state variable (1 byte) must live in RAM, not ROM.
     if opts.blink_intensity {
         if opts.exclude_ram_org {
@@ -648,6 +780,72 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // We parse the entire ASM to calculate actual addresses based on instruction sizes
     use super::debug_info::parse_vpy_line_markers;
     debug_info.line_map = parse_vpy_line_markers(&out, start_address);
+    
+    // Phase 5: Embed assets data section (only used assets)
+    if !opts.assets.is_empty() {
+        // Analyze which assets are actually used in the code
+        let used_assets = analyze_used_assets(module);
+        
+        // Filter assets to only include used ones
+        let assets_to_embed: Vec<_> = opts.assets.iter()
+            .filter(|asset| used_assets.contains(&asset.name))
+            .collect();
+        
+        if !assets_to_embed.is_empty() {
+            out.push_str("\n; ========================================\n");
+            out.push_str("; ASSET DATA SECTION\n");
+            out.push_str(&format!("; Embedded {} of {} assets (unused assets excluded)\n", 
+                assets_to_embed.len(), opts.assets.len()));
+            out.push_str("; ========================================\n\n");
+            
+            for asset in assets_to_embed {
+                match asset.asset_type {
+                    crate::codegen::AssetType::Vector => {
+                        use crate::vecres::VecResource;
+                        if let Ok(resource) = VecResource::load(std::path::Path::new(&asset.path)) {
+                            let asm = resource.compile_to_asm();
+                            out.push_str(&format!("; Vector asset: {}\n", asset.name));
+                            out.push_str(&asm);
+                            out.push_str("\n");
+                        } else {
+                            out.push_str(&format!("; ERROR: Failed to load vector asset: {}\n", asset.path));
+                        }
+                    },
+                    crate::codegen::AssetType::Music => {
+                        // Use MusicResource to generate proper ASM data (usando asset.name, NO nombre del JSON)
+                        match crate::musres::MusicResource::load(std::path::Path::new(&asset.path)) {
+                            Ok(resource) => {
+                                let asm = resource.compile_to_asm(&asset.name);
+                                out.push_str(&asm);
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                out.push_str(&format!("; ERROR: Failed to load/generate music asset {}: {}\n", asset.path, e));
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            out.push_str("\n; ========================================\n");
+            out.push_str("; NO ASSETS EMBEDDED\n");
+            out.push_str(&format!("; All {} discovered assets are unused in code\n", opts.assets.len()));
+            out.push_str("; ========================================\n\n");
+        }
+    }
+    
+    // Example vector list data (for DRAW_VECTOR_LIST demo)
+    // TODO: Make this configurable via asset system
+    out.push_str("\n; ========================================\n");
+    out.push_str("; VECTOR LIST DATA (Malban format)\n");
+    out.push_str("; ========================================\n");
+    out.push_str("_SQUARE:\n");
+    out.push_str("    FCB 0, 0, 0          ; Header (y=0, x=0, next_y=0)\n");
+    out.push_str("    FCB $FF, $D8, $D8    ; Line 1: flag=-1, dy=-40, dx=-40\n");
+    out.push_str("    FCB $FF, 0, 80       ; Line 2: flag=-1, dy=0, dx=80\n");
+    out.push_str("    FCB $FF, 80, 0       ; Line 3: flag=-1, dy=80, dx=0\n");
+    out.push_str("    FCB $FF, 0, $B0      ; Line 4: flag=-1, dy=0, dx=-80\n");
+    out.push_str("    FCB 2                ; End marker\n\n");
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
@@ -923,7 +1121,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("VECTREX_PRINT_TEXT") {
         let start_line = out.lines().count() + 1;
-        let function_code = "VECTREX_PRINT_TEXT:\n    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS\n    LDU VAR_ARG2   ; string pointer (high-bit terminated)\n    LDA VAR_ARG1+1 ; Y\n    LDB VAR_ARG0+1 ; X\n    JSR Print_Str_d\n    RTS\n";
+        let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(string, Y, X) -> args (ARG0=string, ARG1=Y, ARG2=X)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG0   ; string pointer (ARG0 = first param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG2+1 ; X (ARG2 = third param)\n    JSR Print_Str_d\n    RTS\n";
         out.push_str(function_code);
         let end_line = out.lines().count();
         
@@ -978,12 +1176,12 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("VECTREX_DRAW_TO") {
         out.push_str(
-            "; Draw from current (VCUR_X,VCUR_Y) to new (x,y) provided in low bytes VAR_ARG0/1.\n; Semántica: igual a MOVE_TO seguido de línea, pero preserva origen previo como punto inicial.\n; Limita dx/dy a rango BIOS (-64..63) antes de invocar Draw_Line_d.\nVECTREX_DRAW_TO:\n    ; Cargar destino (x,y)\n    LDA VAR_ARG0+1  ; Xdest en A temporalmente\n    STA VLINE_DX    ; reutilizar buffer temporal (bajo) para Xdest\n    LDA VAR_ARG1+1  ; Ydest en A\n    STA VLINE_DY    ; reutilizar buffer temporal para Ydest\n    ; Calcular dx = Xdest - VCUR_X\n    LDA VLINE_DX\n    SUBA VCUR_X\n    STA VLINE_DX\n    ; Calcular dy = Ydest - VCUR_Y\n    LDA VLINE_DY\n    SUBA VCUR_Y\n    STA VLINE_DY\n    ; Clamp dx\n    LDA VLINE_DX\n    CMPA #63\n    BLE D2_DX_HI_OK\n    LDA #63\nD2_DX_HI_OK: CMPA #-64\n    BGE D2_DX_LO_OK\n    LDA #-64\nD2_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy\n    LDA VLINE_DY\n    CMPA #63\n    BLE D2_DY_HI_OK\n    LDA #63\nD2_DY_HI_OK: CMPA #-64\n    BGE D2_DY_LO_OK\n    LDA #-64\nD2_DY_LO_OK: STA VLINE_DY\n    ; Mover haz al origen previo (VCUR_Y en A, VCUR_X en B)\n    LDA VCUR_Y\n    LDB VCUR_X\n    JSR Moveto_d\n    ; Dibujar línea usando deltas (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    ; Actualizar posición actual al destino exacto original (no clamped)\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
+            "; Draw from current (VCUR_X,VCUR_Y) to new (x,y) provided in low bytes VAR_ARG0/1.\n; Semántica: igual a MOVE_TO seguido de línea, pero preserva origen previo como punto inicial.\n; Deltas pueden ser ±127 (hardware Vectrex soporta rango completo).\nVECTREX_DRAW_TO:\n    ; Cargar destino (x,y)\n    LDA VAR_ARG0+1  ; Xdest en A temporalmente\n    STA VLINE_DX    ; reutilizar buffer temporal (bajo) para Xdest\n    LDA VAR_ARG1+1  ; Ydest en A\n    STA VLINE_DY    ; reutilizar buffer temporal para Ydest\n    ; Calcular dx = Xdest - VCUR_X\n    LDA VLINE_DX\n    SUBA VCUR_X\n    STA VLINE_DX\n    ; Calcular dy = Ydest - VCUR_Y\n    LDA VLINE_DY\n    SUBA VCUR_Y\n    STA VLINE_DY\n    ; No clamping needed - signed byte arithmetic handles ±127 correctly\n    ; Mover haz al origen previo (VCUR_Y en A, VCUR_X en B)\n    LDA VCUR_Y\n    LDB VCUR_X\n    JSR Moveto_d\n    ; Dibujar línea usando deltas (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    ; Actualizar posición actual al destino exacto original\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
         );
     }
     if w.contains("DRAW_LINE_WRAPPER") {
         out.push_str(
-            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity and handles Reset0Ref properly.\nDRAW_LINE_WRAPPER:\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; CRITICAL: Reset integrator origin before each line\n    JSR Reset0Ref\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLW_DX_HI_OK\n    LDA #63\nDLW_DX_HI_OK: CMPA #-64\n    BGE DLW_DX_LO_OK\n    LDA #-64\nDLW_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLW_DY_HI_OK\n    LDA #63\nDLW_DY_HI_OK: CMPA #-64\n    BGE DLW_DY_LO_OK\n    LDA #-64\nDLW_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n\n; DRAW_LINE_FAST - optimized version that skips redundant setup\n; Use this for multiple consecutive draws with same intensity\n; Args: (x0,y0,x1,y1) only - intensity must be set beforehand\nDRAW_LINE_FAST:\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DX_CLAMP_HI_OK\n    LDD #127\nDLF_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DX_CLAMP_LO_OK\n    LDD #-128\nDLF_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DY_CLAMP_HI_OK\n    LDD #127\nDLF_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DY_CLAMP_LO_OK\n    LDD #-128\nDLF_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; Further clamp to Vectrex hardware limits (-64 to +63)\n    LDA VLINE_DX\n    CMPA #63\n    BLE DLF_DX_HI_OK\n    LDA #63\nDLF_DX_HI_OK: CMPA #-64\n    BGE DLF_DX_LO_OK\n    LDA #-64\nDLF_DX_LO_OK: STA VLINE_DX\n    ; Clamp dy to Vectrex limits\n    LDA VLINE_DY\n    CMPA #63\n    BLE DLF_DY_HI_OK\n    LDA #63\nDLF_DY_HI_OK: CMPA #-64\n    BGE DLF_DY_LO_OK\n    LDA #-64\nDLF_DY_LO_OK: STA VLINE_DY\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
+            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).\nDRAW_LINE_WRAPPER:\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; dx and dy are already clamped to ±127 - no further clamping needed\n    ; Vectrex hardware supports full ±127 delta range\n    LDA VLINE_DX\n    STA VLINE_DX    ; Keep full range\n    LDA VLINE_DY\n    STA VLINE_DY    ; Keep full range\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n\n; DRAW_LINE_FAST - optimized version that skips redundant setup\n; Use this for multiple consecutive draws with same intensity\n; Args: (x0,y0,x1,y1) only - intensity must be set beforehand\nDRAW_LINE_FAST:\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DX_CLAMP_HI_OK\n    LDD #127\nDLF_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DX_CLAMP_LO_OK\n    LDD #-128\nDLF_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DY_CLAMP_HI_OK\n    LDD #127\nDLF_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DY_CLAMP_LO_OK\n    LDD #-128\nDLF_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; dx and dy are already clamped to ±127 - no further clamping needed\n    ; Vectrex hardware supports full ±127 delta range\n    LDA VLINE_DX\n    STA VLINE_DX    ; Keep full range\n    LDA VLINE_DY\n    STA VLINE_DY    ; Keep full range\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
         );
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
@@ -1010,7 +1208,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         }
     }
     if w.contains("VECTREX_SET_INTENSITY") {
-    out.push_str("VECTREX_SET_INTENSITY:\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    RTS\n");
+    out.push_str("VECTREX_SET_INTENSITY:\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    RTS\n");
     }
     if w.contains("SETUP_DRAW_COMMON") {
         out.push_str(
@@ -1025,7 +1223,314 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
         out.push_str("VECTREX_PLAY_MUSIC1:\n    JSR MUSIC1\n    RTS\n");
     }
+    
+    // DRAW_VECTOR_RUNTIME: Old helper - NO LONGER USED
+    // Now using inline code with Draw_VLc BIOS function
+    // (removed to avoid label conflicts with inline code)
+    
+    // PLAY_MUSIC_RUNTIME: Basic music player for .vmus assets
+    // Only emit if PLAY_MUSIC() builtin is actually used in code
+    if w.contains("PLAY_MUSIC_RUNTIME") {
+        out.push_str(
+            "; ============================================================================\n\
+            ; PSG MUSIC PLAYER RUNTIME\n\
+            ; ============================================================================\n\
+            ; Music data structure (generated by compiler from .vmus):\n\
+            ;   +0: FDB tempo (BPM)\n\
+            ;   +2: FDB ticks_per_beat\n\
+            ;   +4: FDB total_ticks_hi, total_ticks_lo (32-bit)\n\
+            ;   +8: FDB num_events\n\
+            ;   +10: Event data (variable length)\n\
+            ;   Last: FDB loop_start_hi, loop_start_lo, loop_end_hi, loop_end_lo\n\
+            ;\n\
+            ; Event types:\n\
+            ;   $01 = NOTE: FCB type, FDB start_hi, start_lo, FDB dur_hi, dur_lo,\n\
+            ;               FCB channel, FDB psg_period, FCB velocity\n\
+            ;   $02 = NOISE: FCB type, FDB start_hi, start_lo, FDB dur_hi, dur_lo,\n\
+            ;                FCB period, FCB channels_mask\n\
+            ;\n\
+            ; PSG Registers (accessed via VIA Port B $D000):\n\
+            ;   R0/R1 = Channel A tone period (12-bit)\n\
+            ;   R2/R3 = Channel B tone period (12-bit)\n\
+            ;   R4/R5 = Channel C tone period (12-bit)\n\
+            ;   R6 = Noise period (5-bit)\n\
+            ;   R7 = Mixer control (tone/noise enable per channel)\n\
+            ;   R8/R9/R10 = Channel A/B/C volume (4-bit)\n\
+            ; ============================================================================\n\
+            \n\
+            ; RAM variables (defined in RAM section)\n\
+            ; MUSIC_PTR     FDB 0  ; Pointer to current music data\n\
+            ; MUSIC_TICK    FDB 0, 0  ; Current playback tick (32-bit)\n\
+            ; MUSIC_EVENT   FDB 0  ; Pointer to current event\n\
+            ; MUSIC_ACTIVE  FCB 0  ; 0=stopped, 1=playing\n\
+            \n\
+            ; PLAY_MUSIC_RUNTIME - Initialize and start music playback\n\
+            ; Input: X = pointer to music data structure\n\
+            PLAY_MUSIC_RUNTIME:\n\
+            ; Store music pointer\n\
+            STX MUSIC_PTR\n\
+            \n\
+            ; Initialize playback state\n\
+            CLRA\n\
+            CLRB\n\
+            STD MUSIC_TICK      ; Reset tick counter to 0\n\
+            STD MUSIC_TICK+2\n\
+            \n\
+            ; Point to first event (skip 10-byte header)\n\
+            TFR X,D\n\
+            ADDD #10\n\
+            STD MUSIC_EVENT\n\
+            \n\
+            ; Mark as active\n\
+            LDA #1\n\
+            STA MUSIC_ACTIVE\n\
+            \n\
+            ; Initialize PSG - silence all channels\n\
+            BSR PSG_SILENCE\n\
+            \n\
+            RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; PSG_SILENCE - Silence all PSG channels\n\
+            ; ============================================================================\n\
+            PSG_SILENCE:\n\
+            PSHS A,B\n\
+            \n\
+            ; Set all channel volumes to 0 (R8, R9, R10)\n\
+            LDA #8              ; Register 8 (Channel A volume)\n\
+            LDB #0              ; Volume = 0\n\
+            BSR PSG_WRITE_REG\n\
+            \n\
+            LDA #9              ; Register 9 (Channel B volume)\n\
+            LDB #0\n\
+            BSR PSG_WRITE_REG\n\
+            \n\
+            LDA #10             ; Register 10 (Channel C volume)\n\
+            LDB #0\n\
+            BSR PSG_WRITE_REG\n\
+            \n\
+            ; Disable all tone/noise (R7 = $3F = all disabled)\n\
+            LDA #7              ; Register 7 (Mixer)\n\
+            LDB #$3F            ; All channels off\n\
+            BSR PSG_WRITE_REG\n\
+            \n\
+            PULS A,B\n\
+            RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; PSG_WRITE_REG - Write to PSG register via VIA\n\
+            ; Input: A = register number (0-15)\n\
+            ;        B = data value\n\
+            ; ============================================================================\n\
+            PSG_WRITE_REG:\n\
+            PSHS A,B,X\n\
+            \n\
+            ; Step 1: Latch register address\n\
+            ; Port B bit 2 = BC1, bit 1 = BDIR\n\
+            ; BDIR=1, BC1=1 = Latch address mode\n\
+            LDX #VIA_port_b\n\
+            ANDA #$0F           ; Mask to 4 bits\n\
+            ORA #$06            ; Set BDIR=1, BC1=1 (bits 2:1)\n\
+            STA ,X              ; Write to Port B\n\
+            \n\
+            ; Short delay (PSG needs ~1μs setup time)\n\
+            NOP\n\
+            NOP\n\
+            \n\
+            ; Step 2: Write data to selected register\n\
+            ; BDIR=1, BC1=0 = Write data mode\n\
+            TFR B,A\n\
+            ANDA #$FF           ; Data value\n\
+            ORA #$02            ; Set BDIR=1, BC1=0 (bit 1)\n\
+            ANDA #$FD           ; Clear BC1 (bit 2)\n\
+            STA ,X\n\
+            \n\
+            ; Deselect PSG (BDIR=0, BC1=0)\n\
+            CLRA\n\
+            STA ,X\n\
+            \n\
+            PULS A,B,X\n\
+            RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; MUSIC_UPDATE - Process music events (call once per frame)\n\
+            ; Should be called from main loop after WAIT_RECAL\n\
+            ; ============================================================================\n\
+            MUSIC_UPDATE:\n\
+            PSHS A,B,X,Y\n\
+            \n\
+            ; Check if music is active\n\
+            TST MUSIC_ACTIVE\n\
+            LBEQ MUSIC_UPDATE_done          ; Not playing, skip\n\
+            \n\
+            ; Increment tick counter (32-bit)\n\
+            ; At 60 FPS, increment by 1 tick per frame\n\
+            ; (Proper tempo: ticks_per_frame = (tempo * ticks_per_beat) / (60 * 60))\n\
+            LDD MUSIC_TICK+2    ; Load low word\n\
+            ADDD #1\n\
+            STD MUSIC_TICK+2\n\
+            BCC MUSIC_UPDATE_no_carry\n\
+            LDD MUSIC_TICK      ; Increment high word on carry\n\
+            ADDD #1\n\
+            STD MUSIC_TICK\n\
+            \n\
+MUSIC_UPDATE_no_carry:\n\
+            ; Process events at current tick\n\
+            LDX MUSIC_EVENT     ; Load current event pointer\n\
+            CMPX #0\n\
+            BEQ MUSIC_UPDATE_done           ; No events, done\n\
+            \n\
+MUSIC_UPDATE_check_event:\n\
+            ; Load event type\n\
+            LDA ,X+             ; A = event type, X now points to start_tick\n\
+            BEQ MUSIC_UPDATE_done           ; Type 0 = end of events\n\
+            \n\
+            ; Compare event.start_tick (32-bit) with MUSIC_TICK\n\
+            ; If event.start_tick > MUSIC_TICK, not ready yet\n\
+            LDD ,X++            ; D = start_tick high word\n\
+            CMPD MUSIC_TICK\n\
+            BHI MUSIC_UPDATE_event_not_ready ; start_hi > tick_hi\n\
+            BLO MUSIC_UPDATE_event_ready     ; start_hi < tick_hi\n\
+            ; High words equal, check low words\n\
+            LDD ,X++            ; D = start_tick low word\n\
+            CMPD MUSIC_TICK+2\n\
+            BHI MUSIC_UPDATE_event_not_ready ; start_lo > tick_lo\n\
+            \n\
+MUSIC_UPDATE_event_ready:\n\
+            ; Event is ready, execute based on type\n\
+            CMPA #1\n\
+            BEQ MUSIC_UPDATE_process_note\n\
+            CMPA #2\n\
+            BEQ MUSIC_UPDATE_process_noise\n\
+            BRA MUSIC_UPDATE_skip_event     ; Unknown type, skip\n\
+            \n\
+MUSIC_UPDATE_process_note:\n\
+            ; NOTE event structure (after start_tick):\n\
+            ; +0: FDB duration_hi, duration_lo (skip 4 bytes)\n\
+            ; +4: FCB channel (0/1/2)\n\
+            ; +5: FDB psg_period\n\
+            ; +7: FCB velocity\n\
+            LEAX 4,X            ; Skip duration (4 bytes)\n\
+            LDA ,X+             ; A = channel (0/1/2)\n\
+            LDY ,X++            ; Y = PSG period (16-bit)\n\
+            LDB ,X+             ; B = velocity\n\
+            \n\
+            ; Set PSG tone period for channel\n\
+            ; Channel A=0: R0/R1, B=1: R2/R3, C=2: R4/R5\n\
+            PSHS A,B,X,Y\n\
+            TFR A,B\n\
+            LSLB                ; B = channel * 2\n\
+            TFR B,A             ; A = register base (0/2/4)\n\
+            TFR Y,D             ; D = period\n\
+            ANDB #$0F           ; Period low 4 bits\n\
+            BSR PSG_WRITE_REG   ; Write R0/R2/R4\n\
+            PULS A,B,X,Y\n\
+            PSHS A,B,X,Y\n\
+            TFR A,B\n\
+            LSLB\n\
+            INCA                ; A = register + 1\n\
+            TFR Y,D\n\
+            LSRA\n\
+            LSRA\n\
+            LSRA\n\
+            LSRA                ; Period high 8 bits\n\
+            TFR A,B\n\
+            LDA ,S              ; Restore register\n\
+            INCA\n\
+            BSR PSG_WRITE_REG   ; Write R1/R3/R5\n\
+            PULS A,B,X,Y\n\
+            \n\
+            ; Set volume (R8/R9/R10)\n\
+            PSHS A,B,X,Y\n\
+            ADDA #8             ; A = R8 + channel\n\
+            ; B already has velocity\n\
+            BSR PSG_WRITE_REG\n\
+            PULS A,B,X,Y\n\
+            \n\
+            ; Enable tone in mixer (clear bit in R7)\n\
+            ; TODO: Read-modify-write R7\n\
+            \n\
+            ; Save updated event pointer\n\
+            STX MUSIC_EVENT\n\
+            BRA MUSIC_UPDATE_done\n\
+            \n\
+MUSIC_UPDATE_process_noise:\n\
+            ; NOISE event structure:\n\
+            ; +0: FDB duration_hi, duration_lo (skip 4 bytes)\n\
+            ; +4: FCB period (5-bit)\n\
+            ; +5: FCB channels mask\n\
+            LEAX 4,X\n\
+            LDA ,X+             ; A = noise period\n\
+            LDB ,X+             ; B = channels mask\n\
+            \n\
+            ; Set noise period (R6)\n\
+            PSHS A,B,X\n\
+            ANDA #$1F           ; 5-bit period\n\
+            TFR A,B\n\
+            LDA #6              ; Register 6\n\
+            BSR PSG_WRITE_REG\n\
+            PULS A,B,X\n\
+            \n\
+            ; Enable noise in mixer R7\n\
+            ; TODO: Read-modify-write R7 with channels mask\n\
+            \n\
+            STX MUSIC_EVENT\n\
+            BRA MUSIC_UPDATE_done\n\
+            \n\
+MUSIC_UPDATE_skip_event:\n\
+            ; Skip unknown event (can't determine size, so stop)\n\
+            BRA MUSIC_UPDATE_done\n\
+            \n\
+MUSIC_UPDATE_event_not_ready:\n\
+            ; Event not ready yet, done for this frame\n\
+            BRA MUSIC_UPDATE_done\n\
+            \n\
+MUSIC_UPDATE_done:\n\
+            PULS A,B,X,Y\n\
+            RTS\n\
+            \n"
+        );
+    }
     // Trig tables are emitted later in data section.
+    
+    // ===========================================================================
+    // BIOS WRAPPERS - VIDE/gcc6809 compatible calling convention
+    // ===========================================================================
+    // These wrappers ensure DP=$D0 is set before each BIOS call, mimicking
+    // the behavior of VIDE's auto-generated wrapper functions.
+    // Using these wrappers instead of direct BIOS calls eliminates issues
+    // with Direct Page register state across multiple calls.
+    
+    out.push_str("; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)\n");
+    
+    // __Intensity_a wrapper - VIDE compatible (JMP not JSR)
+    out.push_str(
+        "__Intensity_a:\n\
+        TFR B,A         ; Move B to A (BIOS expects intensity in A)\n\
+        JMP Intensity_a ; JMP (not JSR) - BIOS returns to original caller\n"
+    );
+    
+    // __Reset0Ref wrapper - VIDE compatible (JMP not JSR)
+    out.push_str(
+        "__Reset0Ref:\n\
+        JMP Reset0Ref   ; JMP (not JSR) - BIOS returns to original caller\n"
+    );
+    
+    // __Moveto_d wrapper - VIDE compatible (JMP not JSR)
+    // Caller pushes Y parameter on stack, X in B register
+    out.push_str(
+        "__Moveto_d:\n\
+        LDA 2,S         ; Get Y from stack (after return address)\n\
+        JMP Moveto_d    ; JMP (not JSR) - BIOS returns to original caller\n"
+    );
+    
+    // __Draw_Line_d wrapper - VIDE compatible (JMP not JSR)
+    // Caller pushes dy parameter on stack, dx in B register
+    out.push_str(
+        "__Draw_Line_d:\n\
+        LDA 2,S         ; Get dy from stack (after return address)\n\
+        JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller\n"
+    );
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
@@ -1033,7 +1538,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
-    "VECTREX_PLAY_MUSIC1"|
+    "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"PLAY_MUSIC"|"MUSIC_UPDATE"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
     "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
@@ -1045,6 +1550,105 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             out.push_str(&format!("; NATIVE_CALL: {} at line {}\n", func_name, line));
         }
     };
+    
+    // DRAW_VECTOR: Draw vector asset by name
+    // Usage: DRAW_VECTOR("player") -> loads vector data and renders it
+    if up == "DRAW_VECTOR" && args.len() == 1 {
+        if let Expr::StringLit(asset_name) = &args[0] {
+            // Check if asset exists in opts.assets
+            let asset_exists = opts.assets.iter().any(|a| {
+                a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Vector)
+            });
+            
+            if asset_exists {
+                // Generate unique labels for this DRAW_VECTOR call
+                static mut DRAW_VECTOR_COUNTER: usize = 0;
+                let counter = unsafe { 
+                    DRAW_VECTOR_COUNTER += 1; 
+                    DRAW_VECTOR_COUNTER 
+                };
+                
+                let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                let loop_label = format!("DSL_LOOP_{}", counter);
+                let skip_label = format!("DSL_SKIP_{}", counter);
+                let done_label = format!("DSL_DONE_{}", counter);
+                
+                out.push_str(&format!("; DRAW_VECTOR(\"{}\") - Using BIOS Draw_VLc directly\n", asset_name));
+                out.push_str("    JSR Reset0Ref       ; Reset integrator to center\n");
+                out.push_str("    LDA #$7F\n");
+                out.push_str("    STA VIA_t1_cnt_lo   ; Set scale factor\n");
+                
+                // Use Draw_VLc format: intensity in A, position in D, count in B, deltas follow
+                out.push_str(&format!("    LDX #{}_VECTORS  ; X = vector data pointer\n", symbol));
+                out.push_str("    LDA ,X+             ; A = intensity\n");
+                out.push_str("    JSR Intensity_a     ; Set intensity\n");
+                out.push_str("    LDD ,X++            ; D = y,x start position\n");
+                out.push_str("    JSR Moveto_d_7F     ; Move to start\n");
+                out.push_str("    LDB ,X+             ; B = line count\n");
+                out.push_str("    JSR Draw_VLc        ; Draw lines (X points to deltas)\n");
+                
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            } else {
+                // Generate helpful compile-time error with list of available assets
+                let available: Vec<&str> = opts.assets.iter()
+                    .filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Vector))
+                    .map(|a| a.name.as_str())
+                    .collect();
+                
+                out.push_str(&format!("; ╔════════════════════════════════════════════════════════════╗\n"));
+                out.push_str(&format!("; ║  ❌ COMPILATION ERROR: Vector asset not found             ║\n"));
+                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
+                out.push_str(&format!("; ║  DRAW_VECTOR(\"{}\") - asset does not exist{:>width$}║\n", 
+                    asset_name, "", width = 61 - asset_name.len() - 32));
+                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
+                if available.is_empty() {
+                    out.push_str(&format!("; ║  No .vec files found in assets/vectors/                   ║\n"));
+                    out.push_str(&format!("; ║  Please create vector assets in that directory.           ║\n"));
+                } else {
+                    out.push_str(&format!("; ║  Available vector assets ({} found):                     ║\n", available.len()));
+                    for (i, name) in available.iter().enumerate() {
+                        out.push_str(&format!("; ║    {}. \"{}\"{:>width$}║\n", 
+                            i+1, name, "", width = 56 - name.len()));
+                    }
+                }
+                out.push_str(&format!("; ╚════════════════════════════════════════════════════════════╝\n"));
+                out.push_str("    ERROR_VECTOR_ASSET_NOT_FOUND  ; Assembly will fail here\n");
+                return true;
+            }
+        }
+    }
+    
+    // PLAY_MUSIC: Play music asset by name
+    // Usage: PLAY_MUSIC("theme") -> loads music data and starts playback
+    if up == "PLAY_MUSIC" && args.len() == 1 {
+        if let Expr::StringLit(asset_name) = &args[0] {
+            // Check if asset exists in opts.assets
+            let asset_exists = opts.assets.iter().any(|a| {
+                a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Music)
+            });
+            
+            if asset_exists {
+                let symbol = format!("_{}_MUSIC", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                out.push_str(&format!("; PLAY_MUSIC(\"{}\") - play music asset\n", asset_name));
+                out.push_str(&format!("    LDX #{}\n", symbol));
+                out.push_str("    JSR PLAY_MUSIC_RUNTIME\n");
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            } else {
+                out.push_str(&format!("; ERROR: Music asset '{}' not found\n", asset_name));
+                return true;
+            }
+        }
+    }
+    
+    if up == "MUSIC_UPDATE" && args.is_empty() {
+        add_native_call_comment(out, "MUSIC_UPDATE");
+        out.push_str("    JSR MUSIC_UPDATE\n");
+        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
+    
     if up == "VECTREX_DRAW_VECTORLIST" { // alias to compact list runtime
         if args.len()==1 {
             if let Expr::StringLit(s) = &args[0] {
@@ -1067,27 +1671,191 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         }
     }
     
-    // DRAW_LINE optimization: when all args are numeric constants, generate inline code
+    // ASM: Inline assembly - emit raw string directly
+    if up == "ASM" && args.len() == 1 {
+        if let Expr::StringLit(asm_code) = &args[0] {
+            out.push_str(&format!("    {}\n", asm_code));
+            return true;
+        }
+    }
+    
+    // DRAW_VECTOR_LIST: Malban's complete algorithm for processing vector lists
+    // Usage: DRAW_VECTOR_LIST(list_label, y, x, scale)
+    // Generates the full frame init + vector list iteration code from VIDE
+    if up == "DRAW_VECTOR_LIST" && args.len() == 4 {
+        // Extract list label (string or ident)
+        let list_label = match &args[0] {
+            Expr::StringLit(s) => s.clone(),
+            Expr::Ident(id) => id.name.clone(),
+            _ => {
+                out.push_str("; ERROR: DRAW_VECTOR_LIST requires label as first arg\n");
+                return true;
+            }
+        };
+        
+        // Evaluate other arguments to RESULT/vars (single bytes)
+        // y position
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDA RESULT+1\n    STA VL_Y\n");
+        
+        // x position  
+        emit_expr(&args[2], out, fctx, string_map, opts);
+        out.push_str("    LDA RESULT+1\n    STA VL_X\n");
+        
+        // scale
+        emit_expr(&args[3], out, fctx, string_map, opts);
+        out.push_str("    LDA RESULT+1\n    STA VL_SCALE\n");
+        
+        // Generate Malban algorithm inline (replicate VIDE output)
+        let list_sym = format!("_{}", list_label.to_uppercase());
+        out.push_str(&format!("; DRAW_VECTOR_LIST({}, y, x, scale) - Malban algorithm\n", list_label));
+        out.push_str(&format!("    LDX #{}\n", list_sym));
+        out.push_str("    STX VL_PTR\n");
+        
+        // DO-WHILE loop label
+        out.push_str("VL_LOOP_START:\n");
+        
+        // Frame initialization sequence (Malban lines 13-43 from VIDE ASM)
+        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (blank beam)\n");
+        out.push_str("    LDA #$CC\n");
+        out.push_str("    STA $D00B           ; VIA_cntl = 0xCC (zero integrators)\n");
+        out.push_str("    CLR $D000           ; VIA_port_a = 0 (reset offset)\n");
+        out.push_str("    LDA #$82\n");
+        out.push_str("    STA $D002           ; VIA_port_b = 0x82\n");
+        out.push_str("    LDA VL_SCALE\n");
+        out.push_str("    STA $D004           ; VIA_t1_cnt_lo = scale\n");
+        
+        // Delay loop (5 iterations for beam settling)
+        out.push_str("    LDB #5              ; ZERO_DELAY\n");
+        out.push_str("VL_DELAY:\n");
+        out.push_str("    DECB\n");
+        out.push_str("    BNE VL_DELAY\n");
+        
+        out.push_str("    LDA #$83\n");
+        out.push_str("    STA $D002           ; VIA_port_b = 0x83\n");
+        
+        // Move to initial position (y, x)
+        out.push_str("    LDA VL_Y\n");
+        out.push_str("    STA $D000           ; VIA_port_a = y\n");
+        out.push_str("    LDA #$CE\n");
+        out.push_str("    STA $D00B           ; VIA_cntl = 0xCE (integrator mode)\n");
+        out.push_str("    CLR $D002           ; VIA_port_b = 0 (mux enable)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $D002           ; VIA_port_b = 1 (mux disable)\n");
+        out.push_str("    LDA VL_X\n");
+        out.push_str("    STA $D000           ; VIA_port_a = x\n");
+        out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0 (start timer)\n");
+        
+        // Set scale for vector drawing
+        out.push_str("    LDA VL_SCALE\n");
+        out.push_str("    STA $D004           ; VIA_t1_cnt_lo = scale\n");
+        
+        // Advance pointer past header (u += 3)
+        out.push_str("    LDX VL_PTR\n");
+        out.push_str("    LEAX 3,X\n");
+        out.push_str("    STX VL_PTR\n");
+        
+        // Wait for move to complete
+        out.push_str("VL_WAIT_MOVE:\n");
+        out.push_str("    LDA $D00D           ; VIA_int_flags\n");
+        out.push_str("    ANDA #$40\n");
+        out.push_str("    BEQ VL_WAIT_MOVE\n");
+        
+        // Vector list processing loop (WHILE(1))
+        out.push_str("VL_PROCESS_LOOP:\n");
+        out.push_str("    LDX VL_PTR\n");
+        out.push_str("    LDA ,X              ; Load flag byte (*u)\n");
+        out.push_str("    TSTA\n");
+        out.push_str("    BPL VL_CHECK_MOVE   ; If >= 0, not a draw\n");
+        
+        // DRAW LINE (*u < 0)
+        out.push_str("VL_DRAW:\n");
+        out.push_str("    LDA 1,X             ; dy\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
+        out.push_str("    CLR $D002           ; VIA_port_b = 0\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $D002           ; VIA_port_b = 1\n");
+        out.push_str("    LDA 2,X             ; dx\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dx\n");
+        out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0\n");
+        out.push_str("    LDA #$FF\n");
+        out.push_str("    STA $D05A           ; VIA_shift_reg = 0xFF (beam ON)\n");
+        out.push_str("VL_WAIT_DRAW:\n");
+        out.push_str("    LDA $D00D\n");
+        out.push_str("    ANDA #$40\n");
+        out.push_str("    BEQ VL_WAIT_DRAW\n");
+        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (beam OFF)\n");
+        out.push_str("    BRA VL_CONTINUE\n");
+        
+        // MOVE TO (*u == 0)
+        out.push_str("VL_CHECK_MOVE:\n");
+        out.push_str("    TSTA\n");
+        out.push_str("    BNE VL_CHECK_END    ; If != 0, check for end\n");
+        out.push_str("    ; MoveTo logic (similar to draw but no beam)\n");
+        out.push_str("    LDA 1,X             ; dy\n");
+        out.push_str("    BEQ VL_CHECK_DX\n");
+        out.push_str("VL_DO_MOVE:\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
+        out.push_str("    LDA #$CE\n");
+        out.push_str("    STA $D00B           ; VIA_cntl = 0xCE\n");
+        out.push_str("    CLR $D002\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $D002\n");
+        out.push_str("    LDA 2,X             ; dx\n");
+        out.push_str("    STA $D000\n");
+        out.push_str("    CLR $D005\n");
+        out.push_str("VL_WAIT_MOVE2:\n");
+        out.push_str("    LDA $D00D\n");
+        out.push_str("    ANDA #$40\n");
+        out.push_str("    BEQ VL_WAIT_MOVE2\n");
+        out.push_str("    BRA VL_CONTINUE\n");
+        out.push_str("VL_CHECK_DX:\n");
+        out.push_str("    LDA 2,X\n");
+        out.push_str("    BNE VL_DO_MOVE\n");
+        out.push_str("    BRA VL_CONTINUE\n");
+        
+        // Check for end marker (2)
+        out.push_str("VL_CHECK_END:\n");
+        out.push_str("    CMPA #2\n");
+        out.push_str("    BEQ VL_DONE         ; Exit if *u == 2\n");
+        
+        // Continue to next entry (u += 3)
+        out.push_str("VL_CONTINUE:\n");
+        out.push_str("    LDX VL_PTR\n");
+        out.push_str("    LEAX 3,X\n");
+        out.push_str("    STX VL_PTR\n");
+        out.push_str("    BRA VL_PROCESS_LOOP\n");
+        
+        out.push_str("VL_DONE:\n");
+        out.push_str("    ; DO-WHILE check: if more lists, loop to VL_LOOP_START\n");
+        out.push_str("    ; For single list, we're done\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        
+        return true;
+    }
+    
+    // DRAW_LINE optimization: when all args are numeric constants, generate inline BIOS calls
+    // NO hace Moveto - el usuario debe posicionarse antes con MOVETO si es necesario
     if up == "DRAW_LINE" && args.len() == 5 && args.iter().all(|a| matches!(a, Expr::Number(_))) {
         if let (Expr::Number(x0), Expr::Number(y0), Expr::Number(x1), Expr::Number(y1), Expr::Number(intensity)) 
             = (&args[0], &args[1], &args[2], &args[3], &args[4]) {
-            // Calculate deltas with proper signed handling
-            let dx_total = *x1 - *x0;
-            let dy_total = *y1 - *y0;
+            // Calculate deltas from absolute coordinates
+            let dx = (*x1 - *x0) as i8;
+            let dy = (*y1 - *y0) as i8;
             
-            // Use raw deltas (no clamping - let BIOS handle overflow)
-            let dx = dx_total;
-            let dy = dy_total;
-            
-            // Generate optimized inline assembly - check for consecutive same-intensity draws
-            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Moveto_d\n", *y0 as i8, *x0 as i8));
-            if *intensity != 0x5F { 
-                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity & 0xFF)); 
-            } else {
+            // Set DP and intensity
+            out.push_str("    LDA #$D0\n    TFR A,DP\n");
+            if *intensity == 0x5F {
                 out.push_str("    JSR Intensity_5F\n");
+            } else {
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity as u8));
             }
+            // Clear Vec_Misc_Count for proper timing
             out.push_str("    CLR Vec_Misc_Count\n");
-            out.push_str(&format!("    LDA #{}\n    LDB #{}\n    JSR Draw_Line_d\n", dy as i8, dx as i8));
+            // Draw line using RELATIVE deltas (A=dy, B=dx)
+            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                dy as u8, dx as u8));
+            out.push_str("    LDD #0\n    STD RESULT\n");
             return true;
         }
     }

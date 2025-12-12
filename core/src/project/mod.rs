@@ -6,4 +6,6 @@ mod schema;
 mod loader;
 
 pub use schema::*;
+// Re-export loader functions (currently unused, will be used by IDE)
+#[allow(unused_imports)]
 pub use loader::*;

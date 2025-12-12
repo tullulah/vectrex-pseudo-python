@@ -32,6 +32,7 @@ def loop():
         blink_intensity: false,
         exclude_ram_org: false,
         fast_wait: false, source_path: None,
+        assets: vec![],
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
     // The main loop is generated with label "MAIN:" when auto_loop is enabled

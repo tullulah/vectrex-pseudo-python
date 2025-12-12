@@ -19,7 +19,7 @@ export class GitHubModelsProvider extends BaseAiProvider {
     }
 
     try {
-      const systemPrompt = this.buildSystemPrompt();
+      const systemPrompt = this.buildSystemPrompt(request.concise ?? false);
       const userPrompt = this.buildUserPrompt(request);
 
       // GitHub Models API endpoint correcto

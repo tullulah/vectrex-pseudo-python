@@ -30,16 +30,16 @@ fn builtin_arities_stable() {
         let ok_args: Vec<Expr> = (0..c.ok_arity).map(|i| Expr::Number(i as i32)).collect();
         let ok_module = Module { items: vec![Item::Function(Function { name: "main".into(), line: 0, params: vec![], body: vec![
             Stmt::Expr(Expr::Call(CallInfo { name: c.name.into(), source_line: 0, col: 0, args: ok_args }), 0)
-        ]})], meta: ModuleMeta::default() };
-        let (_asm, diags) = emit_asm_with_diagnostics(&ok_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        ]})], imports: vec![], meta: ModuleMeta::default() };
+        let (_asm, diags) = emit_asm_with_diagnostics(&ok_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
         assert!(diags.iter().all(|d| d.code != DiagnosticCode::ArityMismatch), "{} deberia aceptar {} args: {:?}", c.name, c.ok_arity, diags);
 
         // Construir función main con llamada de aridad incorrecta
         let bad_args: Vec<Expr> = (0..c.bad_arity).map(|i| Expr::Number(i as i32)).collect();
         let bad_module = Module { items: vec![Item::Function(Function { name: "main".into(), line: 0, params: vec![], body: vec![
             Stmt::Expr(Expr::Call(CallInfo { name: c.name.into(), source_line: 0, col: 0, args: bad_args }), 0)
-        ]})], meta: ModuleMeta::default() };
-        let (_asm_bad, diags_bad) = emit_asm_with_diagnostics(&bad_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None });
+        ]})], imports: vec![], meta: ModuleMeta::default() };
+        let (_asm_bad, diags_bad) = emit_asm_with_diagnostics(&bad_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
         assert!(diags_bad.iter().any(|d| d.code == DiagnosticCode::ArityMismatch), "{} deberia rechazar {} args (tabla espera {}): {:?}", c.name, c.bad_arity, c.ok_arity, diags_bad);
     }
 }

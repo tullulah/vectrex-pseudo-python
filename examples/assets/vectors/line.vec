@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "name": "line",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "segment",
+      "intensity": 127,
+      "closed": false,
+      "points": [
+        {"x": 0, "y": 0},
+        {"x": 10, "y": 10}
+      ]
+    }]
+  }]
+}

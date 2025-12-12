@@ -19,7 +19,7 @@ export class AnthropicProvider extends BaseAiProvider {
     }
 
     try {
-      const systemPrompt = this.buildSystemPrompt();
+      const systemPrompt = this.buildSystemPrompt(request.concise ?? false);
       const userPrompt = this.buildUserPrompt(request);
 
       // Get MCP tools if available

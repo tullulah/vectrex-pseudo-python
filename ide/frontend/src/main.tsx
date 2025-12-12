@@ -37,6 +37,22 @@ function App() {
 
   const initializedRef = useRef(false);
 
+  // Listen for commands from Electron main process
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.onCommand) return;
+    
+    const handler = (id: string, _payload?: any) => {
+      if (id === 'app.hardRefreshBlocked') {
+        logger.error('App', '🚨 Hard refresh blocked! This would clear ALL settings and API keys.');
+        logger.info('App', '💡 To reload the IDE, close and reopen the window instead.');
+        alert('⚠️ Hard Refresh Blocked!\n\nCmd+Shift+R would delete all your settings, API keys, and chat history.\n\nTo reload the IDE properly, close and reopen the window instead.');
+      }
+    };
+    
+    electronAPI.onCommand(handler);
+  }, []);
+
   // Optional auto-open demo disabled: show Welcome when no docs. Uncomment block below if you want the sample on fresh start.
   /*useEffect(() => {
     if (documents.length === 0 && process.env.VPY_AUTO_DEMO === '1') {
@@ -319,11 +335,13 @@ function App() {
       }
 
       // Si el documento está sucio, enviarlo para que se guarde antes de compilar
+      // Solo aplica cuando el documento está realmente abierto (no buildFromProject sin abrir)
       if (activeDoc.dirty && !buildFromProject) {
         args.saveIfDirty = {
           content: activeDoc.content,
           expectedMTime: activeDoc.mtime
         };
+        logger.debug('Build', 'Document is dirty - will save before compiling');
       }
 
       // Ejecutar compilación

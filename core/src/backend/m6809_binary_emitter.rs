@@ -112,6 +112,13 @@ impl BinaryEmitter {
         self.emit_word(0x0000); // Placeholder
     }
 
+    /// LDA indexed (opcode 0xA6) - modos indexados con postbyte
+    pub fn lda_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xA6);
+        self.emit(postbyte);
+    }
+
     /// LDB #immediate (opcode 0xC6)
     pub fn ldb_immediate(&mut self, value: u8) {
         self.record_line_mapping();
@@ -131,6 +138,13 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0xF6);
         self.emit_word(addr);
+    }
+
+    /// LDB indexed (opcode 0xE6 + postbyte)
+    pub fn ldb_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xE6);
+        self.emit(postbyte);
     }
 
     /// LDD #immediate (opcode 0xCC)
@@ -168,6 +182,13 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
+    /// STA indexed (opcode 0xA7) - modos indexados con postbyte
+    pub fn sta_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xA7);
+        self.emit(postbyte);
+    }
+
     /// STB direct (opcode 0xD7)
     pub fn stb_direct(&mut self, addr: u8) {
         self.record_line_mapping();
@@ -182,11 +203,25 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
+    /// STB indexed (opcode 0xE7) - modos indexados con postbyte
+    pub fn stb_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xE7);
+        self.emit(postbyte);
+    }
+
     /// STD extended (opcode 0xFD)
     pub fn std_extended(&mut self, addr: u16) {
         self.record_line_mapping();
         self.emit(0xFD);
         self.emit_word(addr);
+    }
+
+    /// STD indexed (opcode 0xED) - Store D register with indexed addressing
+    pub fn std_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xED);
+        self.emit(postbyte);
     }
 
     // ========== INSTRUCCIONES DE CONTROL DE FLUJO ==========
@@ -210,6 +245,27 @@ impl BinaryEmitter {
     pub fn rts(&mut self) {
         self.record_line_mapping();
         self.emit(0x39);
+    }
+
+    /// BSR - Branch to Subroutine (opcode 0x8D + offset relativo de 8 bits)
+    pub fn bsr_offset(&mut self, offset: i8) {
+        self.record_line_mapping();
+        self.emit(0x8D);
+        self.emit(offset as u8);
+    }
+
+    /// BSR con etiqueta (resolver después)
+    pub fn bsr_label(&mut self, label: &str) {
+        self.record_line_mapping();
+        self.emit(0x8D);
+        self.add_symbol_ref(label, true, 1);
+        self.emit(0x00); // Placeholder
+    }
+
+    /// NOP - No Operation (opcode 0x12)
+    pub fn nop(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x12);
     }
 
     /// BRA - branch siempre (opcode 0x20)
@@ -322,6 +378,13 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
+    /// SUBD indexed (opcode 0xA3) - 16-bit subtract from D register with indexed addressing
+    pub fn subd_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xA3);
+        self.emit(postbyte);
+    }
+
     /// SUBA #immediate (opcode 0x80)
     pub fn suba_immediate(&mut self, value: u8) {
         self.record_line_mapping();
@@ -381,6 +444,13 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0x7F);
         self.emit_word(addr);
+    }
+    
+    /// CLR indexed (opcode 0x6F) - Clear memory location (indexed mode)
+    pub fn clr_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x6F);
+        self.emit(postbyte);
     }
 
     /// INCA (opcode 0x4C)
@@ -461,6 +531,33 @@ impl BinaryEmitter {
         self.emit(0x3A);
     }
 
+    /// TSTA (opcode 0x4D) - Test A (actualiza flags sin modificar A)
+    pub fn tsta(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x4D);
+    }
+
+    /// TSTB (opcode 0x5D) - Test B (actualiza flags sin modificar B)
+    pub fn tstb(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x5D);
+    }
+
+    /// TST extended (opcode 0x7D) - Test memory location
+    pub fn tst_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0x7D);
+        self.emit_word(addr);
+    }
+
+    /// TST extended con símbolo
+    pub fn tst_extended_sym(&mut self, symbol: &str) {
+        self.record_line_mapping();
+        self.emit(0x7D);
+        self.add_symbol_ref(symbol, false, 2);
+        self.emit_word(0x0000); // Placeholder
+    }
+
     // ========== INSTRUCCIONES DE TRANSFERENCIA/COMPARACIÓN ==========
 
     /// TFR (opcode 0x1F) - requiere postbyte con src/dst
@@ -498,6 +595,37 @@ impl BinaryEmitter {
         self.emit(0x10);
         self.emit(0xB3);
         self.emit_word(addr);
+    }
+
+    /// CMPX #immediate (opcode 0x8C) - Compare X register with 16-bit value
+    pub fn cmpx_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x8C);
+        self.emit_word(value);
+    }
+
+    /// CMPY #immediate (opcode 0x108C) - Compare Y register with 16-bit value
+    pub fn cmpy_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0x8C);
+        self.emit_word(value);
+    }
+
+    /// CMPU #immediate (opcode 0x1183) - Compare U register with 16-bit value
+    pub fn cmpu_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x11);
+        self.emit(0x83);
+        self.emit_word(value);
+    }
+
+    /// CMPS #immediate (opcode 0x118C) - Compare S register with 16-bit value
+    pub fn cmps_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x11);
+        self.emit(0x8C);
+        self.emit_word(value);
     }
 
     // ========== INSTRUCCIONES 16-BIT ADICIONALES ==========
@@ -547,6 +675,13 @@ impl BinaryEmitter {
         self.emit_word(0x0000);
     }
 
+    /// LDX indexed (opcode 0xAE + postbyte)
+    pub fn ldx_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xAE);
+        self.emit(postbyte);
+    }
+
     /// LDY #immediate (opcode 0x108E)
     pub fn ldy_immediate(&mut self, value: u16) {
         self.record_line_mapping();
@@ -555,12 +690,29 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
+    /// LDY #immediate with symbol reference
+    pub fn ldy_immediate_sym(&mut self, symbol: &str) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0x8E);
+        self.add_symbol_ref(symbol, false, 2);
+        self.emit_word(0x0000);
+    }
+
     /// LDY extended (opcode 0x10BE)
     pub fn ldy_extended(&mut self, addr: u16) {
         self.record_line_mapping();
         self.emit(0x10);
         self.emit(0xBE);
         self.emit_word(addr);
+    }
+
+    /// LDY indexed (opcode 0x10AE + postbyte)
+    pub fn ldy_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xAE);
+        self.emit(postbyte);
     }
 
     /// STX extended (opcode 0xBF)
@@ -598,6 +750,13 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0xCE);
         self.emit_word(value);
+    }
+
+    /// LDU indexed (opcode 0xEE)
+    pub fn ldu_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xEE);
+        self.emit(postbyte);
     }
 
     /// LDU extended (opcode 0xFE)
@@ -748,6 +907,7 @@ impl BinaryEmitter {
     }
 
     /// Versión legacy que solo usa symbols internos (deprecated)
+    #[allow(dead_code)]
     pub fn resolve_symbols(&mut self) -> Result<(), String> {
         use std::collections::HashMap;
         let empty_equates = HashMap::new();
@@ -767,11 +927,13 @@ impl BinaryEmitter {
     }
 
     /// Obtiene el mapeo offset -> línea
+    #[allow(dead_code)]
     pub fn get_offset_to_line_map(&self) -> &HashMap<usize, usize> {
         &self.offset_to_line
     }
 
     /// Obtiene la dirección base (ORG)
+    #[allow(dead_code)]
     pub fn get_org(&self) -> u16 {
         self.current_address - self.code.len() as u16
     }

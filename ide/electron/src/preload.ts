@@ -109,4 +109,15 @@ contextBridge.exposeInMainWorld('aiProxy', {
   }>,
 });
 
+// Persistent Storage API (replaces localStorage)
+contextBridge.exposeInMainWorld('storage', {
+  get: (key: string) => ipcRenderer.invoke('storage:get', key),
+  set: (key: string, value: any) => ipcRenderer.invoke('storage:set', key, value),
+  delete: (key: string) => ipcRenderer.invoke('storage:delete', key),
+  keys: () => ipcRenderer.invoke('storage:keys') as Promise<string[]>,
+  clear: () => ipcRenderer.invoke('storage:clear') as Promise<boolean>,
+  getPath: () => ipcRenderer.invoke('storage:path') as Promise<string>,
+  getKeys: () => ipcRenderer.invoke('storage:getKeys') as Promise<Record<string, string>>,
+});
+
 export {};

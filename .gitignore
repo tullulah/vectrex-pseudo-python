@@ -46,4 +46,11 @@ dist/
 # Vectrexy reference implementation (backup only, not for version control)
 vectrexy/
 
+# VIDE project files (external tool, not part of VPy)
+examples/vide project/
+
 # C++ parity host (vectrexy) versionado: marker2
+
+# VIDE (Vectrex IDE) - binary distribution
+examples/vide/
+vide/

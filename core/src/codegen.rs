@@ -42,8 +42,16 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("DRAW_LINE", 5),
     ("SET_ORIGIN", 0),
     ("SET_INTENSITY", 1),
-            ("DEBUG_PRINT", 1),
-        ("DEBUG_PRINT_LABELED", 2),  // label, value     // Nueva función para debug output
+    ("DEBUG_PRINT", 1),
+    ("DEBUG_PRINT_LABELED", 2),  // label, value
+    
+    // Asset functions (new)
+    ("DRAW_VECTOR", 1),     // Draw vector asset by name
+    ("PLAY_MUSIC", 1),      // Play music asset by name
+    ("MUSIC_UPDATE", 0),    // Process music events per frame
+    
+    // Malban algorithm (vector list processing)
+    ("DRAW_VECTOR_LIST", 4), // Draw vector list: (list_ptr, y, x, scale)
     
     // Funciones específicas de vectorlist
     ("DRAW_VL", 2),
@@ -52,6 +60,9 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("WAIT_RECAL", 0),
     ("PLAY_MUSIC1", 0),
     ("DBG_STATIC_VL", 0),
+    
+    // Inline assembly
+    ("ASM", 1),             // Inline assembly string
     
     // Compatibilidad hacia atrás (deprecated)
     ("MOVE_TO", 2),         // deprecated: use MOVE
@@ -72,6 +83,21 @@ mod backends_ref {
     pub use crate::backend::m6809::emit_with_debug as emit_6809_with_debug;
 }
 
+// Asset information for compilation
+#[derive(Clone, Debug)]
+pub struct AssetInfo {
+    pub name: String,      // Asset name without extension (e.g., "player", "theme")
+    pub path: String,      // Full path to asset file
+    pub asset_type: AssetType,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssetType {
+    Vector,  // .vec file
+    Music,   // .vmus file
+}
+
 // CodegenOptions: options affecting generation (title, etc.).
 #[derive(Clone)]
 pub struct CodegenOptions {
@@ -87,6 +113,7 @@ pub struct CodegenOptions {
     pub exclude_ram_org: bool,       // emit RAM variables as EQU instead of ORG-ing into RAM (keeps ROM size small)
     pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
+    pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -222,18 +249,61 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
             Item::Export(_) => {}, // Export declarations don't define globals
         }
     }
+    
+    // Recolectar todas las variables locales de cada función para detección de cross-function usage
+    let mut function_locals: HashMap<String, HashSet<String>> = HashMap::new();
+    for it in &module.items {
+        if let Item::Function(func) = it {
+            let mut locals = HashSet::new();
+            collect_function_locals(&func.body, &mut locals);
+            function_locals.insert(func.name.clone(), locals);
+        }
+    }
+    
     // Validar cada función independientemente.
     for it in &module.items {
         if let Item::Function(func) = it {
             TL_ACCUM.with(|acc| acc.borrow_mut().clear());
-            validate_function(func, &globals, diagnostics);
+            validate_function(func, &globals, &function_locals, diagnostics);
             // Mover errores recolectados (uso/assign/arity) del thread-local
             TL_ACCUM.with(|acc| diagnostics.extend(acc.borrow().iter().cloned()));
         }
     }
 }
 
-fn validate_function(f: &Function, globals: &HashSet<String>, diagnostics: &mut Vec<Diagnostic>) {
+// Helper para recolectar todas las variables locales declaradas en una función
+fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Let { name, .. } => { locals.insert(name.clone()); }
+            Stmt::For { var, body, .. } => {
+                locals.insert(var.clone());
+                collect_function_locals(body, locals);
+            }
+            Stmt::While { body, .. } => collect_function_locals(body, locals),
+            Stmt::If { body, elifs, else_body, .. } => {
+                collect_function_locals(body, locals);
+                for (_, elif_body) in elifs {
+                    collect_function_locals(elif_body, locals);
+                }
+                if let Some(else_body) = else_body {
+                    collect_function_locals(else_body, locals);
+                }
+            }
+            Stmt::Switch { cases, default, .. } => {
+                for (_, case_body) in cases {
+                    collect_function_locals(case_body, locals);
+                }
+                if let Some(default_body) = default {
+                    collect_function_locals(default_body, locals);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn validate_function(f: &Function, globals: &HashSet<String>, function_locals: &HashMap<String, HashSet<String>>, diagnostics: &mut Vec<Diagnostic>) {
     // ámbito inicial: globals + params
     let mut scope: Vec<HashSet<String>> = Vec::new();
     scope.push(globals.clone());
@@ -242,7 +312,7 @@ fn validate_function(f: &Function, globals: &HashSet<String>, diagnostics: &mut 
     scope.push(param_set);
     // tracking de lecturas para warning de variables no usadas
     let mut reads: HashSet<String> = HashSet::new();
-    for stmt in &f.body { validate_stmt_collect(stmt, &mut scope, &mut reads); }
+    for stmt in &f.body { validate_stmt_collect(stmt, &mut scope, &mut reads, &f.name, function_locals); }
     // Advertencias (stderr) para variables declaradas pero no leídas (excluye params por ahora)
     let mut declared: HashSet<String> = HashSet::new();
     for frame in &scope { for v in frame { declared.insert(v.clone()); } }
@@ -264,16 +334,27 @@ fn is_declared(name: &str, scope: &Vec<HashSet<String>>) -> bool {
 }
 
 #[allow(dead_code)]
-fn validate_stmt(stmt: &Stmt, scope: &mut Vec<HashSet<String>>) { validate_stmt_collect(stmt, scope, &mut HashSet::new()); }
+fn validate_stmt(stmt: &Stmt, scope: &mut Vec<HashSet<String>>) { 
+    validate_stmt_collect(stmt, scope, &mut HashSet::new(), "unknown", &HashMap::new()); 
+}
 
-fn validate_stmt_collect(stmt: &Stmt, scope: &mut Vec<HashSet<String>>, reads: &mut HashSet<String>) {
+fn validate_stmt_collect(
+    stmt: &Stmt, 
+    scope: &mut Vec<HashSet<String>>, 
+    reads: &mut HashSet<String>,
+    current_func: &str,
+    function_locals: &HashMap<String, HashSet<String>>
+) {
     match stmt {
-        Stmt::Let { name, value, .. } => { validate_expr_collect(value, scope, reads); declare(name, scope); }
+        Stmt::Let { name, value, .. } => { 
+            validate_expr_collect(value, scope, reads, current_func, function_locals); 
+            declare(name, scope); 
+        }
         Stmt::Assign { target, value, .. } => {
             if !is_declared(&target.name, scope) {
                 TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
             }
-            validate_expr_collect(value, scope, reads);
+            validate_expr_collect(value, scope, reads, current_func, function_locals);
         }
         Stmt::CompoundAssign { target, value, .. } => {
             // Similar a Assign, pero también leemos la variable del lado izquierdo
@@ -281,47 +362,112 @@ fn validate_stmt_collect(stmt: &Stmt, scope: &mut Vec<HashSet<String>>, reads: &
                 TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
             }
             reads.insert(target.name.clone()); // Leemos la variable para x += expr
-            validate_expr_collect(value, scope, reads);
+            validate_expr_collect(value, scope, reads, current_func, function_locals);
         }
         Stmt::For { var, start, end, step, body, .. } => {
-            validate_expr_collect(start, scope, reads); validate_expr_collect(end, scope, reads); if let Some(se) = step { validate_expr_collect(se, scope, reads); }
+            validate_expr_collect(start, scope, reads, current_func, function_locals); 
+            validate_expr_collect(end, scope, reads, current_func, function_locals); 
+            if let Some(se) = step { 
+                validate_expr_collect(se, scope, reads, current_func, function_locals); 
+            }
             push_scope(scope); // cuerpo loop con var declarada
             declare(var, scope);
-            for s in body { validate_stmt_collect(s, scope, reads); }
+            for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals); }
             pop_scope(scope);
         }
         Stmt::While { cond, body, .. } => {
-            validate_expr_collect(cond, scope, reads);
+            validate_expr_collect(cond, scope, reads, current_func, function_locals);
             push_scope(scope);
-            for s in body { validate_stmt_collect(s, scope, reads); }
+            for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals); }
             pop_scope(scope);
         }
         Stmt::If { cond, body, elifs, else_body, .. } => {
-            validate_expr_collect(cond, scope, reads);
-            push_scope(scope); for s in body { validate_stmt_collect(s, scope, reads); } pop_scope(scope);
-            for (ec, eb) in elifs { validate_expr_collect(ec, scope, reads); push_scope(scope); for s in eb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
-            if let Some(eb) = else_body { push_scope(scope); for s in eb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
+            validate_expr_collect(cond, scope, reads, current_func, function_locals);
+            push_scope(scope); 
+            for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals); } 
+            pop_scope(scope);
+            for (ec, eb) in elifs { 
+                validate_expr_collect(ec, scope, reads, current_func, function_locals); 
+                push_scope(scope); 
+                for s in eb { validate_stmt_collect(s, scope, reads, current_func, function_locals); } 
+                pop_scope(scope); 
+            }
+            if let Some(eb) = else_body { 
+                push_scope(scope); 
+                for s in eb { validate_stmt_collect(s, scope, reads, current_func, function_locals); } 
+                pop_scope(scope); 
+            }
         }
         Stmt::Switch { expr, cases, default, .. } => {
-            validate_expr_collect(expr, scope, reads);
-            for (ce, cb) in cases { validate_expr_collect(ce, scope, reads); push_scope(scope); for s in cb { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
-            if let Some(db) = default { push_scope(scope); for s in db { validate_stmt_collect(s, scope, reads); } pop_scope(scope); }
+            validate_expr_collect(expr, scope, reads, current_func, function_locals);
+            for (ce, cb) in cases { 
+                validate_expr_collect(ce, scope, reads, current_func, function_locals); 
+                push_scope(scope); 
+                for s in cb { validate_stmt_collect(s, scope, reads, current_func, function_locals); } 
+                pop_scope(scope); 
+            }
+            if let Some(db) = default { 
+                push_scope(scope); 
+                for s in db { validate_stmt_collect(s, scope, reads, current_func, function_locals); } 
+                pop_scope(scope); 
+            }
         }
-        Stmt::Expr(e, _) => validate_expr_collect(e, scope, reads),
-        Stmt::Return(o, _) => { if let Some(e) = o { validate_expr_collect(e, scope, reads); } }
+        Stmt::Expr(e, _) => validate_expr_collect(e, scope, reads, current_func, function_locals),
+        Stmt::Return(o, _) => { 
+            if let Some(e) = o { 
+                validate_expr_collect(e, scope, reads, current_func, function_locals); 
+            } 
+        }
         Stmt::Break { .. } | Stmt::Continue { .. } => {}
     }
 }
 
 #[allow(dead_code)]
-fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) { let mut dummy=HashSet::new(); validate_expr_collect(e, scope, &mut dummy); }
+fn validate_expr(e: &Expr, scope: &mut Vec<HashSet<String>>) { 
+    let mut dummy=HashSet::new(); 
+    validate_expr_collect(e, scope, &mut dummy, "unknown", &HashMap::new()); 
+}
 
-fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut HashSet<String>) {
+fn validate_expr_collect(
+    e: &Expr, 
+    scope: &mut Vec<HashSet<String>>, 
+    reads: &mut HashSet<String>,
+    current_func: &str,
+    function_locals: &HashMap<String, HashSet<String>>
+) {
     match e {
         Expr::Ident(info) => {
             if !is_declared(&info.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredVar, message: format!("SemanticsError: uso de variable no declarada '{}'.", info.name), line: Some(info.source_line), col: Some(info.col) }));
-            } else { reads.insert(info.name.clone()); }
+                // Variable no está en scope actual, verificar si está en otra función
+                let mut found_in_other_func = None;
+                for (func_name, locals) in function_locals.iter() {
+                    if func_name != current_func && locals.contains(&info.name) {
+                        found_in_other_func = Some(func_name.clone());
+                        break;
+                    }
+                }
+                
+                let error_msg = if let Some(other_func) = found_in_other_func {
+                    format!(
+                        "SemanticsError: variable '{}' declarada en función '{}' no es accesible en '{}'. \
+                        Las funciones en VPy tienen scopes separados (no comparten variables). \
+                        Solución: declara '{}' dentro de '{}' donde la necesitas.",
+                        info.name, other_func, current_func, info.name, current_func
+                    )
+                } else {
+                    format!("SemanticsError: uso de variable no declarada '{}'.", info.name)
+                };
+                
+                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { 
+                    severity: DiagnosticSeverity::Error, 
+                    code: DiagnosticCode::UndeclaredVar, 
+                    message: error_msg, 
+                    line: Some(info.source_line), 
+                    col: Some(info.col) 
+                }));
+            } else { 
+                reads.insert(info.name.clone()); 
+            }
         }
         Expr::Call(ci) => {
             if let Some(exp) = expected_builtin_arity(&ci.name) {
@@ -329,12 +475,13 @@ fn validate_expr_collect(e: &Expr, scope: &mut Vec<HashSet<String>>, reads: &mut
                     TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::ArityMismatch, message: format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", ci.name, ci.args.len(), exp), line: Some(ci.source_line), col: Some(ci.col) }));
                 }
             }
-            for a in &ci.args { validate_expr_collect(a, scope, reads); }
+            for a in &ci.args { validate_expr_collect(a, scope, reads, current_func, function_locals); }
         }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-            validate_expr_collect(left, scope, reads); validate_expr_collect(right, scope, reads);
+            validate_expr_collect(left, scope, reads, current_func, function_locals); 
+            validate_expr_collect(right, scope, reads, current_func, function_locals);
         }
-        Expr::Not(inner) | Expr::BitNot(inner) => validate_expr_collect(inner, scope, reads),
+        Expr::Not(inner) | Expr::BitNot(inner) => validate_expr_collect(inner, scope, reads, current_func, function_locals),
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }

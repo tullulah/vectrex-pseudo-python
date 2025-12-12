@@ -19,7 +19,7 @@ export class GeminiProvider extends BaseAiProvider {
     }
 
     try {
-      const systemPrompt = this.buildSystemPrompt();
+      const systemPrompt = this.buildSystemPrompt(request.concise ?? false);
       const userPrompt = this.buildUserPrompt(request);
 
       // Get first available model if none configured

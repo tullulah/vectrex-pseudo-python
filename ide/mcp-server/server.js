@@ -261,7 +261,7 @@ class StdioTransport {
         },
         {
           name: 'editor_write_document',
-          description: 'Create OR update a document (automatically opens in editor if new). Use this to create any text file. For .vec and .vmus files, prefer project_create_vector/project_create_music which validate JSON format.',
+          description: 'Create OR update a document (automatically opens in editor if new). Use this to create any text file. For .vec and .vmus files, prefer project_create_vector/project_create_music which validate JSON format. CRITICAL VPy RULES: 1) Variables in main() are NOT accessible in loop() - each function has separate scope. Declare variables inside loop() where they are used, NOT in main(). 2) ALWAYS call WAIT_RECAL() at the START of loop() function - this is MANDATORY for proper frame synchronization. 3) Each DRAW_LINE call repositions the beam (creates gaps) - for connected shapes use vector assets (project_create_vector) or coordinate multiple calls carefully. Example: def loop():\n    WAIT_RECAL()  # MANDATORY FIRST\n    # your drawing code',
           inputSchema: {
             type: 'object',
             properties: {
@@ -328,13 +328,11 @@ class StdioTransport {
         },
         {
           name: 'compiler_build',
-          description: 'Compile a VPy program',
+          description: 'Build the current project (equivalent to pressing F7). Compiles the project entry file automatically. No parameters needed.',
           inputSchema: {
             type: 'object',
-            properties: {
-              entryFile: { type: 'string', description: 'Entry VPy file path' }
-            },
-            required: ['entryFile']
+            properties: {},
+            required: []
           }
         },
         {
@@ -457,7 +455,7 @@ class StdioTransport {
         },
         {
           name: 'project_create_vector',
-          description: 'Create .vec vector graphics file (JSON format ONLY). Structure: {"version":"1.0","name":"shape","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"line1","intensity":127,"closed":false,"points":[{"x":0,"y":0},{"x":10,"y":10}]}]}]}. Each path has points array with x,y coordinates. Triangle example: points:[{"x":0,"y":20},{"x":-15,"y":-10},{"x":15,"y":-10}], closed:true. NO text format - JSON only.',
+          description: 'Create .vec vector graphics file for VPy games (JSON format ONLY). Assets are auto-discovered in assets/vectors/ and embedded in ROM at compile time. Use in code: DRAW_VECTOR("name"). Structure: {"version":"1.0","name":"shape","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"line1","intensity":127,"closed":false,"points":[{"x":0,"y":0},{"x":10,"y":10}]}]}]}. Each path has points array with x,y coordinates (-127 to 127). Triangle example: points:[{"x":0,"y":20},{"x":-15,"y":-10},{"x":15,"y":-10}], closed:true. NO text format - JSON only.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -469,7 +467,7 @@ class StdioTransport {
         },
         {
           name: 'project_create_music',
-          description: 'Create .vmus music file (JSON format ONLY). Structure: {"version":"1.0","tempo":120,"notes":[{"pitch":440,"duration":500,"start":0}],"noise":[{"frequency":1000,"duration":100,"start":1000}]}. Each note: pitch (Hz), duration (ms), start (ms). Each noise: frequency, duration, start. Example melody: [{"pitch":523,"duration":250,"start":0},{"pitch":587,"duration":250,"start":250}]. NO text format - JSON only.',
+          description: 'Create .vmus music file for VPy games (JSON format ONLY). Assets are auto-discovered in assets/music/ and embedded in ROM at compile time. Use in code: PLAY_MUSIC("name"). Structure: {"version":"1.0","name":"Song","author":"Composer","tempo":120,"ticksPerBeat":24,"totalTicks":384,"notes":[{"id":"note1","note":60,"start":0,"duration":48,"velocity":12,"channel":0}],"noise":[{"id":"noise1","start":0,"duration":24,"period":15,"channels":1}],"loopStart":0,"loopEnd":384}. note: MIDI number (60=C4), velocity: 0-15 (volume), channel: 0-2 (PSG A/B/C), period: 0-31 (noise pitch). NO text format - JSON only.',
           inputSchema: {
             type: 'object',
             properties: {

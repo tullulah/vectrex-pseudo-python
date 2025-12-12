@@ -32,3 +32,6 @@ path = "src/bin/vpy_lsp.rs"
 [[bin]]
 name = "vectrexc"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3.23.0"

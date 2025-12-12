@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "name": "enemy",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "body",
+      "intensity": 127,
+      "closed": true,
+      "points": [
+        {"x": -10, "y": 10},
+        {"x": 10, "y": 10},
+        {"x": 10, "y": -10},
+        {"x": -10, "y": -10}
+      ]
+    }]
+  }]
+}

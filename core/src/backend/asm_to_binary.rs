@@ -2,7 +2,7 @@
 // Esto reemplaza la dependencia de lwasm con generación nativa
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use crate::backend::m6809_binary_emitter::BinaryEmitter;
 
@@ -82,6 +82,8 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
     
     // Primera pasada: procesar etiquetas, EQU y generar código
     let mut current_line = 1;
+    let mut last_global_label = String::from("_START");  // Track última etiqueta global para locales
+    
     for line in asm_source.lines() {
         let trimmed = line.trim();
         
@@ -111,7 +113,14 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
         
         // Procesar etiquetas (terminan en :)
         if let Some(label) = parse_label(trimmed) {
-            emitter.define_label(label);
+            // Si es etiqueta local (empieza con .), prefijar con última global
+            let full_label = if label.starts_with('.') {
+                format!("{}{}", last_global_label, label)
+            } else {
+                last_global_label = label.to_string();
+                label.to_string()
+            };
+            emitter.define_label(&full_label);
             current_line += 1;
             continue;
         }
@@ -124,7 +133,7 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
         }
         
         // Procesar instrucciones y directivas de datos
-        if let Err(e) = parse_and_emit_instruction(&mut emitter, trimmed, &equates) {
+        if let Err(e) = parse_and_emit_instruction(&mut emitter, trimmed, &equates, &last_global_label) {
             return Err(format!("Error en línea {}: {} (código: '{}')", current_line, e, trimmed));
         }
         
@@ -169,6 +178,7 @@ fn parse_equ_directive_raw(line: &str) -> Option<(String, String)> {
 }
 
 /// Parsea directiva EQU (formato: SYMBOL EQU $C800)
+#[allow(dead_code)]
 fn parse_equ_directive(line: &str) -> Option<(String, u16)> {
     let upper = line.to_uppercase();
     if upper.contains(" EQU ") {
@@ -371,7 +381,7 @@ fn parse_label(line: &str) -> Option<&str> {
 }
 
 /// Parsea y emite una instrucción M6809
-fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: &HashMap<String, u16>, last_global_label: &str) -> Result<(), String> {
     // Remover comentarios inline
     let code = if let Some(idx) = line.find(';') {
         &line[..idx]
@@ -406,7 +416,9 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         
         // === CONTROL FLOW ===
         "JSR" => emit_jsr(emitter, operand),
+        "BSR" => emit_bsr(emitter, operand),
         "RTS" => { emitter.rts(); Ok(()) },
+        "NOP" => { emitter.nop(); Ok(()) },
         "BRA" => emit_bra(emitter, operand),
         "BEQ" => emit_beq(emitter, operand),
         "BNE" => emit_bne(emitter, operand),
@@ -460,8 +472,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "INCB" => { emitter.incb(); Ok(()) },
         "DECA" => { emitter.deca(); Ok(()) },
         "DECB" => { emitter.decb(); Ok(()) },
-        "ASLA" => { emitter.asla(); Ok(()) },
-        "ASLB" => { emitter.aslb(); Ok(()) },
+        "ASLA" | "LSLA" => { emitter.asla(); Ok(()) },  // LSLA es alias de ASLA
+        "ASLB" | "LSLB" => { emitter.aslb(); Ok(()) },  // LSLB es alias de ASLB
         "ROLA" => { emitter.rola(); Ok(()) },
         "ROLB" => { emitter.rolb(); Ok(()) },
         "LSRA" => { emitter.lsra(); Ok(()) },
@@ -469,12 +481,19 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "RORA" => { emitter.rora(); Ok(()) },
         "RORB" => { emitter.rorb(); Ok(()) },
         "ABX" => { emitter.abx(); Ok(()) },
+        "TSTA" => { emitter.tsta(); Ok(()) },
+        "TSTB" => { emitter.tstb(); Ok(()) },
+        "TST" => emit_tst(emitter, operand, equates),
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),
         "CMPA" => emit_cmpa(emitter, operand),
         "CMPB" => emit_cmpb(emitter, operand),
         "CMPD" => emit_cmpd(emitter, operand, equates),
+        "CMPX" => emit_cmpx(emitter, operand),
+        "CMPY" => emit_cmpy(emitter, operand),
+        "CMPU" => emit_cmpu(emitter, operand),
+        "CMPS" => emit_cmps(emitter, operand),
         
         // === 16-BIT LOAD/STORE ===
         "JMP" => emit_jmp(emitter, operand),
@@ -552,6 +571,7 @@ fn resolve_symbol_value(symbol: &str, equates: &HashMap<String, u16>) -> Result<
 }
 
 /// Parsea un número (decimal o hex)
+#[allow(dead_code)]
 fn parse_number(s: &str) -> Result<u16, String> {
     let s = s.trim();
     if s.starts_with('$') {
@@ -575,6 +595,13 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.lda_immediate(val);
+    } else if operand.contains(',') {
+        // Modo indexado
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.lda_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else if operand.starts_with('$') {
         let addr = parse_hex(&operand[1..])?;
         if addr <= 0xFF {
@@ -613,6 +640,13 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.ldb_immediate(val);
+    } else if operand.contains(',') {
+        // Modo indexado
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.ldb_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else if operand.starts_with('$') {
         let addr = parse_hex(&operand[1..])?;
         if addr <= 0xFF {
@@ -651,8 +685,11 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.ldd_immediate(val);
     } else if operand.contains(',') {
         // Indexed mode - parse postbyte
-        let postbyte = parse_indexed_postbyte(operand, emitter)?;
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.ldd_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else {
         match resolve_address(operand, equates) {
             Ok(addr) => {
@@ -670,6 +707,16 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 }
 
 fn emit_sta(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // Check if it's indexed addressing (contains comma: ,X  ,X+  5,Y  etc.)
+    if operand.contains(',') {
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.sta_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        return Ok(());
+    }
+    
     match resolve_address(operand, equates) {
         Ok(addr) => {
             if addr <= 0xFF {
@@ -689,6 +736,16 @@ fn emit_sta(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 }
 
 fn emit_stb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // Check if it's indexed addressing (contains comma: ,X  ,X+  5,Y  etc.)
+    if operand.contains(',') {
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.stb_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        return Ok(());
+    }
+    
     match resolve_address(operand, equates) {
         Ok(addr) => {
             if addr <= 0xFF {
@@ -708,18 +765,28 @@ fn emit_stb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 }
 
 fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    match resolve_address(operand, equates) {
-        Ok(addr) => {
-            emitter.std_extended(addr);
-        },
-        Err(e) if e.starts_with("SYMBOL:") => {
-            let symbol = e.trim_start_matches("SYMBOL:");
-            emitter.add_symbol_ref(symbol, false, 2);
-            emitter.std_extended(0x0000); // Placeholder
-        },
-        Err(e) => return Err(e),
+    if operand.contains(',') {
+        // Indexed mode: 1,S  5,X  A,X  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.std_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else {
+        match resolve_address(operand, equates) {
+            Ok(addr) => {
+                emitter.std_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let symbol = e.trim_start_matches("SYMBOL:");
+                emitter.add_symbol_ref(symbol, false, 2);
+                emitter.std_extended(0x0000); // Placeholder
+            },
+            Err(e) => return Err(e),
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 fn emit_jsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
@@ -731,6 +798,16 @@ fn emit_jsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     } else {
         let addr = parse_address(operand)?;
         emitter.jsr_extended(addr);
+    }
+    Ok(())
+}
+
+fn emit_bsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        emitter.bsr_label(operand);
+    } else {
+        let offset = parse_signed(operand)?;
+        emitter.bsr_offset(offset);
     }
     Ok(())
 }
@@ -1247,6 +1324,14 @@ fn emit_subd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate_16(&operand[1..])?;
         emitter.subd_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // Indexed mode: 3,S  5,X  A,X  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.subd_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         // Extended mode (symbol or address)
         match evaluate_expression(operand, equates) {
@@ -1457,7 +1542,57 @@ fn emit_cmpd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     }
 }
 
+fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate_16(&operand[1..])?;
+        emitter.cmpx_immediate(val);
+        Ok(())
+    } else {
+        Err(format!("CMPX solo soporta modo inmediato (#valor)"))
+    }
+}
+
+fn emit_cmpy(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate_16(&operand[1..])?;
+        emitter.cmpy_immediate(val);
+        Ok(())
+    } else {
+        Err(format!("CMPY solo soporta modo inmediato (#valor)"))
+    }
+}
+
+fn emit_cmpu(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate_16(&operand[1..])?;
+        emitter.cmpu_immediate(val);
+        Ok(())
+    } else {
+        Err(format!("CMPU solo soporta modo inmediato (#valor)"))
+    }
+}
+
+fn emit_cmps(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate_16(&operand[1..])?;
+        emitter.cmps_immediate(val);
+        Ok(())
+    } else {
+        Err(format!("CMPS solo soporta modo inmediato (#valor)"))
+    }
+}
+
 fn emit_clr(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // Check if it's indexed addressing (contains comma: ,-S  ,X+  5,Y  etc.)
+    if operand.contains(',') {
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.clr_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        return Ok(());
+    }
+    
     // CLR para memoria (extended mode - opcode 0x7F)
     match evaluate_expression(operand, equates) {
         Ok(addr) => {
@@ -1473,7 +1608,110 @@ fn emit_clr(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     }
 }
 
+fn emit_tst(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // TST para memoria (extended mode - opcode 0x7D)
+    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        // Es un símbolo
+        emitter.tst_extended_sym(operand);
+        Ok(())
+    } else {
+        // Es una dirección numérica
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.tst_extended(addr);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 // === HELPERS DE PARSING ===
+
+/// Parsea modo indexado y retorna (postbyte, tiene_offset_extra)
+/// Ejemplos: ,X+ → (0x80, false), ,X++ → (0x81, false), 4,X → (offset en postbyte, true si >-16..+15)
+fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
+    let trimmed = operand.trim();
+    
+    // Helper para obtener bits de registro
+    let get_reg_bits = |reg: &str| -> Result<u8, String> {
+        match reg.to_uppercase().as_str() {
+            "X" => Ok(0x00),
+            "Y" => Ok(0x20),
+            "U" => Ok(0x40),
+            "S" => Ok(0x60),
+            _ => Err(format!("Registro no reconocido: {}", reg))
+        }
+    };
+    
+    // Modos con acumulador: A,X  B,X  D,X  A,Y  B,Y  D,Y  A,U  B,U  D,U  A,S  B,S  D,S
+    // Postbytes: A=0x86, B=0x85, D=0x8B (más bits de registro)
+    for index_reg in &["X", "Y", "U", "S"] {
+        for acc_reg in &["A", "B", "D"] {
+            if trimmed == format!("{},{}", acc_reg, index_reg) {
+                let reg_bits = get_reg_bits(index_reg)?;
+                let acc_bits = match acc_reg.as_ref() {
+                    "A" => 0x86,
+                    "B" => 0x85,
+                    "D" => 0x8B,
+                    _ => unreachable!()
+                };
+                return Ok((acc_bits | reg_bits, None));
+            }
+        }
+    }
+    
+    // Modos auto-increment/decrement: ,REG+ ,REG++ ,-REG --REG
+    // También soporta sin coma: REG+ REG++ (sintaxis alternativa)
+    // Soporta X, Y, U, S
+    for reg in &["X", "Y", "U", "S"] {
+        // ,REG+ o REG+ → post-increment by 1
+        if trimmed == format!(",{}+", reg) || trimmed == format!("{}+", reg) {
+            let reg_bits = get_reg_bits(reg)?;
+            return Ok((0x80 | reg_bits, None));
+        }
+        // ,REG++ o REG++ → post-increment by 2
+        if trimmed == format!(",{}++", reg) || trimmed == format!("{}++", reg) {
+            let reg_bits = get_reg_bits(reg)?;
+            return Ok((0x81 | reg_bits, None));
+        }
+        // ,-REG → pre-decrement by 1
+        if trimmed == format!(",-{}", reg) {
+            let reg_bits = get_reg_bits(reg)?;
+            return Ok((0x82 | reg_bits, None));
+        }
+        // --REG → pre-decrement by 2
+        if trimmed == format!("--{}", reg) || trimmed == format!(",--{}", reg) {
+            let reg_bits = get_reg_bits(reg)?;
+            return Ok((0x83 | reg_bits, None));
+        }
+    }
+    
+    // offset,REG → constant offset o sin offset
+    if let Some(comma_pos) = trimmed.find(',') {
+        let offset_str = trimmed[..comma_pos].trim();
+        let reg_str = trimmed[comma_pos+1..].trim();
+        let reg_bits = get_reg_bits(reg_str)?;
+        
+        if offset_str.is_empty() {
+            // ,REG → zero offset (indirect)
+            return Ok((0x84 | reg_bits, None));
+        } else {
+            // offset,REG
+            let offset = parse_signed(offset_str)?;
+            if offset >= -16 && offset <= 15 {
+                // 5-bit offset en postbyte
+                let postbyte = ((offset as u8) & 0x1F) | reg_bits;
+                return Ok((postbyte, None));
+            } else {
+                // 8-bit offset
+                return Ok((0x88 | reg_bits, Some(offset)));
+            }
+        }
+    }
+    
+    Err(format!("Modo indexado no reconocido: {}", operand))
+}
 
 fn parse_immediate(s: &str) -> Result<u8, String> {
     let trimmed = s.trim();
@@ -1571,8 +1809,8 @@ fn emit_fdb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let upper = part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
             emitter.emit_data_word(value);
-        } else if part.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            // Es un símbolo - usar referencia (normalizado a uppercase para consistencia)
+        } else if part.chars().all(|c| c.is_alphanumeric() || c == '_') && !part.chars().all(|c| c.is_ascii_digit()) {
+            // Es un símbolo (no es puramente numérico) - usar referencia (normalizado a uppercase para consistencia)
             emitter.add_symbol_ref(&upper, false, 2);
             emitter.emit_data_word(0x0000); // Placeholder que DEBE resolverse en PASS 2
         } else {
@@ -1629,6 +1867,13 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             let value = parse_immediate_16(value_part)?;
             emitter.ldx_immediate(value);
         }
+    } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
+        // Indexed mode: ,Y  ,Y++  5,Y  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.ldx_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
         // Symbol reference
         let upper = operand.to_uppercase();
@@ -1650,9 +1895,19 @@ fn emit_ldy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
             emitter.ldy_immediate(value);
+        } else if value_part.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            // Symbol reference: LDY #SYMBOL
+            emitter.ldy_immediate_sym(value_part);
         } else {
             let value = parse_immediate_16(value_part)?;
             emitter.ldy_immediate(value);
+        }
+    } else if operand.contains(',') {
+        // Modo indexado
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.ldy_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
         }
     } else {
         let addr = parse_address(operand)?;
@@ -1664,8 +1919,11 @@ fn emit_ldy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 fn emit_stx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     // Check if it's indexed addressing (contains comma: ,X  5,Y  etc.)
     if operand.contains(',') {
-        let postbyte = parse_indexed_postbyte(operand, emitter)?;
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.stx_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else {
         // Extended addressing
         let upper = operand.to_uppercase();
@@ -1682,8 +1940,11 @@ fn emit_stx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 fn emit_sty(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     // Check if it's indexed addressing (contains comma: ,X  5,Y  etc.)
     if operand.contains(',') {
-        let postbyte = parse_indexed_postbyte(operand, emitter)?;
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.sty_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else {
         // Extended addressing
         let upper = operand.to_uppercase();
@@ -1707,6 +1968,13 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         } else {
             let value = parse_immediate_16(value_part)?;
             emitter.ldu_immediate(value);
+        }
+    } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
+        // Indexed mode: ,X  X++  ,X++  5,X  A,X  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.ldu_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
         }
     } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
         // Symbol reference
@@ -1736,13 +2004,33 @@ fn emit_stu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 
 fn emit_lea(emitter: &mut BinaryEmitter, mnemonic: &str, operand: &str) -> Result<(), String> {
     // Parse indexed addressing mode with optional offset: 5,X  -2,Y  ,S  etc.
-    let postbyte = parse_indexed_postbyte(operand, emitter)?;
+    let (postbyte, offset) = parse_indexed_mode(operand)?;
     
     match mnemonic {
-        "LEAX" => emitter.leax_indexed(postbyte),
-        "LEAY" => emitter.leay_indexed(postbyte),
-        "LEAS" => emitter.leas_indexed(postbyte),
-        "LEAU" => emitter.leau_indexed(postbyte),
+        "LEAX" => {
+            emitter.leax_indexed(postbyte);
+            if let Some(off) = offset {
+                emitter.emit(off as u8);
+            }
+        },
+        "LEAY" => {
+            emitter.leay_indexed(postbyte);
+            if let Some(off) = offset {
+                emitter.emit(off as u8);
+            }
+        },
+        "LEAS" => {
+            emitter.leas_indexed(postbyte);
+            if let Some(off) = offset {
+                emitter.emit(off as u8);
+            }
+        },
+        "LEAU" => {
+            emitter.leau_indexed(postbyte);
+            if let Some(off) = offset {
+                emitter.emit(off as u8);
+            }
+        },
         _ => unreachable!()
     }
     Ok(())
@@ -1794,12 +2082,10 @@ fn parse_indexed_postbyte(operand: &str, _emitter: &mut BinaryEmitter) -> Result
             // 8-bit offset: postbyte 0x88, then 1 byte offset
             // Note: Caller must emit the offset byte after the postbyte
             Ok(reg_bits | 0x88)
-        } else if offset >= -32768 && offset <= 32767 {
-            // 16-bit offset: postbyte 0x89, then 2 bytes offset
+        } else {
+            // 16-bit offset: postbyte 0x89, then 2 bytes offset (i16 always fits)
             // Note: Caller must emit the 2 offset bytes after the postbyte
             Ok(reg_bits | 0x89)
-        } else {
-            Err(format!("Offset fuera de rango: {}", offset))
         }
     } else {
         Err(format!("Formato de direccionamiento indexado inválido: {}", operand))

@@ -14,10 +14,23 @@ import * as net from 'net';
 import { getMCPServer } from './mcp/server.js';
 import type { MCPRequest } from './mcp/types.js';
 import { registerAIProxyHandlers } from './ai-proxy.js';
+import { storageGet, storageSet, storageDelete, storageKeys, storageClear, getStoragePath, StorageKeys } from './storage.js';
 
 let mainWindow: BrowserWindow | null = null;
 let mcpIpcServer: net.Server | null = null;
 const MCP_IPC_PORT = 9123;
+const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
+
+// Track current project for MCP server
+let currentProject: { entryFile: string; rootDir: string } | null = null;
+
+export function getCurrentProject() {
+  return currentProject;
+}
+
+export function setCurrentProject(project: { entryFile: string; rootDir: string } | null) {
+  currentProject = project;
+}
 
 // --- Emulator load helpers (shared by emu:load and run:compile) -----------------
 // Removed cpuColdReset/loadBinaryBase64IntoEmu: renderer now responsible for loading programs
@@ -125,6 +138,62 @@ async function createWindow() {
   
   // Start MCP IPC server for external MCP stdio process
   startMCPIpcServer();
+  
+  // CRITICAL: Block accidental browser reloads that would clear localStorage
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const ctrl = input.control || input.meta; // Ctrl on Windows/Linux, Cmd on macOS
+    
+    // Block F5 (normal refresh)
+    if (input.type === 'keyDown' && input.key === 'F5' && !ctrl && !input.shift) {
+      console.log('[IDE] ⚠️ Blocked F5 reload - use IDE build commands instead');
+      event.preventDefault();
+      return;
+    }
+    
+    // Block Ctrl+R / Cmd+R (normal refresh)
+    if (input.type === 'keyDown' && input.key === 'r' && ctrl && !input.shift) {
+      console.log('[IDE] ⚠️ Blocked Ctrl/Cmd+R reload - use IDE build commands instead');
+      event.preventDefault();
+      return;
+    }
+    
+    // Block Ctrl+Shift+R / Cmd+Shift+R (hard refresh - CRITICAL!)
+    if (input.type === 'keyDown' && input.key === 'R' && ctrl && input.shift) {
+      console.error('[IDE] 🚨 BLOCKED HARD REFRESH (Cmd+Shift+R) - This would clear ALL localStorage!');
+      console.error('[IDE] 💡 If you need to reload, close and reopen the IDE instead');
+      event.preventDefault();
+      // Show dialog to user
+      if (mainWindow) {
+        mainWindow.webContents.send('command', 'app.hardRefreshBlocked');
+      }
+      return;
+    }
+    
+    // Block F12 (DevTools) if not enabled
+    if (input.type === 'keyDown' && input.key === 'F12' && process.env.VPY_IDE_DEVTOOLS !== '1') {
+      console.log('[IDE] 🔒 Blocked F12 DevTools (use VPY_IDE_DEVTOOLS=1 to enable)');
+      event.preventDefault();
+      return;
+    }
+  });
+  
+  // Also block navigation events (could be triggered by links or JavaScript)
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const currentUrl = mainWindow?.webContents.getURL();
+    if (url !== currentUrl) {
+      console.warn('[IDE] ⚠️ Blocked navigation from', currentUrl, 'to', url);
+      event.preventDefault();
+    }
+  });
+  
+  // Log when page actually reloads (debugging)
+  mainWindow.webContents.on('did-start-loading', () => {
+    console.log('[IDE] 🔄 Page started loading - localStorage may be affected');
+  });
+  
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[IDE] ✅ Page finished loading');
+  });
 }
 
 // Start TCP server for MCP stdio process to communicate with IDE
@@ -523,7 +592,7 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   if (verbose) console.log('[RUN] spawning compiler', compiler, fsPath);
   mainWindow?.webContents.send('run://status', `Starting compilation: ${targetDisplay}`);
   return new Promise(async (resolvePromise) => {
-    const outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
+    let outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
     const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
     
     // If outputPath is provided (from project), add --out argument
@@ -534,11 +603,23 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       const outAsmFromProject = outputPath.replace(/\.bin$/, '.asm');
       argsv.push('--out', outAsmFromProject);
       finalBinPath = outputPath;
+      outAsm = outAsmFromProject; // CRITICAL: Use project ASM path for all checks
       // Ensure output directory exists
       const outputDir = join(outputPath, '..');
       try {
         await fs.mkdir(outputDir, { recursive: true });
       } catch {}
+    }
+    
+    // CRITICAL: Delete old .asm and .bin files before compilation to avoid stale files
+    // This ensures the IDE always loads the freshly compiled binary
+    try {
+      await fs.unlink(outAsm).catch(() => {});
+      await fs.unlink(finalBinPath).catch(() => {});
+      if (verbose) console.log('[RUN] 🗑️ Cleaned old files:', outAsm, finalBinPath);
+      mainWindow?.webContents.send('run://stdout', `[Compiler] Cleaned old output files\n`);
+    } catch (e: any) {
+      if (verbose) console.log('[RUN] ⚠️ Error cleaning files:', e.message);
     }
     
     // Set working directory to project root (three levels up from ide/electron/dist/)
@@ -666,6 +747,9 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
         const base64 = Buffer.from(buf).toString('base64');
         mainWindow?.webContents.send('run://status', `✅ COMPILATION SUCCESS: ${binPath} (${buf.length} bytes)`);
         mainWindow?.webContents.send('run://stdout', `✅ Generated binary: ${buf.length} bytes`);
+        
+        // Clear previous compilation diagnostics (successful compilation = no errors)
+        mainWindow?.webContents.send('run://diagnostics', []);
         
         // Phase 3: Load .pdb debug symbols if available
         const pdbPath = binPath.replace(/\.bin$/, '.pdb');
@@ -923,6 +1007,46 @@ ipcMain.handle('shell:runCommand', async (_e, command: string) => {
   });
 });
 
+// ============================================================================
+// PERSISTENT STORAGE HANDLERS
+// Replaces localStorage with filesystem-backed storage in userData directory
+// ============================================================================
+
+ipcMain.handle('storage:get', async (_e, key: string) => {
+  if (verbose) console.log('[IPC] storage:get:', key);
+  return await storageGet(key);
+});
+
+ipcMain.handle('storage:set', async (_e, key: string, value: any) => {
+  if (verbose) console.log('[IPC] storage:set:', key);
+  return await storageSet(key, value);
+});
+
+ipcMain.handle('storage:delete', async (_e, key: string) => {
+  if (verbose) console.log('[IPC] storage:delete:', key);
+  return await storageDelete(key);
+});
+
+ipcMain.handle('storage:keys', async () => {
+  if (verbose) console.log('[IPC] storage:keys');
+  return await storageKeys();
+});
+
+ipcMain.handle('storage:clear', async () => {
+  if (verbose) console.log('[IPC] storage:clear');
+  return await storageClear();
+});
+
+ipcMain.handle('storage:path', async () => {
+  if (verbose) console.log('[IPC] storage:path');
+  return getStoragePath();
+});
+
+// Expose storage keys enum to frontend
+ipcMain.handle('storage:getKeys', async () => {
+  return StorageKeys;
+});
+
 // ============================================
 // Project Management
 // ============================================
@@ -962,10 +1086,18 @@ ipcMain.handle('project:read', async (_e, projectPath: string) => {
     const content = await fs.readFile(projectPath, 'utf-8');
     const toml = await import('toml');
     const parsed = toml.parse(content);
+    const rootDir = join(projectPath, '..');
+    
+    // Update current project tracker for MCP
+    if (parsed.build?.entry) {
+      const entryFile = join(rootDir, parsed.build.entry);
+      setCurrentProject({ entryFile, rootDir });
+    }
+    
     return {
       path: projectPath,
       config: parsed,
-      rootDir: join(projectPath, '..')
+      rootDir
     };
   } catch (e: any) {
     return { error: e.message || 'Failed to read project file' };

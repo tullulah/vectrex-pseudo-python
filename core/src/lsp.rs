@@ -66,6 +66,10 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "DEBUG_PRINT" => Some(AritySpec::Exact(1)),             // value - debug output to console
         "DEBUG_PRINT_LABELED" => Some(AritySpec::Exact(2)),     // label, value - debug output with label
         
+        // Asset system functions
+        "DRAW_VECTOR" => Some(AritySpec::Exact(1)),            // asset_name (string)
+        "PLAY_MUSIC" => Some(AritySpec::Exact(1)),             // asset_name (string)
+        
         // Funciones de dibujo con intensidad explícita
         "DRAW_POLYGON" => Some(AritySpec::Variable(4)),         // n, intensity, x1, y1, ... (minimum 4: count + intensity + at least one point)
         "DRAW_CIRCLE" => Some(AritySpec::Exact(4)),             // x, y, r, intensity
@@ -113,6 +117,11 @@ pub fn is_builtin_function(name: &str) -> bool {
     if upper.starts_with("DRAW_") || matches!(upper.as_str(), 
         "RECT"|"POLYGON"|"CIRCLE"|"ARC"|"SPIRAL"|"DRAW_VECTORLIST"
     ) {
+        return true;
+    }
+    
+    // Asset system functions
+    if matches!(upper.as_str(), "DRAW_VECTOR"|"PLAY_MUSIC") {
         return true;
     }
     

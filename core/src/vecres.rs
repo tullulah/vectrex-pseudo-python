@@ -5,9 +5,10 @@
 
 use std::path::Path;
 use serde::{Deserialize, Serialize};
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 /// Vector resource file extension
+#[allow(dead_code)]
 pub const VEC_EXTENSION: &str = "vec";
 
 /// Root structure of a .vec file
@@ -107,6 +108,10 @@ fn default_intensity() -> u8 { 127 }
 pub struct Point {
     pub x: i16,
     pub y: i16,
+    /// Optional intensity override for this specific point (0-255)
+    /// If present, triggers Intensity_a call before drawing to this point
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intensity: Option<u8>,
 }
 
 /// Animation definition
@@ -202,63 +207,98 @@ impl VecResource {
             .sum()
     }
     
-    /// Compile to Vectrex-compatible ASM data
+    // Helper: format i8 value for ASM (compatible with both native and lwasm)
+    // lwasm requires hex format $XX for negative values, no spaces after commas
+    fn format_byte(value: i8) -> String {
+        format!("${:02X}", value as u8)
+    }
+    
+    // Helper: format two bytes for FCB (lwasm compatibility: no space after comma)
+    fn format_fcb2(v1: i8, v2: i8) -> String {
+        format!("{},{}", Self::format_byte(v1), Self::format_byte(v2))
+    }
+    
+    /// Compile to Vectrex-compatible ASM data using Draw_Sync_List format (Malban optimized)
+    /// Format: FCB intensity, y, x, [<0=draw | 0=move | 1=next_seg], dy, dx, ..., FCB 1, [repeat], FCB 2 (end)
     pub fn compile_to_asm(&self) -> String {
         let mut asm = String::new();
         let symbol_name = self.name.to_uppercase().replace("-", "_").replace(" ", "_");
         
-        asm.push_str(&format!("; Generated from {}.vec\n", self.name));
+        asm.push_str(&format!("; Generated from {}.vec (Malban Draw_Sync_List format)\n", self.name));
         asm.push_str(&format!("; Total paths: {}, points: {}\n", 
             self.visible_paths().len(), self.point_count()));
         asm.push_str("\n");
         
-        // Generate data for each visible path
-        for (i, path) in self.visible_paths().iter().enumerate() {
-            let path_name = if path.name.is_empty() {
-                format!("{}_{}", symbol_name, i)
-            } else {
-                format!("{}_{}", symbol_name, path.name.to_uppercase().replace("-", "_"))
-            };
-            
-            asm.push_str(&format!("_{}_VECTORS:\n", path_name));
-            asm.push_str(&format!("    FCB {}              ; num_points\n", path.points.len()));
-            asm.push_str(&format!("    FCB {}              ; intensity\n", path.intensity));
-            
-            for (j, point) in path.points.iter().enumerate() {
-                // Convert canvas coordinates to Vectrex format
-                // Vectrex uses signed bytes for relative moves
-                let x = point.x.clamp(-127, 127) as i8;
-                let y = point.y.clamp(-127, 127) as i8;
-                asm.push_str(&format!("    FCB {}, {}          ; point {}\n", y, x, j));
-            }
-            
-            // End marker
-            if path.closed {
-                asm.push_str("    FCB $01             ; closed path\n");
-            } else {
-                asm.push_str("    FCB $00             ; open path\n");
-            }
-            asm.push_str("\n");
+        // Single path per file - no multi-path complexity
+        if self.visible_paths().is_empty() {
+            asm.push_str(&format!("_{}_VECTORS:\n", symbol_name));
+            asm.push_str("    FCB 2               ; end marker\n");
+            return asm;
         }
         
-        // Generate combined vectorlist if multiple paths
-        if self.visible_paths().len() > 1 {
-            asm.push_str(&format!("_{}_ALL:\n", symbol_name));
-            for (i, path) in self.visible_paths().iter().enumerate() {
-                let path_name = if path.name.is_empty() {
-                    format!("{}_{}", symbol_name, i)
-                } else {
-                    format!("{}_{}", symbol_name, path.name.to_uppercase().replace("-", "_"))
-                };
-                asm.push_str(&format!("    FDB _{}_VECTORS\n", path_name));
+        let path = &self.visible_paths()[0]; // Take only the first path
+        asm.push_str(&format!("_{}_VECTORS:\n", symbol_name));
+        
+        // Malban Draw_Sync_List format:
+        // First segment: FCB intensity, y, x (absolute position)
+        // Then for each line: FCB <0 (draw) or 0 (move), dy, dx
+        // Between segments: FCB 1 (next segment marker)
+        // End: FCB 2
+        if path.points.len() < 2 {
+            asm.push_str("    FCB 2               ; end marker (< 2 points)\n");
+        } else {
+            let default_intensity = path.intensity;
+            let mut segments: Vec<(usize, usize, u8)> = Vec::new(); // (start_idx, end_idx, intensity)
+            let mut current_intensity = path.points[0].intensity.unwrap_or(default_intensity);
+            let mut segment_start = 0;
+            
+            // Detect segments by intensity changes (intensity=0 means beam off/move)
+            for i in 1..path.points.len() {
+                if let Some(new_intensity) = path.points[i].intensity {
+                    if new_intensity != current_intensity {
+                        // End current segment
+                        segments.push((segment_start, i - 1, current_intensity));
+                        segment_start = i;
+                        current_intensity = new_intensity;
+                    }
+                }
             }
-            asm.push_str("    FDB 0               ; end of list\n");
+            // Add final segment
+            segments.push((segment_start, path.points.len() - 1, current_intensity));
+            
+            // Generate BIOS Draw_VLc format data (simple, proven format)
+            // Format: FCB intensity, FCB y,x (start), FCB count, [FCB dy,dx]*count
+            for (seg_idx, (start, end, intensity)) in segments.iter().enumerate() {
+                let p0 = &path.points[*start];
+                let y0 = p0.y.clamp(-127, 127) as i8;
+                let x0 = p0.x.clamp(-127, 127) as i8;
+                let line_count = (end - start) as u8;
+                
+                // Header: intensity, position, count
+                asm.push_str(&format!("    FCB {}              ; seg{}: intensity\n", *intensity, seg_idx));
+                asm.push_str(&format!("    FCB {},{}          ; seg{}: position (y={}, x={})\n", 
+                    Self::format_byte(y0), Self::format_byte(x0), seg_idx, y0, x0));
+                asm.push_str(&format!("    FCB {}              ; seg{}: {} lines\n", line_count, seg_idx, line_count));
+                
+                // Generate deltas (dy, dx pairs)
+                for j in *start..*end {
+                    let p_from = &path.points[j];
+                    let p_to = &path.points[j + 1];
+                    
+                    let dx = (p_to.x - p_from.x).clamp(-127, 127) as i8;
+                    let dy = (p_to.y - p_from.y).clamp(-127, 127) as i8;
+                    
+                    asm.push_str(&format!("    FCB {}          ; line {} delta (dy={}, dx={})\n", 
+                        Self::format_fcb2(dy, dx), j - start, dy, dx));
+                }
+            }
         }
         
         asm
     }
     
     /// Compile to binary vectorlist format
+    #[allow(dead_code)]
     pub fn compile_to_binary(&self) -> Vec<u8> {
         let mut data = Vec::new();
         
@@ -281,6 +321,7 @@ impl VecResource {
 }
 
 /// Compile a .vec file to ASM
+#[allow(dead_code)]
 pub fn compile_vec_to_asm(input: &Path, output: &Path) -> Result<()> {
     let resource = VecResource::load(input)?;
     let asm = resource.compile_to_asm();
@@ -289,6 +330,7 @@ pub fn compile_vec_to_asm(input: &Path, output: &Path) -> Result<()> {
 }
 
 /// Compile a .vec file to binary
+#[allow(dead_code)]
 pub fn compile_vec_to_binary(input: &Path, output: &Path) -> Result<()> {
     let resource = VecResource::load(input)?;
     let binary = resource.compile_to_binary();
@@ -315,9 +357,9 @@ mod tests {
             intensity: 127,
             closed: true,
             points: vec![
-                Point { x: 0, y: 20 },
-                Point { x: -10, y: -10 },
-                Point { x: 10, y: -10 },
+                Point { x: 0, y: 20, intensity: None },
+                Point { x: -10, y: -10, intensity: None },
+                Point { x: 10, y: -10, intensity: None },
             ],
         });
         

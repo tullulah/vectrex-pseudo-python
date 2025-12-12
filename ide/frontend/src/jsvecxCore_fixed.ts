@@ -1,4 +1,4 @@
-import type { MetricsSnapshot, RegistersSnapshot, Segment } from './types.js';
+import type { MetricsSnapshot, RegistersSnapshot, Segment } from './emulatorCore';
 
 export class JsVecxCore {
   private mod: any = null;
@@ -389,7 +389,8 @@ export class JsVecxCore {
               y0: v.y0 || 0,
               x1: v.x1 || 0,
               y1: v.y1 || 0,
-              intensity: v.intensity || 0
+              intensity: v.intensity || 0,
+              frame: this.frameCounter
             });
           }
         }
@@ -413,14 +414,16 @@ export class JsVecxCore {
   metrics(): MetricsSnapshot | null {
     if (!this.inst) return null;
     
+    // MetricsSnapshot interface requires specific fields
     return {
+      total: 0,
+      unimplemented: 0,
+      frames: this.frameCounter,
+      draw_vl: this.lastFrameSegments.length,
+      last_intensity: 0,
+      unique_unimplemented: [],
       cycles: this.inst.fcycles || 0,
-      cyclesPerSecond: 1_500_000, // Estándar Vectrex
-      frameCount: this.frameCounter,
-      vectorsDrawn: this.lastFrameSegments.length,
-      pcCurrent: this.inst.e6809?.reg_pc || 0,
-      stackSize: 0, // No fácilmente disponible en jsvecx
-      maxStackSize: 0
+      top_opcodes: []
     };
   }
 
@@ -437,7 +440,9 @@ export class JsVecxCore {
       y: cpu.reg_y?.value || 0,
       u: cpu.reg_u?.value || 0,
       s: cpu.reg_s?.value || 0,
-      cc: cpu.reg_cc || 0
+      cycles: this.inst.fcycles || 0,
+      frame_count: this.frameCounter,
+      last_intensity: 0
     };
   }
 

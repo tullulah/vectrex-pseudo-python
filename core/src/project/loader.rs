@@ -60,9 +60,11 @@ impl From<toml::ser::Error> for ProjectError {
 pub const PROJECT_EXTENSION: &str = "vpyproj";
 
 /// Project file name (default)
+#[allow(dead_code)]
 pub const DEFAULT_PROJECT_FILE: &str = "project.vpyproj";
 
 /// Load a project from a .vpyproj file
+#[allow(dead_code)]
 pub fn load_project(path: &Path) -> Result<VpyProject, ProjectError> {
     if !path.exists() {
         return Err(ProjectError::NotFound(path.to_path_buf()));
@@ -80,6 +82,7 @@ pub fn load_project(path: &Path) -> Result<VpyProject, ProjectError> {
 }
 
 /// Save a project to a .vpyproj file
+#[allow(dead_code)]
 pub fn save_project(project: &VpyProject, path: &Path) -> Result<(), ProjectError> {
     // Validate before saving
     if let Err(errors) = project.validate() {
@@ -93,6 +96,7 @@ pub fn save_project(project: &VpyProject, path: &Path) -> Result<(), ProjectErro
 }
 
 /// Find a .vpyproj file in a directory or its parents
+#[allow(dead_code)]
 pub fn find_project_file(start_dir: &Path) -> Option<PathBuf> {
     let mut current = start_dir.to_path_buf();
     
@@ -117,6 +121,7 @@ pub fn find_project_file(start_dir: &Path) -> Option<PathBuf> {
 }
 
 /// Create a new project with the given name in the specified directory
+#[allow(dead_code)]
 pub fn create_project(name: &str, dir: &Path) -> Result<PathBuf, ProjectError> {
     // Create project structure
     let project_dir = dir.join(name);
@@ -166,6 +171,7 @@ def loop():
 }
 
 /// Loaded project with resolved paths
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct LoadedProject {
     /// The project configuration
@@ -178,6 +184,7 @@ pub struct LoadedProject {
     pub root_dir: PathBuf,
 }
 
+#[allow(dead_code)]
 impl LoadedProject {
     /// Load a project from a .vpyproj file path
     pub fn load(project_file: &Path) -> Result<Self, ProjectError> {

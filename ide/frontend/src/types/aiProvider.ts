@@ -9,6 +9,7 @@ export interface AiProvider {
 
 export interface AiRequest {
   message: string;
+  concise?: boolean; // Modo respuestas concisas
   context: {
     fileName?: string;
     selectedCode?: string;

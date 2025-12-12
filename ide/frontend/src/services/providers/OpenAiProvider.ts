@@ -19,7 +19,7 @@ export class OpenAiProvider extends BaseAiProvider {
     }
 
     try {
-      const systemPrompt = this.buildSystemPrompt();
+      const systemPrompt = this.buildSystemPrompt(request.concise ?? false);
       const userPrompt = this.buildUserPrompt(request);
 
       const response = await fetch(`${this.baseUrl}/chat/completions`, {

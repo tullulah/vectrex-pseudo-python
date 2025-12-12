@@ -6,11 +6,12 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use crate::ast::*;
-use crate::resolver::{ModuleResolver, LoadedModule};
+use crate::resolver::ModuleResolver;
 use anyhow::{bail, Result};
 
 /// Context for symbol resolution during unification
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct SymbolTable {
     /// Global symbols: name -> (module_path, original_name)
     pub globals: HashMap<String, (String, String)>,
@@ -21,6 +22,7 @@ pub struct SymbolTable {
 }
 
 /// Configuration for AST unification
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct UnifyOptions {
     /// Prefix module names to avoid collisions (e.g., `utils_math_clamp`)
@@ -42,6 +44,7 @@ impl Default for UnifyOptions {
 }
 
 /// Result of AST unification
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct UnifiedModule {
     /// The merged module

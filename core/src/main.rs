@@ -9,11 +9,13 @@ mod unifier;  // AST unification for multi-file projects
 mod project;  // Project system
 mod library;  // Library system
 mod vecres;   // Vector resources (.vec)
+mod musres;   // Music resources (.vmus)
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 
+#[allow(dead_code)]
 fn find_project_root() -> anyhow::Result<PathBuf> {
     let mut current = std::env::current_dir()?;
     loop {
@@ -28,6 +30,75 @@ fn find_project_root() -> anyhow::Result<PathBuf> {
 }
 use anyhow::Result;
 
+/// Discover assets (.vec and .vmus files) in project directory
+/// Phase 0: Asset Discovery
+fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
+    let mut assets = Vec::new();
+    
+    // Determine project root (parent of src/ or directory of file)
+    let project_root = if let Some(parent) = source_path.parent() {
+        if parent.file_name().and_then(|n| n.to_str()) == Some("src") {
+            parent.parent().unwrap_or(parent)
+        } else {
+            parent
+        }
+    } else {
+        source_path
+    };
+    
+    // Search for vector assets (assets/vectors/*.vec)
+    let vectors_dir = project_root.join("assets").join("vectors");
+    if vectors_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&vectors_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vec") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: codegen::AssetType::Vector,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Search for music assets (assets/music/*.vmus)
+    let music_dir = project_root.join("assets").join("music");
+    if music_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&music_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: codegen::AssetType::Music,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Log discovered assets
+    if !assets.is_empty() {
+        eprintln!("✓ Discovered {} asset(s):", assets.len());
+        for asset in &assets {
+            let type_str = match asset.asset_type {
+                codegen::AssetType::Vector => "Vector",
+                codegen::AssetType::Music => "Music",
+            };
+            eprintln!("  - {} ({})", asset.name, type_str);
+        }
+    }
+    
+    assets
+}
+
 #[derive(Parser)]
 #[command(name = "vectrexc", about = "Pseudo-Python multi-target assembler compiler (prototype)")]
 struct Cli { #[command(subcommand)] command: Commands }
@@ -39,7 +110,9 @@ enum Commands {
         #[arg(short, long)] out: Option<PathBuf>,
         #[arg(long, default_value="vectrex")] target: target::Target,
         #[arg(long, default_value="UNTITLED")] title: String,
-        #[arg(long, help="Generar también binario raw (.bin) con lwasm si está disponible")] bin: bool,
+        #[arg(long, help="Generar también binario raw (.bin) con ensamblador nativo M6809")] bin: bool,
+        #[arg(long, help="Usar lwasm externo en lugar del ensamblador nativo (útil para comparar/diagnosticar)")] use_lwasm: bool,
+        #[arg(long, help="Compilar con AMBOS ensambladores y comparar resultados (requiere lwasm instalado)")] dual: bool,
     },
     Lex { input: PathBuf },
     Ast { input: PathBuf },
@@ -84,7 +157,7 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Build { input, out, target, title, bin } => build_cmd(&input, out.as_ref(), target, &title, bin),
+        Commands::Build { input, out, target, title, bin, use_lwasm, dual } => build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual),
         Commands::Lex { input } => lex_cmd(&input),
         Commands::Ast { input } => ast_cmd(&input),
         Commands::LibNew { name, path } => lib_new_cmd(&name, path.as_ref()),
@@ -218,9 +291,9 @@ fn vec_new_cmd(name: &str, path: Option<&PathBuf>) -> Result<()> {
         intensity: 127,
         closed: true,
         points: vec![
-            vecres::Point { x: 0, y: 20 },
-            vecres::Point { x: -15, y: -10 },
-            vecres::Point { x: 15, y: -10 },
+            vecres::Point { x: 0, y: 20, intensity: None },
+            vecres::Point { x: -15, y: -10, intensity: None },
+            vecres::Point { x: 15, y: -10, intensity: None },
         ],
     });
     
@@ -233,11 +306,18 @@ fn vec_new_cmd(name: &str, path: Option<&PathBuf>) -> Result<()> {
     Ok(())
 }
 // build_cmd: run full pipeline (lex/parse/opt/codegen) and write assembly.
-fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool) -> Result<()> {
+fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool) -> Result<()> {
     eprintln!("=== COMPILATION PIPELINE START ===");
     eprintln!("Input file: {}", path.display());
     eprintln!("Target: {:?}", tgt);
     eprintln!("Binary generation: {}", if bin { "enabled" } else { "disabled" });
+    if bin && dual {
+        eprintln!("Assembler: DUAL MODE (native + lwasm comparison)");
+    } else if bin && use_lwasm {
+        eprintln!("Assembler: lwasm (external)");
+    } else if bin {
+        eprintln!("Assembler: native M6809 (integrated)");
+    }
     
     // Phase 1: Read source
     eprintln!("Phase 1: Reading source file...");
@@ -323,6 +403,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 force_extended_jsr: false,
                 _bank_size: 0,
                 per_frame_silence: false, // default off for minimal output
+                assets: vec![], // TODO: Implement asset discovery
                 debug_init_draw: false,   // default off for minimal output
                 blink_intensity: false,
                 exclude_ram_org: true,
@@ -335,11 +416,16 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 eprintln!("Generated: {} (target={})", out_path.display(), ct);
             // fast_wait desactivado en modo minimal
             if bin && *ct == target::Target::Vectrex {
-                assemble_bin(&out_path)?;
+                // When generating for all targets, always use native assembler
+                assemble_bin(&out_path, false)?;
             }
         }
         Ok(())
     } else {
+        // Phase 0: Asset discovery
+        eprintln!("Phase 0: Asset discovery...");
+        let assets = discover_assets(&path);
+        
         // Phase 4: Code generation
         eprintln!("Phase 4: Code generation (ASM emission)...");
         let (asm, debug_info, _diagnostics) = codegen::emit_asm_with_debug(&final_module, tgt, &codegen::CodegenOptions {
@@ -354,6 +440,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             exclude_ram_org: true,
             fast_wait: false,
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
+            assets,
         });
         
         // Phase 4 validation: Check if assembly was actually generated
@@ -412,11 +499,19 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 6: Binary assembly (if requested)
         if bin && tgt == target::Target::Vectrex { 
             eprintln!("Phase 6: Binary assembly requested...");
-            assemble_bin(&out_path).map_err(|e| {
-                eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
-                eprintln!("   Error: {}", e);
-                e
-            })?; 
+            if dual {
+                assemble_dual(&out_path).map_err(|e| {
+                    eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
+                    eprintln!("   Error: {}", e);
+                    e
+                })?;
+            } else {
+                assemble_bin(&out_path, use_lwasm).map_err(|e| {
+                    eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
+                    eprintln!("   Error: {}", e);
+                    e
+                })?;
+            }
             eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
             
             // Phase 6.5: Generate ASM address mapping (if debug info exists)
@@ -462,14 +557,11 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     }
 }
 
-fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
+fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool) -> Result<()> {
     let bin_path = asm_path.with_extension("bin");
     eprintln!("=== BINARY ASSEMBLY PHASE ===");
     eprintln!("ASM input: {}", asm_path.display());
     eprintln!("BIN output: {}", bin_path.display());
-    
-    // PRIORITY 1: Try native M6809 assembler (integrated, no external dependencies)
-    eprintln!("Attempting native M6809 assembler...");
     
     // Read ASM source
     let asm_source = fs::read_to_string(asm_path).map_err(|e| {
@@ -477,171 +569,257 @@ fn assemble_bin(asm_path: &PathBuf) -> Result<()> {
         e
     })?;
     
-    // Extract ORG directive (default to Vectrex RAM start 0xC800)
-    let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
-    eprintln!("Detected ORG address: 0x{:04X}", org);
-    
-    // Attempt native assembly
-    match backend::asm_to_binary::assemble_m6809(&asm_source, org) {
-        Ok((binary, _line_map)) => {
-            // Write binary file
-            fs::write(&bin_path, &binary).map_err(|e| {
-                eprintln!("❌ Failed to write binary file: {}", e);
+    let binary = if use_lwasm {
+        // Option 1: External lwasm assembler
+        eprintln!("Using external lwasm assembler...");
+        eprintln!("NOTE: lwasm does NOT generate debug symbols (.pdb)");
+        eprintln!("      Breakpoints and line mapping will NOT work with this option");
+        
+        // Check if lwasm is installed
+        let lwasm_check = std::process::Command::new("lwasm")
+            .arg("--version")
+            .output();
+        
+        if lwasm_check.is_err() {
+            eprintln!("❌ ERROR: lwasm not found in PATH");
+            eprintln!("   Install lwasm from: http://www.lwtools.ca/");
+            eprintln!("   macOS: brew install lwtools");
+            eprintln!("   Linux: apt-get install lwtools or build from source");
+            eprintln!("   Or use native assembler (remove --use-lwasm flag)");
+            return Err(anyhow::anyhow!("lwasm not installed"));
+        }
+        
+        // Use temporary file for lwasm output (we'll add padding later)
+        let temp_bin = bin_path.with_extension("bin.tmp");
+        
+        // Determine project root for include path
+        let project_root = std::env::current_dir()?;
+        
+        // Run lwasm with include directory (use project root so "include/VECTREX.I" works)
+        let output = std::process::Command::new("lwasm")
+            .arg("--format=raw")
+            .arg("-I")
+            .arg(&project_root)
+            .arg(format!("--output={}", temp_bin.display()))
+            .arg(asm_path)
+            .output()
+            .map_err(|e| {
+                eprintln!("❌ Failed to execute lwasm: {}", e);
                 e
             })?;
-            eprintln!("✓ NATIVE ASSEMBLER SUCCESS: Generated {} bytes -> {}", 
-                binary.len(), bin_path.display());
-            return Ok(());
-        },
-        Err(e) => {
-            eprintln!("⚠ Native assembler failed: {}", e);
-            eprintln!("  Falling back to lwasm...");
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            eprintln!("❌ lwasm assembly failed:");
+            if !stdout.is_empty() {
+                eprintln!("STDOUT:\n{}", stdout);
+            }
+            if !stderr.is_empty() {
+                eprintln!("STDERR:\n{}", stderr);
+            }
+            return Err(anyhow::anyhow!("lwasm assembly failed"));
         }
+        
+        eprintln!("✓ lwasm assembly successful");
+        
+        // Read generated binary (will be padded later)
+        let bin_data = fs::read(&temp_bin).map_err(|e| {
+            eprintln!("❌ Failed to read lwasm output: {}", e);
+            e
+        })?;
+        
+        // Clean up temp file
+        let _ = fs::remove_file(&temp_bin);
+        
+        bin_data
+    } else {
+        // Option 2: Native M6809 assembler (default)
+        eprintln!("Using native M6809 assembler (integrated)...");
+        
+        // Extract ORG directive (default to Vectrex RAM start 0xC800)
+        let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
+        eprintln!("Detected ORG address: 0x{:04X}", org);
+        
+        // Assemble with native assembler
+        let (binary, _line_map) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+            .map_err(|e| {
+                eprintln!("❌ Native assembler failed: {}", e);
+                eprintln!("\nPlease fix the assembly errors above.");
+                eprintln!("\nAlternative: Use --use-lwasm flag to try external lwasm assembler");
+                eprintln!("             (WARNING: No debug symbols with lwasm)");
+                anyhow::anyhow!("Native assembler failed: {}", e)
+            })?;
+        
+        eprintln!("✓ Native assembler successful");
+        binary
+    };
+    
+    // Validate binary is not empty
+    if binary.is_empty() {
+        eprintln!("❌ CRITICAL ERROR: Binary is EMPTY (0 bytes)");
+        eprintln!("   This usually indicates ASM syntax errors or missing ORG directive");
+        return Err(anyhow::anyhow!("Empty binary generated"));
     }
     
-    // FALLBACK: Use lwasm (original behavior)
-    // Find project root by looking for Cargo.toml
-    let project_root = find_project_root()?;
-    eprintln!("Project root detected: {}", project_root.display());
+    let original_size = binary.len();
+    eprintln!("✓ Assembler generated: {} bytes", original_size);
     
-    // Convert asm_path to absolute if it's relative
-    let asm_path_abs = if asm_path.is_absolute() {
-        asm_path.clone()
+    // Pad to minimum 8K so BIOS detects cartridge instead of launching MineStorm
+    let mut data = binary;
+    if original_size < 0x2000 { 
+        data.resize(0x2000, 0); 
+        let remaining = 0x2000 - original_size;
+        eprintln!("✓ Padded to 8192 bytes (available space: {} bytes / {} KB)", 
+            remaining, remaining / 1024);
+    } else if original_size == 0x2000 {
+        eprintln!("⚠ Cartridge is at maximum size (8KB)");
     } else {
-        std::env::current_dir()?.join(asm_path)
-    };
+        eprintln!("❌ Binary size exceeds 8KB cartridge limit by {} bytes", 
+            original_size - 0x2000);
+    }
     
-    // Convert bin_path to absolute if it's relative  
-    let bin_path_abs = if bin_path.is_absolute() {
-        bin_path.clone()
-    } else {
-        std::env::current_dir()?.join(&bin_path)
-    };
+    // Write final binary to file
+    fs::write(&bin_path, &data).map_err(|e| {
+        eprintln!("❌ Failed to write binary file: {}", e);
+        e
+    })?;
     
-    // Try lwasm first (system PATH)
-    eprintln!("Attempting lwasm assembly...");
-    let mut attempt_local = std::process::Command::new("lwasm")
-        .arg("--6809")
-        .arg("--format=raw")
-        .arg(format!("--output={}", bin_path_abs.display()))
-        .arg(&asm_path_abs)
-        .current_dir(&project_root) // Always run from project root
+    eprintln!("✓ NATIVE ASSEMBLER SUCCESS: {} -> {}", 
+        bin_path.display(), data.len());
+    eprintln!("=== BINARY ASSEMBLY COMPLETE ===");
+    Ok(())
+}
+
+fn assemble_dual(asm_path: &PathBuf) -> Result<()> {
+    eprintln!("=== DUAL ASSEMBLER MODE ===");
+    eprintln!("Compiling with BOTH native and lwasm, then comparing...");
+    
+    let bin_path = asm_path.with_extension("bin");
+    let native_path = asm_path.with_file_name(
+        asm_path.file_stem().unwrap().to_str().unwrap().to_string() + ".native.bin"
+    );
+    let lwasm_path = asm_path.with_file_name(
+        asm_path.file_stem().unwrap().to_str().unwrap().to_string() + ".lwasm.bin"
+    );
+    
+    // Read ASM source
+    let asm_source = fs::read_to_string(asm_path).map_err(|e| {
+        eprintln!("❌ Failed to read ASM file: {}", e);
+        e
+    })?;
+    
+    // === NATIVE ASSEMBLER ===
+    eprintln!("\n[1/2] Compiling with NATIVE assembler...");
+    let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
+    eprintln!("    Detected ORG: 0x{:04X}", org);
+    
+    let (native_binary, _line_map) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+        .map_err(|e| {
+            eprintln!("❌ Native assembler failed: {}", e);
+            anyhow::anyhow!("Native assembler failed: {}", e)
+        })?;
+    
+    eprintln!("    ✓ Native: {} bytes", native_binary.len());
+    fs::write(&native_path, &native_binary)?;
+    
+    // === LWASM ASSEMBLER ===
+    eprintln!("\n[2/2] Compiling with LWASM assembler...");
+    
+    // Check if lwasm is installed
+    let lwasm_check = std::process::Command::new("lwasm")
+        .arg("--version")
         .output();
     
-    // If system lwasm failed, try local lwasm in tools directory
-    if attempt_local.is_err() {
-        let local_lwasm = project_root.join("ide/frontend/public/tools/lwasm.exe");
-        if local_lwasm.exists() {
-            eprintln!("System lwasm not found, trying local lwasm...");
-            attempt_local = std::process::Command::new(&local_lwasm)
-                .arg("--6809")
-                .arg("--format=raw")
-                .arg(format!("--output={}", bin_path_abs.display()))
-                .arg(&asm_path_abs)
-                .current_dir(&project_root) // Always run from project root
-                .output();
-        }
-    }
-        
-    let mut assembled_success = false;
-    let mut lwasm_error_details = String::new();
-    
-    match attempt_local {
-        Ok(res) => {
-            if res.status.success() {
-                eprintln!("✓ lwasm SUCCESS: {}", bin_path_abs.display());
-                assembled_success = true;
-            } else {
-                let stderr_text = String::from_utf8_lossy(&res.stderr);
-                let stdout_text = String::from_utf8_lossy(&res.stdout);
-                lwasm_error_details = format!("lwasm failed (exit code: {})\nSTDERR:\n{}\nSTDOUT:\n{}", 
-                    res.status, stderr_text, stdout_text);
-                eprintln!("❌ {}", lwasm_error_details);
-            }
-        }
-        Err(e) => {
-            lwasm_error_details = format!("Failed to execute lwasm: {} (Is lwasm installed and in PATH?)", e);
-            eprintln!("❌ {}", lwasm_error_details);
-        }
+    if lwasm_check.is_err() {
+        eprintln!("❌ ERROR: lwasm not found in PATH");
+        eprintln!("   Install: brew install lwtools (macOS)");
+        return Err(anyhow::anyhow!("lwasm not installed"));
     }
     
-    // Try PowerShell fallback if lwasm failed
-    if !assembled_success {
-        eprintln!("Trying PowerShell fallback script...");
-        let script = project_root.join("ide/frontend/public/tools/lwasm.ps1");
-        if script.exists() {
-            let pw = std::process::Command::new("powershell")
-                .arg("-NoProfile")
-                .arg("-ExecutionPolicy").arg("Bypass")
-                .arg("-File")
-                .arg(&script)
-                .arg(&asm_path_abs)
-                .arg(&bin_path_abs)
-                .current_dir(&project_root)
-                .output();
-            match pw {
-                Ok(r) => {
-                    if r.status.success() {
-                        eprintln!("✓ PowerShell fallback SUCCESS: {}", bin_path_abs.display());
-                        assembled_success = true;
-                    } else {
-                        let stderr_text = String::from_utf8_lossy(&r.stderr);
-                        let stdout_text = String::from_utf8_lossy(&r.stdout);
-                        eprintln!("❌ PowerShell fallback failed (exit code: {})\nSTDERR:\n{}\nSTDOUT:\n{}", 
-                            r.status, stderr_text, stdout_text);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("❌ PowerShell execution failed: {}", e);
-                }
+    // Determine project root for include path
+    let project_root = std::env::current_dir()?;
+    
+    // Run lwasm with include directory (use project root so "include/VECTREX.I" works)
+    let output = std::process::Command::new("lwasm")
+        .arg("--format=raw")
+        .arg("-I")
+        .arg(&project_root)
+        .arg(format!("--output={}", lwasm_path.display()))
+        .arg(asm_path)
+        .output()
+        .map_err(|e| {
+            eprintln!("❌ Failed to execute lwasm: {}", e);
+            e
+        })?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("❌ lwasm failed:\n{}", stderr);
+        return Err(anyhow::anyhow!("lwasm assembly failed"));
+    }
+    
+    let lwasm_binary = fs::read(&lwasm_path)?;
+    eprintln!("    ✓ lwasm: {} bytes", lwasm_binary.len());
+    
+    // === COMPARISON ===
+    eprintln!("\n=== BINARY COMPARISON ===");
+    eprintln!("Native: {} bytes", native_binary.len());
+    eprintln!("lwasm:  {} bytes", lwasm_binary.len());
+    
+    if native_binary.len() != lwasm_binary.len() {
+        eprintln!("⚠️  SIZE MISMATCH: {} bytes difference", 
+            (native_binary.len() as i32 - lwasm_binary.len() as i32).abs());
+    }
+    
+    let min_len = native_binary.len().min(lwasm_binary.len());
+    let mut differences = 0;
+    let mut first_diff = None;
+    
+    for i in 0..min_len {
+        if native_binary[i] != lwasm_binary[i] {
+            differences += 1;
+            if first_diff.is_none() {
+                first_diff = Some(i);
             }
-        } else {
-            eprintln!("❌ PowerShell fallback script not found: {}", script.display());
         }
     }
     
-    // Final validation
-    if assembled_success {
-        // Check if binary was actually created and is not empty
-        match std::fs::metadata(&bin_path_abs) {
-            Ok(metadata) => {
-                if metadata.len() == 0 {
-                    eprintln!("❌ CRITICAL ERROR: Binary file created but is EMPTY (0 bytes)");
-                    eprintln!("   This usually indicates ASM syntax errors or missing ORG directive");
-                    return Err(anyhow::anyhow!("Empty binary file generated"));
-                } else {
-                    eprintln!("✓ Binary validation passed: {} bytes", metadata.len());
-                }
-            }
-            Err(e) => {
-                eprintln!("❌ CRITICAL ERROR: Binary file not found after successful assembly: {}", e);
-                return Err(anyhow::anyhow!("Binary file missing after assembly: {}", e));
-            }
-        }
-        
-        // Pad to minimum 8K so BIOS detects cartridge instead of launching MineStorm
-        if let Ok(mut data) = std::fs::read(&bin_path_abs) {
-            let original_size = data.len();
-            if original_size < 0x2000 { 
-                data.resize(0x2000, 0); 
-                std::fs::write(&bin_path_abs, &data)?; 
-                let remaining = 0x2000 - original_size;
-                eprintln!("✓ Binary size: {} bytes (padded to 8192 bytes)", original_size); 
-                eprintln!("✓ Available space: {} bytes ({} KB) remaining", remaining, remaining / 1024);
-            } else if original_size == 0x2000 {
-                eprintln!("✓ Binary size: {} bytes (8192 bytes - cartridge size limit reached)", original_size);
-                eprintln!("⚠ Warning: Cartridge is at maximum size (8KB)");
-            } else {
-                eprintln!("❌ Binary size: {} bytes exceeds 8KB cartridge limit by {} bytes", original_size, original_size - 0x2000);
-            }
-        }
-        eprintln!("=== BINARY ASSEMBLY COMPLETE ===");
+    if differences == 0 && native_binary.len() == lwasm_binary.len() {
+        eprintln!("✅ BINARIES ARE IDENTICAL!");
+        eprintln!("   Both assemblers produced exactly the same output.");
     } else {
-        eprintln!("=== BINARY ASSEMBLY FAILED ===");
-        eprintln!("All assembly methods failed. Details:");
-        eprintln!("{}", lwasm_error_details);
-        return Err(anyhow::anyhow!("Binary assembly failed - see details above"));
+        eprintln!("❌ BINARIES DIFFER!");
+        eprintln!("   Differences: {} bytes", differences);
+        if let Some(offset) = first_diff {
+            eprintln!("   First diff at offset 0x{:04X}:", offset);
+            eprintln!("     Native: 0x{:02X}", native_binary[offset]);
+            eprintln!("     lwasm:  0x{:02X}", lwasm_binary[offset]);
+        }
     }
+    
+    // Pad both binaries to 8KB for emulator compatibility
+    let mut native_padded = native_binary.clone();
+    let mut lwasm_padded = lwasm_binary.clone();
+    
+    if native_padded.len() < 0x2000 {
+        native_padded.resize(0x2000, 0);
+    }
+    if lwasm_padded.len() < 0x2000 {
+        lwasm_padded.resize(0x2000, 0);
+    }
+    
+    eprintln!("\n✓ Padded both binaries to 8KB");
+    
+    // Write all three binaries
+    fs::write(&bin_path, &native_padded)?;      // Default .bin (native)
+    fs::write(&native_path, &native_padded)?;   // .native.bin
+    fs::write(&lwasm_path, &lwasm_padded)?;     // .lwasm.bin
+    
+    eprintln!("✓ Generated 3 binaries:");
+    eprintln!("  - {} (default, native)", bin_path.display());
+    eprintln!("  - {} (native assembler)", native_path.display());
+    eprintln!("  - {} (lwasm assembler)", lwasm_path.display());
     
     Ok(())
 }

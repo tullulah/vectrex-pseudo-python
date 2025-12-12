@@ -81,6 +81,51 @@ if ! command -v npm &> /dev/null; then
   exit 1
 fi
 
+# Verificar lwasm (ensamblador externo para modo dual)
+if ! command -v lwasm &> /dev/null; then
+  echo '[INFO] lwasm no encontrado - instalando lwtools...'
+  
+  # Detectar sistema operativo
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS - usar Homebrew
+    if command -v brew &> /dev/null; then
+      echo '[INFO] Instalando lwtools via Homebrew...'
+      brew install lwtools
+      if [ $? -eq 0 ]; then
+        echo '[OK  ] lwtools instalado correctamente'
+      else
+        echo '[WARN] No se pudo instalar lwtools automáticamente'
+        echo '       Instala manualmente: brew install lwtools'
+        echo '       El modo --dual no estará disponible hasta instalar lwasm'
+      fi
+    else
+      echo '[WARN] Homebrew no encontrado - no se puede instalar lwtools'
+      echo '       Instala Homebrew desde: https://brew.sh'
+      echo '       Luego ejecuta: brew install lwtools'
+      echo '       El modo --dual no estará disponible hasta instalar lwasm'
+    fi
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux - intentar con apt-get o yum
+    if command -v apt-get &> /dev/null; then
+      echo '[INFO] Instalando lwtools via apt-get...'
+      sudo apt-get update && sudo apt-get install -y lwtools
+    elif command -v yum &> /dev/null; then
+      echo '[INFO] Instalando lwtools via yum...'
+      sudo yum install -y lwtools
+    else
+      echo '[WARN] No se encontró gestor de paquetes compatible'
+      echo '       Instala lwtools manualmente desde: http://www.lwtools.ca/'
+      echo '       El modo --dual no estará disponible hasta instalar lwasm'
+    fi
+  else
+    echo '[WARN] Sistema operativo no reconocido para instalación automática'
+    echo '       Instala lwtools manualmente desde: http://www.lwtools.ca/'
+    echo '       El modo --dual no estará disponible hasta instalar lwasm'
+  fi
+else
+  echo '[OK  ] lwasm encontrado en PATH'
+fi
+
 # Configurar variables de entorno
 if [ "$NO_DEV_TOOLS" = false ]; then
   export VPY_IDE_DEVTOOLS=1
@@ -156,6 +201,16 @@ echo '[INFO] Lanzando entorno Electron'
 
 if [ "$PRODUCTION" = true ]; then
   echo '[INFO] Modo producción - sin hot reload'
+  
+  # Verificación de tipos TypeScript
+  echo '[INFO] Verificando tipos TypeScript...'
+  (cd "$ROOT/ide/frontend" && npm run typecheck)
+  if [ $? -ne 0 ]; then
+    echo '[ERR ] TypeScript typecheck falló - el código tiene errores de tipos'
+    exit 1
+  fi
+  echo '[OK  ] TypeScript typecheck exitoso'
+  
   # Asegurar que el frontend esté construido
   echo '[INFO] Construyendo frontend...'
   (cd "$ROOT/ide/frontend" && npm run build)
@@ -167,6 +222,16 @@ if [ "$PRODUCTION" = true ]; then
   (cd "$ROOT/ide/electron" && npm run start)
 else
   echo '[INFO] Modo desarrollo - con hot reload'
+  
+  # Verificación de tipos TypeScript
+  echo '[INFO] Verificando tipos TypeScript...'
+  (cd "$ROOT/ide/frontend" && npm run typecheck)
+  if [ $? -ne 0 ]; then
+    echo '[ERR ] TypeScript typecheck falló - el código tiene errores de tipos'
+    exit 1
+  fi
+  echo '[OK  ] TypeScript typecheck exitoso'
+  
   if [ "$NO_CLEAR" = true ]; then
     export FORCE_COLOR=1
   fi
