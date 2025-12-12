@@ -47,16 +47,17 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     syntax: "SET_INTENSITY(level)",
     description: "Sets the electron beam intensity (brightness)",
     parameters: [
-      { name: "level", type: "int", description: "Intensity level (0-255, 0=invisible, 255=brightest)", required: true }
+      { name: "level", type: "int", description: "Intensity level (0-127 recommended, max 255)", required: true }
     ],
     examples: [
-      "SET_INTENSITY(255)  # Maximum brightness",
-      "SET_INTENSITY(128)  # Medium brightness",
+      "SET_INTENSITY(127)  # Maximum safe brightness",
+      "SET_INTENSITY(80)   # Medium brightness",
+      "SET_INTENSITY(64)   # Low-medium brightness",
       "SET_INTENSITY(0)    # Invisible (off)"
     ],
     category: "unified",
     vectrexAddress: "0xF2AB",
-    notes: "Works in both global code and vectorlist contexts with same syntax"
+    notes: "IMPORTANT: Use values ≤127 for safe display. Values 128-255 cause CRT oversaturation, burn-in risk, and invisible lines. Works in both global code and vectorlist contexts."
   },
   {
     name: "SET_ORIGIN",
@@ -122,23 +123,52 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     notes: "Intensity must be > 0 to see the line. Draws from current beam position to target"
   },
   {
-    name: "DRAW_LINE",
-    syntax: "DRAW_LINE(x1, y1, x2, y2, intensity)",
-    description: "PRIMARY LINE FUNCTION: Draws a line between two absolute coordinate points with specified intensity",
+    name: "DRAW_POLYGON",
+    syntax: "DRAW_POLYGON(N, x0, y0, x1, y1, ..., xN-1, yN-1) or DRAW_POLYGON(N, intensity, x0, y0, x1, y1, ...)",
+    description: "⭐ RECOMMENDED FOR SHAPES: Draws a closed polygon with N vertices using connected lines (no gaps)",
     parameters: [
-      { name: "x1", type: "int", description: "Start X coordinate (-127 to +127)", required: true },
-      { name: "y1", type: "int", description: "Start Y coordinate (-127 to +127)", required: true },
-      { name: "x2", type: "int", description: "End X coordinate (-127 to +127)", required: true },
-      { name: "y2", type: "int", description: "End Y coordinate (-127 to +127)", required: true },
-      { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
+      { name: "N", type: "int", description: "Number of vertices (3+ for triangle, 4 for square, etc.)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-127 recommended) - optional, defaults to 95", required: false },
+      { name: "x0, y0, ...", type: "int", description: "Vertex coordinates in order (-127 to +127)", required: true }
     ],
     examples: [
-      "DRAW_LINE(0, 0, 50, 0, 255)    # Horizontal line with max intensity",
-      "DRAW_LINE(-25, -25, 25, 25, 128)  # Diagonal line with medium intensity",
-      "DRAW_LINE(0, 50, 0, -50, 200)     # Vertical line"
+      "# Square (4 vertices):",
+      "DRAW_POLYGON(4, -30, -30, 30, -30, 30, 30, -30, 30)",
+      "# Square with custom intensity:",
+      "DRAW_POLYGON(4, 80, -30, -30, 30, -30, 30, 30, -30, 30)",
+      "# Triangle (3 vertices):",
+      "DRAW_POLYGON(3, 0, 20, -15, -10, 15, -10)",
+      "# Pentagon (5 vertices):",
+      "DRAW_POLYGON(5, 127, 0, 30, 28, 9, 17, -23, -17, -23, -28, 9)"
     ],
     category: "drawing",
-    notes: "RECOMMENDED: Single unified line function. Always reliable, handles intensity and positioning automatically. Use this instead of other line functions."
+    notes: "⭐ USE THIS for squares, triangles, and closed shapes - generates CONNECTED lines with single intensity/origin setup. Much more efficient than multiple DRAW_LINE calls. Automatically closes the polygon (last vertex connects to first)."
+  },
+  {
+    name: "DRAW_LINE",
+    syntax: "DRAW_LINE(x1, y1, x2, y2, intensity)",
+    description: "🚨 DRAWS FROM CURRENT BEAM POSITION using RELATIVE deltas. Does NOT move beam to (x1,y1) automatically. Use MOVE() first to position beam. Takes absolute coords but converts to dx/dy deltas internally.",
+    parameters: [
+      { name: "x1", type: "int", description: "Start X position (-127 to +127, absolute screen coordinate - ONLY used to calculate dx)", required: true },
+      { name: "y1", type: "int", description: "Start Y position (-127 to +127, absolute screen coordinate - ONLY used to calculate dy)", required: true },
+      { name: "x2", type: "int", description: "End X position (-127 to +127, absolute screen coordinate)", required: true },
+      { name: "y2", type: "int", description: "End Y position (-127 to +127, absolute screen coordinate)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-127 ONLY, ≥128 = INVISIBLE)", required: true }
+    ],
+    examples: [
+      "# ✅ CORRECT: Position beam first, then draw connected lines:",
+      "SET_INTENSITY(80)",
+      "MOVE(-30, -30)                   # Position at start",
+      "DRAW_LINE(-30, -30, 30, -30, 80) # Bottom (draws dx=60, dy=0 from current pos)",
+      "DRAW_LINE(30, -30, 30, 30, 80)   # Right (continues from end of previous line)",
+      "DRAW_LINE(30, 30, -30, 30, 80)   # Top (connected)",
+      "DRAW_LINE(-30, 30, -30, -30, 80) # Left (connected)",
+      "",
+      "# ⚠️ EASIER: Use DRAW_POLYGON for closed shapes (handles positioning automatically):",
+      "DRAW_POLYGON(4, 80, -30,-30, 30,-30, 30,30, -30,30)  # Perfect square, no gaps"
+    ],
+    category: "drawing",
+    notes: "⚠️ LOW-LEVEL API: Compiler calculates dx=x2-x1, dy=y2-y1 and calls BIOS Draw_Line_d(dy,dx) directly WITHOUT Moveto_d. Lines are CONNECTED if you position correctly with MOVE(). For simple shapes: USE DRAW_POLYGON (easiest) OR DRAW_TO (mid-level). DRAW_LINE is for advanced users who need explicit delta control."
   },
   {
     name: "DRAW_CIRCLE",
@@ -147,8 +177,8 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [
       { name: "x", type: "int", description: "Center X coordinate (-127 to +127)", required: true },
       { name: "y", type: "int", description: "Center Y coordinate (-127 to +127)", required: true },
-      { name: "r", type: "int", description: "Radius (positive)", required: true },
-      { name: "intensity", type: "int", description: "Line intensity (0-255)", required: true }
+      { name: "r", type: "int", description: "Radius (1 to 110)", required: true },
+      { name: "intensity", type: "int", description: "Line intensity (0-127 recommended)", required: true }
     ],
     examples: [
       "DRAW_CIRCLE(0, 0, 50, 255)    # Large circle at center",
@@ -279,10 +309,29 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     description: "Waits for vertical retrace (frame synchronization)",
     parameters: [],
     examples: [
-      "WAIT_RECAL()  # Wait for next frame"
+      "# ❌ NEVER add WAIT_RECAL() in your code",
+      "# Backend automatically handles frame synchronization",
+      "def loop():",
+      "    # Just write your drawing code",
+      "    SET_INTENSITY(127)",
+      "    DRAW_VECTOR(\"player\")"
     ],
     category: "timing",
-    notes: "Synchronizes with 60 FPS display refresh rate. Essential for smooth animation"
+    notes: "❌ NEVER add WAIT_RECAL() manually - backend automatically handles frame synchronization. Adding it manually causes timing issues. Synchronizes with 60 FPS CRT refresh rate automatically."
+  },
+  {
+    name: "MUSIC_UPDATE",
+    syntax: "MUSIC_UPDATE()",
+    description: "✅ Processes PSG music events (REQUIRED for music playback)",
+    parameters: [],
+    examples: [
+      'def loop():',
+      '    WAIT_RECAL()',
+      '    MUSIC_UPDATE()  # Process music every frame',
+      '    # Your game code...'
+    ],
+    category: "audio",
+    notes: "✅ REQUIRED FOR MUSIC - Must be called once per frame in loop() after PLAY_MUSIC(). Increments tick counter, processes NOTE/NOISE events, programs PSG registers (R0-R10). Handles timing, loops, channel volumes. No-op if no music playing."
   },
   {
     name: "PLAY_MUSIC1",
@@ -294,6 +343,50 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "sound",
     notes: "Activates Vectrex built-in music. Only music1 is currently supported"
+  },
+  
+  // Asset System Functions
+  {
+    name: "DRAW_VECTOR",
+    syntax: "DRAW_VECTOR(name)",
+    description: "✅ WORKING - Draws a vector asset embedded in ROM from assets/vectors/*.vec file",
+    parameters: [
+      { name: "name", type: "string", description: "Name of the vector asset (without .vec extension)", required: true }
+    ],
+    examples: [
+      'def loop():',
+      '    # ❌ NEVER add WAIT_RECAL() here - backend handles it',
+      '    SET_INTENSITY(127)',
+      '    MOVE(0, 0)',
+      '    DRAW_VECTOR("player")  # Draw player sprite',
+      '',
+      '# 🚨 CRITICAL: Vector asset intensity values must be ≤127',
+      '# Values >127 (like 150, 200, 255) cause INVISIBLE LINES',
+      '# Example .vec file (CORRECT intensities):',
+      '# {"paths":[{"intensity":127, "points":[...]}]}  # ✅ VISIBLE',
+      '# {"paths":[{"intensity":200, "points":[...]}]}  # ❌ INVISIBLE!'
+    ],
+    category: "assets",
+    notes: "✅ FULLY IMPLEMENTED. Compiler auto-discovers .vec files in assets/vectors/ folder (Phase 0). Asset is embedded in ROM as _NAME_VECTORS label. Calls BIOS Draw_VLc ($F3CE) to render vector data. 🚨 CRITICAL: intensity values in .vec file MUST be ≤127 - higher values cause invisible lines! If screen is black, check asset intensity values."
+  },
+  {
+    name: "PLAY_MUSIC",
+    syntax: "PLAY_MUSIC(name)",
+    description: "✅ WORKING - Plays PSG music from embedded .vmus file (requires calling MUSIC_UPDATE in loop)",
+    parameters: [
+      { name: "name", type: "string", description: "Name of the music asset (without .vmus extension)", required: true }
+    ],
+    examples: [
+      'def main():',
+      '    PLAY_MUSIC("theme")  # Initialize music from assets/music/theme.vmus',
+      '',
+      'def loop():',
+      '    WAIT_RECAL()',
+      '    MUSIC_UPDATE()       # Process music events (REQUIRED for playback)',
+      '    # Your game code...'
+    ],
+    category: "assets",
+    notes: "✅ FULLY IMPLEMENTED - Auto-discovers .vmus files in assets/music/. Embeds event data in ROM. PLAY_MUSIC_RUNTIME initializes PSG, resets state. MUSIC_UPDATE() processes events (NOTE/NOISE), sets PSG registers (R0-R10), handles timing. Call MUSIC_UPDATE() once per frame in loop() for playback. PSG hardware access via VIA Port B."
   }
 ];
 
@@ -410,6 +503,49 @@ def loop():
 - **Target Platform**: Vectrex console
 - **Compilation**: VPy → 6809 Assembly → Vectrex executable
 
+## ⚠️ Variable Scope Rules (CRITICAL):
+
+### **NO SHARED VARIABLES between main() and loop()**
+- Each function has its **own local scope**
+- Variables declared in \`main()\` are **NOT accessible** in \`loop()\`
+- Variables declared in \`loop()\` are **NOT accessible** in \`main()\`
+- **NO global variables** - VPy does not support variables outside functions
+
+### **Correct Variable Usage**:
+\`\`\`vpy
+# ❌ INCORRECT - Variables in main() cannot be used in loop()
+def main():
+    let player_x = 0    # Local to main() only
+    let score = 0       # Local to main() only
+
+def loop():
+    MOVE(player_x, 0)   # ❌ ERROR: player_x not defined!
+    # This will cause "empty assembly" compilation error
+\`\`\`
+
+\`\`\`vpy
+# ✅ CORRECT - Declare variables inside loop()
+def main():
+    # Initialization only - no game variables here
+    PLAY_MUSIC("theme")
+
+def loop():
+    let player_x = 0    # Declare in loop() where they're used
+    let score = 0
+    MOVE(player_x, 0)   # ✅ Works correctly
+\`\`\`
+
+### **Why This Limitation?**
+- VPy compiles to 6809 assembly with separate stack frames
+- \`main()\` runs once at startup and its stack frame is discarded
+- \`loop()\` runs every frame with a fresh stack frame
+- No mechanism for persistent variables between calls (no static storage)
+
+### **Workarounds for State Persistence**:
+- Use RAM variables (not yet implemented in VPy syntax)
+- Calculate state each frame based on frame counter
+- Keep state in assembly through manual inline code
+
 ## VPy Game Structure (New Model):
 
 ### 🎮 **Two-Function Architecture**
@@ -493,11 +629,12 @@ def loop():
   - **Default**: "g GCE 1982"
   - **Used for**: First line display in ROM header
 
-- **MUSIC**: BIOS music symbol (optional)
-  - Examples: \`META MUSIC = "music1"\` or \`META MUSIC = "0"\`
-  - **Default**: "music1"
-  - **Special**: Use "0" to disable music (FDB $0000)
-  - **Used for**: Background music selection
+- **MUSIC**: Built-in BIOS music NUMBER for title screen (optional)
+  - Examples: \`META MUSIC = "0"\` (no music), \`META MUSIC = "1"\` (Minestorm song 1), \`META MUSIC = "2"\` etc.
+  - **Default**: "music1" (or use "0" for silence)
+  - **⚠️ IMPORTANT**: This is NOT for your custom .vmus files - use \`PLAY_MUSIC("name")\` function in code for that
+  - **Range**: "0" to "9" (numbers only, built-in songs)
+  - **Used for**: Title screen background music (built-in songs only)
 
 ### ⚠️ **Important META Rules:**
 - **Only 3 META fields supported**: TITLE, COPYRIGHT, MUSIC
@@ -703,6 +840,132 @@ def loop():
 #     pass              # ❌ NOT SUPPORTED
 \`\`\`
 
+## 🎨 Asset System - Embedded Graphics and Music
+
+VPy includes a powerful asset system that allows you to embed vector graphics and music directly in your game ROM.
+
+### 📦 How Assets Work:
+1. **Auto-discovery**: Place .vec and .vmus files in \`assets/vectors/\` and \`assets/music/\` directories
+2. **Compile-time embedding**: Assets are automatically discovered and embedded in ROM during compilation (Phase 0)
+3. **Reference by name**: Use \`DRAW_VECTOR("name")\` and \`PLAY_MUSIC("name")\` in your code
+4. **No manual loading**: Everything is compiled into the final binary
+
+### 🎯 Vector Graphics (.vec files)
+
+Vector graphics are stored as JSON files in \`assets/vectors/*.vec\`:
+
+**File format**:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "player",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "ship",
+      "intensity": 127,
+      "closed": true,
+      "points": [
+        {"x": 0, "y": 20},
+        {"x": -15, "y": -10},
+        {"x": 15, "y": -10}
+      ]
+    }]
+  }]
+}
+\`\`\`
+
+**Key fields**:
+- \`name\`: Asset identifier (used in \`DRAW_VECTOR("player")\`)
+- \`intensity\`: Brightness (0-255, higher = brighter)
+- \`closed\`: true = polygon, false = open line
+- \`points\`: Coordinates in range -127 to +127 (Vectrex screen space)
+
+**Usage in code**:
+\`\`\`vpy
+def loop():
+    WAIT_RECAL()
+    SET_INTENSITY(255)
+    MOVE(-50, 0)
+    DRAW_VECTOR("player")  # Draws the vector asset
+\`\`\`
+
+### 🎵 Music Assets (.vmus files)
+
+Music is stored as JSON files in \`assets/music/*.vmus\`:
+
+**File format**:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "theme",
+  "author": "Composer Name",
+  "tempo": 120,
+  "ticksPerBeat": 24,
+  "totalTicks": 384,
+  "notes": [
+    {"id": "note1", "note": 60, "start": 0, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "note2", "note": 64, "start": 48, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "note3", "note": 67, "start": 96, "duration": 48, "velocity": 12, "channel": 0}
+  ],
+  "noise": [
+    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1}
+  ],
+  "loopStart": 0,
+  "loopEnd": 384
+}
+\`\`\`
+
+**Key fields**:
+- \`note\`: MIDI note number (60=C4, 69=A4 440Hz, 72=C5)
+- \`velocity\`: Volume (0-15, where 15=maximum)
+- \`channel\`: PSG channel (0=A, 1=B, 2=C)
+- \`period\`: Noise period (0-31, lower=higher pitch)
+- \`channels\`: Noise channel mask (1=A, 2=B, 4=C, 7=all)
+
+**Usage in code**:
+\`\`\`vpy
+def main():
+    PLAY_MUSIC("theme")  # Start background music
+
+def loop():
+    # Music plays automatically in background
+    # ... game logic ...
+\`\`\`
+
+### 📁 Project Structure with Assets:
+\`\`\`
+my_game/
+├── game.vpy              # Main game code
+├── assets/
+│   ├── vectors/
+│   │   ├── player.vec    # Player ship sprite
+│   │   ├── enemy.vec     # Enemy sprite
+│   │   └── bullet.vec    # Bullet graphic
+│   └── music/
+│       ├── theme.vmus    # Main theme music
+│       ├── gameover.vmus # Game over jingle
+│       └── victory.vmus  # Victory music
+\`\`\`
+
+### 🔧 Asset System Technical Details:
+- **Discovery**: Automatic at compile time (Phase 0)
+- **Embedding**: Data section in ROM (Phase 5)
+- **Format**: FCB assembly directives for vector data
+- **Access**: JSR to BIOS Draw_VLc for vectors
+- **Music**: Placeholder PSG player (full implementation in progress)
+- **Compilation**: Native M6809 assembler (no lwasm needed)
+
+### ✅ Asset Best Practices:
+1. Keep vector sprites simple (fewer points = faster drawing)
+2. Use appropriate intensity values (127-255 for visible graphics)
+3. Place commonly-used sprites first in assets/ for faster access
+4. Keep music files under ~80-100 notes for optimal size
+5. Use loops in music (loopStart/loopEnd) for repetition instead of duplicating notes
+6. Test assets in emulator before deploying to real hardware
+
 ## Hardware Constraints:
 - 1KB RAM total (0xC800-0xCFFF)
 - 8K ROM BIOS (0xE000-0xFFFF) 
@@ -710,14 +973,26 @@ def loop():
 - Vector display with X/Y deflection
 - 4-channel sound via AY-3-8912 PSG
 
+## 🚨 CRITICAL Vectrex Coordinate System:
+- **Screen center is (0, 0)** - NOT top-left corner!
+- **Valid range: -127 to +127** for both X and Y axes
+- **X axis**: -127 (far left) → 0 (center) → +127 (far right)
+- **Y axis**: -127 (bottom) → 0 (center) → +127 (top)
+- **Examples**:
+  - Top-left corner: (-127, 127)
+  - Top-right corner: (127, 127)
+  - Bottom-left corner: (-127, -127)
+  - Bottom-right corner: (127, -127)
+  - Center: (0, 0)
+
 ## Programming Patterns:
 1. **Two required functions**: \`def main():\` for initialization and \`def loop():\` for game logic
 2. **main() runs once**: Use for initializing variables, setting up game state
 3. **loop() runs every frame**: Use for game logic, drawing, input handling (60 FPS)
-4. Set intensity before drawing (SET_INTENSITY > 0)
-5. Move to start position (MOVE)
-6. Draw lines with relative coordinates (DRAW_LINE)
-7. Use ORIGIN() to reset coordinate system
+4. **❌ NEVER add WAIT_RECAL() in loop()**: Backend automatically handles frame synchronization - adding it manually causes timing issues
+5. **Use safe intensity values**: ALWAYS use intensity ≤127 (0x7F) - higher values cause invisible lines
+6. **DRAW_LINE coordinates are SCREEN POSITIONS**: Specify start point (x1,y1) and end point (x2,y2) as absolute screen coordinates
+7. **Compiler converts to BIOS format**: Backend calculates dx=x2-x1, dy=y2-y1 and generates: Moveto_d(x1,y1) + Draw_Line_d(dx,dy)
 
 ## Required Program Structure:
 \\\`\\\`\\\`vpy
@@ -726,16 +1001,46 @@ META COPYRIGHT = "g GCE 1982"
 
 def main():
     # Initialization code - runs ONCE at startup
-    let player_x = 0
-    let score = 0
-    # Set up initial game state
+    let dummy = 0  # Placeholder if no initialization needed
 
 def loop():
-    # Game logic - runs every frame (60 FPS automatically)
-    SET_INTENSITY(255)
-    MOVE(player_x, 0)
-    DRAW_TO(player_x + 20, 0)
-    # Update game state, handle input, etc.
+    # Game loop - runs every frame (60 FPS)
+    # ❌ NEVER add WAIT_RECAL() - backend handles it automatically
+    
+    # OPTION 1 (EASIEST): Draw connected square using DRAW_POLYGON
+    DRAW_POLYGON(4, 80, -30, -30, 30, -30, 30, 30, -30, 30)
+    
+    # OPTION 2 (MANUAL): Draw connected square with MOVE + DRAW_TO
+    # SET_INTENSITY(80)
+    # MOVE(-30, -30)       # Move to first vertex (beam off)
+    # DRAW_TO(30, -30)     # Draw to second vertex (connected)
+    # DRAW_TO(30, 30)      # Draw to third vertex (connected)
+    # DRAW_TO(-30, 30)     # Draw to fourth vertex (connected)
+    # DRAW_TO(-30, -30)    # Close square (connected)
+    
+    # OPTION 3 (LOW-LEVEL): Connected square using MOVE + DRAW_LINE
+    # SET_INTENSITY(80)
+    # MOVE(-30, -30)                      # Position beam at start
+    # DRAW_LINE(-30, -30, 30, -30, 80)    # Bottom edge
+    # DRAW_LINE(30, -30, 30, 30, 80)      # Right edge (continues from previous end)
+    # DRAW_LINE(30, 30, -30, 30, 80)      # Top edge (continues from previous end)
+    # DRAW_LINE(-30, 30, -30, -30, 80)    # Left edge (continues from previous end)
+    
+    # EXAMPLE: House with DRAW_POLYGON (recommended for closed shapes)
+    # Base rectangle
+    DRAW_POLYGON(4, 80, -40, -40, 40, -40, 40, 20, -40, 20)
+    
+    # Roof triangle (peak ABOVE base at y=60)
+    DRAW_POLYGON(3, 80, -50, 20, 0, 60, 50, 20)
+    
+    # Door
+    DRAW_POLYGON(4, 80, -10, -40, 10, -40, 10, -15, -10, -15)
+    
+    # Window
+    DRAW_POLYGON(4, 80, 15, -5, 30, -5, 30, -20, 15, -20)
+    
+    # NOTE: DRAW_POLYGON is MUCH easier than MOVE + DRAW_LINE
+    # Each DRAW_POLYGON is independent - no need to reposition
 \\\`\\\`\\\`
 
 ## Common Mistakes:
@@ -743,8 +1048,16 @@ def loop():
 - **Missing def loop()**: Game loop function is required (runs every frame at 60 FPS)
 - **Putting game logic in main()**: main() is for initialization only, put game logic in loop()
 - **Manual frame loops**: Don't use for/while loops for animation - loop() runs automatically
-- Forgetting to set intensity (lines won't show)
-- Using absolute coordinates for DRAW_LINE (should be relative)
+- **❌ CRITICAL: Using main() variables in loop()**: Variables declared in main() are NOT accessible in loop()
+- **Declaring variables in main() for use in loop()**: Each function has separate scope - declare variables inside loop() instead
+- **🚨 CRITICAL: Using intensity > 127**: Values 128-255 cause CRT oversaturation and INVISIBLE LINES - ALWAYS use ≤127
+- **Using intensity values like 200, 255**: These are TOO HIGH and will NOT display correctly - use 64, 80, 127 instead
+- **Forgetting WAIT_RECAL() at start of loop()**: Required for proper CRT synchronization
+- **❌ Using multiple DRAW_LINE for shapes**: Creates disconnected lines with gaps - USE DRAW_POLYGON (easiest) OR MOVE once + multiple DRAW_TO (manual)
+- **Drawing squares with 4 DRAW_LINE calls**: Each DRAW_LINE repositions beam creating gaps - options: 1) DRAW_POLYGON(4, intensity, x0,y0, x1,y1, x2,y2, x3,y3) OR 2) SET_INTENSITY + MOVE once + 4 DRAW_TO
+- **❌ Putting asset name in META MUSIC**: META MUSIC requires a NUMBER ("0"-"9"), not an asset name like "space_battle". Use PLAY_MUSIC("name") in code instead
+- **❌ Using DRAW_VECTOR/PLAY_MUSIC without creating asset files**: Functions work but need files in assets/vectors/*.vec and assets/music/*.vmus. If file missing, compiler shows "ERROR: asset 'name' not found"
+- **❌ Calling PLAY_MUSIC but forgetting MUSIC_UPDATE()**: PLAY_MUSIC only initializes - you MUST call MUSIC_UPDATE() every frame in loop() for actual playback
 - Coordinates outside -127 to +127 range
 - Not considering automatic 60 FPS timing
 - Trying to pass too many parameters to functions (check function documentation - varies from 0 to 5 params)
@@ -761,8 +1074,21 @@ export const VECTREX_HARDWARE_CONTEXT = `
 ## Display System:
 - Vector CRT display (not raster/pixel-based)
 - Electron beam draws lines directly
-- Intensity controls line brightness
+- Intensity controls line brightness (CRITICAL: use ≤127 for safe display)
 - No frame buffer - real-time drawing
+
+## Safe Intensity Values (ALWAYS USE THESE):
+- **127 (0x7F)**: Maximum safe brightness (bright, clear lines)
+- **80 (0x50)**: Medium brightness (recommended for most graphics)
+- **64 (0x40)**: Low-medium brightness (good for background elements)
+- **48 (0x30)**: Dim (subtle effects)
+- **0**: Invisible (beam off)
+
+⚠️ **NEVER use intensity values above 127** - values like 150, 200, 255 cause:
+  - CRT phosphor oversaturation
+  - Lines become invisible or distorted
+  - Potential burn-in damage on real hardware
+  - Emulator may show incorrect behavior
 
 ## Memory Map:
 - 0x0000-0xBFFF: Cartridge ROM space
@@ -838,6 +1164,7 @@ ${projectFiles ? projectFiles.map(f => `- ${f}`).join('\n') : 'No files loaded'}
 \`\`\`vpy
 var angle = 0
 def loop():
+    WAIT_RECAL()
     let x = cos(angle) / 2
     let y = sin(angle) / 2
     DRAW_LINE(0, 0, x, y, 127)
@@ -849,6 +1176,7 @@ def loop():
 \`\`\`vpy
 var angle = 0
 def loop():
+    WAIT_RECAL()
     # 3 vertices at 120° intervals (42 units in 0-127 system)
     let x1 = cos(angle) / 2
     let y1 = sin(angle) / 2
@@ -856,21 +1184,27 @@ def loop():
     let y2 = sin(angle + 42) / 2
     let x3 = cos(angle + 85) / 2
     let y3 = sin(angle + 85) / 2
-    DRAW_LINE(x1, y1, x2, y2, 120)
-    DRAW_LINE(x2, y2, x3, y3, 120)
-    DRAW_LINE(x3, y3, x1, y1, 120)
+    DRAW_LINE(x1, y1, x2, y2, 80)
+    DRAW_LINE(x2, y2, x3, y3, 80)
+    DRAW_LINE(x3, y3, x1, y1, 80)
     angle = angle + 1
     if angle > 127: angle = 0
 \`\`\`
-
 ### Circular Motion:
 \`\`\`vpy
 var t = 0
 def loop():
-    MOVE(cos(t) / 3, sin(t) / 3)
-    # Draw something at this position
+    WAIT_RECAL()
+    let x = cos(t) / 3
+    let y = sin(t) / 3
+    # Draw a small square at current position
+    DRAW_LINE(x-5, y-5, x+5, y-5, 80)
+    DRAW_LINE(x+5, y-5, x+5, y+5, 80)
+    DRAW_LINE(x+5, y+5, x-5, y+5, 80)
+    DRAW_LINE(x-5, y+5, x-5, y-5, 80)
     t = t + 2  # Faster motion
     if t > 127: t = 0
+\`\`\` t > 127: t = 0
 \`\`\`
 
 - **AI Assistant**: PyPilot with context-aware VPy expertise
