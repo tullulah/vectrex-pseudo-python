@@ -551,9 +551,43 @@ function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ f
 // args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; outputPath?: string }
 ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string }) => {
   const { path, saveIfDirty, autoStart, outputPath } = args || {} as any;
-  if (!path) return { error: 'no_path' };
+  
+  // Check if we have a project open - if so, compile the project instead of individual file
+  const project = getCurrentProject();
+  
+  // Determine what to compile
+  let targetPath: string;
+  let isProjectMode = false;
+  
+  if (project?.rootDir) {
+    // Project is open - find .vpyproj file
+    const projectName = basename(project.rootDir);
+    const vpyprojPath = join(project.rootDir, `${projectName}.vpyproj`);
+    
+    try {
+      await fs.access(vpyprojPath);
+      targetPath = vpyprojPath;
+      isProjectMode = true;
+      mainWindow?.webContents.send('run://stdout', `[Compiler] Compiling project: ${vpyprojPath}\n`);
+    } catch {
+      // No .vpyproj found, fallback to file compilation
+      if (!path) {
+        mainWindow?.webContents.send('run://stderr', `[Compiler] ❌ No .vpyproj file found and no file specified\n`);
+        return { error: 'no_project_and_no_file' };
+      }
+      targetPath = path;
+    }
+  } else {
+    // No project open - use specified file
+    if (!path) {
+      mainWindow?.webContents.send('run://stderr', `[Compiler] ❌ No project open and no file specified\n`);
+      return { error: 'no_project_and_no_file' };
+    }
+    targetPath = path;
+  }
+  
   // Normalize potential file:// URI to local filesystem path (especially on Windows)
-  let fsPath = path;
+  let fsPath = targetPath;
   if (/^file:\/\//i.test(fsPath)) {
     try {
       // new URL handles decoding; strip leading slash for Windows drive letter patterns like /C:/
@@ -563,11 +597,12 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       fsPath = fsPath.replace(/\//g, require('path').sep);
     } catch {}
   }
-  // Optionally save current buffer content before compiling
-  const targetDisplay = fsPath !== path ? `${path} -> ${fsPath}` : fsPath;
-  // Optionally save current buffer content before compiling
+  
+  const targetDisplay = fsPath !== targetPath ? `${targetPath} -> ${fsPath}` : fsPath;
+  
+  // Optionally save current buffer content before compiling (only if NOT project mode)
   let savedMTime: number | undefined;
-  if (saveIfDirty && typeof saveIfDirty.content === 'string') {
+  if (!isProjectMode && saveIfDirty && typeof saveIfDirty.content === 'string') {
     try {
       const statBefore = await fs.stat(fsPath).catch(()=>null);
       if (saveIfDirty.expectedMTime && statBefore && statBefore.mtimeMs !== saveIfDirty.expectedMTime) {
@@ -581,6 +616,7 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       return { error: 'save_failed_before_compile', detail: e?.message };
     }
   }
+  
   const compiler = resolveCompilerPath();
   if (!compiler) return { error: 'compiler_not_found' };
   
@@ -592,8 +628,11 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
   if (verbose) console.log('[RUN] spawning compiler', compiler, fsPath);
   mainWindow?.webContents.send('run://status', `Starting compilation: ${targetDisplay}`);
   return new Promise(async (resolvePromise) => {
+    // Set working directory to project root (three levels up from ide/electron/dist/)
+    const workspaceRoot = join(__dirname, '..', '..', '..');
+    
     let outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
-    const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin'];
+    const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin', '--include-dir', workspaceRoot];
     
     // If outputPath is provided (from project), add --out argument
     // Note: --out specifies the ASM output path, binary is derived from it
@@ -622,18 +661,17 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       if (verbose) console.log('[RUN] ⚠️ Error cleaning files:', e.message);
     }
     
-    // Set working directory to project root (three levels up from ide/electron/dist/)
-    const projectRoot = join(__dirname, '..', '..', '..');
-    
     // CRITICAL DEBUG: Log EXACT command being executed
     const fullCommand = `"${compiler}" ${argsv.join(' ')}`;
     console.log('[RUN] 🔧 FULL COMMAND:', fullCommand);
-    console.log('[RUN] 📁 Working directory:', projectRoot);
+    console.log('[RUN] 📁 Working directory:', workspaceRoot);
     console.log('[RUN] 📝 Input file (absolute):', fsPath);
+    console.log('[RUN] 📦 Mode:', isProjectMode ? 'PROJECT' : 'FILE');
     mainWindow?.webContents.send('run://stdout', `[Compiler] Full command: ${fullCommand}\n`);
-    mainWindow?.webContents.send('run://stdout', `[Compiler] Working dir: ${projectRoot}\n`);
+    mainWindow?.webContents.send('run://stdout', `[Compiler] Working dir: ${workspaceRoot}\n`);
+    mainWindow?.webContents.send('run://stdout', `[Compiler] Mode: ${isProjectMode ? 'PROJECT (.vpyproj)' : 'FILE (.vpy)'}\n`);
     
-    const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'], cwd: projectRoot });
+    const child = spawn(compiler, argsv, { stdio: ['ignore','pipe','pipe'], cwd: workspaceRoot });
     let stdoutBuf = '';
     let stderrBuf = '';
     child.stdout.on('data', (c: Buffer) => { const txt = c.toString('utf8'); stdoutBuf += txt; mainWindow?.webContents.send('run://stdout', txt); });
@@ -1088,10 +1126,11 @@ ipcMain.handle('project:read', async (_e, projectPath: string) => {
     const parsed = toml.parse(content);
     const rootDir = join(projectPath, '..');
     
-    // Update current project tracker for MCP
-    if (parsed.build?.entry) {
-      const entryFile = join(rootDir, parsed.build.entry);
+    // Update current project tracker for MCP and compilation
+    if (parsed.project?.entry) {
+      const entryFile = join(rootDir, parsed.project.entry);
       setCurrentProject({ entryFile, rootDir });
+      console.log('[PROJECT] ✓ Loaded project:', { entryFile, rootDir });
     }
     
     return {

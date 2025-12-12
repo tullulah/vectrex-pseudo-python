@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "name": "triangle",
+  "name": "SIMPLE",
   "canvas": {
     "width": 256,
     "height": 256,
@@ -12,21 +12,29 @@
       "visible": true,
       "paths": [
         {
-          "name": "shape",
+          "name": "path_1765550892786",
           "intensity": 127,
-          "closed": true,
+          "closed": false,
           "points": [
             {
               "x": 0,
-              "y": 20
+              "y": 0,
+              "z": 0
             },
             {
-              "x": -15,
-              "y": -10
+              "x": -28,
+              "y": 26,
+              "z": 0
             },
             {
-              "x": 15,
-              "y": -10
+              "x": -28,
+              "y": 26,
+              "z": 0
+            },
+            {
+              "x": -28,
+              "y": 26,
+              "z": 0
             }
           ]
         }

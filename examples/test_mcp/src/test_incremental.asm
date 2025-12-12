@@ -213,23 +213,19 @@ MAIN:
 LOOP_BODY:
     ; DEBUG: Processing 2 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
-    ; VPy_LINE:7
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 7
+    ; VPy_LINE:8
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 8
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(6)
-    ; VPy_LINE:8
-; ╔════════════════════════════════════════════════════════════╗
-; ║  ❌ COMPILATION ERROR: Vector asset not found             ║
-; ╠════════════════════════════════════════════════════════════╣
-; ║  DRAW_VECTOR("triangle") - asset does not exist                     ║
-; ╠════════════════════════════════════════════════════════════╣
-; ║  No .vec files found in assets/vectors/                   ║
-; ║  Please create vector assets in that directory.           ║
-; ╚════════════════════════════════════════════════════════════╝
-    ERROR_VECTOR_ASSET_NOT_FOUND  ; Assembly will fail here
+    ; VPy_LINE:9
+; DRAW_VECTOR("triangle") - Load pointer and call Draw_Sync_List
+    LDX #_TRIANGLE_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Draw the vector
+    LDD #0
+    STD RESULT
     RTS
 
 ;***************************************************************************
@@ -238,12 +234,45 @@ LOOP_BODY:
 ; Variables (in RAM)
 RESULT    EQU $C880
 TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
+MUSIC_PTR     EQU RESULT+28
+MUSIC_TICK    EQU RESULT+30   ; 32-bit tick counter
+MUSIC_EVENT   EQU RESULT+34   ; Current event pointer
+MUSIC_ACTIVE  EQU RESULT+36   ; Playback state (1 byte)
 VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 ; Call argument scratch space
 VAR_ARG0 EQU RESULT+26
+
+; ========================================
+; ASSET DATA SECTION
+; Embedded 1 of 18 assets (unused assets excluded)
+; ========================================
+
+; Vector asset: triangle
+; Generated from triangle.vec (Malban Draw_Sync_List format)
+; Total paths: 3, points: 10
+
+_TRIANGLE_VECTORS:
+    FCB 127              ; path0: intensity
+    FCB $14,$00,0,0        ; path0: header (y=20, x=0, next_y=0, next_x=0)
+    FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
+    FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
+    FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
+    FCB 1                ; Next path marker
+    FCB 127              ; path1: intensity
+    FCB $12,$00,0,0        ; path1: header (y=18, x=0, next_y=0, next_x=0)
+    FCB $FF,$0E,$15          ; line 0: flag=-1, dy=14, dx=21
+    FCB $FF,$00,$00          ; line 1: flag=-1, dy=0, dx=0
+    FCB $FF,$00,$00          ; line 2: flag=-1, dy=0, dx=0
+    FCB 1                ; Next path marker
+    FCB 127              ; path2: intensity
+    FCB $13,$01,0,0        ; path2: header (y=19, x=1, next_y=0, next_x=0)
+    FCB $FF,$12,$E7          ; line 0: flag=-1, dy=18, dx=-25
+    FCB $FF,$00,$00          ; line 1: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker
+
 ; String literals (classic FCC + $80 terminator)
 STR_0:
     FCC "TRIANGLE"

@@ -24,7 +24,149 @@
 ;***************************************************************************
     JMP START
 
+VECTREX_PRINT_TEXT:
+    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)
+    ; VPy signature: PRINT_TEXT(string, Y, X) -> args (ARG0=string, ARG1=Y, ARG2=X)
+    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
+    LDA #$D0
+    TFR A,DP       ; Set Direct Page to $D0 for BIOS
+    LDU VAR_ARG0   ; string pointer (ARG0 = first param)
+    LDA VAR_ARG1+1 ; Y (ARG1 = second param)
+    LDB VAR_ARG2+1 ; X (ARG2 = third param)
+    JSR Print_Str_d
+    RTS
+VECTREX_MOVE_TO:
+    LDA VAR_ARG1+1 ; Y
+    LDB VAR_ARG0+1 ; X
+    JSR Moveto_d
+    ; store new current position
+    LDA VAR_ARG0+1
+    STA VCUR_X
+    LDA VAR_ARG1+1
+    STA VCUR_Y
+    RTS
+VECTREX_SET_ORIGIN:
+    JSR Reset0Ref
+    RTS
+VECTREX_SET_INTENSITY:
+    LDA #$D0
+    TFR A,DP       ; Set Direct Page to $D0 for BIOS
+    LDA VAR_ARG0+1
+    JSR __Intensity_a
+    RTS
+VECTREX_WAIT_RECAL:
+    JSR Wait_Recal
+    RTS
+; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
+__Intensity_a:
+TFR B,A         ; Move B to A (BIOS expects intensity in A)
+JMP Intensity_a ; JMP (not JSR) - BIOS returns to original caller
+__Reset0Ref:
+JMP Reset0Ref   ; JMP (not JSR) - BIOS returns to original caller
+__Moveto_d:
+LDA 2,S         ; Get Y from stack (after return address)
+JMP Moveto_d    ; JMP (not JSR) - BIOS returns to original caller
+__Draw_Line_d:
+LDA 2,S         ; Get dy from stack (after return address)
+JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller
+; ============================================================================
+; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c
+; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
+; ============================================================================
+Draw_Sync_List:
+; VERSIÓN SIN MOVE: Respeta posición establecida por MOVE() previo
+; El loop de dibujo debe estar INLINE en el caller para funcionar correctamente
+LDA ,X+                 ; intensity
+JSR $F2AB               ; BIOS Intensity_a (expects value in A)
+LEAX 2,X                ; Skip y_start, x_start (posición ya establecida por MOVE)
+; Reset completo VIA (sin move)
+CLR VIA_shift_reg
+LDA #$CC
+STA VIA_cntl
+CLR VIA_port_a
+LDA #$82
+STA VIA_port_b
+NOP
+NOP
+NOP
+NOP
+NOP
+LDA #$83
+STA VIA_port_b
+; NO hacemos move - usamos la posición actual del beam (MOVE previo)
+; Timing setup
+LDA #$7F
+STA VIA_t1_cnt_lo
+CLR VIA_t1_cnt_hi
+LEAX 2,X                ; Skip next_y, next_x
+RTS                     ; Return con X apuntando al primer flag
+; CÓDIGO MUERTO (ya migrado arriba):
+LDB ,X+                 ; y_start (DEAD)
+LDA ,X+                 ; x_start (DEAD)
+PSHS D                  ; Save y,x (DEAD)
+; Reset to zero (Malban resync) - AFTER intensity
+CLR VIA_shift_reg
+LDA #$CC
+STA VIA_cntl
+CLR VIA_port_a
+LDA #$82
+STA VIA_port_b
+NOP
+NOP
+NOP
+NOP
+NOP
+LDA #$83
+STA VIA_port_b
+; Move to start position
+PULS D                  ; Restore y(B), x(A)
+STB VIA_port_a          ; y to DAC
+PSHS A                  ; Save x
+LDA #$CE
+STA VIA_cntl
+CLR VIA_port_b
+LDA #1
+STA VIA_port_b
+PULS A                  ; Restore x
+STA VIA_port_a          ; x to DAC
+LDA #$7F
+STA VIA_t1_cnt_lo       ; Scale factor (CRITICAL for timing)
+CLR VIA_t1_cnt_hi
+; C code does u+=3 after reading intensity,y,x to skip to after next_y,next_x
+; We already advanced X by 3 (LDA ,X+ three times), so skip 2 more for next_y,next_x
+LEAX 2,X
+; Wait for move
+DSL_w1:
+LDA VIA_int_flags
+ANDA #$40
+BEQ DSL_w1
+; Read flag and draw (EXACT copy of working inline)
+LDA ,X+
+TSTA
+BPL DSL_done
+; Draw line (flag<0)
+LDB ,X+                 ; dy
+LDA ,X+                 ; dx
+PSHS A                  ; Save dx
+STB VIA_port_a          ; dy to DAC
+CLR VIA_port_b
+LDA #1
+STA VIA_port_b
+PULS A                  ; Restore dx
+STA VIA_port_a          ; dx to DAC
+CLR VIA_t1_cnt_hi
+LDA #$FF
+STA VIA_shift_reg
+DSL_w2:
+LDA VIA_int_flags
+ANDA #$40
+BEQ DSL_w2
+CLR VIA_shift_reg
+DSL_done:
+RTS
 START:
+    LDA #$D0
+    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
     LDA #$80
     STA VIA_t1_cnt_lo
     LDX #Vec_Default_Stk
@@ -102,35 +244,35 @@ LOOP_BODY:
     STD RESULT
     ; DEBUG: Statement 6 - Discriminant(6)
     ; VPy_LINE:26
-; DRAW_VECTOR("player") - Malban Draw_Sync_List format
-    JSR Reset0Ref       ; Reset integrator to center
-    LDA #$7F
-    STA VIA_t1_cnt_lo   ; Set scale factor
-    LDA #$D0
-    TFR A,DP            ; Set DP for hardware
-    LDX #_PLAYER_VECTORS  ; X = sync list pointer
+; DRAW_VECTOR("player") - Using Malban format with inline loop
+    LDX #_PLAYER_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Setup: intensity + reset + move + timing
+; Draw_Sync_List returns with X pointing to first flag
 DSL_LOOP_1:
-    LDA ,X+             ; A = intensity/marker
-    CMPA #2
-    BEQ DSL_DONE_1            ; End if marker=2
-    CMPA #1
-    BEQ DSL_LOOP_1            ; Next segment if marker=1
-    JSR Intensity_a     ; Set intensity
-    LDD ,X++            ; D = y,x position
-    JSR Moveto_d_7F     ; Move to position
-DSL_LOOP_1_INNER:
-    LDA ,X+             ; A = draw marker
-    BPL DSL_CHECK       ; Branch if >= 0 (move or break)
-    LDD ,X++            ; D = dy,dx
-    JSR Draw_Line_d     ; Draw with intensity
-    BRA DSL_LOOP_1_INNER            ; Continue inner loop
-DSL_CHECK:
-    BNE DSL_NEXT_SEG    ; If A!=0, next segment
-    LDD ,X++            ; D = dy,dx
-    JSR Moveto_d_7F     ; Move beam
-    BRA DSL_LOOP_1_INNER            ; Continue inner loop
-DSL_NEXT_SEG:
-    BRA DSL_LOOP_1            ; Back to outer loop
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_LOOP_1   ; Wait for timer
+    LDA ,X+
+    CMPA #2      ; Check end marker
+    BEQ DSL_DONE_1   ; Done if end marker
+    LDB ,X+      ; dy
+    LDA ,X+      ; dx
+    PSHS A       ; Save x
+    STB VIA_port_a  ; Set y DAC
+    CLR VIA_port_b
+    LDA #1
+    STA VIA_port_b  ; Latch y
+    PULS A       ; Restore x
+    STA VIA_port_a  ; Set x DAC
+    CLR VIA_t1_cnt_hi
+    LDA #$FF
+    STA VIA_shift_reg  ; Enable drawing
+DSL_SKIP_1:
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_SKIP_1   ; Wait for draw complete
+    CLR VIA_shift_reg  ; Disable drawing
+    BRA DSL_LOOP_1   ; Loop for next line
 DSL_DONE_1:
     LDD #0
     STD RESULT
@@ -162,35 +304,35 @@ DSL_DONE_1:
     STD RESULT
     ; DEBUG: Statement 9 - Discriminant(6)
     ; VPy_LINE:31
-; DRAW_VECTOR("enemy") - Malban Draw_Sync_List format
-    JSR Reset0Ref       ; Reset integrator to center
-    LDA #$7F
-    STA VIA_t1_cnt_lo   ; Set scale factor
-    LDA #$D0
-    TFR A,DP            ; Set DP for hardware
-    LDX #_ENEMY_VECTORS  ; X = sync list pointer
+; DRAW_VECTOR("enemy") - Using Malban format with inline loop
+    LDX #_ENEMY_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Setup: intensity + reset + move + timing
+; Draw_Sync_List returns with X pointing to first flag
 DSL_LOOP_2:
-    LDA ,X+             ; A = intensity/marker
-    CMPA #2
-    BEQ DSL_DONE_2            ; End if marker=2
-    CMPA #1
-    BEQ DSL_LOOP_2            ; Next segment if marker=1
-    JSR Intensity_a     ; Set intensity
-    LDD ,X++            ; D = y,x position
-    JSR Moveto_d_7F     ; Move to position
-DSL_LOOP_2_INNER:
-    LDA ,X+             ; A = draw marker
-    BPL DSL_CHECK       ; Branch if >= 0 (move or break)
-    LDD ,X++            ; D = dy,dx
-    JSR Draw_Line_d     ; Draw with intensity
-    BRA DSL_LOOP_2_INNER            ; Continue inner loop
-DSL_CHECK:
-    BNE DSL_NEXT_SEG    ; If A!=0, next segment
-    LDD ,X++            ; D = dy,dx
-    JSR Moveto_d_7F     ; Move beam
-    BRA DSL_LOOP_2_INNER            ; Continue inner loop
-DSL_NEXT_SEG:
-    BRA DSL_LOOP_2            ; Back to outer loop
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_LOOP_2   ; Wait for timer
+    LDA ,X+
+    CMPA #2      ; Check end marker
+    BEQ DSL_DONE_2   ; Done if end marker
+    LDB ,X+      ; dy
+    LDA ,X+      ; dx
+    PSHS A       ; Save x
+    STB VIA_port_a  ; Set y DAC
+    CLR VIA_port_b
+    LDA #1
+    STA VIA_port_b  ; Latch y
+    PULS A       ; Restore x
+    STA VIA_port_a  ; Set x DAC
+    CLR VIA_t1_cnt_hi
+    LDA #$FF
+    STA VIA_shift_reg  ; Enable drawing
+DSL_SKIP_2:
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_SKIP_2   ; Wait for draw complete
+    CLR VIA_shift_reg  ; Disable drawing
+    BRA DSL_LOOP_2   ; Loop for next line
 DSL_DONE_2:
     LDD #0
     STD RESULT
@@ -211,35 +353,35 @@ DSL_DONE_2:
     STD RESULT
     ; DEBUG: Statement 11 - Discriminant(6)
     ; VPy_LINE:34
-; DRAW_VECTOR("enemy") - Malban Draw_Sync_List format
-    JSR Reset0Ref       ; Reset integrator to center
-    LDA #$7F
-    STA VIA_t1_cnt_lo   ; Set scale factor
-    LDA #$D0
-    TFR A,DP            ; Set DP for hardware
-    LDX #_ENEMY_VECTORS  ; X = sync list pointer
+; DRAW_VECTOR("enemy") - Using Malban format with inline loop
+    LDX #_ENEMY_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Setup: intensity + reset + move + timing
+; Draw_Sync_List returns with X pointing to first flag
 DSL_LOOP_3:
-    LDA ,X+             ; A = intensity/marker
-    CMPA #2
-    BEQ DSL_DONE_3            ; End if marker=2
-    CMPA #1
-    BEQ DSL_LOOP_3            ; Next segment if marker=1
-    JSR Intensity_a     ; Set intensity
-    LDD ,X++            ; D = y,x position
-    JSR Moveto_d_7F     ; Move to position
-DSL_LOOP_3_INNER:
-    LDA ,X+             ; A = draw marker
-    BPL DSL_CHECK       ; Branch if >= 0 (move or break)
-    LDD ,X++            ; D = dy,dx
-    JSR Draw_Line_d     ; Draw with intensity
-    BRA DSL_LOOP_3_INNER            ; Continue inner loop
-DSL_CHECK:
-    BNE DSL_NEXT_SEG    ; If A!=0, next segment
-    LDD ,X++            ; D = dy,dx
-    JSR Moveto_d_7F     ; Move beam
-    BRA DSL_LOOP_3_INNER            ; Continue inner loop
-DSL_NEXT_SEG:
-    BRA DSL_LOOP_3            ; Back to outer loop
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_LOOP_3   ; Wait for timer
+    LDA ,X+
+    CMPA #2      ; Check end marker
+    BEQ DSL_DONE_3   ; Done if end marker
+    LDB ,X+      ; dy
+    LDA ,X+      ; dx
+    PSHS A       ; Save x
+    STB VIA_port_a  ; Set y DAC
+    CLR VIA_port_b
+    LDA #1
+    STA VIA_port_b  ; Latch y
+    PULS A       ; Restore x
+    STA VIA_port_a  ; Set x DAC
+    CLR VIA_t1_cnt_hi
+    LDA #$FF
+    STA VIA_shift_reg  ; Enable drawing
+DSL_SKIP_3:
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_SKIP_3   ; Wait for draw complete
+    CLR VIA_shift_reg  ; Disable drawing
+    BRA DSL_LOOP_3   ; Loop for next line
 DSL_DONE_3:
     LDD #0
     STD RESULT
@@ -271,35 +413,35 @@ DSL_DONE_3:
     STD RESULT
     ; DEBUG: Statement 14 - Discriminant(6)
     ; VPy_LINE:39
-; DRAW_VECTOR("bullet") - Malban Draw_Sync_List format
-    JSR Reset0Ref       ; Reset integrator to center
-    LDA #$7F
-    STA VIA_t1_cnt_lo   ; Set scale factor
-    LDA #$D0
-    TFR A,DP            ; Set DP for hardware
-    LDX #_BULLET_VECTORS  ; X = sync list pointer
+; DRAW_VECTOR("bullet") - Using Malban format with inline loop
+    LDX #_BULLET_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Setup: intensity + reset + move + timing
+; Draw_Sync_List returns with X pointing to first flag
 DSL_LOOP_4:
-    LDA ,X+             ; A = intensity/marker
-    CMPA #2
-    BEQ DSL_DONE_4            ; End if marker=2
-    CMPA #1
-    BEQ DSL_LOOP_4            ; Next segment if marker=1
-    JSR Intensity_a     ; Set intensity
-    LDD ,X++            ; D = y,x position
-    JSR Moveto_d_7F     ; Move to position
-DSL_LOOP_4_INNER:
-    LDA ,X+             ; A = draw marker
-    BPL DSL_CHECK       ; Branch if >= 0 (move or break)
-    LDD ,X++            ; D = dy,dx
-    JSR Draw_Line_d     ; Draw with intensity
-    BRA DSL_LOOP_4_INNER            ; Continue inner loop
-DSL_CHECK:
-    BNE DSL_NEXT_SEG    ; If A!=0, next segment
-    LDD ,X++            ; D = dy,dx
-    JSR Moveto_d_7F     ; Move beam
-    BRA DSL_LOOP_4_INNER            ; Continue inner loop
-DSL_NEXT_SEG:
-    BRA DSL_LOOP_4            ; Back to outer loop
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_LOOP_4   ; Wait for timer
+    LDA ,X+
+    CMPA #2      ; Check end marker
+    BEQ DSL_DONE_4   ; Done if end marker
+    LDB ,X+      ; dy
+    LDA ,X+      ; dx
+    PSHS A       ; Save x
+    STB VIA_port_a  ; Set y DAC
+    CLR VIA_port_b
+    LDA #1
+    STA VIA_port_b  ; Latch y
+    PULS A       ; Restore x
+    STA VIA_port_a  ; Set x DAC
+    CLR VIA_t1_cnt_hi
+    LDA #$FF
+    STA VIA_shift_reg  ; Enable drawing
+DSL_SKIP_4:
+    LDA VIA_int_flags
+    ANDA #$40
+    BEQ DSL_SKIP_4   ; Wait for draw complete
+    CLR VIA_shift_reg  ; Disable drawing
+    BRA DSL_LOOP_4   ; Loop for next line
 DSL_DONE_4:
     LDD #0
     STD RESULT
@@ -373,42 +515,20 @@ DSL_DONE_4:
     STD RESULT
     RTS
 
-VECTREX_PRINT_TEXT:
-    ; Wait_Recal set DP=$D0 and zeroed beam; just load U,Y,X and call BIOS
-    LDU VAR_ARG2   ; string pointer (high-bit terminated)
-    LDA VAR_ARG1+1 ; Y
-    LDB VAR_ARG0+1 ; X
-    JSR Print_Str_d
-    RTS
-VECTREX_MOVE_TO:
-    LDA VAR_ARG1+1 ; Y
-    LDB VAR_ARG0+1 ; X
-    JSR Moveto_d
-    ; store new current position
-    LDA VAR_ARG0+1
-    STA VCUR_X
-    LDA VAR_ARG1+1
-    STA VCUR_Y
-    RTS
-VECTREX_SET_ORIGIN:
-    JSR Reset0Ref
-    RTS
-VECTREX_SET_INTENSITY:
-    LDA VAR_ARG0+1
-    JSR Intensity_a
-    RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
-    RTS
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
 ; Variables (in RAM)
 RESULT    EQU $C880
-MUSIC_PTR     EQU RESULT+26
-MUSIC_TICK    EQU RESULT+28   ; 32-bit tick counter
-MUSIC_EVENT   EQU RESULT+32   ; Current event pointer
-MUSIC_ACTIVE  EQU RESULT+34   ; Playback state (1 byte)
+TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
+MUSIC_PTR     EQU RESULT+28
+MUSIC_TICK    EQU RESULT+30   ; 32-bit tick counter
+MUSIC_EVENT   EQU RESULT+34   ; Current event pointer
+MUSIC_ACTIVE  EQU RESULT+36   ; Playback state (1 byte)
+VL_PTR     EQU $CF80      ; Current position in vector list
+VL_Y       EQU $CF82      ; Y position (1 byte)
+VL_X       EQU $CF83      ; X position (1 byte)
+VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 VAR_PLAYER_X EQU $CF00+0
 VAR_PLAYER_Y EQU $CF00+2
 ; String literals (classic FCC + $80 terminator)
@@ -439,7 +559,7 @@ VCUR_Y EQU RESULT+5
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 3 of 5 assets (unused assets excluded)
+; Embedded 3 of 6 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: player
@@ -447,41 +567,48 @@ VCUR_Y EQU RESULT+5
 ; Total paths: 1, points: 3
 
 _PLAYER_VECTORS:
-    FCB 127              ; seg0: intensity
-    FCB $14,$00          ; seg0: position (y=20, x=0)
-    FCB -1              ; draw line 0
-    FCB $E2,$F1          ; delta (dy=-30, dx=-15)
-    FCB -1              ; draw line 1
-    FCB $00,$1E          ; delta (dy=0, dx=30)
-    FCB 2               ; end of list
+    FCB 127              ; path0: intensity
+    FCB $14,$00,0,0        ; path0: header (y=20, x=0, next_y=0, next_x=0)
+    FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
+    FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
+    FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
+    FCB 2                ; End marker
 
 ; Vector asset: bullet
 ; Generated from bullet.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 4
 
 _BULLET_VECTORS:
-    FCB 127              ; seg0: intensity
-    FCB $02,$FE          ; seg0: position (y=2, x=-2)
-    FCB -1              ; draw line 0
-    FCB $00,$04          ; delta (dy=0, dx=4)
-    FCB -1              ; draw line 1
-    FCB $FC,$00          ; delta (dy=-4, dx=0)
-    FCB -1              ; draw line 2
-    FCB $00,$FC          ; delta (dy=0, dx=-4)
-    FCB 2               ; end of list
+    FCB 127              ; path0: intensity
+    FCB $02,$FE,0,0        ; path0: header (y=2, x=-2, next_y=0, next_x=0)
+    FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
+    FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
+    FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
+    FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
+    FCB 2                ; End marker
 
 ; Vector asset: enemy
 ; Generated from enemy.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 4
 
 _ENEMY_VECTORS:
-    FCB 127              ; seg0: intensity
-    FCB $0A,$F6          ; seg0: position (y=10, x=-10)
-    FCB -1              ; draw line 0
-    FCB $00,$14          ; delta (dy=0, dx=20)
-    FCB -1              ; draw line 1
-    FCB $EC,$00          ; delta (dy=-20, dx=0)
-    FCB -1              ; draw line 2
-    FCB $00,$EC          ; delta (dy=0, dx=-20)
-    FCB 2               ; end of list
+    FCB 127              ; path0: intensity
+    FCB $0A,$F6,0,0        ; path0: header (y=10, x=-10, next_y=0, next_x=0)
+    FCB $FF,$00,$14          ; line 0: flag=-1, dy=0, dx=20
+    FCB $FF,$EC,$00          ; line 1: flag=-1, dy=-20, dx=0
+    FCB $FF,$00,$EC          ; line 2: flag=-1, dy=0, dx=-20
+    FCB $FF,$14,$00          ; closing line: flag=-1, dy=20, dx=0
+    FCB 2                ; End marker
+
+
+; ========================================
+; VECTOR LIST DATA (Malban format)
+; ========================================
+_SQUARE:
+    FCB 0, 0, 0          ; Header (y=0, x=0, next_y=0)
+    FCB $FF, $D8, $D8    ; Line 1: flag=-1, dy=-40, dx=-40
+    FCB $FF, 0, 80       ; Line 2: flag=-1, dy=0, dx=80
+    FCB $FF, 80, 0       ; Line 3: flag=-1, dy=80, dx=0
+    FCB $FF, 0, $B0      ; Line 4: flag=-1, dy=0, dx=-80
+    FCB 2                ; End marker
 

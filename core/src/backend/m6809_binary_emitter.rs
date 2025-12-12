@@ -15,7 +15,7 @@ struct SymbolRef {
 /// Emisor de código binario M6809 con tracking de direcciones y símbolos
 pub struct BinaryEmitter {
     code: Vec<u8>,                          // Bytes de código generados
-    current_address: u16,                   // Dirección actual en memoria (ORG)
+    pub current_address: u16,               // Dirección actual en memoria (ORG) - PUBLIC para debug
     symbols: HashMap<String, u16>,          // Tabla de símbolos: label -> dirección
     symbol_refs: Vec<SymbolRef>,            // Referencias pendientes de resolver
     line_to_offset: HashMap<usize, usize>,  // Línea VPy -> offset en binario
@@ -43,7 +43,7 @@ impl BinaryEmitter {
     }
 
     /// Obtiene el offset actual en el buffer de código
-    fn current_offset(&self) -> usize {
+    pub fn current_offset(&self) -> usize {
         self.code.len()
     }
 

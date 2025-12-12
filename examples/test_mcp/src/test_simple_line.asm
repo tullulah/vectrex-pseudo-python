@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Incremental Draw Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "INCREMENTAL DRAW TEST"
+    FCC "UNTITLED"
     FCB $80
     FCB 0
 
@@ -29,9 +29,6 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
-    RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
     RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -50,78 +47,13 @@ JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller
 ; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
 ; ============================================================================
 Draw_Sync_List:
-; ITERACIÓN 11: Loop completo dentro (bug assembler arreglado, datos embebidos OK)
+; Read intensity and set it BEFORE reset (like working inline)
 LDA ,X+                 ; intensity
 JSR $F2AB               ; BIOS Intensity_a (expects value in A)
+; Read y_start, x_start
 LDB ,X+                 ; y_start
 LDA ,X+                 ; x_start
-STD TEMP_YX             ; Guardar en variable temporal (evita stack)
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX             ; Recuperar y,x
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSL_W1:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSL_W1
-; Loop de dibujo
-DSL_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-BEQ DSL_DONE            ; Exit if end
-; Draw line
-LDB ,X+                 ; dy
-LDA ,X+                 ; dx
-PSHS A                  ; Save dx
-STB VIA_port_a          ; dy to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore dx
-STA VIA_port_a          ; dx to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSL_W2:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSL_W2
-CLR VIA_shift_reg
-BRA DSL_LOOP
-DSL_DONE:
-RTS
-; CÓDIGO MUERTO (ya migrado arriba):
-LDB ,X+                 ; y_start (DEAD)
-LDA ,X+                 ; x_start (DEAD)
-PSHS D                  ; Save y,x (DEAD)
+PSHS D                  ; Save y,x
 ; Reset to zero (Malban resync) - AFTER intensity
 CLR VIA_shift_reg
 LDA #$CC
@@ -191,12 +123,12 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:4
+    ; VPy_LINE:2
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 4
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 2
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -211,25 +143,17 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 2 statements in loop() body
+    ; DEBUG: Processing 1 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
-    ; VPy_LINE:7
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 7
-    JSR VECTREX_WAIT_RECAL
-    CLRA
-    CLRB
+    ; VPy_LINE:5
+; DRAW_VECTOR("simple_line") - Using Malban Draw_Sync_List format
+; Draw_Sync_List does its own Reset0Ref internally (VIA_cntl=$CC)
+    LDA #$7F
+    STA VIA_t1_cnt_lo   ; Set scale factor (CRITICAL - inline uses this)
+    LDX #_SIMPLE_LINE_VECTORS  ; X = vector data pointer
+    JSR Draw_Sync_List  ; Draw vector list (Malban format)
+    LDD #0
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(6)
-    ; VPy_LINE:8
-; ╔════════════════════════════════════════════════════════════╗
-; ║  ❌ COMPILATION ERROR: Vector asset not found             ║
-; ╠════════════════════════════════════════════════════════════╣
-; ║  DRAW_VECTOR("triangle") - asset does not exist                     ║
-; ╠════════════════════════════════════════════════════════════╣
-; ║  No .vec files found in assets/vectors/                   ║
-; ║  Please create vector assets in that directory.           ║
-; ╚════════════════════════════════════════════════════════════╝
-    ERROR_VECTOR_ASSET_NOT_FOUND  ; Assembly will fail here
     RTS
 
 ;***************************************************************************
@@ -237,17 +161,36 @@ LOOP_BODY:
 ;***************************************************************************
 ; Variables (in RAM)
 RESULT    EQU $C880
-TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
+MUSIC_PTR     EQU RESULT+26
+MUSIC_TICK    EQU RESULT+28   ; 32-bit tick counter
+MUSIC_EVENT   EQU RESULT+32   ; Current event pointer
+MUSIC_ACTIVE  EQU RESULT+34   ; Playback state (1 byte)
 VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-; Call argument scratch space
-VAR_ARG0 EQU RESULT+26
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "TRIANGLE"
+    FCC "SIMPLE_LINE"
     FCB $80
+; Call argument scratch space
+VAR_ARG0 EQU RESULT+26
+
+; ========================================
+; ASSET DATA SECTION
+; Embedded 1 of 18 assets (unused assets excluded)
+; ========================================
+
+; Vector asset: simple_line
+; Generated from simple_line.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 2
+
+_SIMPLE_LINE_VECTORS:
+    FCB 100              ; path0: intensity
+    FCB $00,$00,0,0        ; path0: header (y=0, x=0, next_y=0, next_x=0)
+    FCB $FF,$14,$14          ; line 0: flag=-1, dy=20, dx=20
+    FCB 2                ; End marker
+
 
 ; ========================================
 ; VECTOR LIST DATA (Malban format)

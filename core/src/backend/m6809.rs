@@ -266,6 +266,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if main_has_content {
         // main() has real content - use START structure
         out.push_str("    JMP START\n\n");
+        
+        // Emit builtin helpers BEFORE program code (fixes forward reference issues)
+        if !suppress_runtime {
+            emit_builtin_helpers(&mut out, &rt_usage, opts, &mut debug_info);
+        }
+        
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
     }
     
@@ -532,7 +538,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if !suppress_runtime {
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-        emit_builtin_helpers(&mut out, &rt_usage, opts, &mut debug_info);
+        // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     // Align ROM size to next 4K boundary: compute remainder via assembler can't do complex IF here, approximate with macro-style logic.
@@ -574,16 +580,23 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         else { out.push_str("DIV_A:    FDB 0\nDIV_B:    FDB 0\nDIV_Q:   FDB 0\nDIV_R:   FDB 0\n"); }
     }
     
+    // TEMP_YX: Temporary storage for y,x coordinates (used by Draw_Sync_List)
+    if opts.exclude_ram_org {
+        out.push_str("TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)\n");
+    } else {
+        out.push_str("TEMP_YX:   FDB 0   ; Temporary y,x storage\n");
+    }
+    
     // MUSIC_PTR: Storage for current music asset pointer (if music assets exist)
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
     if has_music_assets {
         if opts.exclude_ram_org {
-            out.push_str("MUSIC_PTR     EQU RESULT+26\n");
-            out.push_str("MUSIC_TICK    EQU RESULT+28   ; 32-bit tick counter\n");
-            out.push_str("MUSIC_EVENT   EQU RESULT+32   ; Current event pointer\n");
-            out.push_str("MUSIC_ACTIVE  EQU RESULT+34   ; Playback state (1 byte)\n");
+            out.push_str("MUSIC_PTR     EQU RESULT+28\n");
+            out.push_str("MUSIC_TICK    EQU RESULT+30   ; 32-bit tick counter\n");
+            out.push_str("MUSIC_EVENT   EQU RESULT+34   ; Current event pointer\n");
+            out.push_str("MUSIC_ACTIVE  EQU RESULT+36   ; Playback state (1 byte)\n");
         } else {
             out.push_str("MUSIC_PTR:     FDB 0   ; Current music pointer\n");
             out.push_str("MUSIC_TICK:    FDB 0,0  ; Current playback tick (32-bit)\n");
@@ -618,20 +631,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     // Global mutables already allocated via symbol list; (future) could emit non-zero inits via a small startup routine.
-    if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
-    if !string_map.is_empty() {
-        if string_map.len()==1 {
-            let (lit,_label) = string_map.iter().next().unwrap();
-            out.push_str("STR_0:\n");
-            out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase()));
-        } else {
-            // Each entry already has a unique label (STR_n) from string_literals.rs; emit them directly
-            // Avoid emitting an unlabeled duplicated STR_0 header.
-            for (lit,label) in &string_map {
-                out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase()));
-            }
-        }
-    }
+    
+    // ✅ Emit VAR_ARG EQU definitions HERE (before assets/strings)
+    // This ensures ALL EQU definitions are together and don't interrupt FCB/FCC data
     if !suppress_runtime {
         out.push_str("; Call argument scratch space\n");
         if opts.exclude_ram_org {
@@ -646,6 +648,77 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
         }
     }
+    
+    // ✅ CRITICAL FIX: Embed assets HERE (after ALL EQU definitions, before strings)
+    // The native assembler processes ALL lines but EQU doesn't generate bytes
+    // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
+    if !opts.assets.is_empty() {
+        // Analyze which assets are actually used in the code
+        let used_assets = analyze_used_assets(module);
+        
+        // Filter assets to only include used ones
+        let assets_to_embed: Vec<_> = opts.assets.iter()
+            .filter(|asset| used_assets.contains(&asset.name))
+            .collect();
+        
+        if !assets_to_embed.is_empty() {
+            out.push_str("\n; ========================================\n");
+            out.push_str("; ASSET DATA SECTION\n");
+            out.push_str(&format!("; Embedded {} of {} assets (unused assets excluded)\n", 
+                assets_to_embed.len(), opts.assets.len()));
+            out.push_str("; ========================================\n\n");
+            
+            for asset in assets_to_embed {
+                match asset.asset_type {
+                    crate::codegen::AssetType::Vector => {
+                        use crate::vecres::VecResource;
+                        if let Ok(resource) = VecResource::load(std::path::Path::new(&asset.path)) {
+                            let asm = resource.compile_to_asm();
+                            out.push_str(&format!("; Vector asset: {}\n", asset.name));
+                            out.push_str(&asm);
+                            out.push_str("\n");
+                        } else {
+                            out.push_str(&format!("; ERROR: Failed to load vector asset: {}\n", asset.path));
+                        }
+                    },
+                    crate::codegen::AssetType::Music => {
+                        // Use MusicResource to generate proper ASM data (usando asset.name, NO nombre del JSON)
+                        match crate::musres::MusicResource::load(std::path::Path::new(&asset.path)) {
+                            Ok(resource) => {
+                                let asm = resource.compile_to_asm(&asset.name);
+                                out.push_str(&asm);
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                out.push_str(&format!("; ERROR: Failed to load/generate music asset {}: {}\n", asset.path, e));
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            out.push_str("\n; ========================================\n");
+            out.push_str("; NO ASSETS EMBEDDED\n");
+            out.push_str(&format!("; All {} discovered assets are unused in code\n", opts.assets.len()));
+            out.push_str("; ========================================\n\n");
+        }
+    }
+    
+    if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
+    if !string_map.is_empty() {
+        if string_map.len()==1 {
+            let (lit,_label) = string_map.iter().next().unwrap();
+            out.push_str("STR_0:\n");
+            out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase()));
+        } else {
+            // Each entry already has a unique label (STR_n) from string_literals.rs; emit them directly
+            // Avoid emitting an unlabeled duplicated STR_0 header.
+            for (lit,label) in &string_map {
+                out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase()));
+            }
+        }
+    }
+    // VAR_ARG definitions moved earlier (before assets/strings) to keep all EQUs together
     if opts.diag_freeze { if opts.exclude_ram_org { out.push_str(&format!("DIAG_COUNTER EQU RESULT+{}\n", var_offset)); var_offset += 1; } else { out.push_str("DIAG_COUNTER: FCB 0\n"); } }
     if rt_usage.needs_vcur_vars {
         if opts.exclude_ram_org {
@@ -780,59 +853,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // We parse the entire ASM to calculate actual addresses based on instruction sizes
     use super::debug_info::parse_vpy_line_markers;
     debug_info.line_map = parse_vpy_line_markers(&out, start_address);
-    
-    // Phase 5: Embed assets data section (only used assets)
-    if !opts.assets.is_empty() {
-        // Analyze which assets are actually used in the code
-        let used_assets = analyze_used_assets(module);
-        
-        // Filter assets to only include used ones
-        let assets_to_embed: Vec<_> = opts.assets.iter()
-            .filter(|asset| used_assets.contains(&asset.name))
-            .collect();
-        
-        if !assets_to_embed.is_empty() {
-            out.push_str("\n; ========================================\n");
-            out.push_str("; ASSET DATA SECTION\n");
-            out.push_str(&format!("; Embedded {} of {} assets (unused assets excluded)\n", 
-                assets_to_embed.len(), opts.assets.len()));
-            out.push_str("; ========================================\n\n");
-            
-            for asset in assets_to_embed {
-                match asset.asset_type {
-                    crate::codegen::AssetType::Vector => {
-                        use crate::vecres::VecResource;
-                        if let Ok(resource) = VecResource::load(std::path::Path::new(&asset.path)) {
-                            let asm = resource.compile_to_asm();
-                            out.push_str(&format!("; Vector asset: {}\n", asset.name));
-                            out.push_str(&asm);
-                            out.push_str("\n");
-                        } else {
-                            out.push_str(&format!("; ERROR: Failed to load vector asset: {}\n", asset.path));
-                        }
-                    },
-                    crate::codegen::AssetType::Music => {
-                        // Use MusicResource to generate proper ASM data (usando asset.name, NO nombre del JSON)
-                        match crate::musres::MusicResource::load(std::path::Path::new(&asset.path)) {
-                            Ok(resource) => {
-                                let asm = resource.compile_to_asm(&asset.name);
-                                out.push_str(&asm);
-                                out.push_str("\n");
-                            },
-                            Err(e) => {
-                                out.push_str(&format!("; ERROR: Failed to load/generate music asset {}: {}\n", asset.path, e));
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            out.push_str("\n; ========================================\n");
-            out.push_str("; NO ASSETS EMBEDDED\n");
-            out.push_str(&format!("; All {} discovered assets are unused in code\n", opts.assets.len()));
-            out.push_str("; ========================================\n\n");
-        }
-    }
     
     // Example vector list data (for DRAW_VECTOR_LIST demo)
     // TODO: Make this configurable via asset system
@@ -1208,7 +1228,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         }
     }
     if w.contains("VECTREX_SET_INTENSITY") {
-    out.push_str("VECTREX_SET_INTENSITY:\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR Intensity_a\n    RTS\n");
+    out.push_str("VECTREX_SET_INTENSITY:\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    RTS\n");
     }
     if w.contains("SETUP_DRAW_COMMON") {
         out.push_str(
@@ -1531,6 +1551,148 @@ MUSIC_UPDATE_done:\n\
         LDA 2,S         ; Get dy from stack (after return address)\n\
         JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller\n"
     );
+
+    // Draw_Sync_List - EXACT translation of Malban's draw_synced_list_c
+    // Data format: intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
+    out.push_str(
+        "; ============================================================================\n\
+        ; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c\n\
+        ; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2\n\
+        ; ============================================================================\n\
+        Draw_Sync_List:\n\
+        ; ITERACIÓN 11: Loop completo dentro (bug assembler arreglado, datos embebidos OK)\n\
+        LDA ,X+                 ; intensity\n\
+        JSR $F2AB               ; BIOS Intensity_a (expects value in A)\n\
+        LDB ,X+                 ; y_start\n\
+        LDA ,X+                 ; x_start\n\
+        STD TEMP_YX             ; Guardar en variable temporal (evita stack)\n\
+        ; Reset completo\n\
+        CLR VIA_shift_reg\n\
+        LDA #$CC\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_a\n\
+        LDA #$82\n\
+        STA VIA_port_b\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        LDA #$83\n\
+        STA VIA_port_b\n\
+        ; Move sequence\n\
+        LDD TEMP_YX             ; Recuperar y,x\n\
+        STB VIA_port_a          ; y to DAC\n\
+        PSHS A                  ; Save x\n\
+        LDA #$CE\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A                  ; Restore x\n\
+        STA VIA_port_a          ; x to DAC\n\
+        ; Timing setup\n\
+        LDA #$7F\n\
+        STA VIA_t1_cnt_lo\n\
+        CLR VIA_t1_cnt_hi\n\
+        LEAX 2,X                ; Skip next_y, next_x\n\
+        ; Wait for move to complete\n\
+        DSL_W1:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSL_W1\n\
+        ; Loop de dibujo\n\
+        DSL_LOOP:\n\
+        LDA ,X+                 ; Read flag\n\
+        CMPA #2                 ; Check end marker\n\
+        BEQ DSL_DONE            ; Exit if end\n\
+        ; Draw line\n\
+        LDB ,X+                 ; dy\n\
+        LDA ,X+                 ; dx\n\
+        PSHS A                  ; Save dx\n\
+        STB VIA_port_a          ; dy to DAC\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A                  ; Restore dx\n\
+        STA VIA_port_a          ; dx to DAC\n\
+        CLR VIA_t1_cnt_hi\n\
+        LDA #$FF\n\
+        STA VIA_shift_reg\n\
+        ; Wait for line draw\n\
+        DSL_W2:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSL_W2\n\
+        CLR VIA_shift_reg\n\
+        BRA DSL_LOOP\n\
+        DSL_DONE:\n\
+        RTS\n\
+        ; CÓDIGO MUERTO (ya migrado arriba):\n\
+        LDB ,X+                 ; y_start (DEAD)\n\
+        LDA ,X+                 ; x_start (DEAD)\n\
+        PSHS D                  ; Save y,x (DEAD)\n\
+        ; Reset to zero (Malban resync) - AFTER intensity\n\
+        CLR VIA_shift_reg\n\
+        LDA #$CC\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_a\n\
+        LDA #$82\n\
+        STA VIA_port_b\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        LDA #$83\n\
+        STA VIA_port_b\n\
+        ; Move to start position\n\
+        PULS D                  ; Restore y(B), x(A)\n\
+        STB VIA_port_a          ; y to DAC\n\
+        PSHS A                  ; Save x\n\
+        LDA #$CE\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A                  ; Restore x\n\
+        STA VIA_port_a          ; x to DAC\n\
+        LDA #$7F\n\
+        STA VIA_t1_cnt_lo       ; Scale factor (CRITICAL for timing)\n\
+        CLR VIA_t1_cnt_hi\n\
+        ; C code does u+=3 after reading intensity,y,x to skip to after next_y,next_x\n\
+        ; We already advanced X by 3 (LDA ,X+ three times), so skip 2 more for next_y,next_x\n\
+        LEAX 2,X\n\
+        ; Wait for move\n\
+        DSL_w1:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSL_w1\n\
+        ; Read flag and draw (EXACT copy of working inline)\n\
+        LDA ,X+\n\
+        TSTA\n\
+        BPL DSL_done\n\
+        ; Draw line (flag<0)\n\
+        LDB ,X+                 ; dy\n\
+        LDA ,X+                 ; dx\n\
+        PSHS A                  ; Save dx\n\
+        STB VIA_port_a          ; dy to DAC\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A                  ; Restore dx\n\
+        STA VIA_port_a          ; dx to DAC\n\
+        CLR VIA_t1_cnt_hi\n\
+        LDA #$FF\n\
+        STA VIA_shift_reg\n\
+        DSL_w2:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSL_w2\n\
+        CLR VIA_shift_reg\n\
+        DSL_done:\n\
+        RTS\n"
+    );
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
@@ -1569,24 +1731,10 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
                 };
                 
                 let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
-                let loop_label = format!("DSL_LOOP_{}", counter);
-                let skip_label = format!("DSL_SKIP_{}", counter);
-                let done_label = format!("DSL_DONE_{}", counter);
                 
-                out.push_str(&format!("; DRAW_VECTOR(\"{}\") - Using BIOS Draw_VLc directly\n", asset_name));
-                out.push_str("    JSR Reset0Ref       ; Reset integrator to center\n");
-                out.push_str("    LDA #$7F\n");
-                out.push_str("    STA VIA_t1_cnt_lo   ; Set scale factor\n");
-                
-                // Use Draw_VLc format: intensity in A, position in D, count in B, deltas follow
+                out.push_str(&format!("; DRAW_VECTOR(\"{}\") - Load pointer and call Draw_Sync_List\n", asset_name));
                 out.push_str(&format!("    LDX #{}_VECTORS  ; X = vector data pointer\n", symbol));
-                out.push_str("    LDA ,X+             ; A = intensity\n");
-                out.push_str("    JSR Intensity_a     ; Set intensity\n");
-                out.push_str("    LDD ,X++            ; D = y,x start position\n");
-                out.push_str("    JSR Moveto_d_7F     ; Move to start\n");
-                out.push_str("    LDB ,X+             ; B = line count\n");
-                out.push_str("    JSR Draw_VLc        ; Draw lines (X points to deltas)\n");
-                
+                out.push_str("    JSR Draw_Sync_List  ; Draw the vector\n");
                 out.push_str("    LDD #0\n    STD RESULT\n");
                 return true;
             } else {

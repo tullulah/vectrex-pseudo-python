@@ -6,6 +6,15 @@ use std::path::PathBuf;
 use std::fs;
 use crate::backend::m6809_binary_emitter::BinaryEmitter;
 
+// Global variable to store include directory (set before assembly)
+static mut INCLUDE_DIR: Option<PathBuf> = None;
+
+pub fn set_include_dir(dir: Option<PathBuf>) {
+    unsafe {
+        INCLUDE_DIR = dir;
+    }
+}
+
 /// Convierte código M6809 assembly a formato binario
 /// Retorna (bytes_binarios, linea_vpy -> offset_binario)
 pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<usize, usize>), String> {
@@ -137,6 +146,11 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
             return Err(format!("Error en línea {}: {} (código: '{}')", current_line, e, trimmed));
         }
         
+        // 🔍 TRACE: FCB después de _TRIANGLE_VECTORS
+        if trimmed.to_uppercase().starts_with("FCB") && last_global_label == "_TRIANGLE_VECTORS" {
+            eprintln!("           After:  address=${:04X}, offset={}", emitter.current_address, emitter.current_offset());
+        }
+        
         current_line += 1;
     }
     
@@ -214,20 +228,22 @@ fn parse_include_directive(line: &str) -> Option<String> {
 
 /// Resuelve path de INCLUDE buscando en directorios estándar
 fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
-    // Obtener el directorio actual (puede ser core/ o workspace root)
-    let current_dir = std::env::current_dir().ok()?;
+    // Priorizar el directorio especificado por --include-dir
+    let base_dir = unsafe {
+        INCLUDE_DIR.clone().or_else(|| std::env::current_dir().ok())
+    }?;
     
     // Paths a intentar (en orden de prioridad)
-    let search_paths = vec![
-        // Desde el directorio actual
-        current_dir.join(include_path),
-        current_dir.join("include").join(include_path),
-        current_dir.join("ide/frontend/public/include").join(include_path),
+    let mut search_paths = vec![
+        // Desde el directorio base especificado
+        base_dir.join(include_path),
+        base_dir.join("include").join(include_path),
+        base_dir.join("ide/frontend/public/include").join(include_path),
         
-        // Desde el workspace root (un nivel arriba de core/)
-        current_dir.parent()?.join(include_path),
-        current_dir.parent()?.join("include").join(include_path),
-        current_dir.parent()?.join("ide/frontend/public/include").join(include_path),
+        // Desde el workspace root (un nivel arriba del base_dir)
+        base_dir.parent().map(|p| p.join(include_path)).unwrap_or_else(|| PathBuf::from(include_path)),
+        base_dir.parent().map(|p| p.join("include").join(include_path)).unwrap_or_else(|| PathBuf::from("include").join(include_path)),
+        base_dir.parent().map(|p| p.join("ide/frontend/public/include").join(include_path)).unwrap_or_else(|| PathBuf::from("ide/frontend/public/include").join(include_path)),
         
         // Paths absolutos para Windows
         PathBuf::from("C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/include").join(include_path),
@@ -368,8 +384,16 @@ fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
 
 /// Extrae etiqueta si la línea la define
 fn parse_label(line: &str) -> Option<&str> {
-    if line.contains(':') && !line.trim_start().starts_with(';') {
-        let parts: Vec<&str> = line.splitn(2, ':').collect();
+    // ✅ FIX: Remove inline comments BEFORE checking for labels
+    // Comments can contain ':' which would be incorrectly detected as labels
+    let code = if let Some(idx) = line.find(';') {
+        &line[..idx]
+    } else {
+        line
+    }.trim();
+    
+    if code.contains(':') && !code.starts_with(';') {
+        let parts: Vec<&str> = code.splitn(2, ':').collect();
         if parts.len() > 0 {
             let label = parts[0].trim();
             if !label.is_empty() {

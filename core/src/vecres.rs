@@ -229,68 +229,71 @@ impl VecResource {
             self.visible_paths().len(), self.point_count()));
         asm.push_str("\n");
         
-        // Single path per file - no multi-path complexity
+        // Process ALL paths (multi-path support)
         if self.visible_paths().is_empty() {
             asm.push_str(&format!("_{}_VECTORS:\n", symbol_name));
-            asm.push_str("    FCB 2               ; end marker\n");
+            asm.push_str("    FCB 2               ; end marker (empty)\n");
             return asm;
         }
         
-        let path = &self.visible_paths()[0]; // Take only the first path
         asm.push_str(&format!("_{}_VECTORS:\n", symbol_name));
         
-        // Malban Draw_Sync_List format:
-        // First segment: FCB intensity, y, x (absolute position)
-        // Then for each line: FCB <0 (draw) or 0 (move), dy, dx
-        // Between segments: FCB 1 (next segment marker)
-        // End: FCB 2
-        if path.points.len() < 2 {
-            asm.push_str("    FCB 2               ; end marker (< 2 points)\n");
-        } else {
-            let default_intensity = path.intensity;
-            let mut segments: Vec<(usize, usize, u8)> = Vec::new(); // (start_idx, end_idx, intensity)
-            let mut current_intensity = path.points[0].intensity.unwrap_or(default_intensity);
-            let mut segment_start = 0;
+        // Malban Draw_Sync_List format supports multiple paths:
+        // Path 1: FCB intensity, y, x, next_y, next_x, [FCB flag, dy, dx]*, FCB 1 (next path)
+        // Path 2: FCB intensity, y, x, next_y, next_x, [FCB flag, dy, dx]*, FCB 1
+        // ...
+        // Last path: ... FCB 2 (end marker)
+        
+        for (path_idx, path) in self.visible_paths().iter().enumerate() {
+            let is_last_path = path_idx == self.visible_paths().len() - 1;
             
-            // Detect segments by intensity changes (intensity=0 means beam off/move)
-            for i in 1..path.points.len() {
-                if let Some(new_intensity) = path.points[i].intensity {
-                    if new_intensity != current_intensity {
-                        // End current segment
-                        segments.push((segment_start, i - 1, current_intensity));
-                        segment_start = i;
-                        current_intensity = new_intensity;
-                    }
+            if path.points.len() < 2 {
+                // Empty path - skip or mark with end
+                if is_last_path {
+                    asm.push_str("    FCB 2                ; end marker (< 2 points)\n");
                 }
+                continue;
             }
-            // Add final segment
-            segments.push((segment_start, path.points.len() - 1, current_intensity));
             
-            // Generate BIOS Draw_VLc format data (simple, proven format)
-            // Format: FCB intensity, FCB y,x (start), FCB count, [FCB dy,dx]*count
-            for (seg_idx, (start, end, intensity)) in segments.iter().enumerate() {
-                let p0 = &path.points[*start];
-                let y0 = p0.y.clamp(-127, 127) as i8;
-                let x0 = p0.x.clamp(-127, 127) as i8;
-                let line_count = (end - start) as u8;
+            let default_intensity = path.intensity;
+            let p0 = &path.points[0];
+            let y0 = p0.y.clamp(-127, 127) as i8;
+            let x0 = p0.x.clamp(-127, 127) as i8;
+            
+            // Malban format header: intensity, y_start, x_start, next_y, next_x
+            asm.push_str(&format!("    FCB {}              ; path{}: intensity\n", default_intensity, path_idx));
+            asm.push_str(&format!("    FCB {},{},0,0        ; path{}: header (y={}, x={}, next_y=0, next_x=0)\n", 
+                Self::format_byte(y0), Self::format_byte(x0), path_idx, y0, x0));
+            
+            // Generate lines: flag=$FF (draw), dy, dx
+            for j in 0..path.points.len()-1 {
+                let p_from = &path.points[j];
+                let p_to = &path.points[j + 1];
                 
-                // Header: intensity, position, count
-                asm.push_str(&format!("    FCB {}              ; seg{}: intensity\n", *intensity, seg_idx));
-                asm.push_str(&format!("    FCB {},{}          ; seg{}: position (y={}, x={})\n", 
-                    Self::format_byte(y0), Self::format_byte(x0), seg_idx, y0, x0));
-                asm.push_str(&format!("    FCB {}              ; seg{}: {} lines\n", line_count, seg_idx, line_count));
+                let dx = (p_to.x - p_from.x).clamp(-127, 127) as i8;
+                let dy = (p_to.y - p_from.y).clamp(-127, 127) as i8;
                 
-                // Generate deltas (dy, dx pairs)
-                for j in *start..*end {
-                    let p_from = &path.points[j];
-                    let p_to = &path.points[j + 1];
-                    
-                    let dx = (p_to.x - p_from.x).clamp(-127, 127) as i8;
-                    let dy = (p_to.y - p_from.y).clamp(-127, 127) as i8;
-                    
-                    asm.push_str(&format!("    FCB {}          ; line {} delta (dy={}, dx={})\n", 
-                        Self::format_fcb2(dy, dx), j - start, dy, dx));
-                }
+                asm.push_str(&format!("    FCB $FF,{},{}          ; line {}: flag=-1, dy={}, dx={}\n", 
+                    Self::format_byte(dy), Self::format_byte(dx), j, dy, dx));
+            }
+            
+            // If closed path, add closing line back to first point
+            if path.closed && path.points.len() > 2 {
+                let p_from = &path.points[path.points.len() - 1];
+                let p_to = &path.points[0];
+                
+                let dx = (p_to.x - p_from.x).clamp(-127, 127) as i8;
+                let dy = (p_to.y - p_from.y).clamp(-127, 127) as i8;
+                
+                asm.push_str(&format!("    FCB $FF,{},{}          ; closing line: flag=-1, dy={}, dx={}\n", 
+                    Self::format_byte(dy), Self::format_byte(dx), dy, dx));
+            }
+            
+            // Path separator: FCB 1 (next path) or FCB 2 (end)
+            if is_last_path {
+                asm.push_str("    FCB 2                ; End marker\n");
+            } else {
+                asm.push_str("    FCB 1                ; Next path marker\n");
             }
         }
         

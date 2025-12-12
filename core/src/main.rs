@@ -6,7 +6,6 @@ mod target;   // Target info & selection
 mod backend;  // Backend modules declared in src/backend/mod.rs
 mod resolver; // Multi-file import resolution
 mod unifier;  // AST unification for multi-file projects
-mod project;  // Project system
 mod library;  // Library system
 mod vecres;   // Vector resources (.vec)
 mod musres;   // Music resources (.vmus)
@@ -14,6 +13,7 @@ mod musres;   // Music resources (.vmus)
 use std::fs;
 use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
+use toml;
 
 #[allow(dead_code)]
 fn find_project_root() -> anyhow::Result<PathBuf> {
@@ -35,15 +35,20 @@ use anyhow::Result;
 fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
     let mut assets = Vec::new();
     
-    // Determine project root (parent of src/ or directory of file)
-    let project_root = if let Some(parent) = source_path.parent() {
+    // Determine project root - convert to absolute path first to avoid cwd confusion
+    let abs_source = source_path.canonicalize().unwrap_or_else(|_| source_path.to_path_buf());
+    
+    let project_root: PathBuf = if let Some(parent) = abs_source.parent() {
         if parent.file_name().and_then(|n| n.to_str()) == Some("src") {
-            parent.parent().unwrap_or(parent)
+            // Source is in src/ directory, project root is parent
+            parent.parent().unwrap_or(parent).to_path_buf()
         } else {
-            parent
+            // Source is not in src/, assume parent is project root
+            parent.to_path_buf()
         }
     } else {
-        source_path
+        // No parent (shouldn't happen with absolute path), use source itself
+        abs_source.clone()
     };
     
     // Search for vector assets (assets/vectors/*.vec)
@@ -113,6 +118,9 @@ enum Commands {
         #[arg(long, help="Generar también binario raw (.bin) con ensamblador nativo M6809")] bin: bool,
         #[arg(long, help="Usar lwasm externo en lugar del ensamblador nativo (útil para comparar/diagnosticar)")] use_lwasm: bool,
         #[arg(long, help="Compilar con AMBOS ensambladores y comparar resultados (requiere lwasm instalado)")] dual: bool,
+        #[arg(short = 'p', long, help="Compilar proyecto .vpyproj (ignora -f si se especifica)")] project: bool,
+        #[arg(short = 'f', long, help="Compilar archivo .vpy individual (default)")] file: bool,
+        #[arg(long = "include-dir", help="Directorio con archivos include (VECTREX.I, etc)")] include_dir: Option<PathBuf>,
     },
     Lex { input: PathBuf },
     Ast { input: PathBuf },
@@ -157,7 +165,14 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Build { input, out, target, title, bin, use_lwasm, dual } => build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual),
+        Commands::Build { input, out, target, title, bin, use_lwasm, dual, project, file: _, include_dir } => {
+            // Si -p está especificado o el input es .vpyproj, compilar como proyecto
+            if project || input.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
+                build_project_cmd(&input, bin, use_lwasm, dual, include_dir.as_ref())
+            } else {
+                build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual, include_dir.as_ref())
+            }
+        },
         Commands::Lex { input } => lex_cmd(&input),
         Commands::Ast { input } => ast_cmd(&input),
         Commands::LibNew { name, path } => lib_new_cmd(&name, path.as_ref()),
@@ -305,8 +320,73 @@ fn vec_new_cmd(name: &str, path: Option<&PathBuf>) -> Result<()> {
     
     Ok(())
 }
+
+// build_project_cmd: compile a .vpyproj project file
+fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>) -> Result<()> {
+    eprintln!("=== PROJECT COMPILATION START ===");
+    eprintln!("Project file: {}", project_path.display());
+    
+    // Read and parse .vpyproj file
+    let project_content = fs::read_to_string(project_path)?;
+    let project_toml: toml::Value = toml::from_str(&project_content)?;
+    
+    // Extract project root (parent directory of .vpyproj)
+    let project_root = project_path.parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine project root"))?;
+    
+    // Extract entry file from [project] section
+    let entry_relative = project_toml.get("project")
+        .and_then(|p| p.get("entry"))
+        .and_then(|e| e.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing [project] entry field in .vpyproj"))?;
+    
+    let entry_file = project_root.join(entry_relative);
+    
+    // Extract output path from [build] section
+    // Note: .vpyproj defines bin path, but build_cmd expects ASM path
+    let output_relative = project_toml.get("build")
+        .and_then(|b| b.get("output"))
+        .and_then(|o| o.as_str());
+    
+    let output_path = output_relative.map(|o| {
+        let bin_path = project_root.join(o);
+        // Derive ASM path from bin path (change .bin to .asm)
+        bin_path.with_extension("asm")
+    });
+    
+    // Extract target from [build] section
+    let target_str = project_toml.get("build")
+        .and_then(|b| b.get("target"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("vectrex");
+    
+    let target = match target_str {
+        "vectrex" => target::Target::Vectrex,
+        "pitrex" => target::Target::Pitrex,
+        "vecfever" => target::Target::Vecfever,
+        "vextreme" => target::Target::Vextreme,
+        "all" => target::Target::All,
+        _ => target::Target::Vectrex,
+    };
+    
+    // Extract title from [project] section
+    let title = project_toml.get("project")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("UNTITLED");
+    
+    eprintln!("✓ Project: {}", title);
+    eprintln!("✓ Entry file: {}", entry_file.display());
+    if let Some(ref out) = output_path {
+        eprintln!("✓ Output: {}", out.display());
+    }
+    
+    // Call regular build_cmd with project-resolved paths
+    build_cmd(&entry_file, output_path.as_ref(), target, title, bin, use_lwasm, dual, include_dir)
+}
+
 // build_cmd: run full pipeline (lex/parse/opt/codegen) and write assembly.
-fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool) -> Result<()> {
+fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>) -> Result<()> {
     eprintln!("=== COMPILATION PIPELINE START ===");
     eprintln!("Input file: {}", path.display());
     eprintln!("Target: {:?}", tgt);
@@ -417,7 +497,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             // fast_wait desactivado en modo minimal
             if bin && *ct == target::Target::Vectrex {
                 // When generating for all targets, always use native assembler
-                assemble_bin(&out_path, false)?;
+                assemble_bin(&out_path, false, include_dir)?;
             }
         }
         Ok(())
@@ -500,13 +580,13 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         if bin && tgt == target::Target::Vectrex { 
             eprintln!("Phase 6: Binary assembly requested...");
             if dual {
-                assemble_dual(&out_path).map_err(|e| {
+                assemble_dual(&out_path, include_dir).map_err(|e| {
                     eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
                     eprintln!("   Error: {}", e);
                     e
                 })?;
             } else {
-                assemble_bin(&out_path, use_lwasm).map_err(|e| {
+                assemble_bin(&out_path, use_lwasm, include_dir).map_err(|e| {
                     eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
                     eprintln!("   Error: {}", e);
                     e
@@ -557,7 +637,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     }
 }
 
-fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool) -> Result<()> {
+fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>) -> Result<()> {
     let bin_path = asm_path.with_extension("bin");
     eprintln!("=== BINARY ASSEMBLY PHASE ===");
     eprintln!("ASM input: {}", asm_path.display());
@@ -592,14 +672,17 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool) -> Result<()> {
         // Use temporary file for lwasm output (we'll add padding later)
         let temp_bin = bin_path.with_extension("bin.tmp");
         
-        // Determine project root for include path
-        let project_root = std::env::current_dir()?;
+        // Determine include directory (use provided or current working directory)
+        let inc_dir = include_dir
+            .map(|p| p.to_path_buf())
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
         
-        // Run lwasm with include directory (use project root so "include/VECTREX.I" works)
+        // Run lwasm with include directory (use include_dir so "include/VECTREX.I" works)
         let output = std::process::Command::new("lwasm")
             .arg("--format=raw")
             .arg("-I")
-            .arg(&project_root)
+            .arg(&inc_dir)
             .arg(format!("--output={}", temp_bin.display()))
             .arg(asm_path)
             .output()
@@ -640,6 +723,9 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool) -> Result<()> {
         // Extract ORG directive (default to Vectrex RAM start 0xC800)
         let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
         eprintln!("Detected ORG address: 0x{:04X}", org);
+        
+        // Set include directory for assembler
+        backend::asm_to_binary::set_include_dir(include_dir.map(|p| p.to_path_buf()));
         
         // Assemble with native assembler
         let (binary, _line_map) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
@@ -691,7 +777,7 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool) -> Result<()> {
     Ok(())
 }
 
-fn assemble_dual(asm_path: &PathBuf) -> Result<()> {
+fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()> {
     eprintln!("=== DUAL ASSEMBLER MODE ===");
     eprintln!("Compiling with BOTH native and lwasm, then comparing...");
     
