@@ -508,7 +508,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         
         // Phase 4: Code generation
         eprintln!("Phase 4: Code generation (ASM emission)...");
-        let (asm, debug_info, _diagnostics) = codegen::emit_asm_with_debug(&final_module, tgt, &codegen::CodegenOptions {
+        let (asm, debug_info, diagnostics) = codegen::emit_asm_with_debug(&final_module, tgt, &codegen::CodegenOptions {
             title: title.to_string(),
             auto_loop: true,
             diag_freeze: false,
@@ -526,10 +526,21 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 4 validation: Check if assembly was actually generated
         if asm.is_empty() {
             eprintln!("❌ PHASE 4 FAILED: Empty assembly generated (0 bytes)");
-            eprintln!("   This usually indicates:");
-            eprintln!("   - Missing main() function or entry point");
-            eprintln!("   - All code was filtered out or not executed");
-            eprintln!("   - Internal codegen error (no assembly emitted)");
+            if !diagnostics.is_empty() {
+                eprintln!("   Semantic errors detected:");
+                for diag in &diagnostics {
+                    if let (Some(line), Some(col)) = (diag.line, diag.col) {
+                        eprintln!("   error {}:{} - {}", line, col, diag.message);
+                    } else {
+                        eprintln!("   error - {}", diag.message);
+                    }
+                }
+            } else {
+                eprintln!("   This usually indicates:");
+                eprintln!("   - Missing main() function or entry point");
+                eprintln!("   - All code was filtered out or not executed");
+                eprintln!("   - Internal codegen error (no assembly emitted)");
+            }
             return Err(anyhow::anyhow!("Code generation produced empty assembly"));
         }
         

@@ -440,7 +440,7 @@ fn resolve_module_path_for_diagnostic(module_path: &str, current_dir: &std::path
 }
 
 // Function call parser for arity validation - VPy uses Python-style syntax with parentheses
-fn validate_function_arity(original_line: &str, line_num: u32, locale: &str, diags: &mut Vec<Diagnostic>) {
+fn validate_function_arity(original_line: &str, line_num: u32, locale: &str, diags: &mut Vec<Diagnostic>, defined_functions: &std::collections::HashSet<String>) {
     // VPy should use Python-style function calls: FUNCTION(arg1, arg2, ...)
     // Calls without parentheses like "FUNCTION arg1, arg2" are syntax errors
     
@@ -549,23 +549,26 @@ fn validate_function_arity(original_line: &str, line_num: u32, locale: &str, dia
                     });
                 }
             } else if !func_name.is_empty() {
-                // Unknown function - this is an error
-                let message = format!("Unknown function '{}'", func_name);
-                
-                diags.push(Diagnostic {
-                    range: Range {
-                        start: Position { line: line_num, character: 0 },
-                        end: Position { line: line_num, character: original_line.len() as u32 }
-                    },
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    code: None,
-                    code_description: None,
-                    source: Some("vpy".into()),
-                    message,
-                    related_information: None,
-                    tags: None,
-                    data: None,
-                });
+                // Check if it's a user-defined function
+                if !defined_functions.contains(func_name) {
+                    // Unknown function - this is an error
+                    let message = format!("Unknown function '{}'", func_name);
+                    
+                    diags.push(Diagnostic {
+                        range: Range {
+                            start: Position { line: line_num, character: 0 },
+                            end: Position { line: line_num, character: original_line.len() as u32 }
+                        },
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: None,
+                        code_description: None,
+                        source: Some("vpy".into()),
+                        message,
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
             }
         }
     } else {
@@ -604,6 +607,16 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
     
     match lex(text) {
         Ok(tokens) => {
+            // Collect user-defined function names
+            let mut defined_functions = std::collections::HashSet::new();
+            if let Ok(module) = parse_with_filename(&tokens, uri.path()) {
+                for item in &module.items {
+                    if let crate::ast::Item::Function(func) = item {
+                        defined_functions.insert(func.name.clone());
+                    }
+                }
+            }
+            
             // If lexing succeeded, try parsing
             if let Err(e) = parse_with_filename(&tokens, uri.path()) {
                 let msg = e.to_string();
@@ -663,7 +676,7 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
                 }
                 
                 // General arity validation for function calls
-                validate_function_arity(line_txt, i as u32, locale, &mut diags);
+                validate_function_arity(line_txt, i as u32, locale, &mut diags, &defined_functions);
             }
         }
         Err(e) => {
@@ -833,12 +846,88 @@ impl LanguageServer for Backend {
                 SemanticTokenModifier::DEFAULT_LIBRARY,
             ],
         };
-    Ok(InitializeResult { capabilities: ServerCapabilities { text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)), completion_provider: Some(CompletionOptions { resolve_provider: None, trigger_characters: None, work_done_progress_options: Default::default(), all_commit_characters: None, completion_item: None }), semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions { work_done_progress_options: Default::default(), legend, range: None, full: Some(SemanticTokensFullOptions::Bool(true)), })), hover_provider: Some(HoverProviderCapability::Simple(true)), definition_provider: Some(OneOf::Left(true)), rename_provider: Some(OneOf::Left(true)), signature_help_provider: Some(SignatureHelpOptions { trigger_characters: Some(vec!["(".to_string(), ",".to_string()]), retrigger_characters: None, work_done_progress_options: Default::default() }), ..Default::default() }, server_info: Some(ServerInfo { name: "vpy-lsp".into(), version: Some("0.1.0".into()) }) })
+    Ok(InitializeResult { 
+        capabilities: ServerCapabilities { 
+            text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
+                open_close: Some(true),
+                change: Some(TextDocumentSyncKind::FULL),
+                will_save: None,
+                will_save_wait_until: None,
+                save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
+                    include_text: Some(false),
+                })),
+            })),
+            completion_provider: Some(CompletionOptions { 
+                resolve_provider: None, 
+                trigger_characters: None, 
+                work_done_progress_options: Default::default(), 
+                all_commit_characters: None, 
+                completion_item: None 
+            }), 
+            semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions { 
+                work_done_progress_options: Default::default(), 
+                legend, 
+                range: None, 
+                full: Some(SemanticTokensFullOptions::Bool(true)), 
+            })), 
+            hover_provider: Some(HoverProviderCapability::Simple(true)), 
+            definition_provider: Some(OneOf::Left(true)), 
+            rename_provider: Some(OneOf::Left(true)), 
+            signature_help_provider: Some(SignatureHelpOptions { 
+                trigger_characters: Some(vec!["(".to_string(), ",".to_string()]), 
+                retrigger_characters: None, 
+                work_done_progress_options: Default::default() 
+            }), 
+            ..Default::default() 
+        }, 
+        server_info: Some(ServerInfo { 
+            name: "vpy-lsp".into(), 
+            version: Some("0.1.0".into()) 
+        }) 
+    })
     }
     async fn initialized(&self, _: InitializedParams) { let loc = self.locale.lock().unwrap().clone(); let _ = self.client.log_message(MessageType::INFO, tr(&loc, "init.ready")).await; }
     async fn shutdown(&self) -> LspResult<()> { Ok(()) }
-    async fn did_open(&self, params: DidOpenTextDocumentParams) { let uri = params.text_document.uri; let text = params.text_document.text; self.docs.lock().unwrap().insert(uri.clone(), text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; }
-    async fn did_change(&self, params: DidChangeTextDocumentParams) { let uri = params.text_document.uri; if let Some(change) = params.content_changes.into_iter().last() { self.docs.lock().unwrap().insert(uri.clone(), change.text.clone()); let loc = self.locale.lock().unwrap().clone(); let diags = compute_diagnostics(&uri, &change.text, &loc); let _ = self.client.publish_diagnostics(uri, diags, None).await; } }
+    async fn did_open(&self, params: DidOpenTextDocumentParams) { 
+        let uri = params.text_document.uri; 
+        let text = params.text_document.text; 
+        self.docs.lock().unwrap().insert(uri.clone(), text.clone()); 
+        let loc = self.locale.lock().unwrap().clone(); 
+        eprintln!("[LSP] did_open: Computing diagnostics for {}", uri);
+        let diags = compute_diagnostics(&uri, &text, &loc); 
+        eprintln!("[LSP] did_open: Publishing {} diagnostics", diags.len());
+        let _ = self.client.publish_diagnostics(uri, diags, None).await; 
+    }
+    async fn did_change(&self, params: DidChangeTextDocumentParams) { 
+        let uri = params.text_document.uri; 
+        if let Some(change) = params.content_changes.into_iter().last() { 
+            self.docs.lock().unwrap().insert(uri.clone(), change.text.clone()); 
+            let loc = self.locale.lock().unwrap().clone(); 
+            eprintln!("[LSP] did_change: Recomputing diagnostics for {}", uri);
+            let diags = compute_diagnostics(&uri, &change.text, &loc); 
+            eprintln!("[LSP] did_change: Publishing {} diagnostics", diags.len());
+            let _ = self.client.publish_diagnostics(uri, diags, None).await; 
+        } 
+    }
+    
+    async fn did_save(&self, params: DidSaveTextDocumentParams) {
+        let uri = params.text_document.uri;
+        eprintln!("[LSP] did_save: Triggered for {}", uri);
+        
+        // Re-read the document content from our cache
+        let text = {
+            let docs = self.docs.lock().unwrap();
+            docs.get(&uri).cloned()
+        };
+        
+        if let Some(text) = text {
+            let loc = self.locale.lock().unwrap().clone();
+            eprintln!("[LSP] did_save: Recomputing diagnostics for {}", uri);
+            let diags = compute_diagnostics(&uri, &text, &loc);
+            eprintln!("[LSP] did_save: Publishing {} diagnostics", diags.len());
+            let _ = self.client.publish_diagnostics(uri, diags, None).await;
+        }
+    }
     async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> { 
         let uri = params.text_document_position.text_document.uri;
         let docs = self.docs.lock().unwrap();
