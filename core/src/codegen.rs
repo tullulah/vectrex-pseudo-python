@@ -46,7 +46,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("DEBUG_PRINT_LABELED", 2),  // label, value
     
     // Asset functions (new)
-    ("DRAW_VECTOR", 1),     // Draw vector asset by name
+    ("DRAW_VECTOR", 3),     // Draw vector asset at position: name, x, y
     ("PLAY_MUSIC", 1),      // Play music asset by name
     ("MUSIC_UPDATE", 0),    // Process music events per frame
     

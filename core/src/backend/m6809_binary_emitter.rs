@@ -298,6 +298,16 @@ impl BinaryEmitter {
         self.emit(0x00);
     }
 
+    /// LBEQ - long branch si igual/cero (opcode 0x10 0x27, offset 16-bit)
+    pub fn lbeq_label(&mut self, label: &str) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0x27);
+        self.add_symbol_ref(label, true, 2); // 2 bytes para offset de 16 bits
+        self.emit(0x00);
+        self.emit(0x00);
+    }
+
     /// BNE - branch si no igual/no cero (opcode 0x26)
     pub fn bne_offset(&mut self, offset: i8) {
         self.record_line_mapping();
@@ -310,6 +320,16 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0x26);
         self.add_symbol_ref(label, true, 1);
+        self.emit(0x00);
+    }
+
+    /// LBNE - long branch si no igual (opcode 0x10 0x26, offset 16-bit)
+    pub fn lbne_label(&mut self, label: &str) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0x26);
+        self.add_symbol_ref(label, true, 2);
+        self.emit(0x00);
         self.emit(0x00);
     }
 
@@ -475,6 +495,30 @@ impl BinaryEmitter {
     pub fn decb(&mut self) {
         self.record_line_mapping();
         self.emit(0x5A);
+    }
+
+    /// NEGA (opcode 0x40) - Negate A (two's complement)
+    pub fn nega(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x40);
+    }
+
+    /// NEGB (opcode 0x50) - Negate B (two's complement)
+    pub fn negb(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x50);
+    }
+
+    /// COMA (opcode 0x43) - Complement A (one's complement)
+    pub fn coma(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x43);
+    }
+
+    /// COMB (opcode 0x53) - Complement B (one's complement)
+    pub fn comb(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x53);
     }
 
     /// ASLA (opcode 0x48) - Arithmetic Shift Left A
@@ -890,8 +934,24 @@ impl BinaryEmitter {
             if sym_ref.is_relative {
                 // Branch relativo: calcular offset desde la siguiente instrucción
                 let next_addr = self.current_address - (self.code.len() - sym_ref.offset - sym_ref.ref_size as usize) as u16;
-                let offset = (target_addr as i32 - next_addr as i32) as i8;
-                self.code[sym_ref.offset] = offset as u8;
+                let offset_i32 = target_addr as i32 - next_addr as i32;
+                
+                // 🔍 TRACE: Resolución de branches importantes
+                if sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
+                    eprintln!("🔗 Resolving {} at offset {}: target=${:04X}, next=${:04X}, offset={} ({}bytes)", 
+                        sym_ref.symbol, sym_ref.offset, target_addr, next_addr, offset_i32, sym_ref.ref_size);
+                }
+                
+                if sym_ref.ref_size == 1 {
+                    // Branch corto (8-bit offset)
+                    let offset = offset_i32 as i8;
+                    self.code[sym_ref.offset] = offset as u8;
+                } else {
+                    // Long branch (16-bit offset)
+                    let offset = offset_i32 as i16;
+                    self.code[sym_ref.offset] = (offset >> 8) as u8;     // High byte
+                    self.code[sym_ref.offset + 1] = (offset & 0xFF) as u8; // Low byte
+                }
             } else {
                 // Dirección absoluta de 16 bits
                 if sym_ref.ref_size == 2 {

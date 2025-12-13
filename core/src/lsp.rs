@@ -67,7 +67,7 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "DEBUG_PRINT_LABELED" => Some(AritySpec::Exact(2)),     // label, value - debug output with label
         
         // Asset system functions
-        "DRAW_VECTOR" => Some(AritySpec::Exact(1)),            // asset_name (string)
+        "DRAW_VECTOR" => Some(AritySpec::Exact(3)),            // asset_name, x, y
         "PLAY_MUSIC" => Some(AritySpec::Exact(1)),             // asset_name (string)
         
         // Funciones de dibujo con intensidad explícita

@@ -9,6 +9,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static LAST_END_SET: AtomicBool = AtomicBool::new(false);
 
+// Macro to check recursion depth and prevent stack overflow
+macro_rules! check_depth {
+    ($depth:expr, $max:expr, $context:expr) => {
+        if $depth > $max {
+            panic!("Maximum recursion depth ({}) exceeded in {}. Please simplify your code.", $max, $context);
+        }
+    };
+}
+
 // Helper function to map legacy function names to their modern counterparts
 fn resolve_function_name(name: &str) -> Option<String> {
     match name {
@@ -54,71 +63,80 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
     use std::collections::HashSet;
     let mut used = HashSet::new();
     
-    fn scan_expr(expr: &Expr, used: &mut HashSet<String>) {
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, depth: usize) {
+        const MAX_DEPTH: usize = 500;
+        if depth > MAX_DEPTH {
+            panic!("Maximum expression nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
+        }
         match expr {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
-                // Check for DRAW_VECTOR("asset_name") or PLAY_MUSIC("asset_name")
-                if (name_upper == "DRAW_VECTOR" || name_upper == "PLAY_MUSIC") && call_info.args.len() == 1 {
+                // Check for DRAW_VECTOR("asset_name", x, y) or PLAY_MUSIC("asset_name")
+                if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
+                   (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         used.insert(asset_name.clone());
                     }
                 }
                 // Recursively scan arguments
                 for arg in &call_info.args {
-                    scan_expr(arg, used);
+                    scan_expr(arg, used, depth + 1);
                 }
             },
             Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-                scan_expr(left, used);
-                scan_expr(right, used);
+                scan_expr(left, used, depth + 1);
+                scan_expr(right, used, depth + 1);
             },
-            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used),
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, depth + 1),
             // NOTE: No hay Expr::Index en ast.rs actual
             _ => {}
         }
     }
     
-    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>) {
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, depth: usize) {
+        const MAX_DEPTH: usize = 500;
+        if depth > MAX_DEPTH {
+            panic!("Maximum statement nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
+        }
         match stmt {
-            Stmt::Assign { value, .. } => scan_expr(value, used),
-            Stmt::Let { value, .. } => scan_expr(value, used),
-            Stmt::CompoundAssign { value, .. } => scan_expr(value, used),
-            Stmt::Expr(expr, _line) => scan_expr(expr, used),
+            Stmt::Assign { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::Let { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used, depth + 1),
             Stmt::If { cond, body, elifs, else_body, .. } => {
-                scan_expr(cond, used);
-                for s in body { scan_stmt(s, used); }
+                scan_expr(cond, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
                 for (elif_cond, elif_body) in elifs {
-                    scan_expr(elif_cond, used);
-                    for s in elif_body { scan_stmt(s, used); }
+                    scan_expr(elif_cond, used, depth + 1);
+                    for s in elif_body { scan_stmt(s, used, depth + 1); }
                 }
                 if let Some(els) = else_body {
-                    for s in els { scan_stmt(s, used); }
+                    for s in els { scan_stmt(s, used, depth + 1); }
                 }
             },
             Stmt::While { cond, body, .. } => {
-                scan_expr(cond, used);
-                for s in body { scan_stmt(s, used); }
+                scan_expr(cond, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
             },
             Stmt::For { start, end, step, body, .. } => {
-                scan_expr(start, used);
-                scan_expr(end, used);
+                scan_expr(start, used, depth + 1);
+                scan_expr(end, used, depth + 1);
                 if let Some(step_expr) = step {
-                    scan_expr(step_expr, used);
+                    scan_expr(step_expr, used, depth + 1);
                 }
-                for s in body { scan_stmt(s, used); }
+                for s in body { scan_stmt(s, used, depth + 1); }
             },
             Stmt::Switch { expr, cases, default, .. } => {
-                scan_expr(expr, used);
+                scan_expr(expr, used, depth + 1);
                 for (case_expr, case_body) in cases {
-                    scan_expr(case_expr, used);
-                    for s in case_body { scan_stmt(s, used); }
+                    scan_expr(case_expr, used, depth + 1);
+                    for s in case_body { scan_stmt(s, used, depth + 1); }
                 }
                 if let Some(default_body) = default {
-                    for s in default_body { scan_stmt(s, used); }
+                    for s in default_body { scan_stmt(s, used, depth + 1); }
                 }
             },
-            Stmt::Return(Some(expr), _line) => scan_expr(expr, used),
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, depth + 1),
             _ => {}
         }
     }
@@ -128,14 +146,14 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match item {
             Item::Function(func) => {
                 for stmt in &func.body {
-                    scan_stmt(stmt, &mut used);
+                    scan_stmt(stmt, &mut used, 0);
                 }
             },
             Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
-                scan_expr(value, &mut used);
+                scan_expr(value, &mut used, 0);
             },
             Item::ExprStatement(expr) => {
-                scan_expr(expr, &mut used);
+                scan_expr(expr, &mut used, 0);
             },
             _ => {}
         }
@@ -306,7 +324,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             if let Some(main_func) = user_main {
                 let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                 for stmt in &main_func.body {
-                    emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker);
+                    emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                 }
             }
         }
@@ -360,7 +378,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
-                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker);
+                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                     }
                     out.push_str("    RTS\n\n");
                 } else {
@@ -673,7 +691,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     crate::codegen::AssetType::Vector => {
                         use crate::vecres::VecResource;
                         if let Ok(resource) = VecResource::load(std::path::Path::new(&asset.path)) {
-                            let asm = resource.compile_to_asm();
+                            let asm = resource.compile_to_asm_with_name(Some(&asset.name));
                             out.push_str(&format!("; Vector asset: {}\n", asset.name));
                             out.push_str(&asm);
                             out.push_str("\n");
@@ -733,6 +751,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str(&format!("VLINE_STEPS EQU RESULT+{}\n", var_offset)); var_offset += 1;
             out.push_str(&format!("VLINE_LIST EQU RESULT+{}\n", var_offset)); var_offset += 2; // 2 bytes
         } else { out.push_str("; Line drawing temps\nVLINE_DX: FCB 0\nVLINE_DY: FCB 0\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
+    }
+    // DRAW_VECTOR offset position storage (always needed for DRAW_VECTOR)
+    if opts.exclude_ram_org {
+        out.push_str(&format!("DRAW_VEC_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_VEC_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
+    } else {
+        out.push_str("; DRAW_VECTOR position offset\nDRAW_VEC_X: FCB 0\nDRAW_VEC_Y: FCB 0\n");
     }
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function
@@ -871,13 +896,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     (out, debug_info)
 }
 fn expr_has_trig(e: &Expr) -> bool {
+    expr_has_trig_depth(e, 0)
+}
+
+fn expr_has_trig_depth(e: &Expr, depth: usize) -> bool {
+    check_depth!(depth, 500, "expr_has_trig");
     match e {
         Expr::Call(ci) => {
             let u = ci.name.to_ascii_lowercase();
             u == "sin" || u == "cos" || u == "tan" || u == "math.sin" || u == "math.cos" || u == "math.tan"
         }
-        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_trig(left) || expr_has_trig(right),
-        Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig(inner),
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => 
+            expr_has_trig_depth(left, depth + 1) || expr_has_trig_depth(right, depth + 1),
+        Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig_depth(inner, depth + 1),
         _ => false,
     }
 }
@@ -894,14 +925,19 @@ fn module_uses_trig(module: &Module) -> bool {
 }
 
 fn stmt_has_trig(s: &Stmt) -> bool {
+    stmt_has_trig_depth(s, 0)
+}
+
+fn stmt_has_trig_depth(s: &Stmt, depth: usize) -> bool {
+    check_depth!(depth, 500, "stmt_has_trig");
     match s {
-        Stmt::Assign { value, .. } => expr_has_trig(value),
-        Stmt::Let { value, .. } => expr_has_trig(value),
-        Stmt::Expr(e, _) => expr_has_trig(e),
-    Stmt::For { start, end, step, body, .. } => expr_has_trig(start) || expr_has_trig(end) || step.as_ref().map(expr_has_trig).unwrap_or(false) || body.iter().any(stmt_has_trig),
-        Stmt::While { cond, body, .. } => expr_has_trig(cond) || body.iter().any(stmt_has_trig),
-        Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig(cond) || body.iter().any(stmt_has_trig) || elifs.iter().any(|(c,b)| expr_has_trig(c) || b.iter().any(stmt_has_trig)) || else_body.as_ref().map(|eb| eb.iter().any(stmt_has_trig)).unwrap_or(false),
-        Stmt::Return(o, _) => o.as_ref().map(expr_has_trig).unwrap_or(false),
+        Stmt::Assign { value, .. } => expr_has_trig_depth(value, depth + 1),
+        Stmt::Let { value, .. } => expr_has_trig_depth(value, depth + 1),
+        Stmt::Expr(e, _) => expr_has_trig_depth(e, depth + 1),
+    Stmt::For { start, end, step, body, .. } => expr_has_trig_depth(start, depth + 1) || expr_has_trig_depth(end, depth + 1) || step.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
+        Stmt::While { cond, body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
+        Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)) || elifs.iter().any(|(c,b)| expr_has_trig_depth(c, depth + 1) || b.iter().any(|s| stmt_has_trig_depth(s, depth + 1))) || else_body.as_ref().map(|eb| eb.iter().any(|s| stmt_has_trig_depth(s, depth + 1))).unwrap_or(false),
+        Stmt::Return(o, _) => o.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false),
         Stmt::Switch { expr, cases, default, .. } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
         Stmt::Break { .. } | Stmt::Continue { .. } => false,
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before stmt_has_trig"),
@@ -1108,7 +1144,7 @@ fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::
         out.push_str(&format!("    LDD VAR_ARG{}\n    STD VAR_{}\n", i, p.to_uppercase()));
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
-    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker); }
+    for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker, 0); }
     if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }
         out.push_str("    RTS\n");
@@ -1605,7 +1641,9 @@ MUSIC_UPDATE_done:\n\
         DSL_LOOP:\n\
         LDA ,X+                 ; Read flag\n\
         CMPA #2                 ; Check end marker\n\
-        BEQ DSL_DONE            ; Exit if end\n\
+        LBEQ DSL_DONE           ; Exit if end (long branch)\n\
+        CMPA #1                 ; Check next path marker\n\
+        LBEQ DSL_NEXT_PATH      ; Process next path (long branch)\n\
         ; Draw line\n\
         LDB ,X+                 ; dy\n\
         LDA ,X+                 ; dx\n\
@@ -1626,13 +1664,23 @@ MUSIC_UPDATE_done:\n\
         BEQ DSL_W2\n\
         CLR VIA_shift_reg\n\
         BRA DSL_LOOP\n\
-        DSL_DONE:\n\
-        RTS\n\
-        ; CÓDIGO MUERTO (ya migrado arriba):\n\
-        LDB ,X+                 ; y_start (DEAD)\n\
-        LDA ,X+                 ; x_start (DEAD)\n\
-        PSHS D                  ; Save y,x (DEAD)\n\
-        ; Reset to zero (Malban resync) - AFTER intensity\n\
+        ; Next path: read new intensity and header, then continue drawing\n\
+        DSL_NEXT_PATH:\n\
+        ; Save current X position before reading anything\n\
+        TFR X,D                 ; D = X (current position)\n\
+        PSHS D                  ; Save X address\n\
+        LDA ,X+                 ; Read intensity (X now points to y_start)\n\
+        PSHS A                  ; Save intensity\n\
+        LDB ,X+                 ; y_start\n\
+        LDA ,X+                 ; x_start (X now points to next_y)\n\
+        STD TEMP_YX             ; Save y,x\n\
+        PULS A                  ; Get intensity back\n\
+        JSR $F2AB               ; BIOS Intensity_a (may corrupt X!)\n\
+        ; Restore X to point to next_y,next_x (after the 3 bytes we read)\n\
+        PULS D                  ; Get original X\n\
+        ADDD #3                 ; Skip intensity, y_start, x_start\n\
+        TFR D,X                 ; X now points to next_y\n\
+        ; Reset to zero (same as Draw_Sync_List start)\n\
         CLR VIA_shift_reg\n\
         LDA #$CC\n\
         STA VIA_cntl\n\
@@ -1646,8 +1694,59 @@ MUSIC_UPDATE_done:\n\
         NOP\n\
         LDA #$83\n\
         STA VIA_port_b\n\
-        ; Move to start position\n\
-        PULS D                  ; Restore y(B), x(A)\n\
+        ; Move to new start position\n\
+        LDD TEMP_YX\n\
+        STB VIA_port_a          ; y to DAC\n\
+        PSHS A\n\
+        LDA #$CE\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A\n\
+        STA VIA_port_a          ; x to DAC\n\
+        LDA #$7F\n\
+        STA VIA_t1_cnt_lo\n\
+        CLR VIA_t1_cnt_hi\n\
+        LEAX 2,X                ; Skip next_y, next_x\n\
+        ; Wait for move\n\
+        DSL_W3:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSL_W3\n\
+        CLR VIA_shift_reg       ; Clear before continuing\n\
+        BRA DSL_LOOP            ; Continue drawing\n\
+        DSL_DONE:\n\
+        RTS\n\n\
+        ; ============================================================================\n\
+        ; Draw_Sync_List_At - Draw vector at offset position (DRAW_VEC_X, DRAW_VEC_Y)\n\
+        ; Same as Draw_Sync_List but adds offset to y_start, x_start coordinates\n\
+        ; Uses: DRAW_VEC_X, DRAW_VEC_Y (set by DRAW_VECTOR before calling this)\n\
+        ; ============================================================================\n\
+        Draw_Sync_List_At:\n\
+        LDA ,X+                 ; intensity\n\
+        JSR $F2AB               ; BIOS Intensity_a\n\
+        LDB ,X+                 ; y_start from .vec\n\
+        ADDB DRAW_VEC_Y         ; Add Y offset\n\
+        LDA ,X+                 ; x_start from .vec\n\
+        ADDA DRAW_VEC_X         ; Add X offset\n\
+        STD TEMP_YX             ; Save adjusted position\n\
+        ; Reset completo\n\
+        CLR VIA_shift_reg\n\
+        LDA #$CC\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_a\n\
+        LDA #$82\n\
+        STA VIA_port_b\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        LDA #$83\n\
+        STA VIA_port_b\n\
+        ; Move sequence\n\
+        LDD TEMP_YX             ; Recuperar y,x ajustado\n\
         STB VIA_port_a          ; y to DAC\n\
         PSHS A                  ; Save x\n\
         LDA #$CE\n\
@@ -1657,22 +1756,24 @@ MUSIC_UPDATE_done:\n\
         STA VIA_port_b\n\
         PULS A                  ; Restore x\n\
         STA VIA_port_a          ; x to DAC\n\
+        ; Timing setup\n\
         LDA #$7F\n\
-        STA VIA_t1_cnt_lo       ; Scale factor (CRITICAL for timing)\n\
+        STA VIA_t1_cnt_lo\n\
         CLR VIA_t1_cnt_hi\n\
-        ; C code does u+=3 after reading intensity,y,x to skip to after next_y,next_x\n\
-        ; We already advanced X by 3 (LDA ,X+ three times), so skip 2 more for next_y,next_x\n\
-        LEAX 2,X\n\
-        ; Wait for move\n\
-        DSL_w1:\n\
+        LEAX 2,X                ; Skip next_y, next_x\n\
+        ; Wait for move to complete\n\
+        DSLA_W1:\n\
         LDA VIA_int_flags\n\
         ANDA #$40\n\
-        BEQ DSL_w1\n\
-        ; Read flag and draw (EXACT copy of working inline)\n\
-        LDA ,X+\n\
-        TSTA\n\
-        BPL DSL_done\n\
-        ; Draw line (flag<0)\n\
+        BEQ DSLA_W1\n\
+        ; Loop de dibujo (same as Draw_Sync_List)\n\
+        DSLA_LOOP:\n\
+        LDA ,X+                 ; Read flag\n\
+        CMPA #2                 ; Check end marker\n\
+        LBEQ DSLA_DONE\n\
+        CMPA #1                 ; Check next path marker\n\
+        LBEQ DSLA_NEXT_PATH\n\
+        ; Draw line\n\
         LDB ,X+                 ; dy\n\
         LDA ,X+                 ; dx\n\
         PSHS A                  ; Save dx\n\
@@ -1685,12 +1786,66 @@ MUSIC_UPDATE_done:\n\
         CLR VIA_t1_cnt_hi\n\
         LDA #$FF\n\
         STA VIA_shift_reg\n\
-        DSL_w2:\n\
+        ; Wait for line draw\n\
+        DSLA_W2:\n\
         LDA VIA_int_flags\n\
         ANDA #$40\n\
-        BEQ DSL_w2\n\
+        BEQ DSLA_W2\n\
         CLR VIA_shift_reg\n\
-        DSL_done:\n\
+        BRA DSLA_LOOP\n\
+        ; Next path: add offset to new coordinates too\n\
+        DSLA_NEXT_PATH:\n\
+        TFR X,D\n\
+        PSHS D\n\
+        LDA ,X+                 ; Read intensity\n\
+        PSHS A\n\
+        LDB ,X+                 ; y_start\n\
+        ADDB DRAW_VEC_Y         ; Add Y offset to new path\n\
+        LDA ,X+                 ; x_start\n\
+        ADDA DRAW_VEC_X         ; Add X offset to new path\n\
+        STD TEMP_YX\n\
+        PULS A                  ; Get intensity back\n\
+        JSR $F2AB\n\
+        PULS D\n\
+        ADDD #3\n\
+        TFR D,X\n\
+        ; Reset to zero\n\
+        CLR VIA_shift_reg\n\
+        LDA #$CC\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_a\n\
+        LDA #$82\n\
+        STA VIA_port_b\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        NOP\n\
+        LDA #$83\n\
+        STA VIA_port_b\n\
+        ; Move to new start position (already offset-adjusted)\n\
+        LDD TEMP_YX\n\
+        STB VIA_port_a\n\
+        PSHS A\n\
+        LDA #$CE\n\
+        STA VIA_cntl\n\
+        CLR VIA_port_b\n\
+        LDA #1\n\
+        STA VIA_port_b\n\
+        PULS A\n\
+        STA VIA_port_a\n\
+        LDA #$7F\n\
+        STA VIA_t1_cnt_lo\n\
+        CLR VIA_t1_cnt_hi\n\
+        LEAX 2,X\n\
+        ; Wait for move\n\
+        DSLA_W3:\n\
+        LDA VIA_int_flags\n\
+        ANDA #$40\n\
+        BEQ DSLA_W3\n\
+        CLR VIA_shift_reg\n\
+        BRA DSLA_LOOP\n\
+        DSLA_DONE:\n\
         RTS\n"
     );
 }
@@ -1713,9 +1868,9 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         }
     };
     
-    // DRAW_VECTOR: Draw vector asset by name
-    // Usage: DRAW_VECTOR("player") -> loads vector data and renders it
-    if up == "DRAW_VECTOR" && args.len() == 1 {
+    // DRAW_VECTOR: Draw vector asset at position
+    // Usage: DRAW_VECTOR("player", x, y) -> draws vector at absolute position (x, y)
+    if up == "DRAW_VECTOR" && args.len() == 3 {
         if let Expr::StringLit(asset_name) = &args[0] {
             // Check if asset exists in opts.assets
             let asset_exists = opts.assets.iter().any(|a| {
@@ -1723,18 +1878,39 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
             });
             
             if asset_exists {
-                // Generate unique labels for this DRAW_VECTOR call
-                static mut DRAW_VECTOR_COUNTER: usize = 0;
-                let counter = unsafe { 
-                    DRAW_VECTOR_COUNTER += 1; 
-                    DRAW_VECTOR_COUNTER 
+                // Find the asset to get path count
+                let asset_info = opts.assets.iter()
+                    .find(|a| a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Vector))
+                    .unwrap();
+                
+                // Load the .vec file to count paths
+                use crate::vecres::VecResource;
+                let path_count = if let Ok(resource) = VecResource::load(std::path::Path::new(&asset_info.path)) {
+                    resource.visible_paths().len()
+                } else {
+                    1 // Fallback to 1 if can't load
                 };
                 
                 let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
                 
-                out.push_str(&format!("; DRAW_VECTOR(\"{}\") - Load pointer and call Draw_Sync_List\n", asset_name));
-                out.push_str(&format!("    LDX #{}_VECTORS  ; X = vector data pointer\n", symbol));
-                out.push_str("    JSR Draw_Sync_List  ; Draw the vector\n");
+                out.push_str(&format!("; DRAW_VECTOR(\"{}\", x, y) - {} path(s) at position\n", asset_name, path_count));
+                
+                // Evaluate x position (arg 1)
+                emit_expr(&args[1], out, fctx, string_map, opts);
+                out.push_str("    LDA RESULT+1  ; X position (low byte)\n");
+                out.push_str("    STA DRAW_VEC_X\n");
+                
+                // Evaluate y position (arg 2)
+                emit_expr(&args[2], out, fctx, string_map, opts);
+                out.push_str("    LDA RESULT+1  ; Y position (low byte)\n");
+                out.push_str("    STA DRAW_VEC_Y\n");
+                
+                // Generate code to draw each path at offset position
+                for path_idx in 0..path_count {
+                    out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
+                    out.push_str("    JSR Draw_Sync_List_At\n");
+                }
+                
                 out.push_str("    LDD #0\n    STD RESULT\n");
                 return true;
             } else {
@@ -2273,7 +2449,13 @@ struct FuncCtx { locals: Vec<String>, frame_size: i32 }
 impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2) } }
 
 // emit_stmt: lower statements to 6809 instructions.
-fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker) {
+fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker, depth: usize) {
+    // Safety: Prevent stack overflow with deep recursion
+    const MAX_DEPTH: usize = 500;
+    if depth > MAX_DEPTH {
+        panic!("Maximum statement nesting depth ({}) exceeded. Please simplify your code or split into smaller functions.", MAX_DEPTH);
+    }
+    
     // ✅ CRITICAL: Record source line BEFORE emitting code
     let line = stmt.source_line();
     tracker.set_line(line);
@@ -2318,7 +2500,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             // Long branch to end
             out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", le));
             let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
-            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker); }
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker, depth + 1); }
             out.push_str(&format!("    LBRA {}\n{}: ; while end\n", ls, le));
         }
         Stmt::For { var, start, end, step, body, .. } => {
@@ -2335,7 +2517,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             out.push_str("    LDX RESULT\n    CPD RESULT\n");
             out.push_str(&format!("    LBCC {}\n", le)); // unsigned >= end => exit
             let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
-            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker); }
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker, depth + 1); }
             if let Some(se) = step {
                 emit_expr(se, out, fctx, string_map, opts);
                 out.push_str("    LDX RESULT\n");
@@ -2352,20 +2534,20 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             let simple_if = elifs.is_empty() && else_body.is_none();
             emit_expr(cond, out, fctx, string_map, opts);
             out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", next));
-            for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+            for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
             out.push_str(&format!("    LBRA {}\n", end));
             for (i, (c, b)) in elifs.iter().enumerate() {
                 out.push_str(&format!("{}:\n", next));
                 let new_next = if i == elifs.len() - 1 && else_body.is_none() { end.clone() } else { fresh_label("IF_NEXT") };
                 emit_expr(c, out, fctx, string_map, opts);
                 out.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", new_next));
-                for s in b { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                for s in b { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
                 out.push_str(&format!("    LBRA {}\n", end));
                 next = new_next;
             }
             if let Some(eb) = else_body {
                 out.push_str(&format!("{}:\n", next));
-                for s in eb { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                for s in eb { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
             } else if !elifs.is_empty() || simple_if {
                 // Only emit next label if it's different from end
                 if next != end {
@@ -2403,12 +2585,12 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     for (val, body) in &numeric_cases {
                         let lbl = label_map.get(&(*val & 0xFFFF)).unwrap();
                         out.push_str(&format!("{}:\n", lbl));
-                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                        for s in *body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
                         out.push_str(&format!("    LBRA {}\n", end));
                     }
                     if let Some(dl) = &def_label {
                         out.push_str(&format!("{}:\n", dl));
-                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                        for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
                     }
                     out.push_str(&format!("{}:\n", end));
                     out.push_str(&format!("{}:\n", table_label));
@@ -2433,12 +2615,12 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             if let Some(dl) = &def_label { out.push_str(&format!("    LBRA {}\n", dl)); } else { out.push_str(&format!("    LBRA {}\n", end)); }
             for ((_, body), lbl) in cases.iter().zip(labels.iter()) {
                 out.push_str(&format!("{}:\n", lbl));
-                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                for s in body { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
                 out.push_str(&format!("    LBRA {}\n", end));
             }
             if let Some(dl) = def_label {
                 out.push_str(&format!("{}:\n", dl));
-                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker); }
+                for s in default.as_ref().unwrap() { emit_stmt(s, out, loop_ctx, fctx, string_map, opts, tracker, depth + 1); }
             }
             out.push_str(&format!("{}:\n", end));
         },
@@ -2449,6 +2631,19 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
 // emit_expr: lower expressions; result placed in RESULT.
 // Nota: En 6809 las operaciones sobre D ya limitan a 16 bits; no hace falta 'mask' explícito.
 fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
+    emit_expr_depth(expr, out, fctx, string_map, opts, 0);
+}
+
+fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, depth: usize) {
+    // Safety: Prevent stack overflow with deep recursion
+    const MAX_DEPTH: usize = 500;
+    if depth > MAX_DEPTH {
+        panic!("Maximum expression nesting depth ({}) exceeded. Please simplify your expressions or split into smaller parts.", MAX_DEPTH);
+    }
+    if depth > 450 {
+        eprintln!("WARNING: Deep recursion at depth {} in emit_expr", depth);
+    }
+    
     match expr {
         Expr::Number(n) => {
             out.push_str(&format!("    LDD #{}\n    STD RESULT\n", *n));
@@ -2468,7 +2663,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.source_line)) { return; }
             for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
-                emit_expr(arg, out, fctx, string_map, opts);
+                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1);
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i));
             }
@@ -2489,7 +2684,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
         Expr::Binary { op, left, right } => {
             // x+x and x-x peepholes
             if matches!(op, BinOp::Add) && format_expr_ref(left) == format_expr_ref(right) {
-                emit_expr(left, out, fctx, string_map, opts);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
                 out.push_str("    LDD RESULT\n    ADDD RESULT\n    STD RESULT\n");
                 return;
             }
@@ -2500,13 +2695,13 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             // Generalized power-of-two multiply via shifts (any 2^k) using ASLB/ROLA.
             if matches!(op, BinOp::Mul) {
                 if let Some(shift) = power_of_two_const(right) {
-                    emit_expr(left, out, fctx, string_map, opts);
+                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    ASLB\n    ROLA\n"); }
                     out.push_str("    STD RESULT\n");
                     return;
                 } else if let Some(shift) = power_of_two_const(left) {
-                    emit_expr(right, out, fctx, string_map, opts);
+                    emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    ASLB\n    ROLA\n"); }
                     out.push_str("    STD RESULT\n");
@@ -2516,7 +2711,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             // Generalized power-of-two division via shifts (only when RHS is const).
             if matches!(op, BinOp::Div) {
                 if let Some(shift) = power_of_two_const(right) {
-                    emit_expr(left, out, fctx, string_map, opts);
+                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    LSRA\n    RORB\n"); }
                     out.push_str("    STD RESULT\n");
@@ -2524,9 +2719,9 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
                 }
             }
             // Fallback general operations via temporaries / helpers.
-            emit_expr(left, out, fctx, string_map, opts);
+            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
-            emit_expr(right, out, fctx, string_map, opts);
+            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPRIGHT\n");
             match op {
                 BinOp::Add => out.push_str("    LDD TMPLEFT\n    ADDD TMPRIGHT\n    STD RESULT\n"),
@@ -2543,13 +2738,13 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             }
         }
         Expr::BitNot(inner) => {
-            emit_expr(inner, out, fctx, string_map, opts);
+            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    COMA\n    COMB\n    STD RESULT\n");
         }
         Expr::Compare { op, left, right } => {
-            emit_expr(left, out, fctx, string_map, opts);
+            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
-            emit_expr(right, out, fctx, string_map, opts);
+            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPRIGHT\n    LDD TMPLEFT\n    SUBD TMPRIGHT\n");
             // DON'T overwrite result before branch - execute branch immediately after SUBD
             let lt = fresh_label("CT");
@@ -2562,11 +2757,11 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
         }
         Expr::Logic { op, left, right } => match op {
             LogicOp::And => {
-                emit_expr(left, out, fctx, string_map, opts);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
                 let fl = fresh_label("AND_FALSE");
                 let en = fresh_label("AND_END");
                 out.push_str(&format!("    LDD RESULT\n    BEQ {}\n", fl));
-                emit_expr(right, out, fctx, string_map, opts);
+                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
                 out.push_str(&format!(
                     "    LDD RESULT\n    BEQ {}\n    LDD #1\n    STD RESULT\n    BRA {}\n{}:\n    LDD #0\n    STD RESULT\n{}:\n",
                     fl, en, fl, en
@@ -2575,9 +2770,9 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             LogicOp::Or => {
                 let tr = fresh_label("OR_TRUE");
                 let en = fresh_label("OR_END");
-                emit_expr(left, out, fctx, string_map, opts);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
                 out.push_str(&format!("    LDD RESULT\n    BNE {}\n", tr));
-                emit_expr(right, out, fctx, string_map, opts);
+                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
                 out.push_str(&format!(
                     "    LDD RESULT\n    BNE {}\n    LDD #0\n    STD RESULT\n    BRA {}\n{}:\n    LDD #1\n    STD RESULT\n{}:\n",
                     tr, en, tr, en
@@ -2585,7 +2780,7 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             }
         },
         Expr::Not(inner) => {
-            emit_expr(inner, out, fctx, string_map, opts);
+            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1);
             out.push_str(
                 "    LDD RESULT\n    BEQ NOT_TRUE\n    LDD #0\n    STD RESULT\n    BRA NOT_END\nNOT_TRUE:\n    LDD #1\n    STD RESULT\nNOT_END:\n",
             );

@@ -130,6 +130,13 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
                 label.to_string()
             };
             emitter.define_label(&full_label);
+            
+            // 🔍 TRACE: Definición de labels importantes
+            if full_label == "DSL_NEXT_PATH" || full_label == "DSL_LOOP" || full_label == "DSL_DONE" {
+                eprintln!("🏷️  Line {}: Defined label '{}' at addr=${:04X} off={}", 
+                    current_line, full_label, emitter.current_address, emitter.current_offset());
+            }
+            
             current_line += 1;
             continue;
         }
@@ -141,14 +148,24 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
             continue;
         }
         
+        // 🔍 TRACE: Antes de procesar instrucción
+        let trace_labels = ["DSL_LOOP", "DSL_NEXT_PATH", "DSL_DONE", "_PLAYER_VECTORS", "_TRIANGLE_VECTORS"];
+        let should_trace = trace_labels.iter().any(|&l| last_global_label == l);
+        if should_trace {
+            eprintln!("🔍 Line {}: [{}] {} → addr=${:04X} off={}", 
+                current_line, last_global_label, trimmed, emitter.current_address, emitter.current_offset());
+        }
+        
         // Procesar instrucciones y directivas de datos
         if let Err(e) = parse_and_emit_instruction(&mut emitter, trimmed, &equates, &last_global_label) {
             return Err(format!("Error en línea {}: {} (código: '{}')", current_line, e, trimmed));
         }
         
-        // 🔍 TRACE: FCB después de _TRIANGLE_VECTORS
-        if trimmed.to_uppercase().starts_with("FCB") && last_global_label == "_TRIANGLE_VECTORS" {
-            eprintln!("           After:  address=${:04X}, offset={}", emitter.current_address, emitter.current_offset());
+        // 🔍 TRACE: Después de procesar
+        if should_trace {
+            eprintln!("   ✓ After: addr=${:04X} off={} (delta={})", 
+                emitter.current_address, emitter.current_offset(),
+                emitter.current_offset() as i32 - (emitter.current_address as i32 - org as i32));
         }
         
         current_line += 1;
@@ -508,6 +525,10 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "TSTA" => { emitter.tsta(); Ok(()) },
         "TSTB" => { emitter.tstb(); Ok(()) },
         "TST" => emit_tst(emitter, operand, equates),
+        "NEGA" => { emitter.nega(); Ok(()) },
+        "NEGB" => { emitter.negb(); Ok(()) },
+        "COMA" => { emitter.coma(); Ok(()) },
+        "COMB" => { emitter.comb(); Ok(()) },
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),

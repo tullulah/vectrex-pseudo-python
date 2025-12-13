@@ -344,11 +344,26 @@ function App() {
         logger.debug('Build', 'Document is dirty - will save before compiling');
       }
 
+      // Construct expected binary path and delete it before compiling
+      if (activeDoc.diskPath) {
+        const expectedBinPath = activeDoc.diskPath.replace(/\.(vpy|vpyproj)$/, '.bin');
+        if (electronAPI.deleteFile) {
+          try {
+            await electronAPI.deleteFile(expectedBinPath);
+            logger.debug('Build', 'Deleted existing binary before compilation:', expectedBinPath);
+          } catch (deleteError) {
+            // Ignore error if file doesn't exist
+            logger.debug('Build', 'Could not delete existing binary (may not exist)');
+          }
+        }
+      }
+
       // Ejecutar compilación
       const result = await electronAPI.runCompile(args);
       
       if (result.error) {
         logger.error('Build', 'Compilation failed:', result.error, result.detail || '');
+        // Don't proceed to emulator - binary deleted and compilation failed
         return;
       }
 
