@@ -50,6 +50,7 @@ export const FileTreePanel: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [hoveredFile, setHoveredFile] = useState<string | null>(null);
   const [draggedFiles, setDraggedFiles] = useState<Set<string>>(new Set());
+  const [lastClickedFile, setLastClickedFile] = useState<string | null>(null);
 
   // Determine display name - prefer .vpyproj project name
   const displayName = vpyProject?.config?.project?.name || workspaceName || 'Workspace';
@@ -347,7 +348,40 @@ export const FileTreePanel: React.FC = () => {
     });
   };
 
+  // Helper to get all visible files in order (flattened tree respecting expanded state)
+  const getVisibleFilesInOrder = (): string[] => {
+    if (!project?.files) return [];
+    
+    const result: string[] = [];
+    const traverse = (nodes: FileNode[]) => {
+      for (const node of nodes) {
+        result.push(node.path);
+        if (node.isDir && expandedDirs.has(node.path) && node.children) {
+          traverse(node.children);
+        }
+      }
+    };
+    traverse(project.files);
+    return result;
+  };
+
   const handleFileClick = async (node: FileNode, event?: React.MouseEvent) => {
+    // Handle range selection with Shift key
+    if (event?.shiftKey && lastClickedFile) {
+      const visibleFiles = getVisibleFilesInOrder();
+      const startIndex = visibleFiles.indexOf(lastClickedFile);
+      const endIndex = visibleFiles.indexOf(node.path);
+      
+      if (startIndex !== -1 && endIndex !== -1) {
+        const min = Math.min(startIndex, endIndex);
+        const max = Math.max(startIndex, endIndex);
+        const rangeFiles = visibleFiles.slice(min, max + 1);
+        
+        setSelectedFiles(new Set(rangeFiles));
+      }
+      return; // Don't open file on range selection
+    }
+    
     // Handle multi-selection with Ctrl/Cmd key
     if (event?.ctrlKey || event?.metaKey) {
       setSelectedFiles(prev => {
@@ -359,10 +393,12 @@ export const FileTreePanel: React.FC = () => {
         }
         return next;
       });
+      setLastClickedFile(node.path);
       return; // Don't open file on multi-select
     } else {
       // Single selection
       setSelectedFiles(new Set([node.path]));
+      setLastClickedFile(node.path);
     }
     
     if (node.isDir) {

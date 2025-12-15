@@ -77,6 +77,35 @@ contextBridge.exposeInMainWorld('project', {
   find: (startDir: string) => ipcRenderer.invoke('project:find', startDir) as Promise<{ path: string | null }>,
 });
 
+// Git operations API
+contextBridge.exposeInMainWorld('git', {
+  // Get git status (staged/unstaged changes)
+  status: (projectDir: string) => ipcRenderer.invoke('git:status', projectDir) as Promise<{
+    ok: boolean;
+    files?: Array<{ path: string; status: 'M' | 'A' | 'D' | '?'; staged: boolean }>;
+    error?: string;
+  }>,
+  
+  // Stage a file
+  stage: (args: { projectDir: string; filePath: string }) => ipcRenderer.invoke('git:stage', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Unstage a file
+  unstage: (args: { projectDir: string; filePath: string }) => ipcRenderer.invoke('git:unstage', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Create a commit
+  commit: (args: { projectDir: string; message: string }) => ipcRenderer.invoke('git:commit', args) as Promise<{
+    ok: boolean;
+    commit?: any;
+    error?: string;
+  }>,
+});
+
 // MCP Server API for AI agents
 contextBridge.exposeInMainWorld('mcp', {
   // Send JSON-RPC request to MCP server

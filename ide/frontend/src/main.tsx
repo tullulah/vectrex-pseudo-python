@@ -16,6 +16,9 @@ import { MenuRoot, MenuItem, MenuSeparator, MenuCheckItem, SubMenu } from './com
 import { NewProjectDialog } from './components/dialogs/NewProjectDialog.js';
 import { InputDialog } from './components/dialogs/InputDialog.js';
 import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/logger.js';
+import { ActivityBar, ActivityBarItem } from './components/ActivityBar.js';
+import { GitPanel } from './components/panels/GitPanel.js';
+import { FileTreePanel } from './components/panels/FileTreePanel.js';
 
 // Initialize store reference for cross-store access
 setEditorStoreRef(useEditorStore);
@@ -236,6 +239,48 @@ function App() {
 
   // Track which menu is open
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  // Activity Bar state - which sidebar panel is open
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<ActivityBarItem>('files');
+  // Sidebar width state (persisted in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('vpy_sidebar_width');
+    return stored ? parseInt(stored, 10) : 300;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // Persist sidebar width
+  useEffect(() => {
+    localStorage.setItem('vpy_sidebar_width', sidebarWidth.toString());
+  }, [sidebarWidth]);
+  
+  // Handle resize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+  
+  useEffect(() => {
+    if (!isResizing) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      // 48px for activity bar, min 200px, max 600px
+      const newWidth = Math.max(200, Math.min(600, e.clientX - 48));
+      setSidebarWidth(newWidth);
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  
   // New Project dialog state
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [defaultProjectLocation, setDefaultProjectLocation] = useState('');
@@ -247,7 +292,7 @@ function App() {
   const warnCount = diags.filter((d: any)=>d.severity==='warning').length;
 
   const viewItems: Array<{ key: string; label: string; component?: any; disabled?: boolean; badge?: string; onClick?: () => void }> = [
-    { key: 'files', label: t('panel.files'), component: 'files' },
+    // 'files' removed - now in Activity Bar sidebar
     { key: 'emulator', label: t('panel.emulator'), component: 'emulator' },
     { key: 'dual-emulator', label: 'Dual Test', component: 'dual-emulator' },
     { key: 'debug', label: t('panel.debug'), component: 'debug' },
@@ -1071,8 +1116,49 @@ def loop():
           </select>
         </div>
       </header>
-      <div style={{flex:1, position:'relative'}}>
-        <DockWorkspace />
+      <div style={{flex:1, display:'flex', position:'relative'}}>
+        {/* Activity Bar (left sidebar with icons) */}
+        <ActivityBar 
+          activeItem={activeSidebarPanel} 
+          onItemClick={setActiveSidebarPanel}
+        />
+        
+        {/* Sidebar Panel (Files or Git) */}
+        {activeSidebarPanel && (
+          <>
+            <div style={{
+              width: `${sidebarWidth}px`,
+              background: '#252526',
+              display: 'flex',
+              flexDirection: 'column',
+              flexShrink: 0,
+              position: 'relative'
+            }}>
+              {activeSidebarPanel === 'files' && <FileTreePanel />}
+              {activeSidebarPanel === 'git' && <GitPanel />}
+            </div>
+            {/* Resize handle */}
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                width: '4px',
+                cursor: 'col-resize',
+                background: isResizing ? '#007acc' : '#1e1e1e',
+                transition: 'background 0.1s',
+                flexShrink: 0,
+                position: 'relative',
+                zIndex: 10
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#007acc'}
+              onMouseLeave={(e) => !isResizing && (e.currentTarget.style.background = '#1e1e1e')}
+            />
+          </>
+        )}
+        
+        {/* Main workspace area */}
+        <div style={{flex: 1, position: 'relative'}}>
+          <DockWorkspace />
+        </div>
       </div>
       
       {/* New Project Dialog */}

@@ -23,8 +23,8 @@ import { PsgLogPanel } from './panels/PsgLogPanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
 import { AiAssistantPanel } from './panels/AiAssistantPanel';
 
-// Bumped to v3 to force layout refresh with improved default layout
-const STORAGE_KEY = 'vpy_dock_model_v3';
+// Bumped to v4 to use new Activity Bar layout (Files/Git in sidebar)
+const STORAGE_KEY = 'vpy_dock_model_v4';
 const STORAGE_HIDDEN_KEY = 'vpy_hidden_panels_v1';
 const STORAGE_PINNED_KEY = 'vpy_pinned_panels_v1';
 
@@ -34,14 +34,6 @@ const defaultJson = {
   "layout": {
     "type": "row",
     "children": [
-      {
-        "type": "tabset",
-        "weight": 13.81,
-        "children": [
-          { "type": "tab", "name": "Files", "component": "files" },
-          { "type": "tab", "name": "PyPilot", "component": "ai-assistant" }
-        ]
-      },
       {
         "type": "row",
         "weight": 64.71,
@@ -78,7 +70,8 @@ const defaultJson = {
             "type": "tabset",
             "weight": 81.30,
             "children": [
-              { "type": "tab", "name": "Emulator", "component": "emulator" }
+              { "type": "tab", "name": "Emulator", "component": "emulator" },
+              { "type": "tab", "name": "PyPilot", "component": "ai-assistant" }
             ]
           },
           {

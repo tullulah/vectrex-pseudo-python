@@ -1369,6 +1369,152 @@ app.on('before-quit', () => {
   watchers.clear();
 });
 
+// ============================================
+// Git Operations (Version Control)
+// ============================================
+
+interface GitChange {
+  path: string;
+  status: 'M' | 'A' | 'D' | '?'; // Modified, Added, Deleted, Untracked
+  staged: boolean;
+}
+
+ipcMain.handle('git:status', async (_e, projectDir: string) => {
+  try {
+    if (!projectDir) {
+      return { ok: false, error: 'No project directory provided' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get git status
+    const status = await git.status();
+    
+    if (!status) {
+      return { ok: false, error: 'Failed to get git status' };
+    }
+
+    const changes: GitChange[] = [];
+
+    // Map git status to our format
+    // Staged files (in index)
+    for (const file of status.staged) {
+      changes.push({
+        path: file,
+        status: 'M', // Could be M, A, D depending on what git reports
+        staged: true
+      });
+    }
+
+    // Modified files (unstaged)
+    for (const file of status.modified) {
+      changes.push({
+        path: file,
+        status: 'M',
+        staged: false
+      });
+    }
+
+    // Created files (not staged)
+    for (const file of status.created) {
+      changes.push({
+        path: file,
+        status: 'A',
+        staged: false
+      });
+    }
+
+    // Deleted files (unstaged)
+    for (const file of status.deleted) {
+      changes.push({
+        path: file,
+        status: 'D',
+        staged: false
+      });
+    }
+
+    // Untracked files (use 'not_added' if 'untracked' doesn't exist)
+    const untrackeds = (status as any).untracked || (status as any).not_added || [];
+    for (const file of untrackeds) {
+      changes.push({
+        path: file,
+        status: '?',
+        staged: false
+      });
+    }
+
+    return { ok: true, files: changes };
+  } catch (error: any) {
+    console.error('[GIT:status]', error);
+    return { ok: false, error: error.message || 'Git status failed' };
+  }
+});
+
+ipcMain.handle('git:stage', async (_e, args: { projectDir: string; filePath: string }) => {
+  try {
+    const { projectDir, filePath } = args;
+    
+    if (!projectDir || !filePath) {
+      return { ok: false, error: 'Missing projectDir or filePath' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.add(filePath);
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:stage]', error);
+    return { ok: false, error: error.message || 'Failed to stage file' };
+  }
+});
+
+ipcMain.handle('git:unstage', async (_e, args: { projectDir: string; filePath: string }) => {
+  try {
+    const { projectDir, filePath } = args;
+    
+    if (!projectDir || !filePath) {
+      return { ok: false, error: 'Missing projectDir or filePath' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.reset([filePath]);
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:unstage]', error);
+    return { ok: false, error: error.message || 'Failed to unstage file' };
+  }
+});
+
+ipcMain.handle('git:commit', async (_e, args: { projectDir: string; message: string }) => {
+  try {
+    const { projectDir, message } = args;
+    
+    if (!projectDir || !message) {
+      return { ok: false, error: 'Missing projectDir or message' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Check if there are staged changes
+    const status = await git.status();
+    if (!status || status.staged.length === 0) {
+      return { ok: false, error: 'No staged changes to commit' };
+    }
+
+    // Commit
+    const result = await git.commit(message);
+    return { ok: true, commit: result };
+  } catch (error: any) {
+    console.error('[GIT:commit]', error);
+    return { ok: false, error: error.message || 'Failed to commit' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {

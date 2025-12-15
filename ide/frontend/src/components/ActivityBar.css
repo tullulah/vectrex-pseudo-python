@@ -1,0 +1,48 @@
+.activity-bar {
+  width: 48px;
+  background: #333333;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  border-right: 1px solid #1e1e1e;
+  flex-shrink: 0;
+}
+
+.activity-bar-item {
+  width: 48px;
+  height: 48px;
+  border: none;
+  background: transparent;
+  color: #858585;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.activity-bar-item:hover {
+  color: #ffffff;
+}
+
+.activity-bar-item.active {
+  color: #ffffff;
+}
+
+.activity-bar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #007acc;
+}
+
+.activity-bar-item svg {
+  width: 24px;
+  height: 24px;
+}

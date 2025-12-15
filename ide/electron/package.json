@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "pseudo-python": "file:../..",
+    "simple-git": "^3.22.0",
     "toml": "^3.0.0"
   },
   "build": {
