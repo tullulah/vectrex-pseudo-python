@@ -135,8 +135,10 @@ impl MusicResource {
         let note = midi as f64;
         let freq_hz = 440.0 * 2.0_f64.powf((note - 69.0) / 12.0);
         
-        // PSG period = 1.5MHz / (32 * freq)
-        let period = (1_500_000.0 / (32.0 * freq_hz)) as u16;
+        // AY-3-8910 PSG formula: Freq_out = Clock / (16 * Period)
+        // Vectrex clock: 1.5MHz
+        // Therefore: Period = 1.5MHz / (16 * freq)
+        let period = (1_500_000.0 / (16.0 * freq_hz)) as u16;
         period.clamp(0, 4095) // 12-bit period
     }
     

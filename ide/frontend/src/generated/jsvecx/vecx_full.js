@@ -4172,17 +4172,27 @@ function VecX()
                     this.snd_regs[this.snd_select] = this.via_ora;
                     this.e8910.e8910_write(this.snd_select, this.via_ora);
                     
-                    // PSG logging (only log if PSG_MUSIC_ACTIVE is set)
+                    // PSG logging
                     if (window.PSG_LOG_ENABLED) {
-                        // Check if PSG_MUSIC_ACTIVE is set (address 0xC8A1)
-                        const isMusical = this.ram && this.ram[0xC8A1 - 0xC800] === 1;
-                        const targetLog = isMusical ? window.PSG_MUSIC_LOG : window.PSG_VECTOR_LOG;
-                        const limit = window.PSG_LOG_LIMIT || 10000;
-                        
+                        // Initialize arrays if needed
                         if (!window.PSG_MUSIC_LOG) window.PSG_MUSIC_LOG = [];
                         if (!window.PSG_VECTOR_LOG) window.PSG_VECTOR_LOG = [];
+                        if (!window.PSG_WRITE_LOG) window.PSG_WRITE_LOG = [];
                         
-                        if (targetLog && targetLog.length < limit) {
+                        const limit = window.PSG_LOG_LIMIT || 10000;
+                        
+                        // Check if PSG_MUSIC_ACTIVE is set (address 0xC8A1)
+                        const ramOffset = 0xC8A1 - 0xC800; // Should be 0xA1 (161)
+                        const isMusical = this.ram && this.ram[ramOffset] === 1;
+                        const targetLog = isMusical ? window.PSG_MUSIC_LOG : window.PSG_VECTOR_LOG;
+                        
+                        // Debug first write only
+                        if (!window._PSG_DEBUG_LOGGED && window.PSG_WRITE_LOG.length === 0) {
+                            console.log('[PSG] First write - ram exists:', !!this.ram, 'offset:', ramOffset, 'value:', this.ram ? this.ram[ramOffset] : 'N/A', 'isMusical:', isMusical);
+                            window._PSG_DEBUG_LOGGED = true;
+                        }
+                        
+                        if (targetLog.length < limit) {
                             targetLog.push({
                                 reg: this.snd_select,
                                 value: this.via_ora,
@@ -4192,7 +4202,6 @@ function VecX()
                         }
                         
                         // Keep legacy PSG_WRITE_LOG for backward compatibility
-                        if (!window.PSG_WRITE_LOG) window.PSG_WRITE_LOG = [];
                         if (window.PSG_WRITE_LOG.length < limit) {
                             window.PSG_WRITE_LOG.push({
                                 reg: this.snd_select,

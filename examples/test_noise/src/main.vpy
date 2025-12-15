@@ -2,7 +2,7 @@ META TITLE = "Noise Test"
 
 def main():
     SET_INTENSITY(80)
-    PLAY_MUSIC("simple_loop")
+    PLAY_MUSIC("minimal_noise")
 
 def loop():
-    WAIT_RECAL()
+    DRAW_VECTOR("test", 0, 20)

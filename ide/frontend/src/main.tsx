@@ -398,7 +398,7 @@ function App() {
       if (result.binPath) {
         try {
           const pdbPath = result.binPath.replace(/\.bin$/, '.pdb');
-          const pdbRes = await electronAPI.readFile(pdbPath);
+          const pdbRes = await (window as any).files.readFile(pdbPath);
           if ('error' in pdbRes) {
             logger.warn('Build', 'No .pdb file found:', pdbPath);
           } else {

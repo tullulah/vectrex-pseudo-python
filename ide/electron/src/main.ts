@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 // Future work: if Electron main needs limited emulator introspection, expose it explicitly
 // via the existing WASM front-end (renderer) bridge or add a new secure preload API.
 import { createInterface } from 'readline';
-import { join, basename } from 'path';
+import { join, basename, dirname } from 'path';
 import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
 import { watch } from 'fs';
@@ -889,6 +889,9 @@ ipcMain.handle('file:save', async (_e, args: { path: string; content: string; ex
     if (expectedMTime && statBefore && statBefore.mtimeMs !== expectedMTime) {
       return { conflict: true, currentMTime: statBefore.mtimeMs };
     }
+    // Auto-create parent directory if it doesn't exist (for assets/vectors/, assets/music/, etc.)
+    const parentDir = dirname(path);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {}); // Ignore errors if directory already exists
     await fs.writeFile(path, content, 'utf8');
     const statAfter = await fs.stat(path);
     await loadRecents();
@@ -909,6 +912,9 @@ ipcMain.handle('file:saveAs', async (_e, args: { suggestedName?: string; content
   });
   if (canceled || !filePath) return { canceled: true };
   try {
+    // Auto-create parent directory if it doesn't exist (for assets/vectors/, assets/music/, etc.)
+    const parentDir = dirname(filePath);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {}); // Ignore errors if directory already exists
     await fs.writeFile(filePath, content, 'utf8');
     const stat = await fs.stat(filePath);
     await loadRecents();

@@ -27,6 +27,18 @@ interface EditorState {
   clearAllBreakpoints: (uri?: string) => void;
 }
 
+// Detect language from file extension
+function detectLanguageFromUri(uri: string): string {
+  const lower = uri.toLowerCase();
+  if (lower.endsWith('.vpy')) return 'vpy';
+  if (lower.endsWith('.vec') || lower.endsWith('.vmus') || lower.endsWith('.json')) return 'json';
+  if (lower.endsWith('.asm') || lower.endsWith('.s')) return 'asm';
+  if (lower.endsWith('.md')) return 'markdown';
+  if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return 'typescript';
+  if (lower.endsWith('.js') || lower.endsWith('.jsx')) return 'javascript';
+  return 'vpy'; // default fallback
+}
+
 function recomputeAllDiagnostics(documents: DocumentModel[]): FlatDiag[] {
   const rows: FlatDiag[] = [];
   logger.verbose('LSP', 'recomputeAllDiagnostics - processing documents:', documents.length);
@@ -161,7 +173,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gotoLocation: (uri, line, column) => {
     const s = get();
     if (!s.documents.some(d => d.uri === uri)) {
-      const documents: DocumentModel[] = [...s.documents, { uri, language: 'vpy', content: '', dirty: false, diagnostics: [], lastSavedContent: '' } as DocumentModel];
+      const language = detectLanguageFromUri(uri); // Auto-detect language
+      const documents: DocumentModel[] = [...s.documents, { uri, language, content: '', dirty: false, diagnostics: [], lastSavedContent: '' } as DocumentModel];
       set({ documents, active: uri, allDiagnostics: recomputeAllDiagnostics(documents) });
     } else {
       set({ active: uri });

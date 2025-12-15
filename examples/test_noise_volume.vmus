@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "name": "Noise Volume Test",
+  "author": "VPy Demo",
+  "tempo": 120,
+  "ticksPerBeat": 24,
+  "totalTicks": 192,
+  "notes": [],
+  "noise": [
+    {
+      "id": "quiet1",
+      "start": 0,
+      "duration": 24,
+      "period": 15,
+      "channels": 1,
+      "velocity": 3
+    },
+    {
+      "id": "medium1",
+      "start": 48,
+      "duration": 24,
+      "period": 15,
+      "channels": 1,
+      "velocity": 8
+    },
+    {
+      "id": "loud1",
+      "start": 96,
+      "duration": 24,
+      "period": 15,
+      "channels": 1,
+      "velocity": 15
+    },
+    {
+      "id": "quiet2",
+      "start": 144,
+      "duration": 24,
+      "period": 15,
+      "channels": 1,
+      "velocity": 3
+    }
+  ],
+  "loopStart": 0,
+  "loopEnd": 0
+}

@@ -44,11 +44,11 @@ var enemy_dx = -2
 
 def main():
     # Initialization
-    #PLAY_MUSIC("jetpac_theme") 
+    PLAY_MUSIC("jetpac_theme") 
     let i =0
 
 def loop():
-    #MUSIC_UPDATE()
+    MUSIC_UPDATE()
     
     if screen == 0:
         draw_logo_screen()

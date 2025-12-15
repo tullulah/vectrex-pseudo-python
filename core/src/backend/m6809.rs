@@ -388,13 +388,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         let main_label = if main_has_content { "MAIN" } else { "main" };
         out.push_str(&format!("\n{}:\n", main_label));
         
-        // PSG music system: Call UPDATE_MUSIC_PSG before Wait_Recal (like Christman2024)
-        let has_music_assets = opts.assets.iter().any(|a| {
-            matches!(a.asset_type, crate::codegen::AssetType::Music)
-        });
-        if has_music_assets {
-            out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (before Wait_Recal)\n");
-        }
+        // NOTE: UPDATE_MUSIC_PSG is called at END of LOOP_BODY, not here
+        // This ensures it runs exactly once per frame after user code
         
         out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
         
@@ -440,20 +435,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
                     
-                    // PSG music system: Call UPDATE_MUSIC_PSG at start of loop() if music assets exist
-                    let has_music_assets = opts.assets.iter().any(|a| {
-                        matches!(a.asset_type, crate::codegen::AssetType::Music)
-                    });
-                    if has_music_assets {
-                        out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (before loop body)\n");
-                    }
-                    
                     out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                     }
+                    
+                    // PSG music system: Call UPDATE_MUSIC_PSG at END of loop() if music assets exist
+                    // This ensures it runs once per frame AFTER user code (including WAIT_RECAL if present)
+                    let has_music_assets = opts.assets.iter().any(|a| {
+                        matches!(a.asset_type, crate::codegen::AssetType::Music)
+                    });
+                    if has_music_assets {
+                        out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (after loop body, once per frame)\n");
+                    }
+                    
                     out.push_str("    RTS\n\n");
                 } else {
                     // Emit other functions normally
