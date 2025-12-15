@@ -14,31 +14,59 @@ export const GitPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { vpyProject } = useProjectStore();
 
+  // Function to refresh git status
+  const refreshGitStatus = async (projectDir: string) => {
+    try {
+      const git = (window as any).git;
+      if (!git?.status) return;
+
+      const result = await git.status(projectDir);
+      if (result.ok && result.files) {
+        setChanges(result.files);
+      }
+    } catch (error) {
+      console.error('Failed to refresh git status:', error);
+    }
+  };
+
   // Load git status when component mounts or project changes
   useEffect(() => {
     if (!vpyProject?.projectFile) return;
 
+    const projectDir = vpyProject.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
+    
     const loadGitStatus = async () => {
       setLoading(true);
-      try {
-        const git = (window as any).git;
-        if (!git?.status) return;
-
-        // Get project root directory
-        const projectDir = vpyProject.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
-        
-        const result = await git.status(projectDir);
-        if (result.ok && result.files) {
-          setChanges(result.files);
-        }
-      } catch (error) {
-        console.error('Failed to load git status:', error);
-      } finally {
-        setLoading(false);
-      }
+      await refreshGitStatus(projectDir);
+      setLoading(false);
     };
 
     loadGitStatus();
+  }, [vpyProject]);
+
+  // Listen for file changes and auto-refresh git status
+  useEffect(() => {
+    if (!vpyProject?.projectFile) return;
+
+    const projectDir = vpyProject.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
+    const files = (window as any).files;
+    
+    if (!files?.onFileChanged) return;
+
+    // Subscribe to file changes
+    const unsubscribe = files.onFileChanged((event: any) => {
+      // Only refresh if it's a .vpy file change
+      if (event.path.endsWith('.vpy') || event.path.endsWith('.asm')) {
+        // Debounce: wait a bit for rapid file changes
+        const timer = setTimeout(() => {
+          refreshGitStatus(projectDir);
+        }, 500);
+        
+        return () => clearTimeout(timer);
+      }
+    });
+
+    return unsubscribe;
   }, [vpyProject]);
 
   const stagedChanges = changes.filter(c => c.staged);
@@ -75,11 +103,7 @@ export const GitPanel: React.FC = () => {
       const result = await git.stage({ projectDir, filePath: path });
       
       if (result.ok) {
-        // Refresh git status
-        const statusResult = await git.status(projectDir);
-        if (statusResult.ok && statusResult.files) {
-          setChanges(statusResult.files);
-        }
+        await refreshGitStatus(projectDir);
       }
     } catch (error) {
       console.error('Failed to stage file:', error);
@@ -97,11 +121,7 @@ export const GitPanel: React.FC = () => {
       const result = await git.unstage({ projectDir, filePath: path });
       
       if (result.ok) {
-        // Refresh git status
-        const statusResult = await git.status(projectDir);
-        if (statusResult.ok && statusResult.files) {
-          setChanges(statusResult.files);
-        }
+        await refreshGitStatus(projectDir);
       }
     } catch (error) {
       console.error('Failed to unstage file:', error);
@@ -123,11 +143,7 @@ export const GitPanel: React.FC = () => {
       const result = await git.discard({ projectDir, filePath: path });
       
       if (result.ok) {
-        // Refresh git status
-        const statusResult = await git.status(projectDir);
-        if (statusResult.ok && statusResult.files) {
-          setChanges(statusResult.files);
-        }
+        await refreshGitStatus(projectDir);
       } else {
         alert(`Failed to discard changes: ${result.error}`);
       }
@@ -151,11 +167,7 @@ export const GitPanel: React.FC = () => {
       
       if (result.ok) {
         setCommitMessage('');
-        // Refresh git status
-        const statusResult = await git.status(projectDir);
-        if (statusResult.ok && statusResult.files) {
-          setChanges(statusResult.files);
-        }
+        await refreshGitStatus(projectDir);
       } else {
         alert(`Commit failed: ${result.error}`);
       }
