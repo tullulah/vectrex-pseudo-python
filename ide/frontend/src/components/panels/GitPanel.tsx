@@ -12,6 +12,7 @@ export const GitPanel: React.FC = () => {
   const [commitMessage, setCommitMessage] = useState('');
   const [changes, setChanges] = useState<GitChange[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -31,24 +32,40 @@ export const GitPanel: React.FC = () => {
 
   // Load git status when component mounts or project changes
   useEffect(() => {
-    if (!vpyProject?.projectFile) return;
+    // Clear changes when no project
+    if (!vpyProject?.rootDir) {
+      setChanges([]);
+      setCurrentProjectDir(null);
+      setCommitMessage('');
+      setLoading(false);
+      console.log('[GitPanel] Project closed, clearing changes');
+      return;
+    }
 
-    const projectDir = vpyProject.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
+    // Only reload if project actually changed
+    if (currentProjectDir === vpyProject.rootDir) {
+      return;
+    }
+
+    // Clear and load new project
+    console.log('[GitPanel] Project changed, loading:', vpyProject.rootDir);
+    setCurrentProjectDir(vpyProject.rootDir);
+    setChanges([]);
+    setCommitMessage('');
     
     const loadGitStatus = async () => {
       setLoading(true);
-      await refreshGitStatus(projectDir);
+      await refreshGitStatus(vpyProject.rootDir);
       setLoading(false);
     };
 
     loadGitStatus();
-  }, [vpyProject]);
+  }, [vpyProject?.rootDir, currentProjectDir]);
 
   // Listen for file changes and auto-refresh git status
   useEffect(() => {
-    if (!vpyProject?.projectFile) return;
+    if (!currentProjectDir) return;
 
-    const projectDir = vpyProject.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
     const files = (window as any).files;
     
     if (!files?.onFileChanged) return;
@@ -59,7 +76,7 @@ export const GitPanel: React.FC = () => {
       if (event.path.endsWith('.vpy') || event.path.endsWith('.asm')) {
         // Debounce: wait a bit for rapid file changes
         const timer = setTimeout(() => {
-          refreshGitStatus(projectDir);
+          refreshGitStatus(currentProjectDir);
         }, 500);
         
         return () => clearTimeout(timer);
@@ -67,7 +84,7 @@ export const GitPanel: React.FC = () => {
     });
 
     return unsubscribe;
-  }, [vpyProject]);
+  }, [currentProjectDir]);
 
   const stagedChanges = changes.filter(c => c.staged);
   const unstagedChanges = changes.filter(c => !c.staged);
@@ -93,17 +110,16 @@ export const GitPanel: React.FC = () => {
   };
 
   const handleStageFile = async (path: string) => {
+    if (!currentProjectDir) return;
+    
     try {
       const git = (window as any).git;
       if (!git?.stage) return;
-
-      const projectDir = vpyProject?.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
-      if (!projectDir) return;
       
-      const result = await git.stage({ projectDir, filePath: path });
+      const result = await git.stage({ projectDir: currentProjectDir, filePath: path });
       
       if (result.ok) {
-        await refreshGitStatus(projectDir);
+        await refreshGitStatus(currentProjectDir);
       }
     } catch (error) {
       console.error('Failed to stage file:', error);
@@ -111,17 +127,16 @@ export const GitPanel: React.FC = () => {
   };
 
   const handleUnstageFile = async (path: string) => {
+    if (!currentProjectDir) return;
+    
     try {
       const git = (window as any).git;
       if (!git?.unstage) return;
-
-      const projectDir = vpyProject?.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
-      if (!projectDir) return;
       
-      const result = await git.unstage({ projectDir, filePath: path });
+      const result = await git.unstage({ projectDir: currentProjectDir, filePath: path });
       
       if (result.ok) {
-        await refreshGitStatus(projectDir);
+        await refreshGitStatus(currentProjectDir);
       }
     } catch (error) {
       console.error('Failed to unstage file:', error);
@@ -129,6 +144,8 @@ export const GitPanel: React.FC = () => {
   };
 
   const handleDiscardFile = async (path: string) => {
+    if (!currentProjectDir) return;
+    
     // Confirm before discarding
     const confirmed = window.confirm(`Are you sure you want to discard changes to ${path.split('/').pop()}?\n\nThis cannot be undone.`);
     if (!confirmed) return;
@@ -136,14 +153,11 @@ export const GitPanel: React.FC = () => {
     try {
       const git = (window as any).git;
       if (!git?.discard) return;
-
-      const projectDir = vpyProject?.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
-      if (!projectDir) return;
       
-      const result = await git.discard({ projectDir, filePath: path });
+      const result = await git.discard({ projectDir: currentProjectDir, filePath: path });
       
       if (result.ok) {
-        await refreshGitStatus(projectDir);
+        await refreshGitStatus(currentProjectDir);
       } else {
         alert(`Failed to discard changes: ${result.error}`);
       }
@@ -154,20 +168,18 @@ export const GitPanel: React.FC = () => {
   };
 
   const handleCommit = async () => {
+    if (!currentProjectDir) return;
     if (!commitMessage.trim() || stagedChanges.length === 0) return;
 
     try {
       const git = (window as any).git;
       if (!git?.commit) return;
-
-      const projectDir = vpyProject?.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
-      if (!projectDir) return;
       
-      const result = await git.commit({ projectDir, message: commitMessage });
+      const result = await git.commit({ projectDir: currentProjectDir, message: commitMessage });
       
       if (result.ok) {
         setCommitMessage('');
-        await refreshGitStatus(projectDir);
+        await refreshGitStatus(currentProjectDir);
       } else {
         alert(`Commit failed: ${result.error}`);
       }
