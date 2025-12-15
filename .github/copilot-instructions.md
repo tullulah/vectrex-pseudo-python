@@ -445,7 +445,7 @@ _PLAYER_VECTORS:       ; Alias principal (apunta a primer path)
     {"id": "note3", "note": 67, "start": 96, "duration": 48, "velocity": 12, "channel": 0}
   ],
   "noise": [
-    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1}
+    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1, "velocity": 12}
   ],
   "loopStart": 0,
   "loopEnd": 384
@@ -454,10 +454,10 @@ _PLAYER_VECTORS:       ; Alias principal (apunta a primer path)
 
 **Campos importantes**:
 - **note**: Número MIDI (0-127, donde 60=Do central/C4, 69=La/A4 440Hz)
-- **velocity**: Volumen PSG (0-15, donde 15=máximo)
-- **channel**: Canal PSG (0=A, 1=B, 2=C)
+- **velocity**: Volumen PSG (0-15, donde 15=máximo) - Usado tanto por notes como noise
+- **channel**: Canal PSG (0=A, 1=B, 2=C) - Solo para notes
 - **period**: Período de ruido (0-31, valores menores = tono más agudo)
-- **channels**: Máscara de bits para ruido (1=A, 2=B, 4=C, 7=todos)
+- **channels**: Máscara de bits para ruido (1=A, 2=B, 4=C, 7=todos) - Solo para noise
 
 **Conversión MIDI a PSG**:
 - Fórmula: `period = 1_500_000 / (32 * freq_hz)`
@@ -740,7 +740,8 @@ def loop():
       "start": 0,
       "duration": 24,
       "period": 15,
-      "channels": 1
+      "channels": 1,
+      "velocity": 12
     }
   ],
   "loopStart": 0,

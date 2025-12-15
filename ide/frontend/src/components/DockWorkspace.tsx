@@ -98,7 +98,12 @@ export const DockWorkspace: React.FC = () => {
   const { t } = useTranslation(['common','editor']);
   const documents = useEditorStore((s:any)=>s.documents);
   const setActive = useEditorStore((s:any)=>s.setActive);
-  const stored = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+  
+  // Initialize stored layout ONCE from localStorage (not on every render)
+  const [stored] = useState(() => 
+    typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null
+  );
+  
   const model = useMemo(() => Model.fromJson((stored ? JSON.parse(stored) : defaultJson) as IJsonModel), [stored]);
   const layoutRef = useRef<Layout | null>(null);
   const dragStateRef = useRef<{ active: boolean; tabId?: string; startX: number; startY: number; currentIndex?: number; targetIndex?: number; tabsetId?: string; marker?: HTMLDivElement; container?: HTMLElement; overlay?: HTMLDivElement; targetTabsetId?: string } | null>(null);
@@ -135,21 +140,21 @@ export const DockWorkspace: React.FC = () => {
     const comp = node.getComponent();
     // Remove doc:* dynamic tabs; single host now handles tabs internally.
     switch (comp) {
-      case 'files': return <FileTreePanel />;
-      case 'editor': return <EditorSurface />; // fallback if persisted layout uses 'editor'
-      case 'editor-host': return <EditorSurface />;
-      case 'editor-placeholder': return <div className="vpy-welcome-host" style={{position:'relative',height:'100%',width:'100%'}}><EditorSurface /></div>;
-      case 'emulator': return <EmulatorPanel />;
-  case 'debug': return <DebugPanel />;
-  case 'errors': return <ErrorsPanel />;
-  case 'memory': return <MemoryPanel />;
-  case 'trace': return <TracePanel />;
-  case 'psglog': return <PsgLogPanel />;
-  case 'bioscalls': return <BiosCallsPanel />;
-  case 'output': return <OutputPanel />;
-  case 'build-output': return <BuildOutputPanel />;
-  case 'compiler-output': return <CompilerOutputPanel />;
-  case 'ai-assistant': return <AiAssistantPanel />;
+      case 'files': return <FileTreePanel key="files-panel" />;
+      case 'editor': return <EditorSurface key="editor-surface" />; // fallback if persisted layout uses 'editor'
+      case 'editor-host': return <EditorSurface key="editor-host-surface" />;
+      case 'editor-placeholder': return <div key="editor-placeholder" className="vpy-welcome-host" style={{position:'relative',height:'100%',width:'100%'}}><EditorSurface /></div>;
+      case 'emulator': return <EmulatorPanel key="emulator-panel-singleton" />;
+  case 'debug': return <DebugPanel key="debug-panel" />;
+  case 'errors': return <ErrorsPanel key="errors-panel" />;
+  case 'memory': return <MemoryPanel key="memory-panel" />;
+  case 'trace': return <TracePanel key="trace-panel" />;
+  case 'psglog': return <PsgLogPanel key="psglog-panel" />;
+  case 'bioscalls': return <BiosCallsPanel key="bioscalls-panel" />;
+  case 'output': return <OutputPanel key="output-panel" />;
+  case 'build-output': return <BuildOutputPanel key="build-output-panel" />;
+  case 'compiler-output': return <CompilerOutputPanel key="compiler-output-panel" />;
+  case 'ai-assistant': return <AiAssistantPanel key="ai-assistant-panel-singleton" />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);

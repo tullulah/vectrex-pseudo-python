@@ -90,7 +90,12 @@ pub struct NoiseEvent {
     pub period: u8,
     /// Channel mask (bit flags: 1=A, 2=B, 4=C)
     pub channels: u8,
+    /// Volume/velocity (0-15, PSG volume)
+    #[serde(default = "default_noise_velocity")]
+    pub velocity: u8,
 }
+
+fn default_noise_velocity() -> u8 { 12 }
 
 impl MusicResource {
     /// Load a .vmus resource from a file
@@ -250,9 +255,8 @@ impl MusicResource {
                 for (_end, noise) in &active_noise {
                     noise_period = noise.period.min(31);
                     noise_channels = noise.channels;
-                    // Use a default volume for noise if not specified
-                    // Noise doesn't have velocity in the data, use max volume (15)
-                    noise_volume = 15;
+                    // Use noise velocity (0-15) for PSG volume
+                    noise_volume = noise.velocity.min(15);
                 }
                 
                 // Generate register writes for active NOTE channels

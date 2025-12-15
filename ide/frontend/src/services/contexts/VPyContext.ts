@@ -982,7 +982,7 @@ Music is stored as JSON files in \`assets/music/*.vmus\`:
     {"id": "note3", "note": 67, "start": 96, "duration": 48, "velocity": 12, "channel": 0}
   ],
   "noise": [
-    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1}
+    {"id": "noise1", "start": 0, "duration": 24, "period": 15, "channels": 1, "velocity": 12}
   ],
   "loopStart": 0,
   "loopEnd": 384
@@ -991,10 +991,10 @@ Music is stored as JSON files in \`assets/music/*.vmus\`:
 
 **Key fields**:
 - \`note\`: MIDI note number (60=C4, 69=A4 440Hz, 72=C5)
-- \`velocity\`: Volume (0-15, where 15=maximum)
-- \`channel\`: PSG channel (0=A, 1=B, 2=C)
+- \`velocity\`: Volume (0-15, where 15=maximum) - Used for both notes and noise
+- \`channel\`: PSG channel (0=A, 1=B, 2=C) - Only for notes
 - \`period\`: Noise period (0-31, lower=higher pitch)
-- \`channels\`: Noise channel mask (1=A, 2=B, 4=C, 7=all)
+- \`channels\`: Noise channel mask (1=A, 2=B, 4=C, 7=all) - Only for noise
 
 **Usage in code**:
 \`\`\`vpy
@@ -1474,7 +1474,8 @@ PyPilot connects to the IDE via MCP protocol with **22 specialized tools**:
       "start": 0,
       "duration": 24,
       "period": 15,
-      "channels": 1
+      "channels": 1,
+      "velocity": 12
     }
   ],
   "loopStart": 0,
@@ -1483,10 +1484,11 @@ PyPilot connects to the IDE via MCP protocol with **22 specialized tools**:
 \`\`\`
 
 **CRITICAL Field Definitions**:
-- **note**: MIDI note number (0-127, where 60=middle C, 72=C5)
-- **velocity**: Volume (0-15, where 15=max volume)
-- **period**: Noise period (0-31, lower=higher pitch noise)
-- **channels**: Bitmask for noise (1=A, 2=B, 4=C, 7=all)
+- **note**: MIDI note number (0-127, where 60=middle C, 72=C5) - Only for notes
+- **velocity**: Volume (0-15, where 15=max volume) - Used for BOTH notes AND noise (NEW: noise supports velocity since 2025-12-15)
+- **period**: Noise period (0-31, lower=higher pitch noise) - Only for noise
+- **channels**: Bitmask for noise (1=A, 2=B, 4=C, 7=all) - Only for noise
+- **channel**: PSG channel (0=A, 1=B, 2=C) - Only for notes
 - **start/duration**: Time in ticks (ticksPerBeat * beats)
 - **id**: Unique identifier string for each note/noise event
 

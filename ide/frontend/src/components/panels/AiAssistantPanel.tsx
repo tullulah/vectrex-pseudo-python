@@ -92,6 +92,7 @@ export const AiAssistantPanel: React.FC = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const initializedRef = useRef(false); // Track if welcome message was shown
   const activeDocument = useEditorStore(s => s.active);
   const documents = useEditorStore(s => s.documents);
 
@@ -297,9 +298,10 @@ export const AiAssistantPanel: React.FC = () => {
       });
   }, []);
 
-  // Add system message on first load
+  // Add system message on first load ONLY (not on every remount)
   useEffect(() => {
-    if (messages.length === 0) {
+    if (messages.length === 0 && !initializedRef.current) {
+      initializedRef.current = true; // Mark as initialized
       const mcpStatus = mcpEnabled ? 
         '\n\n🔧 **MCP Tools Enabled** - Puedo controlar el IDE directamente' : '';
       
@@ -322,7 +324,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
 
 ¿En qué puedo ayudarte hoy?`);
     }
-  }, [mcpEnabled]);
+  }, [mcpEnabled, messages.length]); // Only run when mcpEnabled changes OR when messages length changes from 0
 
   const addMessage = (role: AiMessage['role'], content: string, context?: AiMessage['context']) => {
     const newMessage: AiMessage = {

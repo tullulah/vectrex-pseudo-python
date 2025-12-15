@@ -251,6 +251,15 @@ export const EmulatorPanel: React.FC = () => {
   const editorDocuments = useEditorStore(s => s.documents);
 
   // Cargar lista de ROMs disponibles (lista hardcodeada ya que Vite no soporta directory listing)
+  // Log component mount/remount
+  useEffect(() => {
+    console.log('🔄 [EmulatorPanel] COMPONENT MOUNTED/REMOUNTED');
+    console.log('📍 [EmulatorPanel] Mount stack trace:', new Error().stack);
+    return () => {
+      console.log('💀 [EmulatorPanel] COMPONENT UNMOUNTING');
+    };
+  }, []);
+
   useEffect(() => {
     // Lista basada en las ROMs que vimos en la carpeta public/roms/
     const knownROMs = [
@@ -305,10 +314,10 @@ export const EmulatorPanel: React.FC = () => {
       console.log(`[EmulatorPanel] Initializing JSVecX with canvas size: ${canvasSize.width}x${canvasSize.height}`);
       
       try {
-        vecx.reset();
-        console.log('[EmulatorPanel] ✓ vecx.reset() successful');
-        
-        vecx.main();
+      console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: JSVecX initialization');
+      console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
+      vecx.reset();
+      console.log('[EmulatorPanel] ✓ vecx.reset() successful');        vecx.main();
         console.log('[EmulatorPanel] ✓ vecx.main() called successfully');
         
         if (!cancelled) {
@@ -1160,11 +1169,15 @@ export const EmulatorPanel: React.FC = () => {
       
       // Reset DOBLE después de cargar - esto copiará cartdata al array cart[]
       // Primer reset para cargar cartdata
+      console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: First reset after ROM load');
+      console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
       vecx.reset();
       console.log('[EmulatorPanel] ✓ First reset after ROM load');
       
       // Esperar un poco y hacer segundo reset para asegurarse
       setTimeout(() => {
+        console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Second reset after ROM load');
+        console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
         vecx.reset();
         console.log('[EmulatorPanel] ✓ Second reset after ROM load');
         
@@ -1209,7 +1222,7 @@ export const EmulatorPanel: React.FC = () => {
         console.log('[EmulatorPanel] ⚠️ ROM not found in available list:', lastRomName, 'Available:', availableROMs);
       }
     }
-  }, [lastRomName, availableROMs, loadedROM]); // Removed selectedROM to avoid dependency cycle
+  }, [lastRomName, availableROMs]); // Fixed: removed loadedROM to prevent reset loop when ROM display changes
 
   // Apply initial audio state when emulator starts
   useEffect(() => {
@@ -1323,6 +1336,8 @@ export const EmulatorPanel: React.FC = () => {
       win.PSG_WRITE_LOG.length = 0;
       console.log('[EmulatorPanel] JSVecX reset, PSG log cleared (length=' + win.PSG_WRITE_LOG.length + ')');
       
+      console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Reset button clicked');
+      console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
       vecx.reset();
       if (status === 'running') {
         initPsgLogging();
@@ -1382,6 +1397,8 @@ export const EmulatorPanel: React.FC = () => {
         await loadOverlay(file.name);
         
         // Reset después de cargar - esto copiará cartdata al array cart[]
+        console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: File upload (insert cartridge)');
+        console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
         vecx.reset();
         console.log('[EmulatorPanel] ✓ Reset after ROM load');
         
@@ -1506,6 +1523,8 @@ export const EmulatorPanel: React.FC = () => {
         
         // Reset
         console.log('[EmulatorPanel] Resetting emulator...');
+        console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Loading compiled binary from MCP');
+        console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
         vecx.reset();
         console.log('[EmulatorPanel] Emulator reset complete');
         
