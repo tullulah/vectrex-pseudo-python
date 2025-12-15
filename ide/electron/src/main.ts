@@ -1707,6 +1707,64 @@ ipcMain.handle('git:createBranch', async (_e, args: { projectDir: string; branch
   }
 });
 
+ipcMain.handle('git:stash', async (_e, args: { projectDir: string; message?: string }) => {
+  try {
+    const { projectDir, message } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    const stashMessage = message ? `stash save "${message}"` : 'stash';
+    await git.stash([stashMessage.split(' ')[0], ...(message ? ['save', message] : [])]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:stash]', error);
+    return { ok: false, error: error.message || 'Failed to stash changes' };
+  }
+});
+
+ipcMain.handle('git:stashList', async (_e, projectDir: string) => {
+  try {
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    const stashes = await git.stashList();
+    const formattedStashes = stashes.all.map((stash: any, idx: number) => ({
+      index: idx,
+      hash: stash.hash?.substring(0, 7) || '',
+      fullHash: stash.hash || '',
+      message: stash.message || `Stash ${idx}`,
+      date: stash.date || new Date().toISOString(),
+    }));
+
+    return { ok: true, stashes: formattedStashes };
+  } catch (error: any) {
+    console.error('[GIT:stashList]', error);
+    return { ok: false, error: error.message || 'Failed to get stash list', stashes: [] };
+  }
+});
+
+ipcMain.handle('git:stashPop', async (_e, args: { projectDir: string; index?: number }) => {
+  try {
+    const { projectDir, index = 0 } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.stash(['pop', `stash@{${index}}`]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:stashPop]', error);
+    return { ok: false, error: error.message || 'Failed to pop stash' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {

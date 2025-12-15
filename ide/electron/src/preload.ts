@@ -164,6 +164,31 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // Stash changes
+  stash: (args: { projectDir: string; message?: string }) => ipcRenderer.invoke('git:stash', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // List stashes
+  stashList: (projectDir: string) => ipcRenderer.invoke('git:stashList', projectDir) as Promise<{
+    ok: boolean;
+    stashes?: Array<{
+      index: number;
+      hash: string;
+      fullHash: string;
+      message: string;
+      date: string;
+    }>;
+    error?: string;
+  }>,
+  
+  // Pop stash
+  stashPop: (args: { projectDir: string; index?: number }) => ipcRenderer.invoke('git:stashPop', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

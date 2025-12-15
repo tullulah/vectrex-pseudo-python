@@ -4,6 +4,7 @@ import { useProjectStore } from '../../state/projectStore';
 import { DiffViewer } from '../modals/DiffViewer';
 import { CommitHistory } from './CommitHistory';
 import { CreateBranchDialog } from '../dialogs/CreateBranchDialog';
+import { StashList } from './StashList';
 
 interface GitChange {
   path: string;
@@ -28,6 +29,8 @@ export const GitPanel: React.FC = () => {
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const [showCommitHistory, setShowCommitHistory] = useState(false);
   const [showCreateBranch, setShowCreateBranch] = useState(false);
+  const [showStashList, setShowStashList] = useState(false);
+  const [stashMessage, setStashMessage] = useState('');
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -217,6 +220,34 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+  const handleStash = async () => {
+    if (!currentProjectDir) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.stash) return;
+
+      setLoading(true);
+      const result = await git.stash({
+        projectDir: currentProjectDir,
+        message: stashMessage || undefined,
+      });
+
+      if (result.ok) {
+        alert('Changes stashed successfully');
+        setStashMessage('');
+        await refreshGitStatus(currentProjectDir);
+      } else {
+        alert(`Failed to stash: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to stash:', error);
+      alert(`Error stashing changes: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStageFile = async (path: string) => {
     if (!currentProjectDir) return;
     
@@ -334,6 +365,13 @@ export const GitPanel: React.FC = () => {
           >
             🌿
           </button>
+          <button
+            className="git-panel-action-btn"
+            onClick={() => setShowStashList(!showStashList)}
+            title="View stashes"
+          >
+            📦
+          </button>
         </div>
         
         {/* Branch Selector Dropdown */}
@@ -407,6 +445,28 @@ export const GitPanel: React.FC = () => {
           >
             ✓ Commit ({stagedChanges.length})
           </button>
+
+          {/* Stash Section */}
+          {unstagedChanges.length > 0 && (
+            <div style={{ marginTop: '8px' }}>
+              <input
+                type="text"
+                className="git-commit-message"
+                placeholder="Stash message (optional)"
+                value={stashMessage}
+                onChange={(e) => setStashMessage(e.target.value)}
+                style={{ minHeight: 'auto', padding: '6px 8px', fontSize: '12px', marginBottom: '4px' }}
+              />
+              <button 
+                className="git-commit-button"
+                disabled={loading || unstagedChanges.length === 0}
+                onClick={handleStash}
+                style={{ backgroundColor: '#8B4513', borderColor: '#8B4513' }}
+              >
+                📦 Stash ({unstagedChanges.length})
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Staged Changes */}
@@ -534,6 +594,29 @@ export const GitPanel: React.FC = () => {
             refreshGitStatus(currentProjectDir);
           }}
         />
+      )}
+
+      {/* Stash List Modal */}
+      {showStashList && currentProjectDir && (
+        <div className="git-modal-overlay" onClick={() => setShowStashList(false)}>
+          <div className="git-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>Stashes</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowStashList(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <StashList
+              projectDir={currentProjectDir}
+              onStashPopped={() => {
+                refreshGitStatus(currentProjectDir);
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
