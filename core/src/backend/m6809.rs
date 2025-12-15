@@ -388,10 +388,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         let main_label = if main_has_content { "MAIN" } else { "main" };
         out.push_str(&format!("\n{}:\n", main_label));
         
-        // NOTE: UPDATE_MUSIC_PSG is called at END of LOOP_BODY, not here
-        // This ensures it runs exactly once per frame after user code
-        
         out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
+        // NOTE: UPDATE_MUSIC_PSG now called at START of LOOP_BODY, not here
         
         // CRITICAL: Initialize global variables even if main() has no content
         // This must happen ONCE before the loop starts
@@ -434,21 +432,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
+                    // NOTE: Do NOT auto-insert UPDATE_MUSIC_PSG here - user must call MUSIC_UPDATE() explicitly
+                    // This gives user control over when PSG updates happen (important for Print_Str_d compatibility)
                     
                     out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
-                    }
-                    
-                    // PSG music system: Call UPDATE_MUSIC_PSG at END of loop() if music assets exist
-                    // This ensures it runs once per frame AFTER user code (including WAIT_RECAL if present)
-                    let has_music_assets = opts.assets.iter().any(|a| {
-                        matches!(a.asset_type, crate::codegen::AssetType::Music)
-                    });
-                    if has_music_assets {
-                        out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (after loop body, once per frame)\n");
                     }
                     
                     out.push_str("    RTS\n\n");
@@ -1296,7 +1287,7 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
     }
     if w.contains("VECTREX_PRINT_TEXT") {
         let start_line = out.lines().count() + 1;
-        let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(string, Y, X) -> args (ARG0=string, ARG1=Y, ARG2=X)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG0   ; string pointer (ARG0 = first param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG2+1 ; X (ARG2 = third param)\n    JSR Print_Str_d\n    RTS\n";
+        let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(string, Y, X) -> args (ARG0=string, ARG1=Y, ARG2=X)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG0   ; string pointer (ARG0 = first param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG2+1 ; X (ARG2 = third param)\n    JSR Print_Str_d\n    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n    TFR A,DP\n    RTS\n";
         out.push_str(function_code);
         let end_line = out.lines().count();
         
@@ -1383,16 +1374,16 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         }
     }
     if w.contains("VECTREX_SET_INTENSITY") {
-    out.push_str("VECTREX_SET_INTENSITY:\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    RTS\n");
+    out.push_str("VECTREX_SET_INTENSITY:\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n    TFR A,DP\n    RTS\n");
     }
     if w.contains("SETUP_DRAW_COMMON") {
         out.push_str(
-            "; Common drawing setup - sets DP register and resets integrator origin\n; Eliminates repetitive LDA #$D0; TFR A,DP; JSR Reset0Ref sequences\nSETUP_DRAW_COMMON:\n    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n    RTS\n"
+            "; Common drawing setup - sets DP register and resets integrator origin\n; Eliminates repetitive LDA #$D0; TFR A,DP; JSR Reset0Ref sequences\nSETUP_DRAW_COMMON:\n    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n    LDA #$C8\n    TFR A,DP\n    RTS\n"
         );
     }
     if w.contains("VECTREX_WAIT_RECAL") || opts.fast_wait {
-        if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    RTS\n");
-            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR Wait_Recal\n    RTS\n"); }
+        if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    LDA #$C8\n    TFR A,DP\n    RTS\n");
+            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    LDA #$C8\n    TFR A,DP\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR Wait_Recal\n    RTS\n"); }
     }
     if w.contains("VECTREX_PLAY_MUSIC1") {
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
@@ -1505,48 +1496,8 @@ PSG_frame_done:\n\
             \n\
 PSG_music_ended:\n\
             CLR >PSG_IS_PLAYING ; Stop playback (extended - var at 0xC8A0)\n\
-            ; Silence all channels (write $00 to volume regs 8,9,10)\n\
-            LDA #8\n\
-            LDB #$00\n\
-            PSHS X\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            LDA #9\n\
-            LDB #$00\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            LDA #10\n\
-            LDB #$00\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            PULS X\n\
+            ; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing\n\
+            ; Music will fade naturally as frame data stops updating\n\
             BRA PSG_update_done\n\
             \n\
 PSG_music_loop:\n\
@@ -1568,50 +1519,7 @@ PSG_update_done:\n\
             CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)\n\
             CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)\n\
             CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)\n\
-            \n\
-            ; Silence all PSG channels (write $00 to volume registers)\n\
-            LDA #8                 ; Channel A volume\n\
-            LDB #$00\n\
-            PSHS X\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            LDA #9                 ; Channel B volume\n\
-            LDB #$00\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            LDA #10                ; Channel C volume\n\
-            LDB #$00\n\
-            STA VIA_port_a\n\
-            LDA #$19\n\
-            STA VIA_port_b\n\
-            LDA #$01\n\
-            STA VIA_port_b\n\
-            LDA VIA_port_a\n\
-            STB VIA_port_a\n\
-            LDB #$11\n\
-            STB VIA_port_b\n\
-            LDB #$01\n\
-            STB VIA_port_b\n\
-            PULS X\n\
-            \n\
+            ; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing\n\
             RTS\n\
             \n"
         );

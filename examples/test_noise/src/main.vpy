@@ -5,4 +5,5 @@ def main():
     PLAY_MUSIC("minimal_noise")
 
 def loop():
+    MUSIC_UPDATE()
     DRAW_VECTOR("test", 0, 20)

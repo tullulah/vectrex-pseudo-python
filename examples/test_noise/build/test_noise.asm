@@ -137,48 +137,8 @@ BRA PSG_update_done
 
 PSG_music_ended:
 CLR >PSG_IS_PLAYING ; Stop playback (extended - var at 0xC8A0)
-; Silence all channels (write $00 to volume regs 8,9,10)
-LDA #8
-LDB #$00
-PSHS X
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-LDA #9
-LDB #$00
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-LDA #10
-LDB #$00
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-PULS X
+; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing
+; Music will fade naturally as frame data stops updating
 BRA PSG_update_done
 
 PSG_music_loop:
@@ -200,50 +160,7 @@ STOP_MUSIC_RUNTIME:
 CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)
 CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)
 CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)
-
-; Silence all PSG channels (write $00 to volume registers)
-LDA #8                 ; Channel A volume
-LDB #$00
-PSHS X
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-LDA #9                 ; Channel B volume
-LDB #$00
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-LDA #10                ; Channel C volume
-LDB #$00
-STA VIA_port_a
-LDA #$19
-STA VIA_port_b
-LDA #$01
-STA VIA_port_b
-LDA VIA_port_a
-STB VIA_port_a
-LDB #$11
-STB VIA_port_b
-LDB #$01
-STB VIA_port_b
-PULS X
-
+; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing
 RTS
 
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
@@ -551,12 +468,29 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 1 statements in loop() body
-    ; DEBUG: Statement 0 - Discriminant(1)
+    ; DEBUG: Processing 2 statements in loop() body
+    ; DEBUG: Statement 0 - Discriminant(6)
     ; VPy_LINE:8
+; NATIVE_CALL: UPDATE_MUSIC_PSG at line 8
+    JSR UPDATE_MUSIC_PSG
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(6)
+    ; VPy_LINE:9
+; DRAW_VECTOR("test", x, y) - 1 path(s) at position
     LDD #0
     STD RESULT
-    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (after loop body, once per frame)
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD #20
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDX #_TEST_PATH0  ; Path 0
+    JSR Draw_Sync_List_At
+    LDD #0
+    STD RESULT
     RTS
 
 ;***************************************************************************
@@ -570,11 +504,24 @@ VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 ; Call argument scratch space
 VAR_ARG0 EQU RESULT+26
+VAR_ARG1 EQU RESULT+28
+VAR_ARG2 EQU RESULT+30
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 1 of 4 assets (unused assets excluded)
+; Embedded 2 of 4 assets (unused assets excluded)
 ; ========================================
+
+; Vector asset: test
+; Generated from test.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 2
+
+_TEST_VECTORS:  ; Main entry
+_TEST_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $00,$00,0,0        ; path0: header (y=0, x=0, next_y=0, next_x=0)
+    FCB $FF,$0A,$0A          ; line 0: flag=-1, dy=10, dx=10
+    FCB 2                ; End marker
 
 ; Generated from minimal_noise.vmus (internal name: Space Groove)
 ; Tempo: 140 BPM, Total events: 36 (PSG Direct format)

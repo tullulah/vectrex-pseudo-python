@@ -60,11 +60,11 @@ def draw_logo_screen():
     SET_INTENSITY(127)
     DRAW_VECTOR("jetpac_logo", 0, 20)
     
-    # Copyright
+    # # Copyright
     SET_INTENSITY(80)
     PRINT_TEXT(-50, -60, "2025")
     
-    # Timer
+    # # Timer
     logo_timer = logo_timer + 1
     if logo_timer > 300:    # 5 seconds at 60 FPS
         screen = 1
