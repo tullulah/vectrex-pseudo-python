@@ -1,8 +1,0 @@
-META TITLE = "Incremental Draw Test"
-
-def main():
-    SET_INTENSITY(127)
-
-def loop():
-    # WAIT_RECAL()
-    DRAW_VECTOR("triangle")

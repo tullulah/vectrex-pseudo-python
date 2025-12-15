@@ -13,6 +13,18 @@ The original C version was written by Valavan Manohararajah
   Tatsuyuki Satoh, Fabrice Frances, Nicola Salmoria.
 */
 
+// Global PSG write log (for debugging)
+var PSG_WRITE_LOG = [];
+var PSG_LOG_ENABLED = false;
+var PSG_LOG_LIMIT = 10000;
+
+// Expose to window for debugging panel
+if (typeof window !== 'undefined') {
+    window.PSG_WRITE_LOG = PSG_WRITE_LOG;
+    window.PSG_LOG_ENABLED = PSG_LOG_ENABLED;
+    window.PSG_LOG_LIMIT = PSG_LOG_LIMIT;
+}
+
 function e8910()
 {
     this.psg = {
@@ -66,6 +78,17 @@ function e8910()
     this.e8910_write = function(r, v) {
         var old;
         this.psg.Regs[r] = v;
+        
+        // Log PSG write for debugging (use window globals directly)
+        if (typeof window !== 'undefined' && window.PSG_LOG_ENABLED && window.PSG_WRITE_LOG && window.PSG_WRITE_LOG.length < window.PSG_LOG_LIMIT) {
+            window.PSG_WRITE_LOG.push({
+                reg: r,
+                value: v,
+                frame: (typeof window.g_frameCount !== 'undefined') ? window.g_frameCount : 0,
+                pc: (typeof window.g_currentPC !== 'undefined') ? window.g_currentPC : 0
+            });
+        }
+        
         switch( r )
         {
             case (0):

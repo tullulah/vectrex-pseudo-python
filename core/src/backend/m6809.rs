@@ -47,8 +47,9 @@ fn resolve_function_name(name: &str) -> Option<String> {
 
 // Helper function to calculate the correct include path based on source file location
 fn calculate_include_path(_opts: &CodegenOptions) -> String {
-    // Always use relative path from project root - assembler should be run from project root
-    "include/VECTREX.I".to_string()
+    // For lwasm compatibility: use "VECTREX.I" and pass -Iinclude to lwasm
+    // Native assembler: reads from project root, so both "VECTREX.I" and "include/VECTREX.I" work
+    "VECTREX.I".to_string()
 }
 
 // Helper function to calculate the correct runtime path based on source file location  
@@ -71,10 +72,12 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match expr {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
-                // Check for DRAW_VECTOR("asset_name", x, y) or PLAY_MUSIC("asset_name")
+                // Check for DRAW_VECTOR("asset_name", x, y), PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
-                   (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) {
+                   (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
+                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
+                        eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
                     }
                 }
@@ -237,7 +240,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Classic include; no manual EQU needed.
     let include_path = calculate_include_path(opts);
     out.push_str(&format!("    INCLUDE \"{}\"\n\n", include_path));
-    // (Include already added above)
+    
+    // NOTE: BIOS symbols (Vec_Music_Flag, etc.) are defined in VECTREX.I
+    // Do NOT duplicate them here to maintain lwasm compatibility
+    
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Header (emulator-compatible variant):
     //  - 'g GCE 1998' + $80 (year per reference example)
@@ -272,6 +278,41 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
+    // ========================================================================
+    // CRITICAL FIX: Emit RAM EQU definitions EARLY (before helpers)
+    // This ensures symbols like PSG_MUSIC_PTR are defined before being used
+    // ========================================================================
+    out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
+    out.push_str("; Must be defined BEFORE builtin helpers that reference them\n");
+    out.push_str("RESULT         EQU $C880   ; Main result temporary\n");
+    
+    // PSG_MUSIC_PTR: Only if music assets exist
+    let has_music_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Music)
+    });
+    if has_music_assets {
+        out.push_str("PSG_MUSIC_PTR   EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)\n");
+        out.push_str("PSG_MUSIC_START EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)\n");
+        out.push_str("PSG_IS_PLAYING  EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)\n");
+        out.push_str("PSG_FRAME_COUNT EQU $C8A1   ; Current frame register write count (RESULT+$21, 1 byte)\n");
+        out.push_str("PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_FRAME_COUNT_DP EQU $A1  ; DP-relative offset (for lwasm compatibility)\n");
+    }
+    
+    // SFX_PTR: Only if SFX assets exist
+    let has_sfx_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Sfx)
+    });
+    if has_sfx_assets {
+        out.push_str("SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)\n");
+        out.push_str("SFX_TICK       EQU $C8AA   ; 32-bit tick counter (RESULT+$2A, 4 bytes)\n");
+        out.push_str("SFX_EVENT      EQU $C8AE   ; Current event pointer (RESULT+$2E, 2 bytes)\n");
+        out.push_str("SFX_ACTIVE     EQU $C8B0   ; Playback state (RESULT+$30, 1 byte)\n");
+    }
+    out.push_str("\n");
+    
     // Check if main() has real content (not just return)
     let main_has_content = if let Some(main_func) = user_main {
         !main_func.body.is_empty() && !main_func.body.iter().all(|stmt| {
@@ -290,7 +331,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             emit_builtin_helpers(&mut out, &rt_usage, opts, &mut debug_info);
         }
         
-        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
+        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
+        
+        // Check if we have music/sfx assets that need PSG initialization
+        let has_audio_assets = opts.assets.iter().any(|a| {
+            matches!(a.asset_type, crate::codegen::AssetType::Music | crate::codegen::AssetType::Sfx)
+        });
+        
+        // BIOS music system: Initialize music buffer to silence
+        if has_audio_assets {
+            out.push_str("    JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence\n");
+        }
+        
+        out.push_str("\n");
     }
     
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
@@ -331,7 +384,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         
         // Choose label based on whether we have START or not
         let main_label = if main_has_content { "MAIN" } else { "main" };
-        out.push_str(&format!("\n{}:\n    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n", main_label));
+        out.push_str(&format!("\n{}:\n", main_label));
+        
+        // PSG music system: Call UPDATE_MUSIC_PSG before Wait_Recal (like Christman2024)
+        let has_music_assets = opts.assets.iter().any(|a| {
+            matches!(a.asset_type, crate::codegen::AssetType::Music)
+        });
+        if has_music_assets {
+            out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (before Wait_Recal)\n");
+        }
+        
+        out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
         
         // CRITICAL: Initialize global variables even if main() has no content
         // This must happen ONCE before the loop starts
@@ -374,6 +437,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
+                    
+                    // PSG music system: Call UPDATE_MUSIC_PSG at start of loop() if music assets exist
+                    let has_music_assets = opts.assets.iter().any(|a| {
+                        matches!(a.asset_type, crate::codegen::AssetType::Music)
+                    });
+                    if has_music_assets {
+                        out.push_str("    JSR UPDATE_MUSIC_PSG   ; Update PSG registers (before loop body)\n");
+                    }
+                    
                     out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
                     let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
                     for (i, stmt) in f.body.iter().enumerate() {
@@ -581,9 +653,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
     }
     if !suppress_runtime { out.push_str("; Variables (in RAM)\n"); }
-    // CRITICAL FIX: RESULT must ALWAYS be defined because DRAW_LINE and other functions depend on it
-    // Even if suppress_runtime is true, RESULT is fundamental for basic operations
-    if opts.exclude_ram_org { out.push_str("RESULT    EQU $C880\n"); } else { out.push_str("RESULT:   FDB 0\n"); }
+    // NOTE: RESULT EQU is now defined earlier (before helpers)
+    // Only emit storage allocation here (FDB) if not using EQU mode
+    if !opts.exclude_ram_org { out.push_str("RESULT:   FDB 0\n"); }
     if !suppress_runtime && rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
     if !suppress_runtime && rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
     if !suppress_runtime && rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
@@ -605,22 +677,27 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("TEMP_YX:   FDB 0   ; Temporary y,x storage\n");
     }
     
-    // MUSIC_PTR: Storage for current music asset pointer (if music assets exist)
-    let has_music_assets = opts.assets.iter().any(|a| {
+    // NOTE: PSG_MUSIC_PTR/PSG_IS_PLAYING EQU definitions moved earlier (before helpers)
+    // Only emit storage allocation here (FDB/FCB) if not using EQU mode
+    let has_music_assets_storage = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
-    if has_music_assets {
-        if opts.exclude_ram_org {
-            out.push_str("MUSIC_PTR     EQU RESULT+28\n");
-            out.push_str("MUSIC_TICK    EQU RESULT+30   ; 32-bit tick counter\n");
-            out.push_str("MUSIC_EVENT   EQU RESULT+34   ; Current event pointer\n");
-            out.push_str("MUSIC_ACTIVE  EQU RESULT+36   ; Playback state (1 byte)\n");
-        } else {
-            out.push_str("MUSIC_PTR:     FDB 0   ; Current music pointer\n");
-            out.push_str("MUSIC_TICK:    FDB 0,0  ; Current playback tick (32-bit)\n");
-            out.push_str("MUSIC_EVENT:   FDB 0   ; Pointer to current event\n");
-            out.push_str("MUSIC_ACTIVE:  FCB 0   ; 0=stopped, 1=playing\n");
-        }
+    if has_music_assets_storage && !opts.exclude_ram_org {
+        out.push_str("PSG_MUSIC_PTR:     FDB 0          ; Pointer to current PSG music position\n");
+        out.push_str("PSG_MUSIC_START:   FDB 0          ; Pointer to start of PSG music (for loops)\n");
+        out.push_str("PSG_IS_PLAYING:    FCB 0          ; Playing flag ($00=stopped, $01=playing)\n");
+    }
+    
+    // NOTE: SFX EQU definitions moved earlier (before helpers)
+    // Only emit storage allocation here if not using EQU mode
+    let has_sfx_assets_storage = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Sfx)
+    });
+    if has_sfx_assets_storage && !opts.exclude_ram_org {
+        out.push_str("SFX_PTR:       FDB 0   ; Current SFX pointer\n");
+        out.push_str("SFX_TICK:      FDB 0,0  ; Current playback tick (32-bit)\n");
+        out.push_str("SFX_EVENT:     FDB 0   ; Pointer to current event\n");
+        out.push_str("SFX_ACTIVE:    FCB 0   ; 0=stopped, 1=playing\n");
     }
     
     // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
@@ -673,11 +750,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if !opts.assets.is_empty() {
         // Analyze which assets are actually used in the code
         let used_assets = analyze_used_assets(module);
+        eprintln!("[DEBUG] Used assets: {:?}", used_assets);
+        eprintln!("[DEBUG] Available assets: {:?}", opts.assets.iter().map(|a| &a.name).collect::<Vec<_>>());
         
         // Filter assets to only include used ones
         let assets_to_embed: Vec<_> = opts.assets.iter()
             .filter(|asset| used_assets.contains(&asset.name))
             .collect();
+        eprintln!("[DEBUG] Assets to embed: {}", assets_to_embed.len());
         
         if !assets_to_embed.is_empty() {
             out.push_str("\n; ========================================\n");
@@ -711,6 +791,39 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                                 out.push_str(&format!("; ERROR: Failed to load/generate music asset {}: {}\n", asset.path, e));
                             }
                         }
+                    },
+                    crate::codegen::AssetType::Sfx => {
+                        // SFX uses same format as music but labeled differently
+                        match crate::musres::MusicResource::load(std::path::Path::new(&asset.path)) {
+                            Ok(resource) => {
+                                // Generate with "_SFX" suffix instead of "_MUSIC"
+                                let symbol = format!("_{}_SFX", asset.name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                                out.push_str(&format!("; ========================================\n"));
+                                out.push_str(&format!("; SFX Asset: {} (from {})\n", asset.name, asset.path));
+                                out.push_str(&format!("; ========================================\n"));
+                                out.push_str(&format!("{}:\n", symbol));
+                                
+                                // Emit same structure as music (tempo, ticks, events)
+                                // MusicResource::compile_to_asm already handles full structure
+                                // Just need to extract the data part without the label
+                                let full_asm = resource.compile_to_asm(&asset.name);
+                                // Skip first 4 lines (comments) and label line
+                                let lines: Vec<&str> = full_asm.lines().collect();
+                                if lines.len() > 5 {
+                                    for line in &lines[5..] {
+                                        out.push_str(line);
+                                        out.push_str("\n");
+                                    }
+                                } else {
+                                    // Fallback: just emit the whole thing
+                                    out.push_str(&full_asm);
+                                }
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                out.push_str(&format!("; ERROR: Failed to load/generate SFX asset {}: {}\n", asset.path, e));
+                            }
+                        }
                     }
                 }
             }
@@ -722,16 +835,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     
-    if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
-    if !string_map.is_empty() {
-        if string_map.len()==1 {
-            let (lit,_label) = string_map.iter().next().unwrap();
+    // Filter out asset names from string_map (they are resolved to symbols, not string data)
+    let asset_names: std::collections::HashSet<_> = opts.assets.iter().map(|a| a.name.as_str()).collect();
+    let filtered_strings: Vec<_> = string_map.iter()
+        .filter(|(lit, _)| !asset_names.contains(lit.as_str()))
+        .collect();
+    
+    if !suppress_runtime && !filtered_strings.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
+    if !filtered_strings.is_empty() {
+        if filtered_strings.len()==1 {
+            let (lit,_label) = filtered_strings[0];
             out.push_str("STR_0:\n");
             out.push_str(&format!("    FCC \"{}\"\n    FCB $80\n", lit.to_ascii_uppercase()));
         } else {
             // Each entry already has a unique label (STR_n) from string_literals.rs; emit them directly
             // Avoid emitting an unlabeled duplicated STR_0 header.
-            for (lit,label) in &string_map {
+            for (lit,label) in filtered_strings {
                 out.push_str(&format!("{}:\n    FCC \"{}\"\n    FCB $80\n", label, lit.to_ascii_uppercase()));
             }
         }
@@ -878,19 +997,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // We parse the entire ASM to calculate actual addresses based on instruction sizes
     use super::debug_info::parse_vpy_line_markers;
     debug_info.line_map = parse_vpy_line_markers(&out, start_address);
-    
-    // Example vector list data (for DRAW_VECTOR_LIST demo)
-    // TODO: Make this configurable via asset system
-    out.push_str("\n; ========================================\n");
-    out.push_str("; VECTOR LIST DATA (Malban format)\n");
-    out.push_str("; ========================================\n");
-    out.push_str("_SQUARE:\n");
-    out.push_str("    FCB 0, 0, 0          ; Header (y=0, x=0, next_y=0)\n");
-    out.push_str("    FCB $FF, $D8, $D8    ; Line 1: flag=-1, dy=-40, dx=-40\n");
-    out.push_str("    FCB $FF, 0, 80       ; Line 2: flag=-1, dy=0, dx=80\n");
-    out.push_str("    FCB $FF, 80, 0       ; Line 3: flag=-1, dy=80, dx=0\n");
-    out.push_str("    FCB $FF, 0, $B0      ; Line 4: flag=-1, dy=0, dx=-80\n");
-    out.push_str("    FCB 2                ; End marker\n\n");
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
@@ -1111,6 +1217,19 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                     usage.wrappers_used.insert("DRAW_LINE_WRAPPER".to_string());
                 }
             }
+            // Music/SFX system: track runtime helpers needed
+            if up == "PLAY_MUSIC" {
+                usage.wrappers_used.insert("PLAY_MUSIC_RUNTIME".to_string());
+            }
+            if up == "PLAY_SFX" {
+                usage.wrappers_used.insert("PLAY_SFX_RUNTIME".to_string());
+            }
+            if up == "STOP_MUSIC" {
+                usage.wrappers_used.insert("STOP_MUSIC_RUNTIME".to_string());
+            }
+            if up == "MUSIC_UPDATE" {
+                usage.wrappers_used.insert("UPDATE_MUSIC_PSG".to_string());
+            }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
@@ -1280,273 +1399,301 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         out.push_str("VECTREX_PLAY_MUSIC1:\n    JSR MUSIC1\n    RTS\n");
     }
     
+    // BIOS music system handles all PSG operations internally - no custom helpers needed
+    
     // DRAW_VECTOR_RUNTIME: Old helper - NO LONGER USED
     // Now using inline code with Draw_VLc BIOS function
     // (removed to avoid label conflicts with inline code)
     
-    // PLAY_MUSIC_RUNTIME: Basic music player for .vmus assets
-    // Only emit if PLAY_MUSIC() builtin is actually used in code
-    if w.contains("PLAY_MUSIC_RUNTIME") {
+    // PLAY_MUSIC_RUNTIME: Direct PSG music player (inspired by Christman2024/malbanGit)
+    // Writes directly to PSG chip, bypassing BIOS
+    // Force generation if music assets exist (for auto-inject UPDATE_MUSIC_PSG)
+    let has_music_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Music)
+    });
+    if w.contains("PLAY_MUSIC_RUNTIME") || w.contains("STOP_MUSIC_RUNTIME") || has_music_assets {
         out.push_str(
             "; ============================================================================\n\
-            ; PSG MUSIC PLAYER RUNTIME\n\
+            ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)\n\
             ; ============================================================================\n\
-            ; Music data structure (generated by compiler from .vmus):\n\
+            ; Writes directly to PSG chip using WRITE_PSG sequence\n\
+            ;\n\
+            ; Music data format (frame-based):\n\
+            ;   FCB count           ; Number of register writes this frame\n\
+            ;   FCB reg, val        ; PSG register/value pairs\n\
+            ;   ...                 ; Repeat for each register\n\
+            ;   FCB $FF             ; End marker\n\
+            ;\n\
+            ; PSG Registers:\n\
+            ;   0-1: Channel A frequency (12-bit)\n\
+            ;   2-3: Channel B frequency\n\
+            ;   4-5: Channel C frequency\n\
+            ;   6:   Noise period\n\
+            ;   7:   Mixer control (enable/disable channels)\n\
+            ;   8-10: Channel A/B/C volume\n\
+            ;   11-12: Envelope period\n\
+            ;   13:  Envelope shape\n\
+            ; ============================================================================\n\
+            \n\
+            ; RAM variables (defined in RAM section above)\n\
+            ; PSG_MUSIC_PTR   EQU RESULT+28  (2 bytes)\n\
+            ; PSG_IS_PLAYING  EQU RESULT+30  (1 byte)\n\
+            \n\
+            ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
+            ; Input: X = pointer to PSG music data\n\
+            PLAY_MUSIC_RUNTIME:\n\
+            STX >PSG_MUSIC_PTR     ; Store current music pointer (force extended)\n\
+            STX >PSG_MUSIC_START   ; Store start pointer for loops (force extended)\n\
+            LDA #$01\n\
+            STA >PSG_IS_PLAYING ; Mark as playing (extended - var at 0xC8A0)\n\
+            RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; UPDATE_MUSIC_PSG - Update PSG (call every frame)\n\
+            ; ============================================================================\n\
+            UPDATE_MUSIC_PSG:\n\
+            LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)\n\
+            BEQ PSG_update_done    ; Not playing, exit\n\
+            \n\
+            LDX >PSG_MUSIC_PTR     ; Load pointer (force extended - LDX has no DP mode)\n\
+            BEQ PSG_update_done    ; No music loaded\n\
+            \n\
+            ; Read frame count byte (number of register writes)\n\
+            LDB ,X+\n\
+            BEQ PSG_music_ended    ; Count=0 means end (no loop)\n\
+            CMPB #$FE              ; Check for loop command\n\
+            BEQ PSG_music_loop     ; $FE means loop\n\
+            \n\
+            ; Process frame - push counter to stack\n\
+            PSHS B                 ; Save count on stack\n\
+            \n\
+            ; Write register/value pairs to PSG\n\
+PSG_write_loop:\n\
+            LDA ,X+                ; Load register number\n\
+            LDB ,X+                ; Load register value\n\
+            PSHS X                 ; Save pointer (after reads)\n\
+            \n\
+            ; WRITE_PSG sequence\n\
+            STA VIA_port_a         ; Store register number\n\
+            LDA #$19               ; BDIR=1, BC1=1 (LATCH)\n\
+            STA VIA_port_b\n\
+            LDA #$01               ; BDIR=0, BC1=0 (INACTIVE)\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a         ; Read status\n\
+            STB VIA_port_a         ; Store data\n\
+            LDB #$11               ; BDIR=1, BC1=0 (WRITE)\n\
+            STB VIA_port_b\n\
+            LDB #$01               ; BDIR=0, BC1=0 (INACTIVE)\n\
+            STB VIA_port_b\n\
+            \n\
+            PULS X                 ; Restore pointer\n\
+            PULS B                 ; Get counter\n\
+            DECB                   ; Decrement\n\
+            BEQ PSG_frame_done     ; Done with this frame\n\
+            PSHS B                 ; Save counter back\n\
+            BRA PSG_write_loop\n\
+            \n\
+PSG_frame_done:\n\
+            \n\
+            ; Frame complete - update pointer and done\n\
+            STX >PSG_MUSIC_PTR     ; Update pointer (force extended)\n\
+            BRA PSG_update_done\n\
+            \n\
+PSG_music_ended:\n\
+            CLR >PSG_IS_PLAYING ; Stop playback (extended - var at 0xC8A0)\n\
+            ; Silence all channels (write $00 to volume regs 8,9,10)\n\
+            LDA #8\n\
+            LDB #$00\n\
+            PSHS X\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            LDA #9\n\
+            LDB #$00\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            LDA #10\n\
+            LDB #$00\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            PULS X\n\
+            BRA PSG_update_done\n\
+            \n\
+PSG_music_loop:\n\
+            ; Loop command: $FE followed by 2-byte address (FDB)\n\
+            ; X points past $FE, read the target address\n\
+            LDD ,X                 ; Load 2-byte loop target address\n\
+            STD >PSG_MUSIC_PTR     ; Update pointer to loop target\n\
+            BRA PSG_update_done    ; Exit, will process on next frame\n\
+            \n\
+PSG_update_done:\n\
+            RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; STOP_MUSIC_RUNTIME - Stop music playback\n\
+            ; ============================================================================\n\
+            STOP_MUSIC_RUNTIME:\n\
+            CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)\n\
+            CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)\n\
+            CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)\n\
+            \n\
+            ; Silence all PSG channels (write $00 to volume registers)\n\
+            LDA #8                 ; Channel A volume\n\
+            LDB #$00\n\
+            PSHS X\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            LDA #9                 ; Channel B volume\n\
+            LDB #$00\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            LDA #10                ; Channel C volume\n\
+            LDB #$00\n\
+            STA VIA_port_a\n\
+            LDA #$19\n\
+            STA VIA_port_b\n\
+            LDA #$01\n\
+            STA VIA_port_b\n\
+            LDA VIA_port_a\n\
+            STB VIA_port_a\n\
+            LDB #$11\n\
+            STB VIA_port_b\n\
+            LDB #$01\n\
+            STB VIA_port_b\n\
+            PULS X\n\
+            \n\
+            RTS\n\
+            \n"
+        );
+    }
+    
+    // PLAY_SFX_RUNTIME: Sound effects player for .vmus assets (one-shot, non-looping)
+    // Only emit if PLAY_SFX() builtin is actually used in code
+    if w.contains("PLAY_SFX_RUNTIME") {
+        out.push_str(
+            "; ============================================================================\n\
+            ; PSG SOUND EFFECTS PLAYER RUNTIME\n\
+            ; ============================================================================\n\
+            ; SFX data structure (same as music .vmus format):\n\
             ;   +0: FDB tempo (BPM)\n\
             ;   +2: FDB ticks_per_beat\n\
             ;   +4: FDB total_ticks_hi, total_ticks_lo (32-bit)\n\
             ;   +8: FDB num_events\n\
             ;   +10: Event data (variable length)\n\
-            ;   Last: FDB loop_start_hi, loop_start_lo, loop_end_hi, loop_end_lo\n\
             ;\n\
-            ; Event types:\n\
-            ;   $01 = NOTE: FCB type, FDB start_hi, start_lo, FDB dur_hi, dur_lo,\n\
-            ;               FCB channel, FDB psg_period, FCB velocity\n\
-            ;   $02 = NOISE: FCB type, FDB start_hi, start_lo, FDB dur_hi, dur_lo,\n\
-            ;                FCB period, FCB channels_mask\n\
+            ; SFX player differences from music:\n\
+            ;   - One-shot playback (no looping)\n\
+            ;   - Higher priority than music (can interrupt)\n\
+            ;   - Multiple SFX can play simultaneously (TODO: implement mixing)\n\
             ;\n\
-            ; PSG Registers (accessed via VIA Port B $D000):\n\
-            ;   R0/R1 = Channel A tone period (12-bit)\n\
-            ;   R2/R3 = Channel B tone period (12-bit)\n\
-            ;   R4/R5 = Channel C tone period (12-bit)\n\
-            ;   R6 = Noise period (5-bit)\n\
-            ;   R7 = Mixer control (tone/noise enable per channel)\n\
-            ;   R8/R9/R10 = Channel A/B/C volume (4-bit)\n\
+            ; Current implementation: Simple placeholder\n\
+            ; TODO: Implement full SFX queue with mixing\n\
             ; ============================================================================\n\
             \n\
-            ; RAM variables (defined in RAM section)\n\
-            ; MUSIC_PTR     FDB 0  ; Pointer to current music data\n\
-            ; MUSIC_TICK    FDB 0, 0  ; Current playback tick (32-bit)\n\
-            ; MUSIC_EVENT   FDB 0  ; Pointer to current event\n\
-            ; MUSIC_ACTIVE  FCB 0  ; 0=stopped, 1=playing\n\
+            ; RAM variables for SFX (defined in RAM section)\n\
+            ; SFX_PTR       FDB 0  ; Pointer to current SFX data\n\
+            ; SFX_TICK      FDB 0, 0  ; Current playback tick (32-bit)\n\
+            ; SFX_EVENT     FDB 0  ; Pointer to current event\n\
+            ; SFX_ACTIVE    FCB 0  ; 0=stopped, 1=playing\n\
             \n\
-            ; PLAY_MUSIC_RUNTIME - Initialize and start music playback\n\
-            ; Input: X = pointer to music data structure\n\
-            PLAY_MUSIC_RUNTIME:\n\
-            ; Store music pointer\n\
-            STX MUSIC_PTR\n\
+            ; PLAY_SFX_RUNTIME - Initialize and start SFX playback\n\
+            ; Input: X = pointer to SFX data structure\n\
+            PLAY_SFX_RUNTIME:\n\
+            ; Store SFX pointer\n\
+            STX SFX_PTR\n\
             \n\
             ; Initialize playback state\n\
             CLRA\n\
             CLRB\n\
-            STD MUSIC_TICK      ; Reset tick counter to 0\n\
-            STD MUSIC_TICK+2\n\
+            STD SFX_TICK        ; Reset tick counter to 0\n\
+            STD SFX_TICK+2\n\
             \n\
             ; Point to first event (skip 10-byte header)\n\
             TFR X,D\n\
             ADDD #10\n\
-            STD MUSIC_EVENT\n\
+            STD SFX_EVENT\n\
             \n\
             ; Mark as active\n\
             LDA #1\n\
-            STA MUSIC_ACTIVE\n\
-            \n\
-            ; Initialize PSG - silence all channels\n\
-            BSR PSG_SILENCE\n\
+            STA SFX_ACTIVE\n\
             \n\
             RTS\n\
             \n\
             ; ============================================================================\n\
-            ; PSG_SILENCE - Silence all PSG channels\n\
+            ; SFX_UPDATE - Process SFX events (called from MUSIC_UPDATE)\n\
+            ; TODO: Integrate into MUSIC_UPDATE or call separately\n\
             ; ============================================================================\n\
-            PSG_SILENCE:\n\
-            PSHS A,B\n\
-            \n\
-            ; Set all channel volumes to 0 (R8, R9, R10)\n\
-            LDA #8              ; Register 8 (Channel A volume)\n\
-            LDB #0              ; Volume = 0\n\
-            BSR PSG_WRITE_REG\n\
-            \n\
-            LDA #9              ; Register 9 (Channel B volume)\n\
-            LDB #0\n\
-            BSR PSG_WRITE_REG\n\
-            \n\
-            LDA #10             ; Register 10 (Channel C volume)\n\
-            LDB #0\n\
-            BSR PSG_WRITE_REG\n\
-            \n\
-            ; Disable all tone/noise (R7 = $3F = all disabled)\n\
-            LDA #7              ; Register 7 (Mixer)\n\
-            LDB #$3F            ; All channels off\n\
-            BSR PSG_WRITE_REG\n\
-            \n\
-            PULS A,B\n\
-            RTS\n\
-            \n\
-            ; ============================================================================\n\
-            ; PSG_WRITE_REG - Write to PSG register via VIA\n\
-            ; Input: A = register number (0-15)\n\
-            ;        B = data value\n\
-            ; ============================================================================\n\
-            PSG_WRITE_REG:\n\
-            PSHS A,B,X\n\
-            \n\
-            ; Step 1: Latch register address\n\
-            ; Port B bit 2 = BC1, bit 1 = BDIR\n\
-            ; BDIR=1, BC1=1 = Latch address mode\n\
-            LDX #VIA_port_b\n\
-            ANDA #$0F           ; Mask to 4 bits\n\
-            ORA #$06            ; Set BDIR=1, BC1=1 (bits 2:1)\n\
-            STA ,X              ; Write to Port B\n\
-            \n\
-            ; Short delay (PSG needs ~1μs setup time)\n\
-            NOP\n\
-            NOP\n\
-            \n\
-            ; Step 2: Write data to selected register\n\
-            ; BDIR=1, BC1=0 = Write data mode\n\
-            TFR B,A\n\
-            ANDA #$FF           ; Data value\n\
-            ORA #$02            ; Set BDIR=1, BC1=0 (bit 1)\n\
-            ANDA #$FD           ; Clear BC1 (bit 2)\n\
-            STA ,X\n\
-            \n\
-            ; Deselect PSG (BDIR=0, BC1=0)\n\
-            CLRA\n\
-            STA ,X\n\
-            \n\
-            PULS A,B,X\n\
-            RTS\n\
-            \n\
-            ; ============================================================================\n\
-            ; MUSIC_UPDATE - Process music events (call once per frame)\n\
-            ; Should be called from main loop after WAIT_RECAL\n\
-            ; ============================================================================\n\
-            MUSIC_UPDATE:\n\
+            SFX_UPDATE:\n\
             PSHS A,B,X,Y\n\
             \n\
-            ; Check if music is active\n\
-            TST MUSIC_ACTIVE\n\
-            LBEQ MUSIC_UPDATE_done          ; Not playing, skip\n\
+            ; Check if SFX is active\n\
+            TST SFX_ACTIVE\n\
+            BEQ SFX_UPDATE_done             ; Not playing, skip\n\
             \n\
-            ; Increment tick counter (32-bit)\n\
-            ; At 60 FPS, increment by 1 tick per frame\n\
-            ; (Proper tempo: ticks_per_frame = (tempo * ticks_per_beat) / (60 * 60))\n\
-            LDD MUSIC_TICK+2    ; Load low word\n\
+            ; Increment tick counter (same logic as music)\n\
+            LDD SFX_TICK+2\n\
             ADDD #1\n\
-            STD MUSIC_TICK+2\n\
-            BCC MUSIC_UPDATE_no_carry\n\
-            LDD MUSIC_TICK      ; Increment high word on carry\n\
+            STD SFX_TICK+2\n\
+            BCC SFX_UPDATE_no_carry\n\
+            LDD SFX_TICK\n\
             ADDD #1\n\
-            STD MUSIC_TICK\n\
+            STD SFX_TICK\n\
             \n\
-MUSIC_UPDATE_no_carry:\n\
-            ; Process events at current tick\n\
-            LDX MUSIC_EVENT     ; Load current event pointer\n\
-            CMPX #0\n\
-            BEQ MUSIC_UPDATE_done           ; No events, done\n\
+SFX_UPDATE_no_carry:\n\
+            ; TODO: Process SFX events (similar to MUSIC_UPDATE)\n\
+            ; For now, just placeholder\n\
             \n\
-MUSIC_UPDATE_check_event:\n\
-            ; Load event type\n\
-            LDA ,X+             ; A = event type, X now points to start_tick\n\
-            BEQ MUSIC_UPDATE_done           ; Type 0 = end of events\n\
-            \n\
-            ; Compare event.start_tick (32-bit) with MUSIC_TICK\n\
-            ; If event.start_tick > MUSIC_TICK, not ready yet\n\
-            LDD ,X++            ; D = start_tick high word\n\
-            CMPD MUSIC_TICK\n\
-            BHI MUSIC_UPDATE_event_not_ready ; start_hi > tick_hi\n\
-            BLO MUSIC_UPDATE_event_ready     ; start_hi < tick_hi\n\
-            ; High words equal, check low words\n\
-            LDD ,X++            ; D = start_tick low word\n\
-            CMPD MUSIC_TICK+2\n\
-            BHI MUSIC_UPDATE_event_not_ready ; start_lo > tick_lo\n\
-            \n\
-MUSIC_UPDATE_event_ready:\n\
-            ; Event is ready, execute based on type\n\
-            CMPA #1\n\
-            BEQ MUSIC_UPDATE_process_note\n\
-            CMPA #2\n\
-            BEQ MUSIC_UPDATE_process_noise\n\
-            BRA MUSIC_UPDATE_skip_event     ; Unknown type, skip\n\
-            \n\
-MUSIC_UPDATE_process_note:\n\
-            ; NOTE event structure (after start_tick):\n\
-            ; +0: FDB duration_hi, duration_lo (skip 4 bytes)\n\
-            ; +4: FCB channel (0/1/2)\n\
-            ; +5: FDB psg_period\n\
-            ; +7: FCB velocity\n\
-            LEAX 4,X            ; Skip duration (4 bytes)\n\
-            LDA ,X+             ; A = channel (0/1/2)\n\
-            LDY ,X++            ; Y = PSG period (16-bit)\n\
-            LDB ,X+             ; B = velocity\n\
-            \n\
-            ; Set PSG tone period for channel\n\
-            ; Channel A=0: R0/R1, B=1: R2/R3, C=2: R4/R5\n\
-            PSHS A,B,X,Y\n\
-            TFR A,B\n\
-            LSLB                ; B = channel * 2\n\
-            TFR B,A             ; A = register base (0/2/4)\n\
-            TFR Y,D             ; D = period\n\
-            ANDB #$0F           ; Period low 4 bits\n\
-            BSR PSG_WRITE_REG   ; Write R0/R2/R4\n\
-            PULS A,B,X,Y\n\
-            PSHS A,B,X,Y\n\
-            TFR A,B\n\
-            LSLB\n\
-            INCA                ; A = register + 1\n\
-            TFR Y,D\n\
-            LSRA\n\
-            LSRA\n\
-            LSRA\n\
-            LSRA                ; Period high 8 bits\n\
-            TFR A,B\n\
-            LDA ,S              ; Restore register\n\
-            INCA\n\
-            BSR PSG_WRITE_REG   ; Write R1/R3/R5\n\
-            PULS A,B,X,Y\n\
-            \n\
-            ; Set volume (R8/R9/R10)\n\
-            PSHS A,B,X,Y\n\
-            ADDA #8             ; A = R8 + channel\n\
-            ; B already has velocity\n\
-            BSR PSG_WRITE_REG\n\
-            PULS A,B,X,Y\n\
-            \n\
-            ; Enable tone in mixer (clear bit in R7)\n\
-            ; TODO: Read-modify-write R7\n\
-            \n\
-            ; Save updated event pointer\n\
-            STX MUSIC_EVENT\n\
-            BRA MUSIC_UPDATE_done\n\
-            \n\
-MUSIC_UPDATE_process_noise:\n\
-            ; NOISE event structure:\n\
-            ; +0: FDB duration_hi, duration_lo (skip 4 bytes)\n\
-            ; +4: FCB period (5-bit)\n\
-            ; +5: FCB channels mask\n\
-            LEAX 4,X\n\
-            LDA ,X+             ; A = noise period\n\
-            LDB ,X+             ; B = channels mask\n\
-            \n\
-            ; Set noise period (R6)\n\
-            PSHS A,B,X\n\
-            ANDA #$1F           ; 5-bit period\n\
-            TFR A,B\n\
-            LDA #6              ; Register 6\n\
-            BSR PSG_WRITE_REG\n\
-            PULS A,B,X\n\
-            \n\
-            ; Enable noise in mixer R7\n\
-            ; TODO: Read-modify-write R7 with channels mask\n\
-            \n\
-            STX MUSIC_EVENT\n\
-            BRA MUSIC_UPDATE_done\n\
-            \n\
-MUSIC_UPDATE_skip_event:\n\
-            ; Skip unknown event (can't determine size, so stop)\n\
-            BRA MUSIC_UPDATE_done\n\
-            \n\
-MUSIC_UPDATE_event_not_ready:\n\
-            ; Event not ready yet, done for this frame\n\
-            BRA MUSIC_UPDATE_done\n\
-            \n\
-MUSIC_UPDATE_done:\n\
+SFX_UPDATE_done:\n\
             PULS A,B,X,Y\n\
             RTS\n\
             \n"
         );
     }
+    
     // Trig tables are emitted later in data section.
     
     // ===========================================================================
@@ -1855,7 +2002,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
-    "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"PLAY_MUSIC"|"MUSIC_UPDATE"|
+    "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"MUSIC_UPDATE"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
     "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
@@ -1967,9 +2114,65 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     }
     
     if up == "MUSIC_UPDATE" && args.is_empty() {
-        add_native_call_comment(out, "MUSIC_UPDATE");
-        out.push_str("    JSR MUSIC_UPDATE\n");
+        add_native_call_comment(out, "UPDATE_MUSIC_PSG");
+        out.push_str("    JSR UPDATE_MUSIC_PSG\n");
         out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
+    
+    // PLAY_SFX: Play sound effect asset by name (one-shot, non-looping)
+    // Usage: PLAY_SFX("explosion") -> plays SFX once
+    if up == "PLAY_SFX" && args.len() == 1 {
+        if let Expr::StringLit(asset_name) = &args[0] {
+            // Check if asset exists in opts.assets
+            let asset_exists = opts.assets.iter().any(|a| {
+                a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Sfx)
+            });
+            
+            if asset_exists {
+                let symbol = format!("_{}_SFX", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                out.push_str(&format!("; PLAY_SFX(\"{}\") - play sound effect (one-shot)\n", asset_name));
+                out.push_str(&format!("    LDX #{}\n", symbol));
+                out.push_str("    JSR PLAY_SFX_RUNTIME\n");
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            } else {
+                // Generate helpful compile-time error with list of available SFX
+                let available: Vec<&str> = opts.assets.iter()
+                    .filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Sfx))
+                    .map(|a| a.name.as_str())
+                    .collect();
+                
+                out.push_str(&format!("; ╔════════════════════════════════════════════════════════════╗\n"));
+                out.push_str(&format!("; ║  ❌ COMPILATION ERROR: SFX asset not found                ║\n"));
+                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
+                out.push_str(&format!("; ║  PLAY_SFX(\"{}\") - asset does not exist{:>width$}║\n", 
+                    asset_name, "", width = 64 - asset_name.len() - 29));
+                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
+                if available.is_empty() {
+                    out.push_str(&format!("; ║  No .vmus files found in assets/sfx/                      ║\n"));
+                    out.push_str(&format!("; ║  Please create sound effect assets in that directory.     ║\n"));
+                } else {
+                    out.push_str(&format!("; ║  Available SFX assets ({} found):                        ║\n", available.len()));
+                    for (i, name) in available.iter().enumerate() {
+                        out.push_str(&format!("; ║    {}. \"{}\"{:>width$}║\n", 
+                            i+1, name, "", width = 56 - name.len()));
+                    }
+                }
+                out.push_str(&format!("; ╚════════════════════════════════════════════════════════════╝\n"));
+                out.push_str("    ERROR_SFX_ASSET_NOT_FOUND  ; Assembly will fail here\n");
+                return true;
+            }
+        }
+    }
+    
+    // STOP_MUSIC: Stop currently playing background music
+    // Usage: STOP_MUSIC() -> stops music playback
+    if up == "STOP_MUSIC" && args.is_empty() {
+        add_native_call_comment(out, "STOP_MUSIC");
+        out.push_str("; STOP_MUSIC() - stop background music\n");
+        out.push_str("    JSR STOP_MUSIC_RUNTIME\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
         return true;
     }
     

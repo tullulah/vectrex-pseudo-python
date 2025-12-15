@@ -45,6 +45,8 @@ export interface ProjectConfig {
   };
   resources?: {
     vectors?: string[];
+    music?: string[];
+    sfx?: string[];
     data?: string[];
   };
   dependencies?: Record<string, string | { path?: string; version?: string }>;

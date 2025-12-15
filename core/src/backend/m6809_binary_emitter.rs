@@ -472,6 +472,41 @@ impl BinaryEmitter {
         self.emit(0x6F);
         self.emit(postbyte);
     }
+    
+    /// INC extended (opcode 0x7C) - Increment memory location (extended mode)
+    pub fn inc_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0x7C);
+        self.emit_word(addr);
+    }
+    
+    /// INC indexed (opcode 0x6C) - Increment memory location (indexed mode)
+    pub fn inc_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x6C);
+        self.emit(postbyte);
+    }
+    
+    /// DEC direct (opcode 0x0A) - Decrement memory location (direct page mode)
+    pub fn dec_direct(&mut self, addr: u8) {
+        self.record_line_mapping();
+        self.emit(0x0A);
+        self.emit(addr);
+    }
+    
+    /// DEC extended (opcode 0x7A) - Decrement memory location (extended mode)
+    pub fn dec_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0x7A);
+        self.emit_word(addr);
+    }
+    
+    /// DEC indexed (opcode 0x6A) - Decrement memory location (indexed mode)
+    pub fn dec_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x6A);
+        self.emit(postbyte);
+    }
 
     /// INCA (opcode 0x4C)
     pub fn inca(&mut self) {
@@ -955,6 +990,11 @@ impl BinaryEmitter {
             } else {
                 // Dirección absoluta de 16 bits
                 if sym_ref.ref_size == 2 {
+                    // 🔍 DEBUG: Log ALL symbol resolutions (temporary debug)
+                    if sym_ref.symbol.starts_with('_') {
+                        eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X}", 
+                            sym_ref.symbol, sym_ref.offset, target_addr);
+                    }
                     self.code[sym_ref.offset] = (target_addr >> 8) as u8;
                     self.code[sym_ref.offset + 1] = target_addr as u8;
                 } else {

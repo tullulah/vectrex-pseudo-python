@@ -348,17 +348,20 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
   // Asset System Functions
   {
     name: "DRAW_VECTOR",
-    syntax: "DRAW_VECTOR(name)",
-    description: "✅ WORKING - Draws a vector asset embedded in ROM from assets/vectors/*.vec file",
+    syntax: "DRAW_VECTOR(name, x, y)",
+    description: "✅ WORKING - Draws a vector asset at absolute position (x, y)",
     parameters: [
-      { name: "name", type: "string", description: "Name of the vector asset (without .vec extension)", required: true }
+      { name: "name", type: "string", description: "Name of the vector asset (without .vec extension)", required: true },
+      { name: "x", type: "number", description: "X coordinate (-127 to 127, center=0)", required: true },
+      { name: "y", type: "number", description: "Y coordinate (-127 to 127, center=0)", required: true }
     ],
     examples: [
+      'var player_x = 0',
+      'var player_y = -80',
+      '',
       'def loop():',
-      '    # ❌ NEVER add WAIT_RECAL() here - backend handles it',
       '    SET_INTENSITY(127)',
-      '    MOVE(0, 0)',
-      '    DRAW_VECTOR("player")  # Draw player sprite',
+      '    DRAW_VECTOR("player", player_x, player_y)  # Draw at position',
       '',
       '# 🚨 CRITICAL: Vector asset intensity values must be ≤127',
       '# Values >127 (like 150, 200, 255) cause INVISIBLE LINES',
@@ -367,7 +370,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       '# {"paths":[{"intensity":200, "points":[...]}]}  # ❌ INVISIBLE!'
     ],
     category: "assets",
-    notes: "✅ FULLY IMPLEMENTED. Compiler auto-discovers .vec files in assets/vectors/ folder (Phase 0). Asset is embedded in ROM as _NAME_VECTORS label. Calls BIOS Draw_VLc ($F3CE) to render vector data. 🚨 CRITICAL: intensity values in .vec file MUST be ≤127 - higher values cause invisible lines! If screen is black, check asset intensity values."
+    notes: "✅ FULLY IMPLEMENTED. Draws vector at specified (x,y) position. Compiler auto-discovers .vec files in assets/vectors/ folder (Phase 0). Asset is embedded in ROM as _NAME_PATH0, _NAME_PATH1, etc. Uses Draw_Sync_List_At which adds x,y offset to vector coordinates. 🚨 CRITICAL: intensity values in .vec file MUST be ≤127 - higher values cause invisible lines!"
   },
   {
     name: "PLAY_MUSIC",
@@ -472,16 +475,16 @@ def loop():
         CIRCLE(0, 0, 25, 16)
 
 ## Supported Language Features:
-✅ Variable assignments: let x = 10, name = "Hello"
-✅ Basic arithmetic: +, -, *, /, % (modulo)
-✅ Comparison operators: ==, !=, <, >, <=, >=
-✅ Boolean logic: and, or, not
-✅ Conditional statements: if x > 0:, else:
-✅ Loop constructs: for i in range(10):, while condition:
-✅ **Two required functions**: def main(): (initialization) and def loop(): (game loop)
-✅ Comments: # This is a comment
-✅ Built-in Vectrex functions: MOVE, SET_INTENSITY, RECT, CIRCLE, ARC, SPIRAL, etc.
-✅ Unified syntax: All functions use parentheses everywhere
+- Variable declarations: 'var' for globals (outside functions), 'let' for locals (inside functions)
+- Basic arithmetic: +, -, *, /, % (modulo)
+- Comparison operators: ==, !=, <, >, <=, >=
+- Boolean logic: and, or, not
+- Conditional statements: if x > 0:, else:
+- Loop constructs: for i in range(10):, while condition:
+- Two required functions: def main(): (initialization) and def loop(): (game loop)
+- Comments: # This is a comment
+- Built-in Vectrex functions: MOVE, SET_INTENSITY, RECT, CIRCLE, ARC, SPIRAL, etc.
+- Unified syntax: All functions use parentheses everywhere
 
 ## What VPy IS:
 - A simple, procedural language with Python-like syntax
@@ -503,48 +506,116 @@ def loop():
 - **Target Platform**: Vectrex console
 - **Compilation**: VPy → 6809 Assembly → Vectrex executable
 
-## ⚠️ Variable Scope Rules (CRITICAL):
+## Variable Declaration Rules (CRITICAL):
 
-### **NO SHARED VARIABLES between main() and loop()**
-- Each function has its **own local scope**
-- Variables declared in \`main()\` are **NOT accessible** in \`loop()\`
-- Variables declared in \`loop()\` are **NOT accessible** in \`main()\`
-- **NO global variables** - VPy does not support variables outside functions
+KEY RULE: 'var' vs 'let' - MUST USE CORRECT KEYWORD
 
-### **Correct Variable Usage**:
+'var' = Global variables (declared OUTSIDE functions)
+'let' = Local variables (declared INSIDE functions)
+
 \`\`\`vpy
-# ❌ INCORRECT - Variables in main() cannot be used in loop()
+# ✅ CORRECT - Global variables with var
+var player_x = 0        # Global - accessible in all functions
+var player_y = -80      # Global - accessible in all functions
+var score = 0           # Global - persistent across frames
+var game_state = 0      # Global - persistent across frames
+
 def main():
-    let player_x = 0    # Local to main() only
-    let score = 0       # Local to main() only
+    # Initialization
+    let dummy = 0       # Local to main() - use let inside functions
 
 def loop():
-    MOVE(player_x, 0)   # ❌ ERROR: player_x not defined!
-    # This will cause "empty assembly" compilation error
+    # Access global variables
+    player_x = player_x + 1
+    MOVE(player_x, player_y)
+    
+    # Local variables inside function
+    let dx = 5          # Local to loop() - use let inside functions
+    let dy = 10         # Local to loop() - use let inside functions
+\`\`\`
+
+COMMON ERRORS:
+
+\`\`\`vpy
+# ❌ INCORRECT - Using let outside functions
+let player_x = 0        # ❌ ERROR: "Unexpected token Let"
+let score = 0           # ❌ Syntax error - must use var
+
+def main():
+    let dummy = 0
+
+def loop():
+    MOVE(player_x, 0)   # ❌ Fails: player_x not defined
 \`\`\`
 
 \`\`\`vpy
-# ✅ CORRECT - Declare variables inside loop()
-def main():
-    # Initialization only - no game variables here
-    PLAY_MUSIC("theme")
-
+# ❌ INCORRECT - Using var inside functions
 def loop():
-    let player_x = 0    # Declare in loop() where they're used
-    let score = 0
-    MOVE(player_x, 0)   # ✅ Works correctly
+    var x = 10          # ❌ ERROR: Use let for local variables
+    var y = 20          # ❌ Syntax error
 \`\`\`
 
-### **Why This Limitation?**
-- VPy compiles to 6809 assembly with separate stack frames
-- \`main()\` runs once at startup and its stack frame is discarded
-- \`loop()\` runs every frame with a fresh stack frame
-- No mechanism for persistent variables between calls (no static storage)
+CORRECT PATTERNS:
 
-### **Workarounds for State Persistence**:
-- Use RAM variables (not yet implemented in VPy syntax)
-- Calculate state each frame based on frame counter
-- Keep state in assembly through manual inline code
+**Pattern 1: Persistent Game State (Global Variables)**
+\`\`\`vpy
+# Global variables for game state (use var)
+var player_x = 0
+var player_y = -80
+var enemy_x = 100
+var score = 0
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    # Modify global variables
+    player_x = player_x + 1
+    enemy_x = enemy_x - 2
+    score = score + 10
+    
+    # Draw using globals
+    DRAW_VECTOR("player", player_x, player_y)
+    DRAW_VECTOR("enemy", enemy_x, enemy_y)
+\`\`\`
+
+**Pattern 2: Local Calculations (Inside Functions)**
+\`\`\`vpy
+var angle = 0           # Global rotation angle
+
+def loop():
+    # Local variables for frame calculations (use let)
+    let x = cos(angle) / 2
+    let y = sin(angle) / 2
+    let radius = 50
+    
+    DRAW_LINE(0, 0, x, y, 127)
+    
+    # Update global
+    angle = angle + 1
+    if angle > 127:
+        angle = 0
+\`\`\`
+
+Quick Reference:
+
+Outside functions (Global):
+- Keyword: 'var'
+- Scope: Global
+- Persistence: Permanent across frames
+- Example: var score = 0
+
+Inside functions (Local):
+- Keyword: 'let'
+- Scope: Local to function
+- Persistence: Frame only (discarded after return)
+- Example: let dx = 5
+
+Why This Design?
+- Global 'var': Stored in RAM, persists across frames (game state)
+- Local 'let': Stored on stack, discarded after function returns (temporary calculations)
+- Separates persistent state from temporary calculations
+- Matches 6809 assembly memory model (RAM vs stack)
 
 ## VPy Game Structure (New Model):
 
@@ -847,7 +918,7 @@ VPy includes a powerful asset system that allows you to embed vector graphics an
 ### 📦 How Assets Work:
 1. **Auto-discovery**: Place .vec and .vmus files in \`assets/vectors/\` and \`assets/music/\` directories
 2. **Compile-time embedding**: Assets are automatically discovered and embedded in ROM during compilation (Phase 0)
-3. **Reference by name**: Use \`DRAW_VECTOR("name")\` and \`PLAY_MUSIC("name")\` in your code
+3. **Reference by name**: Use \`DRAW_VECTOR("name", x, y)\` and \`PLAY_MUSIC("name")\` in your code
 4. **No manual loading**: Everything is compiled into the final binary
 
 ### 🎯 Vector Graphics (.vec files)
@@ -889,7 +960,7 @@ def loop():
     WAIT_RECAL()
     SET_INTENSITY(255)
     MOVE(-50, 0)
-    DRAW_VECTOR("player")  # Draws the vector asset
+    DRAW_VECTOR("player", 0, -80)  # Draws the vector asset at position
 \`\`\`
 
 ### 🎵 Music Assets (.vmus files)
@@ -1264,29 +1335,19 @@ PyPilot connects to the IDE via MCP protocol with **22 specialized tools**:
 ### Asset File Formats (CRITICAL):
 
 #### Vector Graphics (.vec) - JSON FORMAT ONLY:
+
+**✅ VERIFIED WORKING FORMAT** (as of 2025-12-12):
 \`\`\`json
 {
   "version": "1.0",
-  "name": "shape",
+  "name": "asset_name",
   "canvas": {"width": 256, "height": 256, "origin": "center"},
   "layers": [{
     "name": "default",
     "visible": true,
     "paths": [{
-      "name": "line1",
+      "name": "path_id",
       "intensity": 127,
-      "closed": false,
-      "points": [{"x": 0, "y": 0}, {"x": 10, "y": 10}]
-    }]
-  }]
-}
-\`\`\`
-
-**Triangle example**:
-\`\`\`json
-{
-  "layers": [{
-    "paths": [{
       "closed": true,
       "points": [
         {"x": 0, "y": 20},
@@ -1297,6 +1358,85 @@ PyPilot connects to the IDE via MCP protocol with **22 specialized tools**:
   }]
 }
 \`\`\`
+
+**🔑 MANDATORY FIELDS (DO NOT OMIT)**:
+- **version**: Always \`"1.0"\`
+- **name**: Asset identifier (matches filename without .vec)
+- **canvas**: \`{"width": 256, "height": 256, "origin": "center"}\`
+- **layers[].name**: Any string (typically \`"default"\`)
+- **layers[].visible**: **MUST BE \`true\`** - only visible layers render
+- **paths[].name**: Unique identifier for path
+- **paths[].intensity**: 0-255 (brightness, recommended 80-127)
+- **paths[].closed**: \`true\`=polygon (auto-closes), \`false\`=open line
+- **paths[].points**: Array of \`{"x": int, "y": int}\` objects
+- **Point coordinates**: -127 to +127 (origin at center)
+
+**Multi-Path Example (Spaceship with Wings)**:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "spaceship",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [
+      {
+        "name": "hull",
+        "intensity": 127,
+        "closed": true,
+        "points": [
+          {"x": 0, "y": 25},
+          {"x": -10, "y": -15},
+          {"x": 0, "y": -10},
+          {"x": 10, "y": -15}
+        ]
+      },
+      {
+        "name": "wing_left",
+        "intensity": 100,
+        "closed": false,
+        "points": [
+          {"x": -10, "y": -15},
+          {"x": -20, "y": -20}
+        ]
+      },
+      {
+        "name": "wing_right",
+        "intensity": 100,
+        "closed": false,
+        "points": [
+          {"x": 10, "y": -15},
+          {"x": 20, "y": -20}
+        ]
+      }
+    ]
+  }]
+}
+\`\`\`
+
+**✅ PROVEN WORKING ASSETS** (verified 2025-12-12):
+- **moon.vec**: 3 paths (circle + 2 craters)
+- **enemigo.vec**: 9 paths (complex alien character)
+- **astronauta.vec**: 6 paths (humanoid with limbs)
+- **bullet.vec**: 2 paths (core + trail)
+- **cohete_base.vec**: 5 paths (rocket with fins)
+- **ejemplo.vec**: 6 paths (character with arms/legs)
+- **player.vec**: 2 paths (ship body + cockpit)
+- **nave3d.vec**: 3 paths (ship body + 2 wings)
+
+**❌ COMMON MISTAKES TO AVOID**:
+- Missing \`"visible": true\` → paths won't render
+- Coordinates outside -127 to +127 → clipped or invisible
+- Intensity > 127 → CRT oversaturation (use ≤127 for safety)
+- Forgetting to close \`"closed": true\` polygons properly
+- One-line JSON → hard to debug (always use formatted JSON)
+
+**🎯 Multi-Path Architecture**:
+- Each path draws independently (separate JSR Draw_Sync_List)
+- DRAW_VECTOR("name") iterates all paths in order
+- Each path ends with FCB 2 marker in compiled ASM
+- Maximum tested: 9 paths (enemigo.vec) ✅
 
 ❌ **REJECTED FORMATS**: VECTOR_START, MOVE, DRAW_TO, or any text-based format
 ✅ **VALIDATION**: project_create_vector validates JSON structure and rejects invalid formats

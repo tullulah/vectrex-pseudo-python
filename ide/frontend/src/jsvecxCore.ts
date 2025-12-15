@@ -165,8 +165,15 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
             const ramAddr = (address - 0xC800) & 0x3FF;
             if (this.inst!.ram) this.inst!.ram[ramAddr] = value;
           } else if (address >= 0xD000 && address < 0xD800) {
-            // VIA registers - ignorar por ahora
-            // TODO: Implementar escritura VIA si es necesario
+            // VIA registers 0xD000-0xD7FF - FORWARD TO JSVECX
+            // PSG está en este rango y jsvecx tiene el handler correcto
+            if (this.inst!.snd_regs && this.inst!.via_regs && this.inst!.e8910) {
+              // JSVecx tiene sound_w() que maneja el routing PSG
+              if (typeof this.inst!.sound_w === 'function') {
+                this.inst!.sound_w(address & 0x1F, value);
+                console.log(`[PSG-WRITE] VIA 0x${address.toString(16).toUpperCase()} = 0x${value.toString(16).toUpperCase()}`);
+              }
+            }
           } else if (address >= 0xD800 && address < 0xD900) {
             // Debug pseudo-RAM 0xD800-0xD8FF
             const debugAddr = address - 0xD800;
@@ -415,6 +422,24 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
     this.biosOk = true;
     console.log(`[JsVecxCore] BIOS loaded: ${maxLen} bytes copied to ROM`);
     
+    // CRITICAL: Start PSG audio system
+    if (this.inst.e8910 && typeof this.inst.e8910.start === 'function') {
+      this.inst.e8910.start();
+      console.log(`[JsVecxCore] PSG audio system started`);
+      
+      // CRITICAL: Intercept e8910_write for PSG logging
+      const originalWrite = this.inst.e8910.e8910_write;
+      if (originalWrite) {
+        this.inst.e8910.e8910_write = (reg: number, val: number) => {
+          console.log(`[PSG-WRITE] Register ${reg} = 0x${val.toString(16).toUpperCase()}`);
+          return originalWrite.call(this.inst.e8910, reg, val);
+        };
+        console.log(`[JsVecxCore] PSG write interceptor installed`);
+      }
+    } else {
+      console.warn(`[JsVecxCore] PSG audio system not available or already started`);
+    }
+    
     // AHORA QUE LA BIOS ESTÁ CARGADA, CONFIGURAR PC AL RESET VECTOR
     if (this.inst.rom.length >= 0x2000 && this.inst.e6809) {
       // Reset vector está en 0xFFFE-0xFFFF (últimos 2 bytes de ROM)
@@ -525,6 +550,12 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
     if (!this.inst) return { stepsRun: 0, vectors: [] };
     
     try { 
+      // CRITICAL: Ensure PSG audio is started (idempotent call)
+      if (this.inst.e8910 && typeof this.inst.e8910.start === 'function' && !this.inst.e8910.ctx) {
+        this.inst.e8910.start();
+        console.log('[JsVecxCore] PSG audio started in runFrame');
+      }
+      
       // CRÍTICO: Re-asignar funciones de memoria antes de cada frame 
       // por si jsvecx las pierde durante reset o ejecución
       console.log('[JsVecxCore] Re-assigning memory functions before frame execution...');
@@ -845,5 +876,29 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
 
   public getLastDebugOutput(): string {
     return this.lastDebugOutput;
+  }
+
+  // PSG Write Logging
+  public enablePsgLog(enabled: boolean, limit?: number): void {
+    const win = window as any;
+    win.PSG_LOG_ENABLED = enabled;
+    if (limit !== undefined) {
+      win.PSG_LOG_LIMIT = limit;
+    }
+    if (!enabled) {
+      this.clearPsgLog();
+    }
+  }
+
+  public clearPsgLog(): void {
+    const win = window as any;
+    if (win.PSG_WRITE_LOG) {
+      win.PSG_WRITE_LOG.length = 0;
+    }
+  }
+
+  public getPsgLog(): Array<{reg: number; value: number; frame: number; pc: number}> {
+    const win = window as any;
+    return win.PSG_WRITE_LOG || [];
   }
 }

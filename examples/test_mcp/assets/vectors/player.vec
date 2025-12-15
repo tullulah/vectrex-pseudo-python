@@ -1,1 +1,0 @@
-{"version":"1.0","name":"player","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"ship_body","intensity":255,"closed":true,"points":[{"x":0,"y":20},{"x":-15,"y":-10},{"x":0,"y":-5},{"x":15,"y":-10}]},{"name":"cockpit","intensity":200,"closed":false,"points":[{"x":-5,"y":5},{"x":0,"y":10},{"x":5,"y":5}]}]}]}

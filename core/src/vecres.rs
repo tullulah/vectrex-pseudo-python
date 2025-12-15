@@ -221,10 +221,15 @@ impl VecResource {
     /// Compile to Vectrex-compatible ASM data using Draw_Sync_List format (Malban optimized)
     /// Format: FCB intensity, y, x, [<0=draw | 0=move | 1=next_seg], dy, dx, ..., FCB 1, [repeat], FCB 2 (end)
     pub fn compile_to_asm(&self) -> String {
+        self.compile_to_asm_with_name(None)
+    }
+    
+    pub fn compile_to_asm_with_name(&self, override_name: Option<&str>) -> String {
         let mut asm = String::new();
-        let symbol_name = self.name.to_uppercase().replace("-", "_").replace(" ", "_");
+        let name_to_use = override_name.unwrap_or(&self.name);
+        let symbol_name = name_to_use.to_uppercase().replace("-", "_").replace(" ", "_");
         
-        asm.push_str(&format!("; Generated from {}.vec (Malban Draw_Sync_List format)\n", self.name));
+        asm.push_str(&format!("; Generated from {}.vec (Malban Draw_Sync_List format)\n", name_to_use));
         asm.push_str(&format!("; Total paths: {}, points: {}\n", 
             self.visible_paths().len(), self.point_count()));
         asm.push_str("\n");
@@ -236,16 +241,18 @@ impl VecResource {
             return asm;
         }
         
-        asm.push_str(&format!("_{}_VECTORS:\n", symbol_name));
-        
-        // Malban Draw_Sync_List format supports multiple paths:
-        // Path 1: FCB intensity, y, x, next_y, next_x, [FCB flag, dy, dx]*, FCB 1 (next path)
-        // Path 2: FCB intensity, y, x, next_y, next_x, [FCB flag, dy, dx]*, FCB 1
-        // ...
-        // Last path: ... FCB 2 (end marker)
+        // Generate individual labels for each path (_NAME_PATH0, _NAME_PATH1, ...)
+        // AND main label (_NAME_VECTORS) and _NAME_PATH0 both pointing to first path
+        asm.push_str(&format!("_{}_VECTORS:  ; Main entry\n", symbol_name));
+        asm.push_str(&format!("_{}_PATH0:    ; Path 0\n", symbol_name));
         
         for (path_idx, path) in self.visible_paths().iter().enumerate() {
             let is_last_path = path_idx == self.visible_paths().len() - 1;
+            
+            // Individual path label (for paths 1+)
+            if path_idx > 0 {
+                asm.push_str(&format!("_{}_PATH{}:\n", symbol_name, path_idx));
+            }
             
             if path.points.len() < 2 {
                 // Empty path - skip or mark with end
@@ -289,11 +296,10 @@ impl VecResource {
                     Self::format_byte(dy), Self::format_byte(dx), dy, dx));
             }
             
-            // Path separator: FCB 1 (next path) or FCB 2 (end)
-            if is_last_path {
-                asm.push_str("    FCB 2                ; End marker\n");
-            } else {
-                asm.push_str("    FCB 1                ; Next path marker\n");
+            // Each path ends with FCB 2 (Draw_Sync_List draws ONE path only)
+            asm.push_str("    FCB 2                ; End marker\n");
+            if !is_last_path {
+                asm.push_str("\n");  // Blank line between paths
             }
         }
         

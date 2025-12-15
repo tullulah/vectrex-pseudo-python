@@ -47,8 +47,10 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     
     // Asset functions (new)
     ("DRAW_VECTOR", 3),     // Draw vector asset at position: name, x, y
-    ("PLAY_MUSIC", 1),      // Play music asset by name
+    ("PLAY_MUSIC", 1),      // Play background music in loop: name
+    ("PLAY_SFX", 1),        // Play sound effect (one-shot): name
     ("MUSIC_UPDATE", 0),    // Process music events per frame
+    ("STOP_MUSIC", 0),      // Stop background music
     
     // Malban algorithm (vector list processing)
     ("DRAW_VECTOR_LIST", 4), // Draw vector list: (list_ptr, y, x, scale)
@@ -98,7 +100,8 @@ pub struct AssetInfo {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssetType {
     Vector,  // .vec file
-    Music,   // .vmus file
+    Music,   // .vmus file (background music, loops)
+    Sfx,     // .vmus file (sound effect, one-shot)
 }
 
 // CodegenOptions: options affecting generation (title, etc.).

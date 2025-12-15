@@ -68,7 +68,10 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         
         // Asset system functions
         "DRAW_VECTOR" => Some(AritySpec::Exact(3)),            // asset_name, x, y
-        "PLAY_MUSIC" => Some(AritySpec::Exact(1)),             // asset_name (string)
+        "PLAY_MUSIC" => Some(AritySpec::Exact(1)),             // music asset (background, loops)
+        "PLAY_SFX" => Some(AritySpec::Exact(1)),               // sound effect (one-shot)
+        "STOP_MUSIC" => Some(AritySpec::Exact(0)),             // stop background music
+        "MUSIC_UPDATE" => Some(AritySpec::Exact(0)),           // process music frame
         
         // Funciones de dibujo con intensidad explícita
         "DRAW_POLYGON" => Some(AritySpec::Variable(4)),         // n, intensity, x1, y1, ... (minimum 4: count + intensity + at least one point)

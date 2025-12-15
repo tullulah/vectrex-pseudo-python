@@ -620,6 +620,7 @@ export const EmulatorPanel: React.FC = () => {
           console.log('[EmulatorPanel] ✓ JSVecx debugState set to running');
           
           if (!vecx.running) {
+            initPsgLogging();
             vecx.start();
             console.log('[EmulatorPanel] ✓ Emulator started');
           }
@@ -1263,9 +1264,29 @@ export const EmulatorPanel: React.FC = () => {
     };
   }, [audioEnabled]);
 
+  // Helper: Initialize PSG logging before starting emulator
+  const initPsgLogging = () => {
+    const win = window as any;
+    if (!win.PSG_WRITE_LOG) win.PSG_WRITE_LOG = [];
+    win.PSG_WRITE_LOG.length = 0;
+    win.PSG_LOG_ENABLED = true;
+    win.PSG_LOG_LIMIT = 10000;
+    console.log('[EmulatorPanel] PSG logging initialized: enabled=true, limit=10000, log length=' + win.PSG_WRITE_LOG.length);
+  };
+
+  // Enable PSG logging on mount and keep it enabled
+  useEffect(() => {
+    const win = window as any;
+    if (!win.PSG_WRITE_LOG) win.PSG_WRITE_LOG = [];
+    win.PSG_LOG_ENABLED = true;
+    win.PSG_LOG_LIMIT = 10000;
+    console.log('[EmulatorPanel] PSG logging enabled globally on mount');
+  }, []);
+
   const onPlay = () => {
     const vecx = (window as any).vecx;
     if (vecx) {
+      initPsgLogging();
       vecx.start();
       setStatus('running');
       useDebugStore.getState().setState('running');
@@ -1296,9 +1317,15 @@ export const EmulatorPanel: React.FC = () => {
   const onReset = () => {
     const vecx = (window as any).vecx;
     if (vecx) {
+      // Clear PSG log on reset
+      const win = window as any;
+      if (!win.PSG_WRITE_LOG) win.PSG_WRITE_LOG = [];
+      win.PSG_WRITE_LOG.length = 0;
+      console.log('[EmulatorPanel] JSVecX reset, PSG log cleared (length=' + win.PSG_WRITE_LOG.length + ')');
+      
       vecx.reset();
-      console.log('[EmulatorPanel] JSVecX reset');
       if (status === 'running') {
+        initPsgLogging();
         vecx.start();
         console.log('[EmulatorPanel] JSVecX restarted after reset');
       }

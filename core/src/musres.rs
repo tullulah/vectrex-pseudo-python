@@ -135,77 +135,243 @@ impl MusicResource {
         period.clamp(0, 4095) // 12-bit period
     }
     
-    /// Compile to Vectrex PSG ASM data
+    /// Compile to direct PSG format (inspired by Christman2024/malbanGit)
+    /// Frame-based: each frame lists PSG register writes
     /// Compila a ASM usando el nombre del asset (filename sin extensión), NO el nombre del JSON
     pub fn compile_to_asm(&self, asset_name: &str) -> String {
         let mut asm = String::new();
         let symbol_name = asset_name.to_uppercase().replace("-", "_").replace(" ", "_");
         
         asm.push_str(&format!("; Generated from {}.vmus (internal name: {})\n", asset_name, self.name));
-        asm.push_str(&format!("; Tempo: {} BPM, Total events: {}\n", 
+        asm.push_str(&format!("; Tempo: {} BPM, Total events: {} (PSG Direct format)\n", 
             self.tempo, self.notes.len() + self.noise.len()));
+        asm.push_str("; Format: FCB count, FCB reg, val, ... (per frame), FCB 0 (end)\n");
         asm.push_str("\n");
         
-        // Music data structure:
-        // Header: tempo (u16), ticks_per_beat (u16), total_ticks (u32)
-        // Events: sorted by start time, each event has type + data
-        
         asm.push_str(&format!("_{}_MUSIC:\n", symbol_name));
-        asm.push_str(&format!("    FDB {}              ; tempo (BPM)\n", self.tempo));
-        asm.push_str(&format!("    FDB {}              ; ticks per beat\n", self.ticks_per_beat));
-        asm.push_str(&format!("    FDB ${:04X},${:04X}  ; total ticks (32-bit)\n", 
-            (self.total_ticks >> 16) as u16, (self.total_ticks & 0xFFFF) as u16));
-        asm.push_str(&format!("    FDB {}              ; num events\n", 
-            self.notes.len() + self.noise.len()));
         
-        // Combine and sort events by start time
-        let mut events: Vec<(u32, EventType)> = Vec::new();
+        // PSG Direct format (inspired by Christman2024):
+        // Each frame: FCB count (number of reg writes), then pairs of FCB reg, FCB val
+        // End: FCB 0 (count=0, allows $FF values in register data)
+        
+        asm.push_str("    ; Frame-based PSG register writes\n");
+        
+        // Convert ticks to frames
+        // Vectrex runs at 50Hz (PAL standard, not 60Hz NTSC)
+        // ticks_per_second = tempo * ticks_per_beat / 60 (tempo is BPM)
+        // frames_per_tick = frames_per_second / ticks_per_second
+        let ticks_per_second = (self.tempo as f32) * (self.ticks_per_beat as f32) / 60.0;
+        let frames_per_second = 50.0; // Vectrex PAL refresh rate
+        let frames_per_tick = frames_per_second / ticks_per_second;
+        
+        let tick_to_frame = |tick: u32| -> u32 {
+            (tick as f32 * frames_per_tick) as u32
+        };
+        
+        // Group notes and noise by frame and build frame-based output
+        use std::collections::BTreeMap;
+        let mut notes_by_frame: BTreeMap<u32, Vec<&NoteEvent>> = BTreeMap::new();
+        let mut noise_by_frame: BTreeMap<u32, Vec<&NoiseEvent>> = BTreeMap::new();
         
         for note in &self.notes {
-            events.push((note.start, EventType::Note(note.clone())));
+            let start_frame = tick_to_frame(note.start);
+            notes_by_frame.entry(start_frame).or_insert_with(Vec::new).push(note);
         }
         
         for noise in &self.noise {
-            events.push((noise.start, EventType::Noise(noise.clone())));
+            let start_frame = tick_to_frame(noise.start);
+            noise_by_frame.entry(start_frame).or_insert_with(Vec::new).push(noise);
         }
         
-        events.sort_by_key(|(start, _)| *start);
+        // Track active notes and noise events and their end frames
+        let mut active_notes: Vec<(u32, &NoteEvent)> = Vec::new(); // (end_frame, note)
+        let mut active_noise: Vec<(u32, &NoiseEvent)> = Vec::new(); // (end_frame, noise)
+        let mut current_frame = 0u32;
+        let max_frame = tick_to_frame(self.total_ticks) + 10; // Add some padding
         
-        // Emit events
-        asm.push_str("\n    ; Event data\n");
-        for (_, event) in events {
-            match event {
-                EventType::Note(note) => {
-                    let period = Self::midi_to_psg_period(note.note);
-                    asm.push_str(&format!("    FCB $01             ; NOTE event\n"));
-                    asm.push_str(&format!("    FDB ${:04X},${:04X}  ; start tick\n", 
-                        (note.start >> 16) as u16, (note.start & 0xFFFF) as u16));
-                    asm.push_str(&format!("    FDB ${:04X},${:04X}  ; duration\n", 
-                        (note.duration >> 16) as u16, (note.duration & 0xFFFF) as u16));
-                    asm.push_str(&format!("    FCB {}              ; channel\n", note.channel));
-                    asm.push_str(&format!("    FDB ${:04X}         ; PSG period\n", period));
-                    asm.push_str(&format!("    FCB {}              ; velocity\n", note.velocity));
-                },
-                EventType::Noise(noise) => {
-                    asm.push_str(&format!("    FCB $02             ; NOISE event\n"));
-                    asm.push_str(&format!("    FDB ${:04X},${:04X}  ; start tick\n", 
-                        (noise.start >> 16) as u16, (noise.start & 0xFFFF) as u16));
-                    asm.push_str(&format!("    FDB ${:04X},${:04X}  ; duration\n", 
-                        (noise.duration >> 16) as u16, (noise.duration & 0xFFFF) as u16));
-                    asm.push_str(&format!("    FCB {}              ; period\n", noise.period));
-                    asm.push_str(&format!("    FCB {}              ; channels mask\n", noise.channels));
+        // Process frames - only emit when something changes
+        while current_frame <= max_frame {
+            let mut something_changed = false;
+            
+            // Remove expired notes
+            let prev_count = active_notes.len();
+            active_notes.retain(|(end_frame, _)| *end_frame > current_frame);
+            if active_notes.len() != prev_count {
+                something_changed = true;
+            }
+            
+            // Remove expired noise
+            let prev_noise_count = active_noise.len();
+            active_noise.retain(|(end_frame, _)| *end_frame > current_frame);
+            if active_noise.len() != prev_noise_count {
+                something_changed = true;
+            }
+            
+            // Add new notes starting this frame
+            if let Some(new_notes) = notes_by_frame.get(&current_frame) {
+                for note in new_notes {
+                    let duration_frames = tick_to_frame(note.start + note.duration) - current_frame;
+                    active_notes.push((current_frame + duration_frames, note));
+                    something_changed = true;
                 }
             }
-            asm.push_str("\n");
+            
+            // Add new noise starting this frame
+            if let Some(new_noise) = noise_by_frame.get(&current_frame) {
+                for noise in new_noise {
+                    let duration_frames = tick_to_frame(noise.start + noise.duration) - current_frame;
+                    active_noise.push((current_frame + duration_frames, noise));
+                    something_changed = true;
+                }
+            }
+            
+            // Don't emit empty frames - if nothing is active, stop
+            // This avoids generating a silent frame at the end before loop
+            if active_notes.is_empty() && active_noise.is_empty() {
+                break;
+            }
+            
+            // Emit EVERY frame with active events (player reads one frame per call)
+            // Can't skip frames because player has no timing mechanism
+            if true {
+                let mut reg_writes = Vec::new();
+                
+                // Build current channel state
+                let mut chan_data: [Option<&NoteEvent>; 3] = [None, None, None];
+                for (_end, note) in &active_notes {
+                    let ch = note.channel.min(2) as usize;
+                    chan_data[ch] = Some(note);
+                }
+                
+                // Handle noise events FIRST to know which channels have active noise
+                let mut noise_period = 0u8;
+                let mut noise_channels = 0u8; // Bitfield: 1=A, 2=B, 4=C
+                let mut noise_volume = 0u8;
+                for (_end, noise) in &active_noise {
+                    noise_period = noise.period.min(31);
+                    noise_channels = noise.channels;
+                    // Use a default volume for noise if not specified
+                    // Noise doesn't have velocity in the data, use max volume (15)
+                    noise_volume = 15;
+                }
+                
+                // Generate register writes for active NOTE channels
+                for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
+                    if let Some(note) = maybe_note {
+                        let period = Self::midi_to_psg_period(note.note);
+                        let volume = note.velocity.min(15);
+                        
+                        // Frequency registers (2 per channel: low 8 bits, high 4 bits)
+                        let reg_lo = (ch_idx * 2) as u8;
+                        let reg_hi = (ch_idx * 2 + 1) as u8;
+                        reg_writes.push((reg_lo, (period & 0xFF) as u8));
+                        reg_writes.push((reg_hi, ((period >> 8) & 0x0F) as u8));
+                        
+                        // Volume register
+                        let reg_vol = (8 + ch_idx) as u8;
+                        reg_writes.push((reg_vol, volume));
+                    } else {
+                        // Only silence this channel if it doesn't have active noise
+                        let has_noise = (noise_channels & (1 << ch_idx)) != 0;
+                        if !has_noise {
+                            let reg_vol = (8 + ch_idx) as u8;
+                            reg_writes.push((reg_vol, 0));
+                        }
+                    }
+                }
+                
+                // Mixer register (enable/disable channels)
+                // Bits 0-2: tone enable (0=on, 1=off) for channels A,B,C
+                // Bits 3-5: noise enable (0=on, 1=off) for channels A,B,C
+                let mut mixer = 0xFF; // Start with all disabled
+                
+                // Enable tones for active note channels
+                for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
+                    if maybe_note.is_some() {
+                        mixer &= !(1 << ch_idx); // Enable tone for this channel (clear bit 0-2)
+                    }
+                }
+                
+                // Enable noise for active noise channels AND set volume
+                if noise_channels > 0 {
+                    if (noise_channels & 1) != 0 { 
+                        mixer &= !0x08; // Enable noise on channel A (clear bit 3)
+                        // Set volume for channel A if it doesn't have a note
+                        if chan_data[0].is_none() {
+                            reg_writes.push((8, noise_volume)); // Vol A
+                        }
+                    }
+                    if (noise_channels & 2) != 0 { 
+                        mixer &= !0x10; // Enable noise on channel B (clear bit 4)
+                        // Set volume for channel B if it doesn't have a note
+                        if chan_data[1].is_none() {
+                            reg_writes.push((9, noise_volume)); // Vol B
+                        }
+                    }
+                    if (noise_channels & 4) != 0 { 
+                        mixer &= !0x20; // Enable noise on channel C (clear bit 5)
+                        // Set volume for channel C if it doesn't have a note
+                        if chan_data[2].is_none() {
+                            reg_writes.push((10, noise_volume)); // Vol C
+                        }
+                    }
+                    
+                    // Only write noise period register if there are active noise events
+                    reg_writes.push((6, noise_period)); // Reg 6: Noise period
+                }
+                
+                // Write mixer register
+                reg_writes.push((7, mixer));
+                
+                // Emit frame data
+                asm.push_str(&format!("    FCB     {}              ; Frame {} - {} writes\n", 
+                    reg_writes.len(), current_frame, reg_writes.len()));
+                for (reg, val) in reg_writes {
+                    // CRITICAL FIX: Generate TWO separate FCB statements per register write
+                    // Old format "FCB 0,$59" generates [00, 59] but UPDATE_MUSIC_PSG reads pairs
+                    // New format generates separate bytes for register number and value
+                    asm.push_str(&format!("    FCB     {}               ; Reg {} number\n", reg, reg));
+                    asm.push_str(&format!("    FCB     ${:02X}             ; Reg {} value\n", val, reg));
+                }
+            }
+            
+            // Check if we should continue BEFORE incrementing frame
+            // Stop when no more events will be active in the NEXT frame
+            let will_have_active_notes_next = !active_notes.is_empty() || notes_by_frame.keys().any(|&k| k > current_frame);
+            let will_have_active_noise_next = !active_noise.is_empty() || noise_by_frame.keys().any(|&k| k > current_frame);
+            
+            current_frame += 1;
+            
+            if !will_have_active_notes_next && !will_have_active_noise_next {
+                break;
+            }
         }
         
-        // Loop points
-        asm.push_str(&format!("    FDB ${:04X},${:04X}  ; loop start\n", 
-            (self.loop_start >> 16) as u16, (self.loop_start & 0xFFFF) as u16));
-        asm.push_str(&format!("    FDB ${:04X},${:04X}  ; loop end\n", 
-            (self.loop_end >> 16) as u16, (self.loop_end & 0xFFFF) as u16));
+        // Loop or end marker
+        let loop_start_frame = tick_to_frame(self.loop_start);
+        let loop_end_frame = tick_to_frame(self.loop_end);
+        
+        if loop_start_frame < loop_end_frame && loop_end_frame > 0 {
+            // Loop marker: FCB $FE, FDB address
+            // Using absolute address instead of relying on PSG_MUSIC_START memory variable
+            asm.push_str(&format!("    FCB     $FE             ; Loop command\n"));
+            asm.push_str(&format!("    FDB     _{}_MUSIC       ; Jump to start (absolute address)\n\n", symbol_name));
+        } else {
+            // End marker (count=0, allows $FF values in register data)
+            asm.push_str("    FCB     0               ; End of music (no loop)\n\n");
+        }
         
         asm
+    }
+    
+    /// Convert MIDI note (0-127) to BIOS 6-bit frequency (0-63)
+    /// BIOS frequency is an index into a note table, not actual PSG period
+    fn midi_to_bios_freq(midi_note: u8) -> u8 {
+        // Map MIDI notes to BIOS 0-63 range
+        // MIDI 24 (C1) = 0, MIDI 87 (D#6) = 63
+        // This gives us ~5 octaves
+        let clamped = midi_note.clamp(24, 87);
+        ((clamped - 24) as f32 * 63.0 / 63.0).min(63.0) as u8
     }
     
     /// Compile to binary music format

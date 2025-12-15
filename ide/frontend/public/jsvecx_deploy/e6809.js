@@ -13,6 +13,26 @@ The original C version was written by Valavan Manohararajah
   Tatsuyuki Satoh, Fabrice Frances, Nicola Salmoria.
 */
 
+// Global music function call tracing
+var MUSIC_CALL_LOG = [];
+var MUSIC_CALL_LOG_ENABLED = false;
+var MUSIC_CALL_LOG_LIMIT = 10000;
+
+// Known music function addresses (from jetpac compilation)
+var MUSIC_FUNCTION_ADDRS = {
+  0x008B: 'PLAY_MUSIC_RUNTIME',
+  0x0093: 'UPDATE_MUSIC_PSG',
+  0x013B: 'STOP_MUSIC_RUNTIME'
+};
+
+// Expose to window for debugging panel
+if (typeof window !== 'undefined') {
+    window.MUSIC_CALL_LOG = MUSIC_CALL_LOG;
+    window.MUSIC_CALL_LOG_ENABLED = MUSIC_CALL_LOG_ENABLED;
+    window.MUSIC_CALL_LOG_LIMIT = MUSIC_CALL_LOG_LIMIT;
+    window.MUSIC_FUNCTION_ADDRS = MUSIC_FUNCTION_ADDRS;
+}
+
 function e6809()
 {
     this.vecx = null;
@@ -1728,6 +1748,23 @@ function e6809()
                 break;
             case 0xbd:
                 ea = this.pc_read16();
+                
+                // Log music function calls
+                if (typeof window !== 'undefined' && window.MUSIC_CALL_LOG_ENABLED && 
+                    window.MUSIC_CALL_LOG && window.MUSIC_CALL_LOG.length < window.MUSIC_CALL_LOG_LIMIT) {
+                    var funcName = window.MUSIC_FUNCTION_ADDRS[ea];
+                    if (funcName) {
+                        window.MUSIC_CALL_LOG.push({
+                            type: 'JSR',
+                            from: this.reg_pc - 3, // PC antes del JSR
+                            to: ea,
+                            funcName: funcName,
+                            frame: (typeof window.g_frameCount !== 'undefined') ? window.g_frameCount : 0,
+                            timestamp: Date.now()
+                        });
+                    }
+                }
+                
                 this.push16(this.reg_s, this.reg_pc);
                 this.reg_pc = ea;
                 cycles.value+=(8);

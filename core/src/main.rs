@@ -89,6 +89,25 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
         }
     }
     
+    // Search for sound effects (assets/sfx/*.vmus)
+    let sfx_dir = project_root.join("assets").join("sfx");
+    if sfx_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&sfx_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: codegen::AssetType::Sfx,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
     // Log discovered assets
     if !assets.is_empty() {
         eprintln!("✓ Discovered {} asset(s):", assets.len());
@@ -96,6 +115,7 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
             let type_str = match asset.asset_type {
                 codegen::AssetType::Vector => "Vector",
                 codegen::AssetType::Music => "Music",
+                codegen::AssetType::Sfx => "SFX",
             };
             eprintln!("  - {} ({})", asset.name, type_str);
         }
@@ -605,13 +625,16 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             }
             eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
             
-            // Phase 6.5: Generate ASM address mapping (if debug info exists)
+            // Phase 6.5: Generate ASM address mapping (DISABLED - BinaryEmitter already has correct addresses)
+            // TODO: Export emitter.symbols from assemble_asm_to_binary() and use those instead of re-estimating
             if let Some(ref mut dbg) = debug_info_mut {
-                eprintln!("Phase 6.5: Generating ASM address mapping...");
-                let bin_path = out_path.with_extension("bin");
+                eprintln!("Phase 6.5: ASM address mapping (skipped - using BinaryEmitter addresses)...");
+                let _bin_path = out_path.with_extension("bin");
                 
-                match backend::asm_address_mapper::generate_asm_address_map(&out_path, &bin_path, dbg) {
-                    Ok(()) => {
+                // DISABLED: This re-estimates addresses and gets them wrong for large binaries
+                // match backend::asm_address_mapper::generate_asm_address_map(&out_path, &bin_path, dbg) {
+                if false {
+                    // Ok(()) => {
                         eprintln!("✓ Phase 6.5 SUCCESS: ASM address mapping complete");
                         
                         // Write updated PDB with address mappings
@@ -630,12 +653,13 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                                 eprintln!("⚠ Warning: Failed to serialize updated debug symbols: {}", e);
                             }
                         }
-                    },
-                    Err(e) => {
-                        eprintln!("⚠ Phase 6.5 WARNING: ASM address mapping failed: {}", e);
-                        eprintln!("   Debugging will work but without precise ASM line mapping");
-                    }
+                    // },
+                    // Err(e) => {
+                    //     eprintln!("⚠ Phase 6.5 WARNING: ASM address mapping failed: {}", e);
+                    //     eprintln!("   Debugging will work but without precise ASM line mapping");
+                    // }
                 }
+                eprintln!("✓ Phase 6.5 SKIPPED - Using BinaryEmitter symbol addresses (more accurate)");
             } else {
                 eprintln!("Phase 6.5: ASM address mapping skipped (no debug info available)");
             }

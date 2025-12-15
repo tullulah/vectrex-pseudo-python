@@ -131,8 +131,8 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
             };
             emitter.define_label(&full_label);
             
-            // 🔍 TRACE: Definición de labels importantes
-            if full_label == "DSL_NEXT_PATH" || full_label == "DSL_LOOP" || full_label == "DSL_DONE" {
+            // 🔍 TRACE: Definición de labels importantes y assets
+            if full_label == "DSL_NEXT_PATH" || full_label == "DSL_LOOP" || full_label == "DSL_DONE" || full_label.contains("_MUSIC") || full_label.contains("_VECTORS") {
                 eprintln!("🏷️  Line {}: Defined label '{}' at addr=${:04X} off={}", 
                     current_line, full_label, emitter.current_address, emitter.current_offset());
             }
@@ -443,8 +443,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
     match mnemonic.as_str() {
         // === DIRECTIVAS DE DATOS ===
         "FCC" => emit_fcc(emitter, operand),
-        "FCB" => emit_fcb(emitter, operand),
-        "FDB" | "FDW" => emit_fdb(emitter, operand, equates),
+        "FCB" | "DB" => emit_fcb(emitter, operand),  // DB es alias común (Frogger usa DB)
+        "FDB" | "FDW" | "DW" => emit_fdb(emitter, operand, equates),  // DW es alias común (Frogger usa DW)
         "RMB" => emit_rmb(emitter, operand),
         "ZMB" => emit_zmb(emitter, operand),
         // === LOAD/STORE ===
@@ -460,36 +460,36 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "BSR" => emit_bsr(emitter, operand),
         "RTS" => { emitter.rts(); Ok(()) },
         "NOP" => { emitter.nop(); Ok(()) },
-        "BRA" => emit_bra(emitter, operand),
-        "BEQ" => emit_beq(emitter, operand),
-        "BNE" => emit_bne(emitter, operand),
-        "BCC" => emit_bcc(emitter, operand),
-        "BCS" => emit_bcs(emitter, operand),
-        "BHS" => emit_bcc(emitter, operand), // Alias de BCC (Branch if Higher or Same)
-        "BLO" => emit_bcs(emitter, operand), // Alias de BCS (Branch if LOwer)
-        "BLE" => emit_ble(emitter, operand),
-        "BGT" => emit_bgt(emitter, operand),
-        "BLT" => emit_blt(emitter, operand),
-        "BGE" => emit_bge(emitter, operand),
-        "BPL" => emit_bpl(emitter, operand),
-        "BMI" => emit_bmi(emitter, operand),
-        "BVC" => emit_bvc(emitter, operand),
-        "BVS" => emit_bvs(emitter, operand),
-        "BHI" => emit_bhi(emitter, operand),
-        "BLS" => emit_bls(emitter, operand),
+        "BRA" => emit_bra(emitter, operand, last_global_label),
+        "BEQ" => emit_beq(emitter, operand, last_global_label),
+        "BNE" => emit_bne(emitter, operand, last_global_label),
+        "BCC" => emit_bcc(emitter, operand, last_global_label),
+        "BCS" => emit_bcs(emitter, operand, last_global_label),
+        "BHS" => emit_bcc(emitter, operand, last_global_label), // Alias de BCC (Branch if Higher or Same)
+        "BLO" => emit_bcs(emitter, operand, last_global_label), // Alias de BCS (Branch if LOwer)
+        "BLE" => emit_ble(emitter, operand, last_global_label),
+        "BGT" => emit_bgt(emitter, operand, last_global_label),
+        "BLT" => emit_blt(emitter, operand, last_global_label),
+        "BGE" => emit_bge(emitter, operand, last_global_label),
+        "BPL" => emit_bpl(emitter, operand, last_global_label),
+        "BMI" => emit_bmi(emitter, operand, last_global_label),
+        "BVC" => emit_bvc(emitter, operand, last_global_label),
+        "BVS" => emit_bvs(emitter, operand, last_global_label),
+        "BHI" => emit_bhi(emitter, operand, last_global_label),
+        "BLS" => emit_bls(emitter, operand, last_global_label),
         
         // === LONG BRANCHES (16-bit offset) ===
-        "LBRA" => emit_lbra(emitter, operand),
-        "LBEQ" => emit_lbeq(emitter, operand),
-        "LBNE" => emit_lbne(emitter, operand),
-        "LBCS" => emit_lbcs(emitter, operand),
-        "LBCC" => emit_lbcc(emitter, operand),
-        "LBLT" => emit_lblt(emitter, operand),
-        "LBGE" => emit_lbge(emitter, operand),
-        "LBGT" => emit_lbgt(emitter, operand),
-        "LBLE" => emit_lble(emitter, operand),
-        "LBMI" => emit_lbmi(emitter, operand),
-        "LBPL" => emit_lbpl(emitter, operand),
+        "LBRA" => emit_lbra(emitter, operand, last_global_label),
+        "LBEQ" => emit_lbeq(emitter, operand, last_global_label),
+        "LBNE" => emit_lbne(emitter, operand, last_global_label),
+        "LBCS" => emit_lbcs(emitter, operand, last_global_label),
+        "LBCC" => emit_lbcc(emitter, operand, last_global_label),
+        "LBLT" => emit_lblt(emitter, operand, last_global_label),
+        "LBGE" => emit_lbge(emitter, operand, last_global_label),
+        "LBGT" => emit_lbgt(emitter, operand, last_global_label),
+        "LBLE" => emit_lble(emitter, operand, last_global_label),
+        "LBMI" => emit_lbmi(emitter, operand, last_global_label),
+        "LBPL" => emit_lbpl(emitter, operand, last_global_label),
         
         // === ARITHMETIC ===
         "ADDA" => emit_adda(emitter, operand, equates),
@@ -511,8 +511,10 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "CLR" => emit_clr(emitter, operand, equates),
         "INCA" => { emitter.inca(); Ok(()) },
         "INCB" => { emitter.incb(); Ok(()) },
+        "INC" => emit_inc(emitter, operand, equates),
         "DECA" => { emitter.deca(); Ok(()) },
         "DECB" => { emitter.decb(); Ok(()) },
+        "DEC" => emit_dec(emitter, operand, equates),
         "ASLA" | "LSLA" => { emitter.asla(); Ok(()) },  // LSLA es alias de ASLA
         "ASLB" | "LSLB" => { emitter.aslb(); Ok(()) },  // LSLB es alias de ASLB
         "ROLA" => { emitter.rola(); Ok(()) },
@@ -636,6 +638,21 @@ fn resolve_address(operand: &str, equates: &HashMap<String, u16>) -> Result<u16,
     evaluate_expression(operand, equates)
 }
 
+/// Helper: Expande labels locales (empiezan con .) con el prefijo del último label global
+/// También verifica si es un label válido (alfanumérico, guión bajo, punto)
+fn expand_local_label(operand: &str, last_global: &str) -> String {
+    if operand.starts_with('.') {
+        format!("{}{}", last_global, operand)
+    } else {
+        operand.to_string()
+    }
+}
+
+/// Helper: Verifica si un operando es un label (alfanumérico, guión bajo, o punto para locales)
+fn is_label(operand: &str) -> bool {
+    operand.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.')
+}
+
 fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
@@ -655,9 +672,13 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.lda_extended(addr);
         }
     } else if operand.starts_with('<') {
-        // Direct page forzado
+        // Direct page forzado (lwasm compatibility)
         let addr = resolve_address(&operand[1..], equates)?;
-        emitter.lda_direct(addr as u8);
+        emitter.lda_direct((addr & 0xFF) as u8);
+    } else if operand.starts_with('>') {
+        // Extended mode forzado (lwasm compatibility)
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.lda_extended(addr);
     } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
         // Símbolo - intentar resolver, sino usar referencia
         let upper = operand.to_uppercase();
@@ -692,6 +713,14 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         if let Some(off) = offset {
             emitter.emit(off as u8);
         }
+    } else if operand.starts_with('<') {
+        // Direct page forzado (lwasm compatibility)
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.ldb_direct((addr & 0xFF) as u8);
+    } else if operand.starts_with('>') {
+        // Extended mode forzado (lwasm compatibility)
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.ldb_extended(addr);
     } else if operand.starts_with('$') {
         let addr = parse_hex(&operand[1..])?;
         if addr <= 0xFF {
@@ -762,6 +791,17 @@ fn emit_sta(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         return Ok(());
     }
     
+    // Handle < (force direct page) and > (force extended) operators
+    if operand.starts_with('<') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.sta_direct((addr & 0xFF) as u8);
+        return Ok(());
+    } else if operand.starts_with('>') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.sta_extended(addr);
+        return Ok(());
+    }
+    
     match resolve_address(operand, equates) {
         Ok(addr) => {
             if addr <= 0xFF {
@@ -791,6 +831,17 @@ fn emit_stb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         return Ok(());
     }
     
+    // Handle < (force direct page) and > (force extended) operators
+    if operand.starts_with('<') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.stb_direct((addr & 0xFF) as u8);
+        return Ok(());
+    } else if operand.starts_with('>') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.stb_extended(addr);
+        return Ok(());
+    }
+    
     match resolve_address(operand, equates) {
         Ok(addr) => {
             if addr <= 0xFF {
@@ -816,6 +867,21 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.std_indexed(postbyte);
         if let Some(off) = offset {
             emitter.emit(off as u8);
+        }
+        Ok(())
+    } else if operand.starts_with('>') {
+        // Extended mode forzado (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.std_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let symbol = e.trim_start_matches("SYMBOL:");
+                emitter.add_symbol_ref(symbol, false, 2);
+                emitter.std_extended(0x0000); // Placeholder
+            },
+            Err(e) => return Err(e),
         }
         Ok(())
     } else {
@@ -857,9 +923,10 @@ fn emit_bsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_bra(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        emitter.bra_label(operand);
+fn emit_bra(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
+        emitter.bra_label(&full_label);
     } else {
         let offset = parse_signed(operand)?;
         emitter.bra_offset(offset);
@@ -867,9 +934,10 @@ fn emit_bra(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_beq(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        emitter.beq_label(operand);
+fn emit_beq(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
+        emitter.beq_label(&full_label);
     } else {
         let offset = parse_signed(operand)?;
         emitter.beq_offset(offset);
@@ -877,9 +945,10 @@ fn emit_beq(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_bne(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        emitter.bne_label(operand);
+fn emit_bne(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
+        emitter.bne_label(&full_label);
     } else {
         let offset = parse_signed(operand)?;
         emitter.bne_offset(offset);
@@ -887,10 +956,11 @@ fn emit_bne(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_bcc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bcc(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x24); // BCC opcode
-        emitter.add_symbol_ref(operand, true, 1); // Relative, 1-byte offset
+        emitter.add_symbol_ref(&full_label, true, 1); // Relative, 1-byte offset
         emitter.emit(0x00); // Placeholder
         Ok(())
     } else {
@@ -900,10 +970,11 @@ fn emit_bcc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bcs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bcs(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x25); // BCS opcode
-        emitter.add_symbol_ref(operand, true, 1); // Relative, 1-byte offset
+        emitter.add_symbol_ref(&full_label, true, 1); // Relative, 1-byte offset
         emitter.emit(0x00); // Placeholder
         Ok(())
     } else {
@@ -913,11 +984,11 @@ fn emit_bcs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_ble(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        // Es una label - emitir opcode y agregar referencia a símbolo relativo
+fn emit_ble(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2F); // BLE opcode
-        emitter.add_symbol_ref(operand, true, 1); // Relative, 1-byte offset
+        emitter.add_symbol_ref(&full_label, true, 1); // Relative, 1-byte offset
         emitter.emit(0x00); // Placeholder
         Ok(())
     } else {
@@ -928,10 +999,11 @@ fn emit_ble(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bgt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bgt(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2E);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -942,10 +1014,11 @@ fn emit_bgt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_blt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_blt(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2D);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -956,10 +1029,11 @@ fn emit_blt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bge(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bge(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2C);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -970,10 +1044,11 @@ fn emit_bge(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bpl(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bpl(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2A);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -984,10 +1059,11 @@ fn emit_bpl(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bmi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bmi(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x2B);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -998,10 +1074,11 @@ fn emit_bmi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bvc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bvc(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x28);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -1012,10 +1089,11 @@ fn emit_bvc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bvs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bvs(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x29);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -1026,10 +1104,11 @@ fn emit_bvs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bhi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bhi(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x22);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -1040,10 +1119,11 @@ fn emit_bhi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_bls(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_bls(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
         emitter.emit(0x23);
-        emitter.add_symbol_ref(operand, true, 1);
+        emitter.add_symbol_ref(&full_label, true, 1);
         emitter.emit(0x00);
         Ok(())
     } else {
@@ -1057,10 +1137,11 @@ fn emit_bls(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
 // === LONG BRANCHES (16-bit offset) ===
 // MC6809 long branches use 2-byte opcode prefix (0x10) + condition byte + 16-bit offset
 
-fn emit_lbra(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbra(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x16); // LBRA opcode
-        emitter.add_symbol_ref(operand, true, 2); // Relative, 2-byte offset
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2); // Relative, 2-byte offset
         emitter.emit_word(0x0000); // Placeholder
         Ok(())
     } else {
@@ -1071,11 +1152,12 @@ fn emit_lbra(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbeq(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbeq(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10); // Long branch prefix
         emitter.emit(0x27); // BEQ condition
-        emitter.add_symbol_ref(operand, true, 2); // Relative, 2-byte offset
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2); // Relative, 2-byte offset
         emitter.emit_word(0x0000); // Placeholder
         Ok(())
     } else {
@@ -1087,11 +1169,12 @@ fn emit_lbeq(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbne(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbne(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x26); // BNE condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1103,11 +1186,12 @@ fn emit_lbne(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbcs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbcs(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x25); // BCS condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1119,11 +1203,12 @@ fn emit_lbcs(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbcc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbcc(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x24); // BCC condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1135,11 +1220,12 @@ fn emit_lbcc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lblt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lblt(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2D); // BLT condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1151,11 +1237,12 @@ fn emit_lblt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbge(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbge(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2C); // BGE condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1167,11 +1254,12 @@ fn emit_lbge(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbgt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbgt(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2E); // BGT condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1183,11 +1271,12 @@ fn emit_lbgt(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lble(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lble(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2F); // BLE condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1199,11 +1288,12 @@ fn emit_lble(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbmi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbmi(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2B); // BMI condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1215,11 +1305,12 @@ fn emit_lbmi(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_lbpl(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+fn emit_lbpl(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
         emitter.emit(0x10);
         emitter.emit(0x2A); // BPL condition
-        emitter.add_symbol_ref(operand, true, 2);
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
         emitter.emit_word(0x0000);
         Ok(())
     } else {
@@ -1638,6 +1729,18 @@ fn emit_clr(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         return Ok(());
     }
     
+    // Handle < (force direct page) and > (force extended) operators
+    if operand.starts_with('<') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.emit(0x0F); // CLR direct page opcode
+        emitter.emit((addr & 0xFF) as u8);
+        return Ok(());
+    } else if operand.starts_with('>') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.clr_extended(addr);
+        return Ok(());
+    }
+    
     // CLR para memoria (extended mode - opcode 0x7F)
     match evaluate_expression(operand, equates) {
         Ok(addr) => {
@@ -1646,6 +1749,73 @@ fn emit_clr(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         }
         Err(e) if e.starts_with("SYMBOL:") => {
             emitter.clr_extended(0);
+            emitter.add_symbol_ref(operand, false, 2);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn emit_inc(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // Check if it's indexed addressing
+    if operand.contains(',') {
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.inc_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        return Ok(());
+    }
+    
+    // INC para memoria (extended mode - opcode 0x7C)
+    match evaluate_expression(operand, equates) {
+        Ok(addr) => {
+            emitter.inc_extended(addr);
+            Ok(())
+        }
+        Err(e) if e.starts_with("SYMBOL:") => {
+            emitter.inc_extended(0);
+            emitter.add_symbol_ref(operand, false, 2);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn emit_dec(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // Check if it's indexed addressing
+    if operand.contains(',') {
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.dec_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        return Ok(());
+    }
+    
+    // Handle < (force direct page) and > (force extended) operators
+    if operand.starts_with('<') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.dec_direct((addr & 0xFF) as u8);
+        return Ok(());
+    } else if operand.starts_with('>') {
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.dec_extended(addr);
+        return Ok(());
+    }
+    
+    // DEC para memoria (auto-select mode based on address)
+    match evaluate_expression(operand, equates) {
+        Ok(addr) => {
+            if addr <= 0xFF {
+                emitter.dec_direct(addr as u8);
+            } else {
+                emitter.dec_extended(addr);
+            }
+            Ok(())
+        }
+        Err(e) if e.starts_with("SYMBOL:") => {
+            emitter.dec_extended(0);
             emitter.add_symbol_ref(operand, false, 2);
             Ok(())
         }
@@ -1912,6 +2082,10 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             let value = parse_immediate_16(value_part)?;
             emitter.ldx_immediate(value);
         }
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility) - LDX has no DP mode anyway
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.ldx_extended(addr);
     } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
         // Indexed mode: ,Y  ,Y++  5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
@@ -1969,6 +2143,10 @@ fn emit_stx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         if let Some(off) = offset {
             emitter.emit(off as u8);
         }
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility) - STX has no DP mode
+        let addr = resolve_address(&operand[1..], equates)?;
+        emitter.stx_extended(addr);
     } else {
         // Extended addressing
         let upper = operand.to_uppercase();

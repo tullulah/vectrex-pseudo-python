@@ -1,7 +1,0 @@
-{
-  "name": "test_simple_vector",
-  "version": "1.0.0",
-  "description": "Test mínimo de DRAW_VECTOR con solo 2 puntos para debug",
-  "author": "Debug",
-  "main": "src/main.vpy"
-}

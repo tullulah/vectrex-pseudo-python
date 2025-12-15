@@ -54,3 +54,6 @@ examples/vide project/
 # VIDE (Vectrex IDE) - binary distribution
 examples/vide/
 vide/
+
+# Christman2024 - Reference ROM for music playback (malbanGit)
+Christman2024/

@@ -25,6 +25,7 @@ if (typeof window !== 'undefined') {
   (window as any).__editorStore__ = useEditorStore;
   (window as any).__projectStore__ = useProjectStore;
   (window as any).__debugStore__ = useDebugStore;
+  (window as any).dockBus = { emit: ensureComponent };
 }
 
 function App() {
@@ -222,8 +223,11 @@ function App() {
     { key: 'debug', label: t('panel.debug'), component: 'debug' },
     { key: 'errors', label: t('panel.errors'), component: 'errors', badge: (errCount+warnCount>0) ? (errCount>0? `${errCount}E` : `${warnCount}W`) : undefined },
     { key: 'output', label: t('panel.output','Output'), component: 'output' },
+    { key: 'build-output', label: 'Build Output', component: 'build-output' },
+    { key: 'compiler-output', label: 'Compiler Output', component: 'compiler-output' },
     { key: 'memory', label: t('panel.memory','Memory'), component: 'memory' },
     { key: 'trace', label: t('panel.trace','Trace'), component: 'trace' },
+    { key: 'psglog', label: 'PSG Log', component: 'psglog' },
     { key: 'ai-assistant', label: t('panel.ai','PyPilot'), component: 'ai-assistant' },
   ];
 
@@ -993,7 +997,7 @@ def loop():
                     const selected = n.getSelectedNode?.();
                     if (selected) {
                       const c = typeof selected.getComponent === 'function' ? selected.getComponent() : selected?._attributes?.component;
-                      if (['files','emulator','debug','errors','memory','trace','bioscalls','ai-assistant'].includes(c)) activeComp = c;
+                      if (['files','emulator','debug','errors','memory','trace','bioscalls','ai-assistant','build-output','compiler-output'].includes(c)) activeComp = c;
                     }
                   }
                 });
@@ -1010,7 +1014,7 @@ def loop():
                     const selected = n.getSelectedNode?.();
                     if (selected) {
                       const c = typeof selected.getComponent === 'function' ? selected.getComponent() : selected?._attributes?.component;
-                      if (['files','emulator','debug','errors','memory','trace','bioscalls','ai-assistant'].includes(c)) activeComp = c;
+                      if (['files','emulator','debug','errors','memory','trace','bioscalls','ai-assistant','build-output','compiler-output'].includes(c)) activeComp = c;
                     }
                   }
                 });

@@ -16,8 +16,10 @@ import { DebugPanel } from './panels/DebugPanel';
 import { ErrorsPanel } from './panels/ErrorsPanel';
 import { OutputPanel } from './panels/OutputPanel';
 import { BuildOutputPanel } from './panels/BuildOutputPanel';
+import { CompilerOutputPanel } from './panels/CompilerOutputPanel';
 import { MemoryPanel } from './panels/MemoryPanel';
 import { TracePanel } from './panels/TracePanel';
+import { PsgLogPanel } from './panels/PsgLogPanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
 import { AiAssistantPanel } from './panels/AiAssistantPanel';
 
@@ -59,8 +61,10 @@ const defaultJson = {
               { "type": "tab", "name": "Debug", "component": "debug" },
               { "type": "tab", "name": "Errors", "component": "errors" },
               { "type": "tab", "name": "Build Output", "component": "build-output" },
+              { "type": "tab", "name": "Compiler Output", "component": "compiler-output" },
               { "type": "tab", "name": "Memory", "component": "memory" },
               { "type": "tab", "name": "Trace", "component": "trace" },
+              { "type": "tab", "name": "PSG Log", "component": "psglog" },
               { "type": "tab", "name": "BIOS Calls", "component": "bioscalls" }
             ]
           }
@@ -99,7 +103,7 @@ export const DockWorkspace: React.FC = () => {
   const layoutRef = useRef<Layout | null>(null);
   const dragStateRef = useRef<{ active: boolean; tabId?: string; startX: number; startY: number; currentIndex?: number; targetIndex?: number; tabsetId?: string; marker?: HTMLDivElement; container?: HTMLElement; overlay?: HTMLDivElement; targetTabsetId?: string } | null>(null);
   // Saved layouts for hidden single-instance panels (files/emulator/debug/errors) + placeholder
-  type PanelKey = DockComponent | 'editor-placeholder' | 'build-output';
+  type PanelKey = DockComponent | 'editor-placeholder' | 'build-output' | 'compiler-output';
   const savedRef = useRef<Record<PanelKey, { json: any; parentTabsetId?: string; index?: number; tabsetWeight?: number }>>({
     files: { json: null as any },
     editor: { json: null as any },
@@ -109,15 +113,17 @@ export const DockWorkspace: React.FC = () => {
   errors: { json: null as any },
   memory: { json: null as any },
   trace: { json: null as any },
+  psglog: { json: null as any },
   bioscalls: { json: null as any },
   output: { json: null as any },
   'build-output': { json: null as any },
+  'compiler-output': { json: null as any },
   'ai-assistant': { json: null as any }
   });
   // Extra metadata to preserve docking edge for panels so re-pin restores original side
-  const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, memory:{edge:'right'}, trace:{edge:'right'}, bioscalls:{edge:'right'}, 'build-output':{edge:'bottom'} });
+  const panelMetaRef = useRef<Partial<Record<DockComponent | 'build-output' | 'compiler-output', { edge: 'left'|'right'|'bottom'|'top'; parentTabsetId?: string }>>>({ files:{edge:'left'}, emulator:{edge:'right'}, debug:{edge:'bottom'}, errors:{edge:'bottom'}, output:{edge:'bottom'}, memory:{edge:'right'}, trace:{edge:'right'}, psglog:{edge:'right'}, bioscalls:{edge:'right'}, 'build-output':{edge:'bottom'}, 'compiler-output':{edge:'bottom'} });
   const hiddenSetRef = useRef<Set<DockComponent>>(new Set());
-  const pinnedSetRef = useRef<Set<DockComponent | 'build-output'>>(new Set(['files','emulator','memory','trace','bioscalls','debug','errors','output','build-output']));
+  const pinnedSetRef = useRef<Set<DockComponent | 'build-output' | 'compiler-output'>>(new Set(['files','emulator','memory','trace','psglog','bioscalls','debug','errors','output','build-output','compiler-output']));
   const [, forceRerender] = useState(0); // for pin UI updates
   (window as any).__pinnedPanelsRef = pinnedSetRef;
   // Expose globally so static handlers can reach
@@ -138,9 +144,11 @@ export const DockWorkspace: React.FC = () => {
   case 'errors': return <ErrorsPanel />;
   case 'memory': return <MemoryPanel />;
   case 'trace': return <TracePanel />;
+  case 'psglog': return <PsgLogPanel />;
   case 'bioscalls': return <BiosCallsPanel />;
   case 'output': return <OutputPanel />;
   case 'build-output': return <BuildOutputPanel />;
+  case 'compiler-output': return <CompilerOutputPanel />;
   case 'ai-assistant': return <AiAssistantPanel />;
       default: return <div>Unknown: {comp}</div>;
     }
@@ -280,6 +288,8 @@ export const DockWorkspace: React.FC = () => {
       debug: t('panel.debug', 'Debug'),
       errors: t('panel.errors', 'Errors'),
       output: t('panel.output', 'Output'),
+      'build-output': 'Build Output',
+      'compiler-output': 'Compiler Output',
       memory: t('panel.memory', 'Memory'),
       trace: t('panel.trace', 'Trace'),
       bioscalls: t('panel.bioscalls', 'BIOS Calls'),

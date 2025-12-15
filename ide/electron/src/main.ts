@@ -510,7 +510,19 @@ function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ f
       continue;
     }
     
-    // Semantic errors: [error] SemanticsErrorArity: llamada a 'PRINT_TEXT' con 4 argumentos; se esperaban 3.
+    // New semantic error format: "error 117:27 - SemanticsError: uso de variable no declarada 'enemy_x'."
+    const newSemanticMatch = /error\s+(\d+):(\d+)\s*-\s*(.*)/.exec(trimmed);
+    if (newSemanticMatch) {
+      diags.push({
+        file: sourceFile,
+        line: parseInt(newSemanticMatch[1], 10) - 1, // Convert to 0-based
+        col: parseInt(newSemanticMatch[2], 10),
+        message: newSemanticMatch[3].trim()
+      });
+      continue;
+    }
+    
+    // Old semantic errors: [error] SemanticsErrorArity: llamada a 'PRINT_TEXT' con 4 argumentos; se esperaban 3.
     const semanticMatch = /\[error\]\s*(\w+):\s*(.*)/.exec(trimmed);
     if (semanticMatch) {
       diags.push({

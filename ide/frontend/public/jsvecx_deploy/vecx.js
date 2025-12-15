@@ -592,6 +592,12 @@ function VecX()
             // Debug: Check breakpoint ANTES de ejecutar la instrucción
             // BUT: skip breakpoint check if in step mode (step handles pause itself)
             var currentPC = e6809.reg_pc;
+            
+            // Expose current PC globally for PSG logging
+            if (typeof window !== 'undefined') {
+                window.g_currentPC = currentPC;
+            }
+            
             if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(currentPC)) {
                 this.pauseDebugger('breakpoint', currentPC);
                 return; // Detener ejecución inmediatamente
