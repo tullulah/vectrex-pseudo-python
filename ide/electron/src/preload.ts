@@ -131,6 +131,21 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // Get commit log
+  log: (args: { projectDir: string; limit?: number }) => ipcRenderer.invoke('git:log', args) as Promise<{
+    ok: boolean;
+    commits?: Array<{
+      hash: string;
+      fullHash: string;
+      message: string;
+      author: string;
+      email: string;
+      date: string;
+      body: string;
+    }>;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

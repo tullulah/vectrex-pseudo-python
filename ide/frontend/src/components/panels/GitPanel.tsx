@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './GitPanel.css';
 import { useProjectStore } from '../../state/projectStore';
 import { DiffViewer } from '../modals/DiffViewer';
+import { CommitHistory } from './CommitHistory';
 
 interface GitChange {
   path: string;
@@ -24,6 +25,7 @@ export const GitPanel: React.FC = () => {
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
+  const [showCommitHistory, setShowCommitHistory] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -249,6 +251,16 @@ export const GitPanel: React.FC = () => {
       <div className="git-panel-header">
         <h3>Source Control</h3>
         
+        <div className="git-panel-actions">
+          <button
+            className="git-panel-action-btn"
+            onClick={() => setShowCommitHistory(!showCommitHistory)}
+            title="View commit history"
+          >
+            📜
+          </button>
+        </div>
+        
         {/* Branch Selector Dropdown */}
         {currentBranch && (
           <div className="git-branch-selector">
@@ -425,6 +437,14 @@ export const GitPanel: React.FC = () => {
           filePath={selectedDiffFile}
           projectDir={currentProjectDir}
           onClose={() => setSelectedDiffFile(null)}
+        />
+      )}
+
+      {/* Commit History Modal */}
+      {showCommitHistory && currentProjectDir && (
+        <CommitHistory
+          projectDir={currentProjectDir}
+          onClose={() => setShowCommitHistory(false)}
         />
       )}
     </div>

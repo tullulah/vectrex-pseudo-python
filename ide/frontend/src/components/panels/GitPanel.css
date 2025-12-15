@@ -24,6 +24,29 @@
   color: #cccccc;
 }
 
+.git-panel-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.git-panel-action-btn {
+  background: #2d2d30;
+  border: 1px solid #3e3e42;
+  color: #cccccc;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.git-panel-action-btn:hover {
+  background: #3e3e42;
+  border-color: #0098ff;
+  color: #0098ff;
+}
+
 .git-panel-content {
   flex: 1;
   overflow-y: auto;
@@ -306,5 +329,218 @@
 
 .git-branch-option.remote {
   padding-left: 20px;
+}
+
+/* Commit History Styles */
+.git-history-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.git-history-modal {
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 5px;
+  width: 90%;
+  max-width: 1200px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.git-history-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.git-history-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #cccccc;
+}
+
+.git-history-close {
+  background: none;
+  border: none;
+  color: #cccccc;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: color 0.2s ease;
+}
+
+.git-history-close:hover {
+  color: #ffffff;
+}
+
+.git-history-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.git-history-list {
+  flex: 0 0 400px;
+  border-right: 1px solid #2d2d30;
+  overflow-y: auto;
+  background: #252526;
+}
+
+.git-history-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #1e1e1e;
+}
+
+.git-history-loading,
+.git-history-empty,
+.git-history-error {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #858585;
+}
+
+.git-history-error {
+  color: #f48771;
+  background: #3c2828;
+  border: 1px solid #5c3838;
+}
+
+.git-history-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d30;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.git-history-item:hover {
+  background: #2d2d30;
+}
+
+.git-history-item.active {
+  background: #0098ff;
+  color: #ffffff;
+}
+
+.git-history-item.active .git-history-author,
+.git-history-item.active .git-history-date {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.git-history-hash {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: #0098ff;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.git-history-item.active .git-history-hash {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.git-history-message {
+  font-size: 12px;
+  color: #cccccc;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.git-history-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #858585;
+}
+
+.git-history-author {
+  flex: 1;
+}
+
+.git-history-date {
+  flex-shrink: 0;
+}
+
+.git-history-detail-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d30;
+  flex-shrink: 0;
+}
+
+.git-history-detail-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #cccccc;
+}
+
+.git-history-detail-content {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.git-history-detail-row {
+  display: flex;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.git-history-detail-row.full {
+  flex-direction: column;
+}
+
+.git-history-detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #858585;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: 70px;
+}
+
+.git-history-detail-row.full .git-history-detail-label {
+  width: auto;
+  margin-bottom: 4px;
+}
+
+.git-history-detail-value {
+  font-size: 12px;
+  color: #cccccc;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.git-history-detail-text {
+  font-size: 12px;
+  color: #cccccc;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: #252526;
+  padding: 8px 12px;
+  border-radius: 3px;
+  border: 1px solid #3e3e42;
+  max-height: 200px;
+  overflow-y: auto;
 }
 

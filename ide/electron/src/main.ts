@@ -1626,6 +1626,31 @@ ipcMain.handle('git:discard', async (_e, args: { projectDir: string; filePath: s
   }
 });
 
+ipcMain.handle('git:log', async (_e, args: { projectDir: string; limit?: number }) => {
+  try {
+    const { projectDir, limit = 50 } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const git = simpleGit(projectDir);
+    const log = await git.log({ maxCount: limit });
+
+    const commits = log.all.map((commit: any) => ({
+      hash: commit.hash?.substring(0, 7) || '',
+      fullHash: commit.hash || '',
+      message: commit.message || '',
+      author: commit.author_name || 'Unknown',
+      email: commit.author_email || '',
+      date: commit.author_date || '',
+      body: commit.body || '',
+    }));
+
+    return { ok: true, commits };
+  } catch (error: any) {
+    console.error('[GIT:log]', error);
+    return { ok: false, error: error.message || 'Failed to get commit log' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {
