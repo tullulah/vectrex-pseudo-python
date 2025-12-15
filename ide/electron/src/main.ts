@@ -1858,6 +1858,25 @@ app.on('render-process-gone', (_e, details) => {
 app.on('child-process-gone', (_e, details) => {
   console.error('[IDE] child process gone', details);
 });
+
+// Revert commit handler
+ipcMain.handle('git:revert', async (_e, args: { projectDir: string; commitHash: string }) => {
+  try {
+    const { projectDir, commitHash } = args;
+    if (!projectDir || !commitHash) return { ok: false, error: 'Missing projectDir or commitHash' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.revert([commitHash]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:revert]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
 process.on('uncaughtException', (err) => {
   console.error('[IDE] uncaughtException', err);
 });

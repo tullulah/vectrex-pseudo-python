@@ -14,13 +14,36 @@ interface Commit {
 interface CommitHistoryProps {
   projectDir: string;
   onClose: () => void;
+  onRevert?: () => void;
 }
 
-export const CommitHistory: React.FC<CommitHistoryProps> = ({ projectDir, onClose }) => {
+export const CommitHistory: React.FC<CommitHistoryProps> = ({ projectDir, onClose, onRevert }) => {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+
+  const handleRevert = async () => {
+    if (!selectedCommit) return;
+
+    const confirmed = window.confirm(`Revert commit ${selectedCommit.hash}?\n\n"${selectedCommit.message}"`);
+    if (!confirmed) return;
+
+    try {
+      const git = (window as any).git;
+      const result = await git.revert({ projectDir, commitHash: selectedCommit.fullHash });
+
+      if (result.ok) {
+        alert('Commit reverted successfully');
+        onRevert?.();
+        onClose();
+      } else {
+        alert(`Failed to revert: ${result.error}`);
+      }
+    } catch (err) {
+      alert(`Error reverting commit: ${err}`);
+    }
+  };
 
   useEffect(() => {
     const loadCommits = async () => {
@@ -124,6 +147,15 @@ export const CommitHistory: React.FC<CommitHistoryProps> = ({ projectDir, onClos
                     <div className="git-history-detail-text">{selectedCommit.body}</div>
                   </div>
                 )}
+                <div className="git-history-detail-row" style={{ marginTop: '12px' }}>
+                  <button
+                    className="git-panel-action-btn"
+                    onClick={handleRevert}
+                    style={{ backgroundColor: '#d9534f', borderColor: '#d9534f' }}
+                  >
+                    ↶ Revert
+                  </button>
+                </div>
               </div>
             </div>
           )}

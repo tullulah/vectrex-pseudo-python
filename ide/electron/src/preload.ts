@@ -189,6 +189,12 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // Revert commit
+  revert: (args: { projectDir: string; commitHash: string }) => ipcRenderer.invoke('git:revert', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

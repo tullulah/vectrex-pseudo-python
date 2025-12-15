@@ -580,6 +580,9 @@ export const GitPanel: React.FC = () => {
         <CommitHistory
           projectDir={currentProjectDir}
           onClose={() => setShowCommitHistory(false)}
+          onRevert={() => {
+            refreshGitStatus(currentProjectDir);
+          }}
         />
       )}
 
