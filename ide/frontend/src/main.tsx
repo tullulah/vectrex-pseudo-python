@@ -35,8 +35,38 @@ function App() {
   const openDocument = useEditorStore(s => s.openDocument);
   const allDiagnostics = useEditorStore(s => s.allDiagnostics);
   const setDiagnosticsBySource = useEditorStore(s => s.setDiagnosticsBySource);
+  const updateContent = useEditorStore(s => s.updateContent);
 
   const initializedRef = useRef(false);
+
+  // Listen for file changes from FileWatcher (reload documents when externally modified)
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.ipcRenderer) return;
+
+    const handler = async (_event: any, payload: { type: string; path: string; isDir: boolean }) => {
+      if (payload.type !== 'changed' || payload.isDir) return;
+
+      const editorState = useEditorStore.getState();
+      const changedDoc = editorState.documents.find(d => d.diskPath?.endsWith(payload.path));
+      
+      if (changedDoc && !changedDoc.dirty) {
+        logger.info('App', `📄 Reloading externally modified file: ${payload.path}`);
+        try {
+          const result = await electronAPI.readFile(changedDoc.diskPath);
+          if (result.ok && result.content !== undefined) {
+            updateContent(changedDoc.uri, result.content);
+            logger.debug('App', `✓ Reloaded ${changedDoc.uri}`);
+          }
+        } catch (error) {
+          logger.error('App', `Failed to reload ${payload.path}:`, error);
+        }
+      }
+    };
+
+    electronAPI.ipcRenderer.on('file://changed', handler);
+    return () => electronAPI.ipcRenderer.removeListener('file://changed', handler);
+  }, [updateContent]);
 
   // Listen for commands from Electron main process
   useEffect(() => {

@@ -60,9 +60,9 @@ def draw_logo_screen():
     SET_INTENSITY(127)
     DRAW_VECTOR("jetpac_logo", 0, 20)
     
-    # # Copyright
-    SET_INTENSITY(80)
-    PRINT_TEXT(-50, -60, "2025")
+    # # # Copyright
+    # SET_INTENSITY(80)
+    # PRINT_TEXT(-50, -60, "2025")
     
     # # Timer
     logo_timer = logo_timer + 1
@@ -129,9 +129,9 @@ def draw_game_screen():
     if enemy_x > 100:
         enemy_dx = -2
     
-    # === DRAW UI ===
-    SET_INTENSITY(64)
-    PRINT_TEXT(-110, 110, "FUEL")
+    # # === DRAW UI ===
+    # SET_INTENSITY(64)
+    # PRINT_TEXT(-110, 110, "FUEL")
     
     # Fuel bar
     let bar_width = fuel_level / 2

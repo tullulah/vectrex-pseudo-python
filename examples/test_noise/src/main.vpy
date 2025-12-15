@@ -6,4 +6,9 @@ def main():
 
 def loop():
     MUSIC_UPDATE()
+    #PRINT_TEXT(0, 0, "NOISE")
     DRAW_VECTOR("test", 0, 20)
+    
+    
+    
+    

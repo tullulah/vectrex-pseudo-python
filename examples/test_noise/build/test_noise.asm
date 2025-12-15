@@ -40,10 +40,15 @@ PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)
     JMP START
 
 VECTREX_SET_INTENSITY:
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode)
+    STA >$D00C     ; VIA_cntl
     LDA #$D0
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
+    LDA #$C8       ; Restore DP to $C8 for our code
+    TFR A,DP
     RTS
 ; ============================================================================
 ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)
@@ -86,6 +91,9 @@ RTS
 ; UPDATE_MUSIC_PSG - Update PSG (call every frame)
 ; ============================================================================
 UPDATE_MUSIC_PSG:
+; CRITICAL: Set VIA to PSG mode BEFORE accessing PSG (don't assume state)
+LDA #$00       ; VIA_cntl = $00 (PSG mode)
+STA >$D00C     ; VIA_cntl
 LDA #$01
 STA >PSG_MUSIC_ACTIVE  ; Mark music system active (for PSG logging)
 LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)
@@ -477,7 +485,7 @@ LOOP_BODY:
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(6)
-    ; VPy_LINE:9
+    ; VPy_LINE:10
 ; DRAW_VECTOR("test", x, y) - 1 path(s) at position
     LDD #0
     STD RESULT
