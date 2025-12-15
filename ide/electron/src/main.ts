@@ -1651,6 +1651,36 @@ ipcMain.handle('git:log', async (_e, args: { projectDir: string; limit?: number 
   }
 });
 
+ipcMain.handle('git:push', async (_e, args: { projectDir: string; remote?: string; branch?: string }) => {
+  try {
+    const { projectDir, remote = 'origin', branch = 'HEAD' } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const git = simpleGit(projectDir);
+    await git.push(remote, branch);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:push]', error);
+    return { ok: false, error: error.message || 'Failed to push changes' };
+  }
+});
+
+ipcMain.handle('git:pull', async (_e, args: { projectDir: string; remote?: string; branch?: string }) => {
+  try {
+    const { projectDir, remote = 'origin', branch = 'HEAD' } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const git = simpleGit(projectDir);
+    await git.pull(remote, branch);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:pull]', error);
+    return { ok: false, error: error.message || 'Failed to pull changes' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {

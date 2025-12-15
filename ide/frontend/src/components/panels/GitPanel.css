@@ -47,6 +47,12 @@
   color: #0098ff;
 }
 
+.git-panel-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #6a6a6a;
+}
+
 .git-panel-content {
   flex: 1;
   overflow-y: auto;

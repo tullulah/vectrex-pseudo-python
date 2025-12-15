@@ -166,6 +166,54 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+  const handlePush = async () => {
+    if (!currentProjectDir || !currentBranch) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.push) return;
+
+      setLoading(true);
+      const result = await git.push({ projectDir: currentProjectDir, branch: currentBranch });
+      
+      if (result.ok) {
+        alert('Changes pushed successfully');
+        await refreshGitStatus(currentProjectDir);
+      } else {
+        alert(`Failed to push: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to push:', error);
+      alert(`Error pushing changes: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePull = async () => {
+    if (!currentProjectDir || !currentBranch) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.pull) return;
+
+      setLoading(true);
+      const result = await git.pull({ projectDir: currentProjectDir, branch: currentBranch });
+      
+      if (result.ok) {
+        alert('Changes pulled successfully');
+        await refreshGitStatus(currentProjectDir);
+        await refreshBranches(currentProjectDir);
+      } else {
+        alert(`Failed to pull: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to pull:', error);
+      alert(`Error pulling changes: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+
   const handleStageFile = async (path: string) => {
     if (!currentProjectDir) return;
     
@@ -252,6 +300,22 @@ export const GitPanel: React.FC = () => {
         <h3>Source Control</h3>
         
         <div className="git-panel-actions">
+          <button
+            className="git-panel-action-btn"
+            onClick={handlePush}
+            disabled={!currentBranch || loading}
+            title="Push changes to remote"
+          >
+            ⬆️
+          </button>
+          <button
+            className="git-panel-action-btn"
+            onClick={handlePull}
+            disabled={!currentBranch || loading}
+            title="Pull changes from remote"
+          >
+            ⬇️
+          </button>
           <button
             className="git-panel-action-btn"
             onClick={() => setShowCommitHistory(!showCommitHistory)}

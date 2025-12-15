@@ -146,6 +146,18 @@ contextBridge.exposeInMainWorld('git', {
     }>;
     error?: string;
   }>,
+  
+  // Push changes to remote
+  push: (args: { projectDir: string; remote?: string; branch?: string }) => ipcRenderer.invoke('git:push', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Pull changes from remote
+  pull: (args: { projectDir: string; remote?: string; branch?: string }) => ipcRenderer.invoke('git:pull', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents
