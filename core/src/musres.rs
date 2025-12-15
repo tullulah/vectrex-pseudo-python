@@ -352,12 +352,12 @@ impl MusicResource {
         let loop_end_frame = tick_to_frame(self.loop_end);
         
         if loop_start_frame < loop_end_frame && loop_end_frame > 0 {
-            // Loop marker: FCB $FE, FDB address
+            // Loop marker: FCB $FF (special value that can't be a frame count), FDB address
             // Using absolute address instead of relying on PSG_MUSIC_START memory variable
-            asm.push_str(&format!("    FCB     $FE             ; Loop command\n"));
+            asm.push_str(&format!("    FCB     $FF             ; Loop command ($FF never valid as count)\n"));
             asm.push_str(&format!("    FDB     _{}_MUSIC       ; Jump to start (absolute address)\n\n", symbol_name));
         } else {
-            // End marker (count=0, allows $FF values in register data)
+            // End marker (count=0, no more frames)
             asm.push_str("    FCB     0               ; End of music (no loop)\n\n");
         }
         

@@ -250,22 +250,46 @@ fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
         INCLUDE_DIR.clone().or_else(|| std::env::current_dir().ok())
     }?;
     
+    // Buscar workspace root (sube hasta encontrar Cargo.toml en root)
+    let workspace_root = {
+        let mut current = base_dir.clone();
+        loop {
+            if current.join("Cargo.toml").exists() && current.join("core").exists() {
+                break Some(current);
+            }
+            match current.parent() {
+                Some(p) => current = p.to_path_buf(),
+                None => break None,
+            }
+        }
+    };
+    
     // Paths a intentar (en orden de prioridad)
     let mut search_paths = vec![
         // Desde el directorio base especificado
         base_dir.join(include_path),
         base_dir.join("include").join(include_path),
         base_dir.join("ide/frontend/public/include").join(include_path),
-        
-        // Desde el workspace root (un nivel arriba del base_dir)
-        base_dir.parent().map(|p| p.join(include_path)).unwrap_or_else(|| PathBuf::from(include_path)),
-        base_dir.parent().map(|p| p.join("include").join(include_path)).unwrap_or_else(|| PathBuf::from("include").join(include_path)),
-        base_dir.parent().map(|p| p.join("ide/frontend/public/include").join(include_path)).unwrap_or_else(|| PathBuf::from("ide/frontend/public/include").join(include_path)),
-        
-        // Paths absolutos para Windows
-        PathBuf::from("C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/include").join(include_path),
-        PathBuf::from("C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/ide/frontend/public/include").join(include_path),
     ];
+    
+    // Agregar paths desde workspace root si se encontró
+    if let Some(ws_root) = &workspace_root {
+        search_paths.push(ws_root.join("include").join(include_path));
+        search_paths.push(ws_root.join("ide/frontend/public/include").join(include_path));
+    }
+    
+    // Paths adicionales (parent del base_dir)
+    if let Some(parent) = base_dir.parent() {
+        search_paths.push(parent.join(include_path));
+        search_paths.push(parent.join("include").join(include_path));
+        search_paths.push(parent.join("ide/frontend/public/include").join(include_path));
+        
+        // Dos niveles arriba (para casos como examples/jetpac/)
+        if let Some(grandparent) = parent.parent() {
+            search_paths.push(grandparent.join("include").join(include_path));
+            search_paths.push(grandparent.join("ide/frontend/public/include").join(include_path));
+        }
+    }
     
     for path in search_paths {
         if path.exists() {

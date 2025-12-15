@@ -2,7 +2,7 @@ META TITLE = "Noise Test"
 
 def main():
     SET_INTENSITY(80)
-    PLAY_MUSIC("minimal_noise")
+    PLAY_MUSIC("simple_loop")
 
 def loop():
     WAIT_RECAL()

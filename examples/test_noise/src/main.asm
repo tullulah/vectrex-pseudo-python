@@ -26,14 +26,16 @@
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; Must be defined BEFORE builtin helpers that reference them
 RESULT         EQU $C880   ; Main result temporary
-PSG_MUSIC_PTR   EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)
-PSG_MUSIC_START EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)
-PSG_IS_PLAYING  EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)
-PSG_FRAME_COUNT EQU $C8A1   ; Current frame register write count (RESULT+$21, 1 byte)
+PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)
+PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)
+PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)
+PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)
+PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)
 PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)
 PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)
 PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)
-PSG_FRAME_COUNT_DP EQU $A1  ; DP-relative offset (for lwasm compatibility)
+PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)
+PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)
 
     JMP START
 
@@ -69,8 +71,10 @@ VECTREX_WAIT_RECAL:
 ; ============================================================================
 
 ; RAM variables (defined in RAM section above)
-; PSG_MUSIC_PTR   EQU RESULT+28  (2 bytes)
-; PSG_IS_PLAYING  EQU RESULT+30  (1 byte)
+; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
+; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
+; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
+; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data
@@ -85,6 +89,8 @@ RTS
 ; UPDATE_MUSIC_PSG - Update PSG (call every frame)
 ; ============================================================================
 UPDATE_MUSIC_PSG:
+LDA #$01
+STA >PSG_MUSIC_ACTIVE  ; Mark music system active (for PSG logging)
 LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)
 BEQ PSG_update_done    ; Not playing, exit
 
@@ -94,8 +100,8 @@ BEQ PSG_update_done    ; No music loaded
 ; Read frame count byte (number of register writes)
 LDB ,X+
 BEQ PSG_music_ended    ; Count=0 means end (no loop)
-CMPB #$FE              ; Check for loop command
-BEQ PSG_music_loop     ; $FE means loop
+CMPB #$FF              ; Check for loop command
+BEQ PSG_music_loop     ; $FF means loop (never valid as count)
 
 ; Process frame - push counter to stack
 PSHS B                 ; Save count on stack
@@ -179,13 +185,15 @@ PULS X
 BRA PSG_update_done
 
 PSG_music_loop:
-; Loop command: $FE followed by 2-byte address (FDB)
-; X points past $FE, read the target address
+; Loop command: $FF followed by 2-byte address (FDB)
+; X points past $FF, read the target address
 LDD ,X                 ; Load 2-byte loop target address
-STD >PSG_MUSIC_PTR     ; Update pointer to loop target
-BRA PSG_update_done    ; Exit, will process on next frame
+STD >PSG_MUSIC_PTR     ; Update pointer to loop start
+; Exit - next frame will start from loop target
+BRA PSG_update_done
 
 PSG_update_done:
+CLR >PSG_MUSIC_ACTIVE  ; Clear flag (music system done)
 RTS
 
 ; ============================================================================
@@ -531,8 +539,8 @@ START:
     CLRB
     STD RESULT
     ; VPy_LINE:5
-; PLAY_MUSIC("minimal_noise") - play music asset
-    LDX #_MINIMAL_NOISE_MUSIC
+; PLAY_MUSIC("simple_loop") - play music asset
+    LDX #_SIMPLE_LOOP_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
@@ -572,3376 +580,991 @@ VAR_ARG0 EQU RESULT+26
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 1 of 1 assets (unused assets excluded)
+; Embedded 1 of 2 assets (unused assets excluded)
 ; ========================================
 
-; Generated from minimal_noise.vmus (internal name: Space Groove)
-; Tempo: 140 BPM, Total events: 36 (PSG Direct format)
+; Generated from simple_loop.vmus (internal name: Simple Loop Test)
+; Tempo: 120 BPM, Total events: 3 (PSG Direct format)
 ; Format: FCB count, FCB reg, val, ... (per frame), FCB 0 (end)
 
-_MINIMAL_NOISE_MUSIC:
+_SIMPLE_LOOP_MUSIC:
     ; Frame-based PSG register writes
-    FCB     11              ; Frame 0 - 11 writes
+    FCB     6              ; Frame 0 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 1 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 2 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 3 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 4 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 5 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 6 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 7 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 8 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 9 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     11              ; Frame 10 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 11 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 12 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 13 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 14 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 15 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 16 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 17 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 18 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 19 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 20 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     9              ; Frame 21 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 22 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 23 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 24 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 25 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 26 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 27 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 28 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 29 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 30 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 31 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     9              ; Frame 32 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 33 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 1 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 34 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 2 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 35 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 3 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 36 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 4 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 37 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 5 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 38 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 6 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 39 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 7 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 40 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 8 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 41 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 9 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $4F             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $B3             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     11              ; Frame 42 - 11 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 10 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 43 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 44 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 45 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 46 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 47 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 48 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 49 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 50 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 51 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 52 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     11              ; Frame 53 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 54 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 55 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 56 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 57 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 58 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 59 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 60 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 61 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 62 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 63 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $66             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $01             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     9              ; Frame 64 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 65 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 11 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 66 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 12 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 67 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 13 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 68 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 14 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 69 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 15 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 70 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 16 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 71 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 17 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 72 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 18 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 73 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 19 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 74 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 20 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $6A             ; Reg 0 value
+    FCB     $B3             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     9              ; Frame 75 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 21 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $B3             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 22 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $B3             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 23 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $B3             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 24 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $B3             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 25 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 26 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 27 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 28 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 29 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 30 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 31 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 32 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 33 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 34 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 35 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 36 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 37 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 38 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 39 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 40 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 41 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 42 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 43 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 44 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 45 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 46 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 47 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 48 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 49 - 6 writes
+    FCB     0               ; Reg 0 number
+    FCB     $8E             ; Reg 0 value
+    FCB     1               ; Reg 1 number
+    FCB     $00             ; Reg 1 value
+    FCB     8               ; Reg 8 number
+    FCB     $0C             ; Reg 8 value
+    FCB     9               ; Reg 9 number
+    FCB     $00             ; Reg 9 value
+    FCB     10               ; Reg 10 number
+    FCB     $00             ; Reg 10 value
+    FCB     7               ; Reg 7 number
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 50 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 76 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 51 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 77 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 52 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 78 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 53 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 79 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 54 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 80 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 55 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 81 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 56 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 82 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 57 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 83 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 58 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 84 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 59 - 6 writes
     FCB     0               ; Reg 0 number
     FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
-    FCB     $0B             ; Reg 8 value
+    FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     11              ; Frame 85 - 11 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 60 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 86 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 87 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 88 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 89 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 90 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 91 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 92 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 93 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 94 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 95 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     11              ; Frame 96 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 97 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 98 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 99 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 100 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 101 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 102 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 103 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 104 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 105 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 106 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0E             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     9              ; Frame 107 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 108 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 109 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 110 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 111 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 112 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 113 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 114 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 115 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 116 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     9              ; Frame 117 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 118 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 119 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 120 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 121 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 122 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 123 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 124 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 125 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 126 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 127 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $3B             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0F             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $77             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     11              ; Frame 128 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 129 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 130 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 131 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 132 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $14             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 133 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 134 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 135 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 136 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 137 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 138 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     11              ; Frame 139 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     11              ; Frame 140 - 11 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
-    FCB     7               ; Reg 7 number
-    FCB     $F0             ; Reg 7 value
-    FCB     10              ; Frame 141 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 142 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 143 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 144 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 145 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 146 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 147 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 148 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     10              ; Frame 149 - 10 writes
-    FCB     0               ; Reg 0 number
-    FCB     $47             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0D             ; Reg 8 value
-    FCB     2               ; Reg 2 number
-    FCB     $EF             ; Reg 2 value
-    FCB     3               ; Reg 3 number
-    FCB     $00             ; Reg 3 value
-    FCB     9               ; Reg 9 number
-    FCB     $0B             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $F8             ; Reg 7 value
-    FCB     9              ; Frame 150 - 9 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 151 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 61 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 152 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 62 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 153 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 63 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 154 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 64 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 155 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 65 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 156 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 66 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 157 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 67 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 158 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 68 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 159 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 69 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     9              ; Frame 160 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 70 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 161 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 71 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     9              ; Frame 162 - 9 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 72 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     6               ; Reg 6 number
-    FCB     $03             ; Reg 6 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $F2             ; Reg 7 value
-    FCB     8              ; Frame 163 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 73 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 164 - 8 writes
+    FCB     $FE             ; Reg 7 value
+    FCB     6              ; Frame 74 - 6 writes
     FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
+    FCB     $77             ; Reg 0 value
     FCB     1               ; Reg 1 number
     FCB     $00             ; Reg 1 value
     FCB     8               ; Reg 8 number
     FCB     $0C             ; Reg 8 value
     FCB     9               ; Reg 9 number
     FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
     FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
+    FCB     $00             ; Reg 10 value
     FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 165 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 166 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 167 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 168 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 169 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     8              ; Frame 170 - 8 writes
-    FCB     0               ; Reg 0 number
-    FCB     $59             ; Reg 0 value
-    FCB     1               ; Reg 1 number
-    FCB     $00             ; Reg 1 value
-    FCB     8               ; Reg 8 number
-    FCB     $0C             ; Reg 8 value
-    FCB     9               ; Reg 9 number
-    FCB     $00             ; Reg 9 value
-    FCB     4               ; Reg 4 number
-    FCB     $8E             ; Reg 4 value
-    FCB     5               ; Reg 5 number
-    FCB     $00             ; Reg 5 value
-    FCB     10               ; Reg 10 number
-    FCB     $09             ; Reg 10 value
-    FCB     7               ; Reg 7 number
-    FCB     $FA             ; Reg 7 value
-    FCB     $FE             ; Loop command
-    FDB     _MINIMAL_NOISE_MUSIC       ; Jump to start (absolute address)
+    FCB     $FE             ; Reg 7 value
+    FCB     0               ; End of music (no loop)
 
 
 DRAW_VEC_X EQU RESULT+0

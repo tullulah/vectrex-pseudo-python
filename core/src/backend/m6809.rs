@@ -291,14 +291,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
     if has_music_assets {
-        out.push_str("PSG_MUSIC_PTR   EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)\n");
-        out.push_str("PSG_MUSIC_START EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)\n");
-        out.push_str("PSG_IS_PLAYING  EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)\n");
-        out.push_str("PSG_FRAME_COUNT EQU $C8A1   ; Current frame register write count (RESULT+$21, 1 byte)\n");
+        out.push_str("PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)\n");
+        out.push_str("PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)\n");
+        out.push_str("PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)\n");
+        out.push_str("PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)\n");
+        out.push_str("PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)\n");
         out.push_str("PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_FRAME_COUNT_DP EQU $A1  ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)\n");
     }
     
     // SFX_PTR: Only if SFX assets exist
@@ -686,6 +688,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("PSG_MUSIC_PTR:     FDB 0          ; Pointer to current PSG music position\n");
         out.push_str("PSG_MUSIC_START:   FDB 0          ; Pointer to start of PSG music (for loops)\n");
         out.push_str("PSG_IS_PLAYING:    FCB 0          ; Playing flag ($00=stopped, $01=playing)\n");
+        out.push_str("PSG_MUSIC_ACTIVE:  FCB 0          ; Set=1 during UPDATE_MUSIC_PSG (for logging)\n");
     }
     
     // NOTE: SFX EQU definitions moved earlier (before helpers)
@@ -1436,8 +1439,10 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
             ; ============================================================================\n\
             \n\
             ; RAM variables (defined in RAM section above)\n\
-            ; PSG_MUSIC_PTR   EQU RESULT+28  (2 bytes)\n\
-            ; PSG_IS_PLAYING  EQU RESULT+30  (1 byte)\n\
+            ; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)\n\
+            ; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)\n\
+            ; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)\n\
+            ; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG\n\
             \n\
             ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
             ; Input: X = pointer to PSG music data\n\
@@ -1452,6 +1457,8 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
             ; UPDATE_MUSIC_PSG - Update PSG (call every frame)\n\
             ; ============================================================================\n\
             UPDATE_MUSIC_PSG:\n\
+            LDA #$01\n\
+            STA >PSG_MUSIC_ACTIVE  ; Mark music system active (for PSG logging)\n\
             LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)\n\
             BEQ PSG_update_done    ; Not playing, exit\n\
             \n\
@@ -1461,8 +1468,8 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
             ; Read frame count byte (number of register writes)\n\
             LDB ,X+\n\
             BEQ PSG_music_ended    ; Count=0 means end (no loop)\n\
-            CMPB #$FE              ; Check for loop command\n\
-            BEQ PSG_music_loop     ; $FE means loop\n\
+            CMPB #$FF              ; Check for loop command\n\
+            BEQ PSG_music_loop     ; $FF means loop (never valid as count)\n\
             \n\
             ; Process frame - push counter to stack\n\
             PSHS B                 ; Save count on stack\n\
@@ -1546,13 +1553,15 @@ PSG_music_ended:\n\
             BRA PSG_update_done\n\
             \n\
 PSG_music_loop:\n\
-            ; Loop command: $FE followed by 2-byte address (FDB)\n\
-            ; X points past $FE, read the target address\n\
+            ; Loop command: $FF followed by 2-byte address (FDB)\n\
+            ; X points past $FF, read the target address\n\
             LDD ,X                 ; Load 2-byte loop target address\n\
-            STD >PSG_MUSIC_PTR     ; Update pointer to loop target\n\
-            BRA PSG_update_done    ; Exit, will process on next frame\n\
+            STD >PSG_MUSIC_PTR     ; Update pointer to loop start\n\
+            ; Exit - next frame will start from loop target\n\
+            BRA PSG_update_done\n\
             \n\
 PSG_update_done:\n\
+            CLR >PSG_MUSIC_ACTIVE  ; Clear flag (music system done)\n\
             RTS\n\
             \n\
             ; ============================================================================\n\
