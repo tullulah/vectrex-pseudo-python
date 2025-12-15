@@ -195,6 +195,25 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // List tags
+  tagList: (projectDir: string) => ipcRenderer.invoke('git:tagList', { projectDir }) as Promise<{
+    ok: boolean;
+    tags?: { name: string }[];
+    error?: string;
+  }>,
+  
+  // Create tag
+  tag: (args: { projectDir: string; tagName: string; message?: string }) => ipcRenderer.invoke('git:tag', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Delete tag
+  deleteTag: (args: { projectDir: string; tagName: string }) => ipcRenderer.invoke('git:deleteTag', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

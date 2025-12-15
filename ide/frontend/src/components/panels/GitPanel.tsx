@@ -5,6 +5,7 @@ import { DiffViewer } from '../modals/DiffViewer';
 import { CommitHistory } from './CommitHistory';
 import { CreateBranchDialog } from '../dialogs/CreateBranchDialog';
 import { StashList } from './StashList';
+import { TagsList } from './TagsList';
 
 interface GitChange {
   path: string;
@@ -31,6 +32,7 @@ export const GitPanel: React.FC = () => {
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showStashList, setShowStashList] = useState(false);
   const [stashMessage, setStashMessage] = useState('');
+  const [showTagsList, setShowTagsList] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -372,6 +374,13 @@ export const GitPanel: React.FC = () => {
           >
             📦
           </button>
+          <button
+            className="git-panel-action-btn"
+            onClick={() => setShowTagsList(!showTagsList)}
+            title="Manage tags"
+          >
+            🏷️
+          </button>
         </div>
         
         {/* Branch Selector Dropdown */}
@@ -615,6 +624,29 @@ export const GitPanel: React.FC = () => {
             <StashList
               projectDir={currentProjectDir}
               onStashPopped={() => {
+                refreshGitStatus(currentProjectDir);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tags List Modal */}
+      {showTagsList && currentProjectDir && (
+        <div className="git-modal-overlay" onClick={() => setShowTagsList(false)}>
+          <div className="git-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>Tags</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowTagsList(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <TagsList
+              projectDir={currentProjectDir}
+              onTagDeleted={() => {
                 refreshGitStatus(currentProjectDir);
               }}
             />

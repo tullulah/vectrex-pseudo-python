@@ -1877,6 +1877,67 @@ ipcMain.handle('git:revert', async (_e, args: { projectDir: string; commitHash: 
   }
 });
 
+// List tags
+ipcMain.handle('git:tagList', async (_e, args: { projectDir: string }) => {
+  try {
+    const { projectDir } = args;
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    const tagsOutput = await git.tag([]);
+    const tags = tagsOutput.split('\n').filter(t => t.trim()).map(tag => ({
+      name: tag.trim(),
+    }));
+
+    return { ok: true, tags };
+  } catch (error: any) {
+    console.error('[GIT:tagList]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Create tag
+ipcMain.handle('git:tag', async (_e, args: { projectDir: string; tagName: string; message?: string }) => {
+  try {
+    const { projectDir, tagName, message } = args;
+    if (!projectDir || !tagName) return { ok: false, error: 'Missing projectDir or tagName' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    if (message) {
+      await git.tag(['-a', tagName, '-m', message]);
+    } else {
+      await git.tag([tagName]);
+    }
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:tag]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Delete tag
+ipcMain.handle('git:deleteTag', async (_e, args: { projectDir: string; tagName: string }) => {
+  try {
+    const { projectDir, tagName } = args;
+    if (!projectDir || !tagName) return { ok: false, error: 'Missing projectDir or tagName' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.tag(['-d', tagName]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:deleteTag]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
 process.on('uncaughtException', (err) => {
   console.error('[IDE] uncaughtException', err);
 });
