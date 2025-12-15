@@ -1868,7 +1868,7 @@ ipcMain.handle('git:revert', async (_e, args: { projectDir: string; commitHash: 
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    await git.revert([commitHash]);
+    await git.raw(['revert', '--no-edit', commitHash]);
 
     return { ok: true };
   } catch (error: any) {
@@ -1886,7 +1886,7 @@ ipcMain.handle('git:tagList', async (_e, args: { projectDir: string }) => {
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    const tagsOutput = await git.tag([]);
+    const tagsOutput = await git.raw(['tag', '-l']);
     const tags = tagsOutput.split('\n').filter(t => t.trim()).map(tag => ({
       name: tag.trim(),
     }));
@@ -1908,9 +1908,9 @@ ipcMain.handle('git:tag', async (_e, args: { projectDir: string; tagName: string
     const git = simpleGit(projectDir);
 
     if (message) {
-      await git.tag(['-a', tagName, '-m', message]);
+      await git.raw(['tag', '-a', tagName, '-m', message]);
     } else {
-      await git.tag([tagName]);
+      await git.raw(['tag', tagName]);
     }
 
     return { ok: true };
@@ -1929,7 +1929,7 @@ ipcMain.handle('git:deleteTag', async (_e, args: { projectDir: string; tagName: 
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    await git.tag(['-d', tagName]);
+    await git.raw(['tag', '-d', tagName]);
 
     return { ok: true };
   } catch (error: any) {
