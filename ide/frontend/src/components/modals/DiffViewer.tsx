@@ -31,7 +31,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ filePath, projectDir, on
         }
 
         // Parse unified diff format
-        const lines = result.data.split('\n');
+        const diffText = result.diff || '';
+        const lines = diffText.split('\n');
         const parsed: DiffLine[] = [];
 
         lines.forEach((line: string) => {
