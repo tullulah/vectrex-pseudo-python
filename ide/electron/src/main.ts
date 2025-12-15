@@ -1631,6 +1631,7 @@ ipcMain.handle('git:log', async (_e, args: { projectDir: string; limit?: number 
     const { projectDir, limit = 50 } = args || { projectDir: '' };
     if (!projectDir) return { ok: false, error: 'No project directory' };
 
+    const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
     const log = await git.log({ maxCount: limit });
 
@@ -1656,6 +1657,7 @@ ipcMain.handle('git:push', async (_e, args: { projectDir: string; remote?: strin
     const { projectDir, remote = 'origin', branch = 'HEAD' } = args || { projectDir: '' };
     if (!projectDir) return { ok: false, error: 'No project directory' };
 
+    const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
     await git.push(remote, branch);
 
@@ -1671,6 +1673,7 @@ ipcMain.handle('git:pull', async (_e, args: { projectDir: string; remote?: strin
     const { projectDir, remote = 'origin', branch = 'HEAD' } = args || { projectDir: '' };
     if (!projectDir) return { ok: false, error: 'No project directory' };
 
+    const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
     await git.pull(remote, branch);
 
@@ -1686,6 +1689,7 @@ ipcMain.handle('git:createBranch', async (_e, args: { projectDir: string; branch
     const { projectDir, branch, fromBranch } = args || { projectDir: '', branch: '' };
     if (!projectDir || !branch) return { ok: false, error: 'Missing parameters' };
 
+    const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
     
     // If fromBranch is specified, check it out first
