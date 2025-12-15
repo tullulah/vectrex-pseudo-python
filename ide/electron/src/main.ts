@@ -1681,6 +1681,28 @@ ipcMain.handle('git:pull', async (_e, args: { projectDir: string; remote?: strin
   }
 });
 
+ipcMain.handle('git:createBranch', async (_e, args: { projectDir: string; branch: string; fromBranch?: string }) => {
+  try {
+    const { projectDir, branch, fromBranch } = args || { projectDir: '', branch: '' };
+    if (!projectDir || !branch) return { ok: false, error: 'Missing parameters' };
+
+    const git = simpleGit(projectDir);
+    
+    // If fromBranch is specified, check it out first
+    if (fromBranch) {
+      await git.checkout(fromBranch);
+    }
+    
+    // Create new branch
+    await git.checkoutLocalBranch(branch);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:createBranch]', error);
+    return { ok: false, error: error.message || 'Failed to create branch' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {

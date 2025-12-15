@@ -3,6 +3,7 @@ import './GitPanel.css';
 import { useProjectStore } from '../../state/projectStore';
 import { DiffViewer } from '../modals/DiffViewer';
 import { CommitHistory } from './CommitHistory';
+import { CreateBranchDialog } from '../dialogs/CreateBranchDialog';
 
 interface GitChange {
   path: string;
@@ -26,6 +27,7 @@ export const GitPanel: React.FC = () => {
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const [showCommitHistory, setShowCommitHistory] = useState(false);
+  const [showCreateBranch, setShowCreateBranch] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -323,6 +325,14 @@ export const GitPanel: React.FC = () => {
           >
             📜
           </button>
+          <button
+            className="git-panel-action-btn"
+            onClick={() => setShowCreateBranch(true)}
+            disabled={!currentBranch}
+            title="Create new branch"
+          >
+            🌿
+          </button>
         </div>
         
         {/* Branch Selector Dropdown */}
@@ -509,6 +519,19 @@ export const GitPanel: React.FC = () => {
         <CommitHistory
           projectDir={currentProjectDir}
           onClose={() => setShowCommitHistory(false)}
+        />
+      )}
+
+      {/* Create Branch Dialog */}
+      {showCreateBranch && currentProjectDir && currentBranch && (
+        <CreateBranchDialog
+          projectDir={currentProjectDir}
+          currentBranch={currentBranch}
+          onClose={() => setShowCreateBranch(false)}
+          onBranchCreated={() => {
+            refreshBranches(currentProjectDir);
+            refreshGitStatus(currentProjectDir);
+          }}
         />
       )}
     </div>

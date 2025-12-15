@@ -158,6 +158,12 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // Create new branch
+  createBranch: (args: { projectDir: string; branch: string; fromBranch?: string }) => ipcRenderer.invoke('git:createBranch', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents
