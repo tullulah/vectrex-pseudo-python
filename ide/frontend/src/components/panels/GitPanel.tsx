@@ -215,6 +215,7 @@ export const GitPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
 
   const handleStageFile = async (path: string) => {
     if (!currentProjectDir) return;
