@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './GitPanel.css';
 import { useProjectStore } from '../../state/projectStore';
+import { DiffViewer } from '../modals/DiffViewer';
 
 interface GitChange {
   path: string;
@@ -8,11 +9,21 @@ interface GitChange {
   staged: boolean;
 }
 
+interface GitBranch {
+  name: string;
+  current: boolean;
+  isRemote: boolean;
+}
+
 export const GitPanel: React.FC = () => {
   const [commitMessage, setCommitMessage] = useState('');
   const [changes, setChanges] = useState<GitChange[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
+  const [branches, setBranches] = useState<GitBranch[]>([]);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -30,6 +41,22 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+  // Function to refresh branches
+  const refreshBranches = async (projectDir: string) => {
+    try {
+      const git = (window as any).git;
+      if (!git?.branches) return;
+
+      const result = await git.branches(projectDir);
+      if (result.ok && result.branches) {
+        setBranches(result.branches);
+        setCurrentBranch(result.current);
+      }
+    } catch (error) {
+      console.error('Failed to refresh branches:', error);
+    }
+  };
+
   // Load git status when component mounts or project changes
   useEffect(() => {
     // Clear changes when no project
@@ -37,6 +64,8 @@ export const GitPanel: React.FC = () => {
       setChanges([]);
       setCurrentProjectDir(null);
       setCommitMessage('');
+      setBranches([]);
+      setCurrentBranch(null);
       setLoading(false);
       console.log('[GitPanel] Project closed, clearing changes');
       return;
@@ -52,14 +81,17 @@ export const GitPanel: React.FC = () => {
     setCurrentProjectDir(vpyProject.rootDir);
     setChanges([]);
     setCommitMessage('');
+    setBranches([]);
+    setCurrentBranch(null);
     
-    const loadGitStatus = async () => {
+    const loadGitData = async () => {
       setLoading(true);
       await refreshGitStatus(vpyProject.rootDir);
+      await refreshBranches(vpyProject.rootDir);
       setLoading(false);
     };
 
-    loadGitStatus();
+    loadGitData();
   }, [vpyProject?.rootDir, currentProjectDir]);
 
   // Listen for file changes and auto-refresh git status
@@ -106,6 +138,29 @@ export const GitPanel: React.FC = () => {
       case 'D': return 'deleted';
       case '?': return 'modified';
       default: return 'modified';
+    }
+  };
+
+  const handleCheckoutBranch = async (branchName: string) => {
+    if (!currentProjectDir || branchName === currentBranch) return;
+
+    setShowBranchDropdown(false);
+    
+    try {
+      const git = (window as any).git;
+      if (!git?.checkout) return;
+
+      const result = await git.checkout({ projectDir: currentProjectDir, branch: branchName });
+      
+      if (result.ok) {
+        await refreshBranches(currentProjectDir);
+        await refreshGitStatus(currentProjectDir);
+      } else {
+        alert(`Failed to checkout branch: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to checkout branch:', error);
+      alert(`Error switching branch: ${error}`);
     }
   };
 
@@ -193,6 +248,55 @@ export const GitPanel: React.FC = () => {
     <div className="git-panel">
       <div className="git-panel-header">
         <h3>Source Control</h3>
+        
+        {/* Branch Selector Dropdown */}
+        {currentBranch && (
+          <div className="git-branch-selector">
+            <button
+              className="git-branch-button"
+              onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+            >
+              {currentBranch}
+            </button>
+            
+            {showBranchDropdown && branches.length > 0 && (
+              <div className="git-branch-dropdown">
+                {/* Local Branches */}
+                {branches.filter(b => !b.isRemote).length > 0 && (
+                  <div className="git-branch-section">
+                    {branches.filter(b => !b.isRemote).map((branch) => (
+                      <button
+                        key={branch.name}
+                        className={`git-branch-option ${branch.current ? 'active' : ''}`}
+                        onClick={() => handleCheckoutBranch(branch.name)}
+                      >
+                        {branch.current && '✓ '}
+                        {branch.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Remote Branches */}
+                {branches.filter(b => b.isRemote).length > 0 && (
+                  <div className="git-branch-section">
+                    <div className="git-branch-section-title">Remote</div>
+                    {branches.filter(b => b.isRemote).map((branch) => (
+                      <button
+                        key={branch.name}
+                        className={`git-branch-option remote ${branch.current ? 'active' : ''}`}
+                        onClick={() => handleCheckoutBranch(branch.name)}
+                      >
+                        {branch.current && '✓ '}
+                        {branch.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       <div className="git-panel-content">
@@ -236,13 +340,22 @@ export const GitPanel: React.FC = () => {
                     {getStatusLabel(file.status)}
                   </span>
                   <span className="git-change-path">{file.path.split('/').pop()}</span>
-                  <button
-                    className="git-change-action"
-                    onClick={() => handleUnstageFile(file.path)}
-                    title="Unstage"
-                  >
-                    −
-                  </button>
+                  <div className="git-change-actions">
+                    <button
+                      className="git-change-action diff-btn"
+                      onClick={() => setSelectedDiffFile(file.path)}
+                      title="View diff"
+                    >
+                      ⧉
+                    </button>
+                    <button
+                      className="git-change-action"
+                      onClick={() => handleUnstageFile(file.path)}
+                      title="Unstage"
+                    >
+                      −
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -268,6 +381,13 @@ export const GitPanel: React.FC = () => {
                   </span>
                   <span className="git-change-path">{file.path.split('/').pop()}</span>
                   <div className="git-change-actions">
+                    <button
+                      className="git-change-action diff-btn"
+                      onClick={() => setSelectedDiffFile(file.path)}
+                      title="View diff"
+                    >
+                      ⧉
+                    </button>
                     <button
                       className="git-change-action git-stage-btn"
                       onClick={() => handleStageFile(file.path)}
@@ -298,6 +418,15 @@ export const GitPanel: React.FC = () => {
           <div className="git-no-changes">Loading...</div>
         )}
       </div>
+
+      {/* Diff Viewer Modal */}
+      {selectedDiffFile && currentProjectDir && (
+        <DiffViewer
+          filePath={selectedDiffFile}
+          projectDir={currentProjectDir}
+          onClose={() => setSelectedDiffFile(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,0 +1,155 @@
+.diff-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.diff-viewer-modal {
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 5px;
+  width: 90%;
+  max-width: 1000px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.diff-viewer-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.diff-viewer-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #cccccc;
+}
+
+.diff-viewer-close {
+  background: none;
+  border: none;
+  color: #cccccc;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: color 0.2s ease;
+}
+
+.diff-viewer-close:hover {
+  color: #ffffff;
+}
+
+.diff-viewer-content {
+  flex: 1;
+  overflow: auto;
+  background: #1e1e1e;
+  padding: 12px;
+}
+
+.diff-viewer-loading,
+.diff-viewer-error {
+  padding: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.diff-viewer-loading {
+  color: #858585;
+}
+
+.diff-viewer-error {
+  color: #f48771;
+  background: #3c2828;
+  border: 1px solid #5c3838;
+  border-radius: 3px;
+}
+
+.diff-viewer-text {
+  margin: 0;
+  padding: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d4d4d4;
+  background: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  overflow-x: auto;
+}
+
+.diff-line {
+  display: block;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.diff-line.diff-header {
+  background: #2d2d30;
+  color: #0098ff;
+  font-weight: 600;
+}
+
+.diff-header-text {
+  color: #0098ff;
+}
+
+.diff-line.diff-added {
+  background: #273d1b;
+  color: #85dd9f;
+}
+
+.diff-added-text {
+  color: #85dd9f;
+}
+
+.diff-line.diff-removed {
+  background: #3c2828;
+  color: #f48771;
+}
+
+.diff-removed-text {
+  color: #f48771;
+}
+
+.diff-line.diff-context {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.diff-context-text {
+  color: #cccccc;
+}
+
+/* Scrollbar styling */
+.diff-viewer-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.diff-viewer-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.diff-viewer-content::-webkit-scrollbar-thumb {
+  background: #464647;
+  border-radius: 6px;
+}
+
+.diff-viewer-content::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}

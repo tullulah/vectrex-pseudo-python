@@ -10,6 +10,9 @@
   padding: 12px 16px;
   border-bottom: 1px solid #2d2d30;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .git-panel-header h3 {
@@ -185,6 +188,20 @@
   padding: 2px 6px;
   font-size: 12px;
   font-weight: bold;
+  transition: color 0.2s ease;
+}
+
+.git-change-action:hover {
+  color: #cccccc;
+}
+
+.git-change-action.diff-btn {
+  color: #0098ff;
+}
+
+.git-change-action.diff-btn:hover {
+  color: #00d4ff;
+}
   transition: all 0.2s;
 }
 
@@ -208,3 +225,86 @@
 .git-discard-btn:hover {
   color: #ff9c87;
 }
+
+/* Branch Selector Styles */
+.git-branch-selector {
+  position: relative;
+  margin-left: auto;
+}
+
+.git-branch-button {
+  background: #2d2d30;
+  border: 1px solid #3e3e42;
+  color: #0098ff;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.git-branch-button:hover {
+  background: #3e3e42;
+  border-color: #0098ff;
+}
+
+.git-branch-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #3c3c3c;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  margin-top: 4px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.git-branch-section {
+  padding: 4px 0;
+  border-bottom: 1px solid #2d2d30;
+}
+
+.git-branch-section:last-child {
+  border-bottom: none;
+}
+
+.git-branch-section-title {
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #858585;
+  letter-spacing: 0.5px;
+}
+
+.git-branch-option {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #cccccc;
+  padding: 6px 12px;
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.git-branch-option:hover {
+  background: #2d2d30;
+  color: #0098ff;
+}
+
+.git-branch-option.active {
+  background: #0098ff;
+  color: #1e1e1e;
+  font-weight: 600;
+}
+
+.git-branch-option.remote {
+  padding-left: 20px;
+}
+
