@@ -108,6 +108,35 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+  const handleDiscardFile = async (path: string) => {
+    // Confirm before discarding
+    const confirmed = window.confirm(`Are you sure you want to discard changes to ${path.split('/').pop()}?\n\nThis cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.discard) return;
+
+      const projectDir = vpyProject?.projectFile.split(/[\\\/]/).slice(0, -1).join('/');
+      if (!projectDir) return;
+      
+      const result = await git.discard({ projectDir, filePath: path });
+      
+      if (result.ok) {
+        // Refresh git status
+        const statusResult = await git.status(projectDir);
+        if (statusResult.ok && statusResult.files) {
+          setChanges(statusResult.files);
+        }
+      } else {
+        alert(`Failed to discard changes: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to discard file:', error);
+      alert(`Error discarding changes: ${error}`);
+    }
+  };
+
   const handleCommit = async () => {
     if (!commitMessage.trim() || stagedChanges.length === 0) return;
 
@@ -214,13 +243,22 @@ export const GitPanel: React.FC = () => {
                     {getStatusLabel(file.status)}
                   </span>
                   <span className="git-change-path">{file.path.split('/').pop()}</span>
-                  <button
-                    className="git-change-action"
-                    onClick={() => handleStageFile(file.path)}
-                    title="Stage"
-                  >
-                    +
-                  </button>
+                  <div className="git-change-actions">
+                    <button
+                      className="git-change-action git-stage-btn"
+                      onClick={() => handleStageFile(file.path)}
+                      title="Stage"
+                    >
+                      +
+                    </button>
+                    <button
+                      className="git-change-action git-discard-btn"
+                      onClick={() => handleDiscardFile(file.path)}
+                      title="Discard changes"
+                    >
+                      ↺
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

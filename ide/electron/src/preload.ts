@@ -104,6 +104,33 @@ contextBridge.exposeInMainWorld('git', {
     commit?: any;
     error?: string;
   }>,
+  
+  // Get file diff
+  diff: (args: { projectDir: string; filePath?: string; staged?: boolean }) => ipcRenderer.invoke('git:diff', args) as Promise<{
+    ok: boolean;
+    diff?: string;
+    error?: string;
+  }>,
+  
+  // List branches
+  branches: (projectDir: string) => ipcRenderer.invoke('git:branches', projectDir) as Promise<{
+    ok: boolean;
+    current?: string;
+    branches?: Array<{ name: string; current: boolean; isRemote: boolean }>;
+    error?: string;
+  }>,
+  
+  // Checkout branch
+  checkout: (args: { projectDir: string; branch: string }) => ipcRenderer.invoke('git:checkout', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Discard changes in a file
+  discard: (args: { projectDir: string; filePath: string }) => ipcRenderer.invoke('git:discard', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

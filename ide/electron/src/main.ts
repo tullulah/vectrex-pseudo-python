@@ -1515,6 +1515,117 @@ ipcMain.handle('git:commit', async (_e, args: { projectDir: string; message: str
   }
 });
 
+ipcMain.handle('git:diff', async (_e, args: { projectDir: string; filePath?: string; staged?: boolean }) => {
+  try {
+    const { projectDir, filePath, staged } = args;
+    
+    if (!projectDir) {
+      return { ok: false, error: 'Missing projectDir' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    let diffOutput: string;
+    
+    if (filePath) {
+      // Get diff for specific file
+      const options = staged ? ['--cached'] : [];
+      diffOutput = await git.diff([...options, filePath]);
+    } else {
+      // Get diff for all files
+      const options = staged ? ['--cached'] : [];
+      diffOutput = await git.diff(options);
+    }
+
+    return { ok: true, diff: diffOutput };
+  } catch (error: any) {
+    console.error('[GIT:diff]', error);
+    return { ok: false, error: error.message || 'Failed to get diff' };
+  }
+});
+
+ipcMain.handle('git:branches', async (_e, projectDir: string) => {
+  try {
+    if (!projectDir) {
+      return { ok: false, error: 'No project directory provided' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get current branch
+    const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
+    
+    // Get all branches (local and remote)
+    const branchResult = await git.branch(['-a']);
+    
+    const branches = branchResult.all.map(branch => ({
+      name: branch,
+      current: branch === currentBranch.trim(),
+      isRemote: branch.includes('remotes/')
+    }));
+
+    return { 
+      ok: true, 
+      current: currentBranch.trim(),
+      branches 
+    };
+  } catch (error: any) {
+    console.error('[GIT:branches]', error);
+    return { ok: false, error: error.message || 'Failed to get branches' };
+  }
+});
+
+ipcMain.handle('git:checkout', async (_e, args: { projectDir: string; branch: string }) => {
+  try {
+    const { projectDir, branch } = args;
+    
+    if (!projectDir || !branch) {
+      return { ok: false, error: 'Missing projectDir or branch' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Check for uncommitted changes
+    const status = await git.status();
+    if (status && (status.modified.length > 0 || status.created.length > 0 || status.deleted.length > 0)) {
+      return { 
+        ok: false, 
+        error: 'Cannot checkout: you have uncommitted changes. Please commit or stash them first.' 
+      };
+    }
+
+    // Checkout branch
+    await git.checkout(branch);
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:checkout]', error);
+    return { ok: false, error: error.message || 'Failed to checkout branch' };
+  }
+});
+
+ipcMain.handle('git:discard', async (_e, args: { projectDir: string; filePath: string }) => {
+  try {
+    const { projectDir, filePath } = args;
+    
+    if (!projectDir || !filePath) {
+      return { ok: false, error: 'Missing projectDir or filePath' };
+    }
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Discard changes for specific file
+    await git.checkout([filePath]);
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:discard]', error);
+    return { ok: false, error: error.message || 'Failed to discard changes' };
+  }
+});
+
 // Assemble a Vectrex 6809 raw binary from an .asm file via PowerShell lwasm wrapper
 // args: { asmPath: string; outPath?: string; extra?: string[] }
 ipcMain.handle('emu:assemble', async (_e, args: { asmPath: string; outPath?: string; extra?: string[] }) => {

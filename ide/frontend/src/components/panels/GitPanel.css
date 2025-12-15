@@ -166,6 +166,17 @@
   white-space: nowrap;
 }
 
+.git-change-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.git-change-item:hover .git-change-actions {
+  opacity: 1;
+}
+
 .git-change-action {
   background: transparent;
   border: none;
@@ -175,15 +186,25 @@
   font-size: 12px;
   font-weight: bold;
   transition: all 0.2s;
-  opacity: 0;
-}
-
-.git-change-item:hover .git-change-action {
-  opacity: 1;
-  color: #007acc;
 }
 
 .git-change-action:hover {
   background: #3c3c3c;
   color: #0e8eec;
+}
+
+.git-stage-btn {
+  color: #73c991;
+}
+
+.git-stage-btn:hover {
+  color: #85dd9f;
+}
+
+.git-discard-btn {
+  color: #f48771;
+}
+
+.git-discard-btn:hover {
+  color: #ff9c87;
 }
