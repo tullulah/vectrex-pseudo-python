@@ -12,7 +12,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .git-panel-header h3 {
@@ -22,6 +22,16 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #cccccc;
+}
+
+.git-panel-actions-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d2d30;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #252526;
 }
 
 .git-panel-actions {
@@ -550,3 +560,109 @@
   overflow-y: auto;
 }
 
+/* Branch Footer Bar (like VS Code) */
+.git-panel-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #2d2d30;
+  background: #252526;
+  padding: 8px 12px;
+  position: relative;
+}
+
+.git-branch-button-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #2d2d30;
+  border: 1px solid #3e3e42;
+  color: #cccccc;
+  padding: 6px 12px;
+  border-radius: 3px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.git-branch-button-footer:hover {
+  background: #3e3e42;
+  border-color: #0098ff;
+  color: #0098ff;
+}
+
+.git-branch-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.git-branch-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.git-branch-dropdown-footer {
+  position: absolute;
+  bottom: 100%;
+  left: 12px;
+  right: 12px;
+  background: #252526;
+  padding: 8px;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.git-branch-section {
+  margin-bottom: 4px;
+}
+
+.git-branch-section:last-child {
+  margin-bottom: 0;
+}
+
+.git-branch-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6a6a6a;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.git-branch-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 2px;
+}
+
+.git-branch-option:hover {
+  background: #3e3e42;
+  color: #0098ff;
+}
+
+.git-branch-option.active {
+  background: #007acc;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.git-branch-option.remote {
+  padding-left: 20px;
+}

@@ -344,124 +344,78 @@ export const GitPanel: React.FC = () => {
 
   return (
     <div className="git-panel">
+      {/* Header */}
       <div className="git-panel-header">
         <h3>Source Control</h3>
-        
-        <div className="git-panel-actions">
+      </div>
+
+      {/* Action Buttons */}
+      <div className="git-panel-actions-bar">
+        <button
+          className="git-panel-action-btn"
+          onClick={handlePush}
+          disabled={!currentBranch || loading}
+          title="Push changes to remote"
+        >
+          ⬆️
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={handlePull}
+          disabled={!currentBranch || loading}
+          title="Pull changes from remote"
+        >
+          ⬇️
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => setShowCommitHistory(!showCommitHistory)}
+          title="View commit history"
+        >
+          📜
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => setShowCreateBranch(true)}
+          disabled={!currentBranch}
+          title="Create new branch"
+        >
+          🌿
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => setShowStashList(!showStashList)}
+          title="View stashes"
+        >
+          📦
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => setShowTagsList(!showTagsList)}
+          title="Manage tags"
+        >
+          🏷️
+        </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => setShowRemotesList(!showRemotesList)}
+          title="Manage remotes"
+        >
+          🔗
+        </button>
+        {hasConflicts && (
           <button
-            className="git-panel-action-btn"
-            onClick={handlePush}
-            disabled={!currentBranch || loading}
-            title="Push changes to remote"
+            className="git-panel-action-btn conflict-warning"
+            onClick={() => setShowConflictResolver(true)}
+            title="Resolve merge conflicts"
+            style={{ color: '#ff6b6b' }}
           >
-            ⬆️
+            ⚠️
           </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={handlePull}
-            disabled={!currentBranch || loading}
-            title="Pull changes from remote"
-          >
-            ⬇️
-          </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={() => setShowCommitHistory(!showCommitHistory)}
-            title="View commit history"
-          >
-            📜
-          </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={() => setShowCreateBranch(true)}
-            disabled={!currentBranch}
-            title="Create new branch"
-          >
-            🌿
-          </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={() => setShowStashList(!showStashList)}
-            title="View stashes"
-          >
-            📦
-          </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={() => setShowTagsList(!showTagsList)}
-            title="Manage tags"
-          >
-            🏷️
-          </button>
-          <button
-            className="git-panel-action-btn"
-            onClick={() => setShowRemotesList(!showRemotesList)}
-            title="Manage remotes"
-          >
-            🔗
-          </button>
-          {hasConflicts && (
-            <button
-              className="git-panel-action-btn conflict-warning"
-              onClick={() => setShowConflictResolver(true)}
-              title="Resolve merge conflicts"
-              style={{ color: '#ff6b6b' }}
-            >
-              ⚠️
-            </button>
-          )}
-        </div>
-        
-        {/* Branch Selector Dropdown */}
-        {currentBranch && (
-          <div className="git-branch-selector">
-            <button
-              className="git-branch-button"
-              onClick={() => setShowBranchDropdown(!showBranchDropdown)}
-            >
-              {currentBranch}
-            </button>
-            
-            {showBranchDropdown && branches.length > 0 && (
-              <div className="git-branch-dropdown">
-                {/* Local Branches */}
-                {branches.filter(b => !b.isRemote).length > 0 && (
-                  <div className="git-branch-section">
-                    {branches.filter(b => !b.isRemote).map((branch) => (
-                      <button
-                        key={branch.name}
-                        className={`git-branch-option ${branch.current ? 'active' : ''}`}
-                        onClick={() => handleCheckoutBranch(branch.name)}
-                      >
-                        {branch.current && '✓ '}
-                        {branch.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                
-                {/* Remote Branches */}
-                {branches.filter(b => b.isRemote).length > 0 && (
-                  <div className="git-branch-section">
-                    <div className="git-branch-section-title">Remote</div>
-                    {branches.filter(b => b.isRemote).map((branch) => (
-                      <button
-                        key={branch.name}
-                        className={`git-branch-option remote ${branch.current ? 'active' : ''}`}
-                        onClick={() => handleCheckoutBranch(branch.name)}
-                      >
-                        {branch.current && '✓ '}
-                        {branch.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         )}
       </div>
-      
+
+      {/* Main Content Area */}
       <div className="git-panel-content">
         <div className="git-commit-section">
           <textarea
@@ -603,6 +557,57 @@ export const GitPanel: React.FC = () => {
           <div className="git-no-changes">Loading...</div>
         )}
       </div>
+
+      {/* Bottom Branch Bar (like VS Code) */}
+      {currentBranch && (
+        <div className="git-panel-footer">
+          <button
+            className="git-branch-button-footer"
+            onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+            title="Switch branch"
+          >
+            <span className="git-branch-icon">⎇</span>
+            <span className="git-branch-name">{currentBranch}</span>
+          </button>
+
+          {showBranchDropdown && branches.length > 0 && (
+            <div className="git-branch-dropdown-footer">
+              {/* Local Branches */}
+              {branches.filter(b => !b.isRemote).length > 0 && (
+                <div className="git-branch-section">
+                  {branches.filter(b => !b.isRemote).map((branch) => (
+                    <button
+                      key={branch.name}
+                      className={`git-branch-option ${branch.current ? 'active' : ''}`}
+                      onClick={() => handleCheckoutBranch(branch.name)}
+                    >
+                      {branch.current && '✓ '}
+                      {branch.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Remote Branches */}
+              {branches.filter(b => b.isRemote).length > 0 && (
+                <div className="git-branch-section">
+                  <div className="git-branch-section-title">Remote</div>
+                  {branches.filter(b => b.isRemote).map((branch) => (
+                    <button
+                      key={branch.name}
+                      className={`git-branch-option remote ${branch.current ? 'active' : ''}`}
+                      onClick={() => handleCheckoutBranch(branch.name)}
+                    >
+                      {branch.current && '✓ '}
+                      {branch.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Diff Viewer Modal */}
       {selectedDiffFile && currentProjectDir && (
