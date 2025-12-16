@@ -233,6 +233,33 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // Check for merge conflicts
+  checkConflicts: (projectDir: string) => ipcRenderer.invoke('git:checkConflicts', { projectDir }) as Promise<{
+    ok: boolean;
+    hasConflicts?: boolean;
+    conflicts?: string[];
+    error?: string;
+  }>,
+  
+  // Get conflict details
+  getConflictDetails: (args: { projectDir: string; filePath: string }) => ipcRenderer.invoke('git:getConflictDetails', args) as Promise<{
+    ok: boolean;
+    content?: string;
+    error?: string;
+  }>,
+  
+  // Mark file as resolved
+  markResolved: (args: { projectDir: string; filePath: string }) => ipcRenderer.invoke('git:markResolved', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Complete merge
+  completeMerge: (args: { projectDir: string; message?: string }) => ipcRenderer.invoke('git:completeMerge', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

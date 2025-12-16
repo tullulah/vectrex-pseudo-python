@@ -2004,6 +2004,86 @@ ipcMain.handle('git:removeRemote', async (_e, args: { projectDir: string; name: 
   }
 });
 
+// Check for merge conflicts
+ipcMain.handle('git:checkConflicts', async (_e, args: { projectDir: string }) => {
+  try {
+    const { projectDir } = args;
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get status to check for conflicts
+    const status = await git.status();
+    const conflicted = status.conflicted || [];
+
+    return { ok: true, hasConflicts: conflicted.length > 0, conflicts: conflicted };
+  } catch (error: any) {
+    console.error('[GIT:checkConflicts]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Get conflict details for a file
+ipcMain.handle('git:getConflictDetails', async (_e, args: { projectDir: string; filePath: string }) => {
+  try {
+    const { projectDir, filePath } = args;
+    if (!projectDir || !filePath) return { ok: false, error: 'Missing projectDir or filePath' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Read file content to show conflict markers
+    const fs = require('fs').promises;
+    const fullPath = require('path').join(projectDir, filePath);
+    const content = await fs.readFile(fullPath, 'utf-8');
+
+    return { ok: true, content };
+  } catch (error: any) {
+    console.error('[GIT:getConflictDetails]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Mark conflict as resolved
+ipcMain.handle('git:markResolved', async (_e, args: { projectDir: string; filePath: string }) => {
+  try {
+    const { projectDir, filePath } = args;
+    if (!projectDir || !filePath) return { ok: false, error: 'Missing projectDir or filePath' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Stage the resolved file
+    await git.add(filePath);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:markResolved]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Complete merge after conflicts resolved
+ipcMain.handle('git:completeMerge', async (_e, args: { projectDir: string; message?: string }) => {
+  try {
+    const { projectDir, message } = args;
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Commit the merge
+    const mergeMessage = message || 'Merge resolved';
+    await git.commit(mergeMessage);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:completeMerge]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
 process.on('uncaughtException', (err) => {
   console.error('[IDE] uncaughtException', err);
 });

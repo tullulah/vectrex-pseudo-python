@@ -7,6 +7,7 @@ import { CreateBranchDialog } from '../dialogs/CreateBranchDialog';
 import { StashList } from './StashList';
 import { TagsList } from './TagsList';
 import { RemotesList } from './RemotesList';
+import { ConflictResolver } from './ConflictResolver';
 
 interface GitChange {
   path: string;
@@ -35,13 +36,20 @@ export const GitPanel: React.FC = () => {
   const [stashMessage, setStashMessage] = useState('');
   const [showTagsList, setShowTagsList] = useState(false);
   const [showRemotesList, setShowRemotesList] = useState(false);
+  const [showConflictResolver, setShowConflictResolver] = useState(false);
+  const [hasConflicts, setHasConflicts] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
   const refreshGitStatus = async (projectDir: string) => {
     try {
+      setLoading(true);
       const git = (window as any).git;
       if (!git?.status) return;
+
+      // Check for conflicts first
+      const conflictResult = await git.checkConflicts(projectDir);
+      setHasConflicts(conflictResult.ok && conflictResult.hasConflicts === true);
 
       const result = await git.status(projectDir);
       if (result.ok && result.files) {
@@ -49,6 +57,8 @@ export const GitPanel: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to refresh git status:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -390,6 +400,16 @@ export const GitPanel: React.FC = () => {
           >
             🔗
           </button>
+          {hasConflicts && (
+            <button
+              className="git-panel-action-btn conflict-warning"
+              onClick={() => setShowConflictResolver(true)}
+              title="Resolve merge conflicts"
+              style={{ color: '#ff6b6b' }}
+            >
+              ⚠️
+            </button>
+          )}
         </div>
         
         {/* Branch Selector Dropdown */}
@@ -685,6 +705,31 @@ export const GitPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Conflict Resolver Modal */}
+      {showConflictResolver && currentProjectDir && (
+        <div className="git-modal-overlay" onClick={() => setShowConflictResolver(false)}>
+          <div className="git-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>Resolve Merge Conflicts</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowConflictResolver(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <ConflictResolver
+              projectDir={currentProjectDir}
+              onMergeComplete={() => {
+                setShowConflictResolver(false);
+                refreshGitStatus(currentProjectDir);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
