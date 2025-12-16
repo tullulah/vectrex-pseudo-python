@@ -5,6 +5,7 @@
  */
 
 import type { MCPRequest, MCPResponse } from '../../../electron/src/mcp/types';
+import { ProjectContextPersistence } from './projectContextPersistence';
 
 export interface MCPTool {
   name: string;
@@ -339,6 +340,9 @@ To use a tool, respond with a JSON function call in a code block:
           resultText = JSON.stringify(result, null, 2);
         }
 
+        // Update project context for file/asset creation
+        this.updateProjectContextForTool(call.tool, call.arguments);
+
         if (isEdit) {
           results.push(`✅ Cambios aplicados correctamente\n${resultText}`);
         } else {
@@ -350,6 +354,39 @@ To use a tool, respond with a JSON function call in a code block:
     }
 
     return results.join('\n\n');
+  }
+
+  /**
+   * Update project context based on tool execution
+   */
+  private updateProjectContextForTool(toolName: string, args: Record<string, any>): void {
+    // Track file creation
+    if (toolName === 'editor_write_document' && args.uri) {
+      const fileName = args.uri.split('/').pop();
+      if (fileName) {
+        console.log('[MCP Tools] Tracking created file:', fileName);
+        ProjectContextPersistence.addCreatedFile(fileName);
+      }
+    }
+
+    // Track vector asset creation
+    if (toolName === 'project_create_vector' && args.name) {
+      console.log('[MCP Tools] Tracking created vector asset:', args.name);
+      ProjectContextPersistence.addVectorAsset(args.name);
+    }
+
+    // Track music asset creation
+    if (toolName === 'project_create_music' && args.name) {
+      console.log('[MCP Tools] Tracking created music asset:', args.name);
+      ProjectContextPersistence.addMusicAsset(args.name);
+    }
+
+    // Track project creation
+    if (toolName === 'project_create' && args.name && args.path) {
+      console.log('[MCP Tools] Tracking new project:', args.name);
+      const context = ProjectContextPersistence.createProjectContext(args.name, args.path);
+      ProjectContextPersistence.saveProjectContext(context);
+    }
   }
 
   /**

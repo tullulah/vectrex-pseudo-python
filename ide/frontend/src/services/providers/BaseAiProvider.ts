@@ -1,5 +1,6 @@
 import type { IAiProvider, AiProviderConfig, AiRequest, AiResponse } from '../../types/aiProvider.js';
 import { getVPyContext, getProjectContext } from '../contexts/VPyContext.js';
+import { ProjectContextPersistence } from '../projectContextPersistence.js';
 
 export abstract class BaseAiProvider implements IAiProvider {
   public abstract readonly name: string;
@@ -21,6 +22,7 @@ export abstract class BaseAiProvider implements IAiProvider {
   protected buildSystemPrompt(concise: boolean = false): string {
     const vpyContext = getVPyContext();
     const projectContext = getProjectContext();
+    const persistedProjectContext = ProjectContextPersistence.getContextString();
     
     const conciseInstruction = concise ? `
 
@@ -60,6 +62,8 @@ CRITICAL: VPy is NOT object-oriented programming! VPy is NOT a full Python imple
 ${vpyContext}
 
 ${projectContext}
+
+${persistedProjectContext}
 
 VPy IDE FEATURES & EDITORS:
 
