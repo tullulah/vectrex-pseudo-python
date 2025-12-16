@@ -1734,9 +1734,9 @@ ipcMain.handle('git:syncStatus', async (_e, args: { projectDir: string }) => {
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    // Get current branch
-    const currentBranch = await git.revparse('--abbrev-ref', 'HEAD');
-    const branch = currentBranch.trim();
+    // Get current branch - use raw command instead of revparse
+    const currentBranch = (await git.raw('rev-parse', '--abbrev-ref', 'HEAD')).trim();
+    const branch = currentBranch;
 
     if (branch === 'HEAD') {
       // Detached HEAD state
@@ -1782,30 +1782,38 @@ ipcMain.handle('git:searchCommits', async (_e, args: { projectDir: string; query
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    // Search in commit message and author
-    const result = await git.log({
-      maxCount: limit,
-      strictFormat: true,
-      format: '%H:%an:%ae:%ai:%s'
+    // Use raw command to search commits
+    const rawOutput = await git.raw([
+      'log',
+      `--max-count=${limit}`,
+      '--format=%H:%an:%ae:%ai:%s'
+    ]);
+
+    // Parse output
+    const commits: Array<{hash: string; message: string; author: string; date: string; shortHash: string}> = [];
+    
+    rawOutput.split('\n').forEach(line => {
+      if (!line.trim()) return;
+      
+      const parts = line.split(':');
+      if (parts.length < 5) return;
+      
+      const [hash, author, email, date, ...msgParts] = parts;
+      const message = msgParts.join(':');
+      
+      const searchableText = `${message} ${author} ${email}`.toLowerCase();
+      if (searchableText.includes(query.toLowerCase())) {
+        commits.push({
+          hash: hash.trim(),
+          message: message.trim(),
+          author: author.trim(),
+          date: date.trim(),
+          shortHash: hash.substring(0, 7)
+        });
+      }
     });
 
-    // Filter commits by query (case-insensitive)
-    const matchingCommits = result.all
-      .filter(commit => {
-        const searchableText = `${commit.message} ${commit.author_name} ${commit.author_email}`.toLowerCase();
-        return searchableText.includes(query.toLowerCase());
-      })
-      .slice(0, limit);
-
-    const commits = matchingCommits.map(commit => ({
-      hash: commit.hash,
-      message: commit.message,
-      author: commit.author_name,
-      date: commit.date,
-      shortHash: commit.hash.substring(0, 7)
-    }));
-
-    return { ok: true, commits };
+    return { ok: true, commits: commits.slice(0, limit) };
   } catch (error: any) {
     console.error('[GIT:searchCommits]', error);
     return { ok: false, error: error.message || 'Failed to search commits' };
@@ -1846,31 +1854,53 @@ ipcMain.handle('git:checkBranchProtection', async (_e, args: { projectDir: strin
   }
 });
 
-ipcMain.handle('git:fileHistory', async (_e, args: { projectDir: string; filePath: string; limit?: number }) => {
+ipcMain.handle('git:fileHistory', async (_e, args: { projectDir: string; filePath: string; limit?: number; offset?: number }) => {
   try {
-    const { projectDir, filePath, limit = 50 } = args || { projectDir: '', filePath: '' };
+    const { projectDir, filePath, limit = 20, offset = 0 } = args || { projectDir: '', filePath: '' };
     if (!projectDir || !filePath) return { ok: false, error: 'Missing parameters' };
 
     const simpleGit = (await import('simple-git')).default;
     const git = simpleGit(projectDir);
 
-    // Get log for specific file
-    const result = await git.log({
-      file: filePath,
-      maxCount: limit,
-      strictFormat: true,
-      format: '%H:%an:%ae:%ai:%s:%b'
-    });
+    // Get log for specific file with pagination
+    const rawOutput = await git.raw([
+      'log',
+      `--max-count=${limit + offset}`,
+      '--format=%H:%an:%ae:%ai:%s:%b',
+      '--',
+      filePath
+    ]);
 
-    const commits = result.all.map(commit => ({
-      hash: commit.hash,
-      shortHash: commit.hash.substring(0, 7),
-      message: commit.message,
-      author: commit.author_name,
-      date: commit.date,
-      email: commit.author_email,
-      body: commit.body || ''
-    }));
+    // Parse output and apply pagination
+    const commits: Array<{hash: string; shortHash: string; message: string; author: string; date: string; email: string; body: string}> = [];
+    
+    const lines = rawOutput.split('\n');
+    let currentCommit: any = null;
+    let lineCount = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      
+      // Check if this is a commit header (contains multiple colons with hash format)
+      const parts = line.split(':');
+      if (parts[0].length === 40) {  // SHA1 hash is 40 chars
+        lineCount++;
+        if (lineCount <= offset) continue;  // Skip offset entries
+        if (lineCount > offset + limit) break;  // Stop after limit
+        
+        const [hash, author, email, date, message] = parts;
+        commits.push({
+          hash: hash.trim(),
+          shortHash: hash.substring(0, 7),
+          message: (message || '').trim(),
+          author: author.trim(),
+          date: date.trim(),
+          email: email.trim(),
+          body: ''
+        });
+      }
+    }
 
     return { ok: true, commits, filePath };
   } catch (error: any) {
