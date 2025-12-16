@@ -1186,6 +1186,174 @@ export const VECTREX_HARDWARE_CONTEXT = `
 - F36B: Reset coordinate origin
 `;
 
+export const IDE_AND_GIT_CONTEXT = `
+# VPy IDE Environment - Git Integration
+
+## IDE Features:
+### Source Control Panel (Git Integration)
+The IDE includes comprehensive Git integration for version control and collaboration:
+
+#### Core Git Operations:
+- **Status Panel**: View staged/unstaged changes by file status (Modified/Added/Deleted)
+- **Commit Workflow**: Stage files → write message → commit with single button
+- **Push/Pull**: Synchronize with remote repositories
+- **Branch Management**: Create, switch, and delete branches with protection warnings
+- **Diff Viewer**: Side-by-side file comparison for reviewing changes
+- **Commit History**: Chronological view of all commits with details
+
+#### Advanced Features (Tasks 7-12):
+1. **Delete Branch**: Remove branches with force option and safety confirmations
+2. **Search Commits**: Real-time search filtering by message/author/date
+3. **File History**: Per-file commit tracking with lazy-loaded pagination (20 commits per load)
+4. **Sync Status**: Visual indicator showing ahead/behind commit counts vs remote
+5. **Branch Protection**: Warnings when working with protected branches (master/main)
+6. **Git Config**: User settings interface for user.name/user.email configuration
+
+#### Performance Optimization (Task 14):
+- **Debounce Search**: 300ms delay prevents lag when searching large commit lists
+- **Lazy Loading**: File history loads 20 commits initially, more on demand
+- **Memoized Components**: Optimized React rendering for commit lists
+- **useCallback Optimization**: Event handlers memoized to prevent unnecessary re-renders
+
+#### Keyboard Shortcuts (Task 13):
+- **Ctrl+G**: Checkout/switch branches
+- **Ctrl+Shift+G**: View commit history
+- **Ctrl+K**: Stage current file
+- **Ctrl+C**: Focus commit message textarea
+- **Ctrl+J**: Push changes to remote
+- **Ctrl+L**: Pull changes from remote
+- **Ctrl+Shift+F**: Search commits by message/author
+
+#### Advanced Operations:
+- **Stash**: Temporarily save changes without committing
+- **Revert**: Undo previous commits safely
+- **Tag Management**: Create, list, and delete release tags
+- **Remote Management**: Add/remove/view remote repositories
+- **Merge Conflict Resolution**: Visual conflict viewer with resolution UI
+
+### Project Context Persistence:
+- **Automatic Tracking**: IDE remembers project name, path, created files, and assets
+- **Asset Recording**: Automatically tracks created vectors (.vec) and music (.vmus) files
+- **PyPilot Integration**: AI assistant has access to project context in subsequent queries
+- **localStorage Integration**: Context persists across IDE sessions
+
+### MCP (Model Context Protocol) Integration:
+The IDE exposes 22 tools for AI assistants (PyPilot, Copilot):
+
+#### Editor Tools (7):
+- editor_list_documents: List open files
+- editor_read_document: Read file content
+- editor_write_document: Create or update files
+- editor_get_diagnostics: Get compilation errors
+- editor_replace_range: Replace text by line range
+- editor_insert_at: Insert text at position
+- editor_delete_range: Delete text range
+
+#### Compiler Tools (2):
+- compiler_build: Compile VPy → 6809 Assembly
+- compiler_get_errors: Retrieve compilation errors
+
+#### Emulator Tools (3):
+- emulator_run: Execute compiled ROM
+- emulator_get_state: CPU state, registers, cycles
+- emulator_stop: Stop emulation
+
+#### Debugger Tools (2):
+- debugger_add_breakpoint: Set breakpoint on line
+- debugger_get_callstack: Inspect call stack
+
+#### Project Tools (8):
+- project_get_structure: View project layout
+- project_read_file: Read any project file
+- project_write_file: Write general files
+- project_create: Create new project
+- project_close: Close active project
+- project_open: Open existing project
+- project_create_vector: Create .vec file with JSON validation
+- project_create_music: Create .vmus file with JSON validation
+
+#### Git Tools (8):
+- git_stage: Stage file for commit
+- git_commit: Create commit with message
+- git_push: Push to remote
+- git_pull: Pull from remote
+- git_checkout: Switch branch
+- git_diff: Show file differences
+- git_history: View commit history
+- git_search: Search commits
+
+### Asset System:
+The IDE supports embedded assets in compiled ROMs:
+
+#### Vector Assets (.vec):
+- JSON-based format for 2D vector graphics
+- Paths with customizable intensity and closed/open modes
+- Automatic embedding in ROM data section
+- Usage: \`DRAW_VECTOR("asset_name")\` in code
+- Location: project_root/assets/vectors/*.vec
+
+#### Music Assets (.vmus):
+- JSON-based music notation with MIDI support
+- Notes with duration, velocity, channel assignment
+- Noise events with period and channels
+- Loop support for repeating sections
+- Usage: \`PLAY_MUSIC("asset_name")\` in code
+- Location: project_root/assets/music/*.vmus
+
+### Developer Workflow:
+1. **Create/Edit Code**: Edit .vpy files with syntax highlighting
+2. **Create Assets**: Use IDE dialogs to create .vec (vectors) and .vmus (music) files
+3. **Compile**: Use Ctrl+Shift+B or menu to compile to 6809 Assembly
+4. **Run**: Press F5 or click Run to execute in built-in emulator
+5. **Debug**: Set breakpoints, inspect CPU state, view call stack
+6. **Version Control**: Use Git panel for commits, branches, and collaboration
+7. **Share**: Push to GitHub or other git hosting
+
+### Keyboard Shortcuts Summary:
+- **F5**: Run compiled program
+- **Ctrl+Shift+B**: Build/Compile
+- **Ctrl+B**: Toggle sidebar
+- **Ctrl+`**: Toggle terminal
+- **Ctrl+Shift+F5**: Clear debug breakpoints
+- Plus all Git shortcuts listed above
+
+### File Types:
+- **.vpy**: VPy source code files
+- **.asm**: Generated 6809 assembly (read-only)
+- **.bin**: Compiled binary executable
+- **.vec**: Vector graphics assets (JSON)
+- **.vmus**: Music notation assets (JSON)
+- **.json**: Configuration and metadata files
+
+### Project Structure:
+\`\`\`
+my-project/
+├── src/
+│   ├── main.vpy          # Main program entry
+│   ├── game.vpy          # Game logic
+│   └── helpers.vpy       # Utility functions
+├── assets/
+│   ├── vectors/
+│   │   ├── player.vec    # Ship sprite
+│   │   ├── enemy.vec     # Enemy sprite
+│   │   └── bullet.vec    # Bullet sprite
+│   └── music/
+│       ├── theme.vmus    # Background music
+│       └── sfx.vmus      # Sound effects
+├── build/
+│   ├── game.asm          # Generated assembly
+│   └── game.bin          # Compiled executable
+└── README.md             # Documentation
+\`\`\`
+
+### Getting Help:
+- **Syntax Help**: Hover over functions to see documentation
+- **Error Messages**: Compiler shows line numbers and error descriptions
+- **Asset Validation**: Tool validation shows correct JSON format on errors
+- **Quick Reference**: Press Ctrl+Shift+P for command palette
+`;
+
+
 export function getVPyContext(): string {
   const functionsDoc = VPY_FUNCTIONS.map(fn => `
 ### ${fn.name}
@@ -1211,7 +1379,9 @@ ${functionsDoc}
 ## Constants:
 ${constantsDoc}
 
-${VECTREX_HARDWARE_CONTEXT}`;
+${VECTREX_HARDWARE_CONTEXT}
+
+${IDE_AND_GIT_CONTEXT}`;
 }
 
 export function getProjectContext(activeFileName?: string, projectFiles?: string[]): string {
