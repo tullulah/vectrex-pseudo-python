@@ -781,8 +781,117 @@ def loop():
       case 'debug.toggleBreakpoint':
   logger.debug('App', 'toggle breakpoint (pending implementation)');
         break;
+
+      // Git commands
+      case 'git.stage': {
+        // Get current project and active file
+        const projectState = useProjectStore.getState();
+        const projectDir = projectState.vpyProject?.rootDir;
+        const editorState = useEditorStore.getState();
+        const activeDoc = editorState.documents.find(d => d.uri === editorState.active);
+        
+        if (!projectDir || !activeDoc?.diskPath) {
+          logger.warn('Git', 'No project or active file to stage');
+          break;
+        }
+        
+        const git = (window as any).git;
+        if (!git?.stage) break;
+        
+        const result = await git.stage({ projectDir, filePath: activeDoc.diskPath });
+        if (result.ok) {
+          logger.info('Git', `Staged: ${activeDoc.diskPath.split('/').pop()}`);
+          // Refresh git panel state if available
+          (window as any).gitRefresh?.();
+        } else {
+          logger.error('Git', `Stage failed: ${result.error}`);
+        }
+        break;
+      }
+
+      case 'git.commit': {
+        logger.info('Git', 'Opening commit dialog (focus commit message field)');
+        // This delegates to GitPanel - it will focus the message textarea
+        (window as any).gitFocusCommit?.();
+        break;
+      }
+
+      case 'git.push': {
+        const projectState = useProjectStore.getState();
+        const projectDir = projectState.vpyProject?.rootDir;
+        
+        if (!projectDir) {
+          logger.warn('Git', 'No project to push');
+          break;
+        }
+        
+        const git = (window as any).git;
+        if (!git?.push) break;
+        
+        const result = await git.push({ projectDir });
+        if (result.ok) {
+          logger.info('Git', 'Push successful');
+          (window as any).gitRefresh?.();
+        } else {
+          logger.error('Git', `Push failed: ${result.error}`);
+        }
+        break;
+      }
+
+      case 'git.pull': {
+        const projectState = useProjectStore.getState();
+        const projectDir = projectState.vpyProject?.rootDir;
+        
+        if (!projectDir) {
+          logger.warn('Git', 'No project to pull');
+          break;
+        }
+        
+        const git = (window as any).git;
+        if (!git?.pull) break;
+        
+        const result = await git.pull({ projectDir });
+        if (result.ok) {
+          logger.info('Git', 'Pull successful');
+          (window as any).gitRefresh?.();
+        } else {
+          logger.error('Git', `Pull failed: ${result.error}`);
+        }
+        break;
+      }
+
+      case 'git.checkout': {
+        logger.info('Git', 'Opening branch selector');
+        (window as any).gitShowBranchSelector?.();
+        break;
+      }
+
+      case 'git.diff': {
+        const editorState = useEditorStore.getState();
+        const activeDoc = editorState.documents.find(d => d.uri === editorState.active);
+        
+        if (!activeDoc?.diskPath) {
+          logger.warn('Git', 'No file to diff');
+          break;
+        }
+        
+        logger.info('Git', 'Opening diff viewer for active file');
+        (window as any).gitShowDiff?.(activeDoc.diskPath);
+        break;
+      }
+
+      case 'git.history': {
+        logger.info('Git', 'Opening commit history');
+        (window as any).gitShowHistory?.();
+        break;
+      }
+
+      case 'git.search': {
+        logger.info('Git', 'Opening commit search');
+        (window as any).gitShowSearch?.();
+        break;
+      }
       
-      // Project commands
       case 'project.new': {
         // Set default location - try from current project, recent projects, or empty
         const projectState = useProjectStore.getState();
@@ -948,6 +1057,14 @@ def loop():
       else if (e.key === 'F11' && !e.shiftKey) { e.preventDefault(); commandExec('debug.stepInto'); }
       else if (e.key === 'F11' && e.shiftKey) { e.preventDefault(); commandExec('debug.stepOut'); }
       else if (e.key === 'F5' && e.shiftKey) { e.preventDefault(); commandExec('debug.stop'); }
+      // Git
+      else if (ctrl && e.key.toLowerCase() === 'g' && !e.shiftKey) { e.preventDefault(); commandExec('git.checkout'); } // Ctrl+G = Git checkout branch
+      else if (ctrl && e.key.toLowerCase() === 'g' && e.shiftKey) { e.preventDefault(); commandExec('git.history'); } // Ctrl+Shift+G = Git history
+      else if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); commandExec('git.stage'); } // Ctrl+K = stage (mnemonic: "checK in")
+      else if (ctrl && e.key.toLowerCase() === 'c') { e.preventDefault(); commandExec('git.commit'); } // Ctrl+C = commit (but in VSCode it's Ctrl+K Ctrl+C, we'll use simple)
+      else if (ctrl && e.key.toLowerCase() === 'j') { e.preventDefault(); commandExec('git.push'); } // Ctrl+J = push (mnemonic: "Jump to remote")
+      else if (ctrl && e.key.toLowerCase() === 'l') { e.preventDefault(); commandExec('git.pull'); } // Ctrl+L = pull (mnemonic: "puLl")
+      else if (ctrl && e.key.toLowerCase() === 'f' && e.shiftKey) { e.preventDefault(); commandExec('git.search'); } // Ctrl+Shift+F = search commits
     };
     window.addEventListener('keydown', handler, { capture: true });
     return () => window.removeEventListener('keydown', handler, { capture: true } as any);

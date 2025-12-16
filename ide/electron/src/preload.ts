@@ -165,6 +165,76 @@ contextBridge.exposeInMainWorld('git', {
     error?: string;
   }>,
   
+  // Delete branch
+  deleteBranch: (args: { projectDir: string; branch: string; force?: boolean }) => ipcRenderer.invoke('git:deleteBranch', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Get sync status (ahead/behind remote)
+  syncStatus: (args: { projectDir: string }) => ipcRenderer.invoke('git:syncStatus', args) as Promise<{
+    ok: boolean;
+    aheadCount?: number;
+    behindCount?: number;
+    branch?: string;
+    hasRemote?: boolean;
+    error?: string;
+  }>,
+  
+  // Search commits
+  searchCommits: (args: { projectDir: string; query: string; limit?: number }) => ipcRenderer.invoke('git:searchCommits', args) as Promise<{
+    ok: boolean;
+    commits?: Array<{
+      hash: string;
+      shortHash: string;
+      message: string;
+      author: string;
+      date: string;
+    }>;
+    error?: string;
+  }>,
+  
+  // Check branch protection
+  checkBranchProtection: (args: { projectDir: string; branch: string }) => ipcRenderer.invoke('git:checkBranchProtection', args) as Promise<{
+    ok: boolean;
+    isProtected?: boolean;
+    branch?: string;
+    reason?: string;
+    error?: string;
+  }>,
+  
+  // Get file history
+  fileHistory: (args: { projectDir: string; filePath: string; limit?: number }) => ipcRenderer.invoke('git:fileHistory', args) as Promise<{
+    ok: boolean;
+    commits?: Array<{
+      hash: string;
+      shortHash: string;
+      message: string;
+      author: string;
+      date: string;
+      email: string;
+      body: string;
+    }>;
+    filePath?: string;
+    error?: string;
+  }>,
+  
+  // Get git config
+  getConfig: (args: { projectDir: string }) => ipcRenderer.invoke('git:getConfig', args) as Promise<{
+    ok: boolean;
+    config?: {
+      userName: string;
+      userEmail: string;
+    };
+    error?: string;
+  }>,
+  
+  // Set git config
+  setConfig: (args: { projectDir: string; key: string; value: string; global?: boolean }) => ipcRenderer.invoke('git:setConfig', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
   // Stash changes
   stash: (args: { projectDir: string; message?: string }) => ipcRenderer.invoke('git:stash', args) as Promise<{
     ok: boolean;

@@ -1707,6 +1707,224 @@ ipcMain.handle('git:createBranch', async (_e, args: { projectDir: string; branch
   }
 });
 
+ipcMain.handle('git:deleteBranch', async (_e, args: { projectDir: string; branch: string; force?: boolean }) => {
+  try {
+    const { projectDir, branch, force } = args || { projectDir: '', branch: '' };
+    if (!projectDir || !branch) return { ok: false, error: 'Missing required parameters' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Delete branch (local)
+    const deleteOptions = force ? ['-D'] : ['-d'];
+    await git.raw(['branch', ...deleteOptions, branch]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:deleteBranch]', error);
+    return { ok: false, error: error.message || 'Failed to delete branch' };
+  }
+});
+
+ipcMain.handle('git:syncStatus', async (_e, args: { projectDir: string }) => {
+  try {
+    const { projectDir } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get current branch
+    const currentBranch = await git.revparse('--abbrev-ref', 'HEAD');
+    const branch = currentBranch.trim();
+
+    if (branch === 'HEAD') {
+      // Detached HEAD state
+      return { ok: true, aheadCount: 0, behindCount: 0, branch: 'HEAD (detached)', hasRemote: false };
+    }
+
+    try {
+      // Get tracking branch
+      const trackingBranch = await git.raw(['rev-parse', '--abbrev-ref', `${branch}@{u}`]);
+      const remote = trackingBranch.trim();
+
+      if (!remote || remote === `${branch}@{u}`) {
+        // No tracking branch set up
+        return { ok: true, aheadCount: 0, behindCount: 0, branch, hasRemote: false };
+      }
+
+      // Get counts using git rev-list
+      const [aheadOutput, behindOutput] = await Promise.all([
+        git.raw(['rev-list', '--count', `${remote}..HEAD`]),
+        git.raw(['rev-list', '--count', `HEAD..${remote}`])
+      ]);
+
+      const aheadCount = parseInt(aheadOutput.trim(), 10) || 0;
+      const behindCount = parseInt(behindOutput.trim(), 10) || 0;
+
+      return { ok: true, aheadCount, behindCount, branch, hasRemote: true };
+    } catch (trackingError) {
+      // No tracking branch - still valid state
+      return { ok: true, aheadCount: 0, behindCount: 0, branch, hasRemote: false };
+    }
+  } catch (error: any) {
+    console.error('[GIT:syncStatus]', error);
+    return { ok: false, error: error.message || 'Failed to get sync status' };
+  }
+});
+
+ipcMain.handle('git:searchCommits', async (_e, args: { projectDir: string; query: string; limit?: number }) => {
+  try {
+    const { projectDir, query, limit = 100 } = args || { projectDir: '', query: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+    if (!query) return { ok: true, commits: [] };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Search in commit message and author
+    const result = await git.log({
+      maxCount: limit,
+      strictFormat: true,
+      format: '%H:%an:%ae:%ai:%s'
+    });
+
+    // Filter commits by query (case-insensitive)
+    const matchingCommits = result.all
+      .filter(commit => {
+        const searchableText = `${commit.message} ${commit.author_name} ${commit.author_email}`.toLowerCase();
+        return searchableText.includes(query.toLowerCase());
+      })
+      .slice(0, limit);
+
+    const commits = matchingCommits.map(commit => ({
+      hash: commit.hash,
+      message: commit.message,
+      author: commit.author_name,
+      date: commit.date,
+      shortHash: commit.hash.substring(0, 7)
+    }));
+
+    return { ok: true, commits };
+  } catch (error: any) {
+    console.error('[GIT:searchCommits]', error);
+    return { ok: false, error: error.message || 'Failed to search commits' };
+  }
+});
+
+ipcMain.handle('git:checkBranchProtection', async (_e, args: { projectDir: string; branch: string }) => {
+  try {
+    const { projectDir, branch } = args || { projectDir: '', branch: '' };
+    if (!projectDir || !branch) return { ok: false, error: 'Missing parameters' };
+
+    // Check if branch is a protected branch (common patterns: master, main)
+    const protectedBranches = ['master', 'main', 'develop', 'production'];
+    const isProtected = protectedBranches.includes(branch.toLowerCase());
+
+    // Additional check: look for branch protection rules in git config if they exist
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Try to get branch-specific config
+    let hasPushRules = false;
+    try {
+      const config = await git.getConfig(`branch.${branch}.protection`);
+      hasPushRules = config?.value === 'true';
+    } catch (e) {
+      // Config key doesn't exist, that's fine
+    }
+
+    return {
+      ok: true,
+      isProtected: isProtected || hasPushRules,
+      branch,
+      reason: isProtected ? `${branch} is a protected branch` : undefined
+    };
+  } catch (error: any) {
+    console.error('[GIT:checkBranchProtection]', error);
+    return { ok: false, error: error.message || 'Failed to check branch protection' };
+  }
+});
+
+ipcMain.handle('git:fileHistory', async (_e, args: { projectDir: string; filePath: string; limit?: number }) => {
+  try {
+    const { projectDir, filePath, limit = 50 } = args || { projectDir: '', filePath: '' };
+    if (!projectDir || !filePath) return { ok: false, error: 'Missing parameters' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get log for specific file
+    const result = await git.log({
+      file: filePath,
+      maxCount: limit,
+      strictFormat: true,
+      format: '%H:%an:%ae:%ai:%s:%b'
+    });
+
+    const commits = result.all.map(commit => ({
+      hash: commit.hash,
+      shortHash: commit.hash.substring(0, 7),
+      message: commit.message,
+      author: commit.author_name,
+      date: commit.date,
+      email: commit.author_email,
+      body: commit.body || ''
+    }));
+
+    return { ok: true, commits, filePath };
+  } catch (error: any) {
+    console.error('[GIT:fileHistory]', error);
+    return { ok: false, error: error.message || 'Failed to get file history' };
+  }
+});
+
+ipcMain.handle('git:getConfig', async (_e, args: { projectDir: string }) => {
+  try {
+    const { projectDir } = args || { projectDir: '' };
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    // Get user config
+    const userNameResult = await git.getConfig('user.name');
+    const userEmailResult = await git.getConfig('user.email');
+
+    const userName = userNameResult?.value || '';
+    const userEmail = userEmailResult?.value || '';
+
+    return {
+      ok: true,
+      config: {
+        userName,
+        userEmail
+      }
+    };
+  } catch (error: any) {
+    console.error('[GIT:getConfig]', error);
+    return { ok: false, error: error.message || 'Failed to get config' };
+  }
+});
+
+ipcMain.handle('git:setConfig', async (_e, args: { projectDir: string; key: string; value: string; global?: boolean }) => {
+  try {
+    const { projectDir, key, value, global = false } = args || { projectDir: '', key: '', value: '' };
+    if (!projectDir || !key || !value) return { ok: false, error: 'Missing parameters' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    const configOptions = global ? ['--global'] : [];
+    await git.raw(['config', ...configOptions, key, value]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:setConfig]', error);
+    return { ok: false, error: error.message || 'Failed to set config' };
+  }
+});
+
 ipcMain.handle('git:stash', async (_e, args: { projectDir: string; message?: string }) => {
   try {
     const { projectDir, message } = args || { projectDir: '' };

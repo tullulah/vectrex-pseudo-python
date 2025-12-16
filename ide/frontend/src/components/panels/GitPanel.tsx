@@ -38,6 +38,23 @@ export const GitPanel: React.FC = () => {
   const [showRemotesList, setShowRemotesList] = useState(false);
   const [showConflictResolver, setShowConflictResolver] = useState(false);
   const [hasConflicts, setHasConflicts] = useState(false);
+  const [aheadCount, setAheadCount] = useState(0);
+  const [behindCount, setBehindCount] = useState(0);
+  const [hasRemote, setHasRemote] = useState(false);
+  const [showSearchCommits, setShowSearchCommits] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ hash: string; shortHash: string; message: string; author: string; date: string }>>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [isBranchProtected, setIsBranchProtected] = useState(false);
+  const [protectionWarning, setProtectionWarning] = useState<string | null>(null);
+  const [showFileHistory, setShowFileHistory] = useState(false);
+  const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
+  const [fileHistoryCommits, setFileHistoryCommits] = useState<Array<{ hash: string; shortHash: string; message: string; author: string; date: string; body: string }>>([]);
+  const [fileHistoryLoading, setFileHistoryLoading] = useState(false);
+  const [showGitConfig, setShowGitConfig] = useState(false);
+  const [configUserName, setConfigUserName] = useState('');
+  const [configUserEmail, setConfigUserEmail] = useState('');
+  const [configLoading, setConfigLoading] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -73,8 +90,34 @@ export const GitPanel: React.FC = () => {
         setBranches(result.branches);
         setCurrentBranch(result.current);
       }
+
+      // Also get sync status with branches
+      if (git?.syncStatus) {
+        const syncResult = await git.syncStatus({ projectDir });
+        if (syncResult.ok) {
+          setAheadCount(syncResult.aheadCount || 0);
+          setBehindCount(syncResult.behindCount || 0);
+          setHasRemote(syncResult.hasRemote || false);
+        }
+      }
     } catch (error) {
       console.error('Failed to refresh branches:', error);
+    }
+  };
+
+  // Function to check if current branch is protected
+  const checkBranchProtection = async (projectDir: string, branch: string) => {
+    try {
+      const git = (window as any).git;
+      if (!git?.checkBranchProtection || !branch) return;
+
+      const result = await git.checkBranchProtection({ projectDir, branch });
+      if (result.ok) {
+        setIsBranchProtected(result.isProtected || false);
+        setProtectionWarning(result.reason || null);
+      }
+    } catch (error) {
+      console.error('Failed to check branch protection:', error);
     }
   };
 
@@ -109,6 +152,14 @@ export const GitPanel: React.FC = () => {
       setLoading(true);
       await refreshGitStatus(vpyProject.rootDir);
       await refreshBranches(vpyProject.rootDir);
+      // Check branch protection after getting current branch
+      const git = (window as any).git;
+      if (git?.checkBranchProtection) {
+        const branchResult = await git.branches(vpyProject.rootDir);
+        if (branchResult.ok && branchResult.current) {
+          await checkBranchProtection(vpyProject.rootDir, branchResult.current);
+        }
+      }
       setLoading(false);
     };
 
@@ -185,6 +236,101 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+  const handleDeleteBranch = async (branchName: string) => {
+    if (!currentProjectDir || branchName === currentBranch) {
+      alert('Cannot delete the currently checked out branch');
+      return;
+    }
+
+    if (!window.confirm(`Delete branch "${branchName}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const git = (window as any).git;
+      if (!git?.deleteBranch) return;
+
+      const result = await git.deleteBranch({ projectDir: currentProjectDir, branch: branchName, force: false });
+      
+      if (result.ok) {
+        setShowBranchDropdown(false);
+        await refreshBranches(currentProjectDir);
+      } else {
+        alert(`Failed to delete branch: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete branch:', error);
+      alert(`Error deleting branch: ${error}`);
+    }
+  };
+
+  // Expose git keyboard handlers to window and listen for events
+  useEffect(() => {
+    // Expose functions to window for keyboard shortcuts
+    (window as any).gitShowBranchSelector = () => setShowBranchDropdown(true);
+    (window as any).gitShowHistory = () => setShowCommitHistory(true);
+    (window as any).gitShowDiff = (filePath: string) => setSelectedDiffFile(filePath);
+    (window as any).gitFocusCommit = () => {
+    // Expose functions to window for keyboard shortcuts
+    (window as any).gitShowBranchSelector = () => setShowBranchDropdown(true);
+    (window as any).gitShowHistory = () => setShowCommitHistory(true);
+    (window as any).gitShowDiff = (filePath: string) => setSelectedDiffFile(filePath);
+    (window as any).gitShowSearch = () => setShowSearchCommits(true);
+    (window as any).gitFocusCommit = () => {
+      // Scroll to commit section and focus textarea
+      const textarea = document.querySelector('.git-commit-message') as HTMLTextAreaElement;
+      if (textarea) {
+        setTimeout(() => {
+          textarea.focus();
+          textarea.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    };
+    (window as any).gitRefresh = () => {
+      if (currentProjectDir) {
+        refreshGitStatus(currentProjectDir);
+        refreshBranches(currentProjectDir);
+      }
+    };
+
+    // Listen for custom events from keyboard handlers
+    const handleShowBranchSelector = () => setShowBranchDropdown(true);
+    const handleShowHistory = () => setShowCommitHistory(true);
+    const handleShowDiff = (e: any) => setSelectedDiffFile(e.detail?.filePath || null);
+    const handleShowSearch = () => setShowSearchCommits(true);
+    const handleFocusCommit = () => {
+      const textarea = document.querySelector('.git-commit-message') as HTMLTextAreaElement;
+      if (textarea) {
+        setTimeout(() => {
+          textarea.focus();
+          textarea.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    };
+    const handleRefresh = () => {
+      if (currentProjectDir) {
+        refreshGitStatus(currentProjectDir);
+        refreshBranches(currentProjectDir);
+      }
+    };
+
+    window.addEventListener('git:showBranchSelector', handleShowBranchSelector);
+    window.addEventListener('git:showHistory', handleShowHistory);
+    window.addEventListener('git:showDiff', handleShowDiff);
+    window.addEventListener('git:showSearch', handleShowSearch);
+    window.addEventListener('git:focusCommit', handleFocusCommit);
+    window.addEventListener('git:refresh', handleRefresh);
+
+    return () => {
+      window.removeEventListener('git:showBranchSelector', handleShowBranchSelector);
+      window.removeEventListener('git:showHistory', handleShowHistory);
+      window.removeEventListener('git:showDiff', handleShowDiff);
+      window.removeEventListener('git:showSearch', handleShowSearch);
+      window.removeEventListener('git:focusCommit', handleFocusCommit);
+      window.removeEventListener('git:refresh', handleRefresh);
+    };
+  }, [currentProjectDir]);
+
   const handlePush = async () => {
     if (!currentProjectDir || !currentBranch) return;
 
@@ -259,6 +405,119 @@ export const GitPanel: React.FC = () => {
       alert(`Error stashing changes: ${error}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearchCommits = async (query: string) => {
+    if (!currentProjectDir || !query) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const git = (window as any).git;
+      if (!git?.searchCommits) return;
+
+      setSearchLoading(true);
+      const result = await git.searchCommits({
+        projectDir: currentProjectDir,
+        query,
+        limit: 50
+      });
+
+      if (result.ok && result.commits) {
+        setSearchResults(result.commits);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Failed to search commits:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleGetFileHistory = async (filePath: string) => {
+    if (!currentProjectDir) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.fileHistory) return;
+
+      setFileHistoryLoading(true);
+      setFileHistoryPath(filePath);
+      const result = await git.fileHistory({
+        projectDir: currentProjectDir,
+        filePath,
+        limit: 50
+      });
+
+      if (result.ok && result.commits) {
+        setFileHistoryCommits(result.commits);
+        setShowFileHistory(true);
+      }
+    } catch (error) {
+      console.error('Failed to get file history:', error);
+      setFileHistoryCommits([]);
+    } finally {
+      setFileHistoryLoading(false);
+    }
+  };
+
+  const handleLoadConfig = async () => {
+    if (!currentProjectDir) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.getConfig) return;
+
+      setConfigLoading(true);
+      const result = await git.getConfig({ projectDir: currentProjectDir });
+
+      if (result.ok && result.config) {
+        setConfigUserName(result.config.userName);
+        setConfigUserEmail(result.config.userEmail);
+      }
+    } catch (error) {
+      console.error('Failed to load config:', error);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!currentProjectDir) return;
+
+    try {
+      const git = (window as any).git;
+      if (!git?.setConfig) return;
+
+      setConfigLoading(true);
+
+      if (configUserName) {
+        await git.setConfig({
+          projectDir: currentProjectDir,
+          key: 'user.name',
+          value: configUserName
+        });
+      }
+
+      if (configUserEmail) {
+        await git.setConfig({
+          projectDir: currentProjectDir,
+          key: 'user.email',
+          value: configUserEmail
+        });
+      }
+
+      alert('Git config saved successfully');
+      setShowGitConfig(false);
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      alert(`Error saving config: ${error}`);
+    } finally {
+      setConfigLoading(false);
     }
   };
 
@@ -403,6 +662,16 @@ export const GitPanel: React.FC = () => {
         >
           🔗
         </button>
+        <button
+          className="git-panel-action-btn"
+          onClick={() => {
+            setShowGitConfig(true);
+            handleLoadConfig();
+          }}
+          title="Git configuration"
+        >
+          ⚙️
+        </button>
         {hasConflicts && (
           <button
             className="git-panel-action-btn conflict-warning"
@@ -414,6 +683,114 @@ export const GitPanel: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Git Config Modal */}
+      {showGitConfig && (
+        <div className="git-modal-overlay" onClick={() => setShowGitConfig(false)}>
+          <div className="git-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>Git Configuration</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowGitConfig(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="git-config-content">
+              <div className="git-config-field">
+                <label htmlFor="git-config-name">User Name:</label>
+                <input
+                  id="git-config-name"
+                  type="text"
+                  className="git-config-input"
+                  value={configUserName}
+                  onChange={(e) => setConfigUserName(e.target.value)}
+                  disabled={configLoading}
+                  placeholder="Your name"
+                />
+              </div>
+              <div className="git-config-field">
+                <label htmlFor="git-config-email">User Email:</label>
+                <input
+                  id="git-config-email"
+                  type="email"
+                  className="git-config-input"
+                  value={configUserEmail}
+                  onChange={(e) => setConfigUserEmail(e.target.value)}
+                  disabled={configLoading}
+                  placeholder="your.email@example.com"
+                />
+              </div>
+              <div className="git-config-actions">
+                <button
+                  className="git-commit-button"
+                  onClick={handleSaveConfig}
+                  disabled={configLoading}
+                  style={{ flex: 1 }}
+                >
+                  {configLoading ? 'Saving...' : '💾 Save'}
+                </button>
+                <button
+                  className="git-panel-action-btn"
+                  onClick={() => setShowGitConfig(false)}
+                  disabled={configLoading}
+                  style={{ flex: 1 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Commits Panel */}
+      {showSearchCommits && (
+        <div className="git-search-panel">
+          <div className="git-search-header">
+            <input
+              type="text"
+              className="git-search-input"
+              placeholder="Search by message, author..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                handleSearchCommits(e.target.value);
+              }}
+              autoFocus
+            />
+            <button
+              className="git-search-close"
+              onClick={() => {
+                setShowSearchCommits(false);
+                setSearchQuery('');
+                setSearchResults([]);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          {searchLoading && <div className="git-search-loading">Searching...</div>}
+          {!searchLoading && searchResults.length === 0 && searchQuery && (
+            <div className="git-search-empty">No commits found</div>
+          )}
+          {!searchLoading && searchResults.length > 0 && (
+            <div className="git-search-results">
+              {searchResults.map((commit) => (
+                <div key={commit.hash} className="git-search-result-item">
+                  <div className="git-result-hash" title={commit.hash}>{commit.shortHash}</div>
+                  <div className="git-result-message">{commit.message}</div>
+                  <div className="git-result-meta">
+                    <span className="git-result-author">{commit.author}</span>
+                    <span className="git-result-date">{new Date(commit.date).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="git-panel-content">
@@ -434,9 +811,18 @@ export const GitPanel: React.FC = () => {
             className="git-commit-button" 
             disabled={!commitMessage.trim() || stagedChanges.length === 0}
             onClick={handleCommit}
+            title={isBranchProtected ? `⚠️ ${protectionWarning || 'Protected branch'}` : 'Commit changes'}
           >
             ✓ Commit ({stagedChanges.length})
           </button>
+
+          {/* Branch Protection Warning */}
+          {isBranchProtected && protectionWarning && (
+            <div className="git-protection-warning">
+              <span className="git-warning-icon">⚠️</span>
+              <span className="git-warning-text">{protectionWarning}</span>
+            </div>
+          )}
 
           {/* Stash Section */}
           {unstagedChanges.length > 0 && (
@@ -528,6 +914,13 @@ export const GitPanel: React.FC = () => {
                       ⧉
                     </button>
                     <button
+                      className="git-change-action diff-btn"
+                      onClick={() => handleGetFileHistory(file.path)}
+                      title="File history"
+                    >
+                      📜
+                    </button>
+                    <button
                       className="git-change-action git-stage-btn"
                       onClick={() => handleStageFile(file.path)}
                       title="Stage"
@@ -568,6 +961,12 @@ export const GitPanel: React.FC = () => {
           >
             <span className="git-branch-icon">⎇</span>
             <span className="git-branch-name">{currentBranch}</span>
+            {hasRemote && (aheadCount > 0 || behindCount > 0) && (
+              <span className="git-sync-indicator" title={`${aheadCount} ahead, ${behindCount} behind`}>
+                {aheadCount > 0 && <span className="git-sync-ahead">↑{aheadCount}</span>}
+                {behindCount > 0 && <span className="git-sync-behind">↓{behindCount}</span>}
+              </span>
+            )}
           </button>
 
           {showBranchDropdown && branches.length > 0 && (
@@ -576,14 +975,24 @@ export const GitPanel: React.FC = () => {
               {branches.filter(b => !b.isRemote).length > 0 && (
                 <div className="git-branch-section">
                   {branches.filter(b => !b.isRemote).map((branch) => (
-                    <button
-                      key={branch.name}
-                      className={`git-branch-option ${branch.current ? 'active' : ''}`}
-                      onClick={() => handleCheckoutBranch(branch.name)}
-                    >
-                      {branch.current && '✓ '}
-                      {branch.name}
-                    </button>
+                    <div key={branch.name} className="git-branch-option-container">
+                      <button
+                        className={`git-branch-option ${branch.current ? 'active' : ''}`}
+                        onClick={() => handleCheckoutBranch(branch.name)}
+                      >
+                        {branch.current && '✓ '}
+                        {branch.name}
+                      </button>
+                      {!branch.current && (
+                        <button
+                          className="git-branch-delete-btn"
+                          onClick={() => handleDeleteBranch(branch.name)}
+                          title="Delete branch"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -593,14 +1002,24 @@ export const GitPanel: React.FC = () => {
                 <div className="git-branch-section">
                   <div className="git-branch-section-title">Remote</div>
                   {branches.filter(b => b.isRemote).map((branch) => (
-                    <button
-                      key={branch.name}
-                      className={`git-branch-option remote ${branch.current ? 'active' : ''}`}
-                      onClick={() => handleCheckoutBranch(branch.name)}
-                    >
-                      {branch.current && '✓ '}
-                      {branch.name}
-                    </button>
+                    <div key={branch.name} className="git-branch-option-container">
+                      <button
+                        className={`git-branch-option remote ${branch.current ? 'active' : ''}`}
+                        onClick={() => handleCheckoutBranch(branch.name)}
+                      >
+                        {branch.current && '✓ '}
+                        {branch.name}
+                      </button>
+                      {!branch.current && (
+                        <button
+                          className="git-branch-delete-btn"
+                          onClick={() => handleDeleteBranch(branch.name)}
+                          title="Delete branch"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -734,7 +1153,73 @@ export const GitPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* File History Modal */}
+      {showFileHistory && fileHistoryPath && (
+        <div className="git-modal-overlay" onClick={() => setShowFileHistory(false)}>
+          <div className="git-modal git-file-history-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>History: {fileHistoryPath.split('/').pop()}</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowFileHistory(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="git-file-history-content">
+              {fileHistoryLoading && <div className="git-search-loading">Loading history...</div>}
+              {!fileHistoryLoading && fileHistoryCommits.length === 0 && (
+                <div className="git-search-empty">No history found</div>
+              )}
+              {!fileHistoryLoading && fileHistoryCommits.length > 0 && (
+                <div className="git-file-history-list">
+                  {fileHistoryCommits.map((commit) => (
+                    <div key={commit.hash} className="git-history-item">
+                      <div className="git-history-header">
+                        <span className="git-history-hash" title={commit.hash}>{commit.shortHash}</span>
+                        <span className="git-history-author">{commit.author}</span>
+                        <span className="git-history-date">{new Date(commit.date).toLocaleDateString()}</span>
+                      </div>
+                      <div className="git-history-message">{commit.message}</div>
+                      {commit.body && <div className="git-history-body">{commit.body}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// Export keyboard shortcut handlers to window for use by main.tsx
+export function exposeGitKeyboardHandlers() {
+  return {
+    gitShowBranchSelector: () => {
+      // This will be implemented by GitPanel setting a ref
+      const event = new CustomEvent('git:showBranchSelector');
+      window.dispatchEvent(event);
+    },
+    gitShowHistory: () => {
+      const event = new CustomEvent('git:showHistory');
+      window.dispatchEvent(event);
+    },
+    gitShowDiff: (filePath: string) => {
+      const event = new CustomEvent('git:showDiff', { detail: { filePath } });
+      window.dispatchEvent(event);
+    },
+    gitFocusCommit: () => {
+      const event = new CustomEvent('git:focusCommit');
+      window.dispatchEvent(event);
+    },
+    gitRefresh: () => {
+      const event = new CustomEvent('git:refresh');
+      window.dispatchEvent(event);
+    }
+  };
+}
+
 
