@@ -6,6 +6,7 @@ import { CommitHistory } from './CommitHistory';
 import { CreateBranchDialog } from '../dialogs/CreateBranchDialog';
 import { StashList } from './StashList';
 import { TagsList } from './TagsList';
+import { RemotesList } from './RemotesList';
 
 interface GitChange {
   path: string;
@@ -33,6 +34,7 @@ export const GitPanel: React.FC = () => {
   const [showStashList, setShowStashList] = useState(false);
   const [stashMessage, setStashMessage] = useState('');
   const [showTagsList, setShowTagsList] = useState(false);
+  const [showRemotesList, setShowRemotesList] = useState(false);
   const { vpyProject } = useProjectStore();
 
   // Function to refresh git status
@@ -381,6 +383,13 @@ export const GitPanel: React.FC = () => {
           >
             🏷️
           </button>
+          <button
+            className="git-panel-action-btn"
+            onClick={() => setShowRemotesList(!showRemotesList)}
+            title="Manage remotes"
+          >
+            🔗
+          </button>
         </div>
         
         {/* Branch Selector Dropdown */}
@@ -647,6 +656,29 @@ export const GitPanel: React.FC = () => {
             <TagsList
               projectDir={currentProjectDir}
               onTagDeleted={() => {
+                refreshGitStatus(currentProjectDir);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Remotes List Modal */}
+      {showRemotesList && currentProjectDir && (
+        <div className="git-modal-overlay" onClick={() => setShowRemotesList(false)}>
+          <div className="git-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="git-modal-header">
+              <span>Remotes</span>
+              <button 
+                className="git-modal-close"
+                onClick={() => setShowRemotesList(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <RemotesList
+              projectDir={currentProjectDir}
+              onRemoteAdded={() => {
                 refreshGitStatus(currentProjectDir);
               }}
             />

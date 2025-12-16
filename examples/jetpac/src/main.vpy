@@ -6,7 +6,7 @@ META MUSIC = 1
 var screen = 0          # 0=logo, 1=game
 var logo_timer = 0      # Frame counter for logo
 var game_state = 0      # 0=collect parts, 1=refuel, 2=complete
-var fuel_level = 0
+var fuel_level = 0,
 
 # === PLAYER ===
 var player_x = 0

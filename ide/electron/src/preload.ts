@@ -214,6 +214,25 @@ contextBridge.exposeInMainWorld('git', {
     ok: boolean;
     error?: string;
   }>,
+  
+  // List remotes
+  remoteList: (projectDir: string) => ipcRenderer.invoke('git:remoteList', { projectDir }) as Promise<{
+    ok: boolean;
+    remotes?: { name: string; url: string; type: string }[];
+    error?: string;
+  }>,
+  
+  // Add remote
+  addRemote: (args: { projectDir: string; name: string; url: string }) => ipcRenderer.invoke('git:addRemote', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
+  
+  // Remove remote
+  removeRemote: (args: { projectDir: string; name: string }) => ipcRenderer.invoke('git:removeRemote', args) as Promise<{
+    ok: boolean;
+    error?: string;
+  }>,
 });
 
 // MCP Server API for AI agents

@@ -1938,6 +1938,72 @@ ipcMain.handle('git:deleteTag', async (_e, args: { projectDir: string; tagName: 
   }
 });
 
+// List remotes
+ipcMain.handle('git:remoteList', async (_e, args: { projectDir: string }) => {
+  try {
+    const { projectDir } = args;
+    if (!projectDir) return { ok: false, error: 'No project directory' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    const remotes = await git.raw(['remote', '-v']);
+    const remoteArray = remotes
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const parts = line.match(/^(\S+)\s+(\S+)\s+\((\w+)\)$/);
+        return {
+          name: parts?.[1] || line.split('\t')[0] || line,
+          url: parts?.[2] || line.split('\t')[1] || '',
+          type: parts?.[3] || 'fetch',
+        };
+      })
+      .filter((v, i, a) => a.findIndex(t => t.name === v.name) === i); // Deduplicate by name
+
+    return { ok: true, remotes: remoteArray };
+  } catch (error: any) {
+    console.error('[GIT:remoteList]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Add remote
+ipcMain.handle('git:addRemote', async (_e, args: { projectDir: string; name: string; url: string }) => {
+  try {
+    const { projectDir, name, url } = args;
+    if (!projectDir || !name || !url) return { ok: false, error: 'Missing projectDir, name, or url' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.raw(['remote', 'add', name, url]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:addRemote]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
+// Remove remote
+ipcMain.handle('git:removeRemote', async (_e, args: { projectDir: string; name: string }) => {
+  try {
+    const { projectDir, name } = args;
+    if (!projectDir || !name) return { ok: false, error: 'Missing projectDir or name' };
+
+    const simpleGit = (await import('simple-git')).default;
+    const git = simpleGit(projectDir);
+
+    await git.raw(['remote', 'remove', name]);
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[GIT:removeRemote]', error);
+    return { ok: false, error: error.message };
+  }
+});
+
 process.on('uncaughtException', (err) => {
   console.error('[IDE] uncaughtException', err);
 });
