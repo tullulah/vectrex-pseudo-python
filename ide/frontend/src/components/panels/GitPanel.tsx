@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import './GitPanel.css';
 import { useProjectStore } from '../../state/projectStore';
 import { DiffViewer } from '../modals/DiffViewer';
@@ -8,6 +8,21 @@ import { StashList } from './StashList';
 import { TagsList } from './TagsList';
 import { RemotesList } from './RemotesList';
 import { ConflictResolver } from './ConflictResolver';
+
+// Custom hook for debouncing
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 interface GitChange {
   path: string;
@@ -20,6 +35,42 @@ interface GitBranch {
   current: boolean;
   isRemote: boolean;
 }
+
+interface GitCommit {
+  hash: string;
+  shortHash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+// Memoized component for search result items
+const SearchResultItem = memo<{ commit: GitCommit }>(({ commit }) => (
+  <div className="git-search-result-item">
+    <div className="git-result-hash" title={commit.hash}>{commit.shortHash}</div>
+    <div className="git-result-message">{commit.message}</div>
+    <div className="git-result-meta">
+      <span className="git-result-author">{commit.author}</span>
+      <span className="git-result-date">{new Date(commit.date).toLocaleDateString()}</span>
+    </div>
+  </div>
+));
+
+SearchResultItem.displayName = 'SearchResultItem';
+
+// Memoized component for file history items
+const HistoryItem = memo<{ commit: GitCommit }>(({ commit }) => (
+  <div className="git-file-history-item">
+    <div className="git-history-hash" title={commit.hash}>{commit.shortHash}</div>
+    <div className="git-history-message">{commit.message}</div>
+    <div className="git-history-meta">
+      <span className="git-history-author">{commit.author}</span>
+      <span className="git-history-date">{new Date(commit.date).toLocaleDateString()}</span>
+    </div>
+  </div>
+));
+
+HistoryItem.displayName = 'HistoryItem';
 
 export const GitPanel: React.FC = () => {
   const [commitMessage, setCommitMessage] = useState('');
@@ -45,12 +96,15 @@ export const GitPanel: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ hash: string; shortHash: string; message: string; author: string; date: string }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300); // 300ms debounce
   const [isBranchProtected, setIsBranchProtected] = useState(false);
   const [protectionWarning, setProtectionWarning] = useState<string | null>(null);
   const [showFileHistory, setShowFileHistory] = useState(false);
   const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
   const [fileHistoryCommits, setFileHistoryCommits] = useState<Array<{ hash: string; shortHash: string; message: string; author: string; date: string; body: string }>>([]);
   const [fileHistoryLoading, setFileHistoryLoading] = useState(false);
+  const [fileHistoryOffset, setFileHistoryOffset] = useState(0);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [showGitConfig, setShowGitConfig] = useState(false);
   const [configUserName, setConfigUserName] = useState('');
   const [configUserEmail, setConfigUserEmail] = useState('');
@@ -120,6 +174,15 @@ export const GitPanel: React.FC = () => {
       console.error('Failed to check branch protection:', error);
     }
   };
+
+  // Auto-search when debounced query changes
+  useEffect(() => {
+    if (debouncedSearchQuery && currentProjectDir) {
+      handleSearchCommits(debouncedSearchQuery);
+    } else if (!debouncedSearchQuery) {
+      setSearchResults([]);
+    }
+  }, [debouncedSearchQuery, currentProjectDir]);
 
   // Load git status when component mounts or project changes
   useEffect(() => {
@@ -270,11 +333,6 @@ export const GitPanel: React.FC = () => {
     (window as any).gitShowBranchSelector = () => setShowBranchDropdown(true);
     (window as any).gitShowHistory = () => setShowCommitHistory(true);
     (window as any).gitShowDiff = (filePath: string) => setSelectedDiffFile(filePath);
-    (window as any).gitFocusCommit = () => {
-    // Expose functions to window for keyboard shortcuts
-    (window as any).gitShowBranchSelector = () => setShowBranchDropdown(true);
-    (window as any).gitShowHistory = () => setShowCommitHistory(true);
-    (window as any).gitShowDiff = (filePath: string) => setSelectedDiffFile(filePath);
     (window as any).gitShowSearch = () => setShowSearchCommits(true);
     (window as any).gitFocusCommit = () => {
       // Scroll to commit section and focus textarea
@@ -331,7 +389,7 @@ export const GitPanel: React.FC = () => {
     };
   }, [currentProjectDir]);
 
-  const handlePush = async () => {
+  const handlePush = useCallback(async () => {
     if (!currentProjectDir || !currentBranch) return;
 
     try {
@@ -353,9 +411,9 @@ export const GitPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentProjectDir, currentBranch]);
 
-  const handlePull = async () => {
+  const handlePull = useCallback(async () => {
     if (!currentProjectDir || !currentBranch) return;
 
     try {
@@ -378,7 +436,7 @@ export const GitPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentProjectDir, currentBranch]);
 
   const handleStash = async () => {
     if (!currentProjectDir) return;
@@ -408,7 +466,7 @@ export const GitPanel: React.FC = () => {
     }
   };
 
-  const handleSearchCommits = async (query: string) => {
+  const handleSearchCommits = useCallback(async (query: string) => {
     if (!currentProjectDir || !query) {
       setSearchResults([]);
       return;
@@ -436,9 +494,9 @@ export const GitPanel: React.FC = () => {
     } finally {
       setSearchLoading(false);
     }
-  };
+  }, [currentProjectDir]);
 
-  const handleGetFileHistory = async (filePath: string) => {
+  const handleGetFileHistory = useCallback(async (filePath: string, append: boolean = false) => {
     if (!currentProjectDir) return;
 
     try {
@@ -446,24 +504,47 @@ export const GitPanel: React.FC = () => {
       if (!git?.fileHistory) return;
 
       setFileHistoryLoading(true);
-      setFileHistoryPath(filePath);
+      if (!append) {
+        setFileHistoryPath(filePath);
+        setFileHistoryOffset(0);
+      }
+
+      const limit = 20;
+      const offset = append ? fileHistoryOffset : 0;
+
       const result = await git.fileHistory({
         projectDir: currentProjectDir,
         filePath,
-        limit: 50
+        limit,
+        offset
       });
 
       if (result.ok && result.commits) {
-        setFileHistoryCommits(result.commits);
-        setShowFileHistory(true);
+        if (append) {
+          // Agregar más commits al historial existente
+          setFileHistoryCommits([...fileHistoryCommits, ...result.commits]);
+        } else {
+          // Reemplazar historial completo (búsqueda nueva)
+          setFileHistoryCommits(result.commits);
+        }
+
+        // Actualizar estado de pagination
+        setFileHistoryOffset(offset + limit);
+        setHasMoreHistory(result.commits.length === limit);
+        
+        if (!append) {
+          setShowFileHistory(true);
+        }
       }
     } catch (error) {
       console.error('Failed to get file history:', error);
-      setFileHistoryCommits([]);
+      if (!append) {
+        setFileHistoryCommits([]);
+      }
     } finally {
       setFileHistoryLoading(false);
     }
-  };
+  }, [currentProjectDir, fileHistoryOffset, fileHistoryCommits]);
 
   const handleLoadConfig = async () => {
     if (!currentProjectDir) return;
@@ -521,7 +602,7 @@ export const GitPanel: React.FC = () => {
     }
   };
 
-  const handleStageFile = async (path: string) => {
+  const handleStageFile = useCallback(async (path: string) => {
     if (!currentProjectDir) return;
     
     try {
@@ -536,9 +617,9 @@ export const GitPanel: React.FC = () => {
     } catch (error) {
       console.error('Failed to stage file:', error);
     }
-  };
+  }, [currentProjectDir]);
 
-  const handleUnstageFile = async (path: string) => {
+  const handleUnstageFile = useCallback(async (path: string) => {
     if (!currentProjectDir) return;
     
     try {
@@ -553,7 +634,7 @@ export const GitPanel: React.FC = () => {
     } catch (error) {
       console.error('Failed to unstage file:', error);
     }
-  };
+  }, [currentProjectDir]);
 
   const handleDiscardFile = async (path: string) => {
     if (!currentProjectDir) return;
@@ -579,7 +660,7 @@ export const GitPanel: React.FC = () => {
     }
   };
 
-  const handleCommit = async () => {
+  const handleCommit = useCallback(async () => {
     if (!currentProjectDir) return;
     if (!commitMessage.trim() || stagedChanges.length === 0) return;
 
@@ -599,7 +680,7 @@ export const GitPanel: React.FC = () => {
       console.error('Failed to commit:', error);
       alert(`Commit error: ${error}`);
     }
-  };
+  }, [currentProjectDir, commitMessage, stagedChanges.length]);
 
   return (
     <div className="git-panel">
@@ -756,7 +837,7 @@ export const GitPanel: React.FC = () => {
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                handleSearchCommits(e.target.value);
+                // Debounce handles actual search via useEffect
               }}
               autoFocus
             />
@@ -778,14 +859,7 @@ export const GitPanel: React.FC = () => {
           {!searchLoading && searchResults.length > 0 && (
             <div className="git-search-results">
               {searchResults.map((commit) => (
-                <div key={commit.hash} className="git-search-result-item">
-                  <div className="git-result-hash" title={commit.hash}>{commit.shortHash}</div>
-                  <div className="git-result-message">{commit.message}</div>
-                  <div className="git-result-meta">
-                    <span className="git-result-author">{commit.author}</span>
-                    <span className="git-result-date">{new Date(commit.date).toLocaleDateString()}</span>
-                  </div>
-                </div>
+                <SearchResultItem key={commit.hash} commit={commit} />
               ))}
             </div>
           )}
@@ -1168,23 +1242,26 @@ export const GitPanel: React.FC = () => {
               </button>
             </div>
             <div className="git-file-history-content">
-              {fileHistoryLoading && <div className="git-search-loading">Loading history...</div>}
+              {fileHistoryLoading && !fileHistoryCommits.length && <div className="git-search-loading">Loading history...</div>}
               {!fileHistoryLoading && fileHistoryCommits.length === 0 && (
                 <div className="git-search-empty">No history found</div>
               )}
-              {!fileHistoryLoading && fileHistoryCommits.length > 0 && (
+              {fileHistoryCommits.length > 0 && (
                 <div className="git-file-history-list">
                   {fileHistoryCommits.map((commit) => (
-                    <div key={commit.hash} className="git-history-item">
-                      <div className="git-history-header">
-                        <span className="git-history-hash" title={commit.hash}>{commit.shortHash}</span>
-                        <span className="git-history-author">{commit.author}</span>
-                        <span className="git-history-date">{new Date(commit.date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="git-history-message">{commit.message}</div>
-                      {commit.body && <div className="git-history-body">{commit.body}</div>}
-                    </div>
+                    <HistoryItem key={commit.hash} commit={commit} />
                   ))}
+                  {hasMoreHistory && (
+                    <div className="git-history-load-more">
+                      <button 
+                        onClick={() => handleGetFileHistory(fileHistoryPath, true)}
+                        disabled={fileHistoryLoading}
+                        className="git-btn-secondary"
+                      >
+                        {fileHistoryLoading ? 'Loading...' : 'Load More'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

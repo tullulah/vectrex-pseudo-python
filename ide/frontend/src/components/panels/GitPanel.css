@@ -347,6 +347,37 @@
   padding-left: 20px;
 }
 
+/* Lazy Loading */
+.git-history-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  border-top: 1px solid #3e3e42;
+  margin-top: 8px;
+}
+
+.git-history-load-more .git-btn-secondary {
+  padding: 6px 16px;
+  font-size: 12px;
+  background: #2d2d30;
+  border: 1px solid #3e3e42;
+  color: #cccccc;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.git-history-load-more .git-btn-secondary:hover:not(:disabled) {
+  background: #3e3e42;
+  border-color: #007acc;
+  color: #0098ff;
+}
+
+.git-history-load-more .git-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .git-search-panel {
   background: #252526;
   border-top: 1px solid #3e3e42;
