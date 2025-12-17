@@ -60,17 +60,12 @@ fn test_music_roundtrip_compilation() {
 fn compile_vmus_to_test_asm(music: &Value) -> String {
     let mut asm = String::new();
     asm.push_str("_TEST_MUSIC:\n");
-    asm.push_str("    ; Frame-based PSG register writes\n");
+    asm.push_str("    ; Frame-based PSG register writes with tick positions\n");
     
-    let tempo = music["tempo"].as_u64().unwrap() as u32;
-    let ticks_per_beat = music["ticksPerBeat"].as_u64().unwrap() as u32;
+    let _tempo = music["tempo"].as_u64().unwrap() as u32;
+    let _ticks_per_beat = music["ticksPerBeat"].as_u64().unwrap() as u32;
     let total_ticks = music["totalTicks"].as_u64().unwrap() as u32;
     let notes = music["notes"].as_array().unwrap();
-    
-    // Calculate frames per tick
-    let frames_per_second = 50; // PAL standard
-    let ticks_per_second = (tempo * ticks_per_beat) / 60;
-    let frames_per_tick = frames_per_second / ticks_per_second;
     
     // Process each frame
     for frame in 0..total_ticks {
@@ -126,6 +121,12 @@ fn compile_vmus_to_test_asm(music: &Value) -> String {
         }
         
         if !reg_writes.is_empty() {
+            // NEW: Emit the tick position first!
+            let tick_hi = ((frame >> 8) & 0xFF) as u8;
+            let tick_lo = (frame & 0xFF) as u8;
+            asm.push_str(&format!("    FCB     {}              ; Tick position (high byte) for frame {}\n", tick_hi, frame));
+            asm.push_str(&format!("    FCB     {}              ; Tick position (low byte) for frame {}\n", tick_lo, frame));
+            
             asm.push_str(&format!("    FCB     {}              ; Frame {} - {} writes\n", 
                 reg_writes.len(), frame, reg_writes.len()));
             for (reg, val) in reg_writes {
@@ -135,7 +136,7 @@ fn compile_vmus_to_test_asm(music: &Value) -> String {
         }
     }
     
-    asm.push_str("    FCB     0               ; End of music\n");
+    asm.push_str("    FCB     0, 0            ; End of music (tick 0, count 0)\n");
     asm
 }
 
@@ -171,27 +172,60 @@ fn extract_binary_from_asm(asm: &str) -> Vec<u8> {
 }
 
 /// Decompile binary music data back to VMUS JSON structure
+/// NEW FORMAT: Each block starts with tick position (2 bytes: hi, lo), then count, then register pairs
 fn decompile_music_binary(data: &[u8], tempo: u32, ticks_per_beat: u32) -> Value {
-    let mut notes = Vec::new();
-    let mut noise = Vec::new();
-    let mut current_frame = 0;
-    let mut offset = 0;
+    let mut notes: Vec<Value> = Vec::new();
+    let noise: Vec<Value> = Vec::new();
     let mut note_id_counter = 1;
-    let mut noise_id_counter = 1;
     
-    // Track active notes across frames (for duration calculation)
-    let mut active_notes: HashMap<u8, (usize, u32, u8, u8)> = HashMap::new(); // channel -> (note_idx, start_frame, midi_note, velocity)
+    // Track active notes across ticks (for duration calculation)
+    let mut active_notes: HashMap<u8, (usize, u32, u8, u8)> = HashMap::new(); // channel -> (note_idx, start_tick, midi_note, velocity)
     
-    while offset < data.len() {
-        let count = data[offset];
-        offset += 1;
-        
-        if count == 0 {
-            // End marker
+    // First pass: scan all blocks to find total ticks
+    let mut total_ticks = 0u32;
+    let mut temp_offset = 0;
+    while temp_offset < data.len() {
+        if temp_offset + 3 >= data.len() {
             break;
         }
         
-        // Process register writes for this frame
+        let tick_hi = data[temp_offset] as u32;
+        let tick_lo = data[temp_offset + 1] as u32;
+        let current_tick = (tick_hi << 8) | tick_lo;
+        let count = data[temp_offset + 2];
+        
+        if count == 0 {
+            break;
+        }
+        
+        total_ticks = current_tick;
+        temp_offset += 3 + (count as usize) * 2;
+    }
+    // Add one to total_ticks to account for inclusive range
+    total_ticks += 1;
+    
+    // Second pass: process blocks to extract notes
+    let mut offset = 0;
+    
+    while offset < data.len() {
+        if offset + 3 >= data.len() {
+            break;
+        }
+        
+        let tick_hi = data[offset] as u32;
+        let tick_lo = data[offset + 1] as u32;
+        let current_tick = (tick_hi << 8) | tick_lo;
+        let count = data[offset + 2];
+        offset += 3;
+        
+        if count == 0 {
+            break;
+        }
+        
+        let block_start_tick = current_tick;
+        
+        // Collect all register writes in this block
+        let mut reg_writes: Vec<(u8, u8)> = Vec::new();
         for _ in 0..count {
             if offset + 1 >= data.len() {
                 break;
@@ -201,113 +235,110 @@ fn decompile_music_binary(data: &[u8], tempo: u32, ticks_per_beat: u32) -> Value
             let val = data[offset + 1];
             offset += 2;
             
-            // Detect note-on events (tone + volume)
+            reg_writes.push((reg, val));
+        }
+        
+        // First: detect note-off events (volume = 0)
+        for (reg, val) in &reg_writes {
             match reg {
-                // Tone A Lo
-                0 => {
-                    if offset + 3 < data.len() && data[offset] == 1 && data[offset + 2] == 8 {
-                        let tone_hi = data[offset + 1];
-                        let volume = data[offset + 3];
-                        let period = (tone_hi as u16) << 8 | val as u16;
-                        
-                        if volume > 0 && period > 0 {
-                            // New note on channel A
-                            let midi_note = psg_period_to_midi(period);
-                            let note_idx = notes.len();
-                            notes.push(serde_json::json!({
-                                "id": format!("n{}", note_id_counter),
-                                "note": midi_note,
-                                "start": current_frame,
-                                "duration": 1, // Will be updated when note ends
-                                "velocity": volume,
-                                "channel": 0
-                            }));
-                            active_notes.insert(0, (note_idx, current_frame, midi_note, volume));
-                            note_id_counter += 1;
-                        }
-                    }
-                }
-                // Volume A (potential note-off)
                 8 => {
-                    if val == 0 {
-                        if let Some((note_idx, start_frame, _, _)) = active_notes.remove(&0) {
-                            let duration = current_frame - start_frame;
+                    if *val == 0 {
+                        if let Some((note_idx, start_tick, _, _)) = active_notes.remove(&0) {
+                            let duration = block_start_tick - start_tick;
                             notes[note_idx]["duration"] = serde_json::json!(duration);
                         }
                     }
                 }
-                // Similar logic for channels B (regs 2,3,9) and C (regs 4,5,10)
-                2 => {
-                    if offset + 3 < data.len() && data[offset] == 3 && data[offset + 2] == 9 {
-                        let tone_hi = data[offset + 1];
-                        let volume = data[offset + 3];
-                        let period = (tone_hi as u16) << 8 | val as u16;
-                        
-                        if volume > 0 && period > 0 {
-                            let midi_note = psg_period_to_midi(period);
-                            let note_idx = notes.len();
-                            notes.push(serde_json::json!({
-                                "id": format!("n{}", note_id_counter),
-                                "note": midi_note,
-                                "start": current_frame,
-                                "duration": 1,
-                                "velocity": volume,
-                                "channel": 1
-                            }));
-                            active_notes.insert(1, (note_idx, current_frame, midi_note, volume));
-                            note_id_counter += 1;
+                9 => {
+                    if *val == 0 {
+                        if let Some((note_idx, start_tick, _, _)) = active_notes.remove(&1) {
+                            let duration = block_start_tick - start_tick;
+                            notes[note_idx]["duration"] = serde_json::json!(duration);
                         }
                     }
                 }
-                4 => {
-                    if offset + 3 < data.len() && data[offset] == 5 && data[offset + 2] == 10 {
-                        let tone_hi = data[offset + 1];
-                        let volume = data[offset + 3];
-                        let period = (tone_hi as u16) << 8 | val as u16;
-                        
-                        if volume > 0 && period > 0 {
-                            let midi_note = psg_period_to_midi(period);
-                            let note_idx = notes.len();
-                            notes.push(serde_json::json!({
-                                "id": format!("n{}", note_id_counter),
-                                "note": midi_note,
-                                "start": current_frame,
-                                "duration": 1,
-                                "velocity": volume,
-                                "channel": 2
-                            }));
-                            active_notes.insert(2, (note_idx, current_frame, midi_note, volume));
-                            note_id_counter += 1;
+                10 => {
+                    if *val == 0 {
+                        if let Some((note_idx, start_tick, _, _)) = active_notes.remove(&2) {
+                            let duration = block_start_tick - start_tick;
+                            notes[note_idx]["duration"] = serde_json::json!(duration);
                         }
-                    }
-                }
-                // Noise detection (reg 6 = period, reg 7 = mixer with noise enabled)
-                6 => {
-                    if val > 0 {
-                        noise.push(serde_json::json!({
-                            "id": format!("perc{}", noise_id_counter),
-                            "start": current_frame,
-                            "duration": 1, // Default short duration
-                            "period": val,
-                            "channels": 1 // Default channel A
-                        }));
-                        noise_id_counter += 1;
                     }
                 }
                 _ => {}
             }
         }
         
-        current_frame += 1;
+        // Second: detect note-on events (tone + volume pairs)
+        // Build a map of register values for easy lookup
+        let mut reg_map: HashMap<u8, u8> = HashMap::new();
+        for (reg, val) in &reg_writes {
+            reg_map.insert(*reg, *val);
+        }
+        
+        // Check for Tone A (channel 0)
+        if let (Some(&lo), Some(&hi), Some(&vol)) = (reg_map.get(&0), reg_map.get(&1), reg_map.get(&8)) {
+            if vol > 0 && !active_notes.contains_key(&0) {
+                let period = (hi as u16) << 8 | (lo as u16);
+                let midi_note = psg_period_to_midi(period);
+                let note_idx = notes.len();
+                notes.push(serde_json::json!({
+                    "id": format!("n{}", note_id_counter),
+                    "note": midi_note,
+                    "start": block_start_tick,
+                    "duration": 1,
+                    "velocity": vol,
+                    "channel": 0
+                }));
+                active_notes.insert(0, (note_idx, block_start_tick, midi_note, vol));
+                note_id_counter += 1;
+            }
+        }
+        
+        // Check for Tone B (channel 1)
+        if let (Some(&lo), Some(&hi), Some(&vol)) = (reg_map.get(&2), reg_map.get(&3), reg_map.get(&9)) {
+            if vol > 0 && !active_notes.contains_key(&1) {
+                let period = (hi as u16) << 8 | (lo as u16);
+                let midi_note = psg_period_to_midi(period);
+                let note_idx = notes.len();
+                notes.push(serde_json::json!({
+                    "id": format!("n{}", note_id_counter),
+                    "note": midi_note,
+                    "start": block_start_tick,
+                    "duration": 1,
+                    "velocity": vol,
+                    "channel": 1
+                }));
+                active_notes.insert(1, (note_idx, block_start_tick, midi_note, vol));
+                note_id_counter += 1;
+            }
+        }
+        
+        // Check for Tone C (channel 2)
+        if let (Some(&lo), Some(&hi), Some(&vol)) = (reg_map.get(&4), reg_map.get(&5), reg_map.get(&10)) {
+            if vol > 0 && !active_notes.contains_key(&2) {
+                let period = (hi as u16) << 8 | (lo as u16);
+                let midi_note = psg_period_to_midi(period);
+                let note_idx = notes.len();
+                notes.push(serde_json::json!({
+                    "id": format!("n{}", note_id_counter),
+                    "note": midi_note,
+                    "start": block_start_tick,
+                    "duration": 1,
+                    "velocity": vol,
+                    "channel": 2
+                }));
+                active_notes.insert(2, (note_idx, block_start_tick, midi_note, vol));
+                note_id_counter += 1;
+            }
+        }
     }
     
-    // Close any remaining active notes
-    for (channel, (note_idx, start_frame, _, _)) in active_notes {
-        let duration = current_frame - start_frame;
+    // Close any remaining active notes at the end
+    for (_channel, (note_idx, start_tick, _, _)) in active_notes {
+        let duration = total_ticks - start_tick;
         notes[note_idx]["duration"] = serde_json::json!(duration);
     }
-    
-    let total_ticks = current_frame;
     
     serde_json::json!({
         "version": "1.0",
