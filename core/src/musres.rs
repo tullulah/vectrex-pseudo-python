@@ -130,7 +130,7 @@ impl MusicResource {
     
     /// MIDI note to PSG frequency (Vectrex uses 1.5 MHz clock)
     /// Formula: freq = 1500000 / (32 * midi_freq_hz)
-    fn midi_to_psg_period(midi: u8) -> u16 {
+    pub fn midi_to_psg_period(midi: u8) -> u16 {
         // MIDI note to Hz: 440 * 2^((note - 69) / 12)
         let note = midi as f64;
         let freq_hz = 440.0 * 2.0_f64.powf((note - 69.0) / 12.0);
@@ -462,46 +462,4 @@ pub fn compile_vmus_to_binary(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_create_music() {
-        let music = MusicResource::new("test-song");
-        assert_eq!(music.name, "test-song");
-        assert_eq!(music.tempo, 120);
-    }
-    
-    #[test]
-    fn test_midi_to_psg() {
-        // Middle C (MIDI 60) = 261.63 Hz
-        let period = MusicResource::midi_to_psg_period(60);
-        // Expected: 1500000 / (32 * 261.63) ≈ 179
-        assert!(period >= 175 && period <= 185);
-        
-        // A4 (MIDI 69) = 440 Hz
-        let period_a4 = MusicResource::midi_to_psg_period(69);
-        // Expected: 1500000 / (32 * 440) ≈ 106
-        assert!(period_a4 >= 100 && period_a4 <= 110);
-    }
-    
-    #[test]
-    fn test_compile_to_asm() {
-        let mut music = MusicResource::new("test");
-        music.notes.push(NoteEvent {
-            id: "note1".to_string(),
-            note: 60, // Middle C
-            start: 0,
-            duration: 48,
-            velocity: 12,
-            channel: 0,
-        });
-        
-        let symbol_name = music.name.to_uppercase().replace("-", "_").replace(" ", "_");
-        let asm = music.compile_to_asm(&symbol_name);
-        assert!(asm.contains("_TEST_MUSIC:"));
-        assert!(asm.contains("FDB 120")); // tempo
-        assert!(asm.contains("FCB $01")); // NOTE event
-    }
-}
+// Tests moved to core/tests/musres_tests.rs to keep production code clean

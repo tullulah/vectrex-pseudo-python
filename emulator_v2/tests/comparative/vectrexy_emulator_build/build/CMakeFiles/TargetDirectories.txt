@@ -1,5 +1,0 @@
-C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/CMakeFiles/vectrexy_core.dir
-C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/CMakeFiles/vectrexy_emulator.dir
-C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/CMakeFiles/INSTALL.dir
-C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/DanielFerrerGuerrero/source/repos/pseudo-python/emulator_v2/tests/comparative/vectrexy_emulator_build/build/CMakeFiles/ZERO_CHECK.dir

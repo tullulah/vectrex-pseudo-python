@@ -241,6 +241,8 @@
 .git-change-action.diff-btn:hover {
   color: #00d4ff;
 }
+
+.git-change-action {
   transition: all 0.2s;
 }
 

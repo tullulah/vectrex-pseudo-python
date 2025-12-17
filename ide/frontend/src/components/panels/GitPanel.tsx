@@ -299,22 +299,24 @@ export const GitPanel: React.FC = () => {
     }
   };
 
+
   const handleDeleteBranch = async (branchName: string) => {
-    if (!currentProjectDir || branchName === currentBranch) {
+    if (!currentProjectDir) return;
+    if (branchName === currentBranch) {
       alert('Cannot delete the currently checked out branch');
       return;
     }
-
     if (!window.confirm(`Delete branch "${branchName}"? This cannot be undone.`)) {
       return;
     }
-
     try {
       const git = (window as any).git;
       if (!git?.deleteBranch) return;
-
-      const result = await git.deleteBranch({ projectDir: currentProjectDir, branch: branchName, force: false });
-      
+      const result = await git.deleteBranch({
+        projectDir: currentProjectDir,
+        branch: branchName,
+        force: false,
+      });
       if (result.ok) {
         setShowBranchDropdown(false);
         await refreshBranches(currentProjectDir);
@@ -328,6 +330,7 @@ export const GitPanel: React.FC = () => {
   };
 
   // Expose git keyboard handlers to window and listen for events
+  // FIXED: branch deletion handler properly closed  
   useEffect(() => {
     // Expose functions to window for keyboard shortcuts
     (window as any).gitShowBranchSelector = () => setShowBranchDropdown(true);

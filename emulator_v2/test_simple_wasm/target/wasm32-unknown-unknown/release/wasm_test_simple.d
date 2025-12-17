@@ -1,1 +1,0 @@
-C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\emulator_v2\test_simple_wasm\target\wasm32-unknown-unknown\release\wasm_test_simple.wasm: C:\Users\DanielFerrerGuerrero\source\repos\pseudo-python\emulator_v2\test_simple_wasm\src\lib.rs

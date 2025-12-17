@@ -347,34 +347,4 @@ pub fn compile_vec_to_binary(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_create_resource() {
-        let res = VecResource::new("test-sprite");
-        assert_eq!(res.name, "test-sprite");
-        assert_eq!(res.layers.len(), 1);
-    }
-    
-    #[test]
-    fn test_compile_to_asm() {
-        let mut res = VecResource::new("ship");
-        res.layers[0].paths.push(VecPath {
-            name: "hull".to_string(),
-            intensity: 127,
-            closed: true,
-            points: vec![
-                Point { x: 0, y: 20, intensity: None },
-                Point { x: -10, y: -10, intensity: None },
-                Point { x: 10, y: -10, intensity: None },
-            ],
-        });
-        
-        let asm = res.compile_to_asm();
-        assert!(asm.contains("_SHIP_HULL_VECTORS:"));
-        assert!(asm.contains("FCB 3"));  // 3 points
-        assert!(asm.contains("FCB 127")); // intensity
-    }
-}
+// Tests moved to core/tests/vecres_tests.rs to keep production code clean
