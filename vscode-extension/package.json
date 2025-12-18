@@ -15,6 +15,9 @@
     "Programming Languages"
   ],
   "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:vpy",
+    "workspaceContains:**/*.vpy",
     "onCommand:vpy.compileCurrent"
   ],
   "main": "dist/extension.js",
@@ -42,6 +45,12 @@
       {
         "command": "vpy.compileCurrent",
         "title": "VPy: Compile Current File"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "vpy-ide",
+        "label": "VPy IDE"
       }
     ]
   },

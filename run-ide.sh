@@ -199,6 +199,25 @@ fi
 
 echo '[INFO] Lanzando entorno Electron'
 
+# Función helper para esperar a que el puerto esté abierto
+wait_for_port() {
+  local port=$1
+  local max_attempts=60
+  local attempt=0
+  
+  while [ $attempt -lt $max_attempts ]; do
+    if lsof -i :$port >/dev/null 2>&1; then
+      echo "[OK  ] Puerto $port está abierto"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.5
+  done
+  
+  echo "[WARN] Puerto $port nunca se abrió (timeout después de $max_attempts intentos)"
+  return 1
+}
+
 if [ "$PRODUCTION" = true ]; then
   echo '[INFO] Modo producción - sin hot reload'
   
@@ -235,7 +254,35 @@ else
   if [ "$NO_CLEAR" = true ]; then
     export FORCE_COLOR=1
   fi
-  (cd "$ROOT/ide/electron" && npm run dev)
+  
+  # Arrancar Electron en background
+  (cd "$ROOT/ide/electron" && npm run dev) &
+  ELECTRON_PID=$!
+  echo "[OK  ] Electron iniciado (PID: $ELECTRON_PID)"
+  
+  # Esperar a que el puerto 9123 esté abierto (IDE listo)
+  echo '[INFO] Esperando a que el IDE esté listo...'
+  wait_for_port 9123
+  if [ $? -ne 0 ]; then
+    echo '[ERR ] El IDE no se inició correctamente'
+    kill $ELECTRON_PID 2>/dev/null || true
+    exit 1
+  fi
+  
+  # MCP server is now launched by VS Code extension, not by IDE
+  # (Old auto-start disabled to avoid conflicts)
+  # echo '[INFO] Iniciando servidor MCP...'
+  # MCP_LOG_FILE="$ROOT/.mcp-server.log"
+  # MCP_VERBOSE=1 node "$ROOT/ide/mcp-server/server.js" 2>&1 | tee -a "$MCP_LOG_FILE" | sed 's/^/[MCP Server] /' &
+  # MCP_PID=$!
+  # echo "[OK  ] Servidor MCP iniciado (PID: $MCP_PID)"
+  # echo "[OK  ] Logs MCP escritos a: $MCP_LOG_FILE"
+  
+  # Trap para limpiar Electron al salir
+  trap "kill $ELECTRON_PID 2>/dev/null || true" EXIT INT TERM
+  
+  # Esperar a que Electron termine
+  wait $ELECTRON_PID
 fi
 
 exit $?

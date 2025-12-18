@@ -298,10 +298,14 @@ export class MCPServer {
 
   // Handle incoming JSON-RPC request
   async handleRequest(request: MCPRequest): Promise<MCPResponse> {
+    console.log('[MCP handleRequest] ▶ START:', request.method, 'id:', request.id);
     try {
       // Handle special methods
       if (request.method === 'tools/list') {
-        return this.createResponse(request.id, await this.listTools());
+        console.log('[MCP handleRequest] ✓ Listing tools...');
+        const result = this.createResponse(request.id, await this.listTools());
+        console.log('[MCP handleRequest] ✓ END (tools/list)');
+        return result;
       }
 
       // Normalize method name to handle different formats
@@ -334,13 +338,18 @@ export class MCPServer {
       }
       
       if (!handler) {
+        console.log('[MCP handleRequest] ✗ Method not found:', request.method);
         return this.createError(request.id, ErrorCodes.MethodNotFound, `Method not found: ${request.method} (tried: ${triedMethods.join(', ')})`);
       }
 
+      console.log('[MCP handleRequest] ▶ Calling handler for:', request.method);
       const result = await handler(request.params || {});
-      return this.createResponse(request.id, result);
+      console.log('[MCP handleRequest] ✓ Handler returned:', typeof result, result);
+      const response = this.createResponse(request.id, result);
+      console.log('[MCP handleRequest] ✓ END (success)');
+      return response;
     } catch (error: any) {
-      console.error('[MCP] Error handling request:', error);
+      console.error('[MCP handleRequest] ✗ Error handling request:', error);
       return this.createError(request.id, ErrorCodes.InternalError, error.message, error);
     }
   }
@@ -744,8 +753,8 @@ export class MCPServer {
     }
 
     try {
-      // Get current project from backend tracker (no need to access Redux store)
-      const { getCurrentProject } = await import('../main.js');
+      // Get current project and call executeCompilation directly
+      const { getCurrentProject, executeCompilation } = await import('../main.js');
       const project = getCurrentProject();
       
       if (!project?.entryFile) {
@@ -759,21 +768,15 @@ export class MCPServer {
         };
       }
 
-      // Execute compilation via IPC (same as F7 key)
-      const entryPath = project.entryFile.replace(/\\/g, '\\\\');
-      const result = await this.mainWindow.webContents.executeJavaScript(`
-        (async () => {
-          try {
-            const compileResult = await window.electron.ipcRenderer.invoke('run:compile', {
-              path: '${entryPath}',
-              autoStart: false
-            });
-            return compileResult;
-          } catch (error) {
-            return { error: 'build_failed', detail: error.message };
-          }
-        })()
-      `);
+      // Call compilation directly and wait for result
+      // When project is open, pass the .vpyproj file path for proper project compilation
+      const projectName = require('path').basename(project.rootDir);
+      const vpyprojPath = require('path').join(project.rootDir, `${projectName}.vpyproj`);
+      
+      const result: any = await executeCompilation({
+        path: vpyprojPath,
+        autoStart: false
+      });
 
       // Check if compilation was successful
       if (result.error) {

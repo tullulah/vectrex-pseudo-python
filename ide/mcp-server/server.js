@@ -17,6 +17,9 @@
 const net = require('net');
 const readline = require('readline');
 
+// Write startup message immediately to stderr (unbuffered)
+console.error('[MCP Server] ✅ SERVER STARTING - Args:', process.argv.slice(2));
+
 // Configuration
 const IPC_PORT = 9123; // Port where Electron main listens for MCP IPC
 const VERBOSE = process.env.MCP_VERBOSE === '1';
@@ -33,62 +36,83 @@ let ipcConnected = false;
 let ipcCallbacks = new Map();
 let ipcCallId = 0;
 
-// Connect to Electron IDE's IPC server
-async function connectToIDE() {
+// Connect to Electron IDE's IPC server with retry logic
+async function connectToIDE(retries = 5, delay = 100) {
+  // In stdio mode, use fast retries but don't fail if IDE isn't available
+  if (process.argv.includes('--stdio')) {
+    retries = 2;
+    delay = 50;
+    log('Using fast retry mode for --stdio (will continue even if IDE not found)');
+  }
+  
   return new Promise((resolve, reject) => {
-    log('Connecting to IDE IPC on port', IPC_PORT);
-    
-    const socket = net.createConnection({ port: IPC_PORT, host: 'localhost' });
-    
-    socket.on('connect', () => {
-      log('Connected to IDE IPC');
-      ipcSocket = socket;
-      ipcConnected = true;
-      resolve();
-    });
-    
-    socket.on('error', (err) => {
-      log('IPC connection error:', err.message);
-      if (!ipcConnected) {
-        reject(err);
-      }
-    });
-    
-    socket.on('close', () => {
-      log('IPC connection closed');
-      ipcSocket = null;
-      ipcConnected = false;
-    });
-    
-    // Read JSON-RPC responses from IPC
-    let buffer = '';
-    socket.on('data', (chunk) => {
-      buffer += chunk.toString();
+    const attemptConnection = (attemptNum) => {
+      log(`Attempting to connect to IDE IPC (attempt ${attemptNum}/${retries})...`);
       
-      // Split by newlines (simple protocol for now)
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      const socket = net.createConnection({ port: IPC_PORT, host: 'localhost' });
       
-      for (const line of lines) {
-        if (line.trim()) {
-          try {
-            const response = JSON.parse(line);
-            const callback = ipcCallbacks.get(response.id);
-            if (callback) {
-              ipcCallbacks.delete(response.id);
-              callback(response);
+      socket.on('connect', () => {
+        log('Connected to IDE IPC');
+        ipcSocket = socket;
+        ipcConnected = true;
+        
+        // Setup data handler
+        let buffer = '';
+        socket.on('data', (chunk) => {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const response = JSON.parse(line);
+                const callback = ipcCallbacks.get(response.id);
+                if (callback) {
+                  ipcCallbacks.delete(response.id);
+                  callback(response);
+                }
+              } catch (e) {
+                log('Failed to parse IPC response:', e);
+              }
             }
-          } catch (e) {
-            log('Failed to parse IPC response:', e.message);
+          }
+        });
+        
+        resolve();
+      });
+      
+      socket.on('error', (err) => {
+        log(`IPC connection attempt ${attemptNum} failed:`, err.message);
+        socket.destroy();
+        
+        if (attemptNum < retries) {
+          setTimeout(() => attemptConnection(attemptNum + 1), delay);
+        } else {
+          // In stdio mode, continue anyway with simulated responses
+          if (process.argv.includes('--stdio')) {
+            log('⚠️ IDE not available, continuing with simulated responses');
+            ipcConnected = false;
+            resolve();
+          } else {
+            reject(new Error(`Failed to connect to IDE IPC after ${retries} attempts`));
           }
         }
-      }
-    });
+      });
+    };
+    
+    attemptConnection(1);
   });
 }
 
 // Send request to IDE via IPC
 async function sendToIDE(request) {
+  // In stdio mode without IDE connection, return simulated data
+  if ((!ipcConnected || !ipcSocket) && process.argv.includes('--stdio')) {
+    log('⚠️ IDE not connected in --stdio mode, returning simulated data for:', request.method);
+    return simulateIDEResponse(request.method, request.params);
+  }
+  
   if (!ipcConnected || !ipcSocket) {
     throw new Error('Not connected to IDE');
   }
@@ -118,6 +142,82 @@ async function sendToIDE(request) {
   });
 }
 
+// Simulate IDE responses for testing in --stdio mode
+function simulateIDEResponse(method, params) {
+  log('Simulating IDE response for:', method);
+  
+  switch (method) {
+    case 'editor/list_documents':
+      return { documents: [] };
+    
+    case 'editor/read_document':
+      return { uri: params?.uri, content: '# Empty document' };
+    
+    case 'editor/write_document':
+      return { success: true, uri: params?.uri };
+    
+    case 'editor/replace_range':
+      return { success: true };
+    
+    case 'editor/insert_at':
+      return { success: true };
+    
+    case 'editor/delete_range':
+      return { success: true };
+    
+    case 'editor/get_diagnostics':
+      return { diagnostics: [] };
+    
+    case 'compiler/build':
+      return { success: true, message: 'Build would run (IDE not connected)' };
+    
+    case 'compiler/get_errors':
+      return { errors: [] };
+    
+    case 'emulator/run':
+      return { success: true, message: 'Emulator would run (IDE not connected)' };
+    
+    case 'emulator/get_state':
+      return { pc: 0, cycles: 0, registers: {} };
+    
+    case 'emulator/stop':
+      return { success: true };
+    
+    case 'debugger/add_breakpoint':
+      return { success: true };
+    
+    case 'debugger/get_callstack':
+      return { stack: [] };
+    
+    case 'project/get_structure':
+      return { root: '/project', files: [], folders: [] };
+    
+    case 'project/read_file':
+      return { content: '# File content unavailable' };
+    
+    case 'project/write_file':
+      return { success: true };
+    
+    case 'project/create':
+      return { success: true };
+    
+    case 'project/close':
+      return { success: true };
+    
+    case 'project/open':
+      return { success: true };
+    
+    case 'project/create_vector':
+      return { success: true, message: 'Vector asset would be created' };
+    
+    case 'project/create_music':
+      return { success: true, message: 'Music asset would be created' };
+    
+    default:
+      return { error: `Unknown method: ${method}` };
+  }
+}
+
 // MCP Protocol - stdio transport
 class StdioTransport {
   constructor() {
@@ -128,7 +228,10 @@ class StdioTransport {
   
   setupStdio() {
     // Read from stdin
+    process.stdin.setEncoding('utf-8');
+    
     process.stdin.on('data', (chunk) => {
+      log('📥 stdin data received:', chunk.length, 'bytes');
       this.buffer += chunk.toString();
       this.processBuffer();
     });
@@ -137,28 +240,71 @@ class StdioTransport {
       log('stdin closed');
       process.exit(0);
     });
+    
+    process.stdin.on('error', (err) => {
+      log('stdin error:', err);
+    });
+    
+    log('✅ stdin setup complete');
   }
   
   processBuffer() {
+    log(`📊 processBuffer - buffer: ${this.buffer.length} bytes, expectedLength: ${this.expectedLength}`);
+    
     while (true) {
       if (this.expectedLength === null) {
-        // Look for Content-Length header
+        // Try MCP standard format first: Content-Length header
         const headerEnd = this.buffer.indexOf('\r\n\r\n');
-        if (headerEnd === -1) break;
         
-        const headers = this.buffer.slice(0, headerEnd);
-        const match = /Content-Length: *(\d+)/i.exec(headers);
-        
-        if (!match) {
-          this.buffer = this.buffer.slice(headerEnd + 4);
-          continue;
+        if (headerEnd !== -1) {
+          // Standard MCP format with Content-Length header
+          log('✅ MCP standard format detected (has \\r\\n\\r\\n)');
+          
+          const headers = this.buffer.slice(0, headerEnd);
+          const match = /Content-Length: *(\d+)/i.exec(headers);
+          
+          if (match) {
+            this.expectedLength = parseInt(match[1], 10);
+            log(`📦 Expecting ${this.expectedLength} bytes`);
+            this.buffer = this.buffer.slice(headerEnd + 4);
+          } else {
+            log('No Content-Length header found, skipping');
+            this.buffer = this.buffer.slice(headerEnd + 4);
+            continue;
+          }
+        } else {
+          // Try alternative format: just JSON with \n or newline
+          const newlineIndex = this.buffer.indexOf('\n');
+          
+          if (newlineIndex !== -1) {
+            log('📝 Simplified format detected (newline-delimited JSON)');
+            
+            // Try to parse as complete JSON object
+            const potentialMessage = this.buffer.slice(0, newlineIndex);
+            
+            try {
+              // Test if it's valid JSON
+              const testParse = JSON.parse(potentialMessage);
+              log('✅ Valid JSON found at newline boundary');
+              
+              this.handleRequest(testParse).catch(err => {
+                log('Error handling request:', err);
+              });
+              
+              this.buffer = this.buffer.slice(newlineIndex + 1);
+              continue;
+            } catch (e) {
+              log('⚠️ Not valid JSON at newline, waiting for more data...');
+              break;
+            }
+          } else {
+            log('⏳ Waiting for complete message (no newline found)...');
+            break;
+          }
         }
-        
-        this.expectedLength = parseInt(match[1], 10);
-        this.buffer = this.buffer.slice(headerEnd + 4);
       }
       
-      if (this.buffer.length >= this.expectedLength) {
+      if (this.expectedLength !== null && this.buffer.length >= this.expectedLength) {
         const message = this.buffer.slice(0, this.expectedLength);
         this.buffer = this.buffer.slice(this.expectedLength);
         this.expectedLength = null;
@@ -180,20 +326,29 @@ class StdioTransport {
   }
   
   async handleRequest(request) {
-    log('Received request:', request.method);
+    log(`🔵 handleRequest START - Method: ${request.method}, ID: ${request.id}`);
     
     try {
       let result;
       
       // Handle MCP protocol methods
       if (request.method === 'initialize') {
+        log('🟦 Calling handleInitialize...');
         result = await this.handleInitialize(request.params);
+        log('🟩 handleInitialize returned:', JSON.stringify(result));
       } else if (request.method === 'tools/list') {
+        log('🟦 Calling handleToolsList...');
         result = await this.handleToolsList();
       } else if (request.method === 'tools/call') {
+        log('🟦 Calling handleToolCall...');
         result = await this.handleToolCall(request.params);
+      } else if (request.method?.startsWith('notifications/')) {
+        // Handle notifications (no response needed)
+        log(`📢 Received notification: ${request.method}`);
+        return;
       } else {
         // Unknown method
+        log('⚠️ Unknown method:', request.method);
         this.sendResponse({
           jsonrpc: '2.0',
           id: request.id,
@@ -205,13 +360,15 @@ class StdioTransport {
         return;
       }
       
+      log(`🟩 Calling sendResponse for request ID ${request.id}`);
       this.sendResponse({
         jsonrpc: '2.0',
         id: request.id,
         result
       });
+      log('🟩 sendResponse completed');
     } catch (error) {
-      log('Error:', error);
+      log('❌ Error:', error);
       this.sendResponse({
         jsonrpc: '2.0',
         id: request.id,
@@ -512,9 +669,17 @@ class StdioTransport {
   
   sendResponse(response) {
     const message = JSON.stringify(response);
-    const header = `Content-Length: ${Buffer.byteLength(message)}\r\n\r\n`;
-    process.stdout.write(header + message);
-    log('Sent response:', response.id || 'notification');
+    
+    log('📤 Sending response to stdout:');
+    log('  - ID:', response.id);
+    log('  - Has result:', !!response.result);
+    log('  - Has error:', !!response.error);
+    log('  - Message length:', message.length);
+    
+    // Send as newline-delimited JSON (compatible with Copilot's simplified format)
+    // No Content-Length headers needed
+    process.stdout.write(message + '\n');
+    log('✅ Response written to stdout');
   }
 }
 
@@ -523,7 +688,7 @@ async function main() {
   log('VPy IDE MCP Server starting...');
   
   try {
-    // Connect to IDE
+    // Connect to IDE (skipped if --stdio mode)
     await connectToIDE();
     log('Connected to IDE');
     
@@ -531,9 +696,29 @@ async function main() {
     const transport = new StdioTransport();
     log('MCP server ready on stdio');
     
+    // Keep process alive - listen for signals
+    process.on('SIGINT', () => {
+      log('Received SIGINT, exiting gracefully...');
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', () => {
+      log('Received SIGTERM, exiting gracefully...');
+      process.exit(0);
+    });
+    
+    log('MCP server is now listening on stdio (waiting for requests from Copilot)');
+    
+    // Prevent process from exiting immediately
+    await new Promise(() => {
+      // This promise never resolves, keeping the process alive
+    });
+    
   } catch (error) {
     console.error('Failed to start MCP server:', error.message);
-    console.error('Make sure the VPy IDE is running with MCP IPC enabled');
+    if (!process.argv.includes('--stdio')) {
+      console.error('Make sure the VPy IDE is running with MCP IPC enabled');
+    }
     process.exit(1);
   }
 }

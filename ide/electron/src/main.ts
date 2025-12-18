@@ -203,7 +203,7 @@ function startMCPIpcServer() {
   const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
   
   mcpIpcServer = net.createServer((socket) => {
-    if (verbose) console.log('[MCP IPC] Client connected');
+    console.log('[MCP IPC] Client connected');
     
     let buffer = '';
     
@@ -218,15 +218,18 @@ function startMCPIpcServer() {
         if (line.trim()) {
           try {
             const request: MCPRequest = JSON.parse(line);
-            if (verbose) console.log('[MCP IPC] Request:', request.method);
+            console.log('[MCP IPC] ▶ Request:', request.method, 'params:', request.params);
             
             const mcpServer = getMCPServer();
+            console.log('[MCP IPC] ▶ Calling handleRequest...');
             const response = await mcpServer.handleRequest(request);
+            console.log('[MCP IPC] ✓ Response received:', response);
             
             // Send response back
             socket.write(JSON.stringify(response) + '\n');
+            console.log('[MCP IPC] ✓ Response sent');
           } catch (e: any) {
-            if (verbose) console.error('[MCP IPC] Error:', e.message);
+            console.error('[MCP IPC] Error:', e.message);
             socket.write(JSON.stringify({
               jsonrpc: '2.0',
               id: null,
@@ -238,16 +241,16 @@ function startMCPIpcServer() {
     });
     
     socket.on('error', (err) => {
-      if (verbose) console.error('[MCP IPC] Socket error:', err.message);
+      console.error('[MCP IPC] Socket error:', err.message);
     });
     
     socket.on('close', () => {
-      if (verbose) console.log('[MCP IPC] Client disconnected');
+      console.log('[MCP IPC] Client disconnected');
     });
   });
   
   mcpIpcServer.listen(MCP_IPC_PORT, 'localhost', () => {
-    if (verbose) console.log(`[MCP IPC] Server listening on port ${MCP_IPC_PORT}`);
+    console.log(`[MCP IPC] Server listening on port ${MCP_IPC_PORT}`);
   });
   
   mcpIpcServer.on('error', (err: any) => {
@@ -560,8 +563,8 @@ function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ f
   return diags;
 }
 
-// args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; outputPath?: string }
-ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string }) => {
+// Exported function for direct invocation (e.g. from MCP server)
+export async function executeCompilation(args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string }) {
   const { path, saveIfDirty, autoStart, outputPath } = args || {} as any;
   
   // Check if we have a project open - if so, compile the project instead of individual file
@@ -581,6 +584,21 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       targetPath = vpyprojPath;
       isProjectMode = true;
       mainWindow?.webContents.send('run://stdout', `[Compiler] Compiling project: ${vpyprojPath}\n`);
+      
+      // Read outputPath from .vpyproj if not provided
+      if (!outputPath) {
+        try {
+          const vpyprojContent = await fs.readFile(vpyprojPath, 'utf-8');
+          const outputMatch = vpyprojContent.match(/^output\s*=\s*"(.+)"$/m);
+          if (outputMatch) {
+            // outputPath is relative to project root
+            args.outputPath = join(project.rootDir, outputMatch[1]);
+            mainWindow?.webContents.send('run://stdout', `[Compiler] Output path from .vpyproj: ${args.outputPath}\n`);
+          }
+        } catch (e: any) {
+          mainWindow?.webContents.send('run://stderr', `[Compiler] ⚠️ Failed to read output path from .vpyproj: ${e.message}\n`);
+        }
+      }
     } catch {
       // No .vpyproj found, fallback to file compilation
       if (!path) {
@@ -629,6 +647,9 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
     }
   }
   
+  // Re-extract outputPath after potentially reading from .vpyproj
+  const finalOutputPath = args.outputPath || outputPath;
+  
   const compiler = resolveCompilerPath();
   if (!compiler) return { error: 'compiler_not_found' };
   
@@ -649,14 +670,14 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
     // If outputPath is provided (from project), add --out argument
     // Note: --out specifies the ASM output path, binary is derived from it
     let finalBinPath = outAsm.replace(/\.asm$/, '.bin');
-    if (outputPath) {
+    if (finalOutputPath) {
       // outputPath is the .bin path, derive .asm from it
-      const outAsmFromProject = outputPath.replace(/\.bin$/, '.asm');
+      const outAsmFromProject = finalOutputPath.replace(/\.bin$/, '.asm');
       argsv.push('--out', outAsmFromProject);
-      finalBinPath = outputPath;
+      finalBinPath = finalOutputPath;
       outAsm = outAsmFromProject; // CRITICAL: Use project ASM path for all checks
       // Ensure output directory exists
-      const outputDir = join(outputPath, '..');
+      const outputDir = join(finalOutputPath, '..');
       try {
         await fs.mkdir(outputDir, { recursive: true });
       } catch {}
@@ -839,6 +860,11 @@ ipcMain.handle('run:compile', async (_e, args: { path: string; saveIfDirty?: { c
       }
     });
   });
+}
+
+// IPC handler wraps the exported function
+ipcMain.handle('run:compile', async (_e, args) => {
+  return executeCompilation(args);
 });
 
 // Emulator: run until next frame (or max steps)
