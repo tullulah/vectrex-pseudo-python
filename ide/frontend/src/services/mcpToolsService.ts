@@ -336,17 +336,28 @@ To use a tool, respond with a JSON function call in a code block:
             .filter((item: any) => item.type === 'text')
             .map((item: any) => item.text)
             .join('\n');
-        } else {
-          resultText = JSON.stringify(result, null, 2);
+        } else if (typeof result === 'object') {
+          // For structured results, provide summary instead of full JSON
+          if (result.uri) {
+            resultText = `Archivo: ${result.uri}`;
+          } else if (result.documents) {
+            resultText = `${result.documents.length} documento(s)`;
+          } else if (result.content) {
+            const contentLength = result.content.length;
+            resultText = `Contenido leído (${contentLength} caracteres)`;
+          } else {
+            resultText = 'Completado';
+          }
         }
 
         // Update project context for file/asset creation
         this.updateProjectContextForTool(call.tool, call.arguments);
 
         if (isEdit) {
-          results.push(`✅ Cambios aplicados correctamente\n${resultText}`);
+          results.push(`✅ Cambios aplicados correctamente`);
         } else {
-          results.push(`✅ **${call.tool}**:\n${resultText}`);
+          // Only show tool name, not verbose results
+          results.push(`✅ ${call.tool}: ${resultText}`);
         }
       } catch (error) {
         results.push(`❌ **${call.tool}**: ${error instanceof Error ? error.message : 'Failed'}`);

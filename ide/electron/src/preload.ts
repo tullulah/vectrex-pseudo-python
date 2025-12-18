@@ -375,4 +375,18 @@ contextBridge.exposeInMainWorld('storage', {
   getKeys: () => ipcRenderer.invoke('storage:getKeys') as Promise<Record<string, string>>,
 });
 
+// PyPilot Sessions API
+contextBridge.exposeInMainWorld('pypilot', {
+  createSession: (projectPath: string, name?: string) => ipcRenderer.invoke('pypilot:createSession', projectPath, name),
+  getSessions: (projectPath: string) => ipcRenderer.invoke('pypilot:getSessions', projectPath),
+  getActiveSession: (projectPath: string) => ipcRenderer.invoke('pypilot:getActiveSession', projectPath),
+  switchSession: (sessionId: number) => ipcRenderer.invoke('pypilot:switchSession', sessionId),
+  renameSession: (sessionId: number, newName: string) => ipcRenderer.invoke('pypilot:renameSession', sessionId, newName),
+  deleteSession: (sessionId: number) => ipcRenderer.invoke('pypilot:deleteSession', sessionId),
+  saveMessage: (sessionId: number, role: string, content: string, metadata?: any) => ipcRenderer.invoke('pypilot:saveMessage', sessionId, role, content, metadata),
+  getMessages: (sessionId: number) => ipcRenderer.invoke('pypilot:getMessages', sessionId),
+  clearMessages: (sessionId: number) => ipcRenderer.invoke('pypilot:clearMessages', sessionId),
+  getMessageCount: (sessionId: number) => ipcRenderer.invoke('pypilot:getMessageCount', sessionId),
+});
+
 export {};

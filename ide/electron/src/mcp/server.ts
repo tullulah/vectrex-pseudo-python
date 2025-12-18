@@ -61,6 +61,18 @@ export class MCPServer {
       },
     });
 
+    this.registerTool('editor/save_document', this.saveDocument.bind(this), {
+      name: 'editor/save_document',
+      description: 'Save an open document to disk and mark as clean (not dirty). CRITICAL: Use this after editor/write_document before compilation to ensure compiler reads latest content.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uri: { type: 'string', description: 'Document URI (file must be open in editor)' },
+        },
+        required: ['uri'],
+      },
+    });
+
     this.registerTool('editor/get_diagnostics', this.getDiagnostics.bind(this), {
       name: 'editor/get_diagnostics',
       description: 'Get compilation/lint diagnostics',
@@ -137,6 +149,18 @@ export class MCPServer {
       inputSchema: {
         type: 'object',
         properties: {},
+      },
+    });
+
+    this.registerTool('compiler/build_and_run', this.buildAndRun.bind(this), {
+      name: 'compiler/build_and_run',
+      description: 'Build current project and run it in emulator (combines compiler/build + emulator/run). Use this for quick testing. Returns compilation errors if build fails.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          breakOnEntry: { type: 'boolean', description: 'Pause at entry point (optional)' },
+        },
+        required: [],
       },
     });
 
@@ -466,22 +490,37 @@ export class MCPServer {
     const { uri } = params;
     const result = await this.mainWindow.webContents.executeJavaScript(`
       (function() {
-        const store = window.__editorStore__;
-        if (!store) throw new Error('Editor store not available');
-        const state = store.getState();
-        const doc = state.documents.find(d => d.uri === '${uri}' || d.uri.endsWith('/${uri}'));
-        if (!doc) {
-          const openDocs = state.documents.map(d => d.uri).join(', ');
-          throw new Error('Document not found: "${uri}". Document must be OPEN in editor first. Open documents: [' + openDocs + ']. Use editor/write_document to CREATE new files, or project/create_music for .vmus files.');
+        try {
+          const store = window.__editorStore__;
+          if (!store) throw new Error('Editor store not available');
+          const state = store.getState();
+          const targetUri = ${JSON.stringify(uri)};
+          const doc = state.documents.find(d => d.uri === targetUri || d.uri.endsWith('/' + targetUri));
+          if (!doc) {
+            const openDocs = state.documents.map(d => d.uri);
+            const errorMsg = 'Document not found: ' + targetUri + 
+                           '. Document must be OPEN in editor first. ' +
+                           'Open documents: ' + JSON.stringify(openDocs) + 
+                           '. Use editor/write_document to CREATE new files.';
+            throw new Error(errorMsg);
+          }
+          return {
+            uri: doc.uri,
+            content: doc.content,
+            language: doc.language,
+            dirty: doc.dirty,
+          };
+        } catch (e) {
+          // Ensure error is properly serialized
+          return { __error: true, message: e.message || String(e), stack: e.stack };
         }
-        return {
-          uri: doc.uri,
-          content: doc.content,
-          language: doc.language,
-          dirty: doc.dirty,
-        };
       })()
     `);
+    
+    // Check if result contains an error
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
 
     return result;
   }
@@ -527,16 +566,17 @@ export class MCPServer {
         const store = window.__editorStore__;
         if (!store) throw new Error('Editor store not available');
         const state = store.getState();
-        const doc = state.documents.find(d => d.uri === '${uri.replace(/\\/g, '\\\\')}');
+        const targetUri = ${JSON.stringify(uri)};
+        const doc = state.documents.find(d => d.uri === targetUri);
         
         if (doc) {
           // Document is open, update content
-          store.getState().updateContent('${uri.replace(/\\/g, '\\\\')}', ${JSON.stringify(content)});
+          store.getState().updateContent(targetUri, ${JSON.stringify(content)});
         } else {
           // Document not open, open it
-          const language = '${uri.endsWith('.vpy') ? 'vpy' : uri.endsWith('.json') || uri.endsWith('.vec') || uri.endsWith('.vmus') ? 'json' : 'plaintext'}';
+          const language = targetUri.endsWith('.vpy') ? 'vpy' : (targetUri.endsWith('.json') || targetUri.endsWith('.vec') || targetUri.endsWith('.vmus')) ? 'json' : 'plaintext';
           store.getState().openDocument({
-            uri: '${uri.replace(/\\/g, '\\\\')}',
+            uri: targetUri,
             language: language,
             content: ${JSON.stringify(content)},
             dirty: false,
@@ -549,6 +589,86 @@ export class MCPServer {
     `);
 
     return { success: true, uri };
+  }
+
+  private async saveDocument(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { uri } = params;
+
+    // Get document from renderer
+    const docData = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const store = window.__editorStore__;
+          if (!store) throw new Error('Editor store not available');
+          const state = store.getState();
+          const targetUri = ${JSON.stringify(uri)};
+          const doc = state.documents.find(d => d.uri === targetUri || d.uri.endsWith('/' + targetUri));
+          if (!doc) {
+            throw new Error('Document not found: ' + targetUri);
+          }
+          return {
+            uri: doc.uri,
+            content: doc.content,
+            diskPath: doc.diskPath
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (docData && (docData as any).__error) {
+      throw new Error((docData as any).message);
+    }
+
+    const diskPath = (docData as any).diskPath || (docData as any).uri;
+    
+    // Remove file:// prefix if present
+    const fsPath = diskPath.startsWith('file://') ? diskPath.substring(7) : diskPath;
+
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // Auto-create parent directory if needed
+      const parentDir = path.dirname(fsPath);
+      await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+      
+      // Write to disk
+      await fs.writeFile(fsPath, (docData as any).content, 'utf-8');
+      
+      // Get new mtime
+      const stat = await fs.stat(fsPath);
+      
+      // Mark as saved in editor store
+      await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__editorStore__;
+          if (store) {
+            const state = store.getState();
+            state.markSaved(${JSON.stringify((docData as any).uri)}, ${stat.mtimeMs});
+          }
+          return { success: true };
+        })()
+      `);
+
+      return {
+        success: true,
+        uri: (docData as any).uri,
+        path: fsPath,
+        mtime: stat.mtimeMs,
+        size: stat.size
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to save: ${error.message}`
+      };
+    }
   }
 
   private async replaceRange(params: any): Promise<any> {
@@ -581,8 +701,9 @@ export class MCPServer {
           const store = window.__editorStore__;
           if (!store) throw new Error('Editor store not available');
           const state = store.getState();
-          const doc = state.documents.find(d => d.uri.endsWith('/${uri}') || d.uri === '${uri}');
-          if (!doc) throw new Error('Document not found: ${uri}');
+          const targetUri = ${JSON.stringify(uri)};
+          const doc = state.documents.find(d => d.uri.endsWith('/' + targetUri) || d.uri === targetUri);
+          if (!doc) throw new Error('Document not found: ' + targetUri);
           const lines = doc.content.split('\\n');
           return lines[${endLine - 1}]?.length || 0;
         })()
@@ -598,8 +719,9 @@ export class MCPServer {
         const store = window.__editorStore__;
         if (!store) throw new Error('Editor store not available');
         const state = store.getState();
-        const doc = state.documents.find(d => d.uri === '${uri.replace(/\\/g, '\\\\')}');
-        if (!doc) throw new Error('Document not found: ${uri}');
+        const targetUri = ${JSON.stringify(uri)};
+        const doc = state.documents.find(d => d.uri === targetUri);
+        if (!doc) throw new Error('Document not found: ' + targetUri);
         
         const lines = doc.content.split('\\n');
         const startIdx = ${startLine - 1};
@@ -630,7 +752,7 @@ export class MCPServer {
         }
         
         const newContent = lines.join('\\n');
-        store.getState().updateContent('${uri.replace(/\\/g, '\\\\')}', newContent);
+        store.getState().updateContent(targetUri, newContent);
         return { 
           success: true, 
           linesChanged: endIdx - startIdx + 1,
@@ -657,8 +779,9 @@ export class MCPServer {
         const store = window.__editorStore__;
         if (!store) throw new Error('Editor store not available');
         const state = store.getState();
-        const doc = state.documents.find(d => d.uri === '${uri}');
-        if (!doc) throw new Error('Document not found: ${uri}');
+        const targetUri = ${JSON.stringify(uri)};
+        const doc = state.documents.find(d => d.uri === targetUri);
+        if (!doc) throw new Error('Document not found: ' + targetUri);
         
         const lines = doc.content.split('\\n');
         const lineIdx = ${line - 1};
@@ -669,13 +792,14 @@ export class MCPServer {
         }
         
         const currentLine = lines[lineIdx];
+        const insertText = ${JSON.stringify(text)};
         lines[lineIdx] = currentLine.substring(0, colIdx) + 
-                        ${JSON.stringify(text)} + 
+                        insertText + 
                         currentLine.substring(colIdx);
         
         const newContent = lines.join('\\n');
-        store.getState().updateContent('${uri}', newContent);
-        return { success: true, insertedLength: ${JSON.stringify(text)}.length };
+        store.getState().updateContent(targetUri, newContent);
+        return { success: true, insertedLength: insertText.length };
       })()
     `);
 
@@ -697,8 +821,9 @@ export class MCPServer {
         const store = window.__editorStore__;
         if (!store) throw new Error('Editor store not available');
         const state = store.getState();
-        const doc = state.documents.find(d => d.uri === '${uri}');
-        if (!doc) throw new Error('Document not found: ${uri}');
+        const targetUri = ${JSON.stringify(uri)};
+        const doc = state.documents.find(d => d.uri === targetUri);
+        if (!doc) throw new Error('Document not found: ' + targetUri);
         
         const lines = doc.content.split('\\n');
         const startIdx = ${startLine - 1};
@@ -716,7 +841,7 @@ export class MCPServer {
         }
         
         const newContent = lines.join('\\n');
-        store.getState().updateContent('${uri}', newContent);
+        store.getState().updateContent(targetUri, newContent);
         return { success: true, linesDeleted: endIdx - startIdx + 1 };
       })()
     `);
@@ -834,12 +959,139 @@ export class MCPServer {
   }
 
   private async getCompilerErrors(params: any): Promise<any> {
-    return { errors: [] };
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const store = window.__editorStore__;
+          if (!store) return { errors: [] };
+          const state = store.getState();
+          const diagnostics = state.allDiagnostics || [];
+          
+          // Filter only errors (not warnings or info)
+          const errors = diagnostics
+            .filter(d => d.severity === 'error')
+            .map(d => ({
+              file: d.file,
+              uri: d.uri,
+              line: d.line,
+              column: d.column,
+              message: d.message,
+              source: d.source
+            }));
+          
+          return { errors, totalCount: errors.length };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async buildAndRun(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    // First, build the project
+    const buildResult = await this.compilerBuild({});
+    
+    if (!buildResult.success) {
+      return {
+        success: false,
+        phase: 'compilation',
+        errors: buildResult.errors || [],
+        message: 'Compilation failed. Fix errors and try again.',
+      };
+    }
+
+    // If build succeeded, get the ROM path from build result
+    const romPath = buildResult.binPath;
+    
+    if (!romPath) {
+      return {
+        success: false,
+        phase: 'compilation',
+        message: 'Compilation succeeded but no ROM path returned',
+      };
+    }
+
+    // Now run in emulator
+    const runResult = await this.emulatorRun({ romPath, breakOnEntry: params.breakOnEntry || false });
+    
+    return {
+      success: runResult.success,
+      phase: 'execution',
+      romPath,
+      state: runResult.state,
+      message: runResult.success ? 'Program running in emulator' : 'Failed to start emulator',
+    };
   }
 
   private async emulatorRun(params: any): Promise<any> {
-    // Will send IPC to start emulator
-    return { success: false, state: 'stopped' };
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { romPath, breakOnEntry } = params;
+    
+    if (!romPath) {
+      return {
+        success: false,
+        message: 'romPath parameter is required'
+      };
+    }
+
+    try {
+      // Read the binary file
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      const binaryData = await fs.readFile(romPath);
+      const base64 = binaryData.toString('base64');
+      
+      // Try to read associated .pdb file
+      const pdbPath = romPath.replace(/\.bin$/, '.pdb');
+      let pdbData = null;
+      
+      try {
+        const pdbContent = await fs.readFile(pdbPath, 'utf-8');
+        pdbData = JSON.parse(pdbContent);
+      } catch {
+        // .pdb not found or invalid - continue without debug symbols
+      }
+
+      // Send to renderer via window.electronAPI.onCompiledBin
+      this.mainWindow.webContents.send('compiled-binary', {
+        base64,
+        size: binaryData.length,
+        binPath: romPath,
+        pdbData
+      });
+
+      return {
+        success: true,
+        state: 'running',
+        romPath,
+        size: binaryData.length,
+        hasDebugSymbols: !!pdbData,
+        message: `ROM loaded successfully: ${path.basename(romPath)}`
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to load ROM: ${error.message}`
+      };
+    }
   }
 
   private async getEmulatorState(params: any): Promise<any> {
@@ -866,7 +1118,41 @@ export class MCPServer {
   }
 
   private async emulatorStop(params: any): Promise<any> {
-    return { success: false };
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const debugStore = window.__debugStore__;
+          if (!debugStore) throw new Error('Debug store not available');
+          
+          const state = debugStore.getState();
+          if (state.stopEmulation) {
+            state.stopEmulation();
+            return { 
+              success: true, 
+              state: 'stopped',
+              message: 'Emulator stopped successfully'
+            };
+          }
+          
+          return { 
+            success: false,
+            message: 'stopEmulation function not available'
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
   }
 
   private async addBreakpoint(params: any): Promise<any> {

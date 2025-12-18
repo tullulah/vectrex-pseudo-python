@@ -15,6 +15,20 @@ import { getMCPServer } from './mcp/server.js';
 import type { MCPRequest } from './mcp/types.js';
 import { registerAIProxyHandlers } from './ai-proxy.js';
 import { storageGet, storageSet, storageDelete, storageKeys, storageClear, getStoragePath, StorageKeys } from './storage.js';
+import { 
+  initPyPilotDb, 
+  createSession, 
+  getSessions, 
+  getActiveSession,
+  switchSession, 
+  renameSession,
+  deleteSession,
+  saveMessage, 
+  getMessages,
+  clearMessages,
+  getMessageCount,
+  closePyPilotDb
+} from './pypilotDb.js';
 
 let mainWindow: BrowserWindow | null = null;
 let mcpIpcServer: net.Server | null = null;
@@ -1393,6 +1407,133 @@ app.on('before-quit', () => {
     watcher.close();
   }
   watchers.clear();
+  
+  // Close PyPilot database
+  closePyPilotDb();
+});
+
+// ==================== PyPilot Session Management ====================
+
+// Initialize PyPilot database on app ready
+app.whenReady().then(() => {
+  initPyPilotDb();
+  console.log('[PyPilot] Database initialized');
+});
+
+// Create new session
+ipcMain.handle('pypilot:createSession', async (_e, projectPath: string, name?: string) => {
+  try {
+    const sessionName = name || `Session ${new Date().toLocaleString()}`;
+    const session = createSession(projectPath, sessionName);
+    console.log('[PyPilot] Created session:', session.id, 'for project:', projectPath);
+    return { success: true, session };
+  } catch (error: any) {
+    console.error('[PyPilot] Error creating session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get all sessions for a project
+ipcMain.handle('pypilot:getSessions', async (_e, projectPath: string) => {
+  try {
+    const sessions = getSessions(projectPath);
+    return { success: true, sessions };
+  } catch (error: any) {
+    console.error('[PyPilot] Error getting sessions:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get active session for a project
+ipcMain.handle('pypilot:getActiveSession', async (_e, projectPath: string) => {
+  try {
+    const session = getActiveSession(projectPath);
+    return { success: true, session };
+  } catch (error: any) {
+    console.error('[PyPilot] Error getting active session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Switch to different session
+ipcMain.handle('pypilot:switchSession', async (_e, sessionId: number) => {
+  try {
+    const session = switchSession(sessionId);
+    console.log('[PyPilot] Switched to session:', sessionId);
+    return { success: true, session };
+  } catch (error: any) {
+    console.error('[PyPilot] Error switching session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Rename session
+ipcMain.handle('pypilot:renameSession', async (_e, sessionId: number, newName: string) => {
+  try {
+    renameSession(sessionId, newName);
+    console.log('[PyPilot] Renamed session:', sessionId, 'to:', newName);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[PyPilot] Error renaming session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Delete session
+ipcMain.handle('pypilot:deleteSession', async (_e, sessionId: number) => {
+  try {
+    deleteSession(sessionId);
+    console.log('[PyPilot] Deleted session:', sessionId);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[PyPilot] Error deleting session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save message to session
+ipcMain.handle('pypilot:saveMessage', async (_e, sessionId: number, role: string, content: string, metadata?: any) => {
+  try {
+    const message = saveMessage(sessionId, role as 'user' | 'assistant' | 'system', content, metadata);
+    return { success: true, message };
+  } catch (error: any) {
+    console.error('[PyPilot] Error saving message:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get all messages for session
+ipcMain.handle('pypilot:getMessages', async (_e, sessionId: number) => {
+  try {
+    const messages = getMessages(sessionId);
+    return { success: true, messages };
+  } catch (error: any) {
+    console.error('[PyPilot] Error getting messages:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear all messages from session
+ipcMain.handle('pypilot:clearMessages', async (_e, sessionId: number) => {
+  try {
+    clearMessages(sessionId);
+    console.log('[PyPilot] Cleared messages for session:', sessionId);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[PyPilot] Error clearing messages:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get message count for session
+ipcMain.handle('pypilot:getMessageCount', async (_e, sessionId: number) => {
+  try {
+    const count = getMessageCount(sessionId);
+    return { success: true, count };
+  } catch (error: any) {
+    console.error('[PyPilot] Error getting message count:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // ============================================

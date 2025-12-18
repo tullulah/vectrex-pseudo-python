@@ -278,10 +278,31 @@ export const EmulatorPanel: React.FC = () => {
   // Inicialización JSVecX con dimensiones responsive
   useEffect(() => {
     let cancelled = false;
+    let initAttempts = 0;
+    const MAX_INIT_ATTEMPTS = 5;
     
     const initJSVecX = () => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas) {
+        console.warn('[EmulatorPanel] Canvas ref not ready yet');
+        // Retry initialization if canvas isn't ready yet
+        if (initAttempts < MAX_INIT_ATTEMPTS) {
+          initAttempts++;
+          setTimeout(initJSVecX, 200);
+        }
+        return;
+      }
+      
+      // Check if canvas is visible (has dimensions)
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        console.warn('[EmulatorPanel] Canvas not visible yet, retrying...');
+        if (initAttempts < MAX_INIT_ATTEMPTS) {
+          initAttempts++;
+          setTimeout(initJSVecX, 200);
+        }
+        return;
+      }
       
       // Configurar canvas con dimensiones responsive
       canvas.id = 'screen';
@@ -311,7 +332,7 @@ export const EmulatorPanel: React.FC = () => {
         return;
       }
       
-      console.log(`[EmulatorPanel] Initializing JSVecX with canvas size: ${canvasSize.width}x${canvasSize.height}`);
+      console.log(`[EmulatorPanel] Initializing JSVecX with canvas size: ${canvasSize.width}x${canvasSize.height} (visible: ${rect.width}x${rect.height})`);
       
       try {
       console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: JSVecX initialization');
@@ -337,7 +358,7 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [setStatus]); // Solo re-inicializar cuando cambie setStatus, no canvasSize
+  }, [setStatus, canvasSize]); // Re-inicializar si cambia canvasSize (puede indicar que se hizo visible)
 
   // Actualizar dimensiones del canvas sin re-inicializar JSVecX
   useEffect(() => {

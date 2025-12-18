@@ -27,16 +27,19 @@
     "harness-test": "npm run build && node dist/harness_tests.js"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/electron": "^1.6.10",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
     "electron": "^29.0.0",
     "electron-builder": "^24.6.0",
+    "electron-rebuild": "^3.2.9",
     "typescript": "^5.4.0",
     "wait-on": "^7.0.1"
   },
   "dependencies": {
+    "better-sqlite3": "^12.5.0",
     "pseudo-python": "file:../..",
     "simple-git": "^3.22.0",
     "toml": "^3.0.0"

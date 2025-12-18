@@ -209,7 +209,105 @@ export const IDE_AND_GIT_CONTEXT = `
 - Vectrex hardware guidance
 
 ## MCP (Model Context Protocol):
-22 specialized tools for AI integration and project management.
+23 specialized tools for AI integration and project management.
+
+### CRITICAL: MCP Tool Usage Workflow
+
+**ALWAYS follow this sequence when modifying code:**
+
+1. **Modify file** using \`editor_write_document\`
+   - Pass complete file content (not partial edits)
+   - Provides uri (file path) and content parameters
+
+2. **SAVE the file** immediately using \`editor_save_document\`
+   - CRITICAL: Must save to disk before compilation
+   - Compiler reads from disk, not editor state
+   - Pass uri parameter (same as write_document)
+
+3. **Compile the project** using \`compiler_build_and_run\`
+   - This is the NEW unified tool (replaces separate build+run steps)
+   - Automatically compiles AND runs in emulator if successful
+   - No parameters needed (uses current project configuration)
+
+4. **VALIDATE compilation output**
+   - Check the returned \`success\` field
+   - If \`success: false\`, read the \`errors\` array
+   - If \`success: true\`, check \`binPath\` exists
+   - Verify \`phase\` field: 'compilation' or 'execution'
+
+5. **Handle compilation errors**
+   - Parse \`errors\` array for line/column/message
+   - Use \`editor_read_document\` to read source if needed
+   - Fix errors and repeat from step 1
+
+**Example workflow:**
+\`\`\`
+1. editor_write_document({uri: "main.vpy", content: "..."})
+2. editor_save_document({uri: "main.vpy"})
+3. compiler_build_and_run({})
+4. Check result.success:
+   - true → Program running in emulator
+   - false → Read result.errors, fix code, repeat
+\`\`\`
+
+### Key MCP Tools:
+
+**Editor Tools:**
+- \`editor_write_document\` - CREATE or UPDATE file (auto-opens in editor)
+- \`editor_save_document\` - SAVE file to disk (REQUIRED before compilation)
+- \`editor_read_document\` - Read file content (file MUST be open first)
+- \`editor_list_documents\` - List all open documents
+
+**Compiler Tools:**
+- \`compiler_build_and_run\` - **USE THIS**: Compile + Run in one step
+- \`compiler_build\` - Only compile (no auto-run)
+- \`compiler_get_errors\` - Get current diagnostics from editor
+
+**Emulator Tools:**
+- \`emulator_run\` - Load ROM file into emulator
+- \`emulator_stop\` - Stop emulation
+- \`emulator_get_state\` - Get PC, registers, cycles, FPS
+
+**Project Tools:**
+- \`project_create_vector\` - Create .vec file (validates JSON)
+- \`project_create_music\` - Create .vmus file (validates JSON)
+- \`project_read_file\` - Read any project file
+- \`project_write_file\` - Write any project file
+
+### Common Mistakes to AVOID:
+
+❌ Using \`editor_read_document\` on unopened files → Use \`editor_write_document\` to create
+❌ Forgetting to save after \`editor_write_document\` → **ALWAYS use \`editor_save_document\` after write**
+❌ Compiling without saving → Compiler reads disk, not editor state
+❌ Using \`editor_replace_range\` for new files → Requires file open first, use \`editor_write_document\`
+❌ Calling \`compiler_build\` then \`emulator_run\` separately → Use \`compiler_build_and_run\` instead
+❌ Not checking \`result.success\` after compilation → Must validate before assuming success
+❌ Inventing tool names like \`emulator_compile_and_run\` → Tool doesn't exist, use \`compiler_build_and_run\`
+❌ Passing undefined parameters → Always provide required parameters (e.g., \`uri\` for read_document)
+
+### Parameter Requirements:
+
+**editor_write_document:**
+- \`uri\`: string (required) - File path or name
+- \`content\`: string (required) - Complete file content
+
+**editor_save_document:**
+- \`uri\`: string (required) - File URI to save (must be open)
+
+**editor_read_document:**
+- \`uri\`: string (required) - MUST match open document URI exactly
+
+**compiler_build_and_run:**
+- No parameters required (uses current project)
+- Optional: \`breakOnEntry\`: boolean (pause at first instruction)
+
+**project_create_vector:**
+- \`name\`: string (required) - Filename without .vec extension
+- \`content\`: string (optional) - JSON content, leave empty for template
+
+**project_create_music:**
+- \`name\`: string (required) - Filename without .vmus extension  
+- \`content\`: string (optional) - JSON content, leave empty for template
 `;
 
 export function getVPyContext(): string {

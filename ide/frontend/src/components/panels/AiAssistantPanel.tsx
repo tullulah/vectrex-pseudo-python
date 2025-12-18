@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../../state/editorStore';
+import { useProjectStore } from '../../state/projectStore';
 import type { AiMessage } from '../../types/ai';
 import type { AiProviderType, AiProviderConfig } from '../../types/aiProvider';
 import { aiService } from '../../services/aiService';
 import { logger } from '../../utils/logger';
 import { mcpTools } from '../../services/mcpToolsService';
 import { OllamaManagerDialog } from '../dialogs/OllamaManagerDialog';
+import { SessionManager } from '../SessionManager';
+import { usePyPilotSession } from '../../hooks/usePyPilotSession';
 
 // Base de conocimiento de comandos Vectrex
 const VECTREX_COMMANDS = [
@@ -49,22 +52,22 @@ const VECTREX_COMMANDS = [
 
 export const AiAssistantPanel: React.FC = () => {
   const { t } = useTranslation();
-  const [messages, setMessages] = useState<AiMessage[]>(() => {
-    const saved = localStorage.getItem('pypilot_conversation');
-    if (!saved) return [];
-    
-    try {
-      const parsed = JSON.parse(saved);
-      // Convert timestamp strings back to Date objects
-      return parsed.map((msg: any) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }));
-    } catch (error) {
-      console.error('[PyPilot] Error loading conversation:', error);
-      return [];
-    }
-  });
+  
+  // Get current project path from Zustand store
+  const vpyProject = useProjectStore(s => s.vpyProject);
+  const selected = useProjectStore(s => s.selected);
+  const projectPath = vpyProject?.projectFile || selected || '';
+  
+  // Use PyPilot session hook for message management
+  const {
+    currentSessionId,
+    messages,
+    isLoading: sessionLoading,
+    addMessage: addSessionMessage,
+    clearMessages: clearSessionMessages,
+    switchSession,
+    createNewSession
+  } = usePyPilotSession(projectPath);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conciseMode, setConciseMode] = useState(() => {
@@ -119,10 +122,8 @@ export const AiAssistantPanel: React.FC = () => {
     localStorage.setItem(`pypilot_config_${currentProviderType}`, JSON.stringify(providerConfig));
   }, [providerConfig, currentProviderType]);
 
-  // Persist conversation history
-  useEffect(() => {
-    localStorage.setItem('pypilot_conversation', JSON.stringify(messages));
-  }, [messages]);
+  // Note: Conversation history is now persisted in database via usePyPilotSession hook
+  // No need for localStorage persistence
 
   // Persist concise mode
   useEffect(() => {
@@ -326,17 +327,10 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
     }
   }, [mcpEnabled, messages.length]); // Only run when mcpEnabled changes OR when messages length changes from 0
 
-  const addMessage = (role: AiMessage['role'], content: string, context?: AiMessage['context']) => {
-    const newMessage: AiMessage = {
-      id: Date.now().toString(),
-      role,
-      content,
-      timestamp: new Date(),
-      context
-    };
-    
-    setMessages(prev => [...prev, newMessage]);
-    logger.debug('AI', 'Message added:', { role, contentLength: content.length });
+  const addMessage = async (role: AiMessage['role'], content: string, context?: AiMessage['context']) => {
+    // Save message to database via session hook
+    await addSessionMessage(role, content);
+    logger.debug('AI', 'Message added to session:', { role, contentLength: content.length });
   };
 
   // Function to parse markdown and render code blocks properly
@@ -464,7 +458,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
         break;
         
       case '/clear':
-        setMessages([]);
+        await clearSessionMessages();
         setTimeout(() => {
           addMessage('system', '🗑️ Conversación limpiada. ¿En qué puedo ayudarte?');
         }, 100);
@@ -855,18 +849,30 @@ def loop():
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px' }}>🤖</span>
-          <span style={{ fontWeight: '600' }}>PyPilot</span>
-          <span style={{ 
-            fontSize: '11px', 
-            background: aiService.isConfigured() ? '#10b981' : '#6b7280',
-            color: 'white',
-            padding: '2px 6px',
-            borderRadius: '10px'
-          }}>
-            {aiService.isConfigured() ? aiService.getCurrentProvider()?.name : 'Mock'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>🤖</span>
+            <span style={{ fontWeight: '600' }}>PyPilot</span>
+            <span style={{ 
+              fontSize: '11px', 
+              background: aiService.isConfigured() ? '#10b981' : '#6b7280',
+              color: 'white',
+              padding: '2px 6px',
+              borderRadius: '10px'
+            }}>
+              {aiService.isConfigured() ? aiService.getCurrentProvider()?.name : 'Mock'}
+            </span>
+          </div>
+          
+          {/* Session Manager - only show if project is open */}
+          {projectPath && (
+            <SessionManager
+              projectPath={projectPath}
+              currentSessionId={currentSessionId}
+              onSessionChange={switchSession}
+              onNewSession={createNewSession}
+            />
+          )}
         </div>
         
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -890,12 +896,11 @@ def loop():
           {/* Clear History */}
           <button
             onClick={() => {
-              if (confirm('¿Borrar todo el historial de conversación?')) {
-                setMessages([]);
-                localStorage.removeItem('pypilot_conversation');
+              if (confirm('¿Borrar todo el historial de conversación de esta sesión?')) {
+                clearSessionMessages();
               }
             }}
-            title="Borrar historial"
+            title="Borrar historial de sesión actual"
             style={{
               background: 'transparent',
               border: '1px solid #3c3c3c',

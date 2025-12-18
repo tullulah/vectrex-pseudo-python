@@ -5,6 +5,44 @@ declare module 'monaco-editor/esm/vs/editor/editor.worker?worker' {
   export default WorkerFactory;
 }
 
+// PyPilot Session Management Types
+interface PyPilotSession {
+  id: number;
+  projectPath: string;
+  name: string;
+  createdAt: string;
+  lastActivity: string;
+  isActive: boolean;
+}
+
+interface PyPilotMessage {
+  id: number;
+  sessionId: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+}
+
+// Backend response wrappers
+interface PyPilotResponse<T> {
+  success: boolean;
+  error?: string;
+  data?: T;
+}
+
+interface PyPilotAPI {
+  createSession: (projectPath: string, name?: string) => Promise<{ success: boolean; session?: PyPilotSession; error?: string }>;
+  getSessions: (projectPath: string) => Promise<{ success: boolean; sessions?: PyPilotSession[]; error?: string }>;
+  getActiveSession: (projectPath: string) => Promise<{ success: boolean; session?: PyPilotSession | null; error?: string }>;
+  switchSession: (sessionId: number) => Promise<{ success: boolean; session?: PyPilotSession; error?: string }>;
+  renameSession: (sessionId: number, newName: string) => Promise<{ success: boolean; error?: string }>;
+  deleteSession: (sessionId: number) => Promise<{ success: boolean; error?: string }>;
+  saveMessage: (sessionId: number, role: 'user' | 'assistant' | 'system', content: string, metadata?: any) => Promise<{ success: boolean; message?: PyPilotMessage; error?: string }>;
+  getMessages: (sessionId: number) => Promise<{ success: boolean; messages?: PyPilotMessage[]; error?: string }>;
+  clearMessages: (sessionId: number) => Promise<{ success: boolean; error?: string }>;
+  getMessageCount: (sessionId: number) => Promise<{ success: boolean; count?: number; error?: string }>;
+}
+
 // Electron API types
 interface Window {
   electron: {
@@ -29,4 +67,5 @@ interface Window {
       status?: number;
     }>;
   };
+  pypilot: PyPilotAPI;
 }

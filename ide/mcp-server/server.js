@@ -429,6 +429,17 @@ class StdioTransport {
           }
         },
         {
+          name: 'editor_save_document',
+          description: 'Save an open document to disk and mark as clean. CRITICAL: Use this after editor_write_document before compilation to ensure compiler reads latest content.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI (file must be open in editor)' }
+            },
+            required: ['uri']
+          }
+        },
+        {
           name: 'editor_replace_range',
           description: 'Replace text in a specific range of a document',
           inputSchema: {
@@ -498,6 +509,17 @@ class StdioTransport {
           inputSchema: {
             type: 'object',
             properties: {}
+          }
+        },
+        {
+          name: 'compiler_build_and_run',
+          description: 'Build current project and run it in emulator (combines compiler_build + emulator_run). Use this for quick testing. Returns compilation errors if build fails.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              breakOnEntry: { type: 'boolean', description: 'Pause at entry point (optional)' }
+            },
+            required: []
           }
         },
         {
