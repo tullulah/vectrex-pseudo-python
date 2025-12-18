@@ -3,6 +3,8 @@ import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
 import { useEmulatorSettings } from '../../state/emulatorSettings';
 import { useDebugStore } from '../../state/debugStore';
+import { useJoystickStore } from '../../state/joystickStore';
+import { JoystickConfigDialog } from '../dialogs/JoystickConfigDialog';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
 import { asmAddressToVpyLine, formatAddress } from '../../utils/debugHelpers';
@@ -213,6 +215,7 @@ const EmulatorOutputInfo: React.FC = () => {
 export const EmulatorPanel: React.FC = () => {
   const status = useEmulatorStore(s => s.status);
   const setStatus = useEmulatorStore(s => s.setStatus);
+  const { setConfigOpen, loadConfig } = useJoystickStore();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
   // Persistent emulator settings
@@ -1890,6 +1893,36 @@ export const EmulatorPanel: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Joystick Configuration Button */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        marginTop: 12,
+        paddingTop: 8,
+        borderTop: '1px solid #333'
+      }}>
+        <button
+          onClick={() => setConfigOpen(true)}
+          style={{
+            ...btn,
+            backgroundColor: '#2d4a5a',
+            color: '#aaccff',
+            fontSize: '12px',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+          title="Configure joystick/gamepad"
+        >
+          🎮 <span>Joystick Config</span>
+        </button>
+      </div>
+
+      {/* Joystick Configuration Modal */}
+      <JoystickConfigDialog />
 
     </div>
   );
