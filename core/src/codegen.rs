@@ -69,6 +69,22 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     // Inline assembly
     ("ASM", 1),             // Inline assembly string
     
+    // Joystick 1 input functions (alg_jch0/jch1)
+    ("J1_X", 0),            // Read Joystick 1 X axis (-127 to +127)
+    ("J1_Y", 0),            // Read Joystick 1 Y axis (-127 to +127)
+    ("J1_BUTTON_1", 0),     // Read J1 button 1 (0=released, 1=pressed)
+    ("J1_BUTTON_2", 0),     // Read J1 button 2
+    ("J1_BUTTON_3", 0),     // Read J1 button 3
+    ("J1_BUTTON_4", 0),     // Read J1 button 4
+    
+    // Joystick 2 input functions (alg_jch2/jch3)
+    ("J2_X", 0),            // Read Joystick 2 X axis (-127 to +127)
+    ("J2_Y", 0),            // Read Joystick 2 Y axis (-127 to +127)
+    ("J2_BUTTON_1", 0),     // Read J2 button 1 (0=released, 1=pressed)
+    ("J2_BUTTON_2", 0),     // Read J2 button 2
+    ("J2_BUTTON_3", 0),     // Read J2 button 3
+    ("J2_BUTTON_4", 0),     // Read J2 button 4
+    
     // Compatibilidad hacia atrás (deprecated)
     ("MOVE_TO", 2),         // deprecated: use MOVE
 ];

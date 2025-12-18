@@ -555,6 +555,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "NEGB" => { emitter.negb(); Ok(()) },
         "COMA" => { emitter.coma(); Ok(()) },
         "COMB" => { emitter.comb(); Ok(()) },
+        "SEX" => { emitter.sex(); Ok(()) },
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),

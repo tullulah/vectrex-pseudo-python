@@ -27,6 +27,7 @@ export const JoystickConfigDialog: React.FC = () => {
 
   const [listeningForButton, setListeningForButton] = useState<number | null>(null);
   const [currentAxisValues, setCurrentAxisValues] = useState<number[]>([]);
+  const [pressedButtons, setPressedButtons] = useState<boolean[]>([]);
 
   // Poll gamepads
   useEffect(() => {
@@ -37,9 +38,11 @@ export const JoystickConfigDialog: React.FC = () => {
       const connected = Array.from(gamepads).filter((g): g is Gamepad => g !== null);
       updateGamepads(connected);
 
-      // Update axis values for visualization
+      // Update axis values and button states for visualization
       if (gamepadIndex !== null && connected[gamepadIndex]) {
-        setCurrentAxisValues(Array.from(connected[gamepadIndex].axes));
+        const gp = connected[gamepadIndex];
+        setCurrentAxisValues(Array.from(gp.axes));
+        setPressedButtons(gp.buttons.map(b => b.pressed));
       }
     }, 100);
 
@@ -260,22 +263,108 @@ export const JoystickConfigDialog: React.FC = () => {
                 />
               </div>
 
-              {/* Axis Visualizer */}
+              {/* Axis Visualizer - Graphical + Numeric */}
               {currentAxisValues.length > 0 && (
-                <div style={{ marginTop: 15, padding: 10, background: '#1e1e1e', borderRadius: 4 }}>
-                  <div style={{ fontSize: 11, marginBottom: 5 }}>Live Preview:</div>
-                  <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
-                    <div>
-                      X: {applyDeadzone(
-                        (axisXInverted ? -1 : 1) * (currentAxisValues[axisXIndex] || 0),
-                        deadzone
-                      ).toFixed(2)}
+                <div style={{ marginTop: 15, padding: 15, background: '#1e1e1e', borderRadius: 4 }}>
+                  <div style={{ fontSize: 12, marginBottom: 10, fontWeight: 'bold' }}>Live Preview</div>
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                    {/* 2D Joystick Visualizer */}
+                    <div style={{ flex: '0 0 auto' }}>
+                      <div style={{ fontSize: 10, marginBottom: 5, color: '#888' }}>Position:</div>
+                      <div style={{
+                        position: 'relative',
+                        width: 120,
+                        height: 120,
+                        background: '#252526',
+                        borderRadius: '50%',
+                        border: '2px solid #3c3c3c',
+                      }}>
+                        {/* Crosshair */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: 0,
+                          right: 0,
+                          height: 1,
+                          background: '#555',
+                        }} />
+                        <div style={{
+                          position: 'absolute',
+                          left: '50%',
+                          top: 0,
+                          bottom: 0,
+                          width: 1,
+                          background: '#555',
+                        }} />
+                        {/* Deadzone circle */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          width: `${deadzone * 200}%`,
+                          height: `${deadzone * 200}%`,
+                          transform: 'translate(-50%, -50%)',
+                          borderRadius: '50%',
+                          border: '1px dashed #666',
+                        }} />
+                        {/* Stick position indicator */}
+                        {(() => {
+                          const rawX = (currentAxisValues[axisXIndex] || 0) * (axisXInverted ? -1 : 1);
+                          const rawY = (currentAxisValues[axisYIndex] || 0) * (axisYInverted ? -1 : 1);
+                          const x = applyDeadzone(rawX, deadzone);
+                          const y = applyDeadzone(rawY, deadzone);
+                          const left = 50 + (x * 40); // 40% = max range from center
+                          const top = 50 + (y * 40);
+                          const isInDeadzone = Math.abs(rawX) < deadzone && Math.abs(rawY) < deadzone;
+                          
+                          return (
+                            <div style={{
+                              position: 'absolute',
+                              left: `${left}%`,
+                              top: `${top}%`,
+                              width: 16,
+                              height: 16,
+                              borderRadius: '50%',
+                              background: isInDeadzone ? '#666' : '#4ec94e',
+                              border: '2px solid #fff',
+                              transform: 'translate(-50%, -50%)',
+                              transition: 'background 0.1s',
+                              boxShadow: isInDeadzone ? 'none' : '0 0 10px #4ec94e',
+                            }} />
+                          );
+                        })()}
+                      </div>
                     </div>
-                    <div>
-                      Y: {applyDeadzone(
-                        (axisYInverted ? -1 : 1) * (currentAxisValues[axisYIndex] || 0),
-                        deadzone
-                      ).toFixed(2)}
+                    
+                    {/* Numeric values */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, marginBottom: 5, color: '#888' }}>Values:</div>
+                      <div style={{ fontSize: 13, fontFamily: 'monospace', lineHeight: '1.6' }}>
+                        <div>
+                          <span style={{ color: '#888' }}>X:</span>{' '}
+                          <span style={{ color: '#4ec94e', fontWeight: 'bold' }}>
+                            {applyDeadzone(
+                              (axisXInverted ? -1 : 1) * (currentAxisValues[axisXIndex] || 0),
+                              deadzone
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#888' }}>Y:</span>{' '}
+                          <span style={{ color: '#4ec94e', fontWeight: 'bold' }}>
+                            {applyDeadzone(
+                              (axisYInverted ? -1 : 1) * (currentAxisValues[axisYIndex] || 0),
+                              deadzone
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 9, color: '#666', marginTop: 5 }}>
+                          {Math.abs(currentAxisValues[axisXIndex] || 0) < deadzone && 
+                           Math.abs(currentAxisValues[axisYIndex] || 0) < deadzone
+                            ? '⚪ In deadzone'
+                            : '🟢 Active'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -290,6 +379,8 @@ export const JoystickConfigDialog: React.FC = () => {
                   const vectrexBtn = idx + 1;
                   const mapping = buttonMappings.find(m => m.vectrexButton === vectrexBtn);
                   const isListening = listeningForButton === vectrexBtn;
+                  const gamepadBtn = mapping?.gamepadButton;
+                  const isPressed = gamepadBtn !== undefined && pressedButtons[gamepadBtn];
 
                   return (
                     <div
@@ -301,7 +392,27 @@ export const JoystickConfigDialog: React.FC = () => {
                         borderRadius: 4,
                       }}
                     >
-                      <div style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 5 }}>{name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                        {/* Visual button indicator */}
+                        <div style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          background: isPressed ? '#4ec94e' : '#3c3c3c',
+                          border: `2px solid ${isPressed ? '#6edc6e' : '#555'}`,
+                          transition: 'all 0.1s',
+                          boxShadow: isPressed ? '0 0 12px #4ec94e' : 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 'bold',
+                          color: isPressed ? '#000' : '#666',
+                        }}>
+                          {vectrexBtn}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 'bold' }}>{name}</div>
+                      </div>
                       <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
                         {mapping
                           ? `Mapped to: ${getButtonName(mapping.gamepadButton)}`
@@ -328,6 +439,42 @@ export const JoystickConfigDialog: React.FC = () => {
                 })}
               </div>
             </div>
+            
+            {/* Button Test Area - All Gamepad Buttons */}
+            {pressedButtons.length > 0 && (
+              <div style={{ marginTop: 15, marginBottom: 20, padding: 15, background: '#1e1e1e', borderRadius: 4 }}>
+                <div style={{ fontSize: 12, marginBottom: 10, fontWeight: 'bold' }}>Button Test (All Gamepad Buttons)</div>
+                <div style={{ fontSize: 10, color: '#888', marginBottom: 10 }}>
+                  Press any gamepad button to test - shows all detected buttons
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(65px, 1fr))',
+                  gap: 8,
+                }}>
+                  {pressedButtons.map((pressed, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: 10,
+                        background: pressed ? '#4ec94e' : '#252526',
+                        borderRadius: 4,
+                        border: `2px solid ${pressed ? '#6edc6e' : '#3c3c3c'}`,
+                        textAlign: 'center',
+                        fontSize: 12,
+                        fontWeight: pressed ? 'bold' : 'normal',
+                        color: pressed ? '#000' : '#888',
+                        transition: 'all 0.1s',
+                        boxShadow: pressed ? '0 0 10px #4ec94e' : 'none',
+                      }}
+                    >
+                      <div style={{ fontSize: 9, marginBottom: 2 }}>BTN</div>
+                      <div style={{ fontSize: 14, fontWeight: 'bold' }}>{idx}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 

@@ -1912,6 +1912,166 @@ SFX_UPDATE_done:\n\
         DSLA_DONE:\n\
         RTS\n"
     );
+    
+    // ========== JOYSTICK INPUT HELPERS ==========
+    // Vectrex joystick hardware mapping:
+    // - Joystick 1: alg_jch0 (Y axis), alg_jch1 (X axis), buttons in PSG reg 14 bits 0-3
+    // - Joystick 2: alg_jch2 (Y axis), alg_jch3 (X axis), buttons in PSG reg 14 bits 4-7
+    // - Analog values: 0-255 (128 = center), we convert to signed -127 to +127
+    
+    // These helpers will be called by emulator integration - the actual hardware reads
+    // will be done in JSVecX which updates memory-mapped registers
+    
+    // Joystick 1 analog X (alg_jch1)
+    out.push_str(
+        "READ_J1_X:\n\
+        ; Read Joystick 1 X axis from analog channel 1\n\
+        ; Hardware: alg_jch1 mapped at $C880 (emulator sets this)\n\
+        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
+        LDB $C880       ; Read analog channel 1 (J1 X)\n\
+        SUBB #128       ; Convert 0-255 to -128 to +127\n\
+        SEX             ; Sign-extend B to D\n\
+        RTS\n"
+    );
+    
+    // Joystick 1 analog Y (alg_jch0)
+    out.push_str(
+        "READ_J1_Y:\n\
+        ; Read Joystick 1 Y axis from analog channel 0\n\
+        ; Hardware: alg_jch0 mapped at $C881 (emulator sets this)\n\
+        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
+        LDB $C881       ; Read analog channel 0 (J1 Y)\n\
+        SUBB #128       ; Convert 0-255 to -128 to +127\n\
+        SEX             ; Sign-extend B to D\n\
+        RTS\n"
+    );
+    
+    // Joystick 2 analog X (alg_jch3)
+    out.push_str(
+        "READ_J2_X:\n\
+        ; Read Joystick 2 X axis from analog channel 3\n\
+        ; Hardware: alg_jch3 mapped at $C882 (emulator sets this)\n\
+        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
+        LDB $C882       ; Read analog channel 3 (J2 X)\n\
+        SUBB #128       ; Convert 0-255 to -128 to +127\n\
+        SEX             ; Sign-extend B to D\n\
+        RTS\n"
+    );
+    
+    // Joystick 2 analog Y (alg_jch2)
+    out.push_str(
+        "READ_J2_Y:\n\
+        ; Read Joystick 2 Y axis from analog channel 2\n\
+        ; Hardware: alg_jch2 mapped at $C883 (emulator sets this)\n\
+        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
+        LDB $C883       ; Read analog channel 2 (J2 Y)\n\
+        SUBB #128       ; Convert 0-255 to -128 to +127\n\
+        SEX             ; Sign-extend B to D\n\
+        RTS\n"
+    );
+    
+    // Joystick 1 buttons (PSG register 14, bits 0-3)
+    // PSG reg 14 is mapped at $C884 by emulator
+    out.push_str(
+        "READ_J1_BUTTON_1:\n\
+        ; Read Joystick 1 Button 1 (PSG reg 14, bit 0)\n\
+        ; Returns: D = 0 (released) or 1 (pressed)\n\
+        LDA $C884       ; Read PSG register 14 (button states)\n\
+        ANDA #$01       ; Mask bit 0 (J1 Button 1)\n\
+        BEQ RJ1B1_ZERO\n\
+        LDD #1          ; Button pressed\n\
+        RTS\n\
+    RJ1B1_ZERO:\n\
+        LDD #0          ; Button released\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J1_BUTTON_2:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$02       ; Mask bit 1 (J1 Button 2)\n\
+        BEQ RJ1B2_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ1B2_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J1_BUTTON_3:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$04       ; Mask bit 2 (J1 Button 3)\n\
+        BEQ RJ1B3_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ1B3_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J1_BUTTON_4:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$08       ; Mask bit 3 (J1 Button 4)\n\
+        BEQ RJ1B4_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ1B4_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    // Joystick 2 buttons (PSG register 14, bits 4-7)
+    out.push_str(
+        "READ_J2_BUTTON_1:\n\
+        ; Read Joystick 2 Button 1 (PSG reg 14, bit 4)\n\
+        ; Returns: D = 0 (released) or 1 (pressed)\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$10       ; Mask bit 4 (J2 Button 1)\n\
+        BEQ RJ2B1_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ2B1_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J2_BUTTON_2:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$20       ; Mask bit 5 (J2 Button 2)\n\
+        BEQ RJ2B2_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ2B2_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J2_BUTTON_3:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$40       ; Mask bit 6 (J2 Button 3)\n\
+        BEQ RJ2B3_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ2B3_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
+    
+    out.push_str(
+        "READ_J2_BUTTON_4:\n\
+        LDA $C884       ; Read PSG register 14\n\
+        ANDA #$80       ; Mask bit 7 (J2 Button 4)\n\
+        BEQ RJ2B4_ZERO\n\
+        LDD #1\n\
+        RTS\n\
+    RJ2B4_ZERO:\n\
+        LDD #0\n\
+        RTS\n"
+    );
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
@@ -1920,6 +2080,8 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"MUSIC_UPDATE"|
+        "J1_X"|"J1_Y"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
+        "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
     "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
@@ -2090,6 +2252,125 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("; STOP_MUSIC() - stop background music\n");
         out.push_str("    JSR STOP_MUSIC_RUNTIME\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // ========== JOYSTICK 1 FUNCTIONS (alg_jch0/jch1) ==========
+    
+    // J1_X: Read Joystick 1 X axis (alg_jch1)
+    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    // Vectrex hardware uses 0-255 range (128 = center), we convert to signed
+    if up == "J1_X" && args.is_empty() {
+        add_native_call_comment(out, "J1_X");
+        out.push_str("; J1_X() - Read Joystick 1 X axis\n");
+        out.push_str("    JSR READ_J1_X\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J1_Y: Read Joystick 1 Y axis (alg_jch0)
+    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    if up == "J1_Y" && args.is_empty() {
+        add_native_call_comment(out, "J1_Y");
+        out.push_str("; J1_Y() - Read Joystick 1 Y axis\n");
+        out.push_str("    JSR READ_J1_Y\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J1_BUTTON_1: Read Joystick 1 button 1 (PSG register 14, bit 0)
+    // Returns 0 if released, 1 if pressed
+    if up == "J1_BUTTON_1" && args.is_empty() {
+        add_native_call_comment(out, "J1_BUTTON_1");
+        out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1\n");
+        out.push_str("    JSR READ_J1_BUTTON_1\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J1_BUTTON_2: Read Joystick 1 button 2 (PSG register 14, bit 1)
+    if up == "J1_BUTTON_2" && args.is_empty() {
+        add_native_call_comment(out, "J1_BUTTON_2");
+        out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2\n");
+        out.push_str("    JSR READ_J1_BUTTON_2\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J1_BUTTON_3: Read Joystick 1 button 3 (PSG register 14, bit 2)
+    if up == "J1_BUTTON_3" && args.is_empty() {
+        add_native_call_comment(out, "J1_BUTTON_3");
+        out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3\n");
+        out.push_str("    JSR READ_J1_BUTTON_3\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J1_BUTTON_4: Read Joystick 1 button 4 (PSG register 14, bit 3)
+    if up == "J1_BUTTON_4" && args.is_empty() {
+        add_native_call_comment(out, "J1_BUTTON_4");
+        out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4\n");
+        out.push_str("    JSR READ_J1_BUTTON_4\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // ========== JOYSTICK 2 FUNCTIONS (alg_jch2/jch3) ==========
+    
+    // J2_X: Read Joystick 2 X axis (alg_jch3)
+    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    if up == "J2_X" && args.is_empty() {
+        add_native_call_comment(out, "J2_X");
+        out.push_str("; J2_X() - Read Joystick 2 X axis\n");
+        out.push_str("    JSR READ_J2_X\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J2_Y: Read Joystick 2 Y axis (alg_jch2)
+    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    if up == "J2_Y" && args.is_empty() {
+        add_native_call_comment(out, "J2_Y");
+        out.push_str("; J2_Y() - Read Joystick 2 Y axis\n");
+        out.push_str("    JSR READ_J2_Y\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J2_BUTTON_1: Read Joystick 2 button 1 (PSG register 14, bit 4)
+    // Returns 0 if released, 1 if pressed
+    if up == "J2_BUTTON_1" && args.is_empty() {
+        add_native_call_comment(out, "J2_BUTTON_1");
+        out.push_str("; J2_BUTTON_1() - Read Joystick 2 button 1\n");
+        out.push_str("    JSR READ_J2_BUTTON_1\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J2_BUTTON_2: Read Joystick 2 button 2 (PSG register 14, bit 5)
+    if up == "J2_BUTTON_2" && args.is_empty() {
+        add_native_call_comment(out, "J2_BUTTON_2");
+        out.push_str("; J2_BUTTON_2() - Read Joystick 2 button 2\n");
+        out.push_str("    JSR READ_J2_BUTTON_2\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J2_BUTTON_3: Read Joystick 2 button 3 (PSG register 14, bit 6)
+    if up == "J2_BUTTON_3" && args.is_empty() {
+        add_native_call_comment(out, "J2_BUTTON_3");
+        out.push_str("; J2_BUTTON_3() - Read Joystick 2 button 3\n");
+        out.push_str("    JSR READ_J2_BUTTON_3\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // J2_BUTTON_4: Read Joystick 2 button 4 (PSG register 14, bit 7)
+    if up == "J2_BUTTON_4" && args.is_empty() {
+        add_native_call_comment(out, "J2_BUTTON_4");
+        out.push_str("; J2_BUTTON_4() - Read Joystick 2 button 4\n");
+        out.push_str("    JSR READ_J2_BUTTON_4\n");
+        out.push_str("    STD RESULT\n");
         return true;
     }
     
