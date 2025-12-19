@@ -83,11 +83,16 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                 out.push_str(&format!("    STD VAR_ARG{}\n", i + 1));
             }
             
-            // Determine struct name from target expression
-            // For now, we need to know the struct type - this is a limitation
-            // TODO: Add type inference system to resolve mc.target's type
-            // For now, we'll generate a generic mangled name and let linker resolve
-            let struct_name = "UNKNOWN"; // Placeholder - need type system
+            // Determine struct name from target expression using type context
+            let struct_name = match &*mc.target {
+                Expr::Ident(info) => {
+                    // Look up variable name in type context
+                    opts.type_context.get(&info.name)
+                        .map(|s| s.as_str())
+                        .unwrap_or("UNKNOWN")
+                }
+                _ => "UNKNOWN" // Complex expressions not yet supported
+            };
             let mangled_name = format!("{}_{}", struct_name, mc.method_name).to_uppercase();
             
             out.push_str(&format!("; Method call: {}.{}()\n", struct_name, mc.method_name));

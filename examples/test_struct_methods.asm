@@ -393,16 +393,16 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-; Method call: UNKNOWN.move()
-    JSR UNKNOWN_MOVE
+; Method call: Point.move()
+    JSR POINT_MOVE
     ; DEBUG: Statement 4 - Discriminant(0)
     ; VPy_LINE:22
     LDD 2 ,S
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; Method call: UNKNOWN.distance_from_origin()
-    JSR UNKNOWN_DISTANCE_FROM_ORIGIN
+; Method call: Point.distance_from_origin()
+    JSR POINT_DISTANCE_FROM_ORIGIN
     LDX RESULT
     STX 0 ,S
     LEAS 6,S ; free locals

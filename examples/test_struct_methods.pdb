@@ -10,26 +10,26 @@
     "MAIN": "0x022C"
   },
   "lineMap": {
-    "9": "0x0248",
-    "12": "0x024E",
-    "19": "0x027B",
-    "20": "0x0286",
     "22": "0x02B7",
-    "18": "0x0270",
     "15": "0x022C",
-    "21": "0x0291"
+    "21": "0x0291",
+    "19": "0x027B",
+    "18": "0x0270",
+    "9": "0x0248",
+    "20": "0x0286",
+    "12": "0x024E"
   },
   "functions": {
-    "main": {
-      "name": "main",
-      "address": "0x022C",
+    "loop": {
+      "name": "loop",
+      "address": "0x026E",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
-    "loop": {
-      "name": "loop",
-      "address": "0x026E",
+    "main": {
+      "name": "main",
+      "address": "0x022C",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"

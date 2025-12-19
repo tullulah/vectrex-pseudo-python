@@ -512,6 +512,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 assets: vec![], // TODO: Implement asset discovery
                 const_values: std::collections::BTreeMap::new(), // Will be populated by backend
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
+                type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -546,6 +547,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             assets,
             const_values: std::collections::BTreeMap::new(), // Will be populated by backend
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
+            type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
         });
         
         // Phase 4 validation: Check if assembly was actually generated

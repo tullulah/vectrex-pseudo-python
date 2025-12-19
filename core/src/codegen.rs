@@ -154,6 +154,7 @@ pub struct CodegenOptions {
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
     pub structs: StructRegistry, // Struct layout information (Phase 2)
+    pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -204,7 +205,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
     
     // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    validate_semantics_with_structs(module, &struct_registry, &mut diagnostics);
+    let type_context = validate_semantics_with_structs(module, &struct_registry, &mut diagnostics);
     let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
     if has_errors {
         return (String::new(), None, diagnostics);
@@ -217,6 +218,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
     // If source defines CONST TITLE = "..." let it override CLI title.
     let mut effective = CodegenOptions { 
         structs: struct_registry, // Add struct registry to options
+        type_context, // Add type context for method resolution
         ..opts.clone() 
     };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
@@ -378,24 +380,89 @@ fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>, globals
     }
 }
 
+// Helper to collect type information from struct initializations
+fn collect_function_types(
+    stmts: &[Stmt], 
+    type_context: &mut HashMap<String, String>,
+    struct_registry: &StructRegistry
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Let { name, value, .. } => {
+                if let Some(struct_name) = extract_struct_type(value, struct_registry) {
+                    type_context.insert(name.clone(), struct_name);
+                }
+            }
+            Stmt::Assign { target, value, .. } => {
+                if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                    if let Some(struct_name) = extract_struct_type(value, struct_registry) {
+                        type_context.insert(name.clone(), struct_name);
+                    }
+                }
+            }
+            Stmt::For { body, .. } => collect_function_types(body, type_context, struct_registry),
+            Stmt::While { body, .. } => collect_function_types(body, type_context, struct_registry),
+            Stmt::If { body, elifs, else_body, .. } => {
+                collect_function_types(body, type_context, struct_registry);
+                for (_, elif_body) in elifs {
+                    collect_function_types(elif_body, type_context, struct_registry);
+                }
+                if let Some(else_body) = else_body {
+                    collect_function_types(else_body, type_context, struct_registry);
+                }
+            }
+            Stmt::Switch { cases, default, .. } => {
+                for (_, case_body) in cases {
+                    collect_function_types(case_body, type_context, struct_registry);
+                }
+                if let Some(default_body) = default {
+                    collect_function_types(default_body, type_context, struct_registry);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// Extract struct type name from expression (for StructInit)
+fn extract_struct_type(expr: &Expr, struct_registry: &StructRegistry) -> Option<String> {
+    match expr {
+        Expr::StructInit { struct_name, .. } => {
+            // Verify struct exists in registry
+            if struct_registry.contains_key(struct_name) {
+                Some(struct_name.clone())
+            } else {
+                None
+            }
+        }
+        _ => None
+    }
+}
+
 // validate_semantics_with_structs: Extended semantic validation with struct support (Phase 2)
 pub fn validate_semantics_with_structs(
     module: &Module, 
     struct_registry: &StructRegistry,
     diagnostics: &mut Vec<Diagnostic>
-) {
+) -> HashMap<String, String> {
     // First, do standard validation
     validate_semantics(module, diagnostics);
     
-    // Phase 2: Additional struct-specific validation
-    // This is already done during struct_registry building, but we validate usage here
-    
-    // Validate struct initialization and field access in all functions
+    // Phase 2: Collect type information from struct initializations
+    let mut type_context = HashMap::new();
     for item in &module.items {
         if let Item::Function(func) = item {
+            collect_function_types(&func.body, &mut type_context, struct_registry);
             validate_function_structs(func, struct_registry, diagnostics);
+        } else if let Item::StructDef(s) = item {
+            // Also collect types from struct methods
+            for method in &s.methods {
+                collect_function_types(&method.body, &mut type_context, struct_registry);
+            }
         }
     }
+    
+    type_context
 }
 
 fn validate_function_structs(
