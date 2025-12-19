@@ -3,6 +3,8 @@ use crate::target::{info, CpuArch, Target};
 use std::collections::{HashSet, HashMap};
 use std::cell::RefCell;
 
+use crate::struct_layout::{StructRegistry, build_struct_registry, StructLayout};
+
 // ---------------- Diagnostics (S8) ----------------
 // Canal estructurado para warnings (y pronto errores S9).
 // S8: warnings estructurados.
@@ -17,6 +19,8 @@ pub enum DiagnosticCode {
     UndeclaredVar,
     UndeclaredAssign,
     ArityMismatch,
+    UndefinedStruct,     // Phase 2: Struct not found
+    StructRegistryError, // Phase 2: Error building struct registry
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +153,7 @@ pub struct CodegenOptions {
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
+    pub structs: StructRegistry, // Struct layout information (Phase 2)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -182,9 +187,24 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
 {
     use crate::target::CpuArch;
     
+    // Phase 2 Step 1: Build struct registry from module
+    let struct_registry = match build_struct_registry(&module.items) {
+        Ok(registry) => registry,
+        Err(e) => {
+            let mut diagnostics = vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                code: DiagnosticCode::StructRegistryError,
+                message: e,
+                line: None,
+                col: None,
+            }];
+            return (String::new(), None, diagnostics);
+        }
+    };
+    
     // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    validate_semantics(module, &mut diagnostics);
+    validate_semantics_with_structs(module, &struct_registry, &mut diagnostics);
     let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
     if has_errors {
         return (String::new(), None, diagnostics);
@@ -195,7 +215,10 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
     let ti = info(target);
     
     // If source defines CONST TITLE = "..." let it override CLI title.
-    let mut effective = CodegenOptions { ..opts.clone() };
+    let mut effective = CodegenOptions { 
+        structs: struct_registry, // Add struct registry to options
+        ..opts.clone() 
+    };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
     
     // Generate ASM and debug info
@@ -353,6 +376,164 @@ fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>, globals
             _ => {}
         }
     }
+}
+
+// validate_semantics_with_structs: Extended semantic validation with struct support (Phase 2)
+pub fn validate_semantics_with_structs(
+    module: &Module, 
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    // First, do standard validation
+    validate_semantics(module, diagnostics);
+    
+    // Phase 2: Additional struct-specific validation
+    // This is already done during struct_registry building, but we validate usage here
+    
+    // Validate struct initialization and field access in all functions
+    for item in &module.items {
+        if let Item::Function(func) = item {
+            validate_function_structs(func, struct_registry, diagnostics);
+        }
+    }
+}
+
+fn validate_function_structs(
+    func: &Function,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    for stmt in &func.body {
+        validate_stmt_structs(stmt, struct_registry, diagnostics);
+    }
+}
+
+fn validate_stmt_structs(
+    stmt: &Stmt,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    match stmt {
+        Stmt::Assign { target, value, .. } => {
+            // Validate field access in assignment target
+            if let crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } = target {
+                validate_field_access_assignment(obj_expr, field, struct_registry, diagnostics);
+            }
+            validate_expr_structs(value, struct_registry, diagnostics);
+        }
+        Stmt::Expr(expr, _) => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+        }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            validate_expr_structs(cond, struct_registry, diagnostics);
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+            for (elif_cond, elif_body) in elifs {
+                validate_expr_structs(elif_cond, struct_registry, diagnostics);
+                for s in elif_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+            if let Some(eb) = else_body {
+                for s in eb {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+        }
+        Stmt::While { cond, body, .. } => {
+            validate_expr_structs(cond, struct_registry, diagnostics);
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+        }
+        Stmt::For { body, .. } => {
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+        }
+        Stmt::Return(Some(expr), _) => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+        }
+        Stmt::Switch { expr, cases, default, .. } => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+            for (case_expr, case_body) in cases {
+                validate_expr_structs(case_expr, struct_registry, diagnostics);
+                for s in case_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+            if let Some(def_body) = default {
+                for s in def_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn validate_expr_structs(
+    expr: &Expr,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    match expr {
+        Expr::StructInit { struct_name, source_line, col } => {
+            // First check if this is actually a builtin function call, not a struct init
+            let is_builtin = BUILTIN_ARITIES.iter().any(|(name, _)| *name == struct_name.as_str());
+            
+            if !is_builtin && !struct_registry.contains_key(struct_name) {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    code: DiagnosticCode::UndefinedStruct,
+                    message: format!("Undefined struct '{}'", struct_name),
+                    line: Some(*source_line),
+                    col: Some(*col),
+                });
+            }
+        }
+        Expr::FieldAccess { target, field, source_line, col } => {
+            // For now, we can't easily determine the type of target expression
+            // This will be improved in Phase 3 with type inference
+            // For simple cases like `obj.field`, we could track variable types
+            // TODO Phase 3: Add type tracking to validate field exists on the struct type
+            validate_expr_structs(target, struct_registry, diagnostics);
+        }
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+            validate_expr_structs(left, struct_registry, diagnostics);
+            validate_expr_structs(right, struct_registry, diagnostics);
+        }
+        Expr::Not(inner) | Expr::BitNot(inner) => {
+            validate_expr_structs(inner, struct_registry, diagnostics);
+        }
+        Expr::Call(call_info) => {
+            for arg in &call_info.args {
+                validate_expr_structs(arg, struct_registry, diagnostics);
+            }
+        }
+        Expr::List(elements) => {
+            for elem in elements {
+                validate_expr_structs(elem, struct_registry, diagnostics);
+            }
+        }
+        Expr::Index { target, index } => {
+            validate_expr_structs(target, struct_registry, diagnostics);
+            validate_expr_structs(index, struct_registry, diagnostics);
+        }
+        _ => {}
+    }
+}
+
+fn validate_field_access_assignment(
+    _obj_expr: &Expr,
+    _field: &str,
+    _struct_registry: &StructRegistry,
+    _diagnostics: &mut Vec<Diagnostic>
+) {
+    // Phase 2: Basic validation - just ensure struct registry is available
+    // Phase 3 will add full type tracking to validate field exists on specific struct type
+    // For now, we'll validate at runtime that the field access is correct
 }
 
 fn validate_function(f: &Function, globals: &HashSet<String>, function_locals: &HashMap<String, HashSet<String>>, defined_functions: &HashSet<String>, diagnostics: &mut Vec<Diagnostic>) {
