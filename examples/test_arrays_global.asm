@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Array Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Array Test Global' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "ARRAY TEST"
+    FCC "ARRAY TEST GLOBAL"
     FCB $80
     FCB 0
 
@@ -29,6 +29,15 @@ RESULT         EQU $C880   ; Main result temporary
 
     JMP START
 
+VECTREX_SET_INTENSITY:
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode)
+    STA >$D00C     ; VIA_cntl
+    LDA #$D0
+    TFR A,DP       ; Set Direct Page to $D0 for BIOS
+    LDA VAR_ARG0+1
+    JSR __Intensity_a
+    RTS
 VECTREX_WAIT_RECAL:
     JSR Wait_Recal
     RTS
@@ -317,8 +326,19 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:4
-    LDD #0
+    LDX #ARRAY_0    ; Array literal
+    STX VAR_NUMBERS
+    LDX #ARRAY_1    ; Array literal
+    STX VAR_POSITIONS_X
+    ; VPy_LINE:8
+    LDD #127
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 8
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
     STD RESULT
 
 MAIN:
@@ -330,21 +350,16 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 4 statements in loop() body
+    ; DEBUG: Processing 7 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(6)
-    ; VPy_LINE:7
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 7
+    ; VPy_LINE:11
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 11
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(1)
-    ; VPy_LINE:10
-; Array literal: 3 elements at ARRAY_0
-    LDX #ARRAY_0
-    STX RESULT
-    ; DEBUG: Statement 2 - Discriminant(1)
-    ; VPy_LINE:13
+    ; VPy_LINE:14
     LDD VAR_NUMBERS
     STD RESULT
     LDD RESULT
@@ -358,9 +373,9 @@ LOOP_BODY:
     TFR D,X
     LDD ,X
     STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:16
-    LDD #2
+    ; DEBUG: Statement 2 - Discriminant(0)
+    ; VPy_LINE:15
+    LDD #0
     STD RESULT
     LDD RESULT
     ASLB
@@ -368,11 +383,11 @@ LOOP_BODY:
     LDX #VAR_NUMBERS
     LEAX D,X
     STX TMPPTR
-    LDD VAR_VALUE
+    LDD VAR_FIRST
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #10
+    LDD #1
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -382,6 +397,73 @@ LOOP_BODY:
     LDX TMPPTR
     LDD RESULT
     STD ,X
+    ; DEBUG: Statement 3 - Discriminant(1)
+    ; VPy_LINE:18
+    LDD VAR_POSITIONS_X
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    ; DEBUG: Statement 4 - Discriminant(1)
+    ; VPy_LINE:19
+    LDD VAR_POSITIONS_X
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    ; DEBUG: Statement 5 - Discriminant(1)
+    ; VPy_LINE:20
+    LDD VAR_POSITIONS_X
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    ; DEBUG: Statement 6 - Discriminant(1)
+    ; VPy_LINE:23
+    LDD VAR_POS0
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_POS1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_POS2
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
     RTS
 
 ;***************************************************************************
@@ -396,8 +478,25 @@ VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-VAR_NUMBERS EQU $CF00+0
-VAR_VALUE EQU $CF00+2
+VAR_FIRST EQU $CF00+0
+VAR_NUMBERS EQU $CF00+2
+VAR_POS0 EQU $CF00+4
+VAR_POS1 EQU $CF00+6
+VAR_POS2 EQU $CF00+8
+VAR_POSITIONS_X EQU $CF00+10
 ; Call argument scratch space
-DRAW_VEC_X EQU RESULT+4
-DRAW_VEC_Y EQU RESULT+5
+VAR_ARG0 EQU $C8B2
+; Array literal for variable 'numbers' (3 elements)
+ARRAY_0:
+    FDB 10   ; Element 0
+    FDB 20   ; Element 1
+    FDB 30   ; Element 2
+
+; Array literal for variable 'positions_x' (3 elements)
+ARRAY_1:
+    FDB 65486   ; Element 0
+    FDB 0   ; Element 1
+    FDB 50   ; Element 2
+
+DRAW_VEC_X EQU RESULT+12
+DRAW_VEC_Y EQU RESULT+13

@@ -2970,20 +2970,24 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                         panic!("Complex array expressions not yet supported in assignment");
                     };
                     
-                    // 1. First, get the array base address
-                    let array_addr = if let Some(off) = fctx.offset_of(array_name) {
-                        format!("{} ,S", off)
-                    } else {
-                        format!("VAR_{}", array_name.to_uppercase())
-                    };
-                    
-                    // 2. Evaluate index
+                    // 1. Evaluate index first
                     emit_expr(index, out, fctx, string_map, opts);
                     out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // index * 2
+                    out.push_str("    STD TMPPTR\n"); // Save offset temporarily
                     
-                    // 3. Add to base address (load base into X first)
-                    out.push_str(&format!("    LDX #{}\n", array_addr)); // X = &array
-                    out.push_str("    LEAX D,X\n"); // X = &array + (index * 2)
+                    // 2. Load the array base address (pointer value, not pointer address)
+                    if let Some(off) = fctx.offset_of(array_name) {
+                        // Local array: load pointer from stack
+                        out.push_str(&format!("    LDD {} ,S\n", off));
+                    } else {
+                        // Global array: load pointer from variable
+                        out.push_str(&format!("    LDD VAR_{}\n", array_name.to_uppercase()));
+                    }
+                    
+                    // 3. Add offset to base pointer
+                    out.push_str("    TFR D,X\n"); // X = array base pointer
+                    out.push_str("    LDD TMPPTR\n"); // D = offset
+                    out.push_str("    LEAX D,X\n"); // X = base + offset
                     out.push_str("    STX TMPPTR\n"); // Save computed address
                     
                     // 4. Evaluate value to assign
