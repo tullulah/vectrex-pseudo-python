@@ -66,10 +66,29 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
             }
         }
         Stmt::Let { name, value, .. } => {
-            emit_expr(value, out, fctx, string_map, opts);
-            if let Some(off) = fctx.offset_of(name) { out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off)); }
+            // Special handling for string literals - load pointer directly
+            if let Expr::StringLit(s) = value {
+                if let Some(label) = string_map.get(s) {
+                    out.push_str(&format!("    LDX #{}    ; String literal pointer\n", label));
+                    if let Some(off) = fctx.offset_of(name) {
+                        out.push_str(&format!("    STX {} ,S\n", off));
+                    }
+                } else {
+                    // String not in map - shouldn't happen but fallback to null
+                    out.push_str("    LDX #0    ; String not found in map\n");
+                    if let Some(off) = fctx.offset_of(name) {
+                        out.push_str(&format!("    STX {} ,S\n", off));
+                    }
+                }
+            } else {
+                // Normal expression evaluation
+                emit_expr(value, out, fctx, string_map, opts);
+                if let Some(off) = fctx.offset_of(name) {
+                    out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
+                }
+            }
         }
-    Stmt::Expr(e, _) => emit_expr(e, out, fctx, string_map, opts),
+        Stmt::Expr(e, _) => emit_expr(e, out, fctx, string_map, opts),
         Stmt::Return(o, _) => {
             if let Some(e) = o { emit_expr(e, out, fctx, string_map, opts); }
             if fctx.frame_size > 0 { out.push_str(&format!("    LEAS {} ,S ; free locals\n", fctx.frame_size)); }

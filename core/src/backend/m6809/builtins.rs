@@ -942,41 +942,62 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // Protocol: C000=unused, C001=marker(0xFD=string), C002-C003=string_ptr, C004-C005=label_ptr
     if matches!(up.as_str(), "DEBUG_PRINT_STR") {
         if let Some(arg) = args.first() {
-            let var_name = if let Expr::Ident(id) = arg {
-                Some(id.name.clone())
+            // Check if it's a direct string literal
+            if let Expr::StringLit(s) = arg {
+                // Direct string literal: DEBUG_PRINT_STR("Hello")
+                if let Some(label) = string_map.get(s) {
+                    add_native_call_comment(out, &format!("DEBUG_PRINT_STR(\"{}\")", s));
+                    let skip_label = fresh_label("DEBUG_SKIP_DATA");
+                    
+                    out.push_str(&format!("    LDX #{}    ; Load string literal pointer\n", label));
+                    out.push_str("    STX $C002\n");      // Store string pointer
+                    out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
+                    out.push_str("    STA $C001\n");      // Write marker
+                    out.push_str("    CLR $C004\n");      // No label for literals
+                    out.push_str("    CLR $C005\n");
+                } else {
+                    // String not in map - shouldn't happen
+                    out.push_str("    ; DEBUG_PRINT_STR: string not found in map\n");
+                    out.push_str("    CLR $C001\n");
+                }
             } else {
-                None
-            };
-            
-            emit_expr(arg, out, fctx, string_map, opts);
-            
-            if let Some(name) = var_name {
-                add_native_call_comment(out, &format!("DEBUG_PRINT_STR({})", name));
-                let label_name = format!("DEBUG_LABEL_{}", name.to_uppercase());
-                let skip_label = fresh_label("DEBUG_SKIP_DATA");
+                // Variable or expression
+                let var_name = if let Expr::Ident(id) = arg {
+                    Some(id.name.clone())
+                } else {
+                    None
+                };
                 
-                out.push_str("    LDD RESULT\n");
-                out.push_str("    STD $C002\n");      // Store string pointer
-                out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
-                out.push_str("    STA $C001\n");      // Write marker
-                out.push_str(&format!("    LDX #{}\n", label_name));
-                out.push_str("    STX $C004\n");      // Store label pointer at C004-C005
-                out.push_str(&format!("    BRA {}\n", skip_label));
+                emit_expr(arg, out, fctx, string_map, opts);
                 
-                // Emit label data inline
-                out.push_str(&format!("{}:\n", label_name));
-                out.push_str(&format!("    FCC \"{}\"\n", name));
-                out.push_str("    FCB $00\n");
-                out.push_str(&format!("{}:\n", skip_label));
-            } else {
-                // String without label
-                add_native_call_comment(out, "DEBUG_PRINT_STR");
-                out.push_str("    LDD RESULT\n");
-                out.push_str("    STD $C002\n");      // Store string pointer
-                out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
-                out.push_str("    STA $C001\n");      // Write marker
-                out.push_str("    CLR $C004\n");      // Clear label pointer
-                out.push_str("    CLR $C005\n");
+                if let Some(name) = var_name {
+                    add_native_call_comment(out, &format!("DEBUG_PRINT_STR({})", name));
+                    let label_name = format!("DEBUG_LABEL_{}", name.to_uppercase());
+                    let skip_label = fresh_label("DEBUG_SKIP_DATA");
+                    
+                    out.push_str("    LDD RESULT\n");
+                    out.push_str("    STD $C002\n");      // Store string pointer
+                    out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
+                    out.push_str("    STA $C001\n");      // Write marker
+                    out.push_str(&format!("    LDX #{}\n", label_name));
+                    out.push_str("    STX $C004\n");      // Store label pointer at C004-C005
+                    out.push_str(&format!("    BRA {}\n", skip_label));
+                    
+                    // Emit label data inline
+                    out.push_str(&format!("{}:\n", label_name));
+                    out.push_str(&format!("    FCC \"{}\"\n", name));
+                    out.push_str("    FCB $00\n");
+                    out.push_str(&format!("{}:\n", skip_label));
+                } else {
+                    // Expression without label
+                    add_native_call_comment(out, "DEBUG_PRINT_STR");
+                    out.push_str("    LDD RESULT\n");
+                    out.push_str("    STD $C002\n");      // Store string pointer
+                    out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
+                    out.push_str("    STA $C001\n");      // Write marker
+                    out.push_str("    CLR $C004\n");      // Clear label pointer
+                    out.push_str("    CLR $C005\n");
+                }
             }
         }
         out.push_str("    LDD #0\n    STD RESULT\n");
