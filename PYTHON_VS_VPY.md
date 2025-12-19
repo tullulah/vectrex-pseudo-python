@@ -88,7 +88,7 @@
 | Tipo | Python | VPy | Notas |
 |------|--------|-----|-------|
 | **Enteros** | `int` (ilimitado) | ✅ | 16-bit signed (-32768 a 32767) |
-| **Strings** | `str` | ✅ | Para PRINT_TEXT, labels ASM |
+| **Strings** | `str` | ✅ | Literals en globales/locales, DEBUG_PRINT_STR |
 | **Booleanos** | `True`/`False` | ⚠️ | Usa 0/1 (no keywords True/False) |
 
 ### 9. Comentarios
@@ -139,22 +139,24 @@
 
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
-| **print()** | `print(x)` | ❌ | 🔴 ALTA | Debugging crítico |
+| **print()** | `print(x)` | ✅ | - | DEBUG_PRINT_STR implementado |
 | **range()** | `range(10)` | ⚠️ | - | Solo en for loops |
 | **abs()** | `abs(-5)` | ❌ | 🟡 MEDIA | Útil para física |
-| **min()** | `min(a, b)` | ❌ | 🟡 MEDIA | Útil |
-| **max()** | `max(a, b)` | ❌ | 🟡 MEDIA | Útil |
+| **min()** | `min(a, b)` | ✅ | - | MIN() builtin |
+| **max()** | `max(a, b)` | ✅ | - | MAX() builtin |
 | **pow()** | `pow(2, 3)` | ❌ | 🟡 MEDIA | Alternativa a ** |
 | **round()** | `round(3.7)` | N/A | - | Solo ints |
 | **int()** | `int("42")` | ❌ | 🟢 BAJA | Conversión |
 | **str()** | `str(42)` | ❌ | 🟢 BAJA | Conversión |
 | **bool()** | `bool(0)` | ❌ | 🟢 BAJA | Usa 0/1 directo |
 | **type()** | `type(x)` | N/A | - | No runtime types |
+| **len()** | `len(lista)` | ✅ | - | Para arrays, retorna first word |
 
 ### 4. String Operations
 
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
+| **Literals** | `"hello"` | ✅ | - | Globales/locales con auto-storage |
 | **Concatenación** | `"a" + "b"` | ❌ | 🟡 MEDIA | Útil para texto |
 | **Multiplicación** | `"x" * 3` | ❌ | 🟢 BAJA | Menos usado |
 | **f-strings** | `f"x={x}"` | ❌ | 🟡 MEDIA | Moderno, útil |
@@ -229,17 +231,17 @@
    let x = enemies[0]
    enemies[1] = 10
    
-   # Tamaño
-   let count = len(enemies)
+   # Tamaño con len()
+   let count = len(enemies)  # ✅ YA IMPLEMENTADO
    ```
    **Implementación**: Arrays estáticos en RAM, tamaño fijo en compile-time.
 
-2. **🔴 print() para debugging**:
+2. ~~**🔴 print() para debugging**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
-   print(player_x)  # Debugging en emulador
-   print("Score:", score)
+   DEBUG_PRINT_STR("Score:")  # Literal directo
+   DEBUG_PRINT_STR(texto)     # Variable global/local
    ```
-   **Implementación**: Output a consola del emulador (no pantalla Vectrex).
+   **Implementación**: DEBUG_PRINT_STR con protocolo C000-C00F.
 
 3. **🔴 for-in sobre listas**:
    ```python
@@ -250,10 +252,10 @@
 
 ### Phase 2: Útiles (MEDIA - Mejoran ergonomía)
 
-4. **🟡 abs(), min(), max()**:
+4. ~~**🟡 abs(), min(), max()**~~ ✅ **COMPLETADO (min/max)**:
    ```python
-   let distance = abs(player_x - enemy_x)
-   let x = max(0, min(player_x, 127))  # Clamp
+   let distance = abs(player_x - enemy_x)  # abs() pendiente
+   let x = max(0, min(player_x, 127))      # ✅ MIN/MAX implementados
    ```
 
 5. **🟡 Operador ternario**:
@@ -273,11 +275,16 @@
        pass  # TODO: implementar
    ```
 
+8. **🟡 abs() builtin**:
+   ```python
+   let distance = abs(player_x - enemy_x)
+   ```
+
 ### Phase 3: Nice-to-have (BAJA - Conveniencia)
 
-8. **🟢 String operations** (concatenación, f-strings)
-9. **🟢 Tuplas** (inmutables, retorno múltiple)
-10. **🟢 assert** (validaciones)
+9. **🟢 String operations** (concatenación, f-strings)
+10. **🟢 Tuplas** (inmutables, retorno múltiple)
+11. **🟢 assert** (validaciones)
 
 ---
 
@@ -294,26 +301,39 @@
 | Operadores Comparación | 6 / 6 | 100% | ✅ |
 | Operadores Lógicos | 3 / 3 | 100% | ✅ |
 | Funciones Básicas | 5 / 5 | 100% | ✅ |
-| **TOTAL BÁSICO** | **37 / 38** | **97%** | ✅ |
+| Strings | 2 / 2 | 100% | ✅ |
+| **TOTAL BÁSICO** | **39 / 40** | **98%** | ✅ |
 
 | Categoría | Faltan | Prioridad Alta | Prioridad Media | Prioridad Baja |
 |-----------|--------|----------------|-----------------|----------------|
-| Estructuras de Datos | 7 | 3 🔴 | 1 🟡 | 3 🟢 |
+| Estructuras de Datos | 6 | 2 🔴 | 1 🟡 | 3 🟢 |
 | Expresiones | 5 | 0 | 3 🟡 | 2 🟢 |
-| Built-ins | 12 | 1 🔴 | 4 🟡 | 7 🟢 |
-| Strings | 6 | 0 | 2 🟡 | 4 🟢 |
+| Built-ins | 9 | 0 | 2 🟡 | 7 🟢 |
+| Strings | 5 | 0 | 2 🟡 | 3 🟢 |
 | Control Flow Avanzado | 7 | 1 🔴 | 2 🟡 | 4 🟢 |
 | Funciones Avanzadas | 7 | 0 | 1 🟡 | 6 🟢 |
 | OOP | 4 | 0 | 0 | 4 🟢 |
 | Operadores | 3 | 0 | 1 🟡 | 2 🟢 |
 | Misc | 9 | 0 | 2 🟡 | 7 🟢 |
-| **TOTAL FALTANTE** | **60** | **5 🔴** | **16 🟡** | **39 🟢** |
+| **TOTAL FALTANTE** | **55** | **3 🔴** | **14 🟡** | **38 🟢** |
+
+**Mejoras recientes (2025-12-19)**:
+- ✅ String literals en variables locales (`let texto = "HOLA"`)
+- ✅ DEBUG_PRINT_STR con literals directos (`DEBUG_PRINT_STR("MENSAJE")`)
+- ✅ len() para arrays (retorna first word)
+- ✅ MIN() y MAX() builtins
 
 ---
 
 ## 🚀 ROADMAP SUGERIDO
 
-### Sprint 1: Arrays Estáticos (1-2 semanas)
+### ✅ Sprint 0: Strings y Debug (COMPLETADO 2025-12-19)
+- [x] String literals en variables locales (`let texto = "HOLA"`)
+- [x] DEBUG_PRINT_STR con literals directos
+- [x] len() builtin para arrays
+- [x] MIN() y MAX() builtins
+
+### Sprint 1: Arrays Estáticos (1-2 semanas) - **PRÓXIMO**
 - [ ] Parser: `var lista = [1, 2, 3]`
 - [ ] AST: `Expr::List(Vec<Expr>)`
 - [ ] Codegen: Alocar en RAM consecutiva
@@ -322,20 +342,17 @@
 - [ ] Codegen: Calcular offset + cargar valor
 - [ ] Parser: `lista[index] = value`
 - [ ] Codegen: Calcular offset + guardar valor
-- [ ] Built-in: `len(lista)` retorna tamaño
 - [ ] Tests: Arrays básicos, acceso, asignación
 
-### Sprint 2: for-in y print() (1 semana)
+### Sprint 2: for-in (1 semana)
 - [ ] Parser: `for item in lista:`
 - [ ] Codegen: Iterar sobre array
-- [ ] Built-in: `print(expr)` → debug output
-- [ ] Built-in: `print(str, expr)` → formato
-- [ ] Tests: Loops sobre arrays, debugging
+- [ ] Tests: Loops sobre arrays
 
 ### Sprint 3: Math Built-ins (3-5 días)
 - [ ] `abs(x)` → valor absoluto
-- [ ] `min(a, b)` → mínimo
-- [ ] `max(a, b)` → máximo
+- [x] `min(a, b)` → mínimo (YA IMPLEMENTADO)
+- [x] `max(a, b)` → máximo (YA IMPLEMENTADO)
 - [ ] Tests: Operaciones matemáticas
 
 ### Sprint 4: Ternario y Pass (2-3 días)
@@ -393,6 +410,11 @@ PRINT_DEBUG:
 
 ---
 
-**Última actualización**: 2025-12-19
+**Última actualización**: 2025-12-19 (21:30)
 **Autor**: VPy Compiler Team
 **Estado**: En desarrollo activo
+
+**Cambios recientes**:
+- ✅ String literals en locales y DEBUG_PRINT_STR con literals directos
+- ✅ len(), MIN(), MAX() builtins implementados
+- 🎯 Próximo: Arrays estáticos con index access
