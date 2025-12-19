@@ -104,8 +104,6 @@
                 // Poll debug memory after frame execution
                 const debugValue = window.debugRam[0] || 0xFF;
                 const debugMarker = window.debugRam[1] || 0;
-                const labelHigh = window.debugRam[2] || 0;
-                const labelLow = window.debugRam[3] || 0;
                 
                 // Log every 100 frames to reduce spam
                 window.pollFrameCount++;
@@ -132,10 +130,16 @@
                             const strPtr = (strPtrHigh << 8) | strPtrLow;
                             const labelPtr = (labelPtrHigh << 8) | labelPtrLow;
                             
+                            console.log(`%c[DEBUG-POLL] 🔍 String pointer: 0x${strPtr.toString(16).toUpperCase().padStart(4, '0')} (high=0x${strPtrHigh.toString(16)}, low=0x${strPtrLow.toString(16)})`, 'color: #ff0; font-weight: bold');
+                            console.log(`%c[DEBUG-POLL] 🔍 Label pointer: 0x${labelPtr.toString(16).toUpperCase().padStart(4, '0')} (high=0x${labelPtrHigh.toString(16)}, low=0x${labelPtrLow.toString(16)})`, 'color: #ff0; font-weight: bold');
+                            
                             // Read string content
                             let strContent = '';
                             for (let i = 0; i < 128; i++) {
                                 const ch = vecx.read8(strPtr + i);
+                                if (i < 8) { // Log first 8 bytes for debugging
+                                    console.log(`%c[DEBUG-POLL] 📖 Byte at 0x${(strPtr + i).toString(16)}: 0x${ch.toString(16).padStart(2, '0')} ('${ch >= 32 && ch < 127 ? String.fromCharCode(ch) : '?'}')`, 'color: #aaa');
+                                }
                                 if (ch === 0 || ch === 0x80) break; // Null or $80 terminator
                                 strContent += String.fromCharCode(ch);
                             }
@@ -152,30 +156,35 @@
                             
                             if (label) {
                                 window.debugStrings[label] = strContent;
-                                console.log(`%c[DEBUG-POLL] 📝 String tracked: ${label} = "${strContent}"`, 'color: #0ff; font-weight: bold');
+                                console.log(`%c[DEBUG-POLL] 📝 String tracked: ${label} = "${strContent}" (${strContent.length} chars)`, 'color: #0ff; font-weight: bold');
                             } else {
                                 const message = `STRING: "${strContent}"`;
                                 window.debugMessages.push(message);
                                 console.log(`%c[DEBUG-POLL] 📋 String message: "${strContent}"`, 'color: #0ff; font-weight: bold');
                             }
-                        } else if (debugMarker === 0xFE && (labelHigh !== 0 || labelLow !== 0)) {
-                            // Labeled debug output - update variable value
+                        } else if (debugMarker === 0xFE) {
+                            // Labeled debug output (numeric variable) - read label pointer from C002-C003
+                            const labelHigh = window.debugRam[2] || 0;
+                            const labelLow = window.debugRam[3] || 0;
                             const labelPtr = (labelHigh << 8) | labelLow;
-                            let label = '';
-                            for (let i = 0; i < 32; i++) {
-                                const ch = vecx.read8(labelPtr + i);
-                                if (ch === 0) break;
-                                label += String.fromCharCode(ch);
-                            }
                             
-                            // Update or add variable
-                            const oldValue = window.debugVariables[label];
-                            window.debugVariables[label] = debugValue;
-                            
-                            if (oldValue === undefined) {
-                                console.log(`%c[DEBUG-POLL] 📌 New variable tracked: ${label} = ${debugValue}`, 'color: #0f0; font-weight: bold');
-                            } else if (oldValue !== debugValue) {
-                                console.log(`%c[DEBUG-POLL] 🔄 Variable updated: ${label}: ${oldValue} → ${debugValue}`, 'color: #ff0; font-weight: bold');
+                            if (labelPtr !== 0) {
+                                let label = '';
+                                for (let i = 0; i < 32; i++) {
+                                    const ch = vecx.read8(labelPtr + i);
+                                    if (ch === 0) break;
+                                    label += String.fromCharCode(ch);
+                                }
+                                
+                                // Update or add variable
+                                const oldValue = window.debugVariables[label];
+                                window.debugVariables[label] = debugValue;
+                                
+                                if (oldValue === undefined) {
+                                    console.log(`%c[DEBUG-POLL] 📌 New variable tracked: ${label} = ${debugValue}`, 'color: #0f0; font-weight: bold');
+                                } else if (oldValue !== debugValue) {
+                                    console.log(`%c[DEBUG-POLL] 🔄 Variable updated: ${label}: ${oldValue} → ${debugValue}`, 'color: #ff0; font-weight: bold');
+                                }
                             }
                         } else {
                             // Simple debug output - add sequential message
