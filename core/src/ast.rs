@@ -63,6 +63,8 @@ pub enum Item {
     ExprStatement(Expr),  // Para permitir expresiones ejecutables en top-level
     /// Declaración de export explícita
     Export(ExportDecl),
+    /// Definición de struct
+    StructDef(StructDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +85,22 @@ pub struct Function {
 	pub line: usize,  // Starting line number of function definition
 	#[allow(dead_code)] pub params: Vec<String>, 
 	pub body: Vec<Stmt> 
+}
+
+/// Definición de struct
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructDef {
+	pub name: String,
+	pub fields: Vec<FieldDef>,
+	pub source_line: usize,
+}
+
+/// Campo de un struct
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldDef {
+	pub name: String,
+	pub type_annotation: Option<String>,  // "int", nombre de otro struct, etc.
+	pub source_line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +150,8 @@ pub enum AssignTarget {
 	Ident { name: String, source_line: usize, col: usize },
 	/// Array index: arr[i] = value
 	Index { target: Box<Expr>, index: Box<Expr>, source_line: usize, col: usize },
+	/// Field access: obj.field = value
+	FieldAccess { target: Box<Expr>, field: String, source_line: usize, col: usize },
 }
 
 // Información de llamadas con span del identificador (primer segmento calificado).
@@ -153,6 +173,10 @@ pub enum Expr {
 	List(Vec<Expr>),
 	/// Array indexing: arr[i]
 	Index { target: Box<Expr>, index: Box<Expr> },
+	/// Struct initialization: Point()
+	StructInit { struct_name: String, source_line: usize, col: usize },
+	/// Field access: obj.field
+	FieldAccess { target: Box<Expr>, field: String, source_line: usize, col: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

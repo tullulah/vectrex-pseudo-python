@@ -21,6 +21,8 @@ pub enum TokenKind {
     PlusEqual, MinusEqual, StarEqual, SlashEqual, SlashSlashEqual, PercentEqual,
     // Multi-archivo e imports
     From, Import, As, Export,
+    // OOP
+    Struct,
     Eof,
 }
 
@@ -311,6 +313,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "import" => TokenKind::Import,
                     "as" => TokenKind::As,
                     "export" => TokenKind::Export,
+                    "struct" => TokenKind::Struct,
                     _ => TokenKind::Identifier(ident.to_string()),
                 };
                 out.push(tok(kind, line_no, start));

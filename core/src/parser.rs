@@ -67,6 +67,7 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::Import => "'import'".to_string(),
         TokenKind::As => "'as'".to_string(),
         TokenKind::Export => "'export'".to_string(),
+        TokenKind::Struct => "'struct'".to_string(),
         TokenKind::Identifier(_) => "identifier".to_string(),
         TokenKind::Number(_) => "number".to_string(),
         TokenKind::StringLit(_) => "string".to_string(),
@@ -169,6 +170,13 @@ impl<'a> Parser<'a> {
             if self.check(TokenKind::Export) {
                 let export = self.parse_export()?;
                 items.push(export);
+                continue;
+            }
+            
+            // Struct definition: struct Name:
+            if self.check(TokenKind::Struct) {
+                let struct_def = self.parse_struct()?;
+                items.push(Item::StructDef(struct_def));
                 continue;
             }
             
@@ -372,6 +380,43 @@ impl<'a> Parser<'a> {
         Ok(Item::Function(Function { name, line: func_line, params, body }))
     }
 
+    // Parse struct definition: struct Name:
+    fn parse_struct(&mut self) -> Result<StructDef> {
+        let source_line = self.peek().line;
+        self.consume(TokenKind::Struct)?;
+        let name = self.identifier()?;
+        self.consume(TokenKind::Colon)?;
+        self.consume(TokenKind::Newline)?;
+        self.consume(TokenKind::Indent)?;
+        
+        let mut fields = Vec::new();
+        while !self.check(TokenKind::Dedent) {
+            self.skip_newlines(); // Skip any extra newlines
+            if self.check(TokenKind::Dedent) { break; }
+            
+            // Parse field: name: type
+            let field_line = self.peek().line;
+            let field_name = self.identifier()?;
+            self.consume(TokenKind::Colon)?;
+            let type_annotation = Some(self.identifier()?);
+            self.consume(TokenKind::Newline)?;
+            
+            fields.push(FieldDef {
+                name: field_name,
+                type_annotation,
+                source_line: field_line,
+            });
+        }
+        
+        self.consume(TokenKind::Dedent)?;
+        
+        if fields.is_empty() {
+            return self.err_here(&format!("Struct {} must have at least one field", name));
+        }
+        
+        Ok(StructDef { name, fields, source_line })
+    }
+
     fn statement(&mut self) -> Result<Stmt> {
         let start_source_line = self.peek().line; // Capturar línea del statement
         
@@ -545,34 +590,100 @@ impl<'a> Parser<'a> {
             return Ok(Expr::List(elements));
         } else if let Some(first) = self.match_identifier() {
             let ident_token = self.tokens[self.pos-1].clone();
-            let mut full = first;
-            while self.match_kind(&TokenKind::Dot) {
-                if let Some(seg) = self.match_identifier() {
-                    full.push('_');
-                    full.push_str(&seg);
-                } else {
-                    return self.err_here("Expected identifier after '.' in qualified name");
-                }
-            }
+            
+            // Check for function call or struct init
             if self.match_kind(&TokenKind::LParen) {
                 let mut args = Vec::new();
-                self.skip_newlines(); // Allow newlines after opening paren
+                self.skip_newlines();
                 if !self.check(TokenKind::RParen) {
                     loop {
                         args.push(self.expression()?);
-                        self.skip_newlines(); // Allow newlines after argument
+                        self.skip_newlines();
                         if self.match_kind(&TokenKind::Comma) { 
-                            self.skip_newlines(); // Allow newlines after comma
+                            self.skip_newlines();
                             continue; 
                         }
                         break;
                     }
                 }
-                self.skip_newlines(); // Allow newlines before closing paren
+                self.skip_newlines();
                 self.consume(TokenKind::RParen)?;
-                return Ok(Expr::Call(crate::ast::CallInfo { name: full, source_line: ident_token.line, col: ident_token.col, args }));
+                
+                // If no args and starts with uppercase, treat as struct init
+                // (This is a heuristic; proper validation happens in semantic analysis)
+                if args.is_empty() && first.chars().next().map_or(false, |c| c.is_uppercase()) {
+                    return Ok(Expr::StructInit {
+                        struct_name: first,
+                        source_line: ident_token.line,
+                        col: ident_token.col,
+                    });
+                }
+                
+                // Otherwise, it's a function call
+                return Ok(Expr::Call(crate::ast::CallInfo { 
+                    name: first, 
+                    source_line: ident_token.line, 
+                    col: ident_token.col, 
+                    args 
+                }));
             }
-            return Ok(Expr::Ident(crate::ast::IdentInfo { name: full, source_line: ident_token.line, col: ident_token.col }));
+            
+            // Not a call, create identifier
+            let mut expr = Expr::Ident(crate::ast::IdentInfo { 
+                name: first, 
+                source_line: ident_token.line, 
+                col: ident_token.col 
+            });
+            
+            // Handle field access: obj.field or qualified names module.function
+            while self.match_kind(&TokenKind::Dot) {
+                let field_token = self.peek().clone();
+                if let Some(field_name) = self.match_identifier() {
+                    // Check if this is followed by a call
+                    if self.check(TokenKind::LParen) {
+                        // Qualified function call: convert to flat name
+                        let base_name = match expr {
+                            Expr::Ident(ref info) => info.name.clone(),
+                            _ => return self.err_here("Expected identifier before '.' in qualified call"),
+                        };
+                        let full_name = format!("{}_{}", base_name, field_name);
+                        self.consume(TokenKind::LParen)?;
+                        let mut args = Vec::new();
+                        self.skip_newlines();
+                        if !self.check(TokenKind::RParen) {
+                            loop {
+                                args.push(self.expression()?);
+                                self.skip_newlines();
+                                if self.match_kind(&TokenKind::Comma) { 
+                                    self.skip_newlines();
+                                    continue; 
+                                }
+                                break;
+                            }
+                        }
+                        self.skip_newlines();
+                        self.consume(TokenKind::RParen)?;
+                        return Ok(Expr::Call(crate::ast::CallInfo { 
+                            name: full_name, 
+                            source_line: field_token.line, 
+                            col: field_token.col, 
+                            args 
+                        }));
+                    } else {
+                        // Field access
+                        expr = Expr::FieldAccess {
+                            target: Box::new(expr),
+                            field: field_name,
+                            source_line: field_token.line,
+                            col: field_token.col,
+                        };
+                    }
+                } else {
+                    return self.err_here("Expected identifier after '.'");
+                }
+            }
+            
+            return Ok(expr);
         } else if self.match_kind(&TokenKind::LParen) {
             self.skip_newlines(); // Allow newlines after opening paren
             let e = self.expression()?;
@@ -596,6 +707,12 @@ impl<'a> Parser<'a> {
                 index, 
                 source_line: line, 
                 col: 0 
+            }),
+            Expr::FieldAccess { target, field, source_line, col } => Ok(crate::ast::AssignTarget::FieldAccess {
+                target,
+                field,
+                source_line,
+                col,
             }),
             _ => self.err_here(&format!("Invalid assignment target at line {}", line))
         }
