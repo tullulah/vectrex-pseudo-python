@@ -232,10 +232,19 @@ impl MusicResource {
                 }
             }
             
-            // Don't emit empty frames - if nothing is active, stop
-            // This avoids generating a silent frame at the end before loop
-            if active_notes.is_empty() && active_noise.is_empty() {
+            // FIXED: Don't break if there are future events pending
+            // Check if we should continue - stop only if nothing active AND no future events
+            let has_future_notes = notes_by_frame.keys().any(|&k| k > current_frame);
+            let has_future_noise = noise_by_frame.keys().any(|&k| k > current_frame);
+            
+            if active_notes.is_empty() && active_noise.is_empty() && !has_future_notes && !has_future_noise {
                 break;
+            }
+            
+            // Skip empty frames (optimization - don't emit silence frames before music starts)
+            if active_notes.is_empty() && active_noise.is_empty() {
+                current_frame += 1;
+                continue;
             }
             
             // Emit EVERY frame with active events (player reads one frame per call)

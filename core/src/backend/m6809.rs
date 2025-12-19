@@ -2156,7 +2156,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
         out.push_str("    LDA #3\n");
         out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
         out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
         out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
         out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
@@ -2172,7 +2176,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("    LDA #1\n");
         out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
         out.push_str("    CLR $C820    ; Vec_Joy_Mux_1_Y (disable Y for speed)\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
         out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
         out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
         out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
@@ -2189,7 +2197,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
         out.push_str("    LDA #3\n");
         out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
         out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
         out.push_str("    LDB $C81C    ; Vec_Joy_1_Y\n");
         out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
@@ -2205,7 +2217,11 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         out.push_str("    CLR $C81F    ; Vec_Joy_Mux_1_X (disable X for speed)\n");
         out.push_str("    LDA #3\n");
         out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
         out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
         out.push_str("    LDB $C81C    ; Vec_Joy_1_Y\n");
         out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
