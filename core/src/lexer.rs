@@ -23,6 +23,7 @@ pub enum TokenKind {
     From, Import, As, Export,
     // OOP
     Struct,
+    Self_,
     Eof,
 }
 
@@ -315,6 +316,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "as" => TokenKind::As,
                     "export" => TokenKind::Export,
                     "struct" => TokenKind::Struct,
+                    "self" => TokenKind::Self_,
                     _ => TokenKind::Identifier(ident.to_string()),
                 };
                 out.push(tok(kind, line_no, start));

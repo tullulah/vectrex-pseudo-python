@@ -92,6 +92,7 @@ pub struct Function {
 pub struct StructDef {
 	pub name: String,
 	pub fields: Vec<FieldDef>,
+	pub methods: Vec<Function>,
 	pub source_line: usize,
 }
 

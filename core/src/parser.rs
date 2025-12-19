@@ -84,6 +84,7 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::As => "'as'".to_string(),
         TokenKind::Export => "'export'".to_string(),
         TokenKind::Struct => "'struct'".to_string(),
+        TokenKind::Self_ => "'self'".to_string(),
         TokenKind::Identifier(_) => "identifier".to_string(),
         TokenKind::Number(_) => "number".to_string(),
         TokenKind::StringLit(_) => "string".to_string(),
@@ -372,6 +373,12 @@ impl<'a> Parser<'a> {
 
     // --- functions / statements ---
     fn function(&mut self) -> Result<Item> {
+        let func = self.parse_function_def()?;
+        Ok(Item::Function(func))
+    }
+
+    // Helper method to parse function definition (used by both top-level and struct methods)
+    fn parse_function_def(&mut self) -> Result<Function> {
         let func_line = self.peek().line;  // Capture function definition line
         self.consume(TokenKind::Def)?;
         let name = self.identifier()?;
@@ -393,7 +400,7 @@ impl<'a> Parser<'a> {
         self.consume(TokenKind::RParen)?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?;
         let mut body = Vec::new();
         while !self.match_kind(&TokenKind::Dedent) { body.push(self.statement()?); }
-        Ok(Item::Function(Function { name, line: func_line, params, body }))
+        Ok(Function { name, line: func_line, params, body })
     }
 
     // Parse struct definition: struct Name:
@@ -406,22 +413,30 @@ impl<'a> Parser<'a> {
         self.consume(TokenKind::Indent)?;
         
         let mut fields = Vec::new();
+        let mut methods = Vec::new();
+        
         while !self.check(TokenKind::Dedent) {
             self.skip_newlines(); // Skip any extra newlines
             if self.check(TokenKind::Dedent) { break; }
             
-            // Parse field: name: type
-            let field_line = self.peek().line;
-            let field_name = self.identifier()?;
-            self.consume(TokenKind::Colon)?;
-            let type_annotation = Some(self.identifier()?);
-            self.consume(TokenKind::Newline)?;
-            
-            fields.push(FieldDef {
-                name: field_name,
-                type_annotation,
-                source_line: field_line,
-            });
+            // Check if it's a method definition (def keyword)
+            if self.check(TokenKind::Def) {
+                let method = self.parse_function_def()?;
+                methods.push(method);
+            } else {
+                // Parse field: name: type
+                let field_line = self.peek().line;
+                let field_name = self.identifier()?;
+                self.consume(TokenKind::Colon)?;
+                let type_annotation = Some(self.identifier()?);
+                self.consume(TokenKind::Newline)?;
+                
+                fields.push(FieldDef {
+                    name: field_name,
+                    type_annotation,
+                    source_line: field_line,
+                });
+            }
         }
         
         self.consume(TokenKind::Dedent)?;
@@ -430,7 +445,7 @@ impl<'a> Parser<'a> {
             return self.err_here(&format!("Struct {} must have at least one field", name));
         }
         
-        Ok(StructDef { name, fields, source_line })
+        Ok(StructDef { name, fields, methods, source_line })
     }
 
     fn statement(&mut self) -> Result<Stmt> {
@@ -565,11 +580,28 @@ impl<'a> Parser<'a> {
 
     fn postfix(&mut self) -> Result<Expr> {
         let mut expr = self.primary()?;
-        // Handle indexing: arr[index]
-        while self.match_kind(&TokenKind::LBracket) {
-            let index = self.expression()?;
-            self.consume(TokenKind::RBracket)?;
-            expr = Expr::Index { target: Box::new(expr), index: Box::new(index) };
+        loop {
+            // Handle field access: obj.field
+            if self.match_kind(&TokenKind::Dot) {
+                let field_line = self.peek().line;
+                let field_col = self.peek().col;
+                let field = self.identifier()?;
+                expr = Expr::FieldAccess { 
+                    target: Box::new(expr), 
+                    field,
+                    source_line: field_line,
+                    col: field_col
+                };
+            }
+            // Handle indexing: arr[index]
+            else if self.match_kind(&TokenKind::LBracket) {
+                let index = self.expression()?;
+                self.consume(TokenKind::RBracket)?;
+                expr = Expr::Index { target: Box::new(expr), index: Box::new(index) };
+            }
+            else {
+                break;
+            }
         }
         Ok(expr)
     }
@@ -579,6 +611,8 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Number(n));
         } else if let Some(s) = self.match_string() {
             return Ok(Expr::StringLit(s));
+        } else if self.match_kind(&TokenKind::Self_) {
+            return Ok(Expr::Ident(IdentInfo { name: "self".to_string(), source_line: self.tokens[self.pos-1].line, col: self.tokens[self.pos-1].col }));
         } else if self.match_kind(&TokenKind::True) {
             return Ok(Expr::Number(1));
         } else if self.match_kind(&TokenKind::False) {
