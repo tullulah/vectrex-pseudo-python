@@ -32,7 +32,7 @@ fn dead_store_elimination_basic() {
     // However, DSE is disabled, so all statements should remain.
     let f = Function { name: "f".into(), line: 0, params: vec![], body: vec![
         Stmt::Let { name: "x".into(), value: Expr::Number(1), source_line: 0 }, // would be dead if DSE enabled
-        Stmt::Assign { target: AssignTarget { name: "x".into(), source_line: 0, col: 0 }, value: Expr::Number(2), source_line: 0 },
+        Stmt::Assign { target: AssignTarget::Ident { name: "x".into(), source_line: 0, col: 0 }, value: Expr::Number(2), source_line: 0 },
         Stmt::Return(Some(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), 0)
     ]};
     let m = Module { items: vec![Item::Function(f)], imports: vec![], meta: ModuleMeta::default() };
