@@ -2029,8 +2029,26 @@ struct FuncCtx { locals: Vec<String>, frame_size: i32 }
 impl FuncCtx { fn offset_of(&self, name: &str) -> Option<i32> { self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2) } }
 
 // power_of_two_const: return shift count if expression is a numeric power-of-two (>1).
+fn power_of_two_const(expr: &Expr) -> Option<u32> {
+    if let Expr::Number(n) = expr {
+        let val = *n as u32 & 0xFFFF;
+        if val >= 2 && (val & (val - 1)) == 0 {
+            return (0..16).find(|s| (1u32 << s) == val);
+        }
+    }
+    None
+}
 
 // format_expr_ref: helper for peephole comparisons.
+fn format_expr_ref(e: &Expr) -> String {
+    match e {
+    Expr::Ident(n) => format!("I:{}", n.name),
+        Expr::Number(n) => format!("N:{}", n),
+        _ => "?".into(),
+    }
+}
+
+// collect_all_vars: gather ALL variable identifiers used in the module (including locals)
 // In the Vectrex context, all variables need DATA section definitions regardless of scope
 fn collect_all_vars(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
@@ -2080,7 +2098,120 @@ fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
 }
 
 // collect_stmt_syms: process statement symbols.
+fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
+    match stmt {
+    Stmt::Assign { target, value, .. } => {
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    set.insert(name.clone());
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    if let Expr::Ident(id) = &**array_expr {
+                        set.insert(id.name.clone());
+                    }
+                    collect_expr_syms(array_expr, set);
+                    collect_expr_syms(index, set);
+                }
+            }
+            collect_expr_syms(value, set);
+        }
+    Stmt::Let { name: _, value, .. } => { collect_expr_syms(value, set); } // exclude locals
+        Stmt::Expr(e, _) => collect_expr_syms(e, set),
+    Stmt::For { var: _, start, end, step, body, .. } => {
+            // treat induction var as global only if not a local (decision deferred to emit)
+            collect_expr_syms(start, set);
+            collect_expr_syms(end, set);
+            if let Some(se) = step { collect_expr_syms(se, set); }
+            for s in body { collect_stmt_syms(s, set); }
+        }
+        Stmt::While { cond, body, .. } => {
+            collect_expr_syms(cond, set);
+            for s in body { collect_stmt_syms(s, set); }
+        }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            collect_expr_syms(cond, set);
+            for s in body { collect_stmt_syms(s, set); }
+            for (c, b) in elifs {
+                collect_expr_syms(c, set);
+                for s in b { collect_stmt_syms(s, set); }
+            }
+            if let Some(eb) = else_body {
+                for s in eb { collect_stmt_syms(s, set); }
+            }
+        }
+        Stmt::Return(o, _) => { if let Some(e) = o { collect_expr_syms(e, set); } }
+        Stmt::Switch { expr, cases, default, .. } => {
+            collect_expr_syms(expr, set);
+            for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
+            if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } => {},
+        Stmt::CompoundAssign { target, value, .. } => {
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    set.insert(name.clone());
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    if let Expr::Ident(id) = &**array_expr {
+                        set.insert(id.name.clone());
+                    }
+                    collect_expr_syms(array_expr, set);
+                    collect_expr_syms(index, set);
+                }
+            }
+            collect_expr_syms(value, set);
+        }
+    }
+}
+
+// collect_locals: traverse function statements to find let-declared locals
+fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
+    use std::collections::BTreeSet;
+    fn walk(s: &Stmt, set: &mut BTreeSet<String>) {
+        match s {
+            Stmt::Let { name, .. } => { set.insert(name.clone()); }
+            Stmt::If { body, elifs, else_body, .. } => {
+                for b in body { walk(b, set); }
+                for (_c, eb) in elifs { for b in eb { walk(b, set); } }
+                if let Some(eb) = else_body { for b in eb { walk(b, set); } }
+            }
+            Stmt::While { body, .. } => { for b in body { walk(b, set); } }
+            Stmt::For { var, body, .. } => {
+                set.insert(var.clone());
+                for b in body { walk(b, set); }
+            }
+            _ => {}
+        }
+    }
+    let mut set = BTreeSet::new();
+    for s in stmts { walk(s, &mut set); }
+    set.into_iter().collect()
+}
 
 // collect_expr_syms: process expression identifiers.
+fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) {
+    match expr {
+    Expr::Ident(n) => { set.insert(n.name.clone()); }
+        Expr::Call(ci) => { for a in &ci.args { collect_expr_syms(a, set); } }
+        Expr::Binary { left, right, .. }
+        | Expr::Compare { left, right, .. }
+        | Expr::Logic { left, right, .. } => {
+            collect_expr_syms(left, set);
+            collect_expr_syms(right, set);
+        }
+    Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
+    Expr::Number(_) => {}
+    Expr::StringLit(_) => {}
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_expr_syms(elem, set);
+            }
+        }
+        Expr::Index { target, index } => {
+            collect_expr_syms(target, set);
+            collect_expr_syms(index, set);
+        }
+    }
+}
 
 // (helper functions moved to utils.rs and helpers.rs)
