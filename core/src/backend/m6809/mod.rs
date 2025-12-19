@@ -441,13 +441,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     }
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0 }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
             
             if let Some(main_func) = user_main {
-                let fctx = FuncCtx { locals: Vec::new(), frame_size: 0 };
+                let fctx = FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new() };
                 for stmt in &main_func.body {
                     emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                 }
@@ -478,7 +478,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0 }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
@@ -514,13 +514,25 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     
                     // Collect locals and allocate stack frame (same as emit_function)
                     let locals = collect_locals(&f.body, &global_names);
-                    let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
+                    
+                    // Analyze variable types for struct instances
+                    let var_info = analyze_var_types(&f.body, &locals, &opts.structs);
+                    
+                    // Calculate frame size based on actual variable sizes
+                    let mut frame_size = 0;
+                    for var_name in &locals {
+                        let size = var_info.get(var_name)
+                            .map(|(_, s)| *s as i32)
+                            .unwrap_or(2);
+                        frame_size += size;
+                    }
+                    
                     if frame_size > 0 {
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
                     
                     out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
-                    let fctx = FuncCtx { locals: locals.clone(), frame_size };
+                    let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);

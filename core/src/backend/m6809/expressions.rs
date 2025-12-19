@@ -202,13 +202,66 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // 5. Load value from computed address
             out.push_str("    LDD ,X\n    STD RESULT\n");
         }
-        Expr::StructInit { .. } => {
-            // Phase 3 - struct initialization codegen
-            todo!("Struct initialization codegen not yet implemented (Phase 3)")
+        Expr::StructInit { struct_name, .. } => {
+            // Phase 3 - struct initialization
+            // For now, struct instance is stored as local variable (assigned via statement)
+            // StructInit expression just returns a "pointer" (address) to where it will be stored
+            // The actual storage allocation happens in Assign statement
+            // For simplicity, we return address 0 here - actual address determined at assignment
+            out.push_str(&format!("    ; StructInit({})", struct_name));
+            out.push_str("\n    LDD #0\n    STD RESULT\n");
         }
-        Expr::FieldAccess { .. } => {
+        Expr::FieldAccess { target, field, source_line, .. } => {
             // Phase 3 - field access codegen
-            todo!("Field access codegen not yet implemented (Phase 3)")
+            // 1. Evaluate target expression to get struct instance address/variable
+            // For local variables that are structs, we need to know:
+            //   - Base offset in stack
+            //   - Field offset within struct
+            
+            // Simple case: target is Ident (struct variable)
+            if let Expr::Ident(name) = target.as_ref() {
+                let var_name = &name.name;
+                
+                // Check if it's a local variable
+                if let Some(base_offset) = fctx.offset_of(var_name) {
+                    // Get struct type from variable info
+                    let struct_type = fctx.var_type(var_name);
+                    
+                    if let Some(type_name) = struct_type {
+                        if !type_name.is_empty() {
+                            // This is a struct variable - find field in its layout
+                            if let Some(layout) = opts.structs.get(type_name) {
+                                if let Some(field_layout) = layout.get_field(field) {
+                                    let field_offset_bytes = field_layout.offset as i32; // offset is already in bytes
+                                    let total_offset = base_offset + field_offset_bytes;
+                                    out.push_str(&format!("    ; FieldAccess {}.{} (struct {} offset {})\n", var_name, field, type_name, total_offset));
+                                    out.push_str(&format!("    LDD {},S\n    STD RESULT\n", total_offset));
+                                } else {
+                                    eprintln!("WARNING at line {}: Field '{}' not found in struct '{}'", source_line, field, type_name);
+                                    out.push_str("    LDD #0\n    STD RESULT\n");
+                                }
+                            } else {
+                                eprintln!("WARNING at line {}: Struct type '{}' not found", source_line, type_name);
+                                out.push_str("    LDD #0\n    STD RESULT\n");
+                            }
+                        } else {
+                            eprintln!("WARNING at line {}: Variable '{}' is not a struct", source_line, var_name);
+                            out.push_str("    LDD #0\n    STD RESULT\n");
+                        }
+                    } else {
+                        eprintln!("WARNING at line {}: Variable '{}' type unknown", source_line, var_name);
+                        out.push_str("    LDD #0\n    STD RESULT\n");
+                    }
+                } else {
+                    // Global variable or not found
+                    out.push_str(&format!("    ; FieldAccess {}.{} (TODO: global structs)\n", var_name, field));
+                    out.push_str("    LDD #0\n    STD RESULT\n");
+                }
+            } else {
+                // Complex expression - not yet supported
+                eprintln!("WARNING at line {}: FieldAccess on complex expression not yet supported", source_line);
+                out.push_str("    LDD #0\n    STD RESULT\n");
+            }
         }
     }
 }
