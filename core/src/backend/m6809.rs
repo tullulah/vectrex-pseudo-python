@@ -373,8 +373,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
             
             // NEW: Initialize global variables with their initial values (ONCE at startup)
+            let mut array_counter = 0;
             for (name, value) in &global_vars {
-                if let Expr::Number(n) = value {
+                if let Expr::List(_elements) = value {
+                    // Array literal: load address of pre-generated array data
+                    let array_label = format!("ARRAY_{}", array_counter);
+                    out.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
+                    out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                    array_counter += 1;
+                } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else {
@@ -403,8 +410,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // This must happen ONCE before the loop starts
         if !main_has_content && !global_vars.is_empty() {
             out.push_str("    ; Initialize global variables\n");
+            let mut array_counter = 0;
             for (name, value) in &global_vars {
-                if let Expr::Number(n) = value {
+                if let Expr::List(_elements) = value {
+                    // Array literal: load address of pre-generated array data
+                    let array_label = format!("ARRAY_{}", array_counter);
+                    out.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
+                    out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                    array_counter += 1;
+                } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else {
@@ -839,6 +853,26 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str("; NO ASSETS EMBEDDED\n");
             out.push_str(&format!("; All {} discovered assets are unused in code\n", opts.assets.len()));
             out.push_str("; ========================================\n\n");
+        }
+    }
+    
+    // ✅ ARRAY LITERAL DATA SECTION
+    // Collect all array literals from global variables and generate data
+    let mut array_counter = 0;
+    for (name, value) in &global_vars {
+        if let Expr::List(elements) = value {
+            let array_label = format!("ARRAY_{}", array_counter);
+            out.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
+            out.push_str(&format!("{}:\n", array_label));
+            for (i, elem) in elements.iter().enumerate() {
+                if let Expr::Number(n) = elem {
+                    out.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+                } else {
+                    out.push_str(&format!("    FDB 0    ; Element {} (non-constant - will be initialized at runtime)\n", i));
+                }
+            }
+            out.push_str("\n");
+            array_counter += 1;
         }
     }
     
@@ -3274,21 +3308,18 @@ fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &s
             );
         }
         Expr::List(elements) => {
-            // Array literal: allocate space and initialize elements
-            // For now, we'll allocate a temporary array in DATA section
-            // This is a compile-time constant array
+            // Array literal: load address of array data
+            // The array data is generated in the DATA section at the end
             let array_label = fresh_label("ARRAY");
             
-            // Generate array data in DATA section (will be moved later)
-            // For now, just emit code to load the array address
-            out.push_str(&format!("; TODO: Array literal initialization for {} elements\n", elements.len()));
-            out.push_str(&format!("    LDX #{}\n    STX RESULT\n", array_label));
+            // Register this array for later data generation
+            // The label will be resolved when we emit the DATA section
+            out.push_str(&format!("; Array literal: {} elements at {}\n", elements.len(), array_label));
+            out.push_str(&format!("    LDX #{}\n", array_label));
+            out.push_str("    STX RESULT\n");
             
-            // TODO: Proper array allocation and initialization
-            // Need to either:
-            // 1. Pre-allocate in DATA section (for constants)
-            // 2. Allocate on stack (for local arrays)
-            // 3. Use a memory pool (for dynamic arrays)
+            // Store array info in global context for DATA section generation
+            // This will be handled by collect_array_literals function
         }
         Expr::Index { target, index } => {
             // Array indexing: arr[index]
