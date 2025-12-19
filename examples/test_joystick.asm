@@ -354,114 +354,6 @@ CLR VIA_shift_reg
 BRA DSLA_LOOP
 DSLA_DONE:
 RTS
-READ_J1_X:
-; Read Joystick 1 X axis from analog channel 1
-; Hardware: alg_jch1 mapped at $C880 (emulator sets this)
-; Returns: D = signed value (-127 to +127, 0 = center)
-LDB $C880       ; Read analog channel 1 (J1 X)
-SUBB #128       ; Convert 0-255 to -128 to +127
-SEX             ; Sign-extend B to D
-RTS
-READ_J1_Y:
-; Read Joystick 1 Y axis from analog channel 0
-; Hardware: alg_jch0 mapped at $C881 (emulator sets this)
-; Returns: D = signed value (-127 to +127, 0 = center)
-LDB $C881       ; Read analog channel 0 (J1 Y)
-SUBB #128       ; Convert 0-255 to -128 to +127
-SEX             ; Sign-extend B to D
-RTS
-READ_J2_X:
-; Read Joystick 2 X axis from analog channel 3
-; Hardware: alg_jch3 mapped at $C882 (emulator sets this)
-; Returns: D = signed value (-127 to +127, 0 = center)
-LDB $C882       ; Read analog channel 3 (J2 X)
-SUBB #128       ; Convert 0-255 to -128 to +127
-SEX             ; Sign-extend B to D
-RTS
-READ_J2_Y:
-; Read Joystick 2 Y axis from analog channel 2
-; Hardware: alg_jch2 mapped at $C883 (emulator sets this)
-; Returns: D = signed value (-127 to +127, 0 = center)
-LDB $C883       ; Read analog channel 2 (J2 Y)
-SUBB #128       ; Convert 0-255 to -128 to +127
-SEX             ; Sign-extend B to D
-RTS
-READ_J1_BUTTON_1:
-; Read Joystick 1 Button 1 (PSG reg 14, bit 0)
-; Returns: D = 0 (released) or 1 (pressed)
-LDA $C884       ; Read PSG register 14 (button states)
-ANDA #$01       ; Mask bit 0 (J1 Button 1)
-BEQ RJ1B1_ZERO
-LDD #1          ; Button pressed
-RTS
-RJ1B1_ZERO:
-LDD #0          ; Button released
-RTS
-READ_J1_BUTTON_2:
-LDA $C884       ; Read PSG register 14
-ANDA #$02       ; Mask bit 1 (J1 Button 2)
-BEQ RJ1B2_ZERO
-LDD #1
-RTS
-RJ1B2_ZERO:
-LDD #0
-RTS
-READ_J1_BUTTON_3:
-LDA $C884       ; Read PSG register 14
-ANDA #$04       ; Mask bit 2 (J1 Button 3)
-BEQ RJ1B3_ZERO
-LDD #1
-RTS
-RJ1B3_ZERO:
-LDD #0
-RTS
-READ_J1_BUTTON_4:
-LDA $C884       ; Read PSG register 14
-ANDA #$08       ; Mask bit 3 (J1 Button 4)
-BEQ RJ1B4_ZERO
-LDD #1
-RTS
-RJ1B4_ZERO:
-LDD #0
-RTS
-READ_J2_BUTTON_1:
-; Read Joystick 2 Button 1 (PSG reg 14, bit 4)
-; Returns: D = 0 (released) or 1 (pressed)
-LDA $C884       ; Read PSG register 14
-ANDA #$10       ; Mask bit 4 (J2 Button 1)
-BEQ RJ2B1_ZERO
-LDD #1
-RTS
-RJ2B1_ZERO:
-LDD #0
-RTS
-READ_J2_BUTTON_2:
-LDA $C884       ; Read PSG register 14
-ANDA #$20       ; Mask bit 5 (J2 Button 2)
-BEQ RJ2B2_ZERO
-LDD #1
-RTS
-RJ2B2_ZERO:
-LDD #0
-RTS
-READ_J2_BUTTON_3:
-LDA $C884       ; Read PSG register 14
-ANDA #$40       ; Mask bit 6 (J2 Button 3)
-BEQ RJ2B3_ZERO
-LDD #1
-RTS
-RJ2B3_ZERO:
-LDD #0
-RTS
-READ_J2_BUTTON_4:
-LDA $C884       ; Read PSG register 14
-ANDA #$80       ; Mask bit 7 (J2 Button 4)
-BEQ RJ2B4_ZERO
-LDD #1
-RTS
-RJ2B4_ZERO:
-LDD #0
-RTS
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -502,14 +394,26 @@ LOOP_BODY:
     ; DEBUG: Statement 1 - Discriminant(1)
     ; VPy_LINE:11
 ; NATIVE_CALL: J1_X at line 11
-; J1_X() - Read Joystick 1 X axis
-    JSR READ_J1_X
+; J1_X() - Read Joystick 1 X axis (BIOS)
+    LDA #1
+    STA $C81F    ; Vec_Joy_Mux_1_X
+    LDA #3
+    STA $C820    ; Vec_Joy_Mux_1_Y
+    JSR $F1F8    ; Joy_Digital
+    LDB $C81B    ; Vec_Joy_1_X
+    SEX
     STD RESULT
     ; DEBUG: Statement 2 - Discriminant(1)
     ; VPy_LINE:12
 ; NATIVE_CALL: J1_Y at line 12
-; J1_Y() - Read Joystick 1 Y axis
-    JSR READ_J1_Y
+; J1_Y() - Read Joystick 1 Y axis (BIOS)
+    LDA #1
+    STA $C81F    ; Vec_Joy_Mux_1_X
+    LDA #3
+    STA $C820    ; Vec_Joy_Mux_1_Y
+    JSR $F1F8    ; Joy_Digital
+    LDB $C81C    ; Vec_Joy_1_Y
+    SEX
     STD RESULT
     ; DEBUG: Statement 3 - Discriminant(1)
     ; VPy_LINE:16
@@ -722,8 +626,16 @@ LOOP_BODY:
     ; DEBUG: Statement 15 - Discriminant(7)
     ; VPy_LINE:38
 ; NATIVE_CALL: J1_BUTTON_1 at line 38
-; J1_BUTTON_1() - Read Joystick 1 button 1
-    JSR READ_J1_BUTTON_1
+; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$01
+    BEQ .j1b1_not_pressed
+    LDD #1
+    BRA .j1b1_done
+.j1b1_not_pressed:
+    LDD #0
+.j1b1_done:
     STD RESULT
     LDD RESULT
     LBEQ IF_NEXT_1
@@ -761,8 +673,16 @@ IF_END_0:
     ; DEBUG: Statement 16 - Discriminant(7)
     ; VPy_LINE:43
 ; NATIVE_CALL: J1_BUTTON_2 at line 43
-; J1_BUTTON_2() - Read Joystick 1 button 2
-    JSR READ_J1_BUTTON_2
+; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$02
+    BEQ .j1b2_not_pressed
+    LDD #1
+    BRA .j1b2_done
+.j1b2_not_pressed:
+    LDD #0
+.j1b2_done:
     STD RESULT
     LDD RESULT
     LBEQ IF_NEXT_3
@@ -800,8 +720,16 @@ IF_END_2:
     ; DEBUG: Statement 17 - Discriminant(7)
     ; VPy_LINE:48
 ; NATIVE_CALL: J1_BUTTON_3 at line 48
-; J1_BUTTON_3() - Read Joystick 1 button 3
-    JSR READ_J1_BUTTON_3
+; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$04
+    BEQ .j1b3_not_pressed
+    LDD #1
+    BRA .j1b3_done
+.j1b3_not_pressed:
+    LDD #0
+.j1b3_done:
     STD RESULT
     LDD RESULT
     LBEQ IF_NEXT_5
@@ -839,8 +767,16 @@ IF_END_4:
     ; DEBUG: Statement 18 - Discriminant(7)
     ; VPy_LINE:53
 ; NATIVE_CALL: J1_BUTTON_4 at line 53
-; J1_BUTTON_4() - Read Joystick 1 button 4
-    JSR READ_J1_BUTTON_4
+; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$08
+    BEQ .j1b4_not_pressed
+    LDD #1
+    BRA .j1b4_done
+.j1b4_not_pressed:
+    LDD #0
+.j1b4_done:
     STD RESULT
     LDD RESULT
     LBEQ IF_NEXT_7

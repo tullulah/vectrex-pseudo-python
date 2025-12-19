@@ -453,6 +453,80 @@ export const EmulatorPanel: React.FC = () => {
     };
   }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
 
+  // Gamepad Manager: Poll HTML5 Gamepad API and inject into JSVecX memory
+  useEffect(() => {
+    // Load joystick configuration on mount
+    loadConfig();
+
+    const gamepadPollInterval = setInterval(() => {
+      const vecx = (window as any).vecx;
+      if (!vecx || status !== 'running') return;
+
+      const gamepads = navigator.getGamepads();
+      if (!gamepads) return;
+
+      // Get joystick configuration from store
+      const joystickConfig = useJoystickStore.getState();
+      const { gamepadIndex, axisXIndex, axisYIndex, axisXInverted, axisYInverted, deadzone, buttonMappings } = joystickConfig;
+
+      if (gamepadIndex === null) return;
+
+      const gamepad = gamepads[gamepadIndex];
+      if (!gamepad || !gamepad.connected) return;
+
+      // Read analog axes and apply configuration
+      const rawX = gamepad.axes[axisXIndex] || 0;
+      const rawY = gamepad.axes[axisYIndex] || 0;
+
+      // Apply deadzone
+      const applyDeadzone = (value: number) => {
+        return Math.abs(value) < deadzone ? 0 : value;
+      };
+
+      const x = applyDeadzone(rawX) * (axisXInverted ? -1 : 1);
+      const y = applyDeadzone(rawY) * (axisYInverted ? -1 : 1);
+
+      // Convert from -1..1 to 0..255 (128 = center)
+      const j1_x_value = Math.round((x + 1) * 127.5);
+      const j1_y_value = Math.round((y + 1) * 127.5);
+
+      // Set JSVecX input state (same mechanism as keyboard)
+      // JSVecX reads these booleans and converts to alg_jch0/1 internally
+      try {
+        // Convert analog -1..1 to directional booleans with deadzone
+        // X axis: negative = left, positive = right
+        vecx.leftHeld = x < -0.3;
+        vecx.rightHeld = x > 0.3;
+        
+        // Y axis: negative = down, positive = up
+        vecx.downHeld = y < -0.3;
+        vecx.upHeld = y > 0.3;
+
+        // Read button states and build PSG register 14 value
+        let psgReg14 = 0xFF; // Default: all buttons released (bits high)
+        
+        buttonMappings.forEach(mapping => {
+          const button = gamepad.buttons[mapping.gamepadButton];
+          if (button && button.pressed) {
+            // Button pressed: clear bit (Vectrex buttons are active low)
+            const bitMask = ~(1 << (mapping.vectrexButton - 1));
+            psgReg14 &= bitMask;
+          }
+        });
+
+        // Update button state (JSVecX reads this)
+        vecx.shadow_snd_regs14 = psgReg14;
+
+      } catch (error) {
+        console.error('[GamepadManager] Error setting input state:', error);
+      }
+    }, 16); // ~60Hz polling
+
+    return () => {
+      clearInterval(gamepadPollInterval);
+    };
+  }, [status, loadConfig]); // Re-create interval if status changes
+
   // Helper function to apply audio state to vecx
   const applyAudioState = useCallback((enabled?: boolean) => {
     const vecx = (window as any).vecx;
@@ -1543,6 +1617,41 @@ export const EmulatorPanel: React.FC = () => {
         if (Globals) {
           Globals.cartdata = binaryData;
           console.log('[EmulatorPanel] ✓ Binary loaded into Globals.cartdata');
+        }
+        
+        // CRITICAL: Verificar que JSVecX esté completamente inicializado antes de reset
+        // Si el panel del emulador no estaba visible, JSVecX puede no estar inicializado
+        console.log('[EmulatorPanel] Checking JSVecX initialization...');
+        const isInitialized = vecx.ram && vecx.ram.length > 0;
+        
+        if (!isInitialized) {
+          console.warn('[EmulatorPanel] JSVecX not initialized - running full initialization...');
+          // Inicializar JSVecX completamente (igual que cuando el panel es visible)
+          try {
+            // Fase 1: Reset inicial
+            vecx.reset();
+            console.log('[EmulatorPanel] ✓ JSVecX reset successful');
+            
+            // Fase 2: Main initialization (necesario para setup completo)
+            vecx.main();
+            console.log('[EmulatorPanel] ✓ JSVecX main() successful');
+            
+            // Fase 3: CRITICAL - Inicializar joystick input state a valores neutros
+            // Sin esto, las variables de joystick contienen basura y causan movimiento fantasma
+            vecx.leftHeld = false;
+            vecx.rightHeld = false;
+            vecx.upHeld = false;
+            vecx.downHeld = false;
+            vecx.shadow_snd_regs14 = 0x00; // Todos los botones sueltos
+            console.log('[EmulatorPanel] ✓ Joystick state initialized to neutral');
+            
+            console.log('[EmulatorPanel] ✓ JSVecX fully initialized in background');
+          } catch (e) {
+            console.error('[EmulatorPanel] Failed to initialize JSVecX:', e);
+            throw new Error(`JSVecX initialization failed: ${e}`);
+          }
+        } else {
+          console.log('[EmulatorPanel] ✓ JSVecX already initialized');
         }
         
         // Reset

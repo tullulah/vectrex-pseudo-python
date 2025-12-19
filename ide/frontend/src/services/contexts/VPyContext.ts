@@ -111,6 +111,229 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "assets",
     notes: "Must call MUSIC_UPDATE() every frame in loop() for actual playback"
+  },
+  {
+    name: "J1_X",
+    syntax: "J1_X()",
+    description: "Reads Joystick 1 X axis position (DIGITAL by default)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let x = J1_X()  # Returns -1 (left), 0 (center), +1 (right)",
+      "    paddle_x = paddle_x + x * 4  # Multiply for speed (4 = medium, 8 = fast)"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Default to DIGITAL mode (-1/0/+1). For analog values use J1_X_ANALOG(). Digital is MUCH faster and suitable for 60fps games."
+  },
+  {
+    name: "J1_X_DIGITAL",
+    syntax: "J1_X_DIGITAL()",
+    description: "Reads Joystick 1 X axis position via BIOS Joy_Digital (explicit)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let x = J1_X_DIGITAL()  # Returns -1 (left), 0 (center), +1 (right)",
+      "    paddle_x = paddle_x + x * 4  # Multiply for speed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Explicit digital version. Returns -1/0/+1. Fast and suitable for 60fps games. Multiply by constant for speed control (e.g., x*2 for slow, x*4 for medium, x*8 for fast)."
+  },
+  {
+    name: "J1_X_ANALOG",
+    syntax: "J1_X_ANALOG()",
+    description: "Reads Joystick 1 X axis position via BIOS Joy_Analog (full range)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let x = J1_X_ANALOG()  # Returns -127 (full left) to +127 (full right)",
+      "    paddle_x = paddle_x + x / 32  # Divide for smooth proportional control"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F5 (Joy_Analog)",
+    notes: "SLOW! Analog version returns full range -127 to +127. May cause frame drops or freezing. Use only if you need fine-grained analog control. Digital version recommended for most games."
+  },
+  {
+    name: "J1_Y",
+    syntax: "J1_Y()",
+    description: "Reads Joystick 1 Y axis position (DIGITAL by default)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let y = J1_Y()  # Returns -1 (down), 0 (center), +1 (up)",
+      "    ship_y = ship_y + y * 4  # Multiply for speed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Default to DIGITAL mode (-1/0/+1). For analog values use J1_Y_ANALOG(). Digital is MUCH faster."
+  },
+  {
+    name: "J1_Y_DIGITAL",
+    syntax: "J1_Y_DIGITAL()",
+    description: "Reads Joystick 1 Y axis position via BIOS Joy_Digital (explicit)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let y = J1_Y_DIGITAL()  # Returns -1 (down), 0 (center), +1 (up)",
+      "    ship_y = ship_y + y * 4"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Explicit digital version. Returns -1/0/+1. Fast and suitable for 60fps games."
+  },
+  {
+    name: "J1_Y_ANALOG",
+    syntax: "J1_Y_ANALOG()",
+    description: "Reads Joystick 1 Y axis position via BIOS Joy_Analog (full range)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let y = J1_Y_ANALOG()  # Returns -127 (full down) to +127 (full up)",
+      "    ship_y = ship_y + y / 32  # Divide for smooth proportional control"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F5 (Joy_Analog)",
+    notes: "SLOW! Analog version returns full range -127 to +127. May cause frame drops or freezing. Digital version recommended."
+  },
+  {
+    name: "J1_BUTTON_1",
+    syntax: "J1_BUTTON_1()",
+    description: "Reads Joystick 1 Button 1 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J1_BUTTON_1():",
+      "        # Button 1 pressed - fire weapon",
+      "        fire_bullet()"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Uses official BIOS routine. Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 0."
+  },
+  {
+    name: "J1_BUTTON_2",
+    syntax: "J1_BUTTON_2()",
+    description: "Reads Joystick 1 Button 2 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J1_BUTTON_2():",
+      "        # Button 2 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 1."
+  },
+  {
+    name: "J1_BUTTON_3",
+    syntax: "J1_BUTTON_3()",
+    description: "Reads Joystick 1 Button 3 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J1_BUTTON_3():",
+      "        # Button 3 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 2."
+  },
+  {
+    name: "J1_BUTTON_4",
+    syntax: "J1_BUTTON_4()",
+    description: "Reads Joystick 1 Button 4 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J1_BUTTON_4():",
+      "        # Button 4 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 3."
+  },
+  {
+    name: "J2_X",
+    syntax: "J2_X()",
+    description: "Reads Joystick 2 X axis position via BIOS Joy_Digital routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let x = J2_X()  # Returns -1 (left), 0 (center), or 1 (right)"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Uses official BIOS routine. Returns digital value: -1/0/+1. Reads from Vec_Joy_2_X ($C81D)."
+  },
+  {
+    name: "J2_Y",
+    syntax: "J2_Y()",
+    description: "Reads Joystick 2 Y axis position via BIOS Joy_Digital routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    let y = J2_Y()  # Returns -1 (down), 0 (center), or 1 (up)"
+    ],
+    category: "input",
+    vectrexAddress: "$F1F8 (Joy_Digital)",
+    notes: "Uses official BIOS routine. Returns digital value: -1/0/+1. Reads from Vec_Joy_2_Y ($C81E)."
+  },
+  {
+    name: "J2_BUTTON_1",
+    syntax: "J2_BUTTON_1()",
+    description: "Reads Joystick 2 Button 1 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J2_BUTTON_1():",
+      "        # Player 2 button 1 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 4."
+  },
+  {
+    name: "J2_BUTTON_2",
+    syntax: "J2_BUTTON_2()",
+    description: "Reads Joystick 2 Button 2 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J2_BUTTON_2():",
+      "        # Player 2 button 2 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 5."
+  },
+  {
+    name: "J2_BUTTON_3",
+    syntax: "J2_BUTTON_3()",
+    description: "Reads Joystick 2 Button 3 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J2_BUTTON_3():",
+      "        # Player 2 button 3 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 6."
+  },
+  {
+    name: "J2_BUTTON_4",
+    syntax: "J2_BUTTON_4()",
+    description: "Reads Joystick 2 Button 4 state via BIOS Read_Btns routine",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    if J2_BUTTON_4():",
+      "        # Player 2 button 4 pressed"
+    ],
+    category: "input",
+    vectrexAddress: "$F1BA (Read_Btns)",
+    notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 7."
   }
 ];
 
@@ -139,10 +362,12 @@ Refer to docs/ folder for comprehensive documentation.
 ### Variable Declaration:
 - 'var' = Global (outside functions)
 - 'let' = Local (inside functions)
+- **NO ARRAYS**: VPy doesn't support arrays/lists yet
+- Use individual variables: brick1, brick2, brick3 (not bricks[0], bricks[1])
 
 ### Required Functions:
-- def main(): - Initialization
-- def loop(): - Game loop (60 FPS)
+- def main(): - Initialization (runs once)
+- def loop(): - Game loop (60 FPS, WAIT_RECAL auto-added by compiler)
 
 ### Safe Intensity Values:
 - ALWAYS use ≤127 (use 127, 80, 64, 48, or 0)
@@ -158,6 +383,21 @@ Refer to docs/ folder for comprehensive documentation.
 - Vector graphics: assets/vectors/*.vec (JSON)
 - Music files: assets/music/*.vmus (JSON)
 - Access: DRAW_VECTOR("name"), PLAY_MUSIC("name")
+
+### META Fields (ROM Header):
+**SYNTAX: Use assignment, NOT function call**
+✅ CORRECT:
+  META TITLE = "MY GAME"       # Required (UPPERCASE only)
+  META COPYRIGHT = "g GCE 1982" # Optional
+  META MUSIC = 1                # Optional (0-9 for BIOS songs)
+
+❌ WRONG (DO NOT USE):
+  META(title="Game", author="Name", year=2025)  # Invalid syntax
+  META AUTHOR = "..."    # Field doesn't exist
+  META DESCRIPTION = "..." # Field doesn't exist
+  META YEAR = 2025       # Field doesn't exist
+
+Only 3 META fields exist: TITLE, COPYRIGHT, MUSIC
 
 For full documentation, see docs/ folder.
 `;
@@ -211,20 +451,29 @@ export const IDE_AND_GIT_CONTEXT = `
 ## MCP (Model Context Protocol):
 23 specialized tools for AI integration and project management.
 
+### COMMUNICATION STYLE:
+**BE CONCISE** - Execute tools silently without announcing them:
+❌ BAD: "I'll use editor/write_document to create the file"
+❌ BAD: "Now calling compiler/build_and_run"
+✅ GOOD: Just execute the tools and show the result
+✅ GOOD: Brief confirmation like "✅ Created paddle.vec" after execution
+
+Do NOT explain which tools you're using unless the user asks. Just do the work.
+
 ### CRITICAL: MCP Tool Usage Workflow
 
 **ALWAYS follow this sequence when modifying code:**
 
-1. **Modify file** using \`editor_write_document\`
+1. **Modify file** using tool: **editor/write_document**
    - Pass complete file content (not partial edits)
    - Provides uri (file path) and content parameters
 
-2. **SAVE the file** immediately using \`editor_save_document\`
+2. **SAVE the file** immediately using tool: **editor/save_document**
    - CRITICAL: Must save to disk before compilation
    - Compiler reads from disk, not editor state
    - Pass uri parameter (same as write_document)
 
-3. **Compile the project** using \`compiler_build_and_run\`
+3. **Compile the project** using tool: **compiler/build_and_run**
    - This is the NEW unified tool (replaces separate build+run steps)
    - Automatically compiles AND runs in emulator if successful
    - No parameters needed (uses current project configuration)
@@ -237,14 +486,14 @@ export const IDE_AND_GIT_CONTEXT = `
 
 5. **Handle compilation errors**
    - Parse \`errors\` array for line/column/message
-   - Use \`editor_read_document\` to read source if needed
+   - Use tool **editor/read_document** to read source if needed
    - Fix errors and repeat from step 1
 
 **Example workflow:**
 \`\`\`
-1. editor_write_document({uri: "main.vpy", content: "..."})
-2. editor_save_document({uri: "main.vpy"})
-3. compiler_build_and_run({})
+1. editor/write_document (uri: "main.vpy", content: "...")
+2. editor/save_document (uri: "main.vpy")
+3. compiler/build_and_run ()
 4. Check result.success:
    - true → Program running in emulator
    - false → Read result.errors, fix code, repeat
@@ -252,62 +501,119 @@ export const IDE_AND_GIT_CONTEXT = `
 
 ### Key MCP Tools:
 
+**CRITICAL: Tool names use SLASH notation, NOT underscores**
+
 **Editor Tools:**
-- \`editor_write_document\` - CREATE or UPDATE file (auto-opens in editor)
-- \`editor_save_document\` - SAVE file to disk (REQUIRED before compilation)
-- \`editor_read_document\` - Read file content (file MUST be open first)
-- \`editor_list_documents\` - List all open documents
+- **editor/write_document** - CREATE or UPDATE file (auto-opens in editor)
+- **editor/save_document** - SAVE file to disk (REQUIRED before compilation)
+- **editor/read_document** - Read file content (file MUST be open first)
+- **editor/list_documents** - List all open documents
 
 **Compiler Tools:**
-- \`compiler_build_and_run\` - **USE THIS**: Compile + Run in one step
-- \`compiler_build\` - Only compile (no auto-run)
-- \`compiler_get_errors\` - Get current diagnostics from editor
+- **compiler/build_and_run** - USE THIS: Compile + Run in one step
+- **compiler/build** - Only compile (no auto-run)
+- **compiler/get_errors** - Get current diagnostics from editor
 
 **Emulator Tools:**
-- \`emulator_run\` - Load ROM file into emulator
-- \`emulator_stop\` - Stop emulation
-- \`emulator_get_state\` - Get PC, registers, cycles, FPS
+- **emulator/run** - Load ROM file into emulator
+- **emulator/stop** - Stop emulation
+- **emulator/get_state** - Get PC, registers, cycles, FPS
 
 **Project Tools:**
-- \`project_create_vector\` - Create .vec file (validates JSON)
-- \`project_create_music\` - Create .vmus file (validates JSON)
-- \`project_read_file\` - Read any project file
-- \`project_write_file\` - Write any project file
+- **project/get_structure** - List ALL project files (USE THIS to verify assets exist)
+- **project/create_vector** - Create .vec file (validates JSON format)
+- **project/create_music** - Create .vmus file (validates JSON format)
+- **project/read_file** - Read any project file (uses RELATIVE paths from project root)
+- **project/write_file** - Write any project file (uses RELATIVE paths from project root)
+
+**CRITICAL Asset Workflow:**
+1. ALWAYS call **project/get_structure** FIRST to see available assets
+2. Check 'assets/vectors/*.vec' and 'assets/music/*.vmus' in response
+3. ONLY use asset names that PHYSICALLY exist in the project
+4. Example: If you see 'rocket_base.vec', use DRAW_VECTOR("rocket_base")
+5. NEVER assume generic names like "player", "enemy", "ship_part1" exist
+6. If asset doesn't exist: Ask user or create with project/create_vector
+
+**BEST PRACTICE: Prefer Assets Over Manual Drawing**
+✅ **USE ASSETS (.vec files)** as the DEFAULT approach for all game objects:
+- Ships, enemies, bullets, UI elements, text → Create as .vec assets
+- Benefits: Reusable, efficient, separates art from logic, easier to edit
+- Example: Create 'player.vec' and use DRAW_VECTOR("player") instead of multiple DRAW_LINE calls
+
+❌ **AVOID manual DRAW_LINE/MOVE** except for:
+- Debug visualization (showing hitboxes, paths)
+- Dynamic effects (lasers, explosions with procedural animation)
+- Simple UI elements that change frequently
+
+**MANDATORY .vec Creation Workflow:**
+1. ALWAYS use **project/create_vector** tool with exact JSON format below
+2. Copy template EXACTLY - change only: name, points coordinates
+3. Verify "paths" (NOT "vectors"), "points" (NOT "type":"line"), version "1.0" (string)
+4. Use DRAW_VECTOR("name") in code
+
+**TEMPLATE - Copy this EXACTLY (remove outer quotes when using):**
+"{\\"version\\":\\"1.0\\",\\"name\\":\\"object_name\\",\\"canvas\\":{\\"width\\":256,\\"height\\":256,\\"origin\\":\\"center\\"},\\"layers\\":[{\\"name\\":\\"default\\",\\"visible\\":true,\\"paths\\":[{\\"name\\":\\"path1\\",\\"intensity\\":127,\\"closed\\":true,\\"points\\":[{\\"x\\":0,\\"y\\":20},{\\"x\\":-15,\\"y\\":-10},{\\"x\\":15,\\"y\\":-10}]}]}]}"
+
+**Formatted for readability (same content):**
+- version: "1.0" (string)
+- name: "object_name" (change this)
+- canvas: {width: 256, height: 256, origin: "center"}
+- layers[0].paths[0].points: Array of {x, y} coordinates (change these)
+- closed: true for polygons, false for lines
 
 ### Common Mistakes to AVOID:
 
-❌ Using \`editor_read_document\` on unopened files → Use \`editor_write_document\` to create
-❌ Forgetting to save after \`editor_write_document\` → **ALWAYS use \`editor_save_document\` after write**
+❌ Using **editor/read_document** on unopened files → Use **editor/write_document** to create
+❌ Forgetting to save after **editor/write_document** → ALWAYS use **editor/save_document** after write
 ❌ Compiling without saving → Compiler reads disk, not editor state
-❌ Using \`editor_replace_range\` for new files → Requires file open first, use \`editor_write_document\`
-❌ Calling \`compiler_build\` then \`emulator_run\` separately → Use \`compiler_build_and_run\` instead
+❌ Using **editor/replace_range** for new files → Requires file open first, use **editor/write_document**
+❌ Calling **compiler/build** then **emulator/run** separately → Use **compiler/build_and_run** instead
 ❌ Not checking \`result.success\` after compilation → Must validate before assuming success
-❌ Inventing tool names like \`emulator_compile_and_run\` → Tool doesn't exist, use \`compiler_build_and_run\`
-❌ Passing undefined parameters → Always provide required parameters (e.g., \`uri\` for read_document)
+❌ Inventing tool names → ONLY use documented tools with slash notation
+❌ Passing undefined parameters → Always provide required parameters
+❌ Using underscores in tool names (editor_write_document) → WRONG, use slashes (editor/write_document)
+❌ Using wrong paths for project/read_file ("main.vpy") → Use relative path ("src/main.vpy")
+❌ Treating tool names as file paths → "project/create_vector" is TOOL NAME, NOT path
+❌ **INVENTING asset names** ("player", "ship_part1") → ALWAYS check project/get_structure FIRST
+❌ Assuming generic names exist → Verify with project/get_structure before using DRAW_VECTOR/PLAY_MUSIC
+❌ **INVENTING .vec format** (using "vectors", "type": "line", x1/y1/x2/y2) → MUST use exact "paths"/"points" format
+❌ Using version: 1 (number) in .vec → MUST be "version": "1.0" (string)
 
 ### Parameter Requirements:
 
-**editor_write_document:**
-- \`uri\`: string (required) - File path or name
+**editor/write_document:**
+- \`uri\`: string (required) - File path or name (e.g., "main.vpy", "src/game.vpy")
 - \`content\`: string (required) - Complete file content
 
-**editor_save_document:**
-- \`uri\`: string (required) - File URI to save (must be open)
+**editor/save_document:**
+- \`uri\`: string (required) - File URI to save (must be open in editor)
 
-**editor_read_document:**
+**editor/read_document:**
 - \`uri\`: string (required) - MUST match open document URI exactly
 
-**compiler_build_and_run:**
+**compiler/build_and_run:**
 - No parameters required (uses current project)
 - Optional: \`breakOnEntry\`: boolean (pause at first instruction)
 
-**project_create_vector:**
-- \`name\`: string (required) - Filename without .vec extension
-- \`content\`: string (optional) - JSON content, leave empty for template
+**project/create_vector:**
+- \`name\`: string (required) - Filename WITHOUT .vec extension (e.g., "ship" not "ship.vec")
+- \`content\`: string (optional if empty = template) - If provided, MUST be EXACT format from template above
 
-**project_create_music:**
-- \`name\`: string (required) - Filename without .vmus extension  
-- \`content\`: string (optional) - JSON content, leave empty for template
+**CRITICAL REMINDER - .vec Format Rules:**
+❌ NEVER use: "vectors", "type":"line", x1/y1/x2/y2, version as number
+✅ ALWAYS use: "paths", "points" array, "version":"1.0" (string)
+✅ Copy template exactly, only change: name and points coordinates
+
+**project/create_music:**
+- \`name\`: string (required) - Filename WITHOUT .vmus extension (e.g., "theme" not "theme.vmus")
+- \`content\`: string (optional) - Valid JSON content, leave empty for template
+
+**project/read_file:**
+- \`path\`: string (required) - RELATIVE path from project root (e.g., "src/main.vpy" NOT "main.vpy")
+
+**project/write_file:**
+- \`path\`: string (required) - RELATIVE path from project root (e.g., "src/game.vpy")
+- \`content\`: string (required) - Complete file content
 `;
 
 export function getVPyContext(): string {

@@ -829,5 +829,44 @@ def loop():
 - **Tool not found**: Verificar conversión de nombre (snake_case → slash-separated)
 - **JSON validation errors**: Verificar estructura completa en mensaje de error
 
+### 18.8 CRITICAL: Project Paths and File Operations
+⚠️ **RUTAS RELATIVAS AL PROYECTO**:
+- `project/read_file` y `project/write_file` usan paths RELATIVAS al project root
+- Ejemplo: Para leer `/Users/daniel/projects/Vectrex/jetpac/src/main.vpy`, usar `src/main.vpy`
+- ❌ MAL: `project/read_file("main.vpy")` → busca en `/project/main.vpy`
+- ✅ BIEN: `project/read_file("src/main.vpy")` → busca en `/project/src/main.vpy`
+
+⚠️ **DIFERENCIA ENTRE EDITOR Y PROJECT**:
+- `editor/read_document`: Lee archivos ABIERTOS en el editor (URI completo: `file:///Users/...`)
+- `project/read_file`: Lee archivos del PROYECTO (path relativo: `src/main.vpy`)
+- Usar `editor/list_documents` para ver qué archivos están abiertos
+- Usar `project/get_structure` para ver estructura del proyecto
+
+⚠️ **NOMBRES DE HERRAMIENTAS**:
+- Los nombres con slash son NOMBRES DE HERRAMIENTAS, NO paths de archivo
+- `project/create_vector` = nombre de herramienta (crear vector file)
+- NO confundir con path de archivo como `project/assets/vectors/ship.vec`
+- Cuando la documentación dice "project/create_vector", el slash es parte del NOMBRE DE HERRAMIENTA
+
+⚠️ **ASSET NAMES VS FILE PATHS**:
+- Asset names en código: `DRAW_VECTOR("ship")` - nombre simple, sin extensión
+- Asset file paths: `assets/vectors/ship.vec` - path relativo con extensión
+- `project/create_vector` recibe NAME (sin extensión) y crea en ubicación estándar
+- El sistema automáticamente crea `assets/vectors/{name}.vec`
+
+⚠️ **CRÍTICO: NUNCA INVENTAR NOMBRES DE ASSETS**:
+- ANTES de usar `DRAW_VECTOR("nombre")` o `PLAY_MUSIC("nombre")`:
+  1. **VERIFICAR** con `project/get_structure` qué assets existen
+  2. **LEER** lista de archivos en `assets/vectors/*.vec` y `assets/music/*.vmus`
+  3. **USAR** solo nombres que existan físicamente
+- ❌ NO asumir nombres genéricos (player, enemy, ship_part1, etc.)
+- ✅ Ejemplo correcto:
+  ```
+  1. project/get_structure → ver assets/vectors/rocket_base.vec
+  2. Código VPy: DRAW_VECTOR("rocket_base")  # ✅ existe
+  3. NO: DRAW_VECTOR("ship_part1")  # ❌ no existe, inventado
+  ```
+- Si asset no existe: Preguntar al usuario o crearlo con `project/create_vector`
+
 ---
-Última actualización: 2025-12-10 - Sistema de Assets completado + MCP Integration (secciones 17 y 18)
+Última actualización: 2025-12-18 - Sección 18.8: Project Paths, File Operations y Asset Verification

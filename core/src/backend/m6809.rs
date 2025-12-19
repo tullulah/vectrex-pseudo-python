@@ -1374,16 +1374,16 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         }
     }
     if w.contains("VECTREX_SET_INTENSITY") {
-    out.push_str("VECTREX_SET_INTENSITY:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    LDA #$C8       ; Restore DP to $C8 for our code\n    TFR A,DP\n    RTS\n");
+    out.push_str("VECTREX_SET_INTENSITY:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    RTS\n");
     }
     if w.contains("SETUP_DRAW_COMMON") {
         out.push_str(
-            "; Common drawing setup - sets DP register and resets integrator origin\n; Eliminates repetitive LDA #$D0; TFR A,DP; JSR Reset0Ref sequences\nSETUP_DRAW_COMMON:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n    LDA #$C8\n    TFR A,DP\n    RTS\n"
+            "; Common drawing setup - sets DP register and resets integrator origin\n; Eliminates repetitive LDA #$D0; TFR A,DP; JSR Reset0Ref sequences\nSETUP_DRAW_COMMON:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n    RTS\n"
         );
     }
     if w.contains("VECTREX_WAIT_RECAL") || opts.fast_wait {
-        if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    LDA #$C8\n    TFR A,DP\n    RTS\n");
-            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    LDA #$C8\n    TFR A,DP\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR Wait_Recal\n    RTS\n"); }
+        if opts.fast_wait { out.push_str("VECTREX_WAIT_RECAL:\n    LDA #$D0\n    TFR A,DP\n    LDA FAST_WAIT_HIT\n    INCA\n    STA FAST_WAIT_HIT\n    RTS\n");
+            out.push_str("VECTREX_RESET0_FAST:\n    LDA #$D0\n    TFR A,DP\n    CLR Vec_Dot_Dwell\n    CLR Vec_Loop_Count\n    RTS\n"); } else { out.push_str("VECTREX_WAIT_RECAL:\n    JSR Wait_Recal\n    RTS\n"); }
     }
     if w.contains("VECTREX_PLAY_MUSIC1") {
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
@@ -1739,6 +1739,10 @@ SFX_UPDATE_done:\n\
         LDA ,X+                 ; x_start (X now points to next_y)\n\
         STD TEMP_YX             ; Save y,x\n\
         PULS A                  ; Get intensity back\n\
+        PSHS A                  ; Save intensity again\n\
+        LDA #$D0\n\
+        TFR A,DP                ; Set DP=$D0 (BIOS requirement)\n\
+        PULS A                  ; Restore intensity\n\
         JSR $F2AB               ; BIOS Intensity_a (may corrupt X!)\n\
         ; Restore X to point to next_y,next_x (after the 3 bytes we read)\n\
         PULS D                  ; Get original X\n\
@@ -1789,6 +1793,9 @@ SFX_UPDATE_done:\n\
         ; ============================================================================\n\
         Draw_Sync_List_At:\n\
         LDA ,X+                 ; intensity\n\
+        PSHS A                  ; Save intensity\n\
+        LDA #$D0\n\
+        PULS A                  ; Restore intensity\n\
         JSR $F2AB               ; BIOS Intensity_a\n\
         LDB ,X+                 ; y_start from .vec\n\
         ADDB DRAW_VEC_Y         ; Add Y offset\n\
@@ -1913,165 +1920,19 @@ SFX_UPDATE_done:\n\
         RTS\n"
     );
     
-    // ========== JOYSTICK INPUT HELPERS ==========
-    // Vectrex joystick hardware mapping:
-    // - Joystick 1: alg_jch0 (Y axis), alg_jch1 (X axis), buttons in PSG reg 14 bits 0-3
-    // - Joystick 2: alg_jch2 (Y axis), alg_jch3 (X axis), buttons in PSG reg 14 bits 4-7
-    // - Analog values: 0-255 (128 = center), we convert to signed -127 to +127
-    
-    // These helpers will be called by emulator integration - the actual hardware reads
-    // will be done in JSVecX which updates memory-mapped registers
-    
-    // Joystick 1 analog X (alg_jch1)
-    out.push_str(
-        "READ_J1_X:\n\
-        ; Read Joystick 1 X axis from analog channel 1\n\
-        ; Hardware: alg_jch1 mapped at $C880 (emulator sets this)\n\
-        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
-        LDB $C880       ; Read analog channel 1 (J1 X)\n\
-        SUBB #128       ; Convert 0-255 to -128 to +127\n\
-        SEX             ; Sign-extend B to D\n\
-        RTS\n"
-    );
-    
-    // Joystick 1 analog Y (alg_jch0)
-    out.push_str(
-        "READ_J1_Y:\n\
-        ; Read Joystick 1 Y axis from analog channel 0\n\
-        ; Hardware: alg_jch0 mapped at $C881 (emulator sets this)\n\
-        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
-        LDB $C881       ; Read analog channel 0 (J1 Y)\n\
-        SUBB #128       ; Convert 0-255 to -128 to +127\n\
-        SEX             ; Sign-extend B to D\n\
-        RTS\n"
-    );
-    
-    // Joystick 2 analog X (alg_jch3)
-    out.push_str(
-        "READ_J2_X:\n\
-        ; Read Joystick 2 X axis from analog channel 3\n\
-        ; Hardware: alg_jch3 mapped at $C882 (emulator sets this)\n\
-        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
-        LDB $C882       ; Read analog channel 3 (J2 X)\n\
-        SUBB #128       ; Convert 0-255 to -128 to +127\n\
-        SEX             ; Sign-extend B to D\n\
-        RTS\n"
-    );
-    
-    // Joystick 2 analog Y (alg_jch2)
-    out.push_str(
-        "READ_J2_Y:\n\
-        ; Read Joystick 2 Y axis from analog channel 2\n\
-        ; Hardware: alg_jch2 mapped at $C883 (emulator sets this)\n\
-        ; Returns: D = signed value (-127 to +127, 0 = center)\n\
-        LDB $C883       ; Read analog channel 2 (J2 Y)\n\
-        SUBB #128       ; Convert 0-255 to -128 to +127\n\
-        SEX             ; Sign-extend B to D\n\
-        RTS\n"
-    );
-    
-    // Joystick 1 buttons (PSG register 14, bits 0-3)
-    // PSG reg 14 is mapped at $C884 by emulator
-    out.push_str(
-        "READ_J1_BUTTON_1:\n\
-        ; Read Joystick 1 Button 1 (PSG reg 14, bit 0)\n\
-        ; Returns: D = 0 (released) or 1 (pressed)\n\
-        LDA $C884       ; Read PSG register 14 (button states)\n\
-        ANDA #$01       ; Mask bit 0 (J1 Button 1)\n\
-        BEQ RJ1B1_ZERO\n\
-        LDD #1          ; Button pressed\n\
-        RTS\n\
-    RJ1B1_ZERO:\n\
-        LDD #0          ; Button released\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J1_BUTTON_2:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$02       ; Mask bit 1 (J1 Button 2)\n\
-        BEQ RJ1B2_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ1B2_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J1_BUTTON_3:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$04       ; Mask bit 2 (J1 Button 3)\n\
-        BEQ RJ1B3_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ1B3_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J1_BUTTON_4:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$08       ; Mask bit 3 (J1 Button 4)\n\
-        BEQ RJ1B4_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ1B4_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    // Joystick 2 buttons (PSG register 14, bits 4-7)
-    out.push_str(
-        "READ_J2_BUTTON_1:\n\
-        ; Read Joystick 2 Button 1 (PSG reg 14, bit 4)\n\
-        ; Returns: D = 0 (released) or 1 (pressed)\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$10       ; Mask bit 4 (J2 Button 1)\n\
-        BEQ RJ2B1_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ2B1_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J2_BUTTON_2:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$20       ; Mask bit 5 (J2 Button 2)\n\
-        BEQ RJ2B2_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ2B2_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J2_BUTTON_3:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$40       ; Mask bit 6 (J2 Button 3)\n\
-        BEQ RJ2B3_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ2B3_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
-    
-    out.push_str(
-        "READ_J2_BUTTON_4:\n\
-        LDA $C884       ; Read PSG register 14\n\
-        ANDA #$80       ; Mask bit 7 (J2 Button 4)\n\
-        BEQ RJ2B4_ZERO\n\
-        LDD #1\n\
-        RTS\n\
-    RJ2B4_ZERO:\n\
-        LDD #0\n\
-        RTS\n"
-    );
+    // ========== JOYSTICK SUPPORT ==========
+    // VPy programs now use REAL BIOS routines just like commercial ROMs:
+    // - Joy_Digital ($F1F8) - reads joystick axes, updates Vec_Joy_1_X/Y ($C81B/$C81C)
+    // - Read_Btns ($F1BA) - reads button states, updates Vec_Btn_State ($C80F)
+    //
+    // Benefits:
+    // 1. Perfect compatibility with real Vectrex hardware
+    // 2. Minestorm and BIOS games work correctly with gamepad
+    // 3. No custom memory-mapped registers needed
+    // 4. Standard Vectrex programming practice
+    //
+    // The BIOS calls are inlined directly in emit_builtin_call() for J1_X(), J1_Y(), etc.
+    // No helper routines needed - everything goes through official BIOS entry points.
 }
 
 // emit_builtin_call: inline lowering for intrinsic names; returns true if handled
@@ -2257,119 +2118,257 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     
     // ========== JOYSTICK 1 FUNCTIONS (alg_jch0/jch1) ==========
     
-    // J1_X: Read Joystick 1 X axis (alg_jch1)
-    // Returns signed 16-bit value: -127 to +127 (0 = center)
-    // Vectrex hardware uses 0-255 range (128 = center), we convert to signed
+    // J1_X: Default to digital (fast, suitable for 60fps)
     if up == "J1_X" && args.is_empty() {
         add_native_call_comment(out, "J1_X");
-        out.push_str("; J1_X() - Read Joystick 1 X axis\n");
-        out.push_str("    JSR READ_J1_X\n");
+        out.push_str("; J1_X() - Read Joystick 1 X axis (BIOS Digital)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
+        out.push_str("    LDA #3\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
+        out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
+        out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
-    
-    // J1_Y: Read Joystick 1 Y axis (alg_jch0)
-    // Returns signed 16-bit value: -127 to +127 (0 = center)
+
+    // J1_X_DIGITAL: Explicit digital version (-1/0/+1)
+    if up == "J1_X_DIGITAL" && args.is_empty() {
+        add_native_call_comment(out, "J1_X_DIGITAL");
+        out.push_str("; J1_X_DIGITAL() - Read Joystick 1 X axis (BIOS Digital)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
+        out.push_str("    LDA #3\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
+        out.push_str("    SEX\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+
+    // J1_X_ANALOG: Analog version (-127 to +127)
+    if up == "J1_X_ANALOG" && args.is_empty() {
+        add_native_call_comment(out, "J1_X_ANALOG");
+        out.push_str("; J1_X_ANALOG() - Read Joystick 1 X axis (BIOS Analog)\n");
+        out.push_str("    LDA #$80\n");
+        out.push_str("    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
+        out.push_str("    CLR $C820    ; Vec_Joy_Mux_1_Y (disable Y for speed)\n");
+        out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
+        out.push_str("    SEX\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+
+    // J1_Y: Read Joystick 1 Y axis via BIOS Joy_Digital
+    // Returns signed 16-bit value: -1 (down), 0 (center), +1 (up)
+    // NOTE: Joy_Digital is MUCH faster than Joy_Analog (suitable for 60fps)
     if up == "J1_Y" && args.is_empty() {
         add_native_call_comment(out, "J1_Y");
-        out.push_str("; J1_Y() - Read Joystick 1 Y axis\n");
-        out.push_str("    JSR READ_J1_Y\n");
+        out.push_str("; J1_Y() - Read Joystick 1 Y axis (BIOS)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
+        out.push_str("    LDA #3\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDB $C81C    ; Vec_Joy_1_Y\n");
+        out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
-    
-    // J1_BUTTON_1: Read Joystick 1 button 1 (PSG register 14, bit 0)
+
+    // J1_Y_ANALOG: Analog version (-127 to +127)
+    if up == "J1_Y_ANALOG" && args.is_empty() {
+        add_native_call_comment(out, "J1_Y_ANALOG");
+        out.push_str("; J1_Y_ANALOG() - Read Joystick 1 Y axis (BIOS Analog)\n");
+        out.push_str("    LDA #$80\n");
+        out.push_str("    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)\n");
+        out.push_str("    CLR $C81F    ; Vec_Joy_Mux_1_X (disable X for speed)\n");
+        out.push_str("    LDA #3\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDB $C81C    ; Vec_Joy_1_Y\n");
+        out.push_str("    SEX\n");
+        out.push_str("    STD RESULT\n");
+        return true;
+    }
+
+    // J1_BUTTON_1: Read Joystick 1 button 1 via BIOS Read_Btns
     // Returns 0 if released, 1 if pressed
     if up == "J1_BUTTON_1" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_1");
-        out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1\n");
-        out.push_str("    JSR READ_J1_BUTTON_1\n");
+        out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$01\n");
+        out.push_str("    BEQ .j1b1_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j1b1_done\n");
+        out.push_str(".j1b1_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j1b1_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J1_BUTTON_2: Read Joystick 1 button 2 (PSG register 14, bit 1)
+    // J1_BUTTON_2: Read Joystick 1 button 2 via BIOS Read_Btns
     if up == "J1_BUTTON_2" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_2");
-        out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2\n");
-        out.push_str("    JSR READ_J1_BUTTON_2\n");
+        out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$02\n");
+        out.push_str("    BEQ .j1b2_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j1b2_done\n");
+        out.push_str(".j1b2_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j1b2_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J1_BUTTON_3: Read Joystick 1 button 3 (PSG register 14, bit 2)
+    // J1_BUTTON_3: Read Joystick 1 button 3 via BIOS Read_Btns
     if up == "J1_BUTTON_3" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_3");
-        out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3\n");
-        out.push_str("    JSR READ_J1_BUTTON_3\n");
+        out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$04\n");
+        out.push_str("    BEQ .j1b3_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j1b3_done\n");
+        out.push_str(".j1b3_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j1b3_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J1_BUTTON_4: Read Joystick 1 button 4 (PSG register 14, bit 3)
+    // J1_BUTTON_4: Read Joystick 1 button 4 via BIOS Read_Btns
     if up == "J1_BUTTON_4" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_4");
-        out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4\n");
-        out.push_str("    JSR READ_J1_BUTTON_4\n");
+        out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$08\n");
+        out.push_str("    BEQ .j1b4_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j1b4_done\n");
+        out.push_str(".j1b4_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j1b4_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // ========== JOYSTICK 2 FUNCTIONS (alg_jch2/jch3) ==========
+    // ========== JOYSTICK 2 FUNCTIONS ==========
     
-    // J2_X: Read Joystick 2 X axis (alg_jch3)
-    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    // J2_X: Read Joystick 2 X axis via BIOS Joy_Digital
+    // Returns signed 16-bit value: -1 (left), 0 (center), +1 (right)
     if up == "J2_X" && args.is_empty() {
         add_native_call_comment(out, "J2_X");
-        out.push_str("; J2_X() - Read Joystick 2 X axis\n");
-        out.push_str("    JSR READ_J2_X\n");
+        out.push_str("; J2_X() - Read Joystick 2 X axis (BIOS)\n");
+        out.push_str("    LDA #5\n");
+        out.push_str("    STA $C821    ; Vec_Joy_Mux_2_X\n");
+        out.push_str("    LDA #7\n");
+        out.push_str("    STA $C822    ; Vec_Joy_Mux_2_Y\n");
+        out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDB $C81D    ; Vec_Joy_2_X\n");
+        out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J2_Y: Read Joystick 2 Y axis (alg_jch2)
-    // Returns signed 16-bit value: -127 to +127 (0 = center)
+    // J2_Y: Read Joystick 2 Y axis via BIOS Joy_Digital
+    // Returns signed 16-bit value: -1 (down), 0 (center), +1 (up)
     if up == "J2_Y" && args.is_empty() {
         add_native_call_comment(out, "J2_Y");
-        out.push_str("; J2_Y() - Read Joystick 2 Y axis\n");
-        out.push_str("    JSR READ_J2_Y\n");
+        out.push_str("; J2_Y() - Read Joystick 2 Y axis (BIOS)\n");
+        out.push_str("    LDA #5\n");
+        out.push_str("    STA $C821    ; Vec_Joy_Mux_2_X\n");
+        out.push_str("    LDA #7\n");
+        out.push_str("    STA $C822    ; Vec_Joy_Mux_2_Y\n");
+        out.push_str("    JSR $F1F8    ; Joy_Digital\n");
+        out.push_str("    LDB $C81E    ; Vec_Joy_2_Y\n");
+        out.push_str("    SEX\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J2_BUTTON_1: Read Joystick 2 button 1 (PSG register 14, bit 4)
+    // J2_BUTTON_1: Read Joystick 2 button 1 via BIOS Read_Btns
     // Returns 0 if released, 1 if pressed
     if up == "J2_BUTTON_1" && args.is_empty() {
         add_native_call_comment(out, "J2_BUTTON_1");
-        out.push_str("; J2_BUTTON_1() - Read Joystick 2 button 1\n");
-        out.push_str("    JSR READ_J2_BUTTON_1\n");
+        out.push_str("; J2_BUTTON_1() - Read Joystick 2 button 1 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$10    ; J2 button 1 (bit 4)\n");
+        out.push_str("    BEQ .j2b1_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j2b1_done\n");
+        out.push_str(".j2b1_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j2b1_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J2_BUTTON_2: Read Joystick 2 button 2 (PSG register 14, bit 5)
+    // J2_BUTTON_2: Read Joystick 2 button 2 via BIOS Read_Btns
     if up == "J2_BUTTON_2" && args.is_empty() {
         add_native_call_comment(out, "J2_BUTTON_2");
-        out.push_str("; J2_BUTTON_2() - Read Joystick 2 button 2\n");
-        out.push_str("    JSR READ_J2_BUTTON_2\n");
+        out.push_str("; J2_BUTTON_2() - Read Joystick 2 button 2 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$20    ; J2 button 2 (bit 5)\n");
+        out.push_str("    BEQ .j2b2_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j2b2_done\n");
+        out.push_str(".j2b2_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j2b2_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J2_BUTTON_3: Read Joystick 2 button 3 (PSG register 14, bit 6)
+    // J2_BUTTON_3: Read Joystick 2 button 3 via BIOS Read_Btns
     if up == "J2_BUTTON_3" && args.is_empty() {
         add_native_call_comment(out, "J2_BUTTON_3");
-        out.push_str("; J2_BUTTON_3() - Read Joystick 2 button 3\n");
-        out.push_str("    JSR READ_J2_BUTTON_3\n");
+        out.push_str("; J2_BUTTON_3() - Read Joystick 2 button 3 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$40    ; J2 button 3 (bit 6)\n");
+        out.push_str("    BEQ .j2b3_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j2b3_done\n");
+        out.push_str(".j2b3_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j2b3_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
     
-    // J2_BUTTON_4: Read Joystick 2 button 4 (PSG register 14, bit 7)
+    // J2_BUTTON_4: Read Joystick 2 button 4 via BIOS Read_Btns
     if up == "J2_BUTTON_4" && args.is_empty() {
         add_native_call_comment(out, "J2_BUTTON_4");
-        out.push_str("; J2_BUTTON_4() - Read Joystick 2 button 4\n");
-        out.push_str("    JSR READ_J2_BUTTON_4\n");
+        out.push_str("; J2_BUTTON_4() - Read Joystick 2 button 4 (BIOS)\n");
+        out.push_str("    JSR $F1BA    ; Read_Btns\n");
+        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+        out.push_str("    ANDA #$80    ; J2 button 4 (bit 7)\n");
+        out.push_str("    BEQ .j2b4_not_pressed\n");
+        out.push_str("    LDD #1\n");
+        out.push_str("    BRA .j2b4_done\n");
+        out.push_str(".j2b4_not_pressed:\n");
+        out.push_str("    LDD #0\n");
+        out.push_str(".j2b4_done:\n");
         out.push_str("    STD RESULT\n");
         return true;
     }

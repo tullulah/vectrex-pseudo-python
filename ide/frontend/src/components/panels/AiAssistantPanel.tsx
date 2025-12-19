@@ -281,6 +281,7 @@ export const AiAssistantPanel: React.FC = () => {
   useEffect(() => {
     console.log('[PyPilot] Initializing MCP tools...');
     mcpTools.initialize()
+    
       .then(() => {
         console.log('[PyPilot] MCP initialize completed');
         const available = mcpTools.isAvailable();
@@ -547,7 +548,7 @@ Soy tu asistente especializado en **Vectrex VPy development**. Puedo ayudarte co
         console.log('[PyPilot] Found', toolCalls.length, 'tool calls:', toolCalls);
         
         if (toolCalls.length > 0) {
-          addMessage('system', `⚙️ Ejecutando ${toolCalls.length} herramienta(s) MCP...`);
+          // addMessage('system', `⚙️ Ejecutando ${toolCalls.length} herramienta(s) MCP...`);
           
           try {
             const results = await mcpTools.executeToolCalls(toolCalls);
