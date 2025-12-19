@@ -10,6 +10,10 @@ def main():
 def loop():
     WAIT_RECAL()
     
+    # Test len() builtin
+    let count = len(scores)
+    DEBUG_PRINT(count)
+    
     # Test: iterate through array and draw lines
     let y = 50
     for score in scores:

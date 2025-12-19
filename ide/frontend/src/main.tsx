@@ -343,6 +343,12 @@ function App() {
       return;
     }
 
+    // Clear debug messages/variables on new build
+    if ((window as any).clearDebugMessages) {
+      (window as any).clearDebugMessages();
+      logger.debug('Build', 'Debug messages cleared for new build');
+    }
+
     const editorState = useEditorStore.getState();
     const projectState = useProjectStore.getState();
     
@@ -1006,6 +1012,12 @@ def loop():
           if (!window.confirm(`You have ${unsavedDocs.length} unsaved file(s): ${names}\n\nClose project anyway?`)) {
             break;
           }
+        }
+        
+        // Clear debug messages/variables on project close
+        if ((window as any).clearDebugMessages) {
+          (window as any).clearDebugMessages();
+          logger.debug('Project', 'Debug messages cleared on project close');
         }
         
         // Close the project (saves state)

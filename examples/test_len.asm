@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='ForIn Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Len Test' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "FORIN TEST"
+    FCC "LEN TEST"
     FCB $80
     FCB 0
 
@@ -30,11 +30,11 @@ RESULT         EQU $C880   ; Main result temporary
     JMP START
 
 VECTREX_DEBUG_PRINT:
-    ; Debug print to console - writes to gap area (C000-C7FF)
+    ; Debug print to console - writes to end of RAM (safe area)
     LDA VAR_ARG0+1   ; Load value to debug print
-    STA $C000        ; Debug output value in unmapped gap
+    STA $CF00        ; Debug output value at end of RAM
     LDA #$42         ; Debug marker
-    STA $C001        ; Debug marker to indicate new output
+    STA $CF01        ; Debug marker to indicate new output
     RTS
 ; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly
 ; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.
@@ -442,16 +442,33 @@ START:
 
     ; *** DEBUG *** main() function code inline (initialization)
     LDX #ARRAY_0    ; Array literal
-    STX VAR_SCORES
-    ; VPy_LINE:8
+    STX VAR_NUMBERS
+    ; VPy_LINE:7
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 8
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
+    STD RESULT
+    ; VPy_LINE:8
+    LDD VAR_NUMBERS
+    STD RESULT
+    LDX RESULT
+    LDD 0,X
+    STD RESULT
+    ; VPy_LINE:9
+    LDD VAR_SIZE
+    STD RESULT
+; NATIVE_CALL: DEBUG_PRINT at line 9
+    LDD RESULT
+    LDX #$C840
+    JSR $F2A2
+    LDD #$0050
+    JSR $F373
+    LDD #0
     STD RESULT
 
 MAIN:
@@ -463,121 +480,83 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 5 statements in loop() body
+    ; DEBUG: Processing 4 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(7)
-    ; VPy_LINE:11
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 11
+    ; VPy_LINE:12
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 12
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(1)
-    ; VPy_LINE:14
-    LDD VAR_SCORES
+    ; VPy_LINE:15
+    LDD VAR_NUMBERS
     STD RESULT
     LDX RESULT
     LDD 0,X
     STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(7)
-    ; VPy_LINE:15
-    LDD VAR_COUNT
+    ; DEBUG: Statement 2 - Discriminant(1)
+    ; VPy_LINE:16
+    LDD VAR_ARRAY_SIZE
     STD RESULT
-; NATIVE_CALL: DEBUG_PRINT at line 15
     LDD RESULT
-    STB $C000
-    LDA #$42
-    STA $C001
-    CLR $C002
-    CLR $C003
-    LDD #0
+    STD TMPLEFT
+    LDD #20
     STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(1)
-    ; VPy_LINE:18
-    LDD #50
-    STD RESULT
-    ; DEBUG: Statement 4 - Discriminant(3)
-    ; VPy_LINE:19
-    ; for score in scores
-    LDD VAR_SCORES   ; Load array pointer
-    STD TMPPTR      ; Save array pointer
-    LDX TMPPTR      ; X = array pointer
-    LDD ,X++        ; D = size, X points to first element
-    STX TMPPTR      ; TMPPTR = first element address
-    STD TMPLEFT     ; TMPLEFT = remaining count
-FORIN_0: ; forin loop start
+    LDD RESULT
+    STD TMPRIGHT
     LDD TMPLEFT
-    LBEQ FORIN_END_1       ; Exit if no elements left
-    LDX TMPPTR      ; X = current element pointer
-    LDD ,X++        ; D = *ptr, ptr++
-    STX TMPPTR      ; Save updated pointer
-    STD VAR_SCORE     ; Store in global var
-    ; VPy_LINE:20
-    LDD #0
+    STD MUL_A
+    LDD TMPRIGHT
+    STD MUL_B
+    JSR MUL16
+    ; DEBUG: Statement 3 - Discriminant(7)
+    ; VPy_LINE:17
+    LDD #65486
     STD VAR_ARG0
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
+    LDD #0
     STD VAR_ARG1
-    LDD VAR_SCORE
-    STD RESULT
-    LDD RESULT
-    LSRA
-    RORB
-    LSRA
-    RORB
+    LDD VAR_LINE_LENGTH
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
+    LDD #0
     STD VAR_ARG3
     LDD #127
     STD VAR_ARG4
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
-    ; VPy_LINE:21
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_Y
-    STU TMPPTR
-    STX ,U
-    LDD TMPLEFT
-    SUBD #1
-    STD TMPLEFT
-    LBRA FORIN_0
-FORIN_END_1: ; forin end
     RTS
 
-DIV16:
+MUL16:
+    LDD MUL_A
+    STD MUL_RES
     LDD #0
-    STD DIV_Q
-    LDD DIV_A
-    STD DIV_R
-    LDD DIV_B
-    BEQ DIV16_DONE
-DIV16_LOOP:
-    LDD DIV_R
-    SUBD DIV_B
-    BLO DIV16_DONE
-    STD DIV_R
-    LDD DIV_Q
-    ADDD #1
-    STD DIV_Q
-    BRA DIV16_LOOP
-DIV16_DONE:
-    LDD DIV_Q
+    STD MUL_TMP
+    LDD MUL_B
+    STD MUL_CNT
+MUL16_LOOP:
+    LDD MUL_CNT
+    BEQ MUL16_DONE
+    LDD MUL_CNT
+    ANDA #1
+    BEQ MUL16_SKIP
+    LDD MUL_RES
+    ADDD MUL_TMP
+    STD MUL_TMP
+MUL16_SKIP:
+    LDD MUL_RES
+    ASLB
+    ROLA
+    STD MUL_RES
+    LDD MUL_CNT
+    LSRA
+    RORB
+    STD MUL_CNT
+    BRA MUL16_LOOP
+MUL16_DONE:
+    LDD MUL_TMP
     STD RESULT
     RTS
 
@@ -587,33 +566,33 @@ DIV16_DONE:
 ; Variables (in RAM)
 TMPLEFT   EQU RESULT+2
 TMPRIGHT  EQU RESULT+4
-TMPPTR    EQU RESULT+6
-DIV_A   EQU RESULT+18
-DIV_B   EQU RESULT+20
-DIV_Q   EQU RESULT+22
-DIV_R   EQU RESULT+24
+MUL_A    EQU RESULT+8
+MUL_B    EQU RESULT+10
+MUL_RES  EQU RESULT+12
+MUL_TMP  EQU RESULT+14
+MUL_CNT  EQU RESULT+16
 TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
 VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-VAR_COUNT EQU $CF10+0
-VAR_SCORE EQU $CF10+2
-VAR_SCORES EQU $CF10+4
-VAR_Y EQU $CF10+6
+VAR_ARRAY_SIZE EQU $CF00+0
+VAR_LINE_LENGTH EQU $CF00+2
+VAR_NUMBERS EQU $CF00+4
+VAR_SIZE EQU $CF00+6
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
 VAR_ARG2 EQU $C8B6
 VAR_ARG3 EQU $C8B8
 VAR_ARG4 EQU $C8BA
-; Array literal for variable 'scores' (5 elements)
+; Array literal for variable 'numbers' (5 elements)
 ARRAY_0:
-    FDB 100   ; Element 0
-    FDB 250   ; Element 1
-    FDB 350   ; Element 2
-    FDB 500   ; Element 3
-    FDB 750   ; Element 4
+    FDB 10   ; Element 0
+    FDB 20   ; Element 1
+    FDB 30   ; Element 2
+    FDB 40   ; Element 3
+    FDB 50   ; Element 4
 
 VLINE_DX EQU RESULT+8
 VLINE_DY EQU RESULT+9

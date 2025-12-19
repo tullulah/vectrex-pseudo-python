@@ -44,6 +44,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("SET_INTENSITY", 1),
     ("DEBUG_PRINT", 1),
     ("DEBUG_PRINT_LABELED", 2),  // label, value
+    ("DEBUG_PRINT_STR", 1),      // string variable
     
     // Asset functions (new)
     ("DRAW_VECTOR", 3),     // Draw vector asset at position: name, x, y
@@ -65,6 +66,9 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     
     // Math functions
     ("ABS", 1),             // Absolute value
+    
+    // Array functions
+    ("LEN", 1),             // Get array length
     
     // Inline assembly
     ("ASM", 1),             // Inline assembly string

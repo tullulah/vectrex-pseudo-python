@@ -12,6 +12,8 @@ pub fn collect_string_literals(module: &Module) -> std::collections::BTreeMap<St
             gather_expr_strings(value, &mut set); 
         } else if let Item::ExprStatement(expr) = item {
             gather_expr_strings(expr, &mut set);
+        } else if let Item::GlobalLet { value, .. } = item {
+            gather_expr_strings(value, &mut set);
         }
     }
     let mut map = BTreeMap::new();

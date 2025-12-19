@@ -75,7 +75,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     }
     if w.contains("VECTREX_DEBUG_PRINT") {
         let start_line = out.lines().count() + 1;
-        let function_code = "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to end of RAM (safe area)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$42         ; Debug marker\n    STA $CF01        ; Debug marker to indicate new output\n    RTS\n";
+        let function_code = "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to gap area (C000-C7FF)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $C000        ; Debug output value in unmapped gap\n    LDA #$42         ; Debug marker\n    STA $C001        ; Debug marker to indicate new output\n    RTS\n";
         out.push_str(function_code);
         let end_line = out.lines().count();
         
@@ -90,7 +90,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     }
     if w.contains("VECTREX_DEBUG_PRINT_LABELED") {
         out.push_str(
-            "VECTREX_DEBUG_PRINT_LABELED:\n    ; Debug print with label - writes to end of RAM (safe area)\n    ; Write label string pointer to end of RAM\n    LDA VAR_ARG0     ; Label string pointer high byte\n    STA $CF02        ; Label pointer high at end of RAM\n    LDA VAR_ARG0+1   ; Label string pointer low byte  \n    STA $CF03        ; Label pointer low at end of RAM\n    ; Write value to debug output\n    LDA VAR_ARG1+1   ; Load value to debug print\n    STA $CF00        ; Debug output value at end of RAM\n    LDA #$FE         ; Labeled debug marker\n    STA $CF01        ; Debug marker to indicate labeled output\n    RTS\n"
+            "VECTREX_DEBUG_PRINT_LABELED:\n    ; Debug print with label - writes to gap area (C000-C7FF)\n    ; Write label string pointer to unmapped gap\n    LDA VAR_ARG0     ; Label string pointer high byte\n    STA $C002        ; Label pointer high in gap\n    LDA VAR_ARG0+1   ; Label string pointer low byte  \n    STA $C003        ; Label pointer low in gap\n    ; Write value to debug output\n    LDA VAR_ARG1+1   ; Load value to debug print\n    STA $C000        ; Debug output value in gap\n    LDA #$FE         ; Labeled debug marker\n    STA $C001        ; Debug marker to indicate labeled output\n    RTS\n"
         );
     }
     if w.contains("VECTREX_POKE") {

@@ -414,6 +414,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                } else if let Expr::StringLit(s) = value {
+                    // String literal: load address of string from string_map
+                    if let Some(label) = string_map.get(s) {
+                        out.push_str(&format!("    LDX #{}    ; String literal\n", label));
+                        out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                    } else {
+                        // Fallback: initialize to 0 if string not in map
+                        out.push_str(&format!("    LDD #0    ; String not found in map\n"));
+                        out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+                    }
                 } else {
                     // For non-constant initial values, evaluate the expression
                     emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0 }, &string_map, opts);
@@ -762,7 +772,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if opts.exclude_ram_org {
             // FIX: Use separate memory area for global variables, not RESULT+offset
             // Global variables should persist between function calls, but RESULT is temporary
-            out.push_str(&format!("VAR_{} EQU $CF00+{}\n", v.to_uppercase(), var_offset));
+            // Use $CF10 to avoid collision with debug RAM at $CF00-$CF03
+            out.push_str(&format!("VAR_{} EQU $CF10+{}\n", v.to_uppercase(), var_offset));
             var_offset += 2;
         } else {
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));

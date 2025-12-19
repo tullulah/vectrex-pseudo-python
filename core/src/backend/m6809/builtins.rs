@@ -34,8 +34,9 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         "J1_X"|"J1_Y"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
-    "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
-    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
+    "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
+    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"|
+    "DEBUG_PRINT"|"DEBUG_PRINT_LABELED"|"DEBUG_PRINT_STR"
     );
     
     // Helper para agregar comentario de tracking cuando es una llamada nativa real
@@ -872,6 +873,116 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str(&format!("    LDD RESULT\n    TSTA\n    BPL {}\n    COMA\n    COMB\n    ADDD #1\n{}: STD RESULT\n", done, done));
         return true;
     }
+    
+    // len(array): Get array length
+    // Array format: first word is size, followed by elements
+    if up == "LEN" {
+        if let Some(arg) = args.first() {
+            emit_expr(arg, out, fctx, string_map, opts);
+            // RESULT now contains pointer to array
+            // Load first word (size) into RESULT
+            out.push_str("    LDX RESULT\n");    // X = pointer to array
+            out.push_str("    LDD 0,X\n");       // D = array[0] = size
+            out.push_str("    STD RESULT\n");    // Store size in RESULT
+        } else {
+            out.push_str("    LDD #0\n    STD RESULT\n");
+        }
+        return true;
+    }
+    
+    // DEBUG_PRINT(value): Write to debug RAM area for IDE debug panel
+    // Protocol: C000=value(low byte), C001=marker(0x42 simple / 0xFE labeled), C002-C003=label_ptr
+    // Uses unmapped gap area (C000-C7FF) to avoid consuming user RAM
+    if matches!(up.as_str(), "DEBUG_PRINT"|"VECTREX_DEBUG_PRINT") {
+        if let Some(arg) = args.first() {
+            // Check if argument is a variable (Ident) to generate labeled output
+            let var_name = if let Expr::Ident(id) = arg {
+                Some(id.name.clone())
+            } else {
+                None
+            };
+            
+            emit_expr(arg, out, fctx, string_map, opts);
+            
+            if let Some(name) = var_name {
+                // Labeled debug output (show variable name)
+                add_native_call_comment(out, &format!("DEBUG_PRINT({})", name));
+                let label_name = format!("DEBUG_LABEL_{}", name.to_uppercase());
+                let skip_label = fresh_label("DEBUG_SKIP_DATA");
+                
+                out.push_str("    LDD RESULT\n");
+                out.push_str("    STB $C000\n");      // Store low byte (B) to debug value
+                out.push_str("    LDA #$FE\n");       // Marker for LABELED debug output
+                out.push_str("    STA $C001\n");      // Write marker
+                out.push_str(&format!("    LDX #{}\n", label_name));
+                out.push_str("    STX $C002\n");      // Store label pointer (16-bit)
+                out.push_str(&format!("    BRA {}\n", skip_label));
+                
+                // Emit label data inline (skipped by BRA)
+                out.push_str(&format!("{}:\n", label_name));
+                out.push_str(&format!("    FCC \"{}\"\n", name));
+                out.push_str("    FCB $00\n");        // Null terminator
+                out.push_str(&format!("{}:\n", skip_label));
+            } else {
+                // Simple debug output (no label)
+                add_native_call_comment(out, "DEBUG_PRINT");
+                out.push_str("    LDD RESULT\n");
+                out.push_str("    STB $C000\n");      // Store low byte (B) to debug value
+                out.push_str("    LDA #$42\n");       // Marker for simple debug output
+                out.push_str("    STA $C001\n");      // Write marker
+                out.push_str("    CLR $C002\n");      // Clear label pointer high
+                out.push_str("    CLR $C003\n");      // Clear label pointer low
+            }
+        }
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // DEBUG_PRINT_STR(string_var): Debug print string content
+    // Protocol: C000=unused, C001=marker(0xFD=string), C002-C003=string_ptr, C004-C005=label_ptr
+    if matches!(up.as_str(), "DEBUG_PRINT_STR") {
+        if let Some(arg) = args.first() {
+            let var_name = if let Expr::Ident(id) = arg {
+                Some(id.name.clone())
+            } else {
+                None
+            };
+            
+            emit_expr(arg, out, fctx, string_map, opts);
+            
+            if let Some(name) = var_name {
+                add_native_call_comment(out, &format!("DEBUG_PRINT_STR({})", name));
+                let label_name = format!("DEBUG_LABEL_{}", name.to_uppercase());
+                let skip_label = fresh_label("DEBUG_SKIP_DATA");
+                
+                out.push_str("    LDD RESULT\n");
+                out.push_str("    STD $C002\n");      // Store string pointer
+                out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
+                out.push_str("    STA $C001\n");      // Write marker
+                out.push_str(&format!("    LDX #{}\n", label_name));
+                out.push_str("    STX $C004\n");      // Store label pointer at C004-C005
+                out.push_str(&format!("    BRA {}\n", skip_label));
+                
+                // Emit label data inline
+                out.push_str(&format!("{}:\n", label_name));
+                out.push_str(&format!("    FCC \"{}\"\n", name));
+                out.push_str("    FCB $00\n");
+                out.push_str(&format!("{}:\n", skip_label));
+            } else {
+                // String without label
+                add_native_call_comment(out, "DEBUG_PRINT_STR");
+                out.push_str("    LDD RESULT\n");
+                out.push_str("    STD $C002\n");      // Store string pointer
+                out.push_str("    LDA #$FD\n");       // Marker for STRING debug output
+                out.push_str("    STA $C001\n");      // Write marker
+                out.push_str("    CLR $C004\n");      // Clear label pointer
+                out.push_str("    CLR $C005\n");
+            }
+        }
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
     // MIN(a,b)
     if matches!(up.as_str(), "MIN"|"MATH_MIN") {
         if args.len() < 2 { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }

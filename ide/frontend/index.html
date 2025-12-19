@@ -69,6 +69,155 @@
             console.log('[JSVecX] Document ready, initializing vecx...');
             initializeJSVecX();
         });
+        
+        // ========== DEBUG SYSTEM SETUP ==========
+        // Setup debug RAM and polling system for DEBUG_PRINT support
+        window.debugRam = new Uint8Array(256); // Debug RAM buffer for C000-C0FF
+        window.debugMessages = []; // Legacy: simple messages list
+        window.debugVariables = {}; // New: tracked variables {name: value}
+        window.debugStrings = {};   // String variables {name: "content"}
+        window.lastDebugValue = 0xFF;
+        window.pollFrameCount = 0;
+        
+        // Intercept write8 for debug area (C000-C00F)
+        if (vecx.write8) {
+            const originalWrite8 = vecx.write8.bind(vecx);
+            vecx.write8 = function(address, data) {
+                // Intercept writes to debug gap C000-C00F
+                if (address >= 0xC000 && address <= 0xC00F) {
+                    const debugAddr = address - 0xC000;
+                    window.debugRam[debugAddr] = data;
+                    console.log(`%c[DEBUG-WRITE] 📝 C0${debugAddr.toString(16).toUpperCase()}=${data.toString(16).padStart(2,'0')} (${data})`, 'background: #080; color: #0f0; font-weight: bold');
+                    return; // Don't call original - this is unmapped gap
+                }
+                return originalWrite8(address, data);
+            };
+            console.log('[JSVecX] ✅ write8 interceptor installed for debug area C000-C00F');
+        }
+        
+        // Patch vecx_emu to poll debug memory after each frame
+        if (vecx.vecx_emu) {
+            const originalVecxEmu = vecx.vecx_emu.bind(vecx);
+            vecx.vecx_emu = function(cycles, cyclesDone) {
+                const result = originalVecxEmu(cycles, cyclesDone);
+                
+                // Poll debug memory after frame execution
+                const debugValue = window.debugRam[0] || 0xFF;
+                const debugMarker = window.debugRam[1] || 0;
+                const labelHigh = window.debugRam[2] || 0;
+                const labelLow = window.debugRam[3] || 0;
+                
+                // Log every 100 frames to reduce spam
+                window.pollFrameCount++;
+                if (window.pollFrameCount % 100 === 0) {
+                    console.log(`%c[DEBUG-POLL] 🔍 Frame ${window.pollFrameCount}: marker=0x${debugMarker.toString(16).padStart(2,'0')}`, 'color: #666');
+                }
+                
+                // Check for debug marker (0x42 = simple, 0xFE = labeled, 0xFD = string)
+                if (debugMarker === 0x42 || debugMarker === 0xFE || debugMarker === 0xFD) {
+                    if (debugMarker !== window.lastDebugValue) {
+                        console.log(`%c[DEBUG-POLL] ✅ Marker detected!`, 'background: #0a0; color: #fff; font-weight: bold; font-size: 14px', {
+                            type: debugMarker === 0x42 ? 'SIMPLE' : (debugMarker === 0xFD ? 'STRING' : 'LABELED'),
+                            value: debugValue,
+                            marker: `0x${debugMarker.toString(16)}`
+                        });
+                        
+                        // Process debug output
+                        if (debugMarker === 0xFD) {
+                            // STRING debug output (M6809 big-endian: high byte first)
+                            const strPtrHigh = window.debugRam[2] || 0;    // C002 = high byte
+                            const strPtrLow = window.debugRam[3] || 0;     // C003 = low byte
+                            const labelPtrHigh = window.debugRam[4] || 0;  // C004 = high byte
+                            const labelPtrLow = window.debugRam[5] || 0;   // C005 = low byte
+                            const strPtr = (strPtrHigh << 8) | strPtrLow;
+                            const labelPtr = (labelPtrHigh << 8) | labelPtrLow;
+                            
+                            // Read string content
+                            let strContent = '';
+                            for (let i = 0; i < 128; i++) {
+                                const ch = vecx.read8(strPtr + i);
+                                if (ch === 0 || ch === 0x80) break; // Null or $80 terminator
+                                strContent += String.fromCharCode(ch);
+                            }
+                            
+                            // Read label if present
+                            let label = '';
+                            if (labelPtr !== 0) {
+                                for (let i = 0; i < 32; i++) {
+                                    const ch = vecx.read8(labelPtr + i);
+                                    if (ch === 0) break;
+                                    label += String.fromCharCode(ch);
+                                }
+                            }
+                            
+                            if (label) {
+                                window.debugStrings[label] = strContent;
+                                console.log(`%c[DEBUG-POLL] 📝 String tracked: ${label} = "${strContent}"`, 'color: #0ff; font-weight: bold');
+                            } else {
+                                const message = `STRING: "${strContent}"`;
+                                window.debugMessages.push(message);
+                                console.log(`%c[DEBUG-POLL] 📋 String message: "${strContent}"`, 'color: #0ff; font-weight: bold');
+                            }
+                        } else if (debugMarker === 0xFE && (labelHigh !== 0 || labelLow !== 0)) {
+                            // Labeled debug output - update variable value
+                            const labelPtr = (labelHigh << 8) | labelLow;
+                            let label = '';
+                            for (let i = 0; i < 32; i++) {
+                                const ch = vecx.read8(labelPtr + i);
+                                if (ch === 0) break;
+                                label += String.fromCharCode(ch);
+                            }
+                            
+                            // Update or add variable
+                            const oldValue = window.debugVariables[label];
+                            window.debugVariables[label] = debugValue;
+                            
+                            if (oldValue === undefined) {
+                                console.log(`%c[DEBUG-POLL] 📌 New variable tracked: ${label} = ${debugValue}`, 'color: #0f0; font-weight: bold');
+                            } else if (oldValue !== debugValue) {
+                                console.log(`%c[DEBUG-POLL] 🔄 Variable updated: ${label}: ${oldValue} → ${debugValue}`, 'color: #ff0; font-weight: bold');
+                            }
+                        } else {
+                            // Simple debug output - add sequential message
+                            const message = `DEBUG: ${debugValue}`;
+                            window.debugMessages.push(message);
+                            console.log(`%c[DEBUG-POLL] 📋 Message added: "${message}"`, 'color: #0f0; font-weight: bold');
+                        }
+                        
+                        // Clear marker
+                        window.debugRam[1] = 0;
+                    }
+                }
+                
+                return result;
+            };
+            console.log('[JSVecX] ✅ vecx_emu patched - debug polling active');
+        }
+        
+        // Helper function to get debug messages (called by DebugPanel)
+        window.getDebugMessages = function() {
+            return window.debugMessages;
+        };
+        
+        // NEW: Helper to get tracked variables
+        window.getDebugVariables = function() {
+            return window.debugVariables;
+        };
+        
+        // NEW: Helper to get tracked strings
+        window.getDebugStrings = function() {
+            return window.debugStrings;
+        };
+        
+        window.clearDebugMessages = function() {
+            window.debugMessages = [];
+            window.debugVariables = {};
+            window.debugStrings = {};
+            console.log('[DEBUG] Messages, variables and strings cleared');
+        };
+        
+        console.log('[JSVecX] ✅ Debug system fully initialized');
+        // ========== END DEBUG SYSTEM ==========
     </script>
   </head>
   <body>
