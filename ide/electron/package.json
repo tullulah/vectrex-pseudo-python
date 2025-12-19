@@ -2,7 +2,7 @@
   "name": "vpy-ide",
   "version": "0.1.0",
   "private": true,
-  "description": "Vectrex Pseudo-Python IDE - A visual programming environment for Vectrex game development",
+  "description": "Vectrex Studio - A visual programming environment for Vectrex game development",
   "author": {
     "name": "Daniel Ferrer",
     "email": "tullulah@gmail.com"
@@ -46,7 +46,7 @@
   },
   "build": {
     "appId": "com.vectrex.vpy-ide",
-    "productName": "VPy IDE",
+    "productName": "Vectrex Studio",
     "copyright": "Copyright © 2025 Daniel Ferrer",
     "directories": {
       "output": "dist",
