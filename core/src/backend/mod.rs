@@ -1,8 +1,8 @@
 pub mod m6809;
 pub mod m6809_binary_emitter;
 pub mod asm_to_binary;
-pub mod arm;
-pub mod cortexm;
+// pub mod arm;  // Desactivado temporalmente - no se está usando
+// pub mod cortexm;  // Desactivado temporalmente - no se está usando
 pub mod string_literals;
 pub mod trig;
 pub mod debug_info;

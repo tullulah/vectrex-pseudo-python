@@ -63,6 +63,10 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     // 5. Store value at computed address
                     out.push_str("    LDX TMPPTR\n    LDD RESULT\n    STD ,X\n");
                 }
+                crate::ast::AssignTarget::FieldAccess { .. } => {
+                    // Phase 3 - struct field assignment codegen
+                    todo!("Field access assignment codegen not yet implemented (Phase 3)")
+                }
             }
         }
         Stmt::Let { name, value, .. } => {

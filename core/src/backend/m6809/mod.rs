@@ -693,6 +693,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 // Export declarations are metadata for multi-file compilation.
                 // No code generation needed at this stage.
             }
+            Item::StructDef(_) => {
+                // Phase 3 - struct definitions: will compute layout and add to data section
+            }
         }
     }
     // In classic minimal, ensure first string literal gets label STR_0 for inlined reference

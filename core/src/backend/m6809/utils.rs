@@ -54,6 +54,8 @@ pub fn collect_expr_syms(expr: &Expr, set: &mut BTreeSet<String>) {
             collect_expr_syms(target, set);
             collect_expr_syms(index, set);
         }
+        Expr::StructInit { .. } => {} // Phase 3 - no identifiers in struct init
+        Expr::FieldAccess { target, .. } => collect_expr_syms(target, set),
     }
 }
 
@@ -71,6 +73,10 @@ pub fn collect_stmt_syms(stmt: &Stmt, set: &mut BTreeSet<String>) {
                     }
                     collect_expr_syms(array_expr, set);
                     collect_expr_syms(index, set);
+                }
+                crate::ast::AssignTarget::FieldAccess { target, .. } => {
+                    // Phase 3 - collect symbols from target expression
+                    collect_expr_syms(target, set);
                 }
             }
             collect_expr_syms(value, set);

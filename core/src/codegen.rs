@@ -110,8 +110,8 @@ fn expected_builtin_arity(name: &str) -> Option<usize> {
 
 // Re-export backend emitters under stable names.
 mod backends_ref {
-    pub use crate::backend::arm::emit as emit_arm;
-    pub use crate::backend::cortexm::emit as emit_cortexm;
+    // pub use crate::backend::arm::emit as emit_arm;  // Desactivado
+    // pub use crate::backend::cortexm::emit as emit_cortexm;  // Desactivado
     pub use crate::backend::m6809::emit as emit_6809;
     pub use crate::backend::m6809::emit_with_debug as emit_6809_with_debug;
 }
@@ -204,8 +204,8 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
             let (asm, dbg) = backends_ref::emit_6809_with_debug(&optimized, target, &ti, &effective);
             (asm, Some(dbg))
         },
-        CpuArch::Arm => (backends_ref::emit_arm(&optimized, target, &ti, opts), None),
-        CpuArch::CortexM => (backends_ref::emit_cortexm(&optimized, target, &ti, opts), None),
+        CpuArch::Arm => panic!("ARM backend desactivado temporalmente"),
+        CpuArch::CortexM => panic!("Cortex-M backend desactivado temporalmente"),
     };
     
     (asm, debug_info, diagnostics)
@@ -230,8 +230,8 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }
     let asm = match ti.arch {
         CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, &effective),
-        CpuArch::Arm => backends_ref::emit_arm(&optimized, target, &ti, opts),
-        CpuArch::CortexM => backends_ref::emit_cortexm(&optimized, target, &ti, opts),
+        CpuArch::Arm => panic!("ARM backend desactivado temporalmente"),
+        CpuArch::CortexM => panic!("Cortex-M backend desactivado temporalmente"),
     };
     (asm, diagnostics)
 }
@@ -282,6 +282,7 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
             Item::Function(_) => {},
             Item::ExprStatement(_) => {}, // Expression statements no definen globals
             Item::Export(_) => {}, // Export declarations don't define globals
+            Item::StructDef(_) => {}, // Struct definitions don't define globals
         }
     }
     
@@ -416,6 +417,11 @@ fn validate_stmt_collect(
                     validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
                     validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
                 }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } => {
+                    // For field assignment, validate the target object expression
+                    validate_expr_collect(obj_expr, scope, reads, current_func, function_locals, defined_functions);
+                    // Field names are not variables, so no declaration needed
+                }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
@@ -432,6 +438,10 @@ fn validate_stmt_collect(
                     // For indexed compound assignment, validate both target and index expressions
                     validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
                     validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } => {
+                    // For field compound assignment, validate the target object
+                    validate_expr_collect(obj_expr, scope, reads, current_func, function_locals, defined_functions);
                 }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
@@ -584,6 +594,15 @@ fn validate_expr_collect(
             validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
             validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
         }
+        Expr::StructInit { .. } => {
+            // Struct initialization - validation happens in semantic analysis phase
+            // TODO: Verify struct exists in Phase 2
+        }
+        Expr::FieldAccess { target, .. } => {
+            // Field access - validate the target object
+            validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
+            // Field names are not variables, so no additional validation needed here
+        }
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }
@@ -596,6 +615,7 @@ fn opt_item(it: &Item) -> Item {
         Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
         Item::ExprStatement(expr) => Item::ExprStatement(opt_expr(expr)),
         Item::Export(e) => Item::Export(e.clone()),
+        Item::StructDef(s) => Item::StructDef(s.clone()), // Structs don't need optimization
     } 
 }
 
@@ -628,6 +648,15 @@ fn opt_stmt(s: &Stmt) -> Stmt {
                     Expr::Index { 
                         target: array_expr.clone(), 
                         index: index.clone()
+                    }
+                }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, source_line, col } => {
+                    // For obj.field += expr, we need obj.field as the left side
+                    Expr::FieldAccess {
+                        target: obj_expr.clone(),
+                        field: field.clone(),
+                        source_line: *source_line,
+                        col: *col,
                     }
                 }
             };
@@ -770,6 +799,23 @@ fn opt_expr(e: &Expr) -> Expr {
             target: Box::new(opt_expr(target)), 
             index: Box::new(opt_expr(index)) 
         },
+        Expr::StructInit { struct_name, source_line, col } => {
+            // Struct initialization doesn't need optimization
+            Expr::StructInit { 
+                struct_name: struct_name.clone(), 
+                source_line: *source_line, 
+                col: *col 
+            }
+        }
+        Expr::FieldAccess { target, field, source_line, col } => {
+            // Optimize the target object expression
+            Expr::FieldAccess {
+                target: Box::new(opt_expr(target)),
+                field: field.clone(),
+                source_line: *source_line,
+                col: *col,
+            }
+        }
         Expr::Not(inner) => {
             let ni = opt_expr(inner);
             if let Expr::Number(v) = ni {
@@ -795,6 +841,7 @@ fn dead_code_elim(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()
@@ -908,6 +955,10 @@ fn dse_function(f: &Function) -> Function {
                     }
                     crate::ast::AssignTarget::Index { .. } => {
                         // Array assignments always kept (side effects)
+                        true
+                    }
+                    crate::ast::AssignTarget::FieldAccess { .. } => {
+                        // Field assignments always kept (side effects)
                         true
                     }
                 };
@@ -1056,6 +1107,13 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(target, used);
             collect_reads_expr(index, used);
         }
+        Expr::StructInit { .. } => {
+            // Struct initialization doesn't read variables
+        }
+        Expr::FieldAccess { target, .. } => {
+            // Field access reads the target object
+            collect_reads_expr(target, used);
+        }
         Expr::Number(_) => {}
     Expr::StringLit(_) => {}
     }
@@ -1080,6 +1138,7 @@ fn propagate_constants(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()
@@ -1114,6 +1173,10 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
                 }
                 crate::ast::AssignTarget::Index { .. } => {
                     // Array indexing - can't propagate constants through
+                    Stmt::Assign { target: target.clone(), value: v2, source_line }
+                }
+                crate::ast::AssignTarget::FieldAccess { .. } => {
+                    // Field access - can't propagate constants through (Phase 3)
                     Stmt::Assign { target: target.clone(), value: v2, source_line }
                 }
             }
@@ -1239,6 +1302,13 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
+    Expr::StructInit { .. } => e.clone(), // Phase 3 - no constant propagation
+    Expr::FieldAccess { target, field, source_line, col } => Expr::FieldAccess { 
+        target: Box::new(cp_expr(target, env)), 
+        field: field.clone(), 
+        source_line: *source_line, 
+        col: *col 
+    },
     }
 }
 
@@ -1253,6 +1323,7 @@ fn fold_const_switches(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()

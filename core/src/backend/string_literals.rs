@@ -54,6 +54,8 @@ fn gather_expr_strings(expr: &Expr, set: &mut std::collections::BTreeSet<String>
             gather_expr_strings(index, set);
         }
         Expr::Ident(_) | Expr::Number(_) => {}
+        Expr::StructInit { .. } => {} // Phase 3 - no string literals
+        Expr::FieldAccess { target, .. } => gather_expr_strings(target, set),
     }
 }
 

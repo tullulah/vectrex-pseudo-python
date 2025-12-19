@@ -202,6 +202,14 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // 5. Load value from computed address
             out.push_str("    LDD ,X\n    STD RESULT\n");
         }
+        Expr::StructInit { .. } => {
+            // Phase 3 - struct initialization codegen
+            todo!("Struct initialization codegen not yet implemented (Phase 3)")
+        }
+        Expr::FieldAccess { .. } => {
+            // Phase 3 - field access codegen
+            todo!("Field access codegen not yet implemented (Phase 3)")
+        }
     }
 }
 
