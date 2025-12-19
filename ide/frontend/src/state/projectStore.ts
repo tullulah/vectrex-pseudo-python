@@ -261,11 +261,11 @@ export const useProjectStore = create<ProjectState>()(
         set({ vpyProject: project });
         if (project) {
           // Update window title
-          document.title = `${project.config.project.name} - VPy IDE`;
+          document.title = `${project.config.project.name} - Vectrex Studio`;
           // Add to recents
           get().addRecentWorkspace(project.projectFile, project.config.project.name, true);
         } else {
-          document.title = 'VPy IDE';
+          document.title = 'Vectrex Studio';
         }
       },
       
@@ -329,7 +329,7 @@ export const useProjectStore = create<ProjectState>()(
           workspaceName: undefined,
           selected: undefined,
         });
-        document.title = 'VPy IDE';
+        document.title = 'Vectrex Studio';
         logger.info('Project', 'Project and workspace closed');
       },
       
