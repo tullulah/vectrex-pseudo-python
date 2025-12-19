@@ -39,6 +39,10 @@ pub fn expr_has_trig_depth(e: &Expr, depth: usize) -> bool {
             let u = ci.name.to_ascii_lowercase();
             u == "sin" || u == "cos" || u == "tan" || u == "math.sin" || u == "math.cos" || u == "math.tan"
         }
+        Expr::MethodCall(mc) => {
+            // Check target and args for trig
+            expr_has_trig_depth(&mc.target, depth + 1) || mc.args.iter().any(|a| expr_has_trig_depth(a, depth + 1))
+        }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => 
             expr_has_trig_depth(left, depth + 1) || expr_has_trig_depth(right, depth + 1),
         Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig_depth(inner, depth + 1),
@@ -148,6 +152,16 @@ pub fn scan_expr_args(e: &Expr) -> usize {
             
             // Other calls use VAR_ARG normally
             ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0))
+        },
+        Expr::MethodCall(mc) => {
+            // Method calls: self + args (self is ARG0, args are ARG1+)
+            // Total = 1 (self) + args.len(), capped at 5
+            let total_args = 1 + mc.args.len();
+            total_args.min(5).max(
+                scan_expr_args(&mc.target).max(
+                    mc.args.iter().map(scan_expr_args).max().unwrap_or(0)
+                )
+            )
         },
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => scan_expr_args(left).max(scan_expr_args(right)),
         Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_args(inner),
@@ -264,6 +278,11 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                 usage.wrappers_used.insert("UPDATE_MUSIC_PSG".to_string());
             }
             for a in &ci.args { scan_expr_runtime(a, usage); }
+        }
+        Expr::MethodCall(mc) => {
+            // Method calls don't use wrappers (user-defined functions)
+            scan_expr_runtime(&mc.target, usage);
+            for a in &mc.args { scan_expr_runtime(a, usage); }
         }
         Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
             scan_expr_runtime(left, usage);

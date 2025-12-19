@@ -28,6 +28,7 @@ pub fn format_expr_ref(e: &Expr) -> String {
         Expr::Number(v) => format!("N:{}", v),
         Expr::StringLit(s) => format!("S:{}", s),
         Expr::Call(ci) => format!("C:{}", ci.name),
+        Expr::MethodCall(mc) => format!("M:{}.{}", format_expr_ref(&mc.target), mc.method_name),
         _ => "?".to_string(),
     }
 }
@@ -37,6 +38,10 @@ pub fn collect_expr_syms(expr: &Expr, set: &mut BTreeSet<String>) {
     match expr {
         Expr::Ident(n) => { set.insert(n.name.clone()); }
         Expr::Call(ci) => { for a in &ci.args { collect_expr_syms(a, set); } }
+        Expr::MethodCall(mc) => { 
+            collect_expr_syms(&mc.target, set);
+            for a in &mc.args { collect_expr_syms(a, set); } 
+        }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {

@@ -43,6 +43,10 @@ fn gather_expr_strings(expr: &Expr, set: &mut std::collections::BTreeSet<String>
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => { gather_expr_strings(left,set); gather_expr_strings(right,set); }
     Expr::Call(ci) => { for a in &ci.args { gather_expr_strings(a,set); } }
+    Expr::MethodCall(mc) => {
+        gather_expr_strings(&mc.target, set);
+        for a in &mc.args { gather_expr_strings(a, set); }
+    }
         Expr::Not(inner) | Expr::BitNot(inner) => gather_expr_strings(inner,set),
         Expr::List(elements) => {
             for elem in elements {

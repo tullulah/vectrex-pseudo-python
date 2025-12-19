@@ -161,12 +161,23 @@ pub enum AssignTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallInfo { pub name: String, pub source_line: usize, pub col: usize, pub args: Vec<Expr> }
 
+// Información de llamadas a métodos: obj.method(args)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodCallInfo {
+    pub target: Box<Expr>,  // obj expression (could be self, variable, or field access)
+    pub method_name: String,
+    pub args: Vec<Expr>,
+    pub source_line: usize,
+    pub col: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
 	Number(i32),
 	StringLit(String),
 	Ident(IdentInfo),
 	Call(CallInfo),
+	MethodCall(MethodCallInfo),
 	Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
 	Compare { op: CmpOp, left: Box<Expr>, right: Box<Expr> },
 	Logic { op: LogicOp, left: Box<Expr>, right: Box<Expr> },

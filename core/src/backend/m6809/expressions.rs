@@ -65,6 +65,38 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                 out.push_str(&format!("    JSR {}\n", target_name)); 
             }
         }
+        Expr::MethodCall(mc) => {
+            // Method call: obj.method(args)
+            // First argument (VAR_ARG0) = address of object (self parameter)
+            // Subsequent arguments in VAR_ARG1, VAR_ARG2, etc.
+            
+            // Emit object address as first argument
+            emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
+            out.push_str("    LDD RESULT\n");
+            out.push_str("    STD VAR_ARG0\n");
+            
+            // Emit remaining arguments
+            for (i, arg) in mc.args.iter().enumerate() {
+                if i >= 4 { break; } // Only 5 args total (ARG0-ARG4), first is self
+                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1);
+                out.push_str("    LDD RESULT\n");
+                out.push_str(&format!("    STD VAR_ARG{}\n", i + 1));
+            }
+            
+            // Determine struct name from target expression
+            // For now, we need to know the struct type - this is a limitation
+            // TODO: Add type inference system to resolve mc.target's type
+            // For now, we'll generate a generic mangled name and let linker resolve
+            let struct_name = "UNKNOWN"; // Placeholder - need type system
+            let mangled_name = format!("{}_{}", struct_name, mc.method_name).to_uppercase();
+            
+            out.push_str(&format!("; Method call: {}.{}()\n", struct_name, mc.method_name));
+            if opts.force_extended_jsr {
+                out.push_str(&format!("    JSR >{}\n", mangled_name));
+            } else {
+                out.push_str(&format!("    JSR {}\n", mangled_name));
+            }
+        }
         Expr::Binary { op, left, right } => {
             // x+x and x-x peepholes
             if matches!(op, BinOp::Add) && format_expr_ref(left) == format_expr_ref(right) {

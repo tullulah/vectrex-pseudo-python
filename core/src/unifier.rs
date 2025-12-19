@@ -447,6 +447,18 @@ fn rewrite_expr(
                     .collect(),
             })
         }
+        Expr::MethodCall(mc) => {
+            // Method calls: rewrite target and args, keep method name as-is
+            Expr::MethodCall(crate::ast::MethodCallInfo {
+                target: Box::new(rewrite_expr(&mc.target, current_module, symbols, name_map, options)),
+                method_name: mc.method_name.clone(),
+                args: mc.args.iter()
+                    .map(|e| rewrite_expr(e, current_module, symbols, name_map, options))
+                    .collect(),
+                source_line: mc.source_line,
+                col: mc.col,
+            })
+        }
         Expr::Binary { op, left, right } => {
             Expr::Binary {
                 op: *op,

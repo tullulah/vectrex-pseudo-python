@@ -688,18 +688,13 @@ impl<'a> Parser<'a> {
                 col: ident_token.col 
             });
             
-            // Handle field access: obj.field or qualified names module.function
+            // Handle field access: obj.field or method calls obj.method()
             while self.match_kind(&TokenKind::Dot) {
                 let field_token = self.peek().clone();
                 if let Some(field_name) = self.match_identifier() {
-                    // Check if this is followed by a call
+                    // Check if this is followed by a call (method call)
                     if self.check(TokenKind::LParen) {
-                        // Qualified function call: convert to flat name
-                        let base_name = match expr {
-                            Expr::Ident(ref info) => info.name.clone(),
-                            _ => return self.err_here("Expected identifier before '.' in qualified call"),
-                        };
-                        let full_name = format!("{}_{}", base_name, field_name);
+                        // Method call: obj.method(args)
                         self.consume(TokenKind::LParen)?;
                         let mut args = Vec::new();
                         self.skip_newlines();
@@ -716,11 +711,12 @@ impl<'a> Parser<'a> {
                         }
                         self.skip_newlines();
                         self.consume(TokenKind::RParen)?;
-                        return Ok(Expr::Call(crate::ast::CallInfo { 
-                            name: full_name, 
+                        return Ok(Expr::MethodCall(crate::ast::MethodCallInfo { 
+                            target: Box::new(expr),
+                            method_name: field_name,
+                            args,
                             source_line: field_token.line, 
-                            col: field_token.col, 
-                            args 
+                            col: field_token.col,
                         }));
                     } else {
                         // Field access

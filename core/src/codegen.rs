@@ -761,6 +761,12 @@ fn validate_expr_collect(
             }
             for a in &ci.args { validate_expr_collect(a, scope, reads, current_func, function_locals, defined_functions); }
         }
+        Expr::MethodCall(mc) => {
+            // Method calls: validate target and arguments
+            // TODO: Add method resolution and struct type checking
+            validate_expr_collect(&mc.target, scope, reads, current_func, function_locals, defined_functions);
+            for a in &mc.args { validate_expr_collect(a, scope, reads, current_func, function_locals, defined_functions); }
+        }
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
             validate_expr_collect(left, scope, reads, current_func, function_locals, defined_functions); 
             validate_expr_collect(right, scope, reads, current_func, function_locals, defined_functions);
@@ -1007,6 +1013,13 @@ fn opt_expr(e: &Expr) -> Expr {
             }
         }
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(opt_expr).collect() }),
+    Expr::MethodCall(mc) => Expr::MethodCall(MethodCallInfo { 
+        target: Box::new(opt_expr(&mc.target)), 
+        method_name: mc.method_name.clone(), 
+        source_line: mc.source_line, 
+        col: mc.col, 
+        args: mc.args.iter().map(opt_expr).collect() 
+    }),
     Expr::Ident(i) => Expr::Ident(i.clone()),
     Expr::Number(n) => Expr::Number(trunc16(*n)),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
@@ -1273,6 +1286,10 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             used.insert(n.name.clone());
         }
         Expr::Call(ci) => { for a in &ci.args { collect_reads_expr(a, used); } }
+        Expr::MethodCall(mc) => { 
+            collect_reads_expr(&mc.target, used);
+            for a in &mc.args { collect_reads_expr(a, used); } 
+        }
         Expr::Binary { left, right, .. }
         | Expr::Compare { left, right, .. }
         | Expr::Logic { left, right, .. } => {
@@ -1483,6 +1500,13 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
             index: Box::new(cp_expr(index, env)) 
         },
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
+    Expr::MethodCall(mc) => Expr::MethodCall(MethodCallInfo {
+        target: Box::new(cp_expr(&mc.target, env)),
+        method_name: mc.method_name.clone(),
+        args: mc.args.iter().map(|a| cp_expr(a, env)).collect(),
+        source_line: mc.source_line,
+        col: mc.col,
+    }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
     Expr::StructInit { .. } => e.clone(), // Phase 3 - no constant propagation

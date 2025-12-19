@@ -113,6 +113,13 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
                     scan_expr(arg, used, depth + 1);
                 }
             },
+            Expr::MethodCall(mc) => {
+                // Scan target and arguments for nested asset usages
+                scan_expr(&mc.target, used, depth + 1);
+                for arg in &mc.args {
+                    scan_expr(arg, used, depth + 1);
+                }
+            },
             Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
                 scan_expr(left, used, depth + 1);
                 scan_expr(right, used, depth + 1);
@@ -705,8 +712,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 // Export declarations are metadata for multi-file compilation.
                 // No code generation needed at this stage.
             }
-            Item::StructDef(_) => {
-                // Phase 3 - struct definitions: will compute layout and add to data section
+            Item::StructDef(struct_def) => {
+                // Phase 3 - struct definitions: emit methods as regular functions with mangled names
+                // Method naming convention: StructName_method_name
+                for method in &struct_def.methods {
+                    let mangled_name = format!("{}_{}", struct_def.name, method.name);
+                    
+                    // Create a new function with mangled name and self as first parameter
+                    let mut method_func = method.clone();
+                    method_func.name = mangled_name;
+                    
+                    // Emit the method as a regular function
+                    emit_function(&method_func, &mut out, &string_map, opts, &mut tracker, &global_names);
+                }
             }
         }
     }
