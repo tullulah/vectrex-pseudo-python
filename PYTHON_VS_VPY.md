@@ -178,9 +178,9 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
 | **Literals** | `"hello"` | ✅ | - | Globales/locales con auto-storage |
-| **Concatenación** | `"a" + "b"` | ❌ | 🟡 MEDIA | Útil para texto |
+| **Concatenación** | `"a" + "b"` | ❌ | � BAJA | Útil para texto |
 | **Multiplicación** | `"x" * 3` | ❌ | 🟢 BAJA | Menos usado |
-| **f-strings** | `f"x={x}"` | ❌ | 🟡 MEDIA | Moderno, útil |
+| **f-strings** | `f"x={x}"` | ❌ | 🟢 BAJA | Moderno, útil |
 | **format()** | `"{}".format(x)` | ❌ | 🟢 BAJA | Antiguo |
 | **split()** | `"a,b".split(",")` | ❌ | 🟢 BAJA | Requiere listas |
 | **join()** | `",".join(lista)` | ❌ | 🟢 BAJA | Requiere listas |
@@ -335,13 +335,13 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | Estructuras de Datos | 4 | 0 | 1 🟡 | 3 🟢 |
 | Expresiones | 5 | 0 | 3 🟡 | 2 🟢 |
 | Built-ins | 6 | 0 | 1 🟡 | 5 🟢 |
-| Strings | 5 | 0 | 2 🟡 | 3 🟢 |
+| Strings | 5 | 0 | 0 | 5 🟢 |
 | Control Flow Avanzado | 6 | 0 | 2 🟡 | 4 🟢 |
 | Funciones Avanzadas | 7 | 0 | 1 🟡 | 6 🟢 |
 | OOP | 4 | 0 | 0 | 4 🟢 |
 | Operadores | 3 | 0 | 1 🟡 | 2 🟢 |
 | Misc | 9 | 0 | 2 🟡 | 7 🟢 |
-| **TOTAL FALTANTE** | **49** | **0 🔴** | **13 🟡** | **36 🟢** |
+| **TOTAL FALTANTE** | **49** | **0 🔴** | **11 🟡** | **38 🟢** |
 
 **Mejoras recientes (2025-12-19)**:
 - ✅ String literals en variables locales (`let texto = "HOLA"`)
