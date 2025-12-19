@@ -15,7 +15,7 @@
   "repository": {
     "comment": { "patterns": [{"name":"comment.line.number-sign.vpy","match":"#.*$"}] },
     "keyword": { "patterns": [
-    {"name":"keyword.control.vpy","match":"\\b(def|struct|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\\b"},
+    {"name":"keyword.control.vpy","match":"\\b(def|struct|return|for|in|range|if|elif|else|while|break|continue|pass|and|or|not|let)\\b"},
     {"name":"storage.modifier.const.vpy","match":"\\bconst\\b"}
     ] },
     "numbers": { "patterns": [

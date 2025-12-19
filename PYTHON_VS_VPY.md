@@ -24,6 +24,7 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **for range** | `for i in range(start, end, step):` | ✅ | Sintaxis: `for i = start to end step step:` |
 | **break** | `break` | ✅ | Sale de loop |
 | **continue** | `continue` | ✅ | Siguiente iteración |
+| **pass** | `pass` | ✅ | No-op placeholder |
 | **switch/match** | `match x: case 1: ...` (Python 3.10+) | ✅ | `switch expr: case 1: ... default: ...` |
 | **return** | `return value` | ✅ | Con/sin valor |
 
@@ -194,7 +195,6 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **for-else** | `for: ... else: ...` | ❌ | 🟢 BAJA | Raramente usado |
 | **try-except** | `try: ... except: ...` | ❌ | 🟢 BAJA | No exceptions en ASM |
 | **with** | `with x as y: ...` | ❌ | 🟢 BAJA | Context managers |
-| **pass** | `pass` | ❌ | 🟡 MEDIA | Placeholder útil |
 
 ### 6. Funciones Avanzadas
 
@@ -295,13 +295,7 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
        # ...
    ```
 
-7. **🟡 pass statement**:
-   ```python
-   if condition:
-       pass  # TODO: implementar
-   ```
-
-8. **🟡 abs() builtin**:
+7. **🟡 abs() builtin**:
    ```python
    let distance = abs(player_x - enemy_x)
    ```
@@ -383,11 +377,11 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 - [x] `max(a, b)` → máximo (YA IMPLEMENTADO)
 - [ ] Tests: Operaciones matemáticas
 
-### Sprint 4: Ternario y Pass (2-3 días)
+### Sprint 4: Ternario (2-3 días)
 - [ ] Parser: `x if cond else y`
 - [ ] AST: `Expr::Ternary { cond, true_val, false_val }`
 - [ ] Codegen: Branch condicional
-- [ ] Parser: `pass`
+- [x] Parser: `pass` ✅ **COMPLETADO 2025-12-19**
 - [ ] Tests: Expresiones condicionales
 
 ### Sprint 5: Default Arguments (1 semana)

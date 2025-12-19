@@ -478,6 +478,14 @@ Refer to docs/ folder for comprehensive documentation.
       p.y = 20         # Set field
       result = p.x + p.y  # Read fields
 
+### Control Flow:
+- if/elif/else - Conditional branching
+- while - While loop
+- for...in - For loop over range or array
+- break - Exit loop early
+- continue - Skip to next iteration
+- pass - No-op placeholder (empty function/block)
+
 ### Required Functions:
 - def main(): - Initialization (runs once)
 - def loop(): - Game loop (60 FPS, WAIT_RECAL auto-added by compiler)
