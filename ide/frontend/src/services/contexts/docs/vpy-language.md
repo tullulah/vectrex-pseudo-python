@@ -24,15 +24,15 @@ VPy (Vectrex Python) is a domain-specific language that compiles to 6809 assembl
 
 ## Current Implementation Limitations:
 - ❌ **NO Object-Oriented Programming**: No classes, objects, methods, inheritance, encapsulation
-- ❌ **NO Complex Data Structures**: No lists, dictionaries, tuples, sets, or custom types
-- ❌ **NO Function Definitions**: Cannot define custom functions (def my_function():)
+- ❌ **NO Dynamic Data Structures**: No dictionaries, tuples, sets, or custom types
 - ❌ **NO Module System**: No imports, packages, or external libraries (import module)
 - ❌ **NO Exception Handling**: No try/catch or error handling constructs
 - ❌ **NO String Manipulation**: No string methods like .split(), .join(), .replace()
 - ❌ **NO Advanced Python Features**: No comprehensions, generators, decorators, lambdas
-- **Function Parameters**: Maximum 2-3 parameters per function call (compiler limitation)
-- **Primitive Variables Only**: Only int, string, and basic numeric types
-- **Simple Control Flow**: Basic if/else, for/while loops only
+- **Function Parameters**: Maximum 4 parameters per function call (via VAR_ARG system)
+- **Arrays**: Static fixed-size arrays only (size known at compile time)
+- **Types**: int (16-bit signed), string literals, arrays
+- **Simple Control Flow**: if/else, for/while loops, switch/case
 - **Direct BIOS Mapping**: Functions compile directly to Vectrex BIOS calls
 
 ## UNIFIED SYNTAX: Global Functions and Vectorlist Commands
@@ -73,13 +73,18 @@ vectorlist myshape:
 
 ## Supported Language Features:
 - Variable declarations: 'var' for globals (outside functions), 'let' for locals (inside functions)
-- Basic arithmetic: +, -, *, /, % (modulo)
+- **Static Arrays**: Fixed-size arrays declared at compile time
+- **Array indexing**: Access and modify array elements with `array[index]`
+- **Array iteration**: `for item in array:` to iterate over elements
+- Basic arithmetic: +, -, *, /, //, % (modulo), <<, >>, &, |, ^, ~
 - Comparison operators: ==, !=, <, >, <=, >=
 - Boolean logic: and, or, not
-- Conditional statements: if x > 0:, else:
-- Loop constructs: for i in range(10):, while condition:
+- Conditional statements: if x > 0:, else:, elif:
+- Loop constructs: for i in range(10):, for item in array:, while condition:
+- Switch/case: switch expr: case 1: ... case 2: ... default: ...
 - Two required functions: def main(): (initialization) and def loop(): (game loop)
 - Comments: # This is a comment
+- Built-in functions: print(), len(), abs(), min(), max()
 - Built-in Vectrex functions: MOVE, SET_INTENSITY, RECT, CIRCLE, ARC, SPIRAL, etc.
 - Unified syntax: All functions use parentheses everywhere
 
@@ -192,6 +197,196 @@ def loop():
     angle = angle + 1
     if angle > 127:
         angle = 0
+```
+
+## Static Arrays (NEW FEATURE)
+
+VPy supports **fixed-size static arrays** allocated at compile time in RAM.
+
+### Array Declaration
+
+```vpy
+# Global arrays (outside functions)
+var enemies = [0, 0, 0, 0, 0]      # Array of 5 integers, all zero
+var positions = [10, 20, 30]       # Array of 3 integers with initial values
+var player_state = [0] * 8         # Array of 8 zeros (NOT IMPLEMENTED YET)
+
+# Local arrays (inside functions)
+def main():
+    let temp_buffer = [0, 0, 0]    # Local array (lives only during function)
+```
+
+### Array Access (Indexing)
+
+```vpy
+var enemies = [100, 200, 300, 400, 500]
+
+def loop():
+    # Read array element
+    let first_enemy = enemies[0]        # Get first element (100)
+    let third_enemy = enemies[2]        # Get third element (300)
+    
+    # Variable index
+    let i = 2
+    let enemy_at_i = enemies[i]         # Get element at index i
+    
+    # Modify array element
+    enemies[0] = 150                    # Set first element to 150
+    enemies[i] = 250                    # Set element at index i
+    
+    # Use in expressions
+    if enemies[0] > 100:
+        print("First enemy is strong!")
+```
+
+### Array Length
+
+```vpy
+var items = [10, 20, 30, 40]
+
+def loop():
+    let count = len(items)              # Returns 4
+    
+    # Use in loops
+    for i = 0 to len(items):
+        print(items[i])
+```
+
+### Array Iteration (for-in)
+
+```vpy
+var enemies = [100, 200, 300, 400]
+
+def loop():
+    # Iterate over all elements
+    for enemy in enemies:
+        if enemy > 0:
+            draw_enemy(enemy)
+            
+    # Iterate with index
+    for i = 0 to len(enemies):
+        if enemies[i] > 0:
+            enemies[i] = enemies[i] - 1  # Decrement each enemy
+```
+
+### Array Patterns
+
+#### Pattern 1: Enemy Management
+```vpy
+var enemy_x = [100, 50, -50, -100]
+var enemy_y = [80, 60, 40, 20]
+var enemy_active = [1, 1, 1, 1]
+
+def loop():
+    # Update all enemies
+    for i = 0 to len(enemy_x):
+        if enemy_active[i] > 0:
+            enemy_y[i] = enemy_y[i] - 1  # Move down
+            
+            # Draw enemy
+            DRAW_VECTOR("enemy", enemy_x[i], enemy_y[i])
+            
+            # Check if off-screen
+            if enemy_y[i] < -120:
+                enemy_active[i] = 0      # Deactivate
+```
+
+#### Pattern 2: Particle System
+```vpy
+var particle_x = [0, 0, 0, 0, 0, 0, 0, 0]
+var particle_y = [0, 0, 0, 0, 0, 0, 0, 0]
+var particle_dx = [2, -2, 3, -3, 1, -1, 2, -2]
+var particle_dy = [3, 3, 2, 2, 4, 4, 1, 1]
+var particle_life = [0, 0, 0, 0, 0, 0, 0, 0]
+
+def spawn_particles(x, y):
+    for i = 0 to len(particle_x):
+        particle_x[i] = x
+        particle_y[i] = y
+        particle_life[i] = 30
+
+def update_particles():
+    for i = 0 to len(particle_x):
+        if particle_life[i] > 0:
+            particle_x[i] = particle_x[i] + particle_dx[i]
+            particle_y[i] = particle_y[i] + particle_dy[i]
+            particle_life[i] = particle_life[i] - 1
+            
+            DRAW_VECTOR("particle", particle_x[i], particle_y[i])
+```
+
+#### Pattern 3: High Score Table
+```vpy
+var high_scores = [1000, 800, 600, 400, 200]
+var current_score = 0
+
+def check_high_score():
+    for i = 0 to len(high_scores):
+        if current_score > high_scores[i]:
+            # Insert new high score
+            insert_score_at(i)
+            break
+            
+def insert_score_at(pos):
+    # Shift scores down
+    for i = len(high_scores) - 1 to pos + 1 step -1:
+        high_scores[i] = high_scores[i - 1]
+    
+    high_scores[pos] = current_score
+```
+
+### Array Limitations
+
+⚠️ **Important Constraints**:
+
+1. **Fixed Size**: Array size must be known at compile time
+   ```vpy
+   var arr = [0, 0, 0]           # ✅ OK - size 3
+   var size = 5
+   var arr2 = [0] * size         # ❌ ERROR - dynamic size not allowed
+   ```
+
+2. **No Resizing**: Cannot add or remove elements
+   ```vpy
+   var items = [1, 2, 3]
+   # items.append(4)              # ❌ NO append() method
+   # items.pop()                  # ❌ NO pop() method
+   ```
+
+3. **No Bounds Checking** (Runtime): Invalid indices cause undefined behavior
+   ```vpy
+   var arr = [10, 20, 30]
+   let x = arr[10]                # ⚠️ Undefined behavior - out of bounds
+   ```
+
+4. **Integer Elements Only**: Arrays can only contain 16-bit signed integers
+   ```vpy
+   var nums = [1, 2, 3]           # ✅ OK
+   var strs = ["a", "b"]          # ❌ ERROR - no string arrays
+   ```
+
+5. **No Nested Arrays**: Cannot create 2D arrays or array of arrays
+   ```vpy
+   var matrix = [[1, 2], [3, 4]]  # ❌ ERROR - no nested arrays
+   ```
+
+### Memory Layout (Technical)
+
+Arrays are stored as consecutive 16-bit values in RAM:
+
+```asm
+; var enemies = [100, 200, 300]
+ENEMIES:
+    FDB 100    ; enemies[0] at offset +0
+    FDB 200    ; enemies[1] at offset +2
+    FDB 300    ; enemies[2] at offset +4
+ENEMIES_LEN: EQU 3
+
+; Accessing enemies[1]
+    LDD #ENEMIES      ; Base address
+    ADDD #2           ; Offset for index 1 (1 * 2 bytes)
+    TFR D,X           ; Transfer to X register
+    LDD ,X            ; Load value (200)
 ```
 
 ## Quick Reference:

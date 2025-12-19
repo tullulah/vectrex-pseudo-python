@@ -334,6 +334,98 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     category: "input",
     vectrexAddress: "$F1BA (Read_Btns)",
     notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 7."
+  },
+  
+  // === BUILT-IN LANGUAGE FUNCTIONS (NEW) ===
+  {
+    name: "len",
+    syntax: "len(array)",
+    description: "Returns the length (number of elements) of an array",
+    parameters: [
+      { name: "array", type: "array", description: "Array to get length of", required: true }
+    ],
+    examples: [
+      "var enemies = [0, 0, 0, 0, 0]",
+      "let count = len(enemies)  # Returns 5",
+      "",
+      "for i = 0 to len(enemies):",
+      "    print(enemies[i])"
+    ],
+    category: "builtin",
+    notes: "Returns compile-time size of static arrays. Size must be known at compile time."
+  },
+  {
+    name: "print",
+    syntax: "print(value) or print(label, value)",
+    description: "Prints a value to the emulator debug console for debugging",
+    parameters: [
+      { name: "value", type: "int", description: "Value to print (integer)", required: true },
+      { name: "label", type: "string", description: "Optional label text", required: false }
+    ],
+    examples: [
+      "var score = 100",
+      "print(score)              # Prints: 100",
+      "print(\"Score:\", score)   # Prints: Score: 100",
+      "",
+      "def loop():",
+      "    let x = player_x + 10",
+      "    print(\"Player X:\", x)"
+    ],
+    category: "builtin",
+    notes: "For debugging only. Output appears in emulator console, NOT on Vectrex screen. Use PRINT_TEXT() for on-screen text."
+  },
+  {
+    name: "abs",
+    syntax: "abs(x)",
+    description: "Returns the absolute value of x (removes negative sign)",
+    parameters: [
+      { name: "x", type: "int", description: "Number to get absolute value of", required: true }
+    ],
+    examples: [
+      "let distance = abs(player_x - enemy_x)",
+      "let speed = abs(velocity)",
+      "",
+      "if abs(ball_x) > 120:",
+      "    # Ball hit edge"
+    ],
+    category: "builtin",
+    notes: "Useful for calculating distances and collision detection."
+  },
+  {
+    name: "min",
+    syntax: "min(a, b)",
+    description: "Returns the smaller of two values",
+    parameters: [
+      { name: "a", type: "int", description: "First value", required: true },
+      { name: "b", type: "int", description: "Second value", required: true }
+    ],
+    examples: [
+      "let x = min(player_x, 100)  # Clamp to maximum 100",
+      "let lowest_score = min(score1, score2)",
+      "",
+      "# Clamp value to range",
+      "player_x = max(-100, min(player_x, 100))"
+    ],
+    category: "builtin",
+    notes: "Often used with max() for clamping values to ranges."
+  },
+  {
+    name: "max",
+    syntax: "max(a, b)",
+    description: "Returns the larger of two values",
+    parameters: [
+      { name: "a", type: "int", description: "First value", required: true },
+      { name: "b", type: "int", description: "Second value", required: true }
+    ],
+    examples: [
+      "let x = max(player_x, -100)  # Clamp to minimum -100",
+      "let highest_score = max(score1, score2)",
+      "",
+      "# Ensure non-negative",
+      "let health = max(0, player_health)"
+    ],
+    category: "builtin",
+    notes: "Often used with min() for clamping values to ranges."
   }
 ];
 
@@ -362,8 +454,12 @@ Refer to docs/ folder for comprehensive documentation.
 ### Variable Declaration:
 - 'var' = Global (outside functions)
 - 'let' = Local (inside functions)
-- **NO ARRAYS**: VPy doesn't support arrays/lists yet
-- Use individual variables: brick1, brick2, brick3 (not bricks[0], bricks[1])
+- **ARRAYS**: Static fixed-size arrays supported!
+  var enemies = [0, 0, 0, 0, 0]  # Array of 5 integers
+  let x = enemies[0]              # Access element
+  enemies[2] = 100                # Modify element
+  for enemy in enemies:           # Iterate
+  let count = len(enemies)        # Get length
 
 ### Required Functions:
 - def main(): - Initialization (runs once)
