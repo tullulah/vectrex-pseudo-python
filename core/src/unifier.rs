@@ -406,6 +406,7 @@ fn rewrite_stmt(
         }
         Stmt::Break { source_line } => Stmt::Break { source_line: *source_line },
         Stmt::Continue { source_line } => Stmt::Continue { source_line: *source_line },
+        Stmt::Pass { source_line } => Stmt::Pass { source_line: *source_line },
     }
 }
 

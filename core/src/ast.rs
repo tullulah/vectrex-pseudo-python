@@ -112,6 +112,7 @@ pub enum Stmt {
 	While { cond: Expr, body: Vec<Stmt>, source_line: usize },
 	Break { source_line: usize },
 	Continue { source_line: usize },
+	Pass { source_line: usize },
 	Expr(Expr, usize), // (expression, line)
 	If { cond: Expr, body: Vec<Stmt>, elifs: Vec<(Expr, Vec<Stmt>)>, else_body: Option<Vec<Stmt>>, source_line: usize },
 	Switch { expr: Expr, cases: Vec<(Expr, Vec<Stmt>)>, default: Option<Vec<Stmt>>, source_line: usize },
@@ -131,6 +132,7 @@ impl Stmt {
 			Stmt::While { source_line, .. } => *source_line,
 			Stmt::Break { source_line } => *source_line,
 			Stmt::Continue { source_line } => *source_line,
+			Stmt::Pass { source_line } => *source_line,
 			Stmt::Expr(_, source_line) => *source_line,
 			Stmt::If { source_line, .. } => *source_line,
 			Stmt::Switch { source_line, .. } => *source_line,

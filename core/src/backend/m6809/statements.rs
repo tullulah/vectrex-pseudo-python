@@ -152,6 +152,10 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                 out.push_str(&format!("    BRA {}\n", st));
             }
         }
+        Stmt::Pass { .. } => {
+            // No-op: generates a comment only
+            out.push_str("    ; pass (no-op)\n");
+        }
         Stmt::While { cond, body, .. } => {
             let ls = fresh_label("WH");
             let le = fresh_label("WH_END");

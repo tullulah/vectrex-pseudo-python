@@ -688,7 +688,7 @@ fn validate_stmt_collect(
                 validate_expr_collect(e, scope, reads, current_func, function_locals, defined_functions); 
             } 
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => {}
     }
 }
 
@@ -874,6 +874,7 @@ fn opt_stmt(s: &Stmt) -> Stmt {
         Stmt::Return(o, _) => Stmt::Return(o.as_ref().map(opt_expr), source_line),
     Stmt::Break { .. } => Stmt::Break { source_line },
     Stmt::Continue { .. } => Stmt::Continue { source_line },
+    Stmt::Pass { .. } => Stmt::Pass { source_line },
     Stmt::Switch { expr, cases, default, .. } => Stmt::Switch { expr: opt_expr(expr), cases: cases.iter().map(|(e,b)| (opt_expr(e), b.iter().map(opt_stmt).collect())).collect(), default: default.as_ref().map(|v| v.iter().map(opt_stmt).collect()), source_line },
     }
 }
@@ -1118,7 +1119,7 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
         Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: source_line }),
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
         Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), source_line)),
-        Stmt::Break { .. } | Stmt::Continue { .. } => out.push(stmt.clone()),
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => out.push(stmt.clone()),
     }
 }
 
@@ -1200,7 +1201,7 @@ fn dse_function(f: &Function) -> Function {
                 new_body.push(stmt.clone());
             }
             Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
-            Stmt::Break { .. } | Stmt::Continue { .. } => new_body.push(stmt.clone()),
+            Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => new_body.push(stmt.clone()),
         }
     }
     new_body.reverse();
@@ -1262,7 +1263,7 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
             if let Some(db) = default { for st in db { collect_reads_stmt(st, used); } }
         }
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should have been transformed to Assign by opt_stmt"),
-        Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => {}
     }
 }
 
@@ -1376,6 +1377,7 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
         Stmt::Return(o, _) => Stmt::Return(o.as_ref().map(|e| cp_expr(e, env)), source_line),
         Stmt::Break { .. } => Stmt::Break { source_line },
         Stmt::Continue { .. } => Stmt::Continue { source_line },
+        Stmt::Pass { .. } => Stmt::Pass { source_line },
         Stmt::While { cond, body, .. } => {
             let c = cp_expr(cond, env);
             let saved = env.clone();
@@ -1563,6 +1565,7 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
         Stmt::Return(o, _) => out.push(Stmt::Return(o.clone(), source_line)),
         Stmt::Break { .. } => out.push(Stmt::Break { source_line }),
         Stmt::Continue { .. } => out.push(Stmt::Continue { source_line }),
+        Stmt::Pass { .. } => out.push(Stmt::Pass { source_line }),
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before fold_const_switch_stmt"),
     }
 }

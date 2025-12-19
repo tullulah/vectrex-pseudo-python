@@ -10,7 +10,7 @@ pub enum TokenKind {
     SlashSlash,  // División entera //
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
-    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Const, VectorList,
+    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Pass, Const, VectorList,
     Switch, Case, Default,
     Meta,
     And, Or, Not,
@@ -295,6 +295,7 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "while" => TokenKind::While,
                     "break" => TokenKind::Break,
                     "continue" => TokenKind::Continue,
+                    "pass" => TokenKind::Pass,
                     "const" => TokenKind::Const,
                     "vectorlist" => TokenKind::VectorList,
                     "switch" => TokenKind::Switch,

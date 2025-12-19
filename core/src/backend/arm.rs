@@ -108,6 +108,9 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             if let Some(start) = &loop_ctx.start { out.push_str(&format!("    B {}\n", start)); }
             else { out.push_str("    ; continue outside loop\n"); }
         },
+        Stmt::Pass { .. } => {
+            out.push_str("    ; pass (no-op)\n");
+        },
         Stmt::While { cond, body, .. } => {
             let lbl_start = fresh_label("WH");
             let lbl_end = fresh_label("WH_END");
@@ -505,7 +508,7 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before collect_stmt_syms"),
         _ => {}, // Catch-all for unsupported statements (e.g., ForIn)
     }

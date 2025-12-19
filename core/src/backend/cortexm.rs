@@ -106,6 +106,9 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                 out.push_str(&format!("    B {}\n", st));
             }
         },
+        Stmt::Pass { .. } => {
+            out.push_str("    ; pass (no-op)\n");
+        },
         Stmt::While { cond, body, .. } => {
             let ls = fresh_label("WH");
             let le = fresh_label("WH_END");
@@ -490,7 +493,7 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
             for (ce, cb) in cases { collect_expr_syms(ce, set); for s in cb { collect_stmt_syms(s, set); } }
             if let Some(db) = default { for s in db { collect_stmt_syms(s, set); } }
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before collect_stmt_syms"),
         _ => {}, // Catch-all for unsupported statements
     }

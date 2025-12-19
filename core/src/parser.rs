@@ -63,6 +63,7 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::Range => "'range'".to_string(),
         TokenKind::Break => "'break'".to_string(),
         TokenKind::Continue => "'continue'".to_string(),
+        TokenKind::Pass => "'pass'".to_string(),
         TokenKind::Return => "'return'".to_string(),
         TokenKind::Const => "'const'".to_string(),
         TokenKind::VectorList => "'vectorlist'".to_string(),
@@ -442,6 +443,7 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::Return) { return self.return_stmt(start_source_line); }
         if self.match_kind(&TokenKind::Break) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Break { source_line: start_source_line }); }
         if self.match_kind(&TokenKind::Continue) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Continue { source_line: start_source_line }); }
+        if self.match_kind(&TokenKind::Pass) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Pass { source_line: start_source_line }); }
         
         // Try to parse assignment (x = value or arr[i] = value)
         let checkpoint = self.pos;

@@ -75,7 +75,7 @@ pub fn stmt_has_trig_depth(s: &Stmt, depth: usize) -> bool {
         Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)) || elifs.iter().any(|(c,b)| expr_has_trig_depth(c, depth + 1) || b.iter().any(|s| stmt_has_trig_depth(s, depth + 1))) || else_body.as_ref().map(|eb| eb.iter().any(|s| stmt_has_trig_depth(s, depth + 1))).unwrap_or(false),
         Stmt::Return(o, _) => o.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false),
         Stmt::Switch { expr, cases, default, .. } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
-        Stmt::Break { .. } | Stmt::Continue { .. } => false,
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => false,
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before stmt_has_trig"),
     }
 }
@@ -128,7 +128,7 @@ pub fn scan_stmt_args(s: &Stmt) -> usize {
             if let Some(db) = default { for st in db { m = m.max(scan_stmt_args(st)); } }
             m
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } => 0,
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => 0,
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_args"),
     }
 }
@@ -209,7 +209,7 @@ pub fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
             if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage); } }
             usage.needs_tmp_left = true; usage.needs_tmp_right = true; // switch lowering uses TMPLEFT
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } => {},
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Pass { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_runtime"),
     }
 }
