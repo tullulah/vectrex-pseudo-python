@@ -412,6 +412,15 @@ fn rewrite_expr(
                 col: info.col,
             })
         }
+        Expr::List(elements) => Expr::List(
+            elements.iter()
+                .map(|e| rewrite_expr(e, current_module, symbols, name_map, options))
+                .collect()
+        ),
+        Expr::Index { target, index } => Expr::Index {
+            target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
+            index: Box::new(rewrite_expr(index, current_module, symbols, name_map, options)),
+        },
         Expr::Call(info) => {
             let resolved_name = resolve_identifier(&info.name, current_module, symbols, name_map, options);
             Expr::Call(CallInfo {

@@ -390,17 +390,35 @@ fn validate_stmt_collect(
             declare(name, scope); 
         }
         Stmt::Assign { target, value, .. } => {
-            if !is_declared(&target.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
+            match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    if !is_declared(name, scope) {
+                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", name, name), line: Some(*source_line), col: Some(*col) }));
+                    }
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    // For indexed assignment, validate both target and index expressions
+                    validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
+                    validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
         Stmt::CompoundAssign { target, value, .. } => {
             // Similar a Assign, pero también leemos la variable del lado izquierdo
-            if !is_declared(&target.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
+            match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    if !is_declared(name, scope) {
+                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", name, name), line: Some(*source_line), col: Some(*col) }));
+                    }
+                    reads.insert(name.clone()); // Leemos la variable para x += expr
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    // For indexed compound assignment, validate both target and index expressions
+                    validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
+                    validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
             }
-            reads.insert(target.name.clone()); // Leemos la variable para x += expr
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
         Stmt::For { var, start, end, step, body, .. } => {
@@ -535,6 +553,15 @@ fn validate_expr_collect(
             validate_expr_collect(right, scope, reads, current_func, function_locals, defined_functions);
         }
         Expr::Not(inner) | Expr::BitNot(inner) => validate_expr_collect(inner, scope, reads, current_func, function_locals, defined_functions),
+        Expr::List(elements) => {
+            for elem in elements {
+                validate_expr_collect(elem, scope, reads, current_func, function_locals, defined_functions);
+            }
+        }
+        Expr::Index { target, index } => {
+            validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
+            validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+        }
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }
@@ -566,11 +593,22 @@ fn opt_stmt(s: &Stmt) -> Stmt {
     Stmt::Let { name, value, .. } => Stmt::Let { name: name.clone(), value: opt_expr(value), source_line },
         Stmt::CompoundAssign { target, op, value, .. } => {
             // Transformar x += expr en x = x + expr
-            let var_expr = Expr::Ident(IdentInfo { 
-                name: target.name.clone(), 
-                source_line: target.source_line, 
-                col: target.col 
-            });
+            let var_expr = match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    Expr::Ident(IdentInfo { 
+                        name: name.clone(), 
+                        source_line: *source_line, 
+                        col: *col 
+                    })
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, source_line, .. } => {
+                    // For array[i] += expr, we need array[i] as the left side
+                    Expr::Index { 
+                        target: array_expr.clone(), 
+                        index: index.clone()
+                    }
+                }
+            };
             let combined_expr = Expr::Binary { 
                 op: *op, 
                 left: Box::new(var_expr), 
@@ -699,6 +737,11 @@ fn opt_expr(e: &Expr) -> Expr {
                 Expr::Logic { op: *op, left: Box::new(l), right: Box::new(r) }
             }
         }
+        Expr::List(elements) => Expr::List(elements.iter().map(opt_expr).collect()),
+        Expr::Index { target, index } => Expr::Index { 
+            target: Box::new(opt_expr(target)), 
+            index: Box::new(opt_expr(index)) 
+        },
         Expr::Not(inner) => {
             let ni = opt_expr(inner);
             if let Expr::Number(v) = ni {
@@ -826,10 +869,21 @@ fn dse_function(f: &Function) -> Function {
     for stmt in f.body.iter().rev() {
         match stmt {
             Stmt::Assign { target, value, .. } => {
-                if !used.contains(&target.name) && !expr_has_call(value) && !expr_contains_string_lit(value) {
-                } else {
+                let should_keep = match target {
+                    crate::ast::AssignTarget::Ident { name, .. } => {
+                        used.contains(name) || expr_has_call(value) || expr_contains_string_lit(value)
+                    }
+                    crate::ast::AssignTarget::Index { .. } => {
+                        // Array assignments always kept (side effects)
+                        true
+                    }
+                };
+                
+                if should_keep {
                     collect_reads_expr(value, &mut used);
-                    used.insert(target.name.clone());
+                    if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                        used.insert(name.clone());
+                    }
                     new_body.push(stmt.clone());
                 }
             }
@@ -887,6 +941,8 @@ fn expr_has_call(e: &Expr) -> bool {
     Expr::Call(_) => true,
     Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
     Expr::Not(inner) | Expr::BitNot(inner) => expr_has_call(inner),
+        Expr::List(elements) => elements.iter().any(expr_has_call),
+        Expr::Index { target, index } => expr_has_call(target) || expr_has_call(index),
         _ => false,
     }
 }
@@ -900,6 +956,8 @@ fn expr_contains_string_lit(e: &Expr) -> bool {
         | Expr::Logic { left, right, .. } => expr_contains_string_lit(left) || expr_contains_string_lit(right),
     Expr::Call(ci) => ci.args.iter().any(expr_contains_string_lit),
         Expr::Not(inner) | Expr::BitNot(inner) => expr_contains_string_lit(inner),
+        Expr::List(elements) => elements.iter().any(expr_contains_string_lit),
+        Expr::Index { target, index } => expr_contains_string_lit(target) || expr_contains_string_lit(index),
         _ => false,
     }
 }
@@ -946,6 +1004,15 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(right, used);
         }
     Expr::Not(inner) | Expr::BitNot(inner) => collect_reads_expr(inner, used),
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_reads_expr(elem, used);
+            }
+        }
+        Expr::Index { target, index } => {
+            collect_reads_expr(target, used);
+            collect_reads_expr(index, used);
+        }
         Expr::Number(_) => {}
     Expr::StringLit(_) => {}
     }
@@ -992,12 +1059,20 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
     match stmt {
         Stmt::Assign { target, value, .. } => {
             let v2 = cp_expr(value, env);
-            if let Expr::Number(n) = v2 {
-                env.insert(target.name.clone(), n);
-                Stmt::Assign { target: target.clone(), value: Expr::Number(n), source_line }
-            } else {
-                env.remove(&target.name);
-                Stmt::Assign { target: target.clone(), value: v2, source_line }
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    if let Expr::Number(n) = v2 {
+                        env.insert(name.clone(), n);
+                        Stmt::Assign { target: target.clone(), value: Expr::Number(n), source_line }
+                    } else {
+                        env.remove(name);
+                        Stmt::Assign { target: target.clone(), value: v2, source_line }
+                    }
+                }
+                crate::ast::AssignTarget::Index { .. } => {
+                    // Array indexing - can't propagate constants through
+                    Stmt::Assign { target: target.clone(), value: v2, source_line }
+                }
             }
         }
         Stmt::Let { name, value, .. } => {
@@ -1104,6 +1179,11 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
         Expr::Logic { op, left, right } => Expr::Logic { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
     Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
     Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
+        Expr::List(elements) => Expr::List(elements.iter().map(|e| cp_expr(e, env)).collect()),
+        Expr::Index { target, index } => Expr::Index { 
+            target: Box::new(cp_expr(target, env)), 
+            index: Box::new(cp_expr(index, env)) 
+        },
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),

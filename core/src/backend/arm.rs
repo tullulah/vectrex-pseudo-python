@@ -76,11 +76,16 @@ impl FuncCtx {
 fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>) {
     match stmt {
         Stmt::Assign { target, value, .. } => {
-            emit_expr(value, out, fctx, string_map);
-            if let Some(off) = fctx.offset_of(&target.name) {
-                out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
-            } else {
-                out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", target.name.to_uppercase()));
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    emit_expr(value, out, fctx, string_map);
+                    if let Some(off) = fctx.offset_of(name) {
+                        out.push_str(&format!("    STRH r0, [sp, #{}]\n", off));
+                    } else {
+                        out.push_str(&format!("    LDR r1, =VAR_{0}\n    STR r0, [r1]\n", name.to_uppercase()));
+                    }
+                }
+                crate::ast::AssignTarget::Index { .. } => panic!("Array assignment not implemented for ARM backend"),
             }
         },
         Stmt::Let { name, value, .. } => {
@@ -239,6 +244,8 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
                 out.push_str(&format!("    LDR r0, =VAR_{}\n    LDR r0, [r0]\n", name.name.to_uppercase()));
             }
         }
+        Expr::List(_) => panic!("Array literals not implemented for ARM backend"),
+        Expr::Index { .. } => panic!("Array indexing not implemented for ARM backend"),
         Expr::Call(ci) => {
             if emit_builtin_call_arm(&ci.name, &ci.args, out, fctx, string_map) { return; }
             let limit = ci.args.len().min(4);
@@ -446,7 +453,9 @@ fn collect_symbols(module: &Module) -> Vec<String> {
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
         Stmt::Assign { target, value, .. } => {
-            set.insert(target.name.clone());
+            if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                set.insert(name.clone());
+            }
             collect_expr_syms(value, set);
         }
         Stmt::Let { .. } => { /* locals excluded */ }
@@ -509,6 +518,15 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
             collect_expr_syms(right, set);
         }
         Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_expr_syms(elem, set);
+            }
+        }
+        Expr::Index { target, index } => {
+            collect_expr_syms(target, set);
+            collect_expr_syms(index, set);
+        }
         Expr::Number(_) => {}
     }
 }

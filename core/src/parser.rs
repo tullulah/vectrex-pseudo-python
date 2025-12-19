@@ -7,6 +7,8 @@ fn token_display_name(kind: &TokenKind) -> String {
     match kind {
         TokenKind::LParen => "'('".to_string(),
         TokenKind::RParen => "')'".to_string(),
+        TokenKind::LBracket => "'['".to_string(),
+        TokenKind::RBracket => "']'".to_string(),
         TokenKind::Colon => "':'".to_string(),
         TokenKind::Comma => "','".to_string(),
         TokenKind::Dot => "'.'".to_string(),
@@ -383,17 +385,19 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::Return) { return self.return_stmt(start_source_line); }
         if self.match_kind(&TokenKind::Break) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Break { source_line: start_source_line }); }
         if self.match_kind(&TokenKind::Continue) { self.consume(TokenKind::Newline)?; return Ok(Stmt::Continue { source_line: start_source_line }); }
-        if let Some(name)=self.try_identifier() {
-            // Hemos consumido un identificador potencialmente para asignación. Guardar token previo.
-            let ident_tok = self.tokens[self.pos-1].clone();
+        
+        // Try to parse assignment (x = value or arr[i] = value)
+        let checkpoint = self.pos;
+        if let Ok(lhs_expr) = self.postfix() {
+            // Check if followed by assignment operator
             if self.match_kind(&TokenKind::Equal) {
-                let expr = self.expression()?;
+                let rhs = self.expression()?;
                 self.consume(TokenKind::Newline)?;
-                return Ok(Stmt::Assign { target: crate::ast::AssignTarget { name, source_line: ident_tok.line, col: ident_tok.col }, value: expr, source_line: start_source_line });
+                let target = self.expr_to_assign_target(lhs_expr, start_source_line)?;
+                return Ok(Stmt::Assign { target, value: rhs, source_line: start_source_line });
             } else if self.check(TokenKind::PlusEqual) || self.check(TokenKind::MinusEqual) || 
                       self.check(TokenKind::StarEqual) || self.check(TokenKind::SlashEqual) || 
                       self.check(TokenKind::SlashSlashEqual) || self.check(TokenKind::PercentEqual) {
-                // Compound assignment: var += expr
                 let op = match self.peek().kind {
                     TokenKind::PlusEqual => { self.advance(); crate::ast::BinOp::Add }
                     TokenKind::MinusEqual => { self.advance(); crate::ast::BinOp::Sub }
@@ -403,14 +407,15 @@ impl<'a> Parser<'a> {
                     TokenKind::PercentEqual => { self.advance(); crate::ast::BinOp::Mod }
                     _ => unreachable!()
                 };
-                let expr = self.expression()?;
+                let rhs = self.expression()?;
                 self.consume(TokenKind::Newline)?;
-                return Ok(Stmt::CompoundAssign { target: crate::ast::AssignTarget { name, source_line: ident_tok.line, col: ident_tok.col }, op, value: expr, source_line: start_source_line });
-            } else {
-                // No era asignación, revertir.
-                self.unread_identifier(name);
+                let target = self.expr_to_assign_target(lhs_expr, start_source_line)?;
+                return Ok(Stmt::CompoundAssign { target, op, value: rhs, source_line: start_source_line });
             }
         }
+        
+        // Not an assignment, revert and parse as expression statement
+        self.pos = checkpoint;
         let expr = self.expression()?; self.consume(TokenKind::Newline)?; Ok(Stmt::Expr(expr, start_source_line))
     }
 
@@ -480,7 +485,18 @@ impl<'a> Parser<'a> {
             let inner = self.unary()?;
             return Ok(Expr::BitNot(Box::new(inner)));
         }
-        self.primary()
+        self.postfix()
+    }
+
+    fn postfix(&mut self) -> Result<Expr> {
+        let mut expr = self.primary()?;
+        // Handle indexing: arr[index]
+        while self.match_kind(&TokenKind::LBracket) {
+            let index = self.expression()?;
+            self.consume(TokenKind::RBracket)?;
+            expr = Expr::Index { target: Box::new(expr), index: Box::new(index) };
+        }
+        Ok(expr)
     }
 
     fn primary(&mut self) -> Result<Expr> {
@@ -492,6 +508,28 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Number(1));
         } else if self.match_kind(&TokenKind::False) {
             return Ok(Expr::Number(0));
+        } else if self.match_kind(&TokenKind::LBracket) {
+            // Array literal: [1, 2, 3]
+            let mut elements = Vec::new();
+            self.skip_newlines();
+            if !self.check(TokenKind::RBracket) {
+                loop {
+                    elements.push(self.expression()?);
+                    self.skip_newlines();
+                    if self.match_kind(&TokenKind::Comma) {
+                        self.skip_newlines();
+                        // Allow trailing comma
+                        if self.check(TokenKind::RBracket) {
+                            break;
+                        }
+                        continue;
+                    }
+                    break;
+                }
+            }
+            self.skip_newlines();
+            self.consume(TokenKind::RBracket)?;
+            return Ok(Expr::List(elements));
         } else if let Some(first) = self.match_identifier() {
             let ident_token = self.tokens[self.pos-1].clone();
             let mut full = first;
@@ -533,6 +571,23 @@ impl<'a> Parser<'a> {
     }
 
     // --- helpers ---
+    fn expr_to_assign_target(&self, expr: Expr, line: usize) -> Result<crate::ast::AssignTarget> {
+        match expr {
+            Expr::Ident(info) => Ok(crate::ast::AssignTarget::Ident { 
+                name: info.name, 
+                source_line: info.source_line, 
+                col: info.col 
+            }),
+            Expr::Index { target, index } => Ok(crate::ast::AssignTarget::Index { 
+                target, 
+                index, 
+                source_line: line, 
+                col: 0 
+            }),
+            _ => self.err_here(&format!("Invalid assignment target at line {}", line))
+        }
+    }
+    
     fn match_ident_case(&mut self, upper:&str) -> bool { if let Some(TokenKind::Identifier(s))=self.peek_kind().cloned(){ if s.eq_ignore_ascii_case(upper){ self.advance(); return true; } } false }
     fn match_cmp_op(&mut self) -> Option<CmpOp> {
         let k=&self.peek().kind; let op=match k { TokenKind::EqEq=>Some(CmpOp::Eq), TokenKind::NotEq=>Some(CmpOp::Ne), TokenKind::Lt=>Some(CmpOp::Lt), TokenKind::Le=>Some(CmpOp::Le), TokenKind::Gt=>Some(CmpOp::Gt), TokenKind::Ge=>Some(CmpOp::Ge), _=>None }; if op.is_some(){ self.pos+=1; } op }

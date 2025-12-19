@@ -91,7 +91,15 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
                 scan_expr(right, used, depth + 1);
             },
             Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, depth + 1),
-            // NOTE: No hay Expr::Index en ast.rs actual
+            Expr::List(elements) => {
+                for elem in elements {
+                    scan_expr(elem, used, depth + 1);
+                }
+            },
+            Expr::Index { target, index } => {
+                scan_expr(target, used, depth + 1);
+                scan_expr(index, used, depth + 1);
+            },
             _ => {}
         }
     }
@@ -1014,6 +1022,8 @@ fn expr_has_trig_depth(e: &Expr, depth: usize) -> bool {
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => 
             expr_has_trig_depth(left, depth + 1) || expr_has_trig_depth(right, depth + 1),
         Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig_depth(inner, depth + 1),
+        Expr::List(elements) => elements.iter().any(|e| expr_has_trig_depth(e, depth + 1)),
+        Expr::Index { target, index } => expr_has_trig_depth(target, depth + 1) || expr_has_trig_depth(index, depth + 1),
         _ => false,
     }
 }
@@ -1115,6 +1125,8 @@ fn scan_expr_args(e: &Expr) -> usize {
         },
         Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => scan_expr_args(left).max(scan_expr_args(right)),
         Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_args(inner),
+        Expr::List(elements) => elements.iter().map(scan_expr_args).max().unwrap_or(0),
+        Expr::Index { target, index } => scan_expr_args(target).max(scan_expr_args(index)),
         _ => 0,
     }
 }
@@ -1240,6 +1252,18 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             usage.needs_tmp_left = true; usage.needs_tmp_right = true;
         }
         Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_runtime(inner, usage),
+        Expr::List(elements) => {
+            for elem in elements {
+                scan_expr_runtime(elem, usage);
+            }
+            // Array literal creation might need temporary storage
+            usage.needs_tmp_ptr = true;
+        }
+        Expr::Index { target, index } => {
+            scan_expr_runtime(target, usage);
+            scan_expr_runtime(index, usage);
+            usage.needs_tmp_ptr = true; // Array indexing needs address computation
+        }
         _ => {}
     }
 }
@@ -2894,11 +2918,46 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
     
     match stmt {
         Stmt::Assign { target, value, .. } => {
-            emit_expr(value, out, fctx, string_map, opts);
-            if let Some(off) = fctx.offset_of(&target.name) {
-                out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
-            } else {
-                out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", target.name.to_uppercase()));
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    emit_expr(value, out, fctx, string_map, opts);
+                    if let Some(off) = fctx.offset_of(name) {
+                        out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
+                    } else {
+                        out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", name.to_uppercase()));
+                    }
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    // Array indexed assignment: arr[index] = value
+                    // For now, only support simple variable arrays
+                    let array_name = if let Expr::Ident(id) = &**array_expr {
+                        &id.name
+                    } else {
+                        panic!("Complex array expressions not yet supported in assignment");
+                    };
+                    
+                    // 1. First, get the array base address
+                    let array_addr = if let Some(off) = fctx.offset_of(array_name) {
+                        format!("{} ,S", off)
+                    } else {
+                        format!("VAR_{}", array_name.to_uppercase())
+                    };
+                    
+                    // 2. Evaluate index
+                    emit_expr(index, out, fctx, string_map, opts);
+                    out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // index * 2
+                    
+                    // 3. Add to base address (load base into X first)
+                    out.push_str(&format!("    LDX #{}\n", array_addr)); // X = &array
+                    out.push_str("    LEAX D,X\n"); // X = &array + (index * 2)
+                    out.push_str("    STX TMPPTR\n"); // Save computed address
+                    
+                    // 4. Evaluate value to assign
+                    emit_expr(value, out, fctx, string_map, opts);
+                    
+                    // 5. Store value at computed address
+                    out.push_str("    LDX TMPPTR\n    LDD RESULT\n    STD ,X\n");
+                }
             }
         }
         Stmt::Let { name, value, .. } => {
@@ -3214,6 +3273,42 @@ fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &s
                 "    LDD RESULT\n    BEQ NOT_TRUE\n    LDD #0\n    STD RESULT\n    BRA NOT_END\nNOT_TRUE:\n    LDD #1\n    STD RESULT\nNOT_END:\n",
             );
         }
+        Expr::List(elements) => {
+            // Array literal: allocate space and initialize elements
+            // For now, we'll allocate a temporary array in DATA section
+            // This is a compile-time constant array
+            let array_label = fresh_label("ARRAY");
+            
+            // Generate array data in DATA section (will be moved later)
+            // For now, just emit code to load the array address
+            out.push_str(&format!("; TODO: Array literal initialization for {} elements\n", elements.len()));
+            out.push_str(&format!("    LDX #{}\n    STX RESULT\n", array_label));
+            
+            // TODO: Proper array allocation and initialization
+            // Need to either:
+            // 1. Pre-allocate in DATA section (for constants)
+            // 2. Allocate on stack (for local arrays)
+            // 3. Use a memory pool (for dynamic arrays)
+        }
+        Expr::Index { target, index } => {
+            // Array indexing: arr[index]
+            // 1. Evaluate array expression (should return address)
+            emit_expr_depth(target, out, fctx, string_map, opts, depth + 1);
+            out.push_str("    LDD RESULT\n    STD TMPPTR\n"); // Save array base address
+            
+            // 2. Evaluate index expression
+            emit_expr_depth(index, out, fctx, string_map, opts, depth + 1);
+            
+            // 3. Multiply index by 2 (each element is 2 bytes)
+            out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // D = index * 2
+            
+            // 4. Add to base address
+            out.push_str("    ADDD TMPPTR\n"); // D = base + (index * 2)
+            out.push_str("    TFR D,X\n"); // X = address of element
+            
+            // 5. Load value from computed address
+            out.push_str("    LDD ,X\n    STD RESULT\n");
+        }
     }
 }
 
@@ -3290,7 +3385,18 @@ fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
 fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) {
     match stmt {
     Stmt::Assign { target, value, .. } => {
-            set.insert(target.name.clone());
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    set.insert(name.clone());
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    if let Expr::Ident(id) = &**array_expr {
+                        set.insert(id.name.clone());
+                    }
+                    collect_expr_syms(array_expr, set);
+                    collect_expr_syms(index, set);
+                }
+            }
             collect_expr_syms(value, set);
         }
     Stmt::Let { name: _, value, .. } => { collect_expr_syms(value, set); } // exclude locals
@@ -3325,7 +3431,18 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
         }
         Stmt::Break { .. } | Stmt::Continue { .. } => {},
         Stmt::CompoundAssign { target, value, .. } => {
-            set.insert(target.name.clone());
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    set.insert(name.clone());
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    if let Expr::Ident(id) = &**array_expr {
+                        set.insert(id.name.clone());
+                    }
+                    collect_expr_syms(array_expr, set);
+                    collect_expr_syms(index, set);
+                }
+            }
             collect_expr_syms(value, set);
         }
     }
@@ -3369,6 +3486,15 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
     Expr::Not(inner) | Expr::BitNot(inner) => collect_expr_syms(inner, set),
     Expr::Number(_) => {}
     Expr::StringLit(_) => {}
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_expr_syms(elem, set);
+            }
+        }
+        Expr::Index { target, index } => {
+            collect_expr_syms(target, set);
+            collect_expr_syms(index, set);
+        }
     }
 }
 
