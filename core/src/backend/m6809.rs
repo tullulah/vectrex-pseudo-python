@@ -724,8 +724,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("; Call argument scratch space\n");
         if opts.exclude_ram_org {
             // Function arguments can use RESULT area since they're temporary
-            let mut arg_offset = 26; // after reserved temps above when exclude_ram_org
-            for i in 0..max_args { out.push_str(&format!("VAR_ARG{} EQU RESULT+{}\n", i, arg_offset)); arg_offset += 2; }
+            // RESULT is defined as $C880, calculate absolute addresses
+            // CRITICAL: Must be AFTER all PSG/SFX variables to avoid corruption
+            // PSG vars: +28 to +34 ($C89C-$C8A2), SFX vars: +40 to +48 ($C8A8-$C8B0)
+            let result_base = 0xC880u16;
+            let mut arg_offset = 50; // Start after SFX_ACTIVE at +48 (0xC8B0)
+            for i in 0..max_args { 
+                let abs_addr = result_base + arg_offset;
+                out.push_str(&format!("VAR_ARG{} EQU ${:04X}\n", i, abs_addr)); 
+                arg_offset += 2; 
+            }
         } else {
             if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
             if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
@@ -1045,6 +1053,9 @@ fn compute_max_args_used(module: &Module) -> usize {
     let mut maxa = 0usize;
     for item in &module.items {
         if let Item::Function(f) = item {
+            // Count function parameters (they will need VAR_ARG slots)
+            maxa = maxa.max(f.params.len());
+            // Count arguments in function body calls
             for s in &f.body { maxa = maxa.max(scan_stmt_args(s)); }
         } else if let Item::ExprStatement(expr) = item {
             maxa = maxa.max(scan_expr_args(expr));
