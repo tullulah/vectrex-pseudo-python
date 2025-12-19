@@ -162,3 +162,23 @@ pub fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
     for s in stmts { walk(s, &mut set); }
     set.into_iter().collect()
 }
+
+/// Loop context for break/continue handling
+#[derive(Default, Clone)]
+pub struct LoopCtx { 
+    pub start: Option<String>, 
+    pub end: Option<String> 
+}
+
+/// Function context with local variables
+#[derive(Clone)]
+pub struct FuncCtx { 
+    pub locals: Vec<String>, 
+    pub frame_size: i32 
+}
+
+impl FuncCtx {
+    pub fn offset_of(&self, name: &str) -> Option<i32> {
+        self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2)
+    }
+}

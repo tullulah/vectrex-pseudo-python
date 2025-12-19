@@ -1,0 +1,278 @@
+// Analysis - AST analysis functions for M6809 backend
+use crate::ast::{BinOp, Expr, Function, Item, Module, Stmt};
+
+use super::resolve_function_name;
+
+macro_rules! check_depth {
+    ($depth:expr, $max:expr, $context:expr) => {
+        if $depth > $max {
+            panic!("Maximum recursion depth ({}) exceeded in {}. Please simplify your code.", $max, $context);
+        }
+    };
+}
+
+#[derive(Default, Debug)]
+pub struct RuntimeUsage {
+    pub uses_mul: bool,
+    pub uses_div: bool,
+    pub uses_music: bool,
+    pub uses_draw_vector: bool,
+    pub needs_mul_helper: bool,
+    pub needs_div_helper: bool,
+    pub needs_tmp_left: bool,
+    pub needs_tmp_right: bool,
+    pub needs_tmp_ptr: bool,
+    pub needs_line_vars: bool,
+    pub needs_vcur_vars: bool,
+    pub needs_vectorlist_runtime: bool,
+    pub wrappers_used: std::collections::HashSet<String>,
+}
+
+pub fn expr_has_trig(e: &Expr) -> bool {
+    expr_has_trig_depth(e, 0)
+}
+
+pub fn expr_has_trig_depth(e: &Expr, depth: usize) -> bool {
+    check_depth!(depth, 500, "expr_has_trig");
+    match e {
+        Expr::Call(ci) => {
+            let u = ci.name.to_ascii_lowercase();
+            u == "sin" || u == "cos" || u == "tan" || u == "math.sin" || u == "math.cos" || u == "math.tan"
+        }
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => 
+            expr_has_trig_depth(left, depth + 1) || expr_has_trig_depth(right, depth + 1),
+        Expr::Not(inner) | Expr::BitNot(inner) => expr_has_trig_depth(inner, depth + 1),
+        Expr::List(elements) => elements.iter().any(|e| expr_has_trig_depth(e, depth + 1)),
+        Expr::Index { target, index } => expr_has_trig_depth(target, depth + 1) || expr_has_trig_depth(index, depth + 1),
+        _ => false,
+    }
+}
+
+pub fn module_uses_trig(module: &Module) -> bool {
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for s in &f.body { if stmt_has_trig(s) { return true; } }
+        } else if let Item::ExprStatement(expr) = item {
+            if expr_has_trig(expr) { return true; }
+        }
+    }
+    false
+}
+
+pub fn stmt_has_trig(s: &Stmt) -> bool {
+    stmt_has_trig_depth(s, 0)
+}
+
+pub fn stmt_has_trig_depth(s: &Stmt, depth: usize) -> bool {
+    check_depth!(depth, 500, "stmt_has_trig");
+    match s {
+        Stmt::Assign { value, .. } => expr_has_trig_depth(value, depth + 1),
+        Stmt::Let { value, .. } => expr_has_trig_depth(value, depth + 1),
+        Stmt::Expr(e, _) => expr_has_trig_depth(e, depth + 1),
+    Stmt::For { start, end, step, body, .. } => expr_has_trig_depth(start, depth + 1) || expr_has_trig_depth(end, depth + 1) || step.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
+        Stmt::While { cond, body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
+        Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)) || elifs.iter().any(|(c,b)| expr_has_trig_depth(c, depth + 1) || b.iter().any(|s| stmt_has_trig_depth(s, depth + 1))) || else_body.as_ref().map(|eb| eb.iter().any(|s| stmt_has_trig_depth(s, depth + 1))).unwrap_or(false),
+        Stmt::Return(o, _) => o.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false),
+        Stmt::Switch { expr, cases, default, .. } => expr_has_trig(expr) || cases.iter().any(|(ce, cb)| expr_has_trig(ce) || cb.iter().any(stmt_has_trig)) || default.as_ref().map(|db| db.iter().any(stmt_has_trig)).unwrap_or(false),
+        Stmt::Break { .. } | Stmt::Continue { .. } => false,
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before stmt_has_trig"),
+    }
+}
+
+pub fn compute_max_args_used(module: &Module) -> usize {
+    let mut maxa = 0usize;
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            // Count function parameters (they will need VAR_ARG slots)
+            maxa = maxa.max(f.params.len());
+            // Count arguments in function body calls
+            for s in &f.body { maxa = maxa.max(scan_stmt_args(s)); }
+        } else if let Item::ExprStatement(expr) = item {
+            maxa = maxa.max(scan_expr_args(expr));
+        }
+    }
+    maxa
+}
+
+pub fn scan_stmt_args(s: &Stmt) -> usize {
+    match s {
+        Stmt::Assign { value, .. } | Stmt::Let { value, .. } | Stmt::Expr(value, _) => scan_expr_args(value),
+        Stmt::For { start, end, step, body, .. } => {
+            let mut m = scan_expr_args(start).max(scan_expr_args(end));
+            if let Some(se) = step { m = m.max(scan_expr_args(se)); }
+            for st in body { m = m.max(scan_stmt_args(st)); }
+            m
+        }
+        Stmt::While { cond, body, .. } => {
+            let mut m = scan_expr_args(cond);
+            for st in body { m = m.max(scan_stmt_args(st)); }
+            m
+        }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            let mut m = scan_expr_args(cond);
+            for st in body { m = m.max(scan_stmt_args(st)); }
+            for (c, b) in elifs { m = m.max(scan_expr_args(c)); for st in b { m = m.max(scan_stmt_args(st)); } }
+            if let Some(eb) = else_body { for st in eb { m = m.max(scan_stmt_args(st)); } }
+            m
+        }
+        Stmt::Return(o, _) => o.as_ref().map(scan_expr_args).unwrap_or(0),
+        Stmt::Switch { expr, cases, default, .. } => {
+            let mut m = scan_expr_args(expr);
+            for (ce, cb) in cases { m = m.max(scan_expr_args(ce)); for st in cb { m = m.max(scan_stmt_args(st)); } }
+            if let Some(db) = default { for st in db { m = m.max(scan_stmt_args(st)); } }
+            m
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } => 0,
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_args"),
+    }
+}
+
+pub fn scan_expr_args(e: &Expr) -> usize {
+    match e {
+        Expr::Call(ci) => {
+            // Check if this call can be optimized inline (no VAR_ARG usage)
+            let up = ci.name.to_ascii_uppercase();
+            
+            // DRAW_LINE with all constants doesn't use VAR_ARG (optimized inline)
+            if up == "DRAW_LINE" && ci.args.len() == 5 && 
+               ci.args.iter().all(|a| matches!(a, Expr::Number(_))) {
+                // This call will be optimized inline - doesn't use VAR_ARG
+                return ci.args.iter().map(scan_expr_args).max().unwrap_or(0);
+            }
+            
+            // Other calls use VAR_ARG normally
+            ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0))
+        },
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => scan_expr_args(left).max(scan_expr_args(right)),
+        Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_args(inner),
+        Expr::List(elements) => elements.iter().map(scan_expr_args).max().unwrap_or(0),
+        Expr::Index { target, index } => scan_expr_args(target).max(scan_expr_args(index)),
+        _ => 0,
+    }
+}
+
+use std::collections::HashSet;
+
+pub fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
+    let mut usage = RuntimeUsage::default();
+    for item in &module.items {
+        if let Item::Function(f) = item {
+            for s in &f.body { scan_stmt_runtime(s, &mut usage); }
+        } else if let Item::ExprStatement(expr) = item {
+            scan_expr_runtime(expr, &mut usage);
+        }
+    }
+    // Derive grouped variable needs from wrappers
+    if usage.wrappers_used.contains("DRAW_LINE_WRAPPER") || usage.wrappers_used.contains("VECTREX_DRAW_VL") || usage.wrappers_used.contains("VECTREX_DRAW_TO") {
+        usage.needs_line_vars = true;
+    }
+    if usage.wrappers_used.contains("VECTREX_MOVE_TO") || usage.wrappers_used.contains("VECTREX_DRAW_TO") {
+        usage.needs_vcur_vars = true;
+    }
+    usage
+}
+
+pub fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
+    match s {
+        Stmt::Assign { value, .. } => { usage.needs_tmp_ptr = true; scan_expr_runtime(value, usage); },
+        Stmt::Let { value, .. } => scan_expr_runtime(value, usage),
+        Stmt::Expr(value, _) => scan_expr_runtime(value, usage),
+        Stmt::For { start, end, step, body, .. } => {
+            scan_expr_runtime(start, usage);
+            scan_expr_runtime(end, usage);
+            if let Some(se) = step { scan_expr_runtime(se, usage); }
+            for st in body { scan_stmt_runtime(st, usage); }
+        }
+        Stmt::While { cond, body, .. } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage); } }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            scan_expr_runtime(cond, usage);
+            for st in body { scan_stmt_runtime(st, usage); }
+            for (c, b) in elifs { scan_expr_runtime(c, usage); for st in b { scan_stmt_runtime(st, usage); } }
+            if let Some(eb) = else_body { for st in eb { scan_stmt_runtime(st, usage); } }
+        }
+        Stmt::Return(o, _) => { if let Some(e) = o { scan_expr_runtime(e, usage); } }
+        Stmt::Switch { expr, cases, default, .. } => {
+            scan_expr_runtime(expr, usage);
+            for (ce, cb) in cases { scan_expr_runtime(ce, usage); for st in cb { scan_stmt_runtime(st, usage); } }
+            if let Some(db) = default { for st in db { scan_stmt_runtime(st, usage); } }
+            usage.needs_tmp_left = true; usage.needs_tmp_right = true; // switch lowering uses TMPLEFT
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } => {},
+        Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before scan_stmt_runtime"),
+    }
+}
+
+pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
+    match e {
+        Expr::Binary { op, left, right } => {
+            // Only mark if not optimized away (non power-of-two cases handled later)
+            match op {
+                BinOp::Mul => { usage.needs_mul_helper = true; }
+                BinOp::Div | BinOp::Mod => { usage.needs_div_helper = true; }
+                _ => {}
+            }
+            usage.needs_tmp_left = true; usage.needs_tmp_right = true; // general binary op temps
+            scan_expr_runtime(left, usage);
+            scan_expr_runtime(right, usage);
+        }
+        Expr::Call(ci) => { 
+            // Track wrapper usage (normalize like emit_builtin_call)
+            let up = ci.name.to_ascii_uppercase();
+            let resolved = resolve_function_name(&up);
+            if let Some(r) = resolved {
+                // Always use wrapper (no inline optimization)
+                usage.wrappers_used.insert(r);
+            }
+            // Check if this function needs vectorlist runtime
+            if up == "VECTREX_DRAW_VECTORLIST" || up == "DRAW_VECTORLIST" {
+                usage.needs_vectorlist_runtime = true;
+            }
+            // DRAW_LINE: only mark wrapper as needed if it can't be optimized inline
+            if up == "DRAW_LINE" {
+                // Check if this call can be optimized inline (all 5 args are constants)
+                let can_optimize_inline = ci.args.len() == 5 && 
+                    ci.args.iter().all(|a| matches!(a, Expr::Number(_)));
+                
+                if !can_optimize_inline {
+                    // Only mark wrapper as needed if inline optimization isn't possible
+                    usage.wrappers_used.insert("DRAW_LINE_WRAPPER".to_string());
+                }
+            }
+            // Music/SFX system: track runtime helpers needed
+            if up == "PLAY_MUSIC" {
+                usage.wrappers_used.insert("PLAY_MUSIC_RUNTIME".to_string());
+            }
+            if up == "PLAY_SFX" {
+                usage.wrappers_used.insert("PLAY_SFX_RUNTIME".to_string());
+            }
+            if up == "STOP_MUSIC" {
+                usage.wrappers_used.insert("STOP_MUSIC_RUNTIME".to_string());
+            }
+            if up == "MUSIC_UPDATE" {
+                usage.wrappers_used.insert("UPDATE_MUSIC_PSG".to_string());
+            }
+            for a in &ci.args { scan_expr_runtime(a, usage); }
+        }
+        Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+            scan_expr_runtime(left, usage);
+            scan_expr_runtime(right, usage);
+            usage.needs_tmp_left = true; usage.needs_tmp_right = true;
+        }
+        Expr::Not(inner) | Expr::BitNot(inner) => scan_expr_runtime(inner, usage),
+        Expr::List(elements) => {
+            for elem in elements {
+                scan_expr_runtime(elem, usage);
+            }
+            // Array literal creation might need temporary storage
+            usage.needs_tmp_ptr = true;
+        }
+        Expr::Index { target, index } => {
+            scan_expr_runtime(target, usage);
+            scan_expr_runtime(index, usage);
+            usage.needs_tmp_ptr = true; // Array indexing needs address computation
+        }
+        _ => {}
+    }
+}
+
+// emit_function: outputs code for a function.
