@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "source": "test_minimal_scope.vpy",
+  "asm": "test_minimal_scope.asm",
+  "binary": "test_minimal_scope.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x025C",
+    "MAIN": "0x024F",
+    "START": "0x0227"
+  },
+  "lineMap": {
+    "4": "0x023B",
+    "7": "0x025E",
+    "8": "0x0266"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x024F",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x025C",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "4": "VECTREX_SET_INTENSITY",
+    "7": "VECTREX_WAIT_RECAL"
+  },
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

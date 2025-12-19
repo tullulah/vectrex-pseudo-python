@@ -44,6 +44,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("SET_INTENSITY", 1),
     ("DEBUG_PRINT", 1),
     ("DEBUG_PRINT_LABELED", 2),  // label, value
+    ("DEBUG_PRINT_STR", 1),      // string variable
     
     // Asset functions (new)
     ("DRAW_VECTOR", 3),     // Draw vector asset at position: name, x, y
@@ -65,6 +66,9 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     
     // Math functions
     ("ABS", 1),             // Absolute value
+    
+    // Array functions
+    ("LEN", 1),             // Get array length
     
     // Inline assembly
     ("ASM", 1),             // Inline assembly string
@@ -144,6 +148,7 @@ pub struct CodegenOptions {
     pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
+    pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -293,7 +298,7 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
     for it in &module.items {
         if let Item::Function(func) = it {
             let mut locals = HashSet::new();
-            collect_function_locals(&func.body, &mut locals);
+            collect_function_locals(&func.body, &mut locals, &globals);
             function_locals.insert(func.name.clone(), locals);
         }
     }
@@ -310,30 +315,38 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 // Helper para recolectar todas las variables locales declaradas en una función
-fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>) {
+fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>, globals: &HashSet<String>) {
     for stmt in stmts {
         match stmt {
             Stmt::Let { name, .. } => { locals.insert(name.clone()); }
+            // NEW: Primera asignación a nombre no global es declaración implícita
+            Stmt::Assign { target, .. } => {
+                if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                    if !globals.contains(name) {
+                        locals.insert(name.clone());
+                    }
+                }
+            }
             Stmt::For { var, body, .. } => {
                 locals.insert(var.clone());
-                collect_function_locals(body, locals);
+                collect_function_locals(body, locals, globals);
             }
-            Stmt::While { body, .. } => collect_function_locals(body, locals),
+            Stmt::While { body, .. } => collect_function_locals(body, locals, globals),
             Stmt::If { body, elifs, else_body, .. } => {
-                collect_function_locals(body, locals);
+                collect_function_locals(body, locals, globals);
                 for (_, elif_body) in elifs {
-                    collect_function_locals(elif_body, locals);
+                    collect_function_locals(elif_body, locals, globals);
                 }
                 if let Some(else_body) = else_body {
-                    collect_function_locals(else_body, locals);
+                    collect_function_locals(else_body, locals, globals);
                 }
             }
             Stmt::Switch { cases, default, .. } => {
                 for (_, case_body) in cases {
-                    collect_function_locals(case_body, locals);
+                    collect_function_locals(case_body, locals, globals);
                 }
                 if let Some(default_body) = default {
-                    collect_function_locals(default_body, locals);
+                    collect_function_locals(default_body, locals, globals);
                 }
             }
             _ => {}
@@ -390,17 +403,37 @@ fn validate_stmt_collect(
             declare(name, scope); 
         }
         Stmt::Assign { target, value, .. } => {
-            if !is_declared(&target.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
+            match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    // NEW: Primera asignación a nombre no declarado es declaración implícita
+                    // (matching behavior de collect_locals en backend)
+                    if !is_declared(name, scope) {
+                        declare(name, scope); // Declaración implícita
+                    }
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    // For indexed assignment, validate both target and index expressions
+                    validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
+                    validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
         Stmt::CompoundAssign { target, value, .. } => {
             // Similar a Assign, pero también leemos la variable del lado izquierdo
-            if !is_declared(&target.name, scope) {
-                TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", target.name, target.name), line: Some(target.source_line), col: Some(target.col) }));
+            match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    if !is_declared(name, scope) {
+                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala primero con '{} = ...' antes de usar '{} += ...'", name, name, name), line: Some(*source_line), col: Some(*col) }));
+                    }
+                    reads.insert(name.clone()); // Leemos la variable para x += expr
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
+                    // For indexed compound assignment, validate both target and index expressions
+                    validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
+                    validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
             }
-            reads.insert(target.name.clone()); // Leemos la variable para x += expr
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
         Stmt::For { var, start, end, step, body, .. } => {
@@ -410,6 +443,13 @@ fn validate_stmt_collect(
                 validate_expr_collect(se, scope, reads, current_func, function_locals, defined_functions); 
             }
             push_scope(scope); // cuerpo loop con var declarada
+            declare(var, scope);
+            for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals, defined_functions); }
+            pop_scope(scope);
+        }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            validate_expr_collect(iterable, scope, reads, current_func, function_locals, defined_functions); 
+            push_scope(scope);
             declare(var, scope);
             for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals, defined_functions); }
             pop_scope(scope);
@@ -535,6 +575,15 @@ fn validate_expr_collect(
             validate_expr_collect(right, scope, reads, current_func, function_locals, defined_functions);
         }
         Expr::Not(inner) | Expr::BitNot(inner) => validate_expr_collect(inner, scope, reads, current_func, function_locals, defined_functions),
+        Expr::List(elements) => {
+            for elem in elements {
+                validate_expr_collect(elem, scope, reads, current_func, function_locals, defined_functions);
+            }
+        }
+        Expr::Index { target, index } => {
+            validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
+            validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+        }
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }
@@ -566,11 +615,22 @@ fn opt_stmt(s: &Stmt) -> Stmt {
     Stmt::Let { name, value, .. } => Stmt::Let { name: name.clone(), value: opt_expr(value), source_line },
         Stmt::CompoundAssign { target, op, value, .. } => {
             // Transformar x += expr en x = x + expr
-            let var_expr = Expr::Ident(IdentInfo { 
-                name: target.name.clone(), 
-                source_line: target.source_line, 
-                col: target.col 
-            });
+            let var_expr = match target {
+                crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    Expr::Ident(IdentInfo { 
+                        name: name.clone(), 
+                        source_line: *source_line, 
+                        col: *col 
+                    })
+                }
+                crate::ast::AssignTarget::Index { target: array_expr, index, source_line, .. } => {
+                    // For array[i] += expr, we need array[i] as the left side
+                    Expr::Index { 
+                        target: array_expr.clone(), 
+                        index: index.clone()
+                    }
+                }
+            };
             let combined_expr = Expr::Binary { 
                 op: *op, 
                 left: Box::new(var_expr), 
@@ -583,6 +643,12 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             start: opt_expr(start),
             end: opt_expr(end),
             step: step.as_ref().map(opt_expr),
+            body: body.iter().map(opt_stmt).collect(),
+            source_line,
+        },
+        Stmt::ForIn { var, iterable, body, .. } => Stmt::ForIn {
+            var: var.clone(),
+            iterable: opt_expr(iterable),
             body: body.iter().map(opt_stmt).collect(),
             source_line,
         },
@@ -699,6 +765,11 @@ fn opt_expr(e: &Expr) -> Expr {
                 Expr::Logic { op: *op, left: Box::new(l), right: Box::new(r) }
             }
         }
+        Expr::List(elements) => Expr::List(elements.iter().map(opt_expr).collect()),
+        Expr::Index { target, index } => Expr::Index { 
+            target: Box::new(opt_expr(target)), 
+            index: Box::new(opt_expr(index)) 
+        },
         Expr::Not(inner) => {
             let ni = opt_expr(inner);
             if let Expr::Number(v) = ni {
@@ -794,6 +865,11 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
             for s in body { dce_stmt(s, &mut nb, terminated); }
             out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line });
         }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            let mut nb = Vec::new();
+            for s in body { dce_stmt(s, &mut nb, terminated); }
+            out.push(Stmt::ForIn { var: var.clone(), iterable: iterable.clone(), body: nb , source_line: source_line });
+        }
         Stmt::Switch { expr, cases, default, .. } => {
             // Keep all arms; could prune unreachable constant-match arms later
             let mut new_cases = Vec::new();
@@ -826,10 +902,21 @@ fn dse_function(f: &Function) -> Function {
     for stmt in f.body.iter().rev() {
         match stmt {
             Stmt::Assign { target, value, .. } => {
-                if !used.contains(&target.name) && !expr_has_call(value) && !expr_contains_string_lit(value) {
-                } else {
+                let should_keep = match target {
+                    crate::ast::AssignTarget::Ident { name, .. } => {
+                        used.contains(name) || expr_has_call(value) || expr_contains_string_lit(value)
+                    }
+                    crate::ast::AssignTarget::Index { .. } => {
+                        // Array assignments always kept (side effects)
+                        true
+                    }
+                };
+                
+                if should_keep {
                     collect_reads_expr(value, &mut used);
-                    used.insert(target.name.clone());
+                    if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                        used.insert(name.clone());
+                    }
                     new_body.push(stmt.clone());
                 }
             }
@@ -868,6 +955,12 @@ fn dse_function(f: &Function) -> Function {
                 used.insert(var.clone());
                 new_body.push(stmt.clone());
             }
+            Stmt::ForIn { var, iterable, body, .. } => {
+                collect_reads_expr(iterable, &mut used);
+                for s in body { collect_reads_stmt(s, &mut used); }
+                used.insert(var.clone());
+                new_body.push(stmt.clone());
+            }
             Stmt::Switch { expr, cases, default, .. } => {
                 collect_reads_expr(expr, &mut used);
                 for (ce, cb) in cases { collect_reads_expr(ce, &mut used); for s in cb { collect_reads_stmt(s, &mut used); } }
@@ -887,6 +980,8 @@ fn expr_has_call(e: &Expr) -> bool {
     Expr::Call(_) => true,
     Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => expr_has_call(left) || expr_has_call(right),
     Expr::Not(inner) | Expr::BitNot(inner) => expr_has_call(inner),
+        Expr::List(elements) => elements.iter().any(expr_has_call),
+        Expr::Index { target, index } => expr_has_call(target) || expr_has_call(index),
         _ => false,
     }
 }
@@ -900,6 +995,8 @@ fn expr_contains_string_lit(e: &Expr) -> bool {
         | Expr::Logic { left, right, .. } => expr_contains_string_lit(left) || expr_contains_string_lit(right),
     Expr::Call(ci) => ci.args.iter().any(expr_contains_string_lit),
         Expr::Not(inner) | Expr::BitNot(inner) => expr_contains_string_lit(inner),
+        Expr::List(elements) => elements.iter().any(expr_contains_string_lit),
+        Expr::Index { target, index } => expr_contains_string_lit(target) || expr_contains_string_lit(index),
         _ => false,
     }
 }
@@ -921,6 +1018,10 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(start, used);
             collect_reads_expr(end, used);
             if let Some(se) = step { collect_reads_expr(se, used); }
+            for st in body { collect_reads_stmt(st, used); }
+        }
+        Stmt::ForIn { iterable, body, .. } => {
+            collect_reads_expr(iterable, used);
             for st in body { collect_reads_stmt(st, used); }
         }
         Stmt::Switch { expr, cases, default, .. } => {
@@ -946,6 +1047,15 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(right, used);
         }
     Expr::Not(inner) | Expr::BitNot(inner) => collect_reads_expr(inner, used),
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_reads_expr(elem, used);
+            }
+        }
+        Expr::Index { target, index } => {
+            collect_reads_expr(target, used);
+            collect_reads_expr(index, used);
+        }
         Expr::Number(_) => {}
     Expr::StringLit(_) => {}
     }
@@ -992,12 +1102,20 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
     match stmt {
         Stmt::Assign { target, value, .. } => {
             let v2 = cp_expr(value, env);
-            if let Expr::Number(n) = v2 {
-                env.insert(target.name.clone(), n);
-                Stmt::Assign { target: target.clone(), value: Expr::Number(n), source_line }
-            } else {
-                env.remove(&target.name);
-                Stmt::Assign { target: target.clone(), value: v2, source_line }
+            match target {
+                crate::ast::AssignTarget::Ident { name, .. } => {
+                    if let Expr::Number(n) = v2 {
+                        env.insert(name.clone(), n);
+                        Stmt::Assign { target: target.clone(), value: Expr::Number(n), source_line }
+                    } else {
+                        env.remove(name);
+                        Stmt::Assign { target: target.clone(), value: v2, source_line }
+                    }
+                }
+                crate::ast::AssignTarget::Index { .. } => {
+                    // Array indexing - can't propagate constants through
+                    Stmt::Assign { target: target.clone(), value: v2, source_line }
+                }
             }
         }
         Stmt::Let { name, value, .. } => {
@@ -1032,6 +1150,15 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
             for sstmt in body { nb.push(cp_stmt(sstmt, env)); }
             *env = saved;
             Stmt::For { var: var.clone(), start: s, end: e, step: st, body: nb, source_line }
+        }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            let it = cp_expr(iterable, env);
+            let saved = env.clone();
+            env.remove(var);
+            let mut nb = Vec::new();
+            for sstmt in body { nb.push(cp_stmt(sstmt, env)); }
+            *env = saved;
+            Stmt::ForIn { var: var.clone(), iterable: it, body: nb, source_line }
         }
         Stmt::If { cond, body, elifs, else_body, .. } => {
             let c = cp_expr(cond, env);
@@ -1104,6 +1231,11 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
         Expr::Logic { op, left, right } => Expr::Logic { op: *op, left: Box::new(cp_expr(left, env)), right: Box::new(cp_expr(right, env)) },
     Expr::Not(inner) => Expr::Not(Box::new(cp_expr(inner, env))),
     Expr::BitNot(inner) => Expr::BitNot(Box::new(cp_expr(inner, env))),
+        Expr::List(elements) => Expr::List(elements.iter().map(|e| cp_expr(e, env)).collect()),
+        Expr::Index { target, index } => Expr::Index { 
+            target: Box::new(cp_expr(target, env)), 
+            index: Box::new(cp_expr(index, env)) 
+        },
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
@@ -1172,6 +1304,7 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
         }
         Stmt::While { cond, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: source_line }); }
         Stmt::For { var, start, end, step, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line }); }
+        Stmt::ForIn { var, iterable, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::ForIn { var: var.clone(), iterable: iterable.clone(), body: nb , source_line: source_line }); }
     Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: source_line }),
         Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: source_line }),
         Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), source_line)),

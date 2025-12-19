@@ -12,6 +12,8 @@ pub fn collect_string_literals(module: &Module) -> std::collections::BTreeMap<St
             gather_expr_strings(value, &mut set); 
         } else if let Item::ExprStatement(expr) = item {
             gather_expr_strings(expr, &mut set);
+        } else if let Item::GlobalLet { value, .. } = item {
+            gather_expr_strings(value, &mut set);
         }
     }
     let mut map = BTreeMap::new();
@@ -25,6 +27,7 @@ fn gather_stmt_strings(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>
         Stmt::Expr(value, _) => gather_expr_strings(value, set),
         Stmt::While { cond, body, .. } => { gather_expr_strings(cond,set); for s in body { gather_stmt_strings(s,set); } }
         Stmt::For { start, end, step, body, .. } => { gather_expr_strings(start,set); gather_expr_strings(end,set); if let Some(se)=step { gather_expr_strings(se,set); } for s in body { gather_stmt_strings(s,set); } }
+        Stmt::ForIn { iterable, body, .. } => { gather_expr_strings(iterable,set); for s in body { gather_stmt_strings(s,set); } }
         Stmt::If { cond, body, elifs, else_body, .. } => { gather_expr_strings(cond,set); for s in body { gather_stmt_strings(s,set); } for (c,b) in elifs { gather_expr_strings(c,set); for s in b { gather_stmt_strings(s,set); } } if let Some(eb)=else_body { for s in eb { gather_stmt_strings(s,set); } } }
         Stmt::Return(o, _) => { if let Some(e)=o { gather_expr_strings(e,set); } }
         Stmt::Switch { expr, cases, default, .. } => { gather_expr_strings(expr,set); for (ce,cb) in cases { gather_expr_strings(ce,set); for s in cb { gather_stmt_strings(s,set); } } if let Some(db)=default { for s in db { gather_stmt_strings(s,set); } } }
@@ -41,6 +44,15 @@ fn gather_expr_strings(expr: &Expr, set: &mut std::collections::BTreeSet<String>
         | Expr::Logic { left, right, .. } => { gather_expr_strings(left,set); gather_expr_strings(right,set); }
     Expr::Call(ci) => { for a in &ci.args { gather_expr_strings(a,set); } }
         Expr::Not(inner) | Expr::BitNot(inner) => gather_expr_strings(inner,set),
+        Expr::List(elements) => {
+            for elem in elements {
+                gather_expr_strings(elem, set);
+            }
+        }
+        Expr::Index { target, index } => {
+            gather_expr_strings(target, set);
+            gather_expr_strings(index, set);
+        }
         Expr::Ident(_) | Expr::Number(_) => {}
     }
 }

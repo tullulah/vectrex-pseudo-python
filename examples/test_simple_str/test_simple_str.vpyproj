@@ -1,0 +1,6 @@
+[project]
+name = "test_simple_str"
+version = "1.0.0"
+entry = "src/main.vpy"
+target = "vectrex"
+outputDir = "build"

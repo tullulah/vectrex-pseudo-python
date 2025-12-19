@@ -5,12 +5,12 @@ use anyhow::{bail, Result};
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Def, Identifier(String), Number(i32), Newline, Indent, Dedent,
-    LParen, RParen, Colon, Comma, Dot,
+    LParen, RParen, LBracket, RBracket, Colon, Comma, Dot,
     Plus, Minus, Star, Slash, Percent,
     SlashSlash,  // División entera //
     Amp, Pipe, Caret, Tilde,
     ShiftLeft, ShiftRight,
-    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Let, Const, Var, VectorList,
+    Equal, If, Elif, Else, For, In, Range, Return, While, Break, Continue, Const, VectorList,
     Switch, Case, Default,
     Meta,
     And, Or, Not,
@@ -84,6 +84,14 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
             }
             ')' => {
                 out.push(tok(TokenKind::RParen, line_no, idx));
+                idx += 1;
+            }
+            '[' => {
+                out.push(tok(TokenKind::LBracket, line_no, idx));
+                idx += 1;
+            }
+            ']' => {
+                out.push(tok(TokenKind::RBracket, line_no, idx));
                 idx += 1;
             }
             ':' => {
@@ -282,12 +290,10 @@ fn lex_line(line: &str, line_no: usize, out: &mut Vec<Token>) -> Result<()> {
                     "elif" => TokenKind::Elif,
                     "else" => TokenKind::Else,
                     "for" => TokenKind::For,
-                    "let" => TokenKind::Let,
                     "while" => TokenKind::While,
                     "break" => TokenKind::Break,
                     "continue" => TokenKind::Continue,
                     "const" => TokenKind::Const,
-                    "var" => TokenKind::Var,
                     "vectorlist" => TokenKind::VectorList,
                     "switch" => TokenKind::Switch,
                     "case" => TokenKind::Case,

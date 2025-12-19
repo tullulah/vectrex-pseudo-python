@@ -16,6 +16,7 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   private lastDebugOutput: string = '';
   private lastDebugValue: number = 0xFF; // Track last value at $DFFF
   private debugRam = new Uint8Array(256); // Debug pseudo-RAM for D800-D8FF area
+  private pollFrameCount: number = 0; // Frame counter for reducing log spam
 
   async init(){
     if (this.mod) return;
@@ -48,13 +49,12 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
       this.inst.write8 = (address: number, data: number) => {
         console.log(`[DEBUG-INTERCEPT] Write attempt: ${address.toString(16)} = ${data}`);
         
-        // Interceptar escrituras al área de debug CF00-CF03 (end of RAM)
-        if (address >= 0xCF00 && address <= 0xCF03) {
-          const debugAddr = address - 0xCF00;
+        // Interceptar escrituras al área de debug C000-C003 (unmapped gap)
+        if (address >= 0xC000 && address <= 0xC003) {
+          const debugAddr = address - 0xC000;
           this.debugRam[debugAddr] = data;
-          console.log(`[DEBUG-WRITE] Wrote ${data} to debug address CF${debugAddr.toString(16).padStart(2, '0').toUpperCase()}`);
-          // También llamar la función original para que se escriba en RAM real
-          originalWrite8(address, data);
+          console.log(`[DEBUG-WRITE] Wrote ${data} to debug address C0${debugAddr.toString(16).padStart(2, '0').toUpperCase()}`);
+          // No llamar originalWrite8 - es un gap, no hay RAM real aquí
           return;
         }
         // Para otras direcciones, usar la función original
@@ -68,10 +68,11 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
         this.inst.read8 = (address: number) => {
           console.log(`[DEBUG-INTERCEPT] Read attempt: ${address.toString(16)}`);
           
-          // Interceptar lecturas del área de debug CF00-CF03
-          if (address >= 0xCF00 && address <= 0xCF03) {
-            const value = originalRead8(address); // Leer de RAM real
-            console.log(`[DEBUG-READ] Read ${value} from debug address CF${(address - 0xCF00).toString(16).padStart(2, '0').toUpperCase()}`);
+          // Interceptar lecturas del área de debug C000-C003
+          if (address >= 0xC000 && address <= 0xC003) {
+            const debugAddr = address - 0xC000;
+            const value = this.debugRam[debugAddr] || 0xFF; // Leer del buffer interno
+            console.log(`[DEBUG-READ] Read ${value} from debug address C0${debugAddr.toString(16).padStart(2, '0').toUpperCase()}`);
             return value;
           }
           // Para otras direcciones, usar la función original
@@ -547,6 +548,8 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   }
 
   runFrame(_maxInstr?: number){
+    console.log('%c[JsVecxCore] 🎬 runFrame CALLED', 'background: #f0f; color: #fff; font-weight: bold; font-size: 14px');
+    
     if (!this.inst) return { stepsRun: 0, vectors: [] };
     
     try { 
@@ -589,10 +592,15 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
             };
           }
           
-          return originalVecxEmu.call(this.inst, cycles, cyclesDone);
+          const result = originalVecxEmu.call(this.inst, cycles, cyclesDone);
+          
+          // CRITICAL: Poll debug memory AFTER each frame execution
+          this.pollDebugMemory();
+          
+          return result;
         };
         this.vecxEmuPatched = true;
-        console.log('[JsVecxCore] Patched vecx_emu to inject memory functions AND CPU debugging');
+        console.log('[JsVecxCore] ✅ Patched vecx_emu - debug polling will run every frame');
       }
       
       // Intentar ejecutar un frame usando la función jsvecx
@@ -755,43 +763,41 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
   }
 
   private pollDebugMemory(): void {
-    console.log('[DEBUG-POLL] pollDebugMemory function called');
+    console.log('%c[DEBUG-POLL] 🔍 pollDebugMemory called', 'background: #222; color: #0f0; font-weight: bold');
     
     if (!this.inst) {
-      console.log('[DEBUG-POLL] No inst available');
+      console.log('[DEBUG-POLL] ❌ No inst available');
       return;
     }
     
-    console.log('[DEBUG-POLL] About to read memory...');
-    
     try {
-      // Debug: verificar qué funciones y arrays están disponibles
-      console.log('[DEBUG-POLL] Available functions:', {
-        read8: typeof this.inst.read8,
-        write8: typeof this.inst.write8,
-        ram: this.inst.ram ? 'available' : 'not available',
-        cart: this.inst.cart ? 'available' : 'not available'
-      });
+      // Leer directamente de debugRam porque JSVecx no tiene memoria mapeada en C000
+      const debugValue = this.debugRam[0] || 0xFF;  // Debug value
+      const debugMarker = this.debugRam[1] || 0;    // Debug marker
+      const labelHigh = this.debugRam[2] || 0;      // Label pointer high
+      const labelLow = this.debugRam[3] || 0;       // Label pointer low
       
-      // Read debug output from end of RAM (CF00-CF03)
-      const debugValue = this.inst.read8 ? this.inst.read8(0xCF00) : 0xFF;  // Debug value
-      const debugMarker = this.inst.read8 ? this.inst.read8(0xCF01) : 0;    // Debug marker
-      const labelHigh = this.inst.read8 ? this.inst.read8(0xCF02) : 0;     // Label pointer high
-      const labelLow = this.inst.read8 ? this.inst.read8(0xCF03) : 0;      // Label pointer low
-      
-      console.log('[DEBUG-POLL] Read memory values:', { debugValue, debugMarker, labelHigh, labelLow });
-      
-      // NUEVO: También verificar directamente el debugRam interno
-      console.log('[DEBUG-POLL] Direct debugRam values:', {
-        ram0: this.debugRam[0],
-        ram1: this.debugRam[1], 
-        ram2: this.debugRam[2],
-        ram3: this.debugRam[3]
+      console.log('%c[DEBUG-POLL] 📊 debugRam contents:', 'color: #0ff', {
+        'C000 (value)': `0x${debugValue.toString(16).padStart(2, '0')} (${debugValue})`,
+        'C001 (marker)': `0x${debugMarker.toString(16).padStart(2, '0')} (${debugMarker})`,
+        'C002 (labelHi)': `0x${labelHigh.toString(16).padStart(2, '0')}`,
+        'C003 (labelLo)': `0x${labelLow.toString(16).padStart(2, '0')}`,
+        'lastDebugValue': this.lastDebugValue,
+        'Full array': Array.from(this.debugRam).map(v => `0x${v.toString(16).padStart(2, '0')}`).join(' ')
       });
       
       // Check if debug marker indicates new output (0x42 = simple, 0xFE = labeled)
-      if ((debugMarker === 0x42 || debugMarker === 0xFE) && debugMarker !== this.lastDebugValue) {
-        console.log(`[DEBUG-POLL] RAM polling detected debug output: value=${debugValue}, marker=${debugMarker}`);
+      if (debugMarker === 0x42 || debugMarker === 0xFE) {
+        if (debugMarker === this.lastDebugValue) {
+          console.log('%c[DEBUG-POLL] ⏭️ Skipping - already processed this marker', 'color: #888');
+          return;
+        }
+        
+        console.log(`%c[DEBUG-POLL] ✅ Marker detected!`, 'background: #0a0; color: #fff; font-weight: bold', {
+          type: debugMarker === 0x42 ? 'SIMPLE' : 'LABELED',
+          value: debugValue,
+          marker: `0x${debugMarker.toString(16)}`
+        });
         
         // Process the debug output
         if (debugMarker === 0xFE && (labelHigh !== 0 || labelLow !== 0)) {
@@ -801,24 +807,34 @@ export class JsVecxEmulatorCore implements IEmulatorCore {
           const message = `${label} = ${debugValue}`;
           this.debugMessages.push(message);
           this.lastDebugOutput = message;
-          console.log(`[DEBUG-POLL] Added labeled message: ${message}`);
+          console.log(`%c[DEBUG-POLL] 📝 Added labeled message: ${message}`, 'color: #0f0');
         } else {
           // Simple debug output
           const message = `DEBUG: ${debugValue}`;
           this.debugMessages.push(message);
           this.lastDebugOutput = message;
-          console.log(`[DEBUG-POLL] Added simple message: ${message}`);
+          console.log(`%c[DEBUG-POLL] 📝 Added simple message: ${message}`, 'color: #0f0');
         }
         
         this.lastDebugValue = debugMarker;
         
-        // Clear the marker to avoid re-processing
-        if (this.inst.write8) {
-          this.inst.write8(0xCF01, 0);
+        // Clear the marker to avoid re-processing (write to debugRam directly)
+        this.debugRam[1] = 0;
+        console.log('%c[DEBUG-POLL] 🧹 Marker cleared', 'color: #fa0');
+      } else {
+        // No marker detected
+        if (debugMarker !== 0) {
+          console.log(`%c[DEBUG-POLL] ⚠️ Unknown marker: 0x${debugMarker.toString(16)}`, 'color: #f80');
+        }
+        // Solo log cada 100 frames para no spamear
+        if (!this.pollFrameCount) this.pollFrameCount = 0;
+        this.pollFrameCount++;
+        if (this.pollFrameCount % 100 === 0) {
+          console.log(`%c[DEBUG-POLL] ⏸️ No marker detected (frame ${this.pollFrameCount})`, 'color: #666');
         }
       }
     } catch (error) {
-      console.warn('[DEBUG-POLL] Error during debug memory polling:', error);
+      console.warn('%c[DEBUG-POLL] ❌ Error during polling:', 'color: #f00; font-weight: bold', error);
     }
   }
 

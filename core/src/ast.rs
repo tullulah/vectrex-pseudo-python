@@ -90,6 +90,7 @@ pub enum Stmt {
 	Assign { target: AssignTarget, value: Expr, source_line: usize },
 	Let { name: String, value: Expr, source_line: usize },
 	For { var: String, start: Expr, end: Expr, step: Option<Expr>, body: Vec<Stmt>, source_line: usize },
+	ForIn { var: String, iterable: Expr, body: Vec<Stmt>, source_line: usize },
 	While { cond: Expr, body: Vec<Stmt>, source_line: usize },
 	Break { source_line: usize },
 	Continue { source_line: usize },
@@ -108,6 +109,7 @@ impl Stmt {
 			Stmt::Assign { source_line, .. } => *source_line,
 			Stmt::Let { source_line, .. } => *source_line,
 			Stmt::For { source_line, .. } => *source_line,
+			Stmt::ForIn { source_line, .. } => *source_line,
 			Stmt::While { source_line, .. } => *source_line,
 			Stmt::Break { source_line } => *source_line,
 			Stmt::Continue { source_line } => *source_line,
@@ -125,7 +127,12 @@ pub struct IdentInfo { pub name: String, pub source_line: usize, pub col: usize 
 
 // Nuevo: información de asignación con span para el identificador del LHS.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssignTarget { pub name: String, pub source_line: usize, pub col: usize }
+pub enum AssignTarget { 
+	/// Simple variable: x = value
+	Ident { name: String, source_line: usize, col: usize },
+	/// Array index: arr[i] = value
+	Index { target: Box<Expr>, index: Box<Expr>, source_line: usize, col: usize },
+}
 
 // Información de llamadas con span del identificador (primer segmento calificado).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +149,10 @@ pub enum Expr {
 	Logic { op: LogicOp, left: Box<Expr>, right: Box<Expr> },
 	Not(Box<Expr>),
 	BitNot(Box<Expr>),
+	/// Array literal: [1, 2, 3]
+	List(Vec<Expr>),
+	/// Array indexing: arr[i]
+	Index { target: Box<Expr>, index: Box<Expr> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

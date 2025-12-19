@@ -18,7 +18,7 @@ export const WelcomeView: React.FC = () => {
 const Branding: React.FC = () => {
   return (
     <div className="vpy-welcome-branding">
-      <div className="title">Pseudo Python</div>
+      <div className="title">Vectrex Studio</div>
       <div className="subtitle">Bienvenido al IDE. Abre un workspace, carpeta o crea un archivo nuevo.</div>
     </div>
   );

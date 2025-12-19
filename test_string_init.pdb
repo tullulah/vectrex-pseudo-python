@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "source": "test_string_init.vpy",
+  "asm": "test_string_init.asm",
+  "binary": "test_string_init.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "MAIN": "0x028E",
+    "START": "0x023B",
+    "LOOP_BODY": "0x029B"
+  },
+  "lineMap": {
+    "13": "0x02CF",
+    "8": "0x0269",
+    "11": "0x029B",
+    "7": "0x0255",
+    "12": "0x02A3"
+  },
+  "functions": {
+    "loop": {
+      "name": "loop",
+      "address": "0x029B",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "main": {
+      "name": "main",
+      "address": "0x028E",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "7": "VECTREX_SET_INTENSITY",
+    "8": "DEBUG_PRINT_STR(texto)",
+    "13": "DEBUG_PRINT(count)",
+    "11": "VECTREX_WAIT_RECAL"
+  },
+  "asmFunctions": {
+    "VECTREX_DEBUG_PRINT": {
+      "name": "VECTREX_DEBUG_PRINT",
+      "file": "test_string_init.asm",
+      "startLine": 32,
+      "endLine": 38,
+      "type": "native"
+    }
+  },
+  "asmAddressMap": {}
+}

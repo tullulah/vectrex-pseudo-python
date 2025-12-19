@@ -509,6 +509,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 exclude_ram_org: true,
                 fast_wait: false,
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
+                const_values: std::collections::BTreeMap::new(), // Will be populated by backend
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -541,6 +542,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             fast_wait: false,
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             assets,
+            const_values: std::collections::BTreeMap::new(), // Will be populated by backend
         });
         
         // Phase 4 validation: Check if assembly was actually generated

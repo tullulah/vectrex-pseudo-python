@@ -331,6 +331,16 @@ fn rewrite_stmt(
                 source_line: *source_line,
             }
         }
+        Stmt::ForIn { var, iterable, body, source_line } => {
+            Stmt::ForIn {
+                var: var.clone(),
+                iterable: rewrite_expr(iterable, current_module, symbols, name_map, options),
+                body: body.iter()
+                    .map(|s| rewrite_stmt(s, current_module, symbols, name_map, options))
+                    .collect(),
+                source_line: *source_line,
+            }
+        }
         Stmt::While { cond, body, source_line } => {
             Stmt::While {
                 cond: rewrite_expr(cond, current_module, symbols, name_map, options),
@@ -412,6 +422,15 @@ fn rewrite_expr(
                 col: info.col,
             })
         }
+        Expr::List(elements) => Expr::List(
+            elements.iter()
+                .map(|e| rewrite_expr(e, current_module, symbols, name_map, options))
+                .collect()
+        ),
+        Expr::Index { target, index } => Expr::Index {
+            target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
+            index: Box::new(rewrite_expr(index, current_module, symbols, name_map, options)),
+        },
         Expr::Call(info) => {
             let resolved_name = resolve_identifier(&info.name, current_module, symbols, name_map, options);
             Expr::Call(CallInfo {
