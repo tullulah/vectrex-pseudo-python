@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "source": "test_struct_simple.vpy",
+  "asm": "test_struct_simple.asm",
+  "binary": "test_struct_simple.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "MAIN": "0x023C",
+    "START": "0x021D",
+    "LOOP_BODY": "0x0249"
+  },
+  "lineMap": {
+    "8": "0x022B",
+    "15": "0x025C",
+    "17": "0x0272",
+    "10": "0x023C",
+    "16": "0x0267",
+    "14": "0x0251",
+    "13": "0x024B"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x023C",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x0249",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {},
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

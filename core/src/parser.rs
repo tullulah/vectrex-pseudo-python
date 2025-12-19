@@ -2,6 +2,21 @@ use anyhow::{bail, Result};
 use crate::ast::*;
 use crate::lexer::{Token, TokenKind};
 
+// Check if a name is a known builtin function (NOT a struct)
+// This prevents builtins like MUSIC_UPDATE() from being parsed as StructInit
+fn is_known_builtin(name: &str) -> bool {
+    matches!(name,
+        // Core builtins (0 args that look like structs)
+        "WAIT_RECAL" | "SET_ORIGIN" | "MUSIC_UPDATE" | "STOP_MUSIC" |
+        "PLAY_MUSIC1" | "DBG_STATIC_VL" | "VECTOR_PHASE_BEGIN" |
+        // Multi-arg builtins (unlikely to be confused but include for completeness)
+        "MOVE" | "PRINT_TEXT" | "DRAW_TO" | "DRAW_LINE" | "DEBUG_PRINT" |
+        "DEBUG_PRINT_LABELED" | "DEBUG_PRINT_STR" | "DRAW_VECTOR" |
+        "PLAY_MUSIC" | "PLAY_SFX" | "DRAW_VECTOR_LIST" | "DRAW_VL" |
+        "FRAME_BEGIN" | "ABS" | "LEN" | "ASM" | "SET_INTENSITY"
+    )
+}
+
 // Convert TokenKind to user-friendly display name
 fn token_display_name(kind: &TokenKind) -> String {
     match kind {
@@ -610,8 +625,10 @@ impl<'a> Parser<'a> {
                 self.consume(TokenKind::RParen)?;
                 
                 // If no args and starts with uppercase, treat as struct init
+                // UNLESS it's a known builtin function
                 // (This is a heuristic; proper validation happens in semantic analysis)
-                if args.is_empty() && first.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if args.is_empty() && first.chars().next().map_or(false, |c| c.is_uppercase()) 
+                    && !is_known_builtin(&first) {
                     return Ok(Expr::StructInit {
                         struct_name: first,
                         source_line: ident_token.line,
