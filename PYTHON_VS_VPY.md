@@ -3,7 +3,7 @@
 **Objetivo**: Documentar qué funcionalidades del lenguaje Python están implementadas en VPy y cuáles faltan.
 
 **Nota importante**: VPy NO es Python. Es un lenguaje inspirado en Python pero con diferencias significativas:
-- **VPy usa `var`/`let` explícito** para declarar variables (Python no usa keywords)
+- **VPy usa sintaxis Python pura** - NO requiere keywords para declarar variables (actualizado 2025-12-19)
 - **VPy es statically-typed 16-bit** (Python es dinamically-typed con ints ilimitados)
 - **VPy compila a ASM M6809** (Python es interpretado/JIT)
 
@@ -31,14 +31,14 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 
 | Feature | Python | VPy | Notas |
 |---------|--------|-----|-------|
-| **Declaración** | `x = 10` (sin keyword) | ⚠️ | VPy requiere `var`/`let` explícito |
-| **Globales** | `x = 10` (top-level) | ✅ | `var x = 10` (keyword obligatoria) |
-| **Locales** | `x = 10` (en función) | ✅ | `let x = 10` (keyword obligatoria) |
+| **Declaración** | `x = 10` (sin keyword) | ✅ | Sintaxis idéntica a Python |
+| **Globales** | `x = 10` (top-level) | ✅ | `x = 10` (top-level, sin keyword) |
+| **Locales** | `x = 10` (en función) | ✅ | `y = 20` (en función, sin keyword) |
 | **Constantes** | No nativas (convención CAPS) | ✅ | `const X = 10` |
 | **Asignación simple** | `x = expr` | ✅ | `x = expr` (sin redeclarar) |
 | **Asignación compuesta** | `x += 5`, `x -= 3`, etc | ✅ | `x += 5`, `x -= 3`, `x *= 2`, etc |
 
-**⚠️ Diferencia importante**: Python NO usa keywords para declarar variables, VPy SÍ requiere `var`/`let` explícito para hacer el scope claro en ASM.
+**✅ Actualización 2025-12-19**: VPy ahora usa sintaxis Python pura. NO requiere `var`/`let` - el scope se detecta automáticamente (top-level = global, en función = local).
 
 ### 3. Operadores Aritméticos
 
@@ -108,7 +108,7 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **Línea** | `# comentario` | ✅ | `# comentario` |
 | **Bloque** | `"""docstring"""` | ❌ | **NO implementado** |
 
-### 10. Módulos (NUEVO)
+### 10. Módulos
 
 | Feature | Python | VPy | Notas |
 |---------|--------|-----|-------|
@@ -119,21 +119,36 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **import all** | `from module import *` | ✅ | `from module import *` |
 | **import relativo** | `from . import x` | ✅ | `from . import x` |
 
+### 11. Arrays y Estructuras de Datos
+
+| Feature | Python | VPy | Notas |
+|---------|--------|-----|-------|
+| **Arrays** | `[1, 2, 3]` | ✅ | Arrays estáticos, tamaño fijo |
+| **Index read** | `x = lista[0]` | ✅ | Acceso por índice |
+| **Index write** | `lista[0] = 5` | ✅ | Asignación por índice |
+| **len()** | `len(lista)` | ✅ | Retorna tamaño del array |
+| **for-in** | `for x in lista:` | ✅ | Iteración sobre arrays |
+
+### 12. Built-in Math Functions
+
+| Feature | Python | VPy | Notas |
+|---------|--------|-----|-------|
+| **abs()** | `abs(-5)` | ✅ | Valor absoluto (útil con enteros: distancias, etc) |
+| **min()** | `min(a, b)` | ✅ | Mínimo de dos valores |
+| **max()** | `max(a, b)` | ✅ | Máximo de dos valores |
+
 ---
 
 ## ❌ NO IMPLEMENTADO (Faltan)
 
-### 1. Estructuras de Datos
+### 1. Estructuras de Datos Avanzadas
 
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
-| **Listas** | `[1, 2, 3]` | ❌ | 🔴 ALTA | Fundamental para juegos |
-| **Tuplas** | `(1, 2)` | ❌ | 🟡 MEDIA | Menos crítico |
+| **Tuplas** | `(1, 2)` | ❌ | 🟡 MEDIA | Retorno múltiple, inmutables |
 | **Diccionarios** | `{"key": val}` | ❌ | 🟢 BAJA | Difícil en ASM |
 | **Sets** | `{1, 2, 3}` | ❌ | 🟢 BAJA | No prioritario |
-| **Index** | `lista[0]` | ❌ | 🔴 ALTA | Necesario con listas |
 | **Slice** | `lista[1:3]` | ❌ | 🟡 MEDIA | Útil pero complejo |
-| **len()** | `len(lista)` | ❌ | 🔴 ALTA | Necesario con listas |
 
 ### 2. Expresiones
 
@@ -151,16 +166,12 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 |---------|--------|-----|-----------|-------|
 | **print()** | `print(x)` | ✅ | - | DEBUG_PRINT_STR implementado |
 | **range()** | `range(10)` | ⚠️ | - | Solo en for loops |
-| **abs()** | `abs(-5)` | ❌ | 🟡 MEDIA | Útil para física |
-| **min()** | `min(a, b)` | ✅ | - | MIN() builtin |
-| **max()** | `max(a, b)` | ✅ | - | MAX() builtin |
 | **pow()** | `pow(2, 3)` | ❌ | 🟡 MEDIA | Alternativa a ** |
 | **round()** | `round(3.7)` | N/A | - | Solo ints |
 | **int()** | `int("42")` | ❌ | 🟢 BAJA | Conversión |
 | **str()** | `str(42)` | ❌ | 🟢 BAJA | Conversión |
 | **bool()** | `bool(0)` | ❌ | 🟢 BAJA | Usa 0/1 directo |
 | **type()** | `type(x)` | N/A | - | No runtime types |
-| **len()** | `len(lista)` | ✅ | - | Para arrays, retorna first word |
 
 ### 4. String Operations
 
@@ -178,8 +189,7 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
-| **for-in** | `for x in lista:` | ❌ | 🔴 ALTA | Necesita listas |
-| **for-enumerate** | `for i, x in enumerate(l):` | ❌ | 🟡 MEDIA | Útil con listas |
+| **for-enumerate** | `for i, x in enumerate(l):` | ❌ | 🟡 MEDIA | Índice + valor simultáneo |
 | **while-else** | `while: ... else: ...` | ❌ | 🟢 BAJA | Raramente usado |
 | **for-else** | `for: ... else: ...` | ❌ | 🟢 BAJA | Raramente usado |
 | **try-except** | `try: ... except: ...` | ❌ | 🟢 BAJA | No exceptions en ASM |
@@ -232,42 +242,31 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 
 ### Phase 1: Fundamentales (CRÍTICO - Sin esto no se pueden hacer juegos complejos)
 
-1. **🔴 Listas básicas**:
+~~1. **🔴 Listas básicas**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
-   # Python real:
-   enemies = [0, 0, 0, 0, 0]    # Sin keyword
-   x = enemies[0]
-   enemies[1] = 10
-   count = len(enemies)
-   
-   # VPy (propuesto):
-   var enemies = [0, 0, 0, 0, 0]  # Array fijo con keyword
-   let x = enemies[0]             # Local con keyword
-   enemies[1] = 10
-   let count = len(enemies)  # ✅ len() YA IMPLEMENTADO
+   # Python Y VPy (sintaxis idéntica):
+   enemies = [0, 0, 0, 0, 0]  # Array fijo
+   x = enemies[0]             # Acceso
+   enemies[1] = 10            # Asignación
+   count = len(enemies)       # Tamaño
    ```
    **Implementación**: Arrays estáticos en RAM, tamaño fijo en compile-time.
 
-2. ~~**🔴 print() para debugging**~~ ✅ **COMPLETADO (2025-12-19)**:
+~~2. **🔴 print() para debugging**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
-   # Python real:
+   # Python:
    print("Score:", score)
    
    # VPy:
    DEBUG_PRINT_STR("Score:")  # Literal directo
    DEBUG_PRINT_STR(texto)     # Variable global/local
-   DEBUG_PRINT(score)         # Numérico con label
+   DEBUG_PRINT(score)         # Numérico
    ```
    **Implementación**: DEBUG_PRINT_STR con protocolo C000-C00F.
 
-3. **🔴 for-in sobre listas**:
+~~3. **🔴 for-in sobre listas**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
-   # Python real:
-   for enemy in enemies:
-       if enemy > 0:
-           draw_enemy(enemy)
-   
-   # VPy (propuesto - mismo):
+   # Python Y VPy (sintaxis idéntica):
    for enemy in enemies:
        if enemy > 0:
            draw_enemy(enemy)
@@ -275,16 +274,13 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 
 ### Phase 2: Útiles (MEDIA - Mejoran ergonomía)
 
-4. ~~**🟡 abs(), min(), max()**~~ ✅ **COMPLETADO (min/max)**:
+~~4. **🟡 abs(), min(), max()**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
-   # Python real:
-   distance = abs(player_x - enemy_x)  # abs() pendiente
-   x = max(0, min(player_x, 127))      # clamp
-   
-   # VPy:
-   let distance = abs(player_x - enemy_x)  # abs() pendiente
-   let x = MAX(0, MIN(player_x, 127))      # ✅ MIN/MAX implementados
+   # Python Y VPy (sintaxis idéntica):
+   distance = abs(player_x - enemy_x)  # ✅ Valor absoluto para distancias
+   x = max(0, min(player_x, 127))      # ✅ Clamp con min/max
    ```
+   **Nota**: abs() es útil con enteros - distancias, velocidades, colisiones.
 
 5. **🟡 Operador ternario**:
    ```python
@@ -323,27 +319,29 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | Categoría | Implementado | Total | % |
 |-----------|--------------|-------|---|
 | Control Flow | 7 / 7 | 100% | ✅ |
-| Variables | 4 / 4 | 100% | ✅ |
+| Variables | 6 / 6 | 100% | ✅ |
 | Operadores Aritméticos | 6 / 7 | 86% | ⚠️ |
 | Operadores Bitwise | 6 / 6 | 100% | ✅ |
 | Operadores Comparación | 6 / 6 | 100% | ✅ |
 | Operadores Lógicos | 3 / 3 | 100% | ✅ |
 | Funciones Básicas | 5 / 5 | 100% | ✅ |
 | Strings | 2 / 2 | 100% | ✅ |
-| **TOTAL BÁSICO** | **39 / 40** | **98%** | ✅ |
+| Arrays & Iteration | 5 / 5 | 100% | ✅ |
+| Math Builtins | 3 / 3 | 100% | ✅ |
+| **TOTAL BÁSICO** | **49 / 50** | **98%** | ✅ |
 
 | Categoría | Faltan | Prioridad Alta | Prioridad Media | Prioridad Baja |
 |-----------|--------|----------------|-----------------|----------------|
-| Estructuras de Datos | 6 | 2 🔴 | 1 🟡 | 3 🟢 |
+| Estructuras de Datos | 4 | 0 | 1 🟡 | 3 🟢 |
 | Expresiones | 5 | 0 | 3 🟡 | 2 🟢 |
-| Built-ins | 9 | 0 | 2 🟡 | 7 🟢 |
+| Built-ins | 6 | 0 | 1 🟡 | 5 🟢 |
 | Strings | 5 | 0 | 2 🟡 | 3 🟢 |
-| Control Flow Avanzado | 7 | 1 🔴 | 2 🟡 | 4 🟢 |
+| Control Flow Avanzado | 6 | 0 | 2 🟡 | 4 🟢 |
 | Funciones Avanzadas | 7 | 0 | 1 🟡 | 6 🟢 |
 | OOP | 4 | 0 | 0 | 4 🟢 |
 | Operadores | 3 | 0 | 1 🟡 | 2 🟢 |
 | Misc | 9 | 0 | 2 🟡 | 7 🟢 |
-| **TOTAL FALTANTE** | **55** | **3 🔴** | **14 🟡** | **38 🟢** |
+| **TOTAL FALTANTE** | **49** | **0 🔴** | **13 🟡** | **36 🟢** |
 
 **Mejoras recientes (2025-12-19)**:
 - ✅ String literals en variables locales (`let texto = "HOLA"`)
@@ -438,11 +436,15 @@ PRINT_DEBUG:
 
 ---
 
-**Última actualización**: 2025-12-19 (21:30)
+**Última actualización**: 2025-12-19 (21:18)
 **Autor**: VPy Compiler Team
 **Estado**: En desarrollo activo
 
 **Cambios recientes**:
-- ✅ String literals en locales y DEBUG_PRINT_STR con literals directos
-- ✅ len(), MIN(), MAX() builtins implementados
-- 🎯 Próximo: Arrays estáticos con index access
+- ✅ **SINTAXIS PYTHON PURA**: Eliminados keywords var/let (sintaxis idéntica a Python)
+- ✅ Arrays estáticos con index access `[1,2,3]`, `lista[0]`, `lista[i]=x`
+- ✅ `for-in` sobre arrays: `for item in lista:`
+- ✅ Math builtins: `abs()`, `min()`, `max()`
+- ✅ String literals en locales y DEBUG_PRINT_STR
+- ✅ `len()` builtin para arrays
+- 🎯 **NO quedan features críticas pendientes** - VPy cubre lo esencial para juegos
