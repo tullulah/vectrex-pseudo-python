@@ -15,7 +15,7 @@
   "repository": {
     "comment": { "patterns": [{"name":"comment.line.number-sign.vpy","match":"#.*$"}] },
     "keyword": { "patterns": [
-    {"name":"keyword.control.vpy","match":"\\b(def|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\\b"},
+    {"name":"keyword.control.vpy","match":"\\b(def|struct|return|for|in|range|if|elif|else|while|break|continue|and|or|not|let)\\b"},
     {"name":"storage.modifier.const.vpy","match":"\\bconst\\b"}
     ] },
     "numbers": { "patterns": [
@@ -25,7 +25,7 @@
     ] },
   "meta": { "patterns": [
     {"match":"^\\s*(META)\\s+(TITLE|COPYRIGHT|MUSIC)\\s*(=)\\s*(\"[^\"]*\")","captures":{
-      "1":{"name":"keyword.other.meta.vpy"},
+      "1":{"name":"storage.type.meta.vpy"},
       "2":{"name":"constant.language.meta.key.vpy"},
       "3":{"name":"keyword.operator.assignment.vpy"},
       "4":{"name":"string.quoted.double.vpy"}
@@ -40,6 +40,10 @@
         {"match":"^\\s*(def)\\s+([A-Za-z_][A-Za-z0-9_]*)","captures":{
           "1":{"name":"keyword.control.def.vpy"},
           "2":{"name":"entity.name.function.vpy"}
+        }},
+        {"match":"^\\s*(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*:","captures":{
+          "1":{"name":"keyword.control.struct.vpy"},
+          "2":{"name":"entity.name.type.struct.vpy"}
         }}
     ] },
       "builtin": { "patterns": [
