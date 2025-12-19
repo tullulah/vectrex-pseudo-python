@@ -208,6 +208,8 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **Decorators** | `@decorator` | ❌ | 🟢 BAJA | Meta-programming |
 | **Generators** | `yield` | ❌ | 🟢 BAJA | Estado complejo |
 
+**Nota sobre límite de parámetros**: VPy actualmente soporta **máximo 4 parámetros** por función. Este es un límite arbitrario de diseño (no técnico), fácilmente ampliable si fuera necesario. Python tiene un límite de 255 parámetros (restricción de bytecode). En la práctica, 4 parámetros son suficientes para desarrollo de juegos Vectrex.
+
 ### 7. Clases y OOP
 
 | Feature | Python | VPy | Prioridad | Notas |
