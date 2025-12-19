@@ -49,9 +49,7 @@ fn token_display_name(kind: &TokenKind) -> String {
         TokenKind::Break => "'break'".to_string(),
         TokenKind::Continue => "'continue'".to_string(),
         TokenKind::Return => "'return'".to_string(),
-        TokenKind::Let => "'let'".to_string(),
         TokenKind::Const => "'const'".to_string(),
-        TokenKind::Var => "'var'".to_string(),
         TokenKind::VectorList => "'vectorlist'".to_string(),
         TokenKind::Switch => "'switch'".to_string(),
         TokenKind::Case => "'case'".to_string(),
@@ -130,13 +128,19 @@ impl<'a> Parser<'a> {
                 items.push(Item::Const { name, value });
                 continue;
             }
-            if self.match_kind(&TokenKind::Var) || self.match_ident_case("VAR") {
-                let name = self.identifier()?;
-                self.consume(TokenKind::Equal)?;
-                let value = self.expression()?;
-                self.consume(TokenKind::Newline)?;
-                items.push(Item::GlobalLet { name, value });
-                continue;
+            // Global variable declaration: identifier = expression (Python-style, no keyword)
+            if self.check_identifier() {
+                let checkpoint = self.pos;
+                if let Ok(name) = self.identifier() {
+                    if self.match_kind(&TokenKind::Equal) {
+                        let value = self.expression()?;
+                        self.consume(TokenKind::Newline)?;
+                        items.push(Item::GlobalLet { name, value });
+                        continue;
+                    }
+                }
+                // Not a variable declaration, rewind
+                self.pos = checkpoint;
             }
             if self.match_kind(&TokenKind::Meta) || self.match_ident_case("META") {
                 let key = self.identifier()?;
@@ -371,13 +375,6 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Stmt> {
         let start_source_line = self.peek().line; // Capturar línea del statement
         
-        if self.match_kind(&TokenKind::Let) { 
-            let name=self.identifier()?; 
-            self.consume(TokenKind::Equal)?; 
-            let value=self.expression()?; 
-            self.consume(TokenKind::Newline)?; 
-            return Ok(Stmt::Let { name, value, source_line: start_source_line }); 
-        }
         if self.match_kind(&TokenKind::For) { return self.for_stmt(start_source_line); }
         if self.match_kind(&TokenKind::While) { return self.while_stmt(start_source_line); }
         if self.match_kind(&TokenKind::If) { return self.if_stmt(start_source_line); }
@@ -625,6 +622,7 @@ impl<'a> Parser<'a> {
         } 
     }
     fn check(&self, kind: TokenKind) -> bool { std::mem::discriminant(&self.peek().kind)==std::mem::discriminant(&kind) }
+    fn check_identifier(&self) -> bool { matches!(self.peek().kind, TokenKind::Identifier(_)) }
     fn match_kind(&mut self, kind:&TokenKind) -> bool { if self.check(kind.clone()) { self.pos+=1; true } else { false } }
     fn peek(&self) -> &Token { &self.tokens[self.pos] }
     fn peek_kind(&self) -> Option<&TokenKind> { self.tokens.get(self.pos).map(|t| &t.kind) }

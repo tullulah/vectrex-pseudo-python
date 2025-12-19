@@ -148,6 +148,7 @@ pub struct CodegenOptions {
     pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
+    pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -297,7 +298,7 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
     for it in &module.items {
         if let Item::Function(func) = it {
             let mut locals = HashSet::new();
-            collect_function_locals(&func.body, &mut locals);
+            collect_function_locals(&func.body, &mut locals, &globals);
             function_locals.insert(func.name.clone(), locals);
         }
     }
@@ -314,30 +315,38 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 // Helper para recolectar todas las variables locales declaradas en una función
-fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>) {
+fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>, globals: &HashSet<String>) {
     for stmt in stmts {
         match stmt {
             Stmt::Let { name, .. } => { locals.insert(name.clone()); }
+            // NEW: Primera asignación a nombre no global es declaración implícita
+            Stmt::Assign { target, .. } => {
+                if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                    if !globals.contains(name) {
+                        locals.insert(name.clone());
+                    }
+                }
+            }
             Stmt::For { var, body, .. } => {
                 locals.insert(var.clone());
-                collect_function_locals(body, locals);
+                collect_function_locals(body, locals, globals);
             }
-            Stmt::While { body, .. } => collect_function_locals(body, locals),
+            Stmt::While { body, .. } => collect_function_locals(body, locals, globals),
             Stmt::If { body, elifs, else_body, .. } => {
-                collect_function_locals(body, locals);
+                collect_function_locals(body, locals, globals);
                 for (_, elif_body) in elifs {
-                    collect_function_locals(elif_body, locals);
+                    collect_function_locals(elif_body, locals, globals);
                 }
                 if let Some(else_body) = else_body {
-                    collect_function_locals(else_body, locals);
+                    collect_function_locals(else_body, locals, globals);
                 }
             }
             Stmt::Switch { cases, default, .. } => {
                 for (_, case_body) in cases {
-                    collect_function_locals(case_body, locals);
+                    collect_function_locals(case_body, locals, globals);
                 }
                 if let Some(default_body) = default {
-                    collect_function_locals(default_body, locals);
+                    collect_function_locals(default_body, locals, globals);
                 }
             }
             _ => {}
@@ -396,8 +405,10 @@ fn validate_stmt_collect(
         Stmt::Assign { target, value, .. } => {
             match target {
                 crate::ast::AssignTarget::Ident { name, source_line, col } => {
+                    // NEW: Primera asignación a nombre no declarado es declaración implícita
+                    // (matching behavior de collect_locals en backend)
                     if !is_declared(name, scope) {
-                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", name, name), line: Some(*source_line), col: Some(*col) }));
+                        declare(name, scope); // Declaración implícita
                     }
                 }
                 crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {
@@ -413,7 +424,7 @@ fn validate_stmt_collect(
             match target {
                 crate::ast::AssignTarget::Ident { name, source_line, col } => {
                     if !is_declared(name, scope) {
-                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala con 'let {} = ...' antes de usarla.", name, name), line: Some(*source_line), col: Some(*col) }));
+                        TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::UndeclaredAssign, message: format!("SemanticsError: asignación compuesta a variable no declarada '{}'. Declárala primero con '{} = ...' antes de usar '{} += ...'", name, name, name), line: Some(*source_line), col: Some(*col) }));
                     }
                     reads.insert(name.clone()); // Leemos la variable para x += expr
                 }

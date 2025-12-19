@@ -135,37 +135,55 @@ pub fn collect_stmt_syms(stmt: &Stmt, set: &mut BTreeSet<String>) {
 }
 
 /// Collect local variables from statements
-pub fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
-    fn walk(s: &Stmt, set: &mut BTreeSet<String>) {
+pub fn collect_locals(stmts: &[Stmt], global_names: &[String]) -> Vec<String> {
+    collect_locals_with_params(stmts, global_names, &[])
+}
+
+pub fn collect_locals_with_params(stmts: &[Stmt], global_names: &[String], params: &[String]) -> Vec<String> {
+    fn walk(s: &Stmt, set: &mut BTreeSet<String>, globals: &[String]) {
+        // Explicit local declaration (old `let` keyword, now unused)
         if let Stmt::Let { name, .. } = s {
             set.insert(name.clone());
         }
+        // Assignment to new name (not in globals) is treated as local declaration
+        if let Stmt::Assign { target, .. } = s {
+            if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                // If not a global, treat as local declaration
+                if !globals.contains(name) {
+                    set.insert(name.clone());
+                }
+            }
+        }
         match s {
             Stmt::If { body, elifs, else_body, .. } => {
-                for b in body { walk(b, set); }
+                for b in body { walk(b, set, globals); }
                 for (_, elif_body) in elifs {
-                    for b in elif_body { walk(b, set); }
+                    for b in elif_body { walk(b, set, globals); }
                 }
                 if let Some(else_stmts) = else_body {
-                    for b in else_stmts { walk(b, set); }
+                    for b in else_stmts { walk(b, set, globals); }
                 }
             }
             Stmt::While { body, .. } | Stmt::For { body, .. } | Stmt::ForIn { body, .. } => {
-                for b in body { walk(b, set); }
+                for b in body { walk(b, set, globals); }
             }
             Stmt::Switch { cases, default, .. } => {
                 for (_, case_body) in cases {
-                    for b in case_body { walk(b, set); }
+                    for b in case_body { walk(b, set, globals); }
                 }
                 if let Some(default_body) = default {
-                    for b in default_body { walk(b, set); }
+                    for b in default_body { walk(b, set, globals); }
                 }
             }
             _ => {}
         }
     }
     let mut set = BTreeSet::new();
-    for s in stmts { walk(s, &mut set); }
+    // Add parameters as locals FIRST
+    for p in params {
+        set.insert(p.clone());
+    }
+    for s in stmts { walk(s, &mut set, global_names); }
     set.into_iter().collect()
 }
 

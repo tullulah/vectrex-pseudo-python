@@ -2,6 +2,13 @@
 
 **Objetivo**: Documentar qué funcionalidades del lenguaje Python están implementadas en VPy y cuáles faltan.
 
+**Nota importante**: VPy NO es Python. Es un lenguaje inspirado en Python pero con diferencias significativas:
+- **VPy usa `var`/`let` explícito** para declarar variables (Python no usa keywords)
+- **VPy es statically-typed 16-bit** (Python es dinamically-typed con ints ilimitados)
+- **VPy compila a ASM M6809** (Python es interpretado/JIT)
+
+Este documento compara la **sintaxis y features** para guiar el desarrollo de VPy.
+
 **Nota**: Este documento se enfoca en características del LENGUAJE (sintaxis, control flow, tipos), NO en bibliotecas Vectrex-específicas.
 
 ---
@@ -24,11 +31,14 @@
 
 | Feature | Python | VPy | Notas |
 |---------|--------|-----|-------|
-| **Globales** | `x = 10` (top-level) | ✅ | `var x = 10` |
-| **Locales** | `x = 10` (en función) | ✅ | `let x = 10` |
-| **Constantes** | No nativas | ✅ | `const X = 10` |
-| **Asignación simple** | `x = expr` | ✅ | `x = expr` |
+| **Declaración** | `x = 10` (sin keyword) | ⚠️ | VPy requiere `var`/`let` explícito |
+| **Globales** | `x = 10` (top-level) | ✅ | `var x = 10` (keyword obligatoria) |
+| **Locales** | `x = 10` (en función) | ✅ | `let x = 10` (keyword obligatoria) |
+| **Constantes** | No nativas (convención CAPS) | ✅ | `const X = 10` |
+| **Asignación simple** | `x = expr` | ✅ | `x = expr` (sin redeclarar) |
 | **Asignación compuesta** | `x += 5`, `x -= 3`, etc | ✅ | `x += 5`, `x -= 3`, `x *= 2`, etc |
+
+**⚠️ Diferencia importante**: Python NO usa keywords para declarar variables, VPy SÍ requiere `var`/`let` explícito para hacer el scope claro en ASM.
 
 ### 3. Operadores Aritméticos
 
@@ -224,27 +234,40 @@
 
 1. **🔴 Listas básicas**:
    ```python
-   # Declaración
-   var enemies = [0, 0, 0, 0, 0]  # Array fijo de 5 elementos
-   
-   # Acceso
-   let x = enemies[0]
+   # Python real:
+   enemies = [0, 0, 0, 0, 0]    # Sin keyword
+   x = enemies[0]
    enemies[1] = 10
+   count = len(enemies)
    
-   # Tamaño con len()
-   let count = len(enemies)  # ✅ YA IMPLEMENTADO
+   # VPy (propuesto):
+   var enemies = [0, 0, 0, 0, 0]  # Array fijo con keyword
+   let x = enemies[0]             # Local con keyword
+   enemies[1] = 10
+   let count = len(enemies)  # ✅ len() YA IMPLEMENTADO
    ```
    **Implementación**: Arrays estáticos en RAM, tamaño fijo en compile-time.
 
 2. ~~**🔴 print() para debugging**~~ ✅ **COMPLETADO (2025-12-19)**:
    ```python
+   # Python real:
+   print("Score:", score)
+   
+   # VPy:
    DEBUG_PRINT_STR("Score:")  # Literal directo
    DEBUG_PRINT_STR(texto)     # Variable global/local
+   DEBUG_PRINT(score)         # Numérico con label
    ```
    **Implementación**: DEBUG_PRINT_STR con protocolo C000-C00F.
 
 3. **🔴 for-in sobre listas**:
    ```python
+   # Python real:
+   for enemy in enemies:
+       if enemy > 0:
+           draw_enemy(enemy)
+   
+   # VPy (propuesto - mismo):
    for enemy in enemies:
        if enemy > 0:
            draw_enemy(enemy)
@@ -254,8 +277,13 @@
 
 4. ~~**🟡 abs(), min(), max()**~~ ✅ **COMPLETADO (min/max)**:
    ```python
+   # Python real:
+   distance = abs(player_x - enemy_x)  # abs() pendiente
+   x = max(0, min(player_x, 127))      # clamp
+   
+   # VPy:
    let distance = abs(player_x - enemy_x)  # abs() pendiente
-   let x = max(0, min(player_x, 127))      # ✅ MIN/MAX implementados
+   let x = MAX(0, MIN(player_x, 127))      # ✅ MIN/MAX implementados
    ```
 
 5. **🟡 Operador ternario**:

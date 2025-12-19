@@ -32,6 +32,7 @@ use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::BTreeMap;
 
 static LAST_END_SET: AtomicBool = AtomicBool::new(false);
 
@@ -229,9 +230,23 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
     
     let mut out = String::new();
-    let syms = collect_all_vars(module); // Use ALL vars (including locals) for assembly generation
-    let global_vars = collect_global_vars(module); // NEW: Collect variables with initial values
+    // CORREGIDO: Usar solo variables GLOBALES, no todas (que incluye locales)
+    let global_vars = collect_global_vars(module); // Collect global variables with initial values
+    let syms: Vec<String> = global_vars.iter().map(|(name, _)| name.clone()).collect(); // Only global names
+    let global_names = syms.clone(); // Same list for passing to collectors
     let string_map = collect_string_literals(module);
+    
+    // Recolectar constantes para inline en expresiones - actualizar opts
+    let mut opts_with_consts = opts.clone(); // Clone opts to modify
+    for item in &module.items {
+        if let Item::Const { name, value } = item {
+            if let Expr::Number(n) = value {
+                opts_with_consts.const_values.insert(name.to_uppercase(), *n);
+            }
+        }
+    }
+    let opts = &opts_with_consts; // Use the modified opts
+    
         let rt_usage = analyze_runtime_usage(module);
     
     // Locate required 'main' and 'loop' functions
@@ -498,7 +513,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // This gives user control over when PSG updates happen (important for Print_Str_d compatibility)
                     
                     // Collect locals and allocate stack frame (same as emit_function)
-                    let locals = collect_locals(&f.body);
+                    let locals = collect_locals(&f.body, &global_names);
                     let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
                     if frame_size > 0 {
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
@@ -518,7 +533,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str("    RTS\n\n");
                 } else {
                     // Emit other functions normally
-                    emit_function(f, &mut out, &string_map, opts, &mut tracker);
+                    emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
                 }
             }
                 Item::VectorList { name, entries } => {

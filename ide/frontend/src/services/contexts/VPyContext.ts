@@ -87,8 +87,8 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "y", type: "number", description: "Y coordinate (-127 to 127, center=0)", required: true }
     ],
     examples: [
-      "var player_x = 0",
-      "var player_y = -80",
+      "player_x = 0  # Global variable",
+      "player_y = -80  # Global variable",
       "def loop():",
       "    SET_INTENSITY(127)",
       "    DRAW_VECTOR(\"player\", player_x, player_y)"
@@ -119,7 +119,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let x = J1_X()  # Returns -1 (left), 0 (center), +1 (right)",
+      "    x = J1_X()  # Returns -1 (left), 0 (center), +1 (right)",
       "    paddle_x = paddle_x + x * 4  # Multiply for speed (4 = medium, 8 = fast)"
     ],
     category: "input",
@@ -133,7 +133,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let x = J1_X_DIGITAL()  # Returns -1 (left), 0 (center), +1 (right)",
+      "    x = J1_X_DIGITAL()  # Returns -1 (left), 0 (center), +1 (right)",
       "    paddle_x = paddle_x + x * 4  # Multiply for speed"
     ],
     category: "input",
@@ -147,7 +147,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let x = J1_X_ANALOG()  # Returns -127 (full left) to +127 (full right)",
+      "    x = J1_X_ANALOG()  # Returns -127 (full left) to +127 (full right)",
       "    paddle_x = paddle_x + x / 32  # Divide for smooth proportional control"
     ],
     category: "input",
@@ -161,7 +161,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let y = J1_Y()  # Returns -1 (down), 0 (center), +1 (up)",
+      "    y = J1_Y()  # Returns -1 (down), 0 (center), +1 (up)",
       "    ship_y = ship_y + y * 4  # Multiply for speed"
     ],
     category: "input",
@@ -175,7 +175,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let y = J1_Y_DIGITAL()  # Returns -1 (down), 0 (center), +1 (up)",
+      "    y = J1_Y_DIGITAL()  # Returns -1 (down), 0 (center), +1 (up)",
       "    ship_y = ship_y + y * 4"
     ],
     category: "input",
@@ -189,7 +189,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let y = J1_Y_ANALOG()  # Returns -127 (full down) to +127 (full up)",
+      "    y = J1_Y_ANALOG()  # Returns -127 (full down) to +127 (full up)",
       "    ship_y = ship_y + y / 32  # Divide for smooth proportional control"
     ],
     category: "input",
@@ -260,7 +260,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let x = J2_X()  # Returns -1 (left), 0 (center), or 1 (right)"
+      "    x = J2_X()  # Returns -1 (left), 0 (center), or 1 (right)"
     ],
     category: "input",
     vectrexAddress: "$F1F8 (Joy_Digital)",
@@ -273,7 +273,7 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     parameters: [],
     examples: [
       "def loop():",
-      "    let y = J2_Y()  # Returns -1 (down), 0 (center), or 1 (up)"
+      "    y = J2_Y()  # Returns -1 (down), 0 (center), or 1 (up)"
     ],
     category: "input",
     vectrexAddress: "$F1F8 (Joy_Digital)",
@@ -345,8 +345,8 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "array", type: "array", description: "Array to get length of", required: true }
     ],
     examples: [
-      "var enemies = [0, 0, 0, 0, 0]",
-      "let count = len(enemies)  # Returns 5",
+      "enemies = [0, 0, 0, 0, 0]  # Global array",
+      "count = len(enemies)  # Returns 5",
       "",
       "for i = 0 to len(enemies):",
       "    print(enemies[i])"
@@ -363,12 +363,12 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "label", type: "string", description: "Optional label text", required: false }
     ],
     examples: [
-      "var score = 100",
+      "score = 100  # Global variable",
       "print(score)              # Prints: 100",
       "print(\"Score:\", score)   # Prints: Score: 100",
       "",
       "def loop():",
-      "    let x = player_x + 10",
+      "    x = player_x + 10  # Local variable",
       "    print(\"Player X:\", x)"
     ],
     category: "builtin",
@@ -382,8 +382,8 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "x", type: "int", description: "Number to get absolute value of", required: true }
     ],
     examples: [
-      "let distance = abs(player_x - enemy_x)",
-      "let speed = abs(velocity)",
+      "distance = abs(player_x - enemy_x)  # Local variable",
+      "speed = abs(velocity)",
       "",
       "if abs(ball_x) > 120:",
       "    # Ball hit edge"
@@ -400,8 +400,8 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "b", type: "int", description: "Second value", required: true }
     ],
     examples: [
-      "let x = min(player_x, 100)  # Clamp to maximum 100",
-      "let lowest_score = min(score1, score2)",
+      "x = min(player_x, 100)  # Clamp to maximum 100",
+      "lowest_score = min(score1, score2)",
       "",
       "# Clamp value to range",
       "player_x = max(-100, min(player_x, 100))"
@@ -418,11 +418,11 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       { name: "b", type: "int", description: "Second value", required: true }
     ],
     examples: [
-      "let x = max(player_x, -100)  # Clamp to minimum -100",
-      "let highest_score = max(score1, score2)",
+      "x = max(player_x, -100)  # Clamp to minimum -100",
+      "highest_score = max(score1, score2)",
       "",
       "# Ensure non-negative",
-      "let health = max(0, player_health)"
+      "health = max(0, player_health)"
     ],
     category: "builtin",
     notes: "Often used with min() for clamping values to ranges."

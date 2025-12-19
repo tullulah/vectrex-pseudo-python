@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "source": "test_no_keywords.vpy",
+  "asm": "test_no_keywords.asm",
+  "binary": "test_no_keywords.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "START": "0x0220",
+    "MAIN": "0x0245",
+    "LOOP_BODY": "0x0252"
+  },
+  "lineMap": {
+    "13": "0x025C",
+    "8": "0x0234",
+    "15": "0x026D",
+    "11": "0x0254"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x0245",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x0252",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "11": "VECTREX_WAIT_RECAL"
+  },
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

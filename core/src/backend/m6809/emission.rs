@@ -1,13 +1,13 @@
 // Emission - High-level code emission functions for M6809 backend
 use crate::ast::{Function, Stmt};
 use crate::codegen::CodegenOptions;
-use super::{LoopCtx, FuncCtx, emit_stmt, collect_locals, RuntimeUsage, LineTracker, DebugInfo};
+use super::{LoopCtx, FuncCtx, emit_stmt, collect_locals, collect_locals_with_params, RuntimeUsage, LineTracker, DebugInfo};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 // Tracking for last END position
 static LAST_END_SET: AtomicBool = AtomicBool::new(false);
 
-pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker) {
+pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, tracker: &mut LineTracker, global_names: &[String]) {
     // Reset end position tracking for each function
     LAST_END_SET.store(false, Ordering::Relaxed);
     
@@ -20,11 +20,15 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
     
     out.push_str(&format!("{}: ; function\n", label_name));
     out.push_str(&format!("; --- function {} ---\n", f.name));
-    let locals = collect_locals(&f.body);
+    let locals = collect_locals_with_params(&f.body, global_names, &f.params);
     let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
     if frame_size > 0 { out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size)); }
+    // Copy parameters from VAR_ARG to stack locals (parameters are first N locals)
     for (i, p) in f.params.iter().enumerate().take(4) {
-        out.push_str(&format!("    LDD VAR_ARG{}\n    STD VAR_{}\n", i, p.to_uppercase()));
+        if let Some(idx) = locals.iter().position(|l| l.eq_ignore_ascii_case(p)) {
+            let offset = idx * 2;
+            out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, p));
+        }
     }
     let fctx = FuncCtx { locals: locals.clone(), frame_size };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker, 0); }

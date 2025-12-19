@@ -29,8 +29,19 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             }
         }
         Expr::Ident(name) => {
-            if let Some(off) = fctx.offset_of(&name.name) { out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); }
-            else { out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", name.name.to_uppercase())); }
+            let upper_name = name.name.to_uppercase();
+            // Check if it's a local variable first
+            if let Some(off) = fctx.offset_of(&name.name) { 
+                out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); 
+            } 
+            // Check if it's a compile-time constant
+            else if let Some(value) = opts.const_values.get(&upper_name) {
+                out.push_str(&format!("    LDD #{}\n    STD RESULT\n", value));
+            }
+            // Otherwise it's a global variable
+            else { 
+                out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", upper_name)); 
+            }
         }
         Expr::Call(ci) => {
             if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.source_line)) { return; }

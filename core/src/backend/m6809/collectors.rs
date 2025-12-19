@@ -25,10 +25,22 @@ pub fn collect_symbols(module: &Module) -> Vec<String> {
     use std::collections::BTreeSet;
     let mut globals = BTreeSet::new();
     let mut locals = BTreeSet::new();
+    
+    // First pass: collect global names
+    let global_names: Vec<String> = module.items.iter()
+        .filter_map(|item| {
+            if let Item::GlobalLet { name, .. } = item {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    
     for item in &module.items {
         if let Item::Function(f) = item {
             for stmt in &f.body { collect_stmt_syms(stmt, &mut globals); }
-            for l in collect_locals(&f.body) { locals.insert(l); }
+            for l in collect_locals(&f.body, &global_names) { locals.insert(l); }
         } else if let Item::GlobalLet { name, .. } = item { 
             globals.insert(name.clone()); 
         } else if let Item::ExprStatement(expr) = item {
