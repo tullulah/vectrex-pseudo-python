@@ -81,6 +81,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     }
                 }
                 crate::ast::AssignTarget::Index { .. } => panic!("Array assignment not implemented for Cortex-M backend"),
+                crate::ast::AssignTarget::FieldAccess { .. } => panic!("Field access assignment not implemented for Cortex-M backend (Phase 3)"),
             }
         },
         Stmt::Let { name, value, .. } => {
@@ -349,6 +350,8 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             emit_expr(inner, out, fctx, string_map);
             out.push_str("    CMP r0,#0\n    MOVEQ r0,#1\n    MOVNE r0,#0\n");
         }
+        Expr::StructInit { .. } => panic!("Struct initialization not implemented for Cortex-M backend (Phase 3)"),
+        Expr::FieldAccess { .. } => panic!("Field access not implemented for Cortex-M backend (Phase 3)"),
     }
 }
 

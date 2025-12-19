@@ -35,6 +35,8 @@ function ensureLanguage(monaco: Monaco) {
         root: [
           // Comments
           [/#[^$]*/, 'comment'],
+          // Struct declaration: struct <name>
+          [/(struct)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','type.declaration']],
           // Function declaration: def <name>
           [/(def)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','function.declaration']],
           // Const declaration: const <NAME>
@@ -43,8 +45,8 @@ function ensureLanguage(monaco: Monaco) {
           [/(var)(\s+)([A-Za-z_][A-Za-z0-9_]*)/, ['keyword','white','variable']],
           // Python keywords (lowercase)
           [/\b(if|else|elif|while|for|return|break|continue|pass|try|except|finally|with|as|import|from|global|nonlocal|class|lambda|yield|assert|del|in|is|not|and|or)\b/, 'keyword'],
-          // VPy keywords (uppercase)
-          [/\b(META|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
+          // VPy keywords (uppercase) - now including META
+          [/\b(META|struct|RETURN|IF|ELSE|WHILE|FOR)\b/i, 'keyword'],
           // Built-in drawing / std library like calls
           [/\b(DRAW_(POLYGON|CIRCLE_SEG|CIRCLE|ARC|SPIRAL)|PRINT_TEXT)\b/, 'function'],
           // Intensity / constant style (I_FOO) & ALL_CAPS identifiers
@@ -85,6 +87,8 @@ function ensureLanguage(monaco: Monaco) {
       { token: 'comment', foreground: '6A9955' },
       { token: 'keyword', foreground: 'C586C0' },
       { token: 'function', foreground: 'DCDCAA' },
+      { token: 'type', foreground: '4EC9B0' },
+      { token: 'type.declaration', foreground: '4EC9B0' },
       { token: 'constant', foreground: '4FC1FF' },
       { token: 'number', foreground: 'B5CEA8' },
       { token: 'string', foreground: 'CE9178' },

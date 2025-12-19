@@ -236,6 +236,10 @@ pub fn unify_modules(
                 Item::Export(_) => {
                     // Export declarations are metadata, not included in output
                 }
+                Item::StructDef(_) => {
+                    // Phase 3 - struct definitions included as-is for now
+                    unified_items.push(item.clone());
+                }
             }
         }
     }
@@ -472,6 +476,22 @@ fn rewrite_expr(
         // Literals pass through unchanged
         Expr::Number(n) => Expr::Number(*n),
         Expr::StringLit(s) => Expr::StringLit(s.clone()),
+        Expr::StructInit { struct_name, source_line, col } => {
+            // Phase 3 - struct init passes through for now
+            Expr::StructInit { 
+                struct_name: struct_name.clone(), 
+                source_line: *source_line, 
+                col: *col 
+            }
+        }
+        Expr::FieldAccess { target, field, source_line, col } => {
+            Expr::FieldAccess {
+                target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
+                field: field.clone(),
+                source_line: *source_line,
+                col: *col,
+            }
+        }
     }
 }
 

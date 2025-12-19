@@ -2,6 +2,7 @@
 use crate::ast::{Function, Stmt};
 use crate::codegen::CodegenOptions;
 use super::{LoopCtx, FuncCtx, emit_stmt, collect_locals, collect_locals_with_params, RuntimeUsage, LineTracker, DebugInfo};
+use super::analyze_var_types; // Import the new function
 use std::sync::atomic::{AtomicBool, Ordering};
 
 // Tracking for last END position
@@ -21,16 +22,35 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
     out.push_str(&format!("{}: ; function\n", label_name));
     out.push_str(&format!("; --- function {} ---\n", f.name));
     let locals = collect_locals_with_params(&f.body, global_names, &f.params);
-    let frame_size = (locals.len() as i32) * 2; // 2 bytes per 16-bit local
+    
+    // Analyze variable types to determine struct instances and their sizes
+    let var_info = analyze_var_types(&f.body, &locals, &opts.structs);
+    
+    // Calculate frame size based on actual variable sizes
+    let mut frame_size = 0;
+    for var_name in &locals {
+        let size = var_info.get(var_name)
+            .map(|(_, s)| *s as i32)
+            .unwrap_or(2); // Default to 2 bytes for simple variables
+        frame_size += size;
+    }
+    
     if frame_size > 0 { out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size)); }
     // Copy parameters from VAR_ARG to stack locals (parameters are first N locals)
     for (i, p) in f.params.iter().enumerate().take(4) {
         if let Some(idx) = locals.iter().position(|l| l.eq_ignore_ascii_case(p)) {
-            let offset = idx * 2;
+            // Calculate offset for this parameter
+            let mut offset = 0;
+            for j in 0..idx {
+                let size = var_info.get(&locals[j])
+                    .map(|(_, s)| *s as i32)
+                    .unwrap_or(2);
+                offset += size;
+            }
             out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, p));
         }
     }
-    let fctx = FuncCtx { locals: locals.clone(), frame_size };
+    let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker, 0); }
     if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }

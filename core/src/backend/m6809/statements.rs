@@ -63,6 +63,54 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     // 5. Store value at computed address
                     out.push_str("    LDX TMPPTR\n    LDD RESULT\n    STD ,X\n");
                 }
+                crate::ast::AssignTarget::FieldAccess { target, field, .. } => {
+                    // Phase 3 - struct field assignment codegen
+                    // Similar to FieldAccess expression, but stores instead of loads
+                    
+                    // Simple case: target is Ident (struct variable)
+                    if let Expr::Ident(name) = target.as_ref() {
+                        let var_name = &name.name;
+                        
+                        // Check if it's a local variable
+                        if let Some(base_offset) = fctx.offset_of(var_name) {
+                            // Get struct type from variable info
+                            let struct_type = fctx.var_type(var_name);
+                            
+                            if let Some(type_name) = struct_type {
+                                if !type_name.is_empty() {
+                                    // This is a struct variable - find field in its layout
+                                    if let Some(layout) = opts.structs.get(type_name) {
+                                        if let Some(field_layout) = layout.get_field(field) {
+                                            let field_offset_bytes = field_layout.offset as i32; // offset is already in bytes
+                                            let total_offset = base_offset + field_offset_bytes;
+                                            
+                                            // 1. Evaluate value to assign
+                                            emit_expr(value, out, fctx, string_map, opts);
+                                            
+                                            // 2. Store value at field location
+                                            out.push_str(&format!("    ; Assign {}.{} (struct {} offset {})\n", var_name, field, type_name, total_offset));
+                                            out.push_str(&format!("    LDD RESULT\n    STD {},S\n", total_offset));
+                                        } else {
+                                            eprintln!("WARNING: Field '{}' not found in struct '{}'", field, type_name);
+                                        }
+                                    } else {
+                                        eprintln!("WARNING: Struct type '{}' not found", type_name);
+                                    }
+                                } else {
+                                    eprintln!("WARNING: Variable '{}' is not a struct", var_name);
+                                }
+                            } else {
+                                eprintln!("WARNING: Variable '{}' type unknown", var_name);
+                            }
+                        } else {
+                            // Global variable or not found
+                            eprintln!("WARNING: FieldAccess assignment to global struct '{}' not yet supported", var_name);
+                        }
+                    } else {
+                        // Complex expression - not yet supported
+                        eprintln!("WARNING: FieldAccess assignment on complex expression not yet supported");
+                    }
+                }
             }
         }
         Stmt::Let { name, value, .. } => {

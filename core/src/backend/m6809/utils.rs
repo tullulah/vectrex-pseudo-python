@@ -54,6 +54,8 @@ pub fn collect_expr_syms(expr: &Expr, set: &mut BTreeSet<String>) {
             collect_expr_syms(target, set);
             collect_expr_syms(index, set);
         }
+        Expr::StructInit { .. } => {} // Phase 3 - no identifiers in struct init
+        Expr::FieldAccess { target, .. } => collect_expr_syms(target, set),
     }
 }
 
@@ -71,6 +73,10 @@ pub fn collect_stmt_syms(stmt: &Stmt, set: &mut BTreeSet<String>) {
                     }
                     collect_expr_syms(array_expr, set);
                     collect_expr_syms(index, set);
+                }
+                crate::ast::AssignTarget::FieldAccess { target, .. } => {
+                    // Phase 3 - collect symbols from target expression
+                    collect_expr_syms(target, set);
                 }
             }
             collect_expr_syms(value, set);
@@ -187,6 +193,75 @@ pub fn collect_locals_with_params(stmts: &[Stmt], global_names: &[String], param
     set.into_iter().collect()
 }
 
+/// Analyze assignments to determine variable types (for struct instances)
+/// Returns HashMap<var_name, (struct_type, size_in_bytes)>
+pub fn analyze_var_types(
+    stmts: &[Stmt], 
+    locals: &[String],
+    struct_registry: &std::collections::HashMap<String, crate::struct_layout::StructLayout>
+) -> std::collections::HashMap<String, (String, usize)> {
+    use crate::ast::Expr;
+    
+    fn walk_stmt(
+        s: &Stmt,
+        var_info: &mut std::collections::HashMap<String, (String, usize)>,
+        locals: &[String],
+        struct_registry: &std::collections::HashMap<String, crate::struct_layout::StructLayout>
+    ) {
+        match s {
+            Stmt::Assign { target, value, .. } => {
+                if let crate::ast::AssignTarget::Ident { name, .. } = target {
+                    // Check if this is a local variable and if value is StructInit
+                    if locals.contains(name) {
+                        if let Expr::StructInit { struct_name, .. } = value {
+                            // This variable is a struct instance
+                            if let Some(layout) = struct_registry.get(struct_name) {
+                                var_info.insert(name.clone(), (struct_name.clone(), layout.total_size));
+                            }
+                        }
+                    }
+                }
+            }
+            Stmt::Let { name, value, .. } => {
+                if locals.contains(name) {
+                    if let Expr::StructInit { struct_name, .. } = value {
+                        if let Some(layout) = struct_registry.get(struct_name) {
+                            var_info.insert(name.clone(), (struct_name.clone(), layout.total_size));
+                        }
+                    }
+                }
+            }
+            Stmt::If { body, elifs, else_body, .. } => {
+                for b in body { walk_stmt(b, var_info, locals, struct_registry); }
+                for (_, elif_body) in elifs {
+                    for b in elif_body { walk_stmt(b, var_info, locals, struct_registry); }
+                }
+                if let Some(else_stmts) = else_body {
+                    for b in else_stmts { walk_stmt(b, var_info, locals, struct_registry); }
+                }
+            }
+            Stmt::While { body, .. } | Stmt::For { body, .. } | Stmt::ForIn { body, .. } => {
+                for b in body { walk_stmt(b, var_info, locals, struct_registry); }
+            }
+            Stmt::Switch { cases, default, .. } => {
+                for (_, case_body) in cases {
+                    for b in case_body { walk_stmt(b, var_info, locals, struct_registry); }
+                }
+                if let Some(default_body) = default {
+                    for b in default_body { walk_stmt(b, var_info, locals, struct_registry); }
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    let mut var_info = std::collections::HashMap::new();
+    for s in stmts {
+        walk_stmt(s, &mut var_info, locals, struct_registry);
+    }
+    var_info
+}
+
 /// Loop context for break/continue handling
 #[derive(Default, Clone)]
 pub struct LoopCtx { 
@@ -197,12 +272,32 @@ pub struct LoopCtx {
 /// Function context with local variables
 #[derive(Clone)]
 pub struct FuncCtx { 
-    pub locals: Vec<String>, 
-    pub frame_size: i32 
+    pub locals: Vec<String>,
+    pub frame_size: i32,
+    // Maps variable name to (type_name, size_in_bytes)
+    // For simple variables: ("", 2)
+    // For struct instances: ("Point", 4) if Point has 2 fields
+    pub var_info: std::collections::HashMap<String, (String, usize)>,
 }
 
 impl FuncCtx {
     pub fn offset_of(&self, name: &str) -> Option<i32> {
-        self.locals.iter().position(|n| n == name).map(|i| (i as i32)*2)
+        // Calculate offset based on actual sizes of preceding variables
+        let mut offset = 0;
+        for var_name in &self.locals {
+            if var_name == name {
+                return Some(offset);
+            }
+            // Get size of this variable
+            let size = self.var_info.get(var_name)
+                .map(|(_, s)| *s as i32)
+                .unwrap_or(2); // Default to 2 bytes for simple variables
+            offset += size;
+        }
+        None
+    }
+    
+    pub fn var_type(&self, name: &str) -> Option<&str> {
+        self.var_info.get(name).map(|(t, _)| t.as_str())
     }
 }

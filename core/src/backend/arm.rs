@@ -22,6 +22,7 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
             Item::VectorList { name, .. } => { out.push_str(&format!("; vectorlist {} ignored on ARM backend (NYI)\n", name)); },
             Item::ExprStatement(_) => { out.push_str("; ExprStatement ignored on ARM backend (TODO: implement top-level execution)\n"); },
             Item::Export(_) => { /* Export declarations are metadata, no code needed */ },
+            Item::StructDef(_) => { out.push_str("; struct definition ignored on ARM backend (Phase 3)\n"); },
         }
     }
     out.push_str(";***************************************************************************\n; RUNTIME SECTION\n;***************************************************************************\n; Runtime helpers\n");
@@ -86,6 +87,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
                     }
                 }
                 crate::ast::AssignTarget::Index { .. } => panic!("Array assignment not implemented for ARM backend"),
+                crate::ast::AssignTarget::FieldAccess { .. } => panic!("Field access assignment not implemented for ARM backend (Phase 3)"),
             }
         },
         Stmt::Let { name, value, .. } => {
@@ -354,6 +356,8 @@ fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::co
             emit_expr(inner, out, fctx, string_map);
             out.push_str("    CMP r0,#0\n    MOVEQ r0,#1\n    MOVNE r0,#0\n");
         }
+        Expr::StructInit { .. } => panic!("Struct initialization not implemented for ARM backend (Phase 3)"),
+        Expr::FieldAccess { .. } => panic!("Field access not implemented for ARM backend (Phase 3)"),
     }
 }
 
@@ -530,6 +534,8 @@ fn collect_expr_syms(expr: &Expr, set: &mut std::collections::BTreeSet<String>) 
             collect_expr_syms(index, set);
         }
         Expr::Number(_) => {}
+        Expr::StructInit { .. } => {} // Phase 3
+        Expr::FieldAccess { target, .. } => collect_expr_syms(target, set),
     }
 }
 

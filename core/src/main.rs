@@ -9,6 +9,7 @@ mod unifier;  // AST unification for multi-file projects
 mod library;  // Library system
 mod vecres;   // Vector resources (.vec)
 mod musres;   // Music resources (.vmus)
+mod struct_layout; // Struct layout computation
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -503,13 +504,14 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 force_extended_jsr: false,
                 _bank_size: 0,
                 per_frame_silence: false, // default off for minimal output
-                assets: vec![], // TODO: Implement asset discovery
                 debug_init_draw: false,   // default off for minimal output
                 blink_intensity: false,
                 exclude_ram_org: true,
                 fast_wait: false,
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
+                assets: vec![], // TODO: Implement asset discovery
                 const_values: std::collections::BTreeMap::new(), // Will be populated by backend
+                structs: std::collections::HashMap::new(), // Empty registry for non-struct code
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -543,6 +545,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             assets,
             const_values: std::collections::BTreeMap::new(), // Will be populated by backend
+            structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
         });
         
         // Phase 4 validation: Check if assembly was actually generated

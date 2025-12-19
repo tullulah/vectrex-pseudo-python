@@ -3,6 +3,8 @@ use crate::target::{info, CpuArch, Target};
 use std::collections::{HashSet, HashMap};
 use std::cell::RefCell;
 
+use crate::struct_layout::{StructRegistry, build_struct_registry, StructLayout};
+
 // ---------------- Diagnostics (S8) ----------------
 // Canal estructurado para warnings (y pronto errores S9).
 // S8: warnings estructurados.
@@ -17,6 +19,8 @@ pub enum DiagnosticCode {
     UndeclaredVar,
     UndeclaredAssign,
     ArityMismatch,
+    UndefinedStruct,     // Phase 2: Struct not found
+    StructRegistryError, // Phase 2: Error building struct registry
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,8 +114,8 @@ fn expected_builtin_arity(name: &str) -> Option<usize> {
 
 // Re-export backend emitters under stable names.
 mod backends_ref {
-    pub use crate::backend::arm::emit as emit_arm;
-    pub use crate::backend::cortexm::emit as emit_cortexm;
+    // pub use crate::backend::arm::emit as emit_arm;  // Desactivado
+    // pub use crate::backend::cortexm::emit as emit_cortexm;  // Desactivado
     pub use crate::backend::m6809::emit as emit_6809;
     pub use crate::backend::m6809::emit_with_debug as emit_6809_with_debug;
 }
@@ -149,6 +153,7 @@ pub struct CodegenOptions {
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
+    pub structs: StructRegistry, // Struct layout information (Phase 2)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -182,9 +187,24 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
 {
     use crate::target::CpuArch;
     
+    // Phase 2 Step 1: Build struct registry from module
+    let struct_registry = match build_struct_registry(&module.items) {
+        Ok(registry) => registry,
+        Err(e) => {
+            let mut diagnostics = vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                code: DiagnosticCode::StructRegistryError,
+                message: e,
+                line: None,
+                col: None,
+            }];
+            return (String::new(), None, diagnostics);
+        }
+    };
+    
     // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    validate_semantics(module, &mut diagnostics);
+    validate_semantics_with_structs(module, &struct_registry, &mut diagnostics);
     let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
     if has_errors {
         return (String::new(), None, diagnostics);
@@ -195,7 +215,10 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
     let ti = info(target);
     
     // If source defines CONST TITLE = "..." let it override CLI title.
-    let mut effective = CodegenOptions { ..opts.clone() };
+    let mut effective = CodegenOptions { 
+        structs: struct_registry, // Add struct registry to options
+        ..opts.clone() 
+    };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
     
     // Generate ASM and debug info
@@ -204,8 +227,8 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
             let (asm, dbg) = backends_ref::emit_6809_with_debug(&optimized, target, &ti, &effective);
             (asm, Some(dbg))
         },
-        CpuArch::Arm => (backends_ref::emit_arm(&optimized, target, &ti, opts), None),
-        CpuArch::CortexM => (backends_ref::emit_cortexm(&optimized, target, &ti, opts), None),
+        CpuArch::Arm => panic!("ARM backend desactivado temporalmente"),
+        CpuArch::CortexM => panic!("Cortex-M backend desactivado temporalmente"),
     };
     
     (asm, debug_info, diagnostics)
@@ -230,8 +253,8 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }
     let asm = match ti.arch {
         CpuArch::M6809 => backends_ref::emit_6809(&optimized, target, &ti, &effective),
-        CpuArch::Arm => backends_ref::emit_arm(&optimized, target, &ti, opts),
-        CpuArch::CortexM => backends_ref::emit_cortexm(&optimized, target, &ti, opts),
+        CpuArch::Arm => panic!("ARM backend desactivado temporalmente"),
+        CpuArch::CortexM => panic!("Cortex-M backend desactivado temporalmente"),
     };
     (asm, diagnostics)
 }
@@ -282,6 +305,7 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
             Item::Function(_) => {},
             Item::ExprStatement(_) => {}, // Expression statements no definen globals
             Item::Export(_) => {}, // Export declarations don't define globals
+            Item::StructDef(_) => {}, // Struct definitions don't define globals
         }
     }
     
@@ -354,6 +378,164 @@ fn collect_function_locals(stmts: &[Stmt], locals: &mut HashSet<String>, globals
     }
 }
 
+// validate_semantics_with_structs: Extended semantic validation with struct support (Phase 2)
+pub fn validate_semantics_with_structs(
+    module: &Module, 
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    // First, do standard validation
+    validate_semantics(module, diagnostics);
+    
+    // Phase 2: Additional struct-specific validation
+    // This is already done during struct_registry building, but we validate usage here
+    
+    // Validate struct initialization and field access in all functions
+    for item in &module.items {
+        if let Item::Function(func) = item {
+            validate_function_structs(func, struct_registry, diagnostics);
+        }
+    }
+}
+
+fn validate_function_structs(
+    func: &Function,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    for stmt in &func.body {
+        validate_stmt_structs(stmt, struct_registry, diagnostics);
+    }
+}
+
+fn validate_stmt_structs(
+    stmt: &Stmt,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    match stmt {
+        Stmt::Assign { target, value, .. } => {
+            // Validate field access in assignment target
+            if let crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } = target {
+                validate_field_access_assignment(obj_expr, field, struct_registry, diagnostics);
+            }
+            validate_expr_structs(value, struct_registry, diagnostics);
+        }
+        Stmt::Expr(expr, _) => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+        }
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            validate_expr_structs(cond, struct_registry, diagnostics);
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+            for (elif_cond, elif_body) in elifs {
+                validate_expr_structs(elif_cond, struct_registry, diagnostics);
+                for s in elif_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+            if let Some(eb) = else_body {
+                for s in eb {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+        }
+        Stmt::While { cond, body, .. } => {
+            validate_expr_structs(cond, struct_registry, diagnostics);
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+        }
+        Stmt::For { body, .. } => {
+            for s in body {
+                validate_stmt_structs(s, struct_registry, diagnostics);
+            }
+        }
+        Stmt::Return(Some(expr), _) => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+        }
+        Stmt::Switch { expr, cases, default, .. } => {
+            validate_expr_structs(expr, struct_registry, diagnostics);
+            for (case_expr, case_body) in cases {
+                validate_expr_structs(case_expr, struct_registry, diagnostics);
+                for s in case_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+            if let Some(def_body) = default {
+                for s in def_body {
+                    validate_stmt_structs(s, struct_registry, diagnostics);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn validate_expr_structs(
+    expr: &Expr,
+    struct_registry: &StructRegistry,
+    diagnostics: &mut Vec<Diagnostic>
+) {
+    match expr {
+        Expr::StructInit { struct_name, source_line, col } => {
+            // First check if this is actually a builtin function call, not a struct init
+            let is_builtin = BUILTIN_ARITIES.iter().any(|(name, _)| *name == struct_name.as_str());
+            
+            if !is_builtin && !struct_registry.contains_key(struct_name) {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    code: DiagnosticCode::UndefinedStruct,
+                    message: format!("Undefined struct '{}'", struct_name),
+                    line: Some(*source_line),
+                    col: Some(*col),
+                });
+            }
+        }
+        Expr::FieldAccess { target, field, source_line, col } => {
+            // For now, we can't easily determine the type of target expression
+            // This will be improved in Phase 3 with type inference
+            // For simple cases like `obj.field`, we could track variable types
+            // TODO Phase 3: Add type tracking to validate field exists on the struct type
+            validate_expr_structs(target, struct_registry, diagnostics);
+        }
+        Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+            validate_expr_structs(left, struct_registry, diagnostics);
+            validate_expr_structs(right, struct_registry, diagnostics);
+        }
+        Expr::Not(inner) | Expr::BitNot(inner) => {
+            validate_expr_structs(inner, struct_registry, diagnostics);
+        }
+        Expr::Call(call_info) => {
+            for arg in &call_info.args {
+                validate_expr_structs(arg, struct_registry, diagnostics);
+            }
+        }
+        Expr::List(elements) => {
+            for elem in elements {
+                validate_expr_structs(elem, struct_registry, diagnostics);
+            }
+        }
+        Expr::Index { target, index } => {
+            validate_expr_structs(target, struct_registry, diagnostics);
+            validate_expr_structs(index, struct_registry, diagnostics);
+        }
+        _ => {}
+    }
+}
+
+fn validate_field_access_assignment(
+    _obj_expr: &Expr,
+    _field: &str,
+    _struct_registry: &StructRegistry,
+    _diagnostics: &mut Vec<Diagnostic>
+) {
+    // Phase 2: Basic validation - just ensure struct registry is available
+    // Phase 3 will add full type tracking to validate field exists on specific struct type
+    // For now, we'll validate at runtime that the field access is correct
+}
+
 fn validate_function(f: &Function, globals: &HashSet<String>, function_locals: &HashMap<String, HashSet<String>>, defined_functions: &HashSet<String>, diagnostics: &mut Vec<Diagnostic>) {
     // ámbito inicial: globals + params
     let mut scope: Vec<HashSet<String>> = Vec::new();
@@ -416,6 +598,11 @@ fn validate_stmt_collect(
                     validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
                     validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
                 }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } => {
+                    // For field assignment, validate the target object expression
+                    validate_expr_collect(obj_expr, scope, reads, current_func, function_locals, defined_functions);
+                    // Field names are not variables, so no declaration needed
+                }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
         }
@@ -432,6 +619,10 @@ fn validate_stmt_collect(
                     // For indexed compound assignment, validate both target and index expressions
                     validate_expr_collect(array_expr, scope, reads, current_func, function_locals, defined_functions);
                     validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
+                }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, .. } => {
+                    // For field compound assignment, validate the target object
+                    validate_expr_collect(obj_expr, scope, reads, current_func, function_locals, defined_functions);
                 }
             }
             validate_expr_collect(value, scope, reads, current_func, function_locals, defined_functions);
@@ -584,6 +775,15 @@ fn validate_expr_collect(
             validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
             validate_expr_collect(index, scope, reads, current_func, function_locals, defined_functions);
         }
+        Expr::StructInit { .. } => {
+            // Struct initialization - validation happens in semantic analysis phase
+            // TODO: Verify struct exists in Phase 2
+        }
+        Expr::FieldAccess { target, .. } => {
+            // Field access - validate the target object
+            validate_expr_collect(target, scope, reads, current_func, function_locals, defined_functions);
+            // Field names are not variables, so no additional validation needed here
+        }
         Expr::Number(_) | Expr::StringLit(_) => {}
     }
 }
@@ -596,6 +796,7 @@ fn opt_item(it: &Item) -> Item {
         Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
         Item::ExprStatement(expr) => Item::ExprStatement(opt_expr(expr)),
         Item::Export(e) => Item::Export(e.clone()),
+        Item::StructDef(s) => Item::StructDef(s.clone()), // Structs don't need optimization
     } 
 }
 
@@ -628,6 +829,15 @@ fn opt_stmt(s: &Stmt) -> Stmt {
                     Expr::Index { 
                         target: array_expr.clone(), 
                         index: index.clone()
+                    }
+                }
+                crate::ast::AssignTarget::FieldAccess { target: obj_expr, field, source_line, col } => {
+                    // For obj.field += expr, we need obj.field as the left side
+                    Expr::FieldAccess {
+                        target: obj_expr.clone(),
+                        field: field.clone(),
+                        source_line: *source_line,
+                        col: *col,
                     }
                 }
             };
@@ -770,6 +980,23 @@ fn opt_expr(e: &Expr) -> Expr {
             target: Box::new(opt_expr(target)), 
             index: Box::new(opt_expr(index)) 
         },
+        Expr::StructInit { struct_name, source_line, col } => {
+            // Struct initialization doesn't need optimization
+            Expr::StructInit { 
+                struct_name: struct_name.clone(), 
+                source_line: *source_line, 
+                col: *col 
+            }
+        }
+        Expr::FieldAccess { target, field, source_line, col } => {
+            // Optimize the target object expression
+            Expr::FieldAccess {
+                target: Box::new(opt_expr(target)),
+                field: field.clone(),
+                source_line: *source_line,
+                col: *col,
+            }
+        }
         Expr::Not(inner) => {
             let ni = opt_expr(inner);
             if let Expr::Number(v) = ni {
@@ -795,6 +1022,7 @@ fn dead_code_elim(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()
@@ -908,6 +1136,10 @@ fn dse_function(f: &Function) -> Function {
                     }
                     crate::ast::AssignTarget::Index { .. } => {
                         // Array assignments always kept (side effects)
+                        true
+                    }
+                    crate::ast::AssignTarget::FieldAccess { .. } => {
+                        // Field assignments always kept (side effects)
                         true
                     }
                 };
@@ -1056,6 +1288,13 @@ fn collect_reads_expr(e: &Expr, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(target, used);
             collect_reads_expr(index, used);
         }
+        Expr::StructInit { .. } => {
+            // Struct initialization doesn't read variables
+        }
+        Expr::FieldAccess { target, .. } => {
+            // Field access reads the target object
+            collect_reads_expr(target, used);
+        }
         Expr::Number(_) => {}
     Expr::StringLit(_) => {}
     }
@@ -1080,6 +1319,7 @@ fn propagate_constants(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()
@@ -1114,6 +1354,10 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
                 }
                 crate::ast::AssignTarget::Index { .. } => {
                     // Array indexing - can't propagate constants through
+                    Stmt::Assign { target: target.clone(), value: v2, source_line }
+                }
+                crate::ast::AssignTarget::FieldAccess { .. } => {
+                    // Field access - can't propagate constants through (Phase 3)
                     Stmt::Assign { target: target.clone(), value: v2, source_line }
                 }
             }
@@ -1239,6 +1483,13 @@ fn cp_expr(e: &Expr, env: &HashMap<String, i32>) -> Expr {
     Expr::Call(ci) => Expr::Call(CallInfo { name: ci.name.clone(), source_line: ci.source_line, col: ci.col, args: ci.args.iter().map(|a| cp_expr(a, env)).collect() }),
         Expr::Number(n) => Expr::Number(*n),
     Expr::StringLit(s) => Expr::StringLit(s.clone()),
+    Expr::StructInit { .. } => e.clone(), // Phase 3 - no constant propagation
+    Expr::FieldAccess { target, field, source_line, col } => Expr::FieldAccess { 
+        target: Box::new(cp_expr(target, env)), 
+        field: field.clone(), 
+        source_line: *source_line, 
+        col: *col 
+    },
     }
 }
 
@@ -1253,6 +1504,7 @@ fn fold_const_switches(m: &Module) -> Module {
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
+            Item::StructDef(s) => Item::StructDef(s.clone()),
         }).collect(), 
         meta: m.meta.clone(),
         imports: m.imports.clone()

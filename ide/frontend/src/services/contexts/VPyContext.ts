@@ -461,6 +461,23 @@ Refer to docs/ folder for comprehensive documentation.
   for enemy in enemies:           # Iterate
   let count = len(enemies)        # Get length
 
+### Structs (User-Defined Types):
+- **Define**: struct Name: followed by field definitions
+- **Fields**: Indented, name: type (only 'int' supported currently)
+- **Instantiate**: variable = StructName()
+- **Access**: variable.field_name (read or write)
+- **Memory**: Optimized - structs stored directly on stack, 2 bytes per field
+- **Example**:
+  struct Point:
+      x: int
+      y: int
+  
+  def loop():
+      p = Point()      # Create instance
+      p.x = 10         # Set field
+      p.y = 20         # Set field
+      result = p.x + p.y  # Read fields
+
 ### Required Functions:
 - def main(): - Initialization (runs once)
 - def loop(): - Game loop (60 FPS, WAIT_RECAL auto-added by compiler)
