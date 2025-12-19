@@ -435,29 +435,45 @@ impl<'a> Parser<'a> {
     fn for_stmt(&mut self, source_line: usize) -> Result<Stmt> { 
         let var=self.identifier()?; 
         self.consume(TokenKind::In)?; 
-        self.consume(TokenKind::Range)?; 
-        self.consume(TokenKind::LParen)?; 
-        self.skip_newlines(); // Allow newlines after opening paren
-        let start=self.expression()?; 
-        self.skip_newlines(); // Allow newlines after start
-        self.consume(TokenKind::Comma)?; 
-        self.skip_newlines(); // Allow newlines after comma
-        let end=self.expression()?; 
-        self.skip_newlines(); // Allow newlines after end
-        let step= if self.match_kind(&TokenKind::Comma){
-            self.skip_newlines(); // Allow newlines after second comma
-            Some(self.expression()?)
-        } else {None}; 
-        self.skip_newlines(); // Allow newlines before closing paren
-        self.consume(TokenKind::RParen)?; 
-        self.consume(TokenKind::Colon)?; 
-        self.consume(TokenKind::Newline)?; 
-        self.consume(TokenKind::Indent)?; 
-        let mut body=Vec::new(); 
-        while !self.match_kind(&TokenKind::Dedent){ 
-            body.push(self.statement()?);
-        } 
-        Ok(Stmt::For { var, start, end, step, body, source_line }) 
+        
+        // Check if it's "for x in range(...)" or "for x in array"
+        if self.check(TokenKind::Range) {
+            // Traditional range-based for loop
+            self.consume(TokenKind::Range)?; 
+            self.consume(TokenKind::LParen)?; 
+            self.skip_newlines(); // Allow newlines after opening paren
+            let start=self.expression()?; 
+            self.skip_newlines(); // Allow newlines after start
+            self.consume(TokenKind::Comma)?; 
+            self.skip_newlines(); // Allow newlines after comma
+            let end=self.expression()?; 
+            self.skip_newlines(); // Allow newlines after end
+            let step= if self.match_kind(&TokenKind::Comma){
+                self.skip_newlines(); // Allow newlines after second comma
+                Some(self.expression()?)
+            } else {None}; 
+            self.skip_newlines(); // Allow newlines before closing paren
+            self.consume(TokenKind::RParen)?; 
+            self.consume(TokenKind::Colon)?; 
+            self.consume(TokenKind::Newline)?; 
+            self.consume(TokenKind::Indent)?; 
+            let mut body=Vec::new(); 
+            while !self.match_kind(&TokenKind::Dedent){ 
+                body.push(self.statement()?);
+            } 
+            Ok(Stmt::For { var, start, end, step, body, source_line }) 
+        } else {
+            // Iterator-based for-in loop: for x in array
+            let iterable = self.expression()?;
+            self.consume(TokenKind::Colon)?; 
+            self.consume(TokenKind::Newline)?; 
+            self.consume(TokenKind::Indent)?; 
+            let mut body=Vec::new(); 
+            while !self.match_kind(&TokenKind::Dedent){ 
+                body.push(self.statement()?);
+            } 
+            Ok(Stmt::ForIn { var, iterable, body, source_line })
+        }
     }
     fn if_stmt(&mut self, source_line: usize) -> Result<Stmt> { let cond=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut body=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ body.push(self.statement()?);} let mut elifs=Vec::new(); while self.match_kind(&TokenKind::Elif){ let ec=self.expression()?; self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut ebody=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ ebody.push(self.statement()?);} elifs.push((ec,ebody)); } let else_body= if self.match_kind(&TokenKind::Else){ self.consume(TokenKind::Colon)?; self.consume(TokenKind::Newline)?; self.consume(TokenKind::Indent)?; let mut eb=Vec::new(); while !self.match_kind(&TokenKind::Dedent){ eb.push(self.statement()?);} Some(eb)} else {None}; Ok(Stmt::If { cond, body, elifs, else_body, source_line }) }
 

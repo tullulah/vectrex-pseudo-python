@@ -110,6 +110,12 @@ pub fn collect_stmt_syms(stmt: &Stmt, set: &mut BTreeSet<String>) {
                 collect_stmt_syms(s, set);
             }
         }
+        Stmt::ForIn { iterable, body, .. } => {
+            collect_expr_syms(iterable, set);
+            for s in body {
+                collect_stmt_syms(s, set);
+            }
+        }
         Stmt::Switch { expr, cases, default, .. } => {
             collect_expr_syms(expr, set);
             for (val, case_body) in cases {
@@ -144,7 +150,7 @@ pub fn collect_locals(stmts: &[Stmt]) -> Vec<String> {
                     for b in else_stmts { walk(b, set); }
                 }
             }
-            Stmt::While { body, .. } | Stmt::For { body, .. } => {
+            Stmt::While { body, .. } | Stmt::For { body, .. } | Stmt::ForIn { body, .. } => {
                 for b in body { walk(b, set); }
             }
             Stmt::Switch { cases, default, .. } => {

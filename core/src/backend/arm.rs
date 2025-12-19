@@ -223,6 +223,7 @@ fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncCtx, 
             out.push_str(&format!("{}:\n", end_label));
         },
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before emit_stmt"),
+        _ => panic!("Unsupported statement type in ARM backend"),
     }
 }
 
@@ -502,6 +503,7 @@ fn collect_stmt_syms(stmt: &Stmt, set: &mut std::collections::BTreeSet<String>) 
         }
         Stmt::Break { .. } | Stmt::Continue { .. } => {},
         Stmt::CompoundAssign { .. } => panic!("CompoundAssign should be transformed away before collect_stmt_syms"),
+        _ => {}, // Catch-all for unsupported statements (e.g., ForIn)
     }
 }
 

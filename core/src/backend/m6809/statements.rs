@@ -121,6 +121,67 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
             else { out.push_str(&format!("    LDD VAR_{}\n    ADDD ,X\n    STD VAR_{}\n", var.to_uppercase(), var.to_uppercase())); }
             out.push_str(&format!("    LBRA {}\n{}: ; for end\n", ls, le));
         }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            // for item in array:
+            //   - Load array pointer
+            //   - Load array size (first word at array address)
+            //   - Loop through each element
+            let ls = fresh_label("FORIN");
+            let le = fresh_label("FORIN_END");
+            let idx_label = format!("_FORIN_IDX_{}", ls.replace("L_", ""));
+            
+            // Evaluate iterable expression (should be array variable)
+            let array_name = if let Expr::Ident(id) = iterable {
+                &id.name
+            } else {
+                panic!("ForIn only supports simple array variables currently");
+            };
+            
+            // Load array pointer
+            out.push_str(&format!("    ; for {} in {}\n", var, array_name));
+            if let Some(off) = fctx.offset_of(array_name) {
+                out.push_str(&format!("    LDD {},S      ; Load array pointer from stack\n", off));
+            } else {
+                out.push_str(&format!("    LDD VAR_{}   ; Load array pointer\n", array_name.to_uppercase()));
+            }
+            out.push_str("    STD TMPPTR      ; Save array pointer\n");
+            
+            // Load array size (first word at array address)
+            out.push_str("    LDX TMPPTR      ; X = array pointer\n");
+            out.push_str("    LDD ,X++        ; D = size, X points to first element\n");
+            out.push_str("    STX TMPPTR      ; TMPPTR = first element address\n");
+            out.push_str("    STD TMPLEFT     ; TMPLEFT = remaining count\n");
+            
+            // Initialize loop index to 0 (stored in local variable)
+            out.push_str(&format!("{}: ; forin loop start\n", ls));
+            
+            // Check if count > 0
+            out.push_str("    LDD TMPLEFT\n");
+            out.push_str(&format!("    LBEQ {}       ; Exit if no elements left\n", le));
+            
+            // Load current element: item = array[current_ptr]
+            out.push_str("    LDX TMPPTR      ; X = current element pointer\n");
+            out.push_str("    LDD ,X++        ; D = *ptr, ptr++\n");
+            out.push_str("    STX TMPPTR      ; Save updated pointer\n");
+            
+            // Store element in loop variable
+            if let Some(off) = fctx.offset_of(var) {
+                out.push_str(&format!("    STD {},S        ; Store in local var\n", off));
+            } else {
+                out.push_str(&format!("    STD VAR_{}     ; Store in global var\n", var.to_uppercase()));
+            }
+            
+            // Execute body
+            let inner = LoopCtx { start: Some(ls.clone()), end: Some(le.clone()) };
+            for s in body { emit_stmt(s, out, &inner, fctx, string_map, opts, tracker, depth + 1); }
+            
+            // Decrement count and loop
+            out.push_str("    LDD TMPLEFT\n");
+            out.push_str("    SUBD #1\n");
+            out.push_str("    STD TMPLEFT\n");
+            out.push_str(&format!("    LBRA {}\n", ls));
+            out.push_str(&format!("{}: ; forin end\n", le));
+        }
         Stmt::If { cond, body, elifs, else_body, .. } => {
             let end = fresh_label("IF_END");
             let mut next = fresh_label("IF_NEXT");

@@ -432,6 +432,13 @@ fn validate_stmt_collect(
             for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals, defined_functions); }
             pop_scope(scope);
         }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            validate_expr_collect(iterable, scope, reads, current_func, function_locals, defined_functions); 
+            push_scope(scope);
+            declare(var, scope);
+            for s in body { validate_stmt_collect(s, scope, reads, current_func, function_locals, defined_functions); }
+            pop_scope(scope);
+        }
         Stmt::While { cond, body, .. } => {
             validate_expr_collect(cond, scope, reads, current_func, function_locals, defined_functions);
             push_scope(scope);
@@ -621,6 +628,12 @@ fn opt_stmt(s: &Stmt) -> Stmt {
             start: opt_expr(start),
             end: opt_expr(end),
             step: step.as_ref().map(opt_expr),
+            body: body.iter().map(opt_stmt).collect(),
+            source_line,
+        },
+        Stmt::ForIn { var, iterable, body, .. } => Stmt::ForIn {
+            var: var.clone(),
+            iterable: opt_expr(iterable),
             body: body.iter().map(opt_stmt).collect(),
             source_line,
         },
@@ -837,6 +850,11 @@ fn dce_stmt(stmt: &Stmt, out: &mut Vec<Stmt>, terminated: &mut bool) {
             for s in body { dce_stmt(s, &mut nb, terminated); }
             out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line });
         }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            let mut nb = Vec::new();
+            for s in body { dce_stmt(s, &mut nb, terminated); }
+            out.push(Stmt::ForIn { var: var.clone(), iterable: iterable.clone(), body: nb , source_line: source_line });
+        }
         Stmt::Switch { expr, cases, default, .. } => {
             // Keep all arms; could prune unreachable constant-match arms later
             let mut new_cases = Vec::new();
@@ -922,6 +940,12 @@ fn dse_function(f: &Function) -> Function {
                 used.insert(var.clone());
                 new_body.push(stmt.clone());
             }
+            Stmt::ForIn { var, iterable, body, .. } => {
+                collect_reads_expr(iterable, &mut used);
+                for s in body { collect_reads_stmt(s, &mut used); }
+                used.insert(var.clone());
+                new_body.push(stmt.clone());
+            }
             Stmt::Switch { expr, cases, default, .. } => {
                 collect_reads_expr(expr, &mut used);
                 for (ce, cb) in cases { collect_reads_expr(ce, &mut used); for s in cb { collect_reads_stmt(s, &mut used); } }
@@ -979,6 +1003,10 @@ fn collect_reads_stmt(s: &Stmt, used: &mut std::collections::HashSet<String>) {
             collect_reads_expr(start, used);
             collect_reads_expr(end, used);
             if let Some(se) = step { collect_reads_expr(se, used); }
+            for st in body { collect_reads_stmt(st, used); }
+        }
+        Stmt::ForIn { iterable, body, .. } => {
+            collect_reads_expr(iterable, used);
             for st in body { collect_reads_stmt(st, used); }
         }
         Stmt::Switch { expr, cases, default, .. } => {
@@ -1107,6 +1135,15 @@ fn cp_stmt(stmt: &Stmt, env: &mut HashMap<String, i32>) -> Stmt {
             for sstmt in body { nb.push(cp_stmt(sstmt, env)); }
             *env = saved;
             Stmt::For { var: var.clone(), start: s, end: e, step: st, body: nb, source_line }
+        }
+        Stmt::ForIn { var, iterable, body, .. } => {
+            let it = cp_expr(iterable, env);
+            let saved = env.clone();
+            env.remove(var);
+            let mut nb = Vec::new();
+            for sstmt in body { nb.push(cp_stmt(sstmt, env)); }
+            *env = saved;
+            Stmt::ForIn { var: var.clone(), iterable: it, body: nb, source_line }
         }
         Stmt::If { cond, body, elifs, else_body, .. } => {
             let c = cp_expr(cond, env);
@@ -1252,6 +1289,7 @@ fn fold_const_switch_stmt(s: &Stmt, out: &mut Vec<Stmt>) {
         }
         Stmt::While { cond, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::While { cond: cond.clone(), body: nb , source_line: source_line }); }
         Stmt::For { var, start, end, step, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::For { var: var.clone(), start: start.clone(), end: end.clone(), step: step.clone(), body: nb , source_line: source_line }); }
+        Stmt::ForIn { var, iterable, body, .. } => { let mut nb = Vec::new(); for cs in body { fold_const_switch_stmt(cs, &mut nb); } out.push(Stmt::ForIn { var: var.clone(), iterable: iterable.clone(), body: nb , source_line: source_line }); }
     Stmt::Assign { target, value, .. } => out.push(Stmt::Assign { target: target.clone(), value: value.clone() , source_line: source_line }),
         Stmt::Let { name, value, .. } => out.push(Stmt::Let { name: name.clone(), value: value.clone() , source_line: source_line }),
         Stmt::Expr(e, _) => out.push(Stmt::Expr(e.clone(), source_line)),

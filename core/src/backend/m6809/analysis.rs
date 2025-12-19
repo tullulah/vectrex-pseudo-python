@@ -70,6 +70,7 @@ pub fn stmt_has_trig_depth(s: &Stmt, depth: usize) -> bool {
         Stmt::Let { value, .. } => expr_has_trig_depth(value, depth + 1),
         Stmt::Expr(e, _) => expr_has_trig_depth(e, depth + 1),
     Stmt::For { start, end, step, body, .. } => expr_has_trig_depth(start, depth + 1) || expr_has_trig_depth(end, depth + 1) || step.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
+        Stmt::ForIn { iterable, body, .. } => expr_has_trig_depth(iterable, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
         Stmt::While { cond, body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)),
         Stmt::If { cond, body, elifs, else_body, .. } => expr_has_trig_depth(cond, depth + 1) || body.iter().any(|s| stmt_has_trig_depth(s, depth + 1)) || elifs.iter().any(|(c,b)| expr_has_trig_depth(c, depth + 1) || b.iter().any(|s| stmt_has_trig_depth(s, depth + 1))) || else_body.as_ref().map(|eb| eb.iter().any(|s| stmt_has_trig_depth(s, depth + 1))).unwrap_or(false),
         Stmt::Return(o, _) => o.as_ref().map(|e| expr_has_trig_depth(e, depth + 1)).unwrap_or(false),
@@ -100,6 +101,11 @@ pub fn scan_stmt_args(s: &Stmt) -> usize {
         Stmt::For { start, end, step, body, .. } => {
             let mut m = scan_expr_args(start).max(scan_expr_args(end));
             if let Some(se) = step { m = m.max(scan_expr_args(se)); }
+            for st in body { m = m.max(scan_stmt_args(st)); }
+            m
+        }
+        Stmt::ForIn { iterable, body, .. } => {
+            let mut m = scan_expr_args(iterable);
             for st in body { m = m.max(scan_stmt_args(st)); }
             m
         }
@@ -181,6 +187,12 @@ pub fn scan_stmt_runtime(s: &Stmt, usage: &mut RuntimeUsage) {
             scan_expr_runtime(start, usage);
             scan_expr_runtime(end, usage);
             if let Some(se) = step { scan_expr_runtime(se, usage); }
+            for st in body { scan_stmt_runtime(st, usage); }
+        }
+        Stmt::ForIn { iterable, body, .. } => {
+            usage.needs_tmp_ptr = true;  // Need TMPPTR for array pointer
+            usage.needs_tmp_left = true; // Need TMPLEFT for element count
+            scan_expr_runtime(iterable, usage);
             for st in body { scan_stmt_runtime(st, usage); }
         }
         Stmt::While { cond, body, .. } => { scan_expr_runtime(cond, usage); for st in body { scan_stmt_runtime(st, usage); } }

@@ -331,6 +331,16 @@ fn rewrite_stmt(
                 source_line: *source_line,
             }
         }
+        Stmt::ForIn { var, iterable, body, source_line } => {
+            Stmt::ForIn {
+                var: var.clone(),
+                iterable: rewrite_expr(iterable, current_module, symbols, name_map, options),
+                body: body.iter()
+                    .map(|s| rewrite_stmt(s, current_module, symbols, name_map, options))
+                    .collect(),
+                source_line: *source_line,
+            }
+        }
         Stmt::While { cond, body, source_line } => {
             Stmt::While {
                 cond: rewrite_expr(cond, current_module, symbols, name_map, options),

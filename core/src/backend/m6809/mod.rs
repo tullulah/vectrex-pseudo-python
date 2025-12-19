@@ -163,6 +163,10 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
                 }
                 for s in body { scan_stmt(s, used, depth + 1); }
             },
+            Stmt::ForIn { iterable, body, .. } => {
+                scan_expr(iterable, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
+            },
             Stmt::Switch { expr, cases, default, .. } => {
                 scan_expr(expr, used, depth + 1);
                 for (case_expr, case_body) in cases {
