@@ -70,10 +70,24 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // First argument (VAR_ARG0) = address of object (self parameter)
             // Subsequent arguments in VAR_ARG1, VAR_ARG2, etc.
             
-            // Emit object address as first argument
-            emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
-            out.push_str("    LDD RESULT\n");
-            out.push_str("    STD VAR_ARG0\n");
+            // Special handling for local struct variables: need ADDRESS not value
+            if let Expr::Ident(info) = &*mc.target {
+                if let Some(off) = fctx.offset_of(&info.name) {
+                    // Local struct: compute address with LEAX
+                    out.push_str(&format!("    LEAX {},S  ; Compute address of local struct\n", off));
+                    out.push_str("    STX VAR_ARG0\n");
+                } else {
+                    // Global struct or parameter: load value and pass as pointer
+                    emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
+                    out.push_str("    LDD RESULT\n");
+                    out.push_str("    STD VAR_ARG0\n");
+                }
+            } else {
+                // Complex expression: evaluate and pass result as pointer
+                emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
+                out.push_str("    LDD RESULT\n");
+                out.push_str("    STD VAR_ARG0\n");
+            }
             
             // Emit remaining arguments
             for (i, arg) in mc.args.iter().enumerate() {
@@ -258,6 +272,34 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // Simple case: target is Ident (struct variable)
             if let Expr::Ident(name) = target.as_ref() {
                 let var_name = &name.name;
+                
+                // ✅ NEW: Handle self.field read in struct methods
+                if var_name == "self" {
+                    // self is passed as VAR_ARG0 (pointer to struct)
+                    if let Some(method_struct_type) = fctx.current_function_struct_type() {
+                        if let Some(layout) = opts.structs.get(&method_struct_type) {
+                            if let Some(field_layout) = layout.get_field(field) {
+                                let field_offset = field_layout.offset as i32;
+                                
+                                // Load struct pointer and read field
+                                out.push_str(&format!("    ; FieldAccess self.{} (struct {} field offset {})\n", field, method_struct_type, field_offset));
+                                out.push_str("    LDX VAR_ARG0    ; Load struct pointer\n");
+                                out.push_str(&format!("    LDD {},X        ; Read field value\n", field_offset));
+                                out.push_str("    STD RESULT\n");
+                            } else {
+                                eprintln!("WARNING at line {}: Field '{}' not found in struct '{}'", source_line, field, method_struct_type);
+                                out.push_str("    LDD #0\n    STD RESULT\n");
+                            }
+                        } else {
+                            eprintln!("WARNING at line {}: Struct type '{}' not found for method", source_line, method_struct_type);
+                            out.push_str("    LDD #0\n    STD RESULT\n");
+                        }
+                    } else {
+                        eprintln!("WARNING at line {}: self.field access outside of struct method context", source_line);
+                        out.push_str("    LDD #0\n    STD RESULT\n");
+                    }
+                    return; // Early return
+                }
                 
                 // Check if it's a local variable
                 if let Some(base_offset) = fctx.offset_of(var_name) {

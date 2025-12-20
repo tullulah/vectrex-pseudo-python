@@ -149,6 +149,27 @@ function App() {
     const handler = (diags: Array<{ file: string; line: number; col: number; message: string }>) => {
       if (diags.length > 0) {
         logger.info('Compilation', `Received ${diags.length} compilation errors`);
+      } else {
+        logger.info('Compilation', `Compilation successful - clearing all previous compilation errors`);
+        logger.info('Compilation', `Open documents count: ${documents.length}`);
+        
+        // Clear all compiler diagnostics from all open documents
+        documents.forEach(doc => {
+          logger.info('Compilation', `Clearing diagnostics for: ${doc.uri}`);
+          logger.info('Compilation', `  Current diagnostics: ${doc.diagnostics?.length || 0}`);
+          
+          // Clear both 'compiler' source and diagnostics without source (legacy)
+          setDiagnosticsBySource(doc.uri, 'compiler', []);
+          
+          // Also clear any diagnostics without source (legacy format)
+          const otherDiags = (doc.diagnostics || []).filter(d => d.source && d.source !== 'compiler');
+          if (otherDiags.length !== (doc.diagnostics?.length || 0)) {
+            logger.info('Compilation', `  Keeping ${otherDiags.length} non-compiler diagnostics`);
+          }
+        });
+        
+        logger.info('Compilation', `✓ All compilation diagnostics cleared`);
+        return; // Early return - no errors to process
       }
       
       // Group diagnostics by file and convert to store format

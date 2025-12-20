@@ -71,6 +71,40 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     if let Expr::Ident(name) = target.as_ref() {
                         let var_name = &name.name;
                         
+                        // ✅ NEW: Handle self.field = value in struct methods
+                        if var_name == "self" {
+                            // self is passed as VAR_ARG0 (pointer to struct)
+                            // Need to determine struct type from function context
+                            // For now, infer from function name (format: STRUCTNAME_METHODNAME)
+                            if let Some(method_struct_type) = fctx.current_function_struct_type() {
+                                if let Some(layout) = opts.structs.get(&method_struct_type) {
+                                    if let Some(field_layout) = layout.get_field(field) {
+                                        let field_offset = field_layout.offset as i32;
+                                        
+                                        // 1. Evaluate value to assign
+                                        emit_expr(value, out, fctx, string_map, opts);
+                                        
+                                        // 2. Load struct pointer from VAR_ARG0
+                                        // 3. Store value at field offset
+                                        out.push_str(&format!("    ; Assign self.{} (struct {} field offset {})\n", field, method_struct_type, field_offset));
+                                        out.push_str("    LDX VAR_ARG0    ; Load struct pointer\n");
+                                        out.push_str("    LDD RESULT      ; Load value to assign\n");
+                                        out.push_str(&format!("    STD {},X        ; Store at field offset\n", field_offset));
+                                    } else {
+                                        eprintln!("WARNING: Field '{}' not found in struct '{}'", field, method_struct_type);
+                                        out.push_str(&format!("    ; ERROR: Field '{}' not found in struct '{}'\n", field, method_struct_type));
+                                    }
+                                } else {
+                                    eprintln!("WARNING: Struct type '{}' not found for method", method_struct_type);
+                                    out.push_str(&format!("    ; ERROR: Struct '{}' not found\n", method_struct_type));
+                                }
+                            } else {
+                                eprintln!("WARNING: self.field assignment outside of struct method context");
+                                out.push_str("    ; ERROR: self.field assignment outside method\n");
+                            }
+                            return;
+                        }
+                        
                         // Check if it's a local variable
                         if let Some(base_offset) = fctx.offset_of(var_name) {
                             // Get struct type from variable info

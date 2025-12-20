@@ -139,20 +139,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     };
   }),
   setDiagnosticsBySource: (uri, source, diags) => set((s) => {
-    logger.verbose('LSP', 'setDiagnosticsBySource called with URI:', uri, 'source:', source);
-    logger.verbose('LSP', 'New diagnostics:', diags);
+    logger.info('EditorStore', `setDiagnosticsBySource: uri=${uri}, source=${source}, count=${diags.length}`);
     
     const documents = s.documents.map(d => {
       if (d.uri !== uri) return d;
+      
+      const beforeCount = (d.diagnostics || []).length;
+      logger.info('EditorStore', `  Document found: ${d.uri}`);
+      logger.info('EditorStore', `  Before: ${beforeCount} diagnostics`);
+      
+      // Show breakdown by source
+      const bySource: Record<string, number> = {};
+      (d.diagnostics || []).forEach(diag => {
+        const src = diag.source || 'no-source';
+        bySource[src] = (bySource[src] || 0) + 1;
+      });
+      logger.info('EditorStore', `  Breakdown:`, bySource);
       
       // Filter out existing diagnostics from this source, then add new ones
       const existingDiags = (d.diagnostics || []).filter(diag => diag.source !== source);
       const newDiags = diags.map(diag => ({ ...diag, source }));
       const combinedDiags = [...existingDiags, ...newDiags];
       
-      logger.verbose('LSP', 'Existing diags (other sources):', existingDiags.length);
-      logger.verbose('LSP', 'New diags for source', source, ':', newDiags.length);
-      logger.verbose('LSP', 'Combined diags:', combinedDiags.length);
+      logger.info('EditorStore', `  Keeping ${existingDiags.length} diagnostics from other sources`);
+      logger.info('EditorStore', `  Adding ${newDiags.length} diagnostics for source '${source}'`);
+      logger.info('EditorStore', `  After: ${combinedDiags.length} diagnostics`);
       
       return { ...d, diagnostics: combinedDiags };
     });

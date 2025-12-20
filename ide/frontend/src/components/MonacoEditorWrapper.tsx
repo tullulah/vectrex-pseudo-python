@@ -516,6 +516,67 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     lspClient.onNotification(handler);
   }, []);
 
+  // Listen for compilation diagnostics from Electron to clear Monaco markers
+  useEffect(() => {
+    const w: any = window as any;
+    if (!w?.electronAPI?.onRunDiagnostics) return;
+    
+    const handler = (diags: Array<{ file: string; line: number; col: number; message: string }>) => {
+      if (!monacoRef.current) return;
+      
+      if (diags.length === 0) {
+        // Clear all compilation markers from all Monaco models
+        const models = monacoRef.current.editor.getModels();
+        models.forEach(model => {
+          monacoRef.current!.editor.setModelMarkers(model, 'vpy-compiler', []);
+        });
+        logger.info('Monaco', 'Cleared all compilation markers from all models');
+      } else {
+        // Set markers for files with errors
+        const markersByUri: Record<string, any[]> = {};
+        
+        diags.forEach(diag => {
+          const { file, line, col, message } = diag;
+          
+          // Convert file path to URI
+          let uri = file;
+          if (file && !file.startsWith('file://')) {
+            const normPath = file.replace(/\\/g, '/');
+            uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+          }
+          
+          if (!markersByUri[uri]) {
+            markersByUri[uri] = [];
+          }
+          
+          markersByUri[uri].push({
+            severity: monacoRef.current!.MarkerSeverity.Error,
+            message: message,
+            startLineNumber: line + 1,
+            startColumn: col + 1,
+            endLineNumber: line + 1,
+            endColumn: col + 100,
+            source: 'vpy-compiler'
+          });
+        });
+        
+        // Apply markers to corresponding models
+        Object.entries(markersByUri).forEach(([uri, markers]) => {
+          const lcUri = uri.toLowerCase();
+          const models = monacoRef.current!.editor.getModels();
+          const model = models.find(m => m.uri.toString().toLowerCase().includes(lcUri) || lcUri.includes(m.uri.toString().toLowerCase()));
+          
+          if (model) {
+            monacoRef.current!.editor.setModelMarkers(model, 'vpy-compiler', markers);
+            logger.info('Monaco', `Set ${markers.length} compilation markers for ${model.uri.toString()}`);
+          }
+        });
+      }
+    };
+    
+    w.electronAPI.onRunDiagnostics(handler);
+  }, []);
+
   // Listen for goto events to move cursor
   useEffect(() => {
     const listener = (e: any) => {

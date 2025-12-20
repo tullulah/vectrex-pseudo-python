@@ -50,7 +50,19 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
             out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, p));
         }
     }
-    let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info };
+    let fctx = FuncCtx { 
+        locals: locals.clone(), 
+        frame_size, 
+        var_info,
+        // Detect if this is a struct method by checking if name contains underscore
+        // Format: STRUCTNAME_methodname (e.g., POINT_MOVE, ENTITY_GET_NEW_X)
+        struct_type: if f.name.contains('_') {
+            // Extract struct name (part before first underscore)
+            f.name.split('_').next().map(|s| s.to_string())
+        } else {
+            None
+        }
+    };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker, 0); }
     if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
     if frame_size > 0 { out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size)); }

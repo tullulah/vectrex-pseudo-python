@@ -283,6 +283,8 @@ pub struct FuncCtx {
     // For simple variables: ("", 2)
     // For struct instances: ("Point", 4) if Point has 2 fields
     pub var_info: std::collections::HashMap<String, (String, usize)>,
+    // NEW: Track if we're in a struct method and which struct
+    pub struct_type: Option<String>, // Some("Point") if in method, None if regular function
 }
 
 impl FuncCtx {
@@ -304,5 +306,9 @@ impl FuncCtx {
     
     pub fn var_type(&self, name: &str) -> Option<&str> {
         self.var_info.get(name).map(|(t, _)| t.as_str())
+    }
+    
+    pub fn current_function_struct_type(&self) -> Option<String> {
+        self.struct_type.clone()
     }
 }

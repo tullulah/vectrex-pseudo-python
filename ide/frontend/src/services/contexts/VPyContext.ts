@@ -467,16 +467,38 @@ Refer to docs/ folder for comprehensive documentation.
 - **Instantiate**: variable = StructName()
 - **Access**: variable.field_name (read or write)
 - **Memory**: Optimized - structs stored directly on stack, 2 bytes per field
+- **Methods**: Structs can have methods (functions inside struct definition)
+  - Use implicit **self** keyword to access own fields (self.x, self.y)
+  - Call methods with: **object.method_name(args)**
+  - Methods are read-only views of state (cannot write self.field = value)
+  - Methods can return calculated values, caller updates fields externally
+  - Pattern: Methods for logic/calculations, builtins (DRAW_VECTOR) inline in main code
 - **Example**:
   struct Point:
       x: int
       y: int
+      
+      def move(dx, dy):
+          # Note: NO explicit 'self' parameter, it's implicit
+          # Can READ self.field but NOT write (self.x = 10 not supported)
+          new_x = self.x + dx
+          new_y = self.y + dy
+          return new_x  # Return values, caller updates fields
+      
+      def distance_from_origin():
+          # Calculate distance using Pythagorean theorem
+          dist_sq = self.x * self.x + self.y * self.y
+          # Approximate sqrt (for simplicity)
+          return dist_sq / 10
   
   def loop():
-      p = Point()      # Create instance
-      p.x = 10         # Set field
-      p.y = 20         # Set field
-      result = p.x + p.y  # Read fields
+      p = Point()         # Create instance
+      p.x = 10            # Set field
+      p.y = 20            # Set field
+      # Call methods:
+      new_x = p.move(5, -3)    # Returns new X value
+      p.x = new_x              # Caller updates field
+      dist = p.distance_from_origin()  # Call method without args
 
 ### Control Flow:
 - if/elif/else - Conditional branching

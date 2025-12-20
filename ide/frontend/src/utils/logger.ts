@@ -2,7 +2,7 @@
 // Permite control granular de qué se muestra en consola
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose';
-export type LogCategory = 'LSP' | 'Build' | 'File' | 'Save' | 'Compilation' | 'App' | 'HMR' | 'Dock' | 'Project' | 'AI' | 'Debug' | 'Git';
+export type LogCategory = 'LSP' | 'Build' | 'File' | 'Save' | 'Compilation' | 'App' | 'HMR' | 'Dock' | 'Project' | 'AI' | 'Debug' | 'Git' | 'Monaco' | 'EditorStore';
 
 interface LogConfig {
   level: LogLevel;
