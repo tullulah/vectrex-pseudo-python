@@ -875,6 +875,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             if max_args >=3 { out.push_str("VAR_ARG2: FDB 0\n"); }
             if max_args >=4 { out.push_str("VAR_ARG3: FDB 0\n"); }
             if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
+            if max_args >=6 { out.push_str("VAR_ARG5: FDB 0\n"); }
         }
     }
     

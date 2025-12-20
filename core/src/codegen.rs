@@ -439,6 +439,15 @@ fn extract_struct_type(expr: &Expr, struct_registry: &StructRegistry) -> Option<
                 None
             }
         }
+        Expr::Call(ci) => {
+            // Check if this is a struct constructor call
+            // Constructor calls look like: Entity(x, y, dx, dy)
+            if struct_registry.contains_key(&ci.name) {
+                Some(ci.name.clone())
+            } else {
+                None
+            }
+        }
         _ => None
     }
 }

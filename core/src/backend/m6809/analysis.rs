@@ -150,8 +150,11 @@ pub fn scan_expr_args(e: &Expr) -> usize {
                 return ci.args.iter().map(scan_expr_args).max().unwrap_or(0);
             }
             
-            // Other calls use VAR_ARG normally
-            ci.args.len().min(5).max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0))
+            // Struct constructors pass self as ARG0 + N args → needs N+1 slots
+            // Be conservative: assume any call MIGHT be a constructor → count args + 1
+            // This ensures we allocate enough VAR_ARG slots for constructors
+            let max_slots_needed = (ci.args.len() + 1).min(6);
+            max_slots_needed.max(ci.args.iter().map(scan_expr_args).max().unwrap_or(0))
         },
         Expr::MethodCall(mc) => {
             // Method calls: self + args (self is ARG0, args are ARG1+)
