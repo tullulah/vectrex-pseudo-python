@@ -464,7 +464,11 @@ Refer to docs/ folder for comprehensive documentation.
 ### Structs (User-Defined Types):
 - **Define**: struct Name: followed by field definitions
 - **Fields**: Indented, name: type (only 'int' supported currently)
-- **Instantiate**: variable = StructName()
+- **Instantiate**: variable = StructName() or with constructor args
+- **Constructors**: Define **def __init__(param1, param2, ...):** to initialize fields
+  - Use **self.field = param** inside constructor to set initial values
+  - Called automatically when creating instance: **Entity(x, y, dx, dy)**
+  - Constructor params passed as ARG1, ARG2, etc. (ARG0 is struct pointer)
 - **Access**: variable.field_name (read or write)
 - **Memory**: Optimized - structs stored directly on stack, 2 bytes per field
 - **Methods**: Structs can have methods (functions inside struct definition)
@@ -479,6 +483,13 @@ Refer to docs/ folder for comprehensive documentation.
       y: int
       dx: int
       dy: int
+      
+      def __init__(init_x, init_y, init_dx, init_dy):
+          # Constructor: initialize fields with parameters
+          self.x = init_x
+          self.y = init_y
+          self.dx = init_dx
+          self.dy = init_dy
       
       def update_position():
           # Note: NO explicit 'self' parameter, it's implicit
@@ -499,17 +510,19 @@ Refer to docs/ folder for comprehensive documentation.
           return dist_sq / 10
   
   def loop():
-      entity = Entity()        # Create instance
-      entity.x = 100          # Set initial position
-      entity.dx = -2          # Set velocity
+      # Create with constructor - fields initialized automatically
+      entity = Entity(100, 50, -2, 0)
       # Call methods - object modifies itself:
       entity.update_position()           # x and dx updated internally
       entity.handle_bounce(-100, 100, 2) # dx changed if out of bounds
 
 **Technical Implementation**:
+- Constructors generate **STRUCTNAME_INIT** function, called during instantiation
+- Constructor receives struct pointer in ARG0, params in ARG1-ARG4 (max 4 params)
 - Method calls on local structs use **LEAX offset,S** to compute struct address
 - VAR_ARG0 receives pointer to struct, methods access fields via offset
 - Self field access: **LDX VAR_ARG0; LDD offset,X** (read) or **STD offset,X** (write)
+- Type tracking: Constructor calls auto-tracked for method resolution
 - Global structs not yet supported - use globals + local struct pattern
 - Pattern for persistence: global vars → local struct → methods → write back to globals
 
