@@ -317,6 +317,10 @@ pub fn validate_semantics(module: &Module, diagnostics: &mut Vec<Diagnostic>) {
         if let Item::Function(func) = it {
             defined_functions.insert(func.name.clone());
         }
+        // Also add struct names so they can be "called" as constructors
+        if let Item::StructDef(struct_def) = it {
+            defined_functions.insert(struct_def.name.clone());
+        }
     }
     
     // Recolectar todas las variables locales de cada función para detección de cross-function usage

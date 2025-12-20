@@ -725,6 +725,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Emit the method as a regular function
                     emit_function(&method_func, &mut out, &string_map, opts, &mut tracker, &global_names);
                 }
+                
+                // If struct has constructor, emit initializer function
+                if let Some(constructor) = &struct_def.constructor {
+                    let init_name = format!("{}_INIT", struct_def.name.to_uppercase());
+                    let mut init_func = constructor.clone();
+                    init_func.name = init_name;
+                    
+                    // Constructor params start at ARG1 (ARG0 is struct pointer)
+                    // Emit the constructor as a regular function
+                    emit_function(&init_func, &mut out, &string_map, opts, &mut tracker, &global_names);
+                }
             }
         }
     }

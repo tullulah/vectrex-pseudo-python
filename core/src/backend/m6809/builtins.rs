@@ -857,6 +857,57 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    CLRA\n    CLRB\n    STD RESULT\n"); return true;
         }
     }
+    
+    // Check if it's a struct instantiation BEFORE checking builtins
+    // Structs are detected by checking if name exists in struct registry
+    if let Some(layout) = opts.structs.get(name) {
+        out.push_str(&format!("; Struct instantiation: {} (size {} bytes)\n", name, layout.total_size));
+        
+        // Allocate space on stack for the struct
+        let stack_size = layout.total_size;
+        out.push_str(&format!("    LEAS -{},S  ; Allocate {} bytes for struct\n", stack_size, stack_size));
+        
+        // Initialize all fields to 0
+        out.push_str("    LDD #0\n");
+        for i in (0..stack_size).step_by(2) {
+            out.push_str(&format!("    STD {},S  ; Zero field at offset {}\n", i, i));
+        }
+        
+        // Check if struct has a constructor
+        let constructor_name = format!("{}_INIT", up);
+        // We can't easily check if constructor exists at this point,
+        // but we can conditionally call it if args are provided
+        if !args.is_empty() {
+            out.push_str(&format!("; Call constructor with {} args\n", args.len()));
+            
+            // ARG0 = pointer to struct (address on stack)
+            out.push_str("    LEAX 0,S  ; Get struct address\n");
+            out.push_str("    STX VAR_ARG0  ; Pass as self\n");
+            
+            // Evaluate and pass constructor arguments (ARG1, ARG2, etc.)
+            for (i, arg) in args.iter().enumerate() {
+                if i >= 4 { break; } // Max 4 constructor args (ARG1-ARG4)
+                emit_expr(arg, out, fctx, string_map, opts);
+                out.push_str("    LDD RESULT\n");
+                out.push_str(&format!("    STD VAR_ARG{}\n", i + 1));
+            }
+            
+            // Call constructor
+            if opts.force_extended_jsr {
+                out.push_str(&format!("    JSR >{}\n", constructor_name));
+            } else {
+                out.push_str(&format!("    JSR {}\n", constructor_name));
+            }
+        }
+        
+        // Store stack pointer (struct address) in RESULT
+        out.push_str("    LEAX 0,S\n");
+        out.push_str("    TFR X,D\n");
+        out.push_str("    STD RESULT  ; Return struct pointer\n");
+        
+        return true;
+    }
+    
     if !is {
         // Backward compatibility: map legacy short names to vectrex-prefixed versions
         let translated = resolve_function_name(&up);
@@ -1065,6 +1116,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
         return true;
     }
+    
     for (i, a) in args.iter().enumerate() {
         if i >= 5 { break; }
     emit_expr(a, out, fctx, string_map, opts);
@@ -1080,4 +1132,3 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
     true
 }
-

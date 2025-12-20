@@ -44,7 +44,9 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             }
         }
         Expr::Call(ci) => {
-            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.source_line)) { return; }
+            if emit_builtin_call(&ci.name, &ci.args, out, fctx, string_map, opts, Some(ci.source_line)) { 
+                return; 
+            }
             for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
                 emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1);

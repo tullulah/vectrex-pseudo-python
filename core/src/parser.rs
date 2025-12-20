@@ -414,6 +414,7 @@ impl<'a> Parser<'a> {
         
         let mut fields = Vec::new();
         let mut methods = Vec::new();
+        let mut constructor = None;
         
         while !self.check(TokenKind::Dedent) {
             self.skip_newlines(); // Skip any extra newlines
@@ -422,7 +423,16 @@ impl<'a> Parser<'a> {
             // Check if it's a method definition (def keyword)
             if self.check(TokenKind::Def) {
                 let method = self.parse_function_def()?;
-                methods.push(method);
+                
+                // Check if it's a constructor
+                if method.name == "__init__" {
+                    if constructor.is_some() {
+                        return self.err_here(&format!("Struct {} already has a constructor", name));
+                    }
+                    constructor = Some(method);
+                } else {
+                    methods.push(method);
+                }
             } else {
                 // Parse field: name: type
                 let field_line = self.peek().line;
@@ -445,7 +455,7 @@ impl<'a> Parser<'a> {
             return self.err_here(&format!("Struct {} must have at least one field", name));
         }
         
-        Ok(StructDef { name, fields, methods, source_line })
+        Ok(StructDef { name, fields, methods, constructor, source_line })
     }
 
     fn statement(&mut self) -> Result<Stmt> {

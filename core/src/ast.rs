@@ -93,6 +93,8 @@ pub struct StructDef {
 	pub name: String,
 	pub fields: Vec<FieldDef>,
 	pub methods: Vec<Function>,
+	/// Constructor opcional (__init__)
+	pub constructor: Option<Function>,
 	pub source_line: usize,
 }
 

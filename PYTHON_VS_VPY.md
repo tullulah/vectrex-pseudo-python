@@ -138,6 +138,22 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | **min()** | `min(a, b)` | ✅ | Mínimo de dos valores |
 | **max()** | `max(a, b)` | ✅ | Máximo de dos valores |
 
+### 13. Structs y OOP Básico
+
+| Feature | Python | VPy | Notas |
+|---------|--------|-----|-------|
+| **Struct definition** | N/A (usa class) | ✅ | `struct Name: x: int` |
+| **Struct instantiation** | N/A | ✅ | `obj = StructName()` |
+| **Field access read** | `obj.field` | ✅ | `x = obj.field` |
+| **Field access write** | `obj.field = val` | ✅ | `obj.field = value` |
+| **Methods** | `def method(self):` | ✅ | `def method():` (self implícito) |
+| **Self field read** | `self.x` | ✅ | `x = self.x` en métodos |
+| **Self field write** | `self.x = val` | ✅ | `self.x = value` en métodos |
+| **Method calls** | `obj.method(args)` | ✅ | `obj.method(args)` |
+| **Constructors** | `__init__(self, x)` | ⚠️ | Params OK, self.field WIP |
+| **Return self** | `return self` | ❌ | Sin method chaining |
+| **Private fields** | `_field` (convención) | ❌ | Todos los campos públicos |
+
 ---
 
 ## ❌ NO IMPLEMENTADO (Faltan)
@@ -214,10 +230,18 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 
 | Feature | Python | VPy | Prioridad | Notas |
 |---------|--------|-----|-----------|-------|
-| **class** | `class Foo: ...` | ❌ | 🟢 BAJA | No OOP en ASM típico |
-| **self** | `self.x` | ❌ | 🟢 BAJA | Requiere clases |
-| **Herencia** | `class B(A): ...` | ❌ | 🟢 BAJA | Muy complejo |
-| **\_\_init\_\_** | `def __init__(self): ...` | ❌ | 🟢 BAJA | Constructores |
+| **Structs básicos** | N/A | ✅ | - | `struct Name: field: int` |
+| **Methods** | `def method(self):` | ✅ | - | Self implícito |
+| **Self read/write** | `self.x`, `self.x = 5` | ✅ | - | Acceso completo a fields |
+| **Constructors** | `__init__(self, x)` | ❌ | 🟡 MEDIA | `def __init__(x, y):` |
+| **Return self** | `return self` | ❌ | 🟡 MEDIA | Method chaining |
+| **Private fields** | `_field` (convención) | ❌ | 🟢 BAJA | Naming convention |
+| **Properties** | `@property` | ❌ | 🟢 BAJA | Getters/setters |
+| **Static methods** | `@staticmethod` | ❌ | 🟢 BAJA | Sin self |
+| **Class methods** | `@classmethod` | ❌ | 🟢 BAJA | Clase como param |
+| **Herencia** | `class B(A):` | ❌ | 🟢 BAJA | Muy complejo en ASM |
+| **Multiple inheritance** | `class C(A,B):` | ❌ | 🟢 BAJA | Extremadamente complejo |
+| **super()** | `super().method()` | ❌ | 🟢 BAJA | Requiere herencia |
 
 ### 8. Operadores No Implementados
 
@@ -284,27 +308,77 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
    ```
    **Nota**: abs() es útil con enteros - distancias, velocidades, colisiones.
 
-5. **🟡 Operador ternario**:
+~~5. **🟡 Structs con self write**~~ ✅ **COMPLETADO (2025-12-20)**:
    ```python
-   let speed = 5 if boost else 3
+   # Python Y VPy (sintaxis similar):
+   struct Entity:
+       x: int
+       dx: int
+       
+       def update():
+           self.x = self.x + self.dx  # ✅ Modifica estado interno
+       
+       def bounce(limit):
+           if self.x > limit:
+               self.dx = -self.dx      # ✅ Cambia dirección
+   
+   entity = Entity()
+   entity.x = 100
+   entity.update()  # ✅ Objeto se modifica internamente
+   ```
+   **Implementación**: LEAX para punteros de structs locales, VAR_ARG0 en métodos.
+
+6. **🟡 Operador ternario**:
+   ```python
+   speed = 5 if boost else 3
    ```
 
-6. **🟡 Default arguments**:
+~~7. **🟡 global keyword**~~ → **DEPRECADO**: VPy no necesita `global` explícito:
+   ```python
+   # Python:
+   def func():
+       global score  # ← Necesario
+       score = score + 10
+   
+   # VPy:
+   def func():
+       score = score + 10  # ✅ Ya funciona sin 'global'
+   ```
+
+8. **🟡 Constructores (__init__)** → **PARCIALMENTE COMPLETADO (2025-12-20)**:
+   ```python
+   struct Player:
+       x: int
+       y: int
+       
+       def __init__(start_x, start_y):
+           # ⚠️ LIMITACIÓN: self.field assignment WIP (FuncCtx awareness needed)
+           # Por ahora: params funcionan, pero fields se asignan después
+           pass
+   
+   player = Player(10, 20)  # ✅ Aloca struct + llama init con params
+   player.x = 10  # Asignación manual por ahora
+   player.y = 20
+   ```
+   **Implementado**: Parser, AST, codegen, instanciación con args
+   **Pendiente**: FuncCtx awareness para self.field en constructor
+
+### Phase 3: Nice-to-have (BAJA - Conveniencia)
+
+9. **🟢 Return self (method chaining)**:
+   ```python
+   entity.move(5).rotate(90).draw()  # Chaining
+   ```
+
+10. **🟢 Default arguments**:
    ```python
    def spawn_enemy(x, y, speed=2):
        # ...
    ```
 
-7. **🟡 abs() builtin**:
-   ```python
-   let distance = abs(player_x - enemy_x)
-   ```
-
-### Phase 3: Nice-to-have (BAJA - Conveniencia)
-
-9. **🟢 String operations** (concatenación, f-strings)
-10. **🟢 Tuplas** (inmutables, retorno múltiple)
-11. **🟢 assert** (validaciones)
+11. **🟢 String operations** (concatenación, f-strings)
+12. **🟢 Tuplas** (inmutables, retorno múltiple)
+13. **🟢 assert** (validaciones)
 
 ---
 
@@ -324,7 +398,8 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | Strings | 2 / 2 | 100% | ✅ |
 | Arrays & Iteration | 5 / 5 | 100% | ✅ |
 | Math Builtins | 3 / 3 | 100% | ✅ |
-| **TOTAL BÁSICO** | **49 / 50** | **98%** | ✅ |
+| Structs & OOP | 8 / 11 | 73% | ⚠️ |
+| **TOTAL BÁSICO** | **57 / 61** | **93%** | ✅ |
 
 | Categoría | Faltan | Prioridad Alta | Prioridad Media | Prioridad Baja |
 |-----------|--------|----------------|-----------------|----------------|
@@ -334,16 +409,14 @@ Este documento compara la **sintaxis y features** para guiar el desarrollo de VP
 | Strings | 5 | 0 | 0 | 5 🟢 |
 | Control Flow Avanzado | 6 | 0 | 2 🟡 | 4 🟢 |
 | Funciones Avanzadas | 7 | 0 | 1 🟡 | 6 🟢 |
-| OOP | 4 | 0 | 0 | 4 🟢 |
+| OOP Avanzado | 9 | 0 | 2 🟡 | 7 🟢 |
 | Operadores | 3 | 0 | 1 🟡 | 2 🟢 |
 | Misc | 9 | 0 | 2 🟡 | 7 🟢 |
-| **TOTAL FALTANTE** | **49** | **0 🔴** | **11 🟡** | **38 🟢** |
+| **TOTAL FALTANTE** | **54** | **0 🔴** | **13 🟡** | **41 🟢** |
 
-**Mejoras recientes (2025-12-19)**:
-- ✅ String literals en variables locales (`let texto = "HOLA"`)
-- ✅ DEBUG_PRINT_STR con literals directos (`DEBUG_PRINT_STR("MENSAJE")`)
-- ✅ len() para arrays (retorna first word)
-- ✅ MIN() y MAX() builtins
+**Mejoras recientes**:
+- ✅ **2025-12-19**: String literals locales, DEBUG_PRINT_STR, len(), MIN(), MAX()
+- ✅ **2025-12-20**: Self write support (self.field = value), method chaining preparation
 
 ---
 
