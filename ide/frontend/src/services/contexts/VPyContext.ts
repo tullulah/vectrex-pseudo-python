@@ -470,35 +470,48 @@ Refer to docs/ folder for comprehensive documentation.
 - **Methods**: Structs can have methods (functions inside struct definition)
   - Use implicit **self** keyword to access own fields (self.x, self.y)
   - Call methods with: **object.method_name(args)**
-  - Methods are read-only views of state (cannot write self.field = value)
-  - Methods can return calculated values, caller updates fields externally
-  - Pattern: Methods for logic/calculations, builtins (DRAW_VECTOR) inline in main code
+  - ✅ **Full read/write support**: Methods can read AND write self.field = value
+  - True OOP behavior: Objects modify their own internal state
+  - Pattern: Encapsulate behavior + data in methods
 - **Example**:
-  struct Point:
+  struct Entity:
       x: int
       y: int
+      dx: int
+      dy: int
       
-      def move(dx, dy):
+      def update_position():
           # Note: NO explicit 'self' parameter, it's implicit
-          # Can READ self.field but NOT write (self.x = 10 not supported)
-          new_x = self.x + dx
-          new_y = self.y + dy
-          return new_x  # Return values, caller updates fields
+          # ✅ CAN read AND write self.field
+          self.x = self.x + self.dx    # Modifies internal state
+          self.y = self.y + self.dy    # State persists after method returns
+      
+      def handle_bounce(min_x, max_x, speed):
+          # Complex logic with conditional writes
+          if self.x < min_x:
+              self.dx = speed      # Bounce right
+          if self.x > max_x:
+              self.dx = -speed     # Bounce left
       
       def distance_from_origin():
-          # Calculate distance using Pythagorean theorem
+          # Read-only methods still work
           dist_sq = self.x * self.x + self.y * self.y
-          # Approximate sqrt (for simplicity)
           return dist_sq / 10
   
   def loop():
-      p = Point()         # Create instance
-      p.x = 10            # Set field
-      p.y = 20            # Set field
-      # Call methods:
-      new_x = p.move(5, -3)    # Returns new X value
-      p.x = new_x              # Caller updates field
-      dist = p.distance_from_origin()  # Call method without args
+      entity = Entity()        # Create instance
+      entity.x = 100          # Set initial position
+      entity.dx = -2          # Set velocity
+      # Call methods - object modifies itself:
+      entity.update_position()           # x and dx updated internally
+      entity.handle_bounce(-100, 100, 2) # dx changed if out of bounds
+
+**Technical Implementation**:
+- Method calls on local structs use **LEAX offset,S** to compute struct address
+- VAR_ARG0 receives pointer to struct, methods access fields via offset
+- Self field access: **LDX VAR_ARG0; LDD offset,X** (read) or **STD offset,X** (write)
+- Global structs not yet supported - use globals + local struct pattern
+- Pattern for persistence: global vars → local struct → methods → write back to globals
 
 ### Control Flow:
 - if/elif/else - Conditional branching
