@@ -728,7 +728,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 
                 // If struct has constructor, emit initializer function
                 if let Some(constructor) = &struct_def.constructor {
-                    let init_name = format!("{}_INIT", struct_def.name.to_uppercase());
+                    // Use same pattern as methods (NOT uppercase here)
+                    // emit_function will uppercase the label, but struct_type extraction needs original case
+                    let init_name = format!("{}_INIT", struct_def.name);
                     let mut init_func = constructor.clone();
                     init_func.name = init_name;
                     
