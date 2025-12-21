@@ -56,6 +56,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("PLAY_MUSIC", 1),      // Play background music in loop: name
     ("PLAY_SFX", 1),        // Play sound effect (one-shot): name
     ("MUSIC_UPDATE", 0),    // Process music events per frame
+    ("SFX_UPDATE", 0),      // Process SFX envelope/pitch per frame
     ("STOP_MUSIC", 0),      // Stop background music
     
     // Malban algorithm (vector list processing)
