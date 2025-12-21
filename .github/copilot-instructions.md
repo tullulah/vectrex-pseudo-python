@@ -536,6 +536,71 @@ def loop():
 - Error si el archivo .vec no se encuentra o el nombre no coincide
 - Genera comentario de error en ASM si falla
 
+#### DRAW_VECTOR_EX(nombre: str, x: int, y: int, mirror: int)
+Dibuja un vector asset con posición y espejo (horizontal/vertical).
+
+**Parámetros**:
+- `nombre`: Nombre del asset .vec
+- `x`, `y`: Posición de dibujo (offset desde la posición del sprite)
+- `mirror`: Modo de espejo (0-3):
+  - **0** = Normal (sin espejo)
+  - **1** = Espejo X (horizontal, voltea izquierda-derecha)
+  - **2** = Espejo Y (vertical, voltea arriba-abajo)
+  - **3** = Espejo XY (ambos ejes, rotación 180°)
+
+**Ejemplo VPy**:
+```python
+def loop():
+    WAIT_RECAL()
+    DRAW_VECTOR_EX("player", 30, 60, 0)   # Normal
+    DRAW_VECTOR_EX("player", 90, 60, 1)   # Espejo X
+    DRAW_VECTOR_EX("player", 30, 0, 2)    # Espejo Y
+    DRAW_VECTOR_EX("player", 90, 0, 3)    # Espejo XY
+```
+
+**Código ASM generado** (simplificado):
+```asm
+    LDD #30          ; X posición
+    STA DRAW_VEC_X
+    LDD #60          ; Y posición
+    STA DRAW_VEC_Y
+    LDD #1           ; Mirror mode
+    LDB RESULT+1
+    
+    ; Decode mirror flags
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CMPB #1          ; Check for X-mirror
+    BNE DSVEX_CHK_Y
+    LDA #1
+    STA MIRROR_X
+DSVEX_CHK_Y:
+    CMPB #2          ; Check for Y-mirror
+    BNE DSVEX_CHK_XY
+    LDA #1
+    STA MIRROR_Y
+    ...
+    LDX #_PLAYER_PATH0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Función unificada
+```
+
+**Arquitectura de Espejos Unificada** (NUEVO 2025-12-18):
+- **Función única**: `Draw_Sync_List_At_With_Mirrors` maneja todos los 4 modos
+- **Runtime flags**: MIRROR_X (0/1) y MIRROR_Y (0/1) controlan condicional­mente las negaciones
+- **Ahorro ASM**: Una función con condicionales (~220 líneas) vs 4 funciones separadas (~520 líneas)
+- **Centro-relativo**: Todas las coordenadas ya son relativas al centro del sprite (vecres.rs)
+- **Operaciones**:
+  - **X-mirror** (modo 1): NEGA X coordinate + NEGA dx deltas
+  - **Y-mirror** (modo 2): NEGB Y coordinate + NEGB dy deltas  
+  - **XY-mirror** (modo 3): Ambas operaciones aplicadas
+  - **Normal** (modo 0): No apply any negation
+
+**Verificación en compilación**:
+- Comprueba que el asset existe
+- Valida que mirror sea 0-3
+- Error si el archivo .vec no se encuentra
+- Automáticamente genera flags MIRROR_X/MIRROR_Y en RAM
+
 #### PLAY_MUSIC(nombre: str)
 Inicia reproducción de música embebida en ROM.
 
@@ -1062,4 +1127,4 @@ If joystick always reads extreme values (stuck at 1):
 - [ ] Reading JSVecx alg_jch0/alg_jch1 directly (skip RAM, avoid collisions)
 
 ---
-Última actualización: 2025-12-18 - Sección 19 added: Joystick Input System (complete architecture)
+Última actualización: 2025-12-18 - Sección 19 added: Joystick Input System (complete architecture)Última actualización: 2025-12-18 - Sección 17.4 actualizada: DRAW_VECTOR_EX unificada con arquitectura de mirrors

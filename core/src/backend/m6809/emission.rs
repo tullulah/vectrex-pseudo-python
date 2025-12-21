@@ -729,28 +729,36 @@ SFX_UPDATE_done:\n\
         RTS\n"
     );
     
-    // Draw_Sync_List_At_Mirrored: Same as Draw_Sync_List_At but with center-based mirroring
-    // This creates a horizontally mirrored sprite using the asset's calculated center as the mirror axis
-    // Formula: x_mirrored = 2*center_x - x_original (reflects point across center_x)
-    // dx values are also negated (NEGA) to flip line direction
-    // (Always emitted as part of core drawing infrastructure)
+    // Draw_Sync_List_At_With_Mirrors: Unified mirror support (X, Y, or both)
+    // Reads MIRROR_X and MIRROR_Y flags (set by DRAW_VECTOR_EX) and conditionally negates
+    // Much more efficient than 4 separate functions - one unified runtime logic with conditional branches
+    // MIRROR_X: 0=normal, 1=negate X (horizontal flip)
+    // MIRROR_Y: 0=normal, 1=negate Y (vertical flip)
+    // Can combine: both flags set = flip both axes
     out.push_str(
-        "Draw_Sync_List_At_Mirrored:\n\
-        ; Horizontally mirrored drawing (uses center-relative coordinates)\n\
-            ; With center-relative coords from vecres.rs, mirroring is simple:\n\
-            ; 1. Negate X coordinate: x_mirrored = -x_start\n\
-            ; 2. Negate dx deltas: dx_mirrored = -dx (via NEGA)\n\
+        "Draw_Sync_List_At_With_Mirrors:\n\
+        ; Unified mirror support using flags: MIRROR_X and MIRROR_Y\n\
+            ; Conditionally negates X and/or Y coordinates and deltas\n\
             LDA ,X+                 ; intensity\n\
             PSHS A                  ; Save intensity\n\
             LDA #$D0\n\
             PULS A                  ; Restore intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
             LDB ,X+                 ; y_start from .vec (already relative to center)\n\
+            ; Check if Y mirroring is enabled\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NO_NEGATE_Y\n\
+            NEGB                    ; ← Negate Y if flag set\n\
+DSWM_NO_NEGATE_Y:\n\
             ADDB DRAW_VEC_Y         ; Add Y offset\n\
             LDA ,X+                 ; x_start from .vec (already relative to center)\n\
-            NEGA                    ; ← Negate for X-axis mirror\n\
+            ; Check if X mirroring is enabled\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NO_NEGATE_X\n\
+            NEGA                    ; ← Negate X if flag set\n\
+DSWM_NO_NEGATE_X:\n\
             ADDA DRAW_VEC_X         ; Add X offset\n\
-            STD TEMP_YX             ; Save adjusted (mirrored) position\n\
+            STD TEMP_YX             ; Save adjusted position\n\
             ; Reset completo\n\
             CLR VIA_shift_reg\n\
             LDA #$CC\n\
@@ -766,7 +774,7 @@ SFX_UPDATE_done:\n\
             LDA #$83\n\
             STA VIA_port_b\n\
             ; Move sequence\n\
-            LDD TEMP_YX             ; Recuperar y,x ajustado\n\
+            LDD TEMP_YX\n\
             STB VIA_port_a          ; y to DAC\n\
             PSHS A                  ; Save x\n\
             LDA #$CE\n\
@@ -782,48 +790,64 @@ SFX_UPDATE_done:\n\
             CLR VIA_t1_cnt_hi\n\
             LEAX 2,X                ; Skip next_y, next_x\n\
             ; Wait for move to complete\n\
-            DSLM_W1:\n\
+            DSWM_W1:\n\
             LDA VIA_int_flags\n\
             ANDA #$40\n\
-            BEQ DSLM_W1\n\
-            ; Loop de dibujo (MIRRORED: negate dx)\n\
-            DSLM_LOOP:\n\
+            BEQ DSWM_W1\n\
+            ; Loop de dibujo (conditional mirrors)\n\
+            DSWM_LOOP:\n\
             LDA ,X+                 ; Read flag\n\
             CMPA #2                 ; Check end marker\n\
-            LBEQ DSLM_DONE\n\
+            LBEQ DSWM_DONE\n\
             CMPA #1                 ; Check next path marker\n\
-            LBEQ DSLM_NEXT_PATH\n\
-            ; Draw line with negated dx\n\
+            LBEQ DSWM_NEXT_PATH\n\
+            ; Draw line with conditional negations\n\
             LDB ,X+                 ; dy\n\
+            ; Check if Y mirroring is enabled\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NO_NEGATE_DY\n\
+            NEGB                    ; ← Negate dy if flag set\n\
+DSWM_NO_NEGATE_DY:\n\
             LDA ,X+                 ; dx\n\
-            NEGA                    ; ← NEGATE dx for mirror effect\n\
-            PSHS A                  ; Save negated dx\n\
-            STB VIA_port_a          ; dy to DAC\n\
+            ; Check if X mirroring is enabled\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NO_NEGATE_DX\n\
+            NEGA                    ; ← Negate dx if flag set\n\
+DSWM_NO_NEGATE_DX:\n\
+            PSHS A                  ; Save final dx\n\
+            STB VIA_port_a          ; dy (possibly negated) to DAC\n\
             CLR VIA_port_b\n\
             LDA #1\n\
             STA VIA_port_b\n\
-            PULS A                  ; Restore negated dx\n\
-            STA VIA_port_a          ; negated dx to DAC\n\
+            PULS A                  ; Restore final dx\n\
+            STA VIA_port_a          ; dx (possibly negated) to DAC\n\
             CLR VIA_t1_cnt_hi\n\
             LDA #$FF\n\
             STA VIA_shift_reg\n\
             ; Wait for line draw\n\
-            DSLM_W2:\n\
+            DSWM_W2:\n\
             LDA VIA_int_flags\n\
             ANDA #$40\n\
-            BEQ DSLM_W2\n\
+            BEQ DSWM_W2\n\
             CLR VIA_shift_reg\n\
-            BRA DSLM_LOOP\n\
-            ; Next path: negate X coordinate for new path too
-            DSLM_NEXT_PATH:\n\
+            BRA DSWM_LOOP\n\
+            ; Next path: repeat mirror logic for new path header\n\
+            DSWM_NEXT_PATH:\n\
             TFR X,D\n\
             PSHS D\n\
             LDA ,X+                 ; Read intensity\n\
             PSHS A\n\
-            LDB ,X+                 ; y_start (already relative to center)\n\
-            ADDB DRAW_VEC_Y         ; Add Y offset to new path\n\
-            LDA ,X+                 ; x_start (already relative to center)\n\
-            NEGA                    ; ← Negate for X-axis mirror\n\
+            LDB ,X+                 ; y_start\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NEXT_NO_NEGATE_Y\n\
+            NEGB\n\
+DSWM_NEXT_NO_NEGATE_Y:\n\
+            ADDB DRAW_VEC_Y         ; Add Y offset\n\
+            LDA ,X+                 ; x_start\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NEXT_NO_NEGATE_X\n\
+            NEGA\n\
+DSWM_NEXT_NO_NEGATE_X:\n\
             ADDA DRAW_VEC_X         ; Add X offset\n\
             STD TEMP_YX\n\
             PULS A                  ; Get intensity back\n\
@@ -845,7 +869,7 @@ SFX_UPDATE_done:\n\
             NOP\n\
             LDA #$83\n\
             STA VIA_port_b\n\
-            ; Move to new start position (already offset-adjusted)\n\
+            ; Move to new start position\n\
             LDD TEMP_YX\n\
             STB VIA_port_a\n\
             PSHS A\n\
@@ -861,154 +885,13 @@ SFX_UPDATE_done:\n\
             CLR VIA_t1_cnt_hi\n\
             LEAX 2,X\n\
             ; Wait for move\n\
-            DSLM_W3:\n\
+            DSWM_W3:\n\
             LDA VIA_int_flags\n\
             ANDA #$40\n\
-            BEQ DSLM_W3\n\
+            BEQ DSWM_W3\n\
             CLR VIA_shift_reg\n\
-            BRA DSLM_LOOP\n\
-            DSLM_DONE:\n\
-            RTS\n"
-    );
-    
-    // Draw_Sync_List_At_Mirrored_Y: Vertically mirrored drawing (Y-axis mirror)
-    // Uses center-relative coordinates, mirrors across Y axis
-    // 1. Negate Y coordinate: y_mirrored = -y_start
-    // 2. Negate dy deltas: dy_mirrored = -dy (via NEGA)
-    out.push_str(
-        "Draw_Sync_List_At_Mirrored_Y:\n\
-        ; Vertically mirrored drawing (uses center-relative coordinates)\n\
-            ; With center-relative coords from vecres.rs, mirroring is simple:\n\
-            ; 1. Negate Y coordinate: y_mirrored = -y_start\n\
-            ; 2. Negate dy deltas: dy_mirrored = -dy (via NEGA)\n\
-            LDA ,X+                 ; intensity\n\
-            PSHS A                  ; Save intensity\n\
-            LDA #$D0\n\
-            PULS A                  ; Restore intensity\n\
-            JSR $F2AB               ; BIOS Intensity_a\n\
-            LDB ,X+                 ; y_start from .vec (already relative to center)\n\
-            NEGB                    ; ← Negate for Y-axis mirror\n\
-            ADDB DRAW_VEC_Y         ; Add Y offset\n\
-            LDA ,X+                 ; x_start from .vec (already relative to center)\n\
-            ADDA DRAW_VEC_X         ; Add X offset\n\
-            STD TEMP_YX             ; Save adjusted (mirrored) position\n\
-            ; Reset completo\n\
-            CLR VIA_shift_reg\n\
-            LDA #$CC\n\
-            STA VIA_cntl\n\
-            CLR VIA_port_a\n\
-            LDA #$82\n\
-            STA VIA_port_b\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            LDA #$83\n\
-            STA VIA_port_b\n\
-            ; Move sequence\n\
-            LDD TEMP_YX             ; Recuperar y,x ajustado\n\
-            STB VIA_port_a          ; y to DAC\n\
-            PSHS A                  ; Save x\n\
-            LDA #$CE\n\
-            STA VIA_cntl\n\
-            CLR VIA_port_b\n\
-            LDA #1\n\
-            STA VIA_port_b\n\
-            PULS A                  ; Restore x\n\
-            STA VIA_port_a          ; x to DAC\n\
-            ; Timing setup\n\
-            LDA #$7F\n\
-            STA VIA_t1_cnt_lo\n\
-            CLR VIA_t1_cnt_hi\n\
-            LEAX 2,X                ; Skip next_y, next_x\n\
-            ; Wait for move to complete\n\
-            DSLMY_W1:\n\
-            LDA VIA_int_flags\n\
-            ANDA #$40\n\
-            BEQ DSLMY_W1\n\
-            ; Loop de dibujo (MIRRORED_Y: negate dy)\n\
-            DSLMY_LOOP:\n\
-            LDA ,X+                 ; Read flag\n\
-            CMPA #2                 ; Check end marker\n\
-            LBEQ DSLMY_DONE\n\
-            CMPA #1                 ; Check next path marker\n\
-            LBEQ DSLMY_NEXT_PATH\n\
-            ; Draw line with negated dy\n\
-            LDB ,X+                 ; dy\n\
-            NEGB                    ; ← NEGATE dy for Y-axis mirror effect\n\
-            LDA ,X+                 ; dx\n\
-            PSHS A                  ; Save dx\n\
-            STB VIA_port_a          ; negated dy to DAC\n\
-            CLR VIA_port_b\n\
-            LDA #1\n\
-            STA VIA_port_b\n\
-            PULS A                  ; Restore dx\n\
-            STA VIA_port_a          ; dx to DAC\n\
-            CLR VIA_t1_cnt_hi\n\
-            LDA #$FF\n\
-            STA VIA_shift_reg\n\
-            ; Wait for line draw\n\
-            DSLMY_W2:\n\
-            LDA VIA_int_flags\n\
-            ANDA #$40\n\
-            BEQ DSLMY_W2\n\
-            CLR VIA_shift_reg\n\
-            BRA DSLMY_LOOP\n\
-            ; Next path: negate Y coordinate for new path too\n\
-            DSLMY_NEXT_PATH:\n\
-            TFR X,D\n\
-            PSHS D\n\
-            LDA ,X+                 ; Read intensity\n\
-            PSHS A\n\
-            LDB ,X+                 ; y_start (already relative to center)\n\
-            NEGB                    ; ← Negate for Y-axis mirror\n\
-            ADDB DRAW_VEC_Y         ; Add Y offset to new path\n\
-            LDA ,X+                 ; x_start (already relative to center)\n\
-            ADDA DRAW_VEC_X         ; Add X offset\n\
-            STD TEMP_YX\n\
-            PULS A                  ; Get intensity back\n\
-            JSR $F2AB\n\
-            PULS D\n\
-            ADDD #3\n\
-            TFR D,X\n\
-            ; Reset to zero\n\
-            CLR VIA_shift_reg\n\
-            LDA #$CC\n\
-            STA VIA_cntl\n\
-            CLR VIA_port_a\n\
-            LDA #$82\n\
-            STA VIA_port_b\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            NOP\n\
-            LDA #$83\n\
-            STA VIA_port_b\n\
-            ; Move to new start position (already offset-adjusted)\n\
-            LDD TEMP_YX\n\
-            STB VIA_port_a\n\
-            PSHS A\n\
-            LDA #$CE\n\
-            STA VIA_cntl\n\
-            CLR VIA_port_b\n\
-            LDA #1\n\
-            STA VIA_port_b\n\
-            PULS A\n\
-            STA VIA_port_a\n\
-            LDA #$7F\n\
-            STA VIA_t1_cnt_lo\n\
-            CLR VIA_t1_cnt_hi\n\
-            LEAX 2,X\n\
-            ; Wait for move\n\
-            DSLMY_W3:\n\
-            LDA VIA_int_flags\n\
-            ANDA #$40\n\
-            BEQ DSLMY_W3\n\
-            CLR VIA_shift_reg\n\
-            BRA DSLMY_LOOP\n\
-            DSLMY_DONE:\n\
+            BRA DSWM_LOOP\n\
+            DSWM_DONE:\n\
             RTS\n"
     );
     

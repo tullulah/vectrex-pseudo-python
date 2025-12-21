@@ -1036,8 +1036,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if opts.exclude_ram_org {
         out.push_str(&format!("DRAW_VEC_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
         out.push_str(&format!("DRAW_VEC_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("MIRROR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("MIRROR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
     } else {
         out.push_str("; DRAW_VECTOR position offset\nDRAW_VEC_X: FCB 0\nDRAW_VEC_Y: FCB 0\n");
+        out.push_str("; Mirror flags for DRAW_VECTOR_EX unified function\nMIRROR_X: FCB 0\nMIRROR_Y: FCB 0\n");
     }
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function

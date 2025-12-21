@@ -123,8 +123,8 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     }
     
     // DRAW_VECTOR_EX: Draw vector asset with transformations (position + mirror)
-    // Usage: DRAW_VECTOR_EX("player", x, y, mirror) -> draws vector at (x, y) with optional X-axis mirroring
-    // mirror: 0 = normal (no flip), 1 = flip X-axis (negates X coordinate)
+    // Usage: DRAW_VECTOR_EX("player", x, y, mirror) -> draws vector at (x, y) with optional X/Y mirroring
+    // mirror modes: 0 = normal (no flip), 1 = flip X-axis, 2 = flip Y-axis, 3 = flip both axes
     if up == "DRAW_VECTOR_EX" && args.len() == 4 {
         if let Expr::StringLit(asset_name) = &args[0] {
             // Check if asset exists in opts.assets
@@ -166,30 +166,33 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 
                 // Evaluate mirror flag (arg 3)
                 emit_expr(&args[3], out, fctx, string_map, opts);
-                out.push_str("    LDB RESULT+1  ; Mirror flag (0=normal, 1=flip X)\n");
-                out.push_str("    STB RESULT+8  ; Save mirror flag in temp storage\n");
+                out.push_str("    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)\n");
                 
-                // Store asset parameters for mirror calculations
-                out.push_str(&format!("    LDB #{}\n", asset_width));
-                out.push_str("    STB RESULT+9  ; Save width for mirror offset\n");
-                out.push_str(&format!("    LDB #{}\n", center_x));
-                out.push_str("    STB RESULT+10 ; Save center_x for mirror axis\n");
+                // Decode mirror mode into separate MIRROR_X and MIRROR_Y flags
+                out.push_str("    ; Decode mirror mode into separate flags:\n");
+                out.push_str("    CLR MIRROR_X  ; Clear X flag\n");
+                out.push_str("    CLR MIRROR_Y  ; Clear Y flag\n");
+                out.push_str("    CMPB #1       ; Check if X-mirror (mode 1)\n");
+                out.push_str("    BNE DSVEX_CHK_Y\n");
+                out.push_str("    LDA #1\n");
+                out.push_str("    STA MIRROR_X\n");
+                out.push_str("DSVEX_CHK_Y:\n");
+                out.push_str("    CMPB #2       ; Check if Y-mirror (mode 2)\n");
+                out.push_str("    BNE DSVEX_CHK_XY\n");
+                out.push_str("    LDA #1\n");
+                out.push_str("    STA MIRROR_Y\n");
+                out.push_str("DSVEX_CHK_XY:\n");
+                out.push_str("    CMPB #3       ; Check if both-mirror (mode 3)\n");
+                out.push_str("    BNE DSVEX_CALL\n");
+                out.push_str("    LDA #1\n");
+                out.push_str("    STA MIRROR_X\n");
+                out.push_str("    STA MIRROR_Y\n");
+                out.push_str("DSVEX_CALL:\n");
                 
-                out.push_str(&format!("{}:\n", no_mirror_label));
-                
-                // Generate code to draw each path at offset position
+                // Generate code to draw each path using unified mirrored function
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    LDB RESULT+8  ; Get mirror flag\n");
-                    out.push_str("    CMPB #0\n");
-                    let normal_label = fresh_label("DRAW_VEX_NORMAL");
-                    out.push_str(&format!("    BEQ {}\n", normal_label));
-                    out.push_str("    JSR Draw_Sync_List_At_Mirrored\n");
-                    let done_label = fresh_label("DRAW_VEX_DONE");
-                    out.push_str(&format!("    BRA {}\n", done_label));
-                    out.push_str(&format!("{}:\n", normal_label));
-                    out.push_str("    JSR Draw_Sync_List_At\n");
-                    out.push_str(&format!("{}:\n", done_label));
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags\n");
                 }
                 
                 out.push_str("    LDD #0\n    STD RESULT\n");
