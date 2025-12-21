@@ -5,6 +5,7 @@ import { WelcomeView } from './WelcomeView';
 import { MonacoEditorWrapper } from './MonacoEditorWrapper';
 import { VectorEditor } from './VectorEditor';
 import { MusicEditor } from './MusicEditor';
+import { SFXEditor } from './SFXEditor';
 
 // Basic custom tab bar replacing flexlayout doc:* logic.
 // Phase 1: single group, order = documents array order.
@@ -39,6 +40,7 @@ export const EditorSurface: React.FC = () => {
   const activeDoc = documents.find(d => d.uri === active);
   const isVectorFile = active?.endsWith('.vec') || false;
   const isMusicFile = active?.endsWith('.vmus') || false;
+  const isSfxFile = active?.endsWith('.vsfx') || false;
   
   // Parse vector resource from document content
   const vectorResource = useMemo(() => {
@@ -60,6 +62,16 @@ export const EditorSurface: React.FC = () => {
     }
   }, [isMusicFile, activeDoc?.content]);
 
+  // Parse SFX resource from document content
+  const sfxResource = useMemo(() => {
+    if (!isSfxFile || !activeDoc?.content) return undefined;
+    try {
+      return JSON.parse(activeDoc.content);
+    } catch {
+      return undefined;
+    }
+  }, [isSfxFile, activeDoc?.content]);
+
   // Handle vector editor changes
   const handleVectorChange = useCallback((resource: any) => {
     if (!active) return;
@@ -74,6 +86,13 @@ export const EditorSurface: React.FC = () => {
     useEditorStore.getState().updateContent(active, newContent);
   }, [active]);
 
+  // Handle SFX editor changes
+  const handleSfxChange = useCallback((resource: any) => {
+    if (!active) return;
+    const newContent = JSON.stringify(resource, null, 2);
+    useEditorStore.getState().updateContent(active, newContent);
+  }, [active]);
+
   return (
     <div className="vpy-editor-surface">
       <div className="vpy-tab-bar">
@@ -81,7 +100,8 @@ export const EditorSurface: React.FC = () => {
           const title = deriveTitle(doc.uri);
           const isVec = doc.uri.endsWith('.vec');
           const isMus = doc.uri.endsWith('.vmus');
-          const icon = isMus ? '🎵' : isVec ? '🎨' : '📄';
+          const isSfx = doc.uri.endsWith('.vsfx');
+          const icon = isSfx ? '🔊' : isMus ? '🎵' : isVec ? '🎨' : '📄';
           return (
             <div key={doc.uri}
               className={"vpy-tab" + (doc.uri===active?" active":"") + (doc.dirty?" dirty":"")}
@@ -98,6 +118,15 @@ export const EditorSurface: React.FC = () => {
       <div className="vpy-editor-body">
         {!active ? (
           <WelcomeView />
+        ) : isSfxFile ? (
+          <div style={{ background: '#16213e', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 16 }}>
+            <SFXEditor 
+              resource={sfxResource} 
+              onChange={handleSfxChange}
+              width={600}
+              height={500}
+            />
+          </div>
         ) : isMusicFile ? (
           <div style={{ background: '#1e1e2e', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <MusicEditor 

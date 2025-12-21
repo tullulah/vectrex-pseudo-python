@@ -307,7 +307,7 @@ function App() {
   const [defaultProjectLocation, setDefaultProjectLocation] = useState('');
   // New File dialog state (for .vec files that need a name)
   const [showNewFileDialog, setShowNewFileDialog] = useState(false);
-  const [newFileType, setNewFileType] = useState<'vec' | 'c' | 'vpy' | 'vmus'>('vec');
+  const [newFileType, setNewFileType] = useState<'vec' | 'c' | 'vpy' | 'vmus' | 'vsfx'>('vec');
   const diags = allDiagnostics || [];
   const errCount = diags.filter((d: any)=>d.severity==='error').length;
   const warnCount = diags.filter((d: any)=>d.severity==='warning').length;
@@ -574,6 +574,11 @@ def loop():
       case 'file.new.vmus': {
         // Open dialog to ask for filename
         setNewFileType('vmus');
+        setShowNewFileDialog(true);
+        break; }
+      case 'file.new.vsfx': {
+        // Open dialog to ask for filename for SFX
+        setNewFileType('vsfx');
         setShowNewFileDialog(true);
         break; }
       case 'file.open': {
@@ -1143,6 +1148,7 @@ def loop():
               <MenuItem label={`${t('file.new.c', 'C/C++ File')}`} onClick={()=>{ commandExec('file.new.c'); setOpenMenu(null); }} />
               <MenuItem label={`${t('file.new.vec', 'Vector List (.vec)')}`} onClick={()=>{ commandExec('file.new.vec'); setOpenMenu(null); }} />
               <MenuItem label={`${t('file.new.vmus', 'Music File (.vmus)')}`} onClick={()=>{ commandExec('file.new.vmus'); setOpenMenu(null); }} />
+              <MenuItem label={`${t('file.new.vsfx', 'Sound Effect (.vsfx)')}`} onClick={()=>{ commandExec('file.new.vsfx'); setOpenMenu(null); }} />
             </SubMenu>
             <SubMenu label={t('file.open', 'Open')}>
               <MenuItem label={`${t('project.open', 'Project...')}	Ctrl+Shift+O`} onClick={()=>{ commandExec('project.open'); setOpenMenu(null); }} />
@@ -1369,9 +1375,9 @@ def loop():
       {/* New File Dialog (for .vec and .vmus files) */}
       <InputDialog
         isOpen={showNewFileDialog}
-        title={newFileType === 'vec' ? 'New Vector List' : newFileType === 'vmus' ? 'New Music File' : 'New File'}
-        message={newFileType === 'vec' ? 'Enter a name for the vector list (without extension):' : newFileType === 'vmus' ? 'Enter a name for the music file (without extension):' : 'Enter filename:'}
-        placeholder={newFileType === 'vec' ? 'my_sprite' : newFileType === 'vmus' ? 'my_music' : 'filename'}
+        title={newFileType === 'vec' ? 'New Vector List' : newFileType === 'vmus' ? 'New Music File' : newFileType === 'vsfx' ? 'New Sound Effect' : 'New File'}
+        message={newFileType === 'vec' ? 'Enter a name for the vector list (without extension):' : newFileType === 'vmus' ? 'Enter a name for the music file (without extension):' : newFileType === 'vsfx' ? 'Enter a name for the sound effect (without extension):' : 'Enter filename:'}
+        placeholder={newFileType === 'vec' ? 'my_sprite' : newFileType === 'vmus' ? 'my_music' : newFileType === 'vsfx' ? 'laser' : 'filename'}
         defaultValue=""
         validateFn={(value) => {
           if (!value.trim()) return 'Name is required';
@@ -1483,6 +1489,51 @@ def loop():
             
             // Fallback: create in-memory
             const uri = `inmemory://${name}.vmus`;
+            openDocument({ uri, language: 'json', content, dirty: true, diagnostics: [] });
+          } else if (newFileType === 'vsfx') {
+            // SFX default content
+            const content = JSON.stringify({
+              version: "1.0",
+              name: name,
+              category: "custom",
+              duration_ms: 200,
+              oscillator: { frequency: 440, channel: 0, duty: 50 },
+              envelope: { attack: 0, decay: 50, sustain: 8, release: 100, peak: 15 },
+              pitch: { enabled: false, start_mult: 1.0, end_mult: 1.0, curve: 0 },
+              noise: { enabled: false, period: 15, volume: 12, decay_ms: 100 },
+              modulation: { arpeggio: false, arpeggio_notes: [], arpeggio_speed: 50, vibrato: false, vibrato_depth: 0, vibrato_speed: 8 }
+            }, null, 2);
+            
+            // If we have a project, save to assets/sfx/
+            if (vpyProject?.rootDir && apiFiles?.saveFile) {
+              const filePath = `${vpyProject.rootDir}/assets/sfx/${name}.vsfx`.replace(/\\/g, '/');
+              try {
+                const result = await apiFiles.saveFile({ path: filePath, content });
+                if (result && !result.error) {
+                  const normPath = filePath.replace(/\\/g, '/');
+                  const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                  openDocument({
+                    uri,
+                    language: 'json',
+                    content,
+                    dirty: false,
+                    diagnostics: [],
+                    diskPath: filePath,
+                    mtime: result.mtime,
+                    lastSavedContent: content
+                  });
+                  // Refresh workspace to show new file
+                  useProjectStore.getState().refreshWorkspace();
+                  logger.info('File', `Created ${filePath}`);
+                  return;
+                }
+              } catch (e) {
+                logger.warn('File', 'Failed to save to project folder, creating in-memory');
+              }
+            }
+            
+            // Fallback: create in-memory
+            const uri = `inmemory://${name}.vsfx`;
             openDocument({ uri, language: 'json', content, dirty: true, diagnostics: [] });
           }
         }}
