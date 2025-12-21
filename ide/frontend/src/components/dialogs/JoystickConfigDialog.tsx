@@ -15,17 +15,25 @@ export const JoystickConfigDialog: React.FC = () => {
     axisXInverted,
     axisYInverted,
     deadzone,
+    dpadUpButton,
+    dpadDownButton,
+    dpadLeftButton,
+    dpadRightButton,
     buttonMappings,
     setAxisXIndex,
     setAxisYIndex,
     setAxisXInverted,
     setAxisYInverted,
     setDeadzone,
+    setDpadUpButton,
+    setDpadDownButton,
+    setDpadLeftButton,
+    setDpadRightButton,
     setButtonMapping,
     resetConfig,
   } = useJoystickStore();
 
-  const [listeningForButton, setListeningForButton] = useState<number | null>(null);
+  const [listeningForButton, setListeningForButton] = useState<string | null>(null); // Changed to string to support 'dpad_up', 'button_1', etc.
   const [currentAxisValues, setCurrentAxisValues] = useState<number[]>([]);
   const [pressedButtons, setPressedButtons] = useState<boolean[]>([]);
 
@@ -59,14 +67,26 @@ export const JoystickConfigDialog: React.FC = () => {
         const gamepad = gamepads[gamepadIndex];
         const pressedButton = gamepad.buttons.findIndex(b => b.pressed);
         if (pressedButton !== -1) {
-          setButtonMapping(listeningForButton, pressedButton);
+          // Handle different button types
+          if (listeningForButton === 'dpad_up') {
+            setDpadUpButton(pressedButton);
+          } else if (listeningForButton === 'dpad_down') {
+            setDpadDownButton(pressedButton);
+          } else if (listeningForButton === 'dpad_left') {
+            setDpadLeftButton(pressedButton);
+          } else if (listeningForButton === 'dpad_right') {
+            setDpadRightButton(pressedButton);
+          } else if (listeningForButton.startsWith('button_')) {
+            const vectrexBtn = parseInt(listeningForButton.split('_')[1]);
+            setButtonMapping(vectrexBtn, pressedButton);
+          }
           setListeningForButton(null);
         }
       }
     }, 50);
 
     return () => clearInterval(interval);
-  }, [listeningForButton, gamepadIndex, isConfigOpen, setButtonMapping]);
+  }, [listeningForButton, gamepadIndex, isConfigOpen, setDpadUpButton, setDpadDownButton, setDpadLeftButton, setDpadRightButton, setButtonMapping]);
 
   if (!isConfigOpen) return null;
 
@@ -181,9 +201,153 @@ export const JoystickConfigDialog: React.FC = () => {
 
         {gamepadIndex !== null && connectedGamepads[gamepadIndex] && (
           <>
+            {/* D-Pad Configuration (Digital Input) */}
+            <div style={{ marginBottom: 20, padding: 15, background: '#2a2a3e', borderRadius: 6, border: '2px solid #4a4a6e' }}>
+              <h3 style={{ fontSize: 14, marginBottom: 10, color: '#ffffff' }}>
+                ⬆️ D-Pad (Digital Input for J1_X / J1_Y)
+              </h3>
+              <p style={{ fontSize: 11, color: '#888', marginBottom: 15 }}>
+                Click on D-Pad buttons to map them. Games using J1_X() / J1_Y() will use these.
+              </p>
+              
+              {/* D-Pad Visual */}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 30 }}>
+                <div style={{ position: 'relative', width: 120, height: 120 }}>
+                  {/* Center circle */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    width: 40,
+                    height: 40,
+                    transform: 'translate(-50%, -50%)',
+                    background: '#1e1e1e',
+                    borderRadius: '50%',
+                    border: '2px solid #3c3c3c',
+                  }} />
+                  
+                  {/* Up */}
+                  <button
+                    onClick={() => setListeningForButton('dpad_up')}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 36,
+                      height: 36,
+                      background: listeningForButton === 'dpad_up' ? '#4ec94e' : (pressedButtons[dpadUpButton] ? '#ffcc00' : '#252526'),
+                      border: listeningForButton === 'dpad_up' ? '3px solid #4ec94e' : '2px solid #3c3c3c',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: pressedButtons[dpadUpButton] ? '0 0 10px #ffcc00' : 'none',
+                    }}
+                  >
+                    ▲
+                  </button>
+                  
+                  {/* Down */}
+                  <button
+                    onClick={() => setListeningForButton('dpad_down')}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 36,
+                      height: 36,
+                      background: listeningForButton === 'dpad_down' ? '#4ec94e' : (pressedButtons[dpadDownButton] ? '#ffcc00' : '#252526'),
+                      border: listeningForButton === 'dpad_down' ? '3px solid #4ec94e' : '2px solid #3c3c3c',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: pressedButtons[dpadDownButton] ? '0 0 10px #ffcc00' : 'none',
+                    }}
+                  >
+                    ▼
+                  </button>
+                  
+                  {/* Left */}
+                  <button
+                    onClick={() => setListeningForButton('dpad_left')}
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 36,
+                      height: 36,
+                      background: listeningForButton === 'dpad_left' ? '#4ec94e' : (pressedButtons[dpadLeftButton] ? '#ffcc00' : '#252526'),
+                      border: listeningForButton === 'dpad_left' ? '3px solid #4ec94e' : '2px solid #3c3c3c',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: pressedButtons[dpadLeftButton] ? '0 0 10px #ffcc00' : 'none',
+                    }}
+                  >
+                    ◀
+                  </button>
+                  
+                  {/* Right */}
+                  <button
+                    onClick={() => setListeningForButton('dpad_right')}
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 36,
+                      height: 36,
+                      background: listeningForButton === 'dpad_right' ? '#4ec94e' : (pressedButtons[dpadRightButton] ? '#ffcc00' : '#252526'),
+                      border: listeningForButton === 'dpad_right' ? '3px solid #4ec94e' : '2px solid #3c3c3c',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: pressedButtons[dpadRightButton] ? '0 0 10px #ffcc00' : 'none',
+                    }}
+                  >
+                    ▶
+                  </button>
+                </div>
+                
+                {/* Current mappings */}
+                <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#cccccc' }}>
+                  <div><strong>Current Mapping:</strong></div>
+                  <div style={{ marginTop: 8, lineHeight: '1.8' }}>
+                    <div>▲ Up: {getButtonName(dpadUpButton)}</div>
+                    <div>▼ Down: {getButtonName(dpadDownButton)}</div>
+                    <div>◀ Left: {getButtonName(dpadLeftButton)}</div>
+                    <div>▶ Right: {getButtonName(dpadRightButton)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Analog Stick Configuration */}
             <div style={{ marginBottom: 20, padding: 15, background: '#252526', borderRadius: 6 }}>
-              <h3 style={{ fontSize: 14, marginBottom: 10, color: '#ffffff' }}>Analog Stick (Vectrex Joystick)</h3>
+              <h3 style={{ fontSize: 14, marginBottom: 10, color: '#ffffff' }}>
+                🎮 Analog Stick (Analog Input for J1_X_ANALOG / J1_Y_ANALOG)
+              </h3>
+              <p style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>
+                Configure analog axes. Games using J1_X_ANALOG() / J1_Y_ANALOG() will use these.
+              </p>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15 }}>
                 <div>
@@ -378,7 +542,7 @@ export const JoystickConfigDialog: React.FC = () => {
                 {vectrexButtonNames.map((name, idx) => {
                   const vectrexBtn = idx + 1;
                   const mapping = buttonMappings.find(m => m.vectrexButton === vectrexBtn);
-                  const isListening = listeningForButton === vectrexBtn;
+                  const isListening = listeningForButton === `button_${vectrexBtn}`;
                   const gamepadBtn = mapping?.gamepadButton;
                   const isPressed = gamepadBtn !== undefined && pressedButtons[gamepadBtn];
 
@@ -419,7 +583,7 @@ export const JoystickConfigDialog: React.FC = () => {
                           : 'Not mapped'}
                       </div>
                       <button
-                        onClick={() => setListeningForButton(vectrexBtn)}
+                        onClick={() => setListeningForButton(`button_${vectrexBtn}`)}
                         disabled={isListening}
                         style={{
                           padding: '4px 10px',

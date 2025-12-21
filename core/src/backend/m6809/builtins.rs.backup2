@@ -30,12 +30,11 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     let up = name.to_ascii_uppercase();
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
-    "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"DRAW_VECTOR_EX"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"MUSIC_UPDATE"|
+    "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"MUSIC_UPDATE"|
         "J1_X"|"J1_Y"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
-    "MUL_A"|"DIV_A"|"MOD_A"|
     "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"|
     "DEBUG_PRINT"|"DEBUG_PRINT_LABELED"|"DEBUG_PRINT_STR"
     );
@@ -104,108 +103,6 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
                 out.push_str(&format!("; ║  DRAW_VECTOR(\"{}\") - asset does not exist{:>width$}║\n", 
                     asset_name, "", width = 61 - asset_name.len() - 32));
-                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
-                if available.is_empty() {
-                    out.push_str(&format!("; ║  No .vec files found in assets/vectors/                   ║\n"));
-                    out.push_str(&format!("; ║  Please create vector assets in that directory.           ║\n"));
-                } else {
-                    out.push_str(&format!("; ║  Available vector assets ({} found):                     ║\n", available.len()));
-                    for (i, name) in available.iter().enumerate() {
-                        out.push_str(&format!("; ║    {}. \"{}\"{:>width$}║\n", 
-                            i+1, name, "", width = 56 - name.len()));
-                    }
-                }
-                out.push_str(&format!("; ╚════════════════════════════════════════════════════════════╝\n"));
-                out.push_str("    ERROR_VECTOR_ASSET_NOT_FOUND  ; Assembly will fail here\n");
-                return true;
-            }
-        }
-    }
-    
-    // DRAW_VECTOR_EX: Draw vector asset with transformations (position + mirror)
-    // Usage: DRAW_VECTOR_EX("player", x, y, mirror) -> draws vector at (x, y) with optional X-axis mirroring
-    // mirror: 0 = normal (no flip), 1 = flip X-axis (negates X coordinate)
-    if up == "DRAW_VECTOR_EX" && args.len() == 4 {
-        if let Expr::StringLit(asset_name) = &args[0] {
-            // Check if asset exists in opts.assets
-            let asset_exists = opts.assets.iter().any(|a| {
-                a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Vector)
-            });
-            
-            if asset_exists {
-                // Find the asset to get path count
-                let asset_info = opts.assets.iter()
-                    .find(|a| a.name == *asset_name && matches!(a.asset_type, crate::codegen::AssetType::Vector))
-                    .unwrap();
-                
-                // Load the .vec file to count paths, get width, and get center for mirror
-                use crate::vecres::VecResource;
-                let (path_count, asset_width, center_x) = if let Ok(resource) = VecResource::load(std::path::Path::new(&asset_info.path)) {
-                    let (min_x, max_x) = resource.calculate_x_bounds();
-                    let width = (max_x - min_x) as i32;
-                    let (cx, _cy) = resource.calculate_center();
-                    (resource.visible_paths().len(), width, cx)
-                } else {
-                    (1, 0, 0) // Fallback if can't load
-                };
-                
-                let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
-                let no_mirror_label = fresh_label("DRAW_VEX");
-                
-                out.push_str(&format!("; DRAW_VECTOR_EX(\"{}\", x, y, mirror) - {} path(s), width={}, center_x={}\n", asset_name, path_count, asset_width, center_x));
-                
-                // Evaluate x position (arg 1)
-                emit_expr(&args[1], out, fctx, string_map, opts);
-                out.push_str("    LDA RESULT+1  ; X position (low byte)\n");
-                out.push_str("    STA DRAW_VEC_X\n");
-                
-                // Evaluate y position (arg 2)
-                emit_expr(&args[2], out, fctx, string_map, opts);
-                out.push_str("    LDA RESULT+1  ; Y position (low byte)\n");
-                out.push_str("    STA DRAW_VEC_Y\n");
-                
-                // Evaluate mirror flag (arg 3)
-                emit_expr(&args[3], out, fctx, string_map, opts);
-                out.push_str("    LDB RESULT+1  ; Mirror flag (0=normal, 1=flip X)\n");
-                out.push_str("    STB RESULT+8  ; Save mirror flag in temp storage\n");
-                
-                // Store asset parameters for mirror calculations
-                out.push_str(&format!("    LDB #{}\n", asset_width));
-                out.push_str("    STB RESULT+9  ; Save width for mirror offset\n");
-                out.push_str(&format!("    LDB #{}\n", center_x));
-                out.push_str("    STB RESULT+10 ; Save center_x for mirror axis\n");
-                
-                out.push_str(&format!("{}:\n", no_mirror_label));
-                
-                // Generate code to draw each path at offset position
-                for path_idx in 0..path_count {
-                    out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    LDB RESULT+8  ; Get mirror flag\n");
-                    out.push_str("    CMPB #0\n");
-                    let normal_label = fresh_label("DRAW_VEX_NORMAL");
-                    out.push_str(&format!("    BEQ {}\n", normal_label));
-                    out.push_str("    JSR Draw_Sync_List_At_Mirrored\n");
-                    let done_label = fresh_label("DRAW_VEX_DONE");
-                    out.push_str(&format!("    BRA {}\n", done_label));
-                    out.push_str(&format!("{}:\n", normal_label));
-                    out.push_str("    JSR Draw_Sync_List_At\n");
-                    out.push_str(&format!("{}:\n", done_label));
-                }
-                
-                out.push_str("    LDD #0\n    STD RESULT\n");
-                return true;
-            } else {
-                // Generate helpful compile-time error with list of available assets
-                let available: Vec<&str> = opts.assets.iter()
-                    .filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Vector))
-                    .map(|a| a.name.as_str())
-                    .collect();
-                
-                out.push_str(&format!("; ╔════════════════════════════════════════════════════════════╗\n"));
-                out.push_str(&format!("; ║  ❌ COMPILATION ERROR: Vector asset not found             ║\n"));
-                out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
-                out.push_str(&format!("; ║  DRAW_VECTOR_EX(\"{}\") - asset does not exist{:>width$}║\n", 
-                    asset_name, "", width = 56 - asset_name.len()));
                 out.push_str(&format!("; ╠════════════════════════════════════════════════════════════╣\n"));
                 if available.is_empty() {
                     out.push_str(&format!("; ║  No .vec files found in assets/vectors/                   ║\n"));
@@ -315,14 +212,24 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // J1_X: Default to digital (fast, suitable for 60fps)
     if up == "J1_X" && args.is_empty() {
         add_native_call_comment(out, "J1_X");
-        out.push_str("; J1_X() - Read Joystick 1 X axis (Digital from RAM)\n");
-        out.push_str("; Frontend writes unsigned 0-255 to $CF00 (128=center)\n");
-        out.push_str("    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)\n");
-        out.push_str("; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)\n");
-        out.push_str("    CMPB #108    ; Check if < 108 (left)\n");
-        out.push_str("    BLO J1X_LEFT ; Branch if lower (unsigned)\n");
-        out.push_str("    CMPB #148    ; Check if > 148 (right)\n");
-        out.push_str("    BHI J1X_RIGHT ; Branch if higher (unsigned)\n");
+        out.push_str("; J1_X() - Read Joystick 1 X axis (Digital from BIOS analog)\n");
+        out.push_str("; Calls Joy_Analog (works in JSVecx) then converts to digital (-1/0/+1)\n");
+        out.push_str("    LDA #$80\n");
+        out.push_str("    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)\n");
+        out.push_str("    LDA #1\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X\n");
+        out.push_str("    CLR $C820    ; Vec_Joy_Mux_1_Y (disable Y for speed)\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
+        out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X (analog value)\n");
+        out.push_str("; Convert analog to digital: < -20 = left(-1), > +20 = right(+1), else center(0)\n");
+        out.push_str("    CMPB #-20    ; Check if left\n");
+        out.push_str("    BLT J1X_LEFT\n");
+        out.push_str("    CMPB #20     ; Check if right\n");
+        out.push_str("    BGT J1X_RIGHT\n");
         out.push_str("    LDD #0       ; Center\n");
         out.push_str("    BRA J1X_END\n");
         out.push_str("J1X_LEFT:\n");
@@ -379,14 +286,24 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // NOTE: Joy_Digital is MUCH faster than Joy_Analog (suitable for 60fps)
     if up == "J1_Y" && args.is_empty() {
         add_native_call_comment(out, "J1_Y");
-        out.push_str("; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)\n");
-        out.push_str("; Frontend writes unsigned 0-255 to $CF01 (128=center)\n");
-        out.push_str("    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)\n");
-        out.push_str("; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)\n");
-        out.push_str("    CMPB #108    ; Check if < 108 (down)\n");
-        out.push_str("    BLO J1Y_DOWN ; Branch if lower (unsigned)\n");
-        out.push_str("    CMPB #148    ; Check if > 148 (up)\n");
-        out.push_str("    BHI J1Y_UP   ; Branch if higher (unsigned)\n");
+        out.push_str("; J1_Y() - Read Joystick 1 Y axis (Digital from BIOS analog)\n");
+        out.push_str("; Calls Joy_Analog (works in JSVecx) then converts to digital (-1/0/+1)\n");
+        out.push_str("    LDA #$80\n");
+        out.push_str("    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)\n");
+        out.push_str("    CLR $C81F    ; Vec_Joy_Mux_1_X (disable X for speed)\n");
+        out.push_str("    LDA #3\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP     ; Set DP=$D0 (BIOS requirement)\n");
+        out.push_str("    JSR $F1F5    ; Joy_Analog\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
+        out.push_str("    LDB $C81C    ; Vec_Joy_1_Y (analog value)\n");
+        out.push_str("; Convert analog to digital: < -20 = down(-1), > +20 = up(+1), else center(0)\n");
+        out.push_str("    CMPB #-20    ; Check if down\n");
+        out.push_str("    BLT J1Y_DOWN\n");
+        out.push_str("    CMPB #20     ; Check if up\n");
+        out.push_str("    BGT J1Y_UP\n");
         out.push_str("    LDD #0       ; Center\n");
         out.push_str("    BRA J1Y_END\n");
         out.push_str("J1Y_DOWN:\n");
@@ -1033,65 +950,6 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     if let Some(arg) = args.first() { emit_expr(arg, out, fctx, string_map, opts); } else { out.push_str("    LDD #0\n    STD RESULT\n"); return true; }
         let done = fresh_label("ABS_DONE");
         out.push_str(&format!("    LDD RESULT\n    TSTA\n    BPL {}\n    COMA\n    COMB\n    ADDD #1\n{}: STD RESULT\n", done, done));
-        return true;
-    }
-    
-    // MUL_A(a, b): Multiply a * b (8-bit result)
-    // Usage: result = MUL_A(x, y)
-    if up == "MUL_A" {
-        if args.len() >= 2 {
-            // First arg
-            emit_expr(&args[0], out, fctx, string_map, opts);
-            out.push_str("    LDA RESULT+1\n");  // A = first arg (low byte)
-            // Second arg
-            emit_expr(&args[1], out, fctx, string_map, opts);
-            out.push_str("    LDB RESULT+1\n");  // B = second arg (low byte)
-            // MUL: A * B -> D (8x8 -> 16)
-            out.push_str("    MUL\n");
-            out.push_str("    STD RESULT\n");    // Store 16-bit result
-        } else {
-            out.push_str("    LDD #0\n    STD RESULT\n");
-        }
-        return true;
-    }
-    
-    // DIV_A(a, b): Divide a / b (integer division)
-    // Usage: result = DIV_A(x, y)
-    if up == "DIV_A" {
-        if args.len() >= 2 {
-            // First arg
-            emit_expr(&args[0], out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT\n");   // D = dividend
-            // Second arg
-            emit_expr(&args[1], out, fctx, string_map, opts);
-            out.push_str("    LDX RESULT\n");   // X = divisor (use as 16-bit)
-            // DIV: D / X -> X (quotient), D (remainder)
-            out.push_str("    IDIV\n");
-            out.push_str("    TFR X,D\n");      // D = quotient
-            out.push_str("    STD RESULT\n");
-        } else {
-            out.push_str("    LDD #0\n    STD RESULT\n");
-        }
-        return true;
-    }
-    
-    // MOD_A(a, b): Modulo a % b (remainder from division)
-    // Usage: result = MOD_A(x, y)
-    if up == "MOD_A" {
-        if args.len() >= 2 {
-            // First arg
-            emit_expr(&args[0], out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT\n");   // D = dividend
-            // Second arg
-            emit_expr(&args[1], out, fctx, string_map, opts);
-            out.push_str("    LDX RESULT\n");   // X = divisor
-            // DIV: D / X -> X (quotient), D (remainder)
-            out.push_str("    IDIV\n");
-            // D already contains remainder, just store it
-            out.push_str("    STD RESULT\n");
-        } else {
-            out.push_str("    LDD #0\n    STD RESULT\n");
-        }
         return true;
     }
     

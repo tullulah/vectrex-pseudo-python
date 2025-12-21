@@ -107,10 +107,11 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
       "def main():",
       "    PLAY_MUSIC(\"theme\")",
       "def loop():",
-      "    MUSIC_UPDATE()       # REQUIRED for playback"
+      "    DRAW_VECTOR(\"player\", x, y)  # All drawing here",
+      "    MUSIC_UPDATE()  # ← Place at END after drawing"
     ],
     category: "assets",
-    notes: "Must call MUSIC_UPDATE() every frame in loop() for actual playback"
+    notes: "CRITICAL: Must be at END of loop() AFTER all drawing. Placing at start causes audio glitches during heavy drawing (e.g., logo screen)"
   },
   {
     name: "J1_X",

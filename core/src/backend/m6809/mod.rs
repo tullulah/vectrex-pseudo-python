@@ -99,8 +99,10 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match expr {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
-                // Check for DRAW_VECTOR("asset_name", x, y), PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
+                // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror), 
+                // PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
+                   (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 4) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
                    (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
@@ -797,8 +799,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // TEMP_YX: Temporary storage for y,x coordinates (used by Draw_Sync_List)
     if opts.exclude_ram_org {
         out.push_str("TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)\n");
+        out.push_str("TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)\n");
+        out.push_str("TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)\n");
     } else {
         out.push_str("TEMP_YX:   FDB 0   ; Temporary y,x storage\n");
+        out.push_str("TEMP_X:    FCB 0   ; Temporary x storage\n");
+        out.push_str("TEMP_Y:    FCB 0   ; Temporary y storage\n");
     }
     
     // NOTE: PSG_MUSIC_PTR/PSG_IS_PLAYING EQU definitions moved earlier (before helpers)

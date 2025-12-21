@@ -385,8 +385,9 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
         }
     }
     // Global mutables already allocated via symbol list; (future) could emit non-zero inits via a small startup routine.
-    if !suppress_runtime && !string_map.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
-    if !string_map.is_empty() {
+    // CRITICAL: Always emit strings if present, even if suppress_runtime (strings must be defined if referenced in code)
+    if !string_map.is_empty() { 
+        if !suppress_runtime { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
         if string_map.len()==1 {
             let (lit,_label) = string_map.iter().next().unwrap();
             out.push_str("STR_0:\n");
@@ -654,6 +655,28 @@ fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                     usage.wrappers_used.insert("DRAW_LINE_WRAPPER".to_string());
                 }
             }
+            // DRAW_VECTOR_EX: only mark wrapper as needed if it can't be optimized inline
+            if up == "DRAW_VECTOR_EX" {
+                // Can only optimize inline if first arg is string literal (asset name)
+                // If first arg is variable/complex, fall back to wrapper
+                let can_optimize_inline = !ci.args.is_empty() && 
+                    matches!(ci.args[0], Expr::StringLit(_));
+                
+                if !can_optimize_inline {
+                    // Mark wrapper as needed when asset name can't be resolved at compile time
+                    usage.wrappers_used.insert("DRAW_VECTOR_EX".to_string());
+                }
+            }
+            // DRAW_VECTOR: only mark wrapper as needed if it can't be optimized inline
+            if up == "DRAW_VECTOR" {
+                // Can only optimize inline if first arg is string literal (asset name)
+                let can_optimize_inline = !ci.args.is_empty() && 
+                    matches!(ci.args[0], Expr::StringLit(_));
+                
+                if !can_optimize_inline {
+                    usage.wrappers_used.insert("DRAW_VECTOR".to_string());
+                }
+            }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
@@ -774,6 +797,13 @@ fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOp
         // Simple wrapper to restart the default MUSIC1 tune each frame or once. BIOS expects U to point to music data table at (?), but calling MUSIC1 vector reinitializes tune.
         out.push_str("VECTREX_PLAY_MUSIC1:\n    JSR MUSIC1\n    RTS\n");
     }
+    // DRAW_VECTOR and DRAW_VECTOR_EX wrappers (if referenced as functions)
+    if w.contains("DRAW_VECTOR") {
+        out.push_str("DRAW_VECTOR:\n    ; Runtime wrapper: expects args in VAR_ARG0-2 (name_ptr, x, y)\n    ; For now, just return (asset name resolution happens at compile-time)\n    ; This is a placeholder for runtime asset loading if needed\n    RTS\n");
+    }
+    if w.contains("DRAW_VECTOR_EX") {
+        out.push_str("DRAW_VECTOR_EX:\n    ; Runtime wrapper: expects args in VAR_ARG0-3 (name_ptr, x, y, mirror)\n    ; For now, just return (asset name resolution happens at compile-time)\n    ; This is a placeholder for runtime asset loading with mirror if needed\n    RTS\n");
+    }
     // Trig tables are emitted later in data section.
 }
 
@@ -785,7 +815,7 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
     "VECTREX_PLAY_MUSIC1"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|
-    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"
+    "DRAW_CIRCLE"|"DRAW_CIRCLE_SEG"|"DRAW_ARC"|"DRAW_SPIRAL"|"DRAW_VECTORLIST"|"DRAW_VECTOR"|"DRAW_VECTOR_EX"
     );
     if up == "VECTREX_DRAW_VECTORLIST" { // alias to compact list runtime
         if args.len()==1 {
@@ -806,6 +836,98 @@ fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &Func
         } else if let Expr::StringLit(s) = &args[0] {
             out.push_str(&format!("    JSR VL_{}\n", s.to_ascii_uppercase()));
             return true;
+        }
+    }
+    
+    // DRAW_VECTOR(name, x, y) - Draw embedded vector asset at position
+    if up == "DRAW_VECTOR" {
+        if args.len() == 3 {
+            let asset_name = match &args[0] {
+                Expr::StringLit(s) => Some(s.clone()),
+                Expr::Ident(id) => {
+                    // Try to reverse-lookup the string from string_map
+                    // string_map stores original_string -> STR_N
+                    let str_var = &id.name;
+                    string_map.iter()
+                        .find(|(_, v)| v == str_var)
+                        .map(|(k, _)| k.clone())
+                },
+                _ => None,
+            };
+            
+            if let Some(asset_name) = asset_name {
+                // Load asset address
+                let asset_label = format!("_{}_VECTORS", asset_name.to_uppercase());
+                
+                // Emit code to load position and asset, then draw
+                out.push_str(&format!("    ; DRAW_VECTOR(\"{}\", x, y)\n", asset_name));
+                out.push_str(&format!("    LDX #{}\n", asset_label));
+                
+                // Load Y coordinate (arg 2)
+                emit_expr(&args[2], out, fctx, string_map, opts);
+                out.push_str("    LDA RESULT+1\n");
+                
+                // Load X coordinate (arg 1)
+                emit_expr(&args[1], out, fctx, string_map, opts);
+                out.push_str("    LDB RESULT+1\n");
+                
+                // Call BIOS Draw_VLc to draw vector at (X, Y) position
+                out.push_str("    JSR Draw_VLc\n");
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            }
+        }
+    }
+    
+    // DRAW_VECTOR_EX(name, x, y, mirror) - Draw vector with transformations (mirror: 0=normal, 1=flip X)
+    if up == "DRAW_VECTOR_EX" {
+        if args.len() == 4 {
+            let asset_name = match &args[0] {
+                Expr::StringLit(s) => Some(s.clone()),
+                Expr::Ident(id) => {
+                    // Try to reverse-lookup the string from string_map
+                    // string_map stores original_string -> STR_N
+                    let str_var = &id.name;
+                    string_map.iter()
+                        .find(|(_, v)| v == str_var)
+                        .map(|(k, _)| k.clone())
+                },
+                _ => None,
+            };
+            
+            if let Some(asset_name) = asset_name {
+                let asset_label = format!("_{}_VECTORS", asset_name.to_uppercase());
+                
+                out.push_str(&format!("    ; DRAW_VECTOR_EX(\"{}\", x, y, mirror)\n", asset_name));
+                out.push_str(&format!("    LDX #{}\n", asset_label));
+                
+                // Load Y coordinate (arg 2)
+                emit_expr(&args[2], out, fctx, string_map, opts);
+                out.push_str("    LDA RESULT+1\n");
+                
+                // Load X coordinate (arg 1)
+                emit_expr(&args[1], out, fctx, string_map, opts);
+                out.push_str("    LDB RESULT+1\n");
+                
+                // Load mirror flag (arg 3) to check if we need to negate X
+                emit_expr(&args[3], out, fctx, string_map, opts);
+                out.push_str("    TST RESULT+1  ; check if mirror != 0\n");
+                
+                // If mirror != 0, negate X coordinate (B register)
+                let no_mirror_label = fresh_label("DRAW_VEX_NO_MIRROR");
+                out.push_str(&format!("    BEQ {}\n", no_mirror_label));
+                out.push_str("    NEGB  ; negate X if mirror=1\n");
+                out.push_str(&format!("{}:\n", no_mirror_label));
+                
+                // Call BIOS Draw_VLc to draw vector at (X, Y) position
+                out.push_str("    JSR Draw_VLc\n");
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            } else {
+                // Fallback: if we can't resolve the asset name, fall through to runtime JSR
+                // This will call a DRAW_VECTOR_EX function in ROM (to be implemented if needed)
+                // For now, we don't emit anything and let the fallback code generate JSR
+            }
         }
     }
     

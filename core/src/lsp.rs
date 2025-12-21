@@ -68,6 +68,7 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         
         // Asset system functions
         "DRAW_VECTOR" => Some(AritySpec::Exact(3)),            // asset_name, x, y
+        "DRAW_VECTOR_EX" => Some(AritySpec::Exact(4)),         // asset_name, x, y, mirror (0=normal, 1=flip X)
         "PLAY_MUSIC" => Some(AritySpec::Exact(1)),             // music asset (background, loops)
         "PLAY_SFX" => Some(AritySpec::Exact(1)),               // sound effect (one-shot)
         "STOP_MUSIC" => Some(AritySpec::Exact(0)),             // stop background music
@@ -124,7 +125,7 @@ pub fn is_builtin_function(name: &str) -> bool {
     }
     
     // Asset system functions
-    if matches!(upper.as_str(), "DRAW_VECTOR"|"PLAY_MUSIC") {
+    if matches!(upper.as_str(), "DRAW_VECTOR"|"DRAW_VECTOR_EX"|"PLAY_MUSIC") {
         return true;
     }
     

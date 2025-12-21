@@ -504,14 +504,6 @@ export const EmulatorPanel: React.FC = () => {
         vecx.downHeld = (y < -0.3) || dpadDown;
         vecx.upHeld = (y > 0.3) || dpadUp;
 
-
-        // Write analog joystick values to RAM ($CF00/$CF01)
-        // VPy's J1_X/J1_Y functions read from these addresses
-        // Values are unsigned 0-255 with 128=center
-        const analogX = Math.round((x + 1) * 127.5); // 0-255 (128=center)
-        const analogY = Math.round((y + 1) * 127.5); // 0-255 (128=center)
-        vecx.write8(0xCF00, analogX); // Vec_Joy_1_X
-        vecx.write8(0xCF01, analogY); // Vec_Joy_1_Y
         // Read button states and build PSG register 14 value
         let psgReg14 = 0xFF; // Default: all buttons released (bits high)
         
@@ -1670,13 +1662,6 @@ export const EmulatorPanel: React.FC = () => {
         console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
         vecx.reset();
         console.log('[EmulatorPanel] Emulator reset complete');
-        
-        // CRITICAL: Initialize joystick RAM to neutral values
-        // $CF00 = X axis (128 = center), $CF01 = Y axis (128 = center)
-        // Without this, RAM contains garbage values interpreted as extreme positions
-        vecx.write8(0xCF00, 128); // Joy_1_X neutral
-        vecx.write8(0xCF01, 128); // Joy_1_Y neutral
-        console.log('[EmulatorPanel] ✓ Joystick RAM initialized to neutral (128, 128)');
         
         // Comportamiento de auto-start dependiendo del modo:
         // - Normal compilation (F7): auto-start

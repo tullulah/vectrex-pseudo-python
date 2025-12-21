@@ -52,6 +52,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     
     // Asset functions (new)
     ("DRAW_VECTOR", 3),     // Draw vector asset at position: name, x, y
+    ("DRAW_VECTOR_EX", 4),  // Draw vector with transformations: name, x, y, mirror (0=normal, 1=flip X)
     ("PLAY_MUSIC", 1),      // Play background music in loop: name
     ("PLAY_SFX", 1),        // Play sound effect (one-shot): name
     ("MUSIC_UPDATE", 0),    // Process music events per frame

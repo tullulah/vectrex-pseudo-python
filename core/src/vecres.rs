@@ -37,6 +37,12 @@ pub struct VecResource {
     /// Metadata (hitbox, origin, tags)
     #[serde(default)]
     pub metadata: Metadata,
+    /// Center X coordinate (calculated in design time, used as mirror axis)
+    #[serde(default)]
+    pub center_x: Option<i16>,
+    /// Center Y coordinate (calculated in design time, used as mirror/rotation axis)
+    #[serde(default)]
+    pub center_y: Option<i16>,
 }
 
 fn default_version() -> String {
@@ -188,6 +194,8 @@ impl VecResource {
             }],
             animations: Vec::new(),
             metadata: Metadata::default(),
+            center_x: None,
+            center_y: None,
         }
     }
     
@@ -207,6 +215,48 @@ impl VecResource {
             .sum()
     }
     
+    /// Calculate X bounds (min_x, max_x) across all points - needed for mirror width calculation
+    pub fn calculate_x_bounds(&self) -> (i16, i16) {
+        let all_points: Vec<_> = self.layers.iter()
+            .flat_map(|l| l.paths.iter())
+            .flat_map(|p| p.points.iter())
+            .collect();
+        
+        if all_points.is_empty() {
+            return (0, 0);
+        }
+        
+        let min_x = all_points.iter().map(|p| p.x).min().unwrap_or(0);
+        let max_x = all_points.iter().map(|p| p.x).max().unwrap_or(0);
+        
+        (min_x, max_x)
+    }
+    
+    /// Calculate center coordinates (design time)
+    /// center_x = (max_x + min_x) / 2
+    /// center_y = (max_y + min_y) / 2
+    pub fn calculate_center(&self) -> (i16, i16) {
+        let all_points: Vec<_> = self.layers.iter()
+            .flat_map(|l| l.paths.iter())
+            .flat_map(|p| p.points.iter())
+            .collect();
+        
+        if all_points.is_empty() {
+            return (0, 0);
+        }
+        
+        let min_x = all_points.iter().map(|p| p.x).min().unwrap_or(0);
+        let max_x = all_points.iter().map(|p| p.x).max().unwrap_or(0);
+        let min_y = all_points.iter().map(|p| p.y).min().unwrap_or(0);
+        let max_y = all_points.iter().map(|p| p.y).max().unwrap_or(0);
+        
+        let center_x = (max_x + min_x) / 2;
+        let center_y = (max_y + min_y) / 2;
+        
+        (center_x, center_y)
+    }
+    
+
     // Helper: format i8 value for ASM (compatible with both native and lwasm)
     // lwasm requires hex format $XX for negative values, no spaces after commas
     fn format_byte(value: i8) -> String {
@@ -229,9 +279,24 @@ impl VecResource {
         let name_to_use = override_name.unwrap_or(&self.name);
         let symbol_name = name_to_use.to_uppercase().replace("-", "_").replace(" ", "_");
         
+        // Calculate asset width for mirror support (max_x - min_x)
+        let (min_x, max_x) = self.calculate_x_bounds();
+        let width = (max_x - min_x) as i32;
+        
+        // Calculate center coordinates (design time axis for mirror/rotation)
+        let (center_x, center_y) = self.calculate_center();
+        
         asm.push_str(&format!("; Generated from {}.vec (Malban Draw_Sync_List format)\n", name_to_use));
         asm.push_str(&format!("; Total paths: {}, points: {}\n", 
             self.visible_paths().len(), self.point_count()));
+        asm.push_str(&format!("; X bounds: min={}, max={}, width={}\n", min_x, max_x, width));
+        asm.push_str(&format!("; Center: ({}, {})\n", center_x, center_y));
+        asm.push_str("\n");
+        
+        // Emit asset constants for runtime calculations
+        asm.push_str(&format!("_{}_WIDTH EQU {}\n", symbol_name, width));
+        asm.push_str(&format!("_{}_CENTER_X EQU {}\n", symbol_name, center_x));
+        asm.push_str(&format!("_{}_CENTER_Y EQU {}\n", symbol_name, center_y));
         asm.push_str("\n");
         
         // Process ALL paths (multi-path support)

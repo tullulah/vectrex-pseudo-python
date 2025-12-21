@@ -8,11 +8,17 @@ export interface ButtonMapping {
 export interface JoystickConfig {
   gamepadIndex: number | null;
   gamepadName: string | null;
+  // Analog stick configuration
   axisXIndex: number; // Default 0 (left stick horizontal)
   axisYIndex: number; // Default 1 (left stick vertical)
   axisXInverted: boolean;
   axisYInverted: boolean;
   deadzone: number; // 0-1, default 0.15
+  // D-Pad configuration (for digital input)
+  dpadUpButton: number;    // Default 12
+  dpadDownButton: number;  // Default 13
+  dpadLeftButton: number;  // Default 14
+  dpadRightButton: number; // Default 15
   buttonMappings: ButtonMapping[];
 }
 
@@ -27,6 +33,10 @@ interface JoystickStore extends JoystickConfig {
   setAxisXInverted: (inverted: boolean) => void;
   setAxisYInverted: (inverted: boolean) => void;
   setDeadzone: (deadzone: number) => void;
+  setDpadUpButton: (button: number) => void;
+  setDpadDownButton: (button: number) => void;
+  setDpadLeftButton: (button: number) => void;
+  setDpadRightButton: (button: number) => void;
   setButtonMapping: (vectrexButton: number, gamepadButton: number) => void;
   clearButtonMapping: (vectrexButton: number) => void;
   resetConfig: () => void;
@@ -42,6 +52,10 @@ const defaultConfig: JoystickConfig = {
   axisXInverted: false,
   axisYInverted: false,
   deadzone: 0.15,
+  dpadUpButton: 12,    // Standard D-Pad Up
+  dpadDownButton: 13,  // Standard D-Pad Down
+  dpadLeftButton: 14,  // Standard D-Pad Left
+  dpadRightButton: 15, // Standard D-Pad Right
   buttonMappings: [
     { vectrexButton: 1, gamepadButton: 0 }, // A/Cross
     { vectrexButton: 2, gamepadButton: 1 }, // B/Circle
@@ -88,6 +102,26 @@ export const useJoystickStore = create<JoystickStore>((set, get) => ({
 
   setDeadzone: (deadzone) => {
     set({ deadzone });
+    get().saveConfig();
+  },
+
+  setDpadUpButton: (button) => {
+    set({ dpadUpButton: button });
+    get().saveConfig();
+  },
+
+  setDpadDownButton: (button) => {
+    set({ dpadDownButton: button });
+    get().saveConfig();
+  },
+
+  setDpadLeftButton: (button) => {
+    set({ dpadLeftButton: button });
+    get().saveConfig();
+  },
+
+  setDpadRightButton: (button) => {
+    set({ dpadRightButton: button });
     get().saveConfig();
   },
 
@@ -141,6 +175,10 @@ export const useJoystickStore = create<JoystickStore>((set, get) => ({
         axisXInverted: state.axisXInverted,
         axisYInverted: state.axisYInverted,
         deadzone: state.deadzone,
+        dpadUpButton: state.dpadUpButton,
+        dpadDownButton: state.dpadDownButton,
+        dpadLeftButton: state.dpadLeftButton,
+        dpadRightButton: state.dpadRightButton,
         buttonMappings: state.buttonMappings,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));

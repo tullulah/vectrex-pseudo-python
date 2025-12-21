@@ -48,6 +48,9 @@ interface VecResource {
     origin: Point | null;
     tags: string[];
   };
+  // Design-time calculated center (mirror axis)
+  center_x?: number;
+  center_y?: number;
   // Background image stored as base64 data URL
   backgroundImage?: string;
 }
@@ -543,6 +546,43 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Calculate center point from all vector points (design-time)
+  const calculateCenter = (res: VecResource): { centerX: number; centerY: number } => {
+    const allPoints: Point[] = [];
+    
+    // Collect all points from all visible layers and paths
+    for (const layer of res.layers || []) {
+      if (!layer || !layer.visible) continue;
+      for (const path of layer.paths || []) {
+        if (!path || !Array.isArray(path.points)) continue;
+        allPoints.push(...path.points);
+      }
+    }
+    
+    if (allPoints.length === 0) {
+      return { centerX: 0, centerY: 0 };
+    }
+    
+    // Calculate min/max for X and Y
+    let minX = allPoints[0]!.x;
+    let maxX = allPoints[0]!.x;
+    let minY = allPoints[0]!.y;
+    let maxY = allPoints[0]!.y;
+    
+    for (const point of allPoints) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+    
+    // Center = (min + max) / 2
+    return {
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
+    };
+  };
+  
   // Ensure resource has valid structure with visible layers
   const normalizeResource = (res: VecResource | undefined): VecResource => {
     if (!res) return defaultResource;
@@ -557,6 +597,14 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         visible: layer.visible !== false, // default to true
       }));
     }
+    
+    // Calculate and add center if not present
+    if (normalized.center_x === undefined || normalized.center_y === undefined) {
+      const { centerX, centerY } = calculateCenter(normalized);
+      normalized.center_x = Math.round(centerX);
+      normalized.center_y = Math.round(centerY);
+    }
+    
     return normalized;
   };
   
@@ -589,9 +637,16 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   
   // Wrapper to set resource and notify parent
   const updateResource = useCallback((newResource: VecResource) => {
+    // Recalculate center whenever resource changes
+    const { centerX, centerY } = calculateCenter(newResource);
+    const withCenter = {
+      ...newResource,
+      center_x: Math.round(centerX),
+      center_y: Math.round(centerY),
+    };
     isInternalChange.current = true;
-    setResource(newResource);
-    onChange?.(newResource);
+    setResource(withCenter);
+    onChange?.(withCenter);
   }, [onChange]);
   
   // Box selection state
@@ -927,6 +982,32 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         }
         ctx.stroke();
       }
+      
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    
+    // Draw center lines (horizontal and vertical dashed gray cross)
+    // Shows the design-time calculated center for mirror axis
+    if (resource.center_x !== undefined && resource.center_y !== undefined) {
+      const centerPoint = resourceToCanvas({ x: resource.center_x, y: resource.center_y });
+      
+      ctx.strokeStyle = '#c0c0c0'; // Light gray
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]); // Dashed pattern
+      ctx.globalAlpha = 0.6;
+      
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(centerPoint.x, 0);
+      ctx.lineTo(centerPoint.x, height);
+      ctx.stroke();
+      
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(0, centerPoint.y);
+      ctx.lineTo(width, centerPoint.y);
+      ctx.stroke();
       
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
@@ -1283,6 +1364,61 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     }
   };
 
+  // Center vector - move all points so that center aligns to (0,0)
+  const centerVector = useCallback(() => {
+    const newResource = { ...resource };
+    const center_x = newResource.center_x || 0;
+    const center_y = newResource.center_y || 0;
+    
+    if (center_x === 0 && center_y === 0) {
+      return; // Already centered
+    }
+
+    // Move all points by -center offset
+    newResource.layers.forEach(layer => {
+      layer.paths.forEach(path => {
+        path.points.forEach(point => {
+          point.x -= center_x;
+          point.y -= center_y;
+        });
+      });
+    });
+
+    updateResource(newResource);
+  }, [resource, updateResource]);
+
+  // Mirror vector X - flip horizontally (negate X coordinates only)
+  const mirrorVectorX = useCallback(() => {
+    const newResource = { ...resource };
+
+    // Negate only X coordinates
+    newResource.layers.forEach(layer => {
+      layer.paths.forEach(path => {
+        path.points.forEach(point => {
+          point.x = -point.x;
+        });
+      });
+    });
+
+    updateResource(newResource);
+  }, [resource, updateResource]);
+
+  // Mirror vector Y - flip vertically (negate Y coordinates only)
+  const mirrorVectorY = useCallback(() => {
+    const newResource = { ...resource };
+
+    // Negate only Y coordinates
+    newResource.layers.forEach(layer => {
+      layer.paths.forEach(path => {
+        path.points.forEach(point => {
+          point.y = -point.y;
+        });
+      });
+    });
+
+    updateResource(newResource);
+  }, [resource, updateResource]);
+
   // UI Components
   const Toolbar = () => (
     <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', padding: '4px', background: '#2a2a4e', borderRadius: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1347,6 +1483,52 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         title="Delete selected points (Delete key)"
       >
         🗑️ Delete {selectedPoints.size > 0 ? `(${selectedPoints.size})` : ''}
+      </button>
+      
+      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
+
+      {/* Transform buttons */}
+      <button
+        onClick={centerVector}
+        style={{
+          padding: '8px 12px',
+          background: '#3a5a3e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Center - move all points so center aligns to (0,0)"
+      >
+        📍 Center
+      </button>
+      <button
+        onClick={mirrorVectorX}
+        style={{
+          padding: '8px 12px',
+          background: '#3a5a3e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Mirror X - flip horizontally (negate X coordinates)"
+      >
+        ↔️ Mirror X
+      </button>
+      <button
+        onClick={mirrorVectorY}
+        style={{
+          padding: '8px 12px',
+          background: '#3a5a3e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Mirror Y - flip vertically (negate Y coordinates)"
+      >
+        ⇅ Mirror Y
       </button>
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />

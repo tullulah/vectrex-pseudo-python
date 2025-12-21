@@ -14,6 +14,48 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 - Sintaxis correcta: `cd emulator; cargo build` (NO `cd emulator && cargo build`).
 - PowerShell v5.1 no soporta `&&` como separador de comandos.
 
+## 0.1.5. ESPACIO CRÍTICO: WAIT_RECAL() - NO PONERLO MANUALMENTE
+⚠️ **REGLA OBLIGATORIA**: 
+- ❌ **NUNCA** escribir `WAIT_RECAL()` manualmente en el código VPy
+- ✅ El compilador inyecta `WAIT_RECAL()` automáticamente al inicio del `loop()`
+- El loop generado es:
+  ```asm
+  LOOP_BODY:
+      WAIT_RECAL()        # ← Inyectado automáticamente por compilador
+      [resto del código]
+      RTS
+  ```
+
+**POR QUÉ**: `WAIT_RECAL()` sincroniza con el refresco de pantalla (50 FPS). El compilador lo maneja automáticamente en M6809 - no debe escribirse en VPy.
+
+## 0.1.6. MÚSICA: MUSIC_UPDATE() AL FINAL DEL LOOP
+⚠️ **REGLA CRÍTICA**: 
+- `MUSIC_UPDATE()` DEBE colocarse al **FINAL del loop()**, después de todo el drawing
+- ❌ MAL: `def loop(): MUSIC_UPDATE(); [drawing]`
+- ✅ BIEN: `def loop(): [drawing]; MUSIC_UPDATE()`
+- **ESTRUCTURA CORRECTA**:
+  ```vpy
+  def loop():
+      # Logo drawing (si aplica)
+      if screen == 0:
+          draw_logo_screen()
+      
+      # Game drawing
+      if screen == 1:
+          # ... todos los DRAW_VECTOR calls ...
+          pass
+      
+      # ✅ MUSIC_UPDATE AL FINAL (después de todo)
+      MUSIC_UPDATE()
+  ```
+
+**POR QUÉ**: 
+- `MUSIC_UPDATE()` es una operación crítica de timing (actualiza PSG cada frame)
+- Si se ejecuta al inicio, puede interrumpirse durante los calls de drawing (que son costosos)
+- Colocar al final garantiza que se completa sin interrupciones entre frames
+- **Problema visto**: Drawing del logo (11 paths) clavaba música cuando MUSIC_UPDATE estaba al inicio
+- **Solución**: Mover MUSIC_UPDATE() al final solventa la sincronización
+
 ## 0.2. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
 **ANTES DE CREAR CUALQUIER ARCHIVO O API**:
 1. **VERIFICAR EXISTENCIA**: Comprobar si existe en `vectrexy/libs/emulator/src/` y `vectrexy/libs/emulator/include/emulator/`
@@ -870,3 +912,154 @@ def loop():
 
 ---
 Última actualización: 2025-12-18 - Sección 18.8: Project Paths, File Operations y Asset Verification
+
+## 19. Joystick Input System (J1_X, J1_Y)
+
+### 19.1 Arquitectura General
+- **Propósito**: Permitir que juegos VPy lean entrada de joystick (Vectrex analógico de hardware original)
+- **Implementación Dual**:
+  - **Frontend**: `ide/frontend/src/components/panels/EmulatorPanel.tsx` - Lee gamepad de navegador
+  - **Emulador**: JSVecx (JavaScript) - Almacena valores en RAM
+  - **Compilador**: `core/src/backend/m6809/builtins.rs` - Genera M6809 que lee desde RAM
+
+### 19.2 RAM Addresses (CRÍTICO - Memory Collision Zone)
+⚠️ **IMPORTANTE**: Estas direcciones pueden colisionar con struct globales en programas grandes.
+
+**Addresses Actuales** (cambio 2025-12-18):
+```
+$CF00 - Joy_1_X (unsigned byte: 0=left, 128=center, 255=right)
+$CF01 - Joy_1_Y (unsigned byte: 0=down, 128=center, 255=up)
+```
+
+**Por qué estos addresses**:
+- $C81B/$C81C anterior causaba colisión con structs en Jetpac
+- $CF00/$CF01 están en zona de alto RAM, menos probable de colisionar
+- Ubicación: Entre típicas variables work ($C800-$CE00) y stack ($CFFF)
+
+**Si hay nueva colisión**:
+1. Cambiar ambas ubicaciones (compiler + frontend) a un nuevo par de addresses
+2. Coordinar entre `builtins.rs` y `EmulatorPanel.tsx` - DEBEN ser el mismo par
+3. Documentar nueva dirección en esta sección
+4. Recompilar compiler y frontend
+
+### 19.3 Data Flow (Unsigned 0-255 Range)
+
+1. **Hardware Input** (Browser Gamepad API):
+   - Analog stick values: -1.0 (left/down) to +1.0 (right/up)
+   - Deadzone: 0.3 (applies to analog sticks, not D-Pad)
+
+2. **Frontend Conversion** (EmulatorPanel.tsx line 511-514):
+   ```typescript
+   const analogX = Math.round((x + 1) * 127.5);  // -1.0..+1.0 → 0..255
+   const analogY = Math.round((y + 1) * 127.5);  // Range: 0=extreme, 128=center, 255=extreme
+   vecx.write8(0xCF00, analogX);  // Write to Joy_1_X
+   vecx.write8(0xCF01, analogY);  // Write to Joy_1_Y
+   ```
+
+3. **Emulator Storage** (JSVecx):
+   - Bytes stored in RAM at $CF00 (X) and $CF01 (Y)
+   - Unsigned range: 0-255
+
+4. **VPy Compiler ASM** (builtins.rs J1_X function):
+   ```asm
+   LDB $CF00          ; Read unsigned byte from RAM
+   CMPB #108          ; Compare with lower threshold
+   BLO J1X_LEFT       ; Branch if <108 (left)
+   CMPB #148          ; Compare with upper threshold
+   BHI J1X_RIGHT      ; Branch if >148 (right)
+   ; Otherwise center (0)
+   ```
+
+5. **Return Value** (VPy Code):
+   ```python
+   joy_x = J1_X()     # Returns signed: -1 (left), 0 (center), +1 (right)
+   joy_y = J1_Y()     # Returns signed: -1 (down), 0 (center), +1 (up)
+   ```
+
+### 19.4 Thresholds for Unsigned 0-255
+
+**Reasoning**:
+- Center = 128 (midpoint of 0-255)
+- Deadzone = ±20 from center
+- Thresholds: 108 (128-20) and 148 (128+20)
+
+```
+Value Range    →    Interpretation
+0-107         →    -1 (left/down, extreme)
+108-148       →    0 (center)
+149-255       →    +1 (right/up, extreme)
+```
+
+**Note**: These thresholds assume no additional deadzone in frontend (deadzone 0.3 handles it).
+
+### 19.5 Builtin Functions
+
+#### J1_X() - Read Joystick X Axis
+- **Returns**: Signed 16-bit (-1, 0, or +1)
+- **Location**: `core/src/backend/m6809/builtins.rs` line 213
+- **ASM Generated**: `LDB $CF00` then compare with thresholds 108/148
+
+#### J1_Y() - Read Joystick Y Axis
+- **Returns**: Signed 16-bit (-1, 0, or +1)
+- **Location**: `core/src/backend/m6809/builtins.rs` line 276
+- **ASM Generated**: `LDB $CF01` then compare with thresholds 108/148
+
+### 19.6 Example VPy Code
+
+```python
+def loop():
+    WAIT_RECAL()
+    
+    # Read joystick input
+    joy_x = J1_X()  # -1, 0, or +1
+    joy_y = J1_Y()  # -1, 0, or +1
+    
+    # Move player based on input
+    if joy_x == 1:
+        player_x += 1  # Move right
+    elif joy_x == -1:
+        player_x -= 1  # Move left
+    
+    if joy_y == 1:
+        player_y += 1  # Move up
+    elif joy_y == -1:
+        player_y -= 1  # Move down
+```
+
+### 19.7 Testing Checklist
+
+When implementing or modifying joystick code:
+- [ ] Verify addresses in `builtins.rs` and `EmulatorPanel.tsx` match
+- [ ] Check thresholds are correct for unsigned range (108/148)
+- [ ] Test with TestController (small binary, less likely to have collisions)
+- [ ] Test with larger program (Jetpac) to catch collisions
+- [ ] Verify D-Pad buttons don't interfere with analog movement
+- [ ] Check that releasing stick centers (joy_x=0, joy_y=0)
+- [ ] No regression in music/vector rendering (input shouldn't slow emulator)
+
+### 19.8 Debugging Memory Collisions
+
+If joystick always reads extreme values (stuck at 1):
+1. **Check addresses match**:
+   - `grep "0xCF00" ide/frontend/src/components/panels/EmulatorPanel.tsx`
+   - `grep "\$CF00" core/src/backend/m6809/builtins.rs`
+   - Both should be consistent
+
+2. **Find what's overwriting RAM**:
+   - Use JSVecx RAM debugging to inspect $CF00/$CF01
+   - Check if struct allocations in main.vpy conflict
+   - Consider moving addresses to different range (e.g., $CD00/$CD01)
+
+3. **Verify formula**:
+   - Frontend: `Math.round((x + 1) * 127.5)` should give 0-255 range
+   - If values wrong, issue is in gamepad reading or formula
+
+### 19.9 Future Enhancements
+
+- [ ] Analog sensitivity option (finer tuning of deadzone)
+- [ ] Button input mapping (currently D-Pad only, no action buttons)
+- [ ] Two-player support (J2_X, J2_Y for second joystick)
+- [ ] Reading JSVecx alg_jch0/alg_jch1 directly (skip RAM, avoid collisions)
+
+---
+Última actualización: 2025-12-18 - Sección 19 added: Joystick Input System (complete architecture)
