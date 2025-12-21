@@ -871,6 +871,147 @@ SFX_UPDATE_done:\n\
             RTS\n"
     );
     
+    // Draw_Sync_List_At_Mirrored_Y: Vertically mirrored drawing (Y-axis mirror)
+    // Uses center-relative coordinates, mirrors across Y axis
+    // 1. Negate Y coordinate: y_mirrored = -y_start
+    // 2. Negate dy deltas: dy_mirrored = -dy (via NEGA)
+    out.push_str(
+        "Draw_Sync_List_At_Mirrored_Y:\n\
+        ; Vertically mirrored drawing (uses center-relative coordinates)\n\
+            ; With center-relative coords from vecres.rs, mirroring is simple:\n\
+            ; 1. Negate Y coordinate: y_mirrored = -y_start\n\
+            ; 2. Negate dy deltas: dy_mirrored = -dy (via NEGA)\n\
+            LDA ,X+                 ; intensity\n\
+            PSHS A                  ; Save intensity\n\
+            LDA #$D0\n\
+            PULS A                  ; Restore intensity\n\
+            JSR $F2AB               ; BIOS Intensity_a\n\
+            LDB ,X+                 ; y_start from .vec (already relative to center)\n\
+            NEGB                    ; ← Negate for Y-axis mirror\n\
+            ADDB DRAW_VEC_Y         ; Add Y offset\n\
+            LDA ,X+                 ; x_start from .vec (already relative to center)\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
+            STD TEMP_YX             ; Save adjusted (mirrored) position\n\
+            ; Reset completo\n\
+            CLR VIA_shift_reg\n\
+            LDA #$CC\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_a\n\
+            LDA #$82\n\
+            STA VIA_port_b\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            LDA #$83\n\
+            STA VIA_port_b\n\
+            ; Move sequence\n\
+            LDD TEMP_YX             ; Recuperar y,x ajustado\n\
+            STB VIA_port_a          ; y to DAC\n\
+            PSHS A                  ; Save x\n\
+            LDA #$CE\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A                  ; Restore x\n\
+            STA VIA_port_a          ; x to DAC\n\
+            ; Timing setup\n\
+            LDA #$7F\n\
+            STA VIA_t1_cnt_lo\n\
+            CLR VIA_t1_cnt_hi\n\
+            LEAX 2,X                ; Skip next_y, next_x\n\
+            ; Wait for move to complete\n\
+            DSLMY_W1:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSLMY_W1\n\
+            ; Loop de dibujo (MIRRORED_Y: negate dy)\n\
+            DSLMY_LOOP:\n\
+            LDA ,X+                 ; Read flag\n\
+            CMPA #2                 ; Check end marker\n\
+            LBEQ DSLMY_DONE\n\
+            CMPA #1                 ; Check next path marker\n\
+            LBEQ DSLMY_NEXT_PATH\n\
+            ; Draw line with negated dy\n\
+            LDB ,X+                 ; dy\n\
+            NEGB                    ; ← NEGATE dy for Y-axis mirror effect\n\
+            LDA ,X+                 ; dx\n\
+            PSHS A                  ; Save dx\n\
+            STB VIA_port_a          ; negated dy to DAC\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A                  ; Restore dx\n\
+            STA VIA_port_a          ; dx to DAC\n\
+            CLR VIA_t1_cnt_hi\n\
+            LDA #$FF\n\
+            STA VIA_shift_reg\n\
+            ; Wait for line draw\n\
+            DSLMY_W2:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSLMY_W2\n\
+            CLR VIA_shift_reg\n\
+            BRA DSLMY_LOOP\n\
+            ; Next path: negate Y coordinate for new path too\n\
+            DSLMY_NEXT_PATH:\n\
+            TFR X,D\n\
+            PSHS D\n\
+            LDA ,X+                 ; Read intensity\n\
+            PSHS A\n\
+            LDB ,X+                 ; y_start (already relative to center)\n\
+            NEGB                    ; ← Negate for Y-axis mirror\n\
+            ADDB DRAW_VEC_Y         ; Add Y offset to new path\n\
+            LDA ,X+                 ; x_start (already relative to center)\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
+            STD TEMP_YX\n\
+            PULS A                  ; Get intensity back\n\
+            JSR $F2AB\n\
+            PULS D\n\
+            ADDD #3\n\
+            TFR D,X\n\
+            ; Reset to zero\n\
+            CLR VIA_shift_reg\n\
+            LDA #$CC\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_a\n\
+            LDA #$82\n\
+            STA VIA_port_b\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            LDA #$83\n\
+            STA VIA_port_b\n\
+            ; Move to new start position (already offset-adjusted)\n\
+            LDD TEMP_YX\n\
+            STB VIA_port_a\n\
+            PSHS A\n\
+            LDA #$CE\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A\n\
+            STA VIA_port_a\n\
+            LDA #$7F\n\
+            STA VIA_t1_cnt_lo\n\
+            CLR VIA_t1_cnt_hi\n\
+            LEAX 2,X\n\
+            ; Wait for move\n\
+            DSLMY_W3:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSLMY_W3\n\
+            CLR VIA_shift_reg\n\
+            BRA DSLMY_LOOP\n\
+            DSLMY_DONE:\n\
+            RTS\n"
+    );
+    
     // ========== JOYSTICK SUPPORT ==========
     // VPy programs now use REAL BIOS routines just like commercial ROMs:
     // - Joy_Digital ($F1F8) - reads joystick axes, updates Vec_Joy_1_X/Y ($C81B/$C81C)

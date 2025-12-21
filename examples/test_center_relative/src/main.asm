@@ -451,6 +451,140 @@ CLR VIA_shift_reg
 BRA DSLM_LOOP
 DSLM_DONE:
 RTS
+Draw_Sync_List_At_Mirrored_Y:
+; Vertically mirrored drawing (uses center-relative coordinates)
+; With center-relative coords from vecres.rs, mirroring is simple:
+; 1. Negate Y coordinate: y_mirrored = -y_start
+; 2. Negate dy deltas: dy_mirrored = -dy (via NEGA)
+LDA ,X+                 ; intensity
+PSHS A                  ; Save intensity
+LDA #$D0
+PULS A                  ; Restore intensity
+JSR $F2AB               ; BIOS Intensity_a
+LDB ,X+                 ; y_start from .vec (already relative to center)
+NEGB                    ; ← Negate for Y-axis mirror
+ADDB DRAW_VEC_Y         ; Add Y offset
+LDA ,X+                 ; x_start from .vec (already relative to center)
+ADDA DRAW_VEC_X         ; Add X offset
+STD TEMP_YX             ; Save adjusted (mirrored) position
+; Reset completo
+CLR VIA_shift_reg
+LDA #$CC
+STA VIA_cntl
+CLR VIA_port_a
+LDA #$82
+STA VIA_port_b
+NOP
+NOP
+NOP
+NOP
+NOP
+LDA #$83
+STA VIA_port_b
+; Move sequence
+LDD TEMP_YX             ; Recuperar y,x ajustado
+STB VIA_port_a          ; y to DAC
+PSHS A                  ; Save x
+LDA #$CE
+STA VIA_cntl
+CLR VIA_port_b
+LDA #1
+STA VIA_port_b
+PULS A                  ; Restore x
+STA VIA_port_a          ; x to DAC
+; Timing setup
+LDA #$7F
+STA VIA_t1_cnt_lo
+CLR VIA_t1_cnt_hi
+LEAX 2,X                ; Skip next_y, next_x
+; Wait for move to complete
+DSLMY_W1:
+LDA VIA_int_flags
+ANDA #$40
+BEQ DSLMY_W1
+; Loop de dibujo (MIRRORED_Y: negate dy)
+DSLMY_LOOP:
+LDA ,X+                 ; Read flag
+CMPA #2                 ; Check end marker
+LBEQ DSLMY_DONE
+CMPA #1                 ; Check next path marker
+LBEQ DSLMY_NEXT_PATH
+; Draw line with negated dy
+LDB ,X+                 ; dy
+NEGB                    ; ← NEGATE dy for Y-axis mirror effect
+LDA ,X+                 ; dx
+PSHS A                  ; Save dx
+STB VIA_port_a          ; negated dy to DAC
+CLR VIA_port_b
+LDA #1
+STA VIA_port_b
+PULS A                  ; Restore dx
+STA VIA_port_a          ; dx to DAC
+CLR VIA_t1_cnt_hi
+LDA #$FF
+STA VIA_shift_reg
+; Wait for line draw
+DSLMY_W2:
+LDA VIA_int_flags
+ANDA #$40
+BEQ DSLMY_W2
+CLR VIA_shift_reg
+BRA DSLMY_LOOP
+; Next path: negate Y coordinate for new path too
+DSLMY_NEXT_PATH:
+TFR X,D
+PSHS D
+LDA ,X+                 ; Read intensity
+PSHS A
+LDB ,X+                 ; y_start (already relative to center)
+NEGB                    ; ← Negate for Y-axis mirror
+ADDB DRAW_VEC_Y         ; Add Y offset to new path
+LDA ,X+                 ; x_start (already relative to center)
+ADDA DRAW_VEC_X         ; Add X offset
+STD TEMP_YX
+PULS A                  ; Get intensity back
+JSR $F2AB
+PULS D
+ADDD #3
+TFR D,X
+; Reset to zero
+CLR VIA_shift_reg
+LDA #$CC
+STA VIA_cntl
+CLR VIA_port_a
+LDA #$82
+STA VIA_port_b
+NOP
+NOP
+NOP
+NOP
+NOP
+LDA #$83
+STA VIA_port_b
+; Move to new start position (already offset-adjusted)
+LDD TEMP_YX
+STB VIA_port_a
+PSHS A
+LDA #$CE
+STA VIA_cntl
+CLR VIA_port_b
+LDA #1
+STA VIA_port_b
+PULS A
+STA VIA_port_a
+LDA #$7F
+STA VIA_t1_cnt_lo
+CLR VIA_t1_cnt_hi
+LEAX 2,X
+; Wait for move
+DSLMY_W3:
+LDA VIA_int_flags
+ANDA #$40
+BEQ DSLMY_W3
+CLR VIA_shift_reg
+BRA DSLMY_LOOP
+DSLMY_DONE:
+RTS
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
