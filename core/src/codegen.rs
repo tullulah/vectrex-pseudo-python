@@ -134,7 +134,7 @@ pub struct AssetInfo {
 pub enum AssetType {
     Vector,  // .vec file
     Music,   // .vmus file (background music, loops)
-    Sfx,     // .vmus file (sound effect, one-shot)
+    Sfx,     // .vsfx file (sound effect, parametric SFXR-style)
 }
 
 // CodegenOptions: options affecting generation (title, etc.).

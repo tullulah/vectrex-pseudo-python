@@ -313,6 +313,19 @@ export class MCPServer {
         required: ['name'],
       },
     });
+
+    this.registerTool('project/create_sfx', this.createSfx.bind(this), {
+      name: 'project/create_sfx',
+      description: 'Create .vsfx sound effect file (SFXR-style parametric format). Structure: {"version":"1.0","name":"laser","oscillator":{...},"envelope":{...},"pitchEnvelope":{...},"noise":{...}}. Presets available: laser, explosion, powerup, hit, jump, blip, coin. Leave content empty for default laser preset.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'SFX file name (without .vsfx extension)' },
+          content: { type: 'string', description: 'Valid JSON string for parametric SFX. Leave empty for laser preset template.' },
+        },
+        required: ['name'],
+      },
+    });
   }
 
   private registerTool(name: string, handler: MCPToolHandler, schema: MCPTool) {
@@ -1713,6 +1726,132 @@ def loop():
       };
     } catch (error: any) {
       throw new Error(`Failed to create music file: ${error.message}`);
+    }
+  }
+
+  private async createSfx(params: any): Promise<any> {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    // Get project root
+    const projectRoot = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__projectStore__;
+        if (!store) throw new Error('Project store not available');
+        const state = store.getState();
+        return state.project?.rootPath || state.vpyProject?.rootDir;
+      })()
+    `);
+
+    if (!projectRoot) {
+      throw new Error('No project open');
+    }
+
+    // Validate parameters
+    if (!params || typeof params !== 'object') {
+      throw new Error('Invalid parameters: expected object with "name" field');
+    }
+    
+    const { name, content } = params;
+    
+    if (!name || typeof name !== 'string') {
+      throw new Error('Invalid or missing "name" parameter. Must be a non-empty string.');
+    }
+    
+    const fileName = name.endsWith('.vsfx') ? name : `${name}.vsfx`;
+    const sfxPath = path.join(projectRoot, 'assets', 'sfx', fileName);
+    
+    // Validate JSON format if content provided
+    if (content) {
+      try {
+        const parsed = JSON.parse(content);
+        if (!parsed.version || !parsed.oscillator || !parsed.envelope) {
+          throw new Error('Invalid SFX JSON structure. Required fields: version, oscillator, envelope');
+        }
+      } catch (error: any) {
+        if (error.message.includes('Invalid SFX')) {
+          throw error;
+        }
+        throw new Error(`SFX file MUST be valid JSON format. Error: ${error.message}\n\nExample format:\n{"version":"1.0","name":"laser","oscillator":{"type":"saw","frequency":1200},"envelope":{"attack":5,"decay":50,"sustain":0,"release":100}}`);
+      }
+    }
+    
+    // Default SFX template (laser preset) if no content provided
+    const defaultContent = content || JSON.stringify({
+      version: "1.0",
+      name: name,
+      oscillator: {
+        type: "saw",
+        frequency: 1200,
+        duty: 50
+      },
+      envelope: {
+        attack: 5,
+        decay: 50,
+        sustain: 0,
+        release: 100
+      },
+      pitchEnvelope: {
+        attack: 0,
+        sustain: 100,
+        decay: 80,
+        amount: -800
+      },
+      noise: {
+        enabled: false,
+        mix: 0,
+        type: "white"
+      },
+      modulation: {
+        type: "none",
+        frequency: 0,
+        amount: 0
+      }
+    }, null, 2);
+
+    try {
+      // Ensure sfx directory exists
+      await fs.mkdir(path.dirname(sfxPath), { recursive: true });
+      
+      // Write sfx file
+      await fs.writeFile(sfxPath, defaultContent, 'utf-8');
+      
+      // Get file stats for metadata
+      const stats = await fs.stat(sfxPath);
+      
+      // Open in editor with proper file metadata
+      const fileUri = `file://${sfxPath}`;
+      await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__editorStore__;
+          if (store) {
+            const doc = {
+              uri: '${fileUri.replace(/\\/g, '\\\\')}',
+              language: 'json',
+              content: ${JSON.stringify(defaultContent)},
+              dirty: false,
+              diagnostics: [],
+              lastSavedContent: ${JSON.stringify(defaultContent)},
+              mtime: ${stats.mtimeMs},
+              size: ${stats.size}
+            };
+            store.getState().openDocument(doc);
+          }
+        })()
+      `);
+      
+      return {
+        success: true,
+        filePath: sfxPath,
+        relativePath: `assets/sfx/${fileName}`,
+        message: `Sound effect file '${fileName}' created and opened successfully`
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to create SFX file: ${error.message}`);
     }
   }
 }

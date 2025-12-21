@@ -9,6 +9,7 @@ mod unifier;  // AST unification for multi-file projects
 mod library;  // Library system
 mod vecres;   // Vector resources (.vec)
 mod musres;   // Music resources (.vmus)
+mod sfxres;   // Sound effects resources (.vsfx)
 mod struct_layout; // Struct layout computation
 
 use std::fs;
@@ -90,13 +91,13 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
         }
     }
     
-    // Search for sound effects (assets/sfx/*.vmus)
+    // Search for sound effects (assets/sfx/*.vsfx)
     let sfx_dir = project_root.join("assets").join("sfx");
     if sfx_dir.is_dir() {
         if let Ok(entries) = fs::read_dir(&sfx_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
+                if path.extension().and_then(|e| e.to_str()) == Some("vsfx") {
                     if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
                         assets.push(codegen::AssetInfo {
                             name: name.to_string(),

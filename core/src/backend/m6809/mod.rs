@@ -371,9 +371,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     });
     if has_sfx_assets {
         out.push_str("SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)\n");
-        out.push_str("SFX_TICK       EQU $C8AA   ; 32-bit tick counter (RESULT+$2A, 4 bytes)\n");
-        out.push_str("SFX_EVENT      EQU $C8AE   ; Current event pointer (RESULT+$2E, 2 bytes)\n");
-        out.push_str("SFX_ACTIVE     EQU $C8B0   ; Playback state (RESULT+$30, 1 byte)\n");
+        out.push_str("SFX_TICK       EQU $C8AA   ; Current frame counter (RESULT+$2A, 2 bytes)\n");
+        out.push_str("SFX_ACTIVE     EQU $C8AC   ; Playback state (RESULT+$2C, 1 byte)\n");
+        out.push_str("SFX_PHASE      EQU $C8AD   ; Envelope phase: 0=A,1=D,2=S,3=R (RESULT+$2D, 1 byte)\n");
+        out.push_str("SFX_VOL        EQU $C8AE   ; Current volume 0-15 (RESULT+$2E, 1 byte)\n");
     }
     out.push_str("\n");
     
@@ -825,10 +826,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
     if has_sfx_assets_storage && !opts.exclude_ram_org {
-        out.push_str("SFX_PTR:       FDB 0   ; Current SFX pointer\n");
-        out.push_str("SFX_TICK:      FDB 0,0  ; Current playback tick (32-bit)\n");
-        out.push_str("SFX_EVENT:     FDB 0   ; Pointer to current event\n");
+        out.push_str("SFX_PTR:       FDB 0   ; Pointer to current SFX data\n");
+        out.push_str("SFX_TICK:      FDB 0   ; Current frame counter\n");
         out.push_str("SFX_ACTIVE:    FCB 0   ; 0=stopped, 1=playing\n");
+        out.push_str("SFX_PHASE:     FCB 0   ; Envelope phase (0=A,1=D,2=S,3=R)\n");
+        out.push_str("SFX_VOL:       FCB 0   ; Current volume level\n");
     }
     
     // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
@@ -934,31 +936,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         }
                     },
                     crate::codegen::AssetType::Sfx => {
-                        // SFX uses same format as music but labeled differently
-                        match crate::musres::MusicResource::load(std::path::Path::new(&asset.path)) {
+                        // SFX uses new .vsfx format with parametric sound design
+                        match crate::sfxres::SfxResource::load(std::path::Path::new(&asset.path)) {
                             Ok(resource) => {
-                                // Generate with "_SFX" suffix instead of "_MUSIC"
-                                let symbol = format!("_{}_SFX", asset.name.to_uppercase().replace("-", "_").replace(" ", "_"));
                                 out.push_str(&format!("; ========================================\n"));
                                 out.push_str(&format!("; SFX Asset: {} (from {})\n", asset.name, asset.path));
                                 out.push_str(&format!("; ========================================\n"));
-                                out.push_str(&format!("{}:\n", symbol));
                                 
-                                // Emit same structure as music (tempo, ticks, events)
-                                // MusicResource::compile_to_asm already handles full structure
-                                // Just need to extract the data part without the label
-                                let full_asm = resource.compile_to_asm(&asset.name);
-                                // Skip first 4 lines (comments) and label line
-                                let lines: Vec<&str> = full_asm.lines().collect();
-                                if lines.len() > 5 {
-                                    for line in &lines[5..] {
-                                        out.push_str(line);
-                                        out.push_str("\n");
-                                    }
-                                } else {
-                                    // Fallback: just emit the whole thing
-                                    out.push_str(&full_asm);
-                                }
+                                // SfxResource::compile_to_asm() generates full label and data
+                                let asm = resource.compile_to_asm();
+                                out.push_str(&asm);
                                 out.push_str("\n");
                             },
                             Err(e) => {
