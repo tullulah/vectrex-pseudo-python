@@ -637,6 +637,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   
   // Wrapper to set resource and notify parent
   const updateResource = useCallback((newResource: VecResource) => {
+    console.log('[VectorEditor] updateResource called');
     // Recalculate center whenever resource changes
     const { centerX, centerY } = calculateCenter(newResource);
     const withCenter = {
@@ -644,10 +645,39 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       center_x: Math.round(centerX),
       center_y: Math.round(centerY),
     };
+    console.log('[VectorEditor] Calling onChange with updated resource');
     isInternalChange.current = true;
     setResource(withCenter);
     onChange?.(withCenter);
   }, [onChange]);
+
+  // Scale all points by a factor
+  const handleScale = (factor: number) => {
+    console.log('[VectorEditor] handleScale called with factor:', factor);
+    console.log('[VectorEditor] Current resource:', JSON.stringify(resource, null, 2));
+    
+    const scaled = JSON.parse(JSON.stringify(resource)) as VecResource;
+    let pointsScaled = 0;
+    
+    for (const layer of scaled.layers) {
+      if (Array.isArray(layer.paths)) {
+        for (const path of layer.paths) {
+          if (Array.isArray(path.points)) {
+            for (const point of path.points) {
+              point.x = Math.round(point.x * factor);
+              point.y = Math.round(point.y * factor);
+              if (point.z) point.z = Math.round(point.z * factor);
+              pointsScaled++;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('[VectorEditor] Scaled', pointsScaled, 'points with factor', factor);
+    console.log('[VectorEditor] Scaled resource:', JSON.stringify(scaled, null, 2));
+    updateResource(scaled);
+  };
   
   // Box selection state
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
@@ -849,6 +879,34 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     const labelY = viewMode === 'xy' ? 'Y' : 'Z';
     ctx.fillText(`+${labelX}`, width - 30, centerY - 10);
     ctx.fillText(`+${labelY}`, centerX + 10, 20);
+
+    // Draw Vectrex screen reference (dimmed rectangle showing screen boundaries)
+    if (viewMode === 'xy') {
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]); // Dashed line
+      
+      // Screen boundaries: X: -127 to 126, Y: -120 to 120
+      const screenLeft = resourceToCanvas({ x: -127, y: 0 });
+      const screenRight = resourceToCanvas({ x: 126, y: 0 });
+      const screenTop = resourceToCanvas({ x: 0, y: 120 });
+      const screenBottom = resourceToCanvas({ x: 0, y: -120 });
+      
+      ctx.beginPath();
+      ctx.rect(
+        screenLeft.x,
+        screenTop.y,
+        screenRight.x - screenLeft.x,
+        screenBottom.y - screenTop.y
+      );
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash
+      
+      // Label
+      ctx.fillStyle = '#666';
+      ctx.font = '10px monospace';
+      ctx.fillText('Vectrex Screen', screenLeft.x + 5, screenTop.y - 5);
+    }
 
     // Draw paths
     for (let layerIdx = 0; layerIdx < resource.layers.length; layerIdx++) {
@@ -1463,6 +1521,44 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         title={viewMode === '3d' ? 'Pan/Rotate - drag to rotate 3D view' : 'Pan - drag to move view'}
       >
         {viewMode === '3d' ? '🔄 Rotate' : '✋ Pan'}
+      </button>
+      
+      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
+      
+      {/* Scale buttons */}
+      <button
+        onClick={() => {
+          console.log('[VectorEditor] Scale Up button clicked');
+          handleScale(1.5);
+        }}
+        style={{
+          padding: '8px 12px',
+          background: '#3a3a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Scale up - increase size by 50%"
+      >
+        🔍+ Scale Up
+      </button>
+      <button
+        onClick={() => {
+          console.log('[VectorEditor] Scale Down button clicked');
+          handleScale(0.67);
+        }}
+        style={{
+          padding: '8px 12px',
+          background: '#3a3a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Scale down - decrease size by 33%"
+      >
+        🔍- Scale Down
       </button>
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />

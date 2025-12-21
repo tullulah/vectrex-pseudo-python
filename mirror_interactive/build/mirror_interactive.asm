@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Unified Mirrors Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Mirror Interactive - Joystick Control' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "UNIFIED MIRRORS TEST"
+    FCC "MIRROR INTERACTIVE   JOY"
     FCB $80
     FCB 0
 
@@ -37,9 +37,6 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
-    RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
     RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -503,168 +500,300 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 5 statements in loop() body
-    ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:8
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 8
-    JSR VECTREX_WAIT_RECAL
-    CLRA
-    CLRB
+    LEAS -10,S ; allocate locals
+    ; DEBUG: Processing 10 statements in loop() body
+    ; DEBUG: Statement 0 - Discriminant(0)
+    ; VPy_LINE:9
+; NATIVE_CALL: J1_X at line 9
+; J1_X() - Read Joystick 1 X axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF00 (128=center)
+    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
+; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)
+    CMPB #108    ; Check if < 108 (left)
+    BLO J1X_LEFT ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (right)
+    BHI J1X_RIGHT ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1X_END
+J1X_LEFT:
+    LDD #$FFFF   ; Left (-1)
+    BRA J1X_END
+J1X_RIGHT:
+    LDD #1       ; Right (+1)
+J1X_END:
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:12
-; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=20, center_x=0
-    LDD #30
+    LDX RESULT
+    STX 0 ,S
+    ; DEBUG: Statement 1 - Discriminant(0)
+    ; VPy_LINE:10
+; NATIVE_CALL: J1_Y at line 10
+; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF01 (128=center)
+    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)
+; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)
+    CMPB #108    ; Check if < 108 (down)
+    BLO J1Y_DOWN ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (up)
+    BHI J1Y_UP   ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1Y_END
+J1Y_DOWN:
+    LDD #$FFFF   ; Down (-1)
+    BRA J1Y_END
+J1Y_UP:
+    LDD #1       ; Up (+1)
+J1Y_END:
     STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #60
+    LDX RESULT
+    STX 2 ,S
+    ; DEBUG: Statement 2 - Discriminant(0)
+    ; VPy_LINE:13
+    LDD #64
     STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
+    LDX RESULT
+    STX 6 ,S
+    ; DEBUG: Statement 3 - Discriminant(0)
+    ; VPy_LINE:14
+    LDD #64
+    STD RESULT
+    LDX RESULT
+    STX 8 ,S
+    ; DEBUG: Statement 4 - Discriminant(9)
+    ; VPy_LINE:17
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_2
     LDD #0
     STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_0
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_0:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_1
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_1:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_2
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_2:
-    LDX #_PLAYER_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:15
-; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=20, center_x=0
-    LDD #90
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #60
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
+    BRA CE_3
+CT_2:
     LDD #1
     STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_3
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_3:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_4
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_4:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_5
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_5:
-    LDX #_PLAYER_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(8)
+CE_3:
+    LDD RESULT
+    LBEQ IF_NEXT_1
     ; VPy_LINE:18
-; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=20, center_x=0
     LDD #30
     STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    LDX RESULT
+    STX 6 ,S
+    LBRA IF_END_0
+IF_NEXT_1:
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_4
     LDD #0
     STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
+    BRA CE_5
+CT_4:
+    LDD #1
+    STD RESULT
+CE_5:
+    LDD RESULT
+    LBEQ IF_END_0
+    ; VPy_LINE:20
+    LDD #98
+    STD RESULT
+    LDX RESULT
+    STX 6 ,S
+    LBRA IF_END_0
+IF_END_0:
+    ; DEBUG: Statement 5 - Discriminant(9)
+    ; VPy_LINE:23
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_8
+    LDD #0
+    STD RESULT
+    BRA CE_9
+CT_8:
+    LDD #1
+    STD RESULT
+CE_9:
+    LDD RESULT
+    LBEQ IF_NEXT_7
+    ; VPy_LINE:24
+    LDD #30
+    STD RESULT
+    LDX RESULT
+    STX 8 ,S
+    LBRA IF_END_6
+IF_NEXT_7:
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_10
+    LDD #0
+    STD RESULT
+    BRA CE_11
+CT_10:
+    LDD #1
+    STD RESULT
+CE_11:
+    LDD RESULT
+    LBEQ IF_END_6
+    ; VPy_LINE:26
+    LDD #98
+    STD RESULT
+    LDX RESULT
+    STX 8 ,S
+    LBRA IF_END_6
+IF_END_6:
+    ; DEBUG: Statement 6 - Discriminant(0)
+    ; VPy_LINE:29
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    STX 4 ,S
+    ; DEBUG: Statement 7 - Discriminant(9)
+    ; VPy_LINE:32
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_14
+    LDD #0
+    STD RESULT
+    BRA CE_15
+CT_14:
+    LDD #1
+    STD RESULT
+CE_15:
+    LDD RESULT
+    LBEQ IF_NEXT_13
+    ; VPy_LINE:33
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    STX 4 ,S
+    LBRA IF_END_12
+IF_NEXT_13:
+IF_END_12:
+    ; DEBUG: Statement 8 - Discriminant(9)
+    ; VPy_LINE:36
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_18
+    LDD #0
+    STD RESULT
+    BRA CE_19
+CT_18:
+    LDD #1
+    STD RESULT
+CE_19:
+    LDD RESULT
+    LBEQ IF_NEXT_17
+    ; VPy_LINE:37
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
     LDD #2
     STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_6
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_6:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_7
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_7:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_8
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_8:
-    LDX #_PLAYER_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
-    LDD #0
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
     STD RESULT
-    ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:21
-; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=20, center_x=0
-    LDD #90
+    LDX RESULT
+    STX 4 ,S
+    LBRA IF_END_16
+IF_NEXT_17:
+IF_END_16:
+    ; DEBUG: Statement 9 - Discriminant(8)
+    ; VPy_LINE:40
+; DRAW_VECTOR_EX("spaceship", x, y, mirror) - 2 path(s), width=10, center_x=0
+    LDD 6 ,S
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
     STA DRAW_VEC_X
-    LDD #0
+    LDD 8 ,S
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
     STA DRAW_VEC_Y
-    LDD #3
+    LDD 4 ,S
     STD RESULT
     LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
     ; Decode mirror mode into separate flags:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_9
+    BNE DSVEX_CHK_Y_20
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_9:
+DSVEX_CHK_Y_20:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_10
+    BNE DSVEX_CHK_XY_21
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_10:
+DSVEX_CHK_XY_21:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_11
+    BNE DSVEX_CALL_22
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_11:
-    LDX #_PLAYER_PATH0  ; Path 0
+DSVEX_CALL_22:
+    LDX #_SPACESHIP_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
+    LDX #_SPACESHIP_PATH1  ; Path 1
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
     LDD #0
     STD RESULT
+    LEAS 10,S ; free locals
     RTS
 
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
 ; Variables (in RAM)
+TMPLEFT   EQU RESULT+2
+TMPRIGHT  EQU RESULT+4
+TMPPTR    EQU RESULT+6
 TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
 TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)
 TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)
@@ -684,23 +813,35 @@ VAR_ARG4 EQU $C8BA
 ; Embedded 1 of 1 assets (unused assets excluded)
 ; ========================================
 
-; Vector asset: player
-; Generated from player.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-10, max=10, width=20
-; Center: (0, 2)
+; Vector asset: spaceship
+; Generated from spaceship.vec (Malban Draw_Sync_List format)
+; Total paths: 2, points: 10
+; X bounds: min=-5, max=5, width=10
+; Center: (0, 1)
 
-_PLAYER_WIDTH EQU 20
-_PLAYER_CENTER_X EQU 0
-_PLAYER_CENTER_Y EQU 2
+_SPACESHIP_WIDTH EQU 10
+_SPACESHIP_CENTER_X EQU 0
+_SPACESHIP_CENTER_Y EQU 1
 
-_PLAYER_VECTORS:  ; Main entry
-_PLAYER_PATH0:    ; Path 0
+_SPACESHIP_VECTORS:  ; Main entry
+_SPACESHIP_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $0D,$00,0,0        ; path0: header (y=13, x=0, relative to center)
-    FCB $FF,$E7,$F6          ; line 0: flag=-1, dy=-25, dx=-10
-    FCB $FF,$00,$14          ; line 1: flag=-1, dy=0, dx=20
-    FCB $FF,$19,$F6          ; closing line: flag=-1, dy=25, dx=-10
+    FCB $07,$00,0,0        ; path0: header (y=7, x=0, relative to center)
+    FCB $FF,$F4,$FB          ; line 0: flag=-1, dy=-12, dx=-5
+    FCB $FF,$02,$02          ; line 1: flag=-1, dy=2, dx=2
+    FCB $FF,$FC,$03          ; line 2: flag=-1, dy=-4, dx=3
+    FCB $FF,$04,$03          ; line 3: flag=-1, dy=4, dx=3
+    FCB $FF,$FE,$02          ; line 4: flag=-1, dy=-2, dx=2
+    FCB $FF,$0C,$FB          ; closing line: flag=-1, dy=12, dx=-5
+    FCB 2                ; End marker
+
+_SPACESHIP_PATH1:
+    FCB 100              ; path1: intensity
+    FCB $01,$FF,0,0        ; path1: header (y=1, x=-1, relative to center)
+    FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
+    FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
+    FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
+    FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker
 
 DRAW_VEC_X EQU RESULT+0

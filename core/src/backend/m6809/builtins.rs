@@ -150,7 +150,11 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 };
                 
                 let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
-                let no_mirror_label = fresh_label("DRAW_VEX");
+                
+                // Generate UNIQUE labels for this call (critical for multiple DRAW_VECTOR_EX calls)
+                let chk_y_label = fresh_label("DSVEX_CHK_Y");
+                let chk_xy_label = fresh_label("DSVEX_CHK_XY");
+                let call_label = fresh_label("DSVEX_CALL");
                 
                 out.push_str(&format!("; DRAW_VECTOR_EX(\"{}\", x, y, mirror) - {} path(s), width={}, center_x={}\n", asset_name, path_count, asset_width, center_x));
                 
@@ -173,21 +177,21 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    CLR MIRROR_X  ; Clear X flag\n");
                 out.push_str("    CLR MIRROR_Y  ; Clear Y flag\n");
                 out.push_str("    CMPB #1       ; Check if X-mirror (mode 1)\n");
-                out.push_str("    BNE DSVEX_CHK_Y\n");
+                out.push_str(&format!("    BNE {}\n", chk_y_label));
                 out.push_str("    LDA #1\n");
                 out.push_str("    STA MIRROR_X\n");
-                out.push_str("DSVEX_CHK_Y:\n");
+                out.push_str(&format!("{}:\n", chk_y_label));
                 out.push_str("    CMPB #2       ; Check if Y-mirror (mode 2)\n");
-                out.push_str("    BNE DSVEX_CHK_XY\n");
+                out.push_str(&format!("    BNE {}\n", chk_xy_label));
                 out.push_str("    LDA #1\n");
                 out.push_str("    STA MIRROR_Y\n");
-                out.push_str("DSVEX_CHK_XY:\n");
+                out.push_str(&format!("{}:\n", chk_xy_label));
                 out.push_str("    CMPB #3       ; Check if both-mirror (mode 3)\n");
-                out.push_str("    BNE DSVEX_CALL\n");
+                out.push_str(&format!("    BNE {}\n", call_label));
                 out.push_str("    LDA #1\n");
                 out.push_str("    STA MIRROR_X\n");
                 out.push_str("    STA MIRROR_Y\n");
-                out.push_str("DSVEX_CALL:\n");
+                out.push_str(&format!("{}:\n", call_label));
                 
                 // Generate code to draw each path using unified mirrored function
                 for path_idx in 0..path_count {
