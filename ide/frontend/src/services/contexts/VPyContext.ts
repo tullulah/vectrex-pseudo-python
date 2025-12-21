@@ -97,6 +97,30 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     notes: "IMPORTANT: intensity values in .vec file MUST be ≤127 - higher values cause invisible lines!"
   },
   {
+    name: "DRAW_VECTOR_EX",
+    syntax: "DRAW_VECTOR_EX(name, x, y, mirror)",
+    description: "Draws a vector asset with position offset and optional mirror transformation",
+    parameters: [
+      { name: "name", type: "string", description: "Name of the vector asset (without .vec extension)", required: true },
+      { name: "x", type: "number", description: "X position offset (-127 to 126)", required: true },
+      { name: "y", type: "number", description: "Y position offset (-120 to 120)", required: true },
+      { name: "mirror", type: "number", description: "Mirror mode: 0=normal, 1=X-flip (horizontal), 2=Y-flip (vertical), 3=both (180° rotation)", required: true }
+    ],
+    examples: [
+      "def loop():",
+      "    # Draw normal sprite",
+      "    DRAW_VECTOR_EX(\"player\", 0, 50, 0)",
+      "    # Draw horizontally mirrored (facing opposite direction)",
+      "    DRAW_VECTOR_EX(\"player\", 0, -50, 1)",
+      "    # Draw vertically mirrored (upside down)",
+      "    DRAW_VECTOR_EX(\"player\", -50, 0, 2)",
+      "    # Draw both axes mirrored (180° rotation)",
+      "    DRAW_VECTOR_EX(\"player\", 50, 0, 3)"
+    ],
+    category: "assets",
+    notes: "Mirror modes: 0=normal (no transformation), 1=X-flip (left-right), 2=Y-flip (top-bottom), 3=XY-flip (both axes, 180° rotation). Screen bounds: X: -127 to 126, Y: -120 to 120."
+  },
+  {
     name: "PLAY_MUSIC",
     syntax: "PLAY_MUSIC(name)",
     description: "Plays PSG music from embedded .vmus file",
