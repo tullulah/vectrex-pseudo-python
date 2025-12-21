@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='testMirror' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Center-Relative Test' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "TESTMIRROR"
+    FCC "CENTER RELATIVE TEST"
     FCB $80
     FCB 0
 
@@ -29,13 +29,6 @@ RESULT         EQU $C880   ; Main result temporary
 
     JMP START
 
-VECTREX_DEBUG_PRINT:
-    ; Debug print to console - writes to gap area (C000-C7FF)
-    LDA VAR_ARG0+1   ; Load value to debug print
-    STA $C000        ; Debug output value in unmapped gap
-    LDA #$42         ; Debug marker
-    STA $C001        ; Debug marker to indicate new output
-    RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
     LDA #$98       ; VIA_cntl = $98 (DAC mode)
@@ -44,6 +37,9 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
+    RTS
+VECTREX_WAIT_RECAL:
+    JSR Wait_Recal
     RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -464,18 +460,12 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    LDD #0
-    STD VAR_PLAYER_X
-    LDD #65456
-    STD VAR_PLAYER_Y
-    LDD #0
-    STD VAR_PLAYER_DIR
-    ; VPy_LINE:13
+    ; VPy_LINE:7
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 13
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -490,271 +480,37 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    LEAS -4,S ; allocate locals
-    ; DEBUG: Processing 9 statements in loop() body
-    ; DEBUG: Statement 0 - Discriminant(0)
-    ; VPy_LINE:18
-; NATIVE_CALL: J1_X at line 18
-; J1_X() - Read Joystick 1 X axis (Digital from RAM)
-; Frontend writes unsigned 0-255 to $CF00 (128=center)
-    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
-; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)
-    CMPB #108    ; Check if < 108 (left)
-    BLO J1X_LEFT ; Branch if lower (unsigned)
-    CMPB #148    ; Check if > 148 (right)
-    BHI J1X_RIGHT ; Branch if higher (unsigned)
-    LDD #0       ; Center
-    BRA J1X_END
-J1X_LEFT:
-    LDD #$FFFF   ; Left (-1)
-    BRA J1X_END
-J1X_RIGHT:
-    LDD #1       ; Right (+1)
-J1X_END:
+    ; DEBUG: Processing 5 statements in loop() body
+    ; DEBUG: Statement 0 - Discriminant(8)
+    ; VPy_LINE:10
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 10
+    JSR VECTREX_WAIT_RECAL
+    CLRA
+    CLRB
     STD RESULT
-    LDX RESULT
-    STX 0 ,S
-    ; DEBUG: Statement 1 - Discriminant(0)
-    ; VPy_LINE:19
-; NATIVE_CALL: J1_Y at line 19
-; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)
-; Frontend writes unsigned 0-255 to $CF01 (128=center)
-    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)
-; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)
-    CMPB #108    ; Check if < 108 (down)
-    BLO J1Y_DOWN ; Branch if lower (unsigned)
-    CMPB #148    ; Check if > 148 (up)
-    BHI J1Y_UP   ; Branch if higher (unsigned)
-    LDD #0       ; Center
-    BRA J1Y_END
-J1Y_DOWN:
-    LDD #$FFFF   ; Down (-1)
-    BRA J1Y_END
-J1Y_UP:
-    LDD #1       ; Up (+1)
-J1Y_END:
-    STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    ; DEBUG: Statement 2 - Discriminant(9)
-    ; VPy_LINE:23
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #65535
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_2
-    LDD #0
-    STD RESULT
-    BRA CE_3
-CT_2:
-    LDD #1
-    STD RESULT
-CE_3:
-    LDD RESULT
-    LBEQ IF_NEXT_1
-    ; VPy_LINE:24
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:25
-    LDD #1
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_DIR
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_0
-IF_NEXT_1:
-IF_END_0:
-    ; DEBUG: Statement 3 - Discriminant(9)
-    ; VPy_LINE:26
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_6
-    LDD #0
-    STD RESULT
-    BRA CE_7
-CT_6:
-    LDD #1
-    STD RESULT
-CE_7:
-    LDD RESULT
-    LBEQ IF_NEXT_5
-    ; VPy_LINE:27
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:28
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_DIR
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_4
-IF_NEXT_5:
-IF_END_4:
-    ; DEBUG: Statement 4 - Discriminant(9)
-    ; VPy_LINE:31
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #65535
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_10
-    LDD #0
-    STD RESULT
-    BRA CE_11
-CT_10:
-    LDD #1
-    STD RESULT
-CE_11:
-    LDD RESULT
-    LBEQ IF_NEXT_9
-    ; VPy_LINE:32
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_8
-IF_NEXT_9:
-IF_END_8:
-    ; DEBUG: Statement 5 - Discriminant(9)
-    ; VPy_LINE:33
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_14
-    LDD #0
-    STD RESULT
-    BRA CE_15
-CT_14:
-    LDD #1
-    STD RESULT
-CE_15:
-    LDD RESULT
-    LBEQ IF_NEXT_13
-    ; VPy_LINE:34
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_12
-IF_NEXT_13:
-IF_END_12:
-    ; DEBUG: Statement 6 - Discriminant(8)
-    ; VPy_LINE:37
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:13
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 37
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 13
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 7 - Discriminant(8)
-    ; VPy_LINE:38
-    LDD VAR_PLAYER_DIR
-    STD RESULT
-; NATIVE_CALL: DEBUG_PRINT(player_dir) at line 38
-    LDD RESULT
-    STB $C000
-    LDA #$FE
-    STA $C001
-    LDX #DEBUG_LABEL_PLAYER_DIR
-    STX $C002
-    BRA DEBUG_SKIP_DATA_16
-DEBUG_LABEL_PLAYER_DIR:
-    FCC "player_dir"
-    FCB $00
-DEBUG_SKIP_DATA_16:
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 8 - Discriminant(8)
-    ; VPy_LINE:41
+    ; DEBUG: Statement 2 - Discriminant(8)
+    ; VPy_LINE:14
 ; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=57, center_x=6
-    LDD VAR_PLAYER_X
+    LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
     STA DRAW_VEC_X
-    LDD VAR_PLAYER_Y
+    LDD #0
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
     STA DRAW_VEC_Y
-    LDD VAR_PLAYER_DIR
+    LDD #0
     STD RESULT
     LDB RESULT+1  ; Mirror flag (0=normal, 1=flip X)
     STB RESULT+8  ; Save mirror flag in temp storage
@@ -762,28 +518,66 @@ DEBUG_SKIP_DATA_16:
     STB RESULT+9  ; Save width for mirror offset
     LDB #6
     STB RESULT+10 ; Save center_x for mirror axis
-DRAW_VEX_17:
+DRAW_VEX_0:
     LDX #_PLAYER_PATH0  ; Path 0
     LDB RESULT+8  ; Get mirror flag
     CMPB #0
-    BEQ DRAW_VEX_NORMAL_18
+    BEQ DRAW_VEX_NORMAL_1
     JSR Draw_Sync_List_At_Mirrored
-    BRA DRAW_VEX_DONE_19
-DRAW_VEX_NORMAL_18:
+    BRA DRAW_VEX_DONE_2
+DRAW_VEX_NORMAL_1:
     JSR Draw_Sync_List_At
-DRAW_VEX_DONE_19:
+DRAW_VEX_DONE_2:
     LDD #0
     STD RESULT
-    LEAS 4,S ; free locals
+    ; DEBUG: Statement 3 - Discriminant(8)
+    ; VPy_LINE:17
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 17
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 4 - Discriminant(8)
+    ; VPy_LINE:18
+; DRAW_VECTOR_EX("player", x, y, mirror) - 1 path(s), width=57, center_x=6
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDD #1
+    STD RESULT
+    LDB RESULT+1  ; Mirror flag (0=normal, 1=flip X)
+    STB RESULT+8  ; Save mirror flag in temp storage
+    LDB #57
+    STB RESULT+9  ; Save width for mirror offset
+    LDB #6
+    STB RESULT+10 ; Save center_x for mirror axis
+DRAW_VEX_3:
+    LDX #_PLAYER_PATH0  ; Path 0
+    LDB RESULT+8  ; Get mirror flag
+    CMPB #0
+    BEQ DRAW_VEX_NORMAL_4
+    JSR Draw_Sync_List_At_Mirrored
+    BRA DRAW_VEX_DONE_5
+DRAW_VEX_NORMAL_4:
+    JSR Draw_Sync_List_At
+DRAW_VEX_DONE_5:
+    LDD #0
+    STD RESULT
     RTS
 
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
 ; Variables (in RAM)
-TMPLEFT   EQU RESULT+2
-TMPRIGHT  EQU RESULT+4
-TMPPTR    EQU RESULT+6
 TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
 TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)
 TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)
@@ -791,9 +585,6 @@ VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-VAR_PLAYER_X EQU $CF10+0
-VAR_PLAYER_Y EQU $CF10+2
-VAR_PLAYER_DIR EQU $CF10+4
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
@@ -827,5 +618,5 @@ _PLAYER_PATH0:    ; Path 0
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker
 
-DRAW_VEC_X EQU RESULT+6
-DRAW_VEC_Y EQU RESULT+7
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+1

@@ -736,26 +736,20 @@ SFX_UPDATE_done:\n\
     // (Always emitted as part of core drawing infrastructure)
     out.push_str(
         "Draw_Sync_List_At_Mirrored:\n\
-        ; Horizontally mirrored drawing using center as mirror axis\n\
-            ; Same as Draw_Sync_List_At but with:\n\
-            ; 1. NEGA applied to each dx (line deltas) - visual mirror\n\
-            ; 2. Center-based position calculation (x_mirrored = 2*center_x - x_original)\n\
+        ; Horizontally mirrored drawing (uses center-relative coordinates)\n\
+            ; With center-relative coords from vecres.rs, mirroring is simple:\n\
+            ; 1. Negate X coordinate: x_mirrored = -x_start\n\
+            ; 2. Negate dx deltas: dx_mirrored = -dx (via NEGA)\n\
             LDA ,X+                 ; intensity\n\
             PSHS A                  ; Save intensity\n\
             LDA #$D0\n\
             PULS A                  ; Restore intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
-            LDB ,X+                 ; y_start from .vec\n\
+            LDB ,X+                 ; y_start from .vec (already relative to center)\n\
             ADDB DRAW_VEC_Y         ; Add Y offset\n\
-            LDA ,X+                 ; x_start from .vec\n\
-            ADDA DRAW_VEC_X         ; Add X offset (position)\n\
-            ; Mirror formula: x_mirrored = 2*center_x - x_original\n\
-            STB TEMP_Y              ; Save Y for later\n\
-            STB TEMP_X              ; Save x_original temporarily\n\
-            LDA RESULT+10           ; Load center_x\n\
-            ASLA                    ; A = 2*center_x\n\
-            SUBA TEMP_X             ; A = 2*center_x - x_original\n\
-            LDB TEMP_Y              ; Restore Y\n\
+            LDA ,X+                 ; x_start from .vec (already relative to center)\n\
+            NEGA                    ; ← Negate for X-axis mirror\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
             STD TEMP_YX             ; Save adjusted (mirrored) position\n\
             ; Reset completo\n\
             CLR VIA_shift_reg\n\
@@ -820,23 +814,17 @@ SFX_UPDATE_done:\n\
             BEQ DSLM_W2\n\
             CLR VIA_shift_reg\n\
             BRA DSLM_LOOP\n\
-            ; Next path: add offset to new coordinates too
+            ; Next path: negate X coordinate for new path too
             DSLM_NEXT_PATH:\n\
             TFR X,D\n\
             PSHS D\n\
             LDA ,X+                 ; Read intensity\n\
             PSHS A\n\
-            LDB ,X+                 ; y_start\n\
+            LDB ,X+                 ; y_start (already relative to center)\n\
             ADDB DRAW_VEC_Y         ; Add Y offset to new path\n\
-            LDA ,X+                 ; x_start\n\
-            ADDA DRAW_VEC_X         ; Add X offset (position)\n\
-            ; Mirror formula: x_mirrored = 2*center_x - x_original\n\
-            STB TEMP_Y              ; Save Y for later\n\
-            STA TEMP_X              ; Save x_original temporarily\n\
-            LDA RESULT+10           ; Load center_x\n\
-            ASLA                    ; A = 2*center_x\n\
-            SUBA TEMP_X             ; A = 2*center_x - x_original\n\
-            LDB TEMP_Y              ; Restore Y\n\
+            LDA ,X+                 ; x_start (already relative to center)\n\
+            NEGA                    ; ← Negate for X-axis mirror\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
             STD TEMP_YX\n\
             PULS A                  ; Get intensity back\n\
             JSR $F2AB\n\
