@@ -491,95 +491,6 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     notes: "Often used with min() for clamping values to ranges."
   },
   {
-    name: "DRAW_POLYGON",
-    syntax: "DRAW_POLYGON(n_sides, intensity?, x0, y0, x1, y1, ..., xn, yn)",
-    description: "Draws a closed polygon with N sides at specified vertices",
-    parameters: [
-      { name: "n_sides", type: "int", description: "Number of polygon sides (minimum 3)", required: true },
-      { name: "intensity", type: "int", description: "Optional beam intensity (0-127, default 95)", required: false },
-      { name: "x0, y0, ..., xn, yn", type: "int", description: "N pairs of (x, y) coordinates for vertices", required: true }
-    ],
-    examples: [
-      "# Triangle (3 vertices)",
-      "DRAW_POLYGON(3, 127, -15, 20, 15, 20, 0, -20)",
-      "",
-      "# Square with intensity",
-      "DRAW_POLYGON(4, 100, -50, -50, 50, -50, 50, 50, -50, 50)",
-      "",
-      "# Pentagon (no intensity specified, uses default)",
-      "DRAW_POLYGON(5, 0, -50, 30, -10, 50, 40, 20, 30, -50)"
-    ],
-    category: "drawing",
-    notes: "Polygon automatically closes (last vertex connects to first). All vertices drawn with CLR Vec_Misc_Count for proper line continuity. Variable arity function."
-  },
-  {
-    name: "DRAW_CIRCLE",
-    syntax: "DRAW_CIRCLE(x_center, y_center, diameter, intensity?)",
-    description: "Draws an approximate circle using a 16-sided polygon",
-    parameters: [
-      { name: "x_center", type: "int", description: "Center X coordinate", required: true },
-      { name: "y_center", type: "int", description: "Center Y coordinate", required: true },
-      { name: "diameter", type: "int", description: "Circle diameter (width)", required: true },
-      { name: "intensity", type: "int", description: "Optional beam intensity (0-127, default 95)", required: false }
-    ],
-    examples: [
-      "# Circle at center with diameter 60",
-      "DRAW_CIRCLE(0, 0, 60, 127)",
-      "",
-      "# Smaller circle at position",
-      "DRAW_CIRCLE(50, -30, 40, 80)"
-    ],
-    category: "drawing",
-    notes: "Approximates circle with 16-point polygon. All points calculated from center using trigonometry. Variable arity function."
-  },
-  {
-    name: "DRAW_CIRCLE_SEG",
-    syntax: "DRAW_CIRCLE_SEG(n_segments, x_center, y_center, diameter, intensity?)",
-    description: "Draws an approximate circle with custom number of segments",
-    parameters: [
-      { name: "n_segments", type: "int", description: "Number of segments (3-64, typically 8-32)", required: true },
-      { name: "x_center", type: "int", description: "Center X coordinate", required: true },
-      { name: "y_center", type: "int", description: "Center Y coordinate", required: true },
-      { name: "diameter", type: "int", description: "Circle diameter", required: true },
-      { name: "intensity", type: "int", description: "Optional beam intensity (0-127, default 95)", required: false }
-    ],
-    examples: [
-      "# Detailed circle with 32 segments",
-      "DRAW_CIRCLE_SEG(32, 0, 0, 60, 127)",
-      "",
-      "# Quick circle with 8 segments (octagon)",
-      "DRAW_CIRCLE_SEG(8, -40, 40, 50, 100)"
-    ],
-    category: "drawing",
-    notes: "More segments = smoother circle but slower. Fewer segments = faster but more angular. Clamped to 3-64 segments. Variable arity function."
-  },
-  {
-    name: "DRAW_ARC",
-    syntax: "DRAW_ARC(...)",
-    description: "Draws an arc (partial circle) - variable arity function",
-    parameters: [
-      { name: "...", type: "varies", description: "Arc drawing parameters (not yet fully documented)", required: true }
-    ],
-    examples: [
-      "# Arc drawing - implementation pending"
-    ],
-    category: "drawing",
-    notes: "Variable arity function. Implementation pending full documentation."
-  },
-  {
-    name: "DRAW_SPIRAL",
-    syntax: "DRAW_SPIRAL(...)",
-    description: "Draws a spiral pattern - variable arity function",
-    parameters: [
-      { name: "...", type: "varies", description: "Spiral drawing parameters (not yet fully documented)", required: true }
-    ],
-    examples: [
-      "# Spiral drawing - implementation pending"
-    ],
-    category: "drawing",
-    notes: "Variable arity function. Implementation pending full documentation."
-  },
-  {
     name: "WAIT_RECAL",
     syntax: "WAIT_RECAL()",
     description: "Waits for screen refresh and recalibrates the vector beam (50 FPS sync)",
@@ -915,26 +826,6 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
 ❌ Assuming generic names exist → Verify with project/get_structure before using DRAW_VECTOR/PLAY_MUSIC
 ❌ **INVENTING .vec format** (using "vectors", "type": "line", x1/y1/x2/y2) → MUST use exact "paths"/"points" format
 ❌ Using version: 1 (number) in .vec → MUST be "version": "1.0" (string)
-
-## Recent Updates (2025-12-23)
-
-### ✅ FIXED: PRINT_TEXT Breaking Vector Drawing
-- **Problem**: PRINT_TEXT was restoring DP=$C8, breaking subsequent DRAW_VECTOR calls
-- **Solution**: Removed DP restoration, keeps DP=$D0 for vector operations
-- **Impact**: Text and vectors now render together without corruption
-- **Details**: See commit 94620737 in feature/fix-print-text-vectors branch
-
-### ✅ NEW: Variable-Arity Builtin Function Support
-- **Added**: DRAW_POLYGON, DRAW_CIRCLE, DRAW_CIRCLE_SEG, DRAW_ARC, DRAW_SPIRAL
-- **Validation**: New semantic validation system supports minimum argument counts
-- **Benefit**: More flexible function calls with optional parameters (e.g., intensity)
-- **Example**: `DRAW_POLYGON(3, 127, x0, y0, x1, y1, x2, y2)` or `DRAW_CIRCLE(0, 0, 60, 100)`
-
-### ✅ IMPROVED: Vector Drawing Continuity
-- **Added**: CLR Vec_Misc_Count in Draw_Sync_List operations
-- **Purpose**: Ensures relative line drawing mode for all line segments
-- **Effect**: Connected line segments in vector assets now draw continuously
-- **Status**: DRAW_POLYGON works perfectly; DRAW_VECTOR closure investigation pending
 
 ### Parameter Requirements:
 
