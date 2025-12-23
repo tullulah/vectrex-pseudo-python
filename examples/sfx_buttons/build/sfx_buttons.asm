@@ -832,11 +832,11 @@ VAR_ARG3 EQU $C8B8
 ; Generated from vector.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 3
 ; X bounds: min=-15, max=15, width=30
-; Center: (0, 5)
+; Center: (0, 0)
 
 _VECTOR_WIDTH EQU 30
 _VECTOR_CENTER_X EQU 0
-_VECTOR_CENTER_Y EQU 5
+_VECTOR_CENTER_Y EQU 0
 
 _VECTOR_VECTORS:  ; Main entry
 _VECTOR_PATH0:    ; Path 0
@@ -845,7 +845,8 @@ _VECTOR_PATH0:    ; Path 0
     FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
     FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
     FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
-    FCB 2                ; End marker
+    FCB 1                ; Path end marker (flush/finalize)
+    FCB 2                ; List end marker
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:
