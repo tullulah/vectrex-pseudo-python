@@ -433,6 +433,27 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
+    /// BITB #immediate (opcode 0xC5)
+    pub fn bitb_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0xC5);
+        self.emit(value);
+    }
+
+    /// BITB extended (opcode 0xF5)
+    pub fn bitb_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xF5);
+        self.emit_word(addr);
+    }
+
+    /// ORB #immediate (opcode 0xCA)
+    pub fn orb_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0xCA);
+        self.emit(value);
+    }
+
     /// ORA #immediate (opcode 0x8A)
     pub fn ora_immediate(&mut self, value: u8) {
         self.record_line_mapping();

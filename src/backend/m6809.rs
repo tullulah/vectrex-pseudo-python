@@ -116,7 +116,14 @@ pub fn emit(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions)
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     // Jump over code to START like smartlist_demo pattern
     out.push_str("    JMP START\n\n");
-    out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\n");
+    out.push_str("START:\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n\
+    ; Initialize Vec_Snd_Shadow to zeros (VRelease requirement)\n\
+    ; Prevents false \"changes\" on first sync\n\
+    LDX #$C84D         ; Vec_Snd_Shadow base\n\
+    LDA #14            ; 14 registers to clear\nSHADOW_INIT_LOOP:\n\
+    CLR ,X+            ; Clear and increment\n\
+    DECA\n\
+    BNE SHADOW_INIT_LOOP\n\n");
     // No explicit init routine defined yet for Vectrex; skip calling ti.init_label if undefined.
     // Execution falls through to MAIN directly.
     // Entry sequence: call MAIN then loop forever (Vectrex BIOS expects cartridge not to return).

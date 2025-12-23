@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Minimal Noise Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='MIN SFX' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "MINIMAL NOISE TEST"
+    FCC "MIN SFX"
     FCB $80
     FCB 0
 
@@ -26,6 +26,21 @@
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; Must be defined BEFORE builtin helpers that reference them
 RESULT         EQU $C880   ; Main result temporary
+PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)
+PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)
+PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)
+PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)
+PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)
+PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)
+PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)
+PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)
+PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)
+PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)
+SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)
+SFX_TICK       EQU $C8AA   ; Current frame counter (RESULT+$2A, 2 bytes)
+SFX_ACTIVE     EQU $C8AC   ; Playback state (RESULT+$2C, 1 byte)
+SFX_PHASE      EQU $C8AD   ; Envelope phase: 0=A,1=D,2=S,3=R (RESULT+$2D, 1 byte)
+SFX_VOL        EQU $C8AE   ; Current volume 0-15 (RESULT+$2E, 1 byte)
 
     JMP START
 
@@ -37,9 +52,6 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
-    RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
     RTS
 ; ============================================================================
 ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)
@@ -63,55 +75,11 @@ VECTREX_WAIT_RECAL:
 ;   13:  Envelope shape
 ; ============================================================================
 
-; RAM variables for music player
-PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes - Current music position
-PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes - Music start address (for loops)
-PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte  - Playback state flag
-PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte  - Set=1 during UPDATE_MUSIC_PSG
-
-; VRelease-style shadow registers (14 bytes at $C84D-$C85A)
-Vec_Snd_Shadow EQU $C84D         ; Shadow copy of PSG state
-
-; ============================================================================
-; SYNC_PSG_WITH_SHADOW - VRelease do_ym_sound2 equivalent
-; Compares Vec_Music_Work with Vec_Snd_Shadow and writes only changes to PSG
-; This is THE function that actually writes to PSG hardware
-; Called once per frame after music has updated Vec_Music_Work
-; ============================================================================
-SYNC_PSG_WITH_SHADOW:
-; Call SFX players FIRST (write to Vec_Music_Work before sync)
-JSR sfx_doframe_intern_3         ; Channel 3 (C)
-JSR sfx_doframe_intern_2         ; Channel 2 (B)
-JSR sfx_doframe_intern_1         ; Channel 1 (A)
-
-; Now sync Vec_Music_Work → PSG via shadow comparison
-LDA #13                          ; Number of regs to copy (+1 for loop)
-LDX #$C83F                       ; Vec_Music_Work (music + SFX wrote here)
-LDU #$C84D                       ; Vec_Snd_Shadow (shadow of actual PSG)
-SYNC_NEXT_REG:
-LDB A,X                          ; Get value from work buffer
-CMPB A,U                         ; Compare with shadow
-BEQ SYNC_INC_REG                 ; No change, skip
-STB A,U                          ; Update shadow
-; A = register number, B = value - Write to PSG directly
-STA $D001                        ; VIA_port_a = register select
-PSHS A,B                         ; Save A,B
-LDA #$19                         ; BDIR on, BC1 on, mux off - LATCH
-STA $D000                        ; VIA_port_b
-LDA #$01                         ; BDIR off, BC1 off, mux off - INACTIVE
-STA $D000                        ; VIA_port_b
-PULS A,B                         ; Restore A,B
-STB $D001                        ; VIA_port_a = data
-PSHS B                           ; Save B
-LDB #$11                         ; BDIR on, BC1 off, mux off - WRITE
-STB $D000                        ; VIA_port_b
-LDB #$01                         ; BDIR off, BC1 off, mux off - INACTIVE
-STB $D000                        ; VIA_port_b
-PULS B                           ; Restore B
-SYNC_INC_REG:
-DECA
-BPL SYNC_NEXT_REG
-RTS
+; RAM variables (defined in RAM section above)
+; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
+; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
+; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
+; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data
@@ -126,6 +94,11 @@ RTS
 ; UPDATE_MUSIC_PSG - Update PSG (call every frame)
 ; ============================================================================
 UPDATE_MUSIC_PSG:
+; CRITICAL: Set VIA to PSG mode BEFORE accessing PSG (don't assume state)
+LDA #$00       ; VIA_cntl = $00 (PSG mode)
+STA >$D00C     ; VIA_cntl
+LDA #$01
+STA >PSG_MUSIC_ACTIVE  ; Mark music system active (for PSG logging)
 LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)
 BEQ PSG_update_done    ; Not playing, exit
 
@@ -141,18 +114,24 @@ BEQ PSG_music_loop     ; $FF means loop (never valid as count)
 ; Process frame - push counter to stack
 PSHS B                 ; Save count on stack
 
-; Write register/value pairs to Vec_Music_Work buffer (VRelease style)
-; Vec_Music_Work: $C83F+reg (normal order, NOT reversed)
+; Write register/value pairs to PSG
 PSG_write_loop:
-LDA ,X+                ; Load register number (0-13)
+LDA ,X+                ; Load register number
 LDB ,X+                ; Load register value
-PSHS X                 ; Save pointer
+PSHS X                 ; Save pointer (after reads)
 
-; Write to Vec_Music_Work buffer
-; Buffer address = $C83F + register_number (VRelease layout)
-LDX #$C83F             ; Base of Vec_Music_Work
-LEAX A,X               ; X = $C83F + register
-STB ,X                 ; Write value to buffer
+; WRITE_PSG sequence
+STA VIA_port_a         ; Store register number
+LDA #$19               ; BDIR=1, BC1=1 (LATCH)
+STA VIA_port_b
+LDA #$01               ; BDIR=0, BC1=0 (INACTIVE)
+STA VIA_port_b
+LDA VIA_port_a         ; Read status
+STB VIA_port_a         ; Store data
+LDB #$11               ; BDIR=1, BC1=0 (WRITE)
+STB VIA_port_b
+LDB #$01               ; BDIR=0, BC1=0 (INACTIVE)
+STB VIA_port_b
 
 PULS X                 ; Restore pointer
 PULS B                 ; Get counter
@@ -162,9 +141,9 @@ PSHS B                 ; Save counter back
 BRA PSG_write_loop
 
 PSG_frame_done:
-; Frame complete - update pointer and call sync function
+
+; Frame complete - update pointer and done
 STX >PSG_MUSIC_PTR     ; Update pointer (force extended)
-JSR SYNC_PSG_WITH_SHADOW  ; VRelease-style sync (compare shadow, write changes)
 BRA PSG_update_done
 
 PSG_music_ended:
@@ -196,242 +175,120 @@ CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)
 RTS
 
 ; ============================================================================
-; VRelease AYFX SFX PLAYER (Port from VRelease sound.i / ayfxPlayer_channel1.i)
-; Three independent channels writing to Vec_Music_Work buffer ($C83F+register)
-; AYFX data format: See VRelease documentation
+; AYFX SOUND EFFECTS PLAYER (Richard Chadd original system)
+; ============================================================================
+; Uses channel C (registers 4/5=tone, 6=noise, 10=volume, 7=mixer bit2/bit5)
+; RAM variables: sfx_pointer (16-bit), sfx_status (8-bit)
+; AYFX format: flag byte + optional data per frame, end marker $D0 $20
+; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,
+;            6=noise data present, 7=disable noise
 ; ============================================================================
 
-; Channel 1 player
-sfx_endofeffect_1:
-LDD #$0000
-STA $C847             ; Set volume off channel A (reg 8 = $C83F+8)
-STD sfx_pointer_1
-STA sfx_status_1
-STD currentSFX_1
-RTS
+; RAM variables for SFX
+sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer
+sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)
 
-sfx_doframe_intern_1:
-LDA sfx_status_1
-BEQ noay1
-LDU sfx_pointer_1
-LDB ,U+
-CMPB #$D0
-BNE sfx_checktonefreq_1
-LDA ,U
-CMPA #$20
-BEQ sfx_endofeffect_1
-sfx_checktonefreq_1:
-BITB #%00100000
-BEQ sfx_checknoisefreq_1
-LDX ,U++
-STX $C83F             ; Store 16-bit tone A (reg 0-1 = $C83F+0/+1)
-sfx_checknoisefreq_1:
-BITB #%01000000
-BEQ sfx_checkvolume_1
-LDA ,U+
-STA $C845             ; Store noise period (reg 6 = $C83F+6)
-sfx_checkvolume_1:
-TFR B,A
-ANDA #%00001111
-STA $C847             ; Store volume A (reg 8 = $C83F+8)
-sfx_checktonedisable_1:
-LDA $C846             ; Read mixer (reg 7 = $C83F+7)
-BITB #%00010000
-BEQ sfx_enabletone_1
-sfx_disabletone_1:
-ORA #%00000001
-BITB #%10000000
-BEQ sfx_enablenoise_1
-ORA #%00001000
-STA $C846
-STU sfx_pointer_1
-RTS
-sfx_enabletone_1:
-ANDA #%11111110
-sfx_checknoisedisable_1:
-BITB #%10000000
-BEQ sfx_enablenoise_1
-sfx_disablenoise_1:
-ORA #%00001000
-STA $C846
-STU sfx_pointer_1
-RTS
-sfx_enablenoise_1:
-ANDA #%11110111
-STA $C846
-STU sfx_pointer_1
-noay1:
-RTS
-
-; Channel 2 player
-sfx_endofeffect_2:
-LDD #$0000
-STA $C848             ; Set volume off channel B (reg 9 = $C83F+9)
-STD sfx_pointer_2
-STA sfx_status_2
-STD currentSFX_2
-RTS
-
-sfx_doframe_intern_2:
-LDA sfx_status_2
-BEQ noay2
-LDU sfx_pointer_2
-LDB ,U+
-CMPB #$D0
-BNE sfx_checktonefreq_2
-LDA ,U
-CMPA #$20
-BEQ sfx_endofeffect_2
-sfx_checktonefreq_2:
-BITB #%00100000
-BEQ sfx_checknoisefreq_2
-LDX ,U++
-STX $C841             ; Store 16-bit tone B (reg 2-3 = $C83F+2/+3)
-sfx_checknoisefreq_2:
-BITB #%01000000
-BEQ sfx_checkvolume_2
-LDA ,U+
-STA $C845             ; Store noise period (reg 6 = $C83F+6)
-sfx_checkvolume_2:
-TFR B,A
-ANDA #%00001111
-STA $C848             ; Store volume B (reg 9 = $C83F+9)
-sfx_checktonedisable_2:
-LDA $C846             ; Read mixer (reg 7 = $C83F+7)
-BITB #%00010000
-BEQ sfx_enabletone_2
-sfx_disabletone_2:
-ORA #%00000010
-BITB #%10000000
-BEQ sfx_enablenoise_2
-ORA #%00010000
-STA $C846
-STU sfx_pointer_2
-RTS
-sfx_enabletone_2:
-ANDA #%11111101
-sfx_checknoisedisable_2:
-BITB #%10000000
-BEQ sfx_enablenoise_2
-sfx_disablenoise_2:
-ORA #%00010000
-STA $C846
-STU sfx_pointer_2
-RTS
-sfx_enablenoise_2:
-ANDA #%11101111
-STA $C846
-STU sfx_pointer_2
-noay2:
-RTS
-
-; Channel 3 player
-sfx_endofeffect_3:
-LDD #$0000
-STA $C849             ; Set volume off channel C (reg 10 = $C83F+10)
-STD sfx_pointer_3
-STA sfx_status_3
-STD currentSFX_3
-RTS
-
-sfx_doframe_intern_3:
-LDA sfx_status_3
-BEQ noay3
-LDU sfx_pointer_3
-LDB ,U+
-CMPB #$D0
-BNE sfx_checktonefreq_3
-LDA ,U
-CMPA #$20
-BEQ sfx_endofeffect_3
-sfx_checktonefreq_3:
-BITB #%00100000
-BEQ sfx_checknoisefreq_3
-LDX ,U++
-STX $C843             ; Store 16-bit tone C (reg 4-5 = $C83F+4/+5)
-sfx_checknoisefreq_3:
-BITB #%01000000
-BEQ sfx_checkvolume_3
-LDA ,U+
-STA $C845             ; Store noise period (reg 6 = $C83F+6)
-sfx_checkvolume_3:
-TFR B,A
-ANDA #%00001111
-STA $C849             ; Store volume C (reg 10 = $C83F+10)
-sfx_checktonedisable_3:
-LDA $C846             ; Read mixer (reg 7 = $C83F+7)
-BITB #%00010000
-BEQ sfx_enabletone_3
-sfx_disabletone_3:
-ORA #%00000100
-BITB #%10000000
-BEQ sfx_enablenoise_3
-ORA #%00100000
-STA $C846
-STU sfx_pointer_3
-RTS
-sfx_enabletone_3:
-ANDA #%11111011
-sfx_checknoisedisable_3:
-BITB #%10000000
-BEQ sfx_enablenoise_3
-sfx_disablenoise_3:
-ORA #%00100000
-STA $C846
-STU sfx_pointer_3
-RTS
-sfx_enablenoise_3:
-ANDA #%11011111
-STA $C846
-STU sfx_pointer_3
-noay3:
-RTS
-
-; play_sfx_1/2/3 - Start playing SFX with priority system
-; Input: X = pointer to SFX structure (dw data_ptr, db priority)
-PLAY_SFX_1_RUNTIME:
-LDU currentSFX_1
-BEQ storeO_12k_1
-LDA 2,U
-CMPA 2,X
-BGT no_new_12_1
-storeO_12k_1:
-STX currentSFX_1
-LDX ,X
-STX sfx_pointer_1
+; PLAY_SFX_RUNTIME - Start SFX playback
+; Input: X = pointer to AYFX data
+PLAY_SFX_RUNTIME:
+STX sfx_pointer        ; Store pointer
 LDA #$01
-STA sfx_status_1
-no_new_12_1:
+STA sfx_status         ; Mark as active
 RTS
 
-PLAY_SFX_2_RUNTIME:
-LDU currentSFX_2
-BEQ storeO_12k_2
-LDA 2,U
-CMPA 2,X
-BGT no_new_12_2
-storeO_12k_2:
-STX currentSFX_2
-LDX ,X
-STX sfx_pointer_2
-LDA #$01
-STA sfx_status_2
-no_new_12_2:
+; SFX_UPDATE - Process one AYFX frame (call once per frame in loop)
+SFX_UPDATE:
+LDA sfx_status         ; Check if active
+BEQ noay               ; Not active, skip
+JSR sfx_doframe        ; Process one frame
+noay:
 RTS
 
-PLAY_SFX_3_RUNTIME:
-LDU currentSFX_3
-BEQ storeO_12k_3
-LDA 2,U
-CMPA 2,X
-BGT no_new_12_3
-storeO_12k_3:
-STX currentSFX_3
-LDX ,X
-STX sfx_pointer_3
-LDA #$01
-STA sfx_status_3
-no_new_12_3:
+; sfx_doframe - AYFX frame parser (Richard Chadd original)
+sfx_doframe:
+LDU sfx_pointer        ; Get current frame pointer
+LDB ,U                 ; Read flag byte (NO auto-increment)
+CMPB #$D0              ; Check end marker (first byte)
+BNE sfx_checktonefreq  ; Not end, continue
+LDB 1,U                ; Check second byte at offset 1
+CMPB #$20              ; End marker $D0 $20?
+BEQ sfx_endofeffect    ; Yes, stop
+
+sfx_checktonefreq:
+LEAY 1,U               ; Y = pointer to tone/noise data
+LDB ,U                 ; Reload flag byte (Sound_Byte corrupts B)
+BITB #$20              ; Bit 5: tone data present?
+BEQ sfx_checknoisefreq ; No, skip tone
+; Set tone frequency (channel C = reg 4/5)
+LDB 2,U                ; Get LOW byte (fine tune)
+LDA #$04               ; Register 4
+JSR Sound_Byte         ; Write to PSG
+LDB 1,U                ; Get HIGH byte (coarse tune)
+LDA #$05               ; Register 5
+JSR Sound_Byte         ; Write to PSG
+LEAY 2,Y               ; Skip 2 tone bytes
+
+sfx_checknoisefreq:
+LDB ,U                 ; Reload flag byte
+BITB #$40              ; Bit 6: noise data present?
+BEQ sfx_checkvolume    ; No, skip noise
+LDB ,Y                 ; Get noise period
+LDA #$06               ; Register 6
+JSR Sound_Byte         ; Write to PSG
+LEAY 1,Y               ; Skip 1 noise byte
+
+sfx_checkvolume:
+LDB ,U                 ; Reload flag byte
+ANDB #$0F              ; Get volume from bits 0-3
+LDA #$0A               ; Register 10 (volume C)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checktonedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$10              ; Bit 4: disable tone?
+BEQ sfx_enabletone
+sfx_disabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$04               ; Set bit 2 (disable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_checknoisedisable  ; Continue to noise check
+
+sfx_enabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$FB              ; Clear bit 2 (enable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checknoisedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$80              ; Bit 7: disable noise?
+BEQ sfx_enablenoise
+sfx_disablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$20               ; Set bit 5 (disable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_nextframe      ; Done, update pointer
+
+sfx_enablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$DF              ; Clear bit 5 (enable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_nextframe:
+STY sfx_pointer        ; Update pointer for next frame
+RTS
+
+sfx_endofeffect:
+; Stop SFX - set volume to 0
+CLR sfx_status         ; Mark as inactive
+LDA #$0A               ; Register 10 (volume C)
+LDB #$00               ; Volume = 0
+JSR Sound_Byte
+LDD #$0000
+STD sfx_pointer        ; Clear pointer
 RTS
 
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
@@ -874,25 +731,24 @@ START:
     STA VIA_t1_cnt_lo
     LDX #Vec_Default_Stk
     TFR X,S
-; Initialize Vec_Snd_Shadow to zeros (VRelease requirement)
-; Prevents false \"changes\" on first sync
-LDX #$C84D         ; Vec_Snd_Shadow base
-LDA #14            ; 14 registers to clear
-SHADOW_INIT_LOOP:
-CLR ,X+            ; Clear and increment
-DECA
-BNE SHADOW_INIT_LOOP
+    JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:4
-    LDD #80
+    ; VPy_LINE:5
+    LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 4
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 5
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
+    STD RESULT
+    ; VPy_LINE:6
+; PLAY_SFX("laser") - play sound effect (one-shot)
+    LDX #_LASER_SFX
+    JSR PLAY_SFX_RUNTIME
+    LDD #0
     STD RESULT
 
 MAIN:
@@ -904,17 +760,15 @@ MAIN:
     BRA MAIN
 
 LOOP_BODY:
-    ; DEBUG: Processing 2 statements in loop() body
+    ; DEBUG: Processing 1 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:7
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 7
-    JSR VECTREX_WAIT_RECAL
+    ; VPy_LINE:10
+; NATIVE_CALL: SFX_UPDATE at line 10
+; SFX_UPDATE() - update SFX envelope/pitch
+    JSR SFX_UPDATE
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:8
-; ERROR: Music asset 'test_minimal_noise' not found
     RTS
 
 ;***************************************************************************
@@ -931,10 +785,71 @@ VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
-; String literals (classic FCC + $80 terminator)
-STR_0:
-    FCC "TEST_MINIMAL_NOISE"
-    FCB $80
+
+; ========================================
+; ASSET DATA SECTION
+; Embedded 1 of 9 assets (unused assets excluded)
+; ========================================
+
+; ========================================
+; SFX Asset: laser (from /Users/daniel/projects/vectrex-pseudo-python/examples/sfx_buttons/assets/sfx/laser.vsfx)
+; ========================================
+_LASER_SFX:
+    ; SFX: laser (laser)
+    ; Duration: 500ms (25fr), Freq: 880Hz, Channel: 0
+    FCB $A0         ; Frame 0 - flags (vol=0, tone=Y, noise=N)
+    FCB $00, $1A  ; Tone period = 26 (big-endian)
+    FCB $AF         ; Frame 1 - flags (vol=15, tone=Y, noise=N)
+    FCB $00, $1D  ; Tone period = 29 (big-endian)
+    FCB $AC         ; Frame 2 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $21  ; Tone period = 33 (big-endian)
+    FCB $AC         ; Frame 3 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $24  ; Tone period = 36 (big-endian)
+    FCB $AC         ; Frame 4 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $27  ; Tone period = 39 (big-endian)
+    FCB $AC         ; Frame 5 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $2B  ; Tone period = 43 (big-endian)
+    FCB $AC         ; Frame 6 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $2E  ; Tone period = 46 (big-endian)
+    FCB $AC         ; Frame 7 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $31  ; Tone period = 49 (big-endian)
+    FCB $AC         ; Frame 8 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $35  ; Tone period = 53 (big-endian)
+    FCB $AC         ; Frame 9 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $38  ; Tone period = 56 (big-endian)
+    FCB $AC         ; Frame 10 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $3B  ; Tone period = 59 (big-endian)
+    FCB $AC         ; Frame 11 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $3E  ; Tone period = 62 (big-endian)
+    FCB $AC         ; Frame 12 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $42  ; Tone period = 66 (big-endian)
+    FCB $AC         ; Frame 13 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $45  ; Tone period = 69 (big-endian)
+    FCB $AC         ; Frame 14 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $48  ; Tone period = 72 (big-endian)
+    FCB $AC         ; Frame 15 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $4C  ; Tone period = 76 (big-endian)
+    FCB $AC         ; Frame 16 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $4F  ; Tone period = 79 (big-endian)
+    FCB $AC         ; Frame 17 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $52  ; Tone period = 82 (big-endian)
+    FCB $AC         ; Frame 18 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $56  ; Tone period = 86 (big-endian)
+    FCB $AC         ; Frame 19 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $59  ; Tone period = 89 (big-endian)
+    FCB $AC         ; Frame 20 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $5C  ; Tone period = 92 (big-endian)
+    FCB $A9         ; Frame 21 - flags (vol=9, tone=Y, noise=N)
+    FCB $00, $60  ; Tone period = 96 (big-endian)
+    FCB $A7         ; Frame 22 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $63  ; Tone period = 99 (big-endian)
+    FCB $A4         ; Frame 23 - flags (vol=4, tone=Y, noise=N)
+    FCB $00, $66  ; Tone period = 102 (big-endian)
+    FCB $A2         ; Frame 24 - flags (vol=2, tone=Y, noise=N)
+    FCB $00, $6A  ; Tone period = 106 (big-endian)
+    FCB $D0, $20    ; End of effect marker
+
+
 DRAW_VEC_X EQU RESULT+0
 DRAW_VEC_Y EQU RESULT+1
 MIRROR_X EQU RESULT+2

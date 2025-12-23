@@ -117,6 +117,8 @@ mod tests {
                 FieldDef { name: "y".to_string(), type_annotation: Some("int".to_string()), source_line: 2 },
             ],
             source_line: 1,
+            constructor: None,
+            methods: vec![],
         };
 
         let layout = StructLayout::from_struct_def(&def).unwrap();
@@ -136,6 +138,8 @@ mod tests {
                 FieldDef { name: "x".to_string(), type_annotation: None, source_line: 2 },
             ],
             source_line: 1,
+            constructor: None,
+            methods: vec![],
         };
 
         let result = StructLayout::from_struct_def(&def);
@@ -155,6 +159,8 @@ mod tests {
                     FieldDef { name: "y".to_string(), type_annotation: None, source_line: 2 },
                 ],
                 source_line: 1,
+                constructor: None,
+                methods: vec![],
             }),
             Item::StructDef(StructDef {
                 name: "Rect".to_string(),
@@ -163,6 +169,8 @@ mod tests {
                     FieldDef { name: "height".to_string(), type_annotation: None, source_line: 2 },
                 ],
                 source_line: 5,
+                constructor: None,
+                methods: vec![],
             }),
         ];
 

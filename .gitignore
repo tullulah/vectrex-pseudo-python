@@ -46,6 +46,9 @@ dist/
 # Vectrexy reference implementation (backup only, not for version control)
 vectrexy/
 
+# Turmoil reference (external game for testing, not part of VPy)
+turmoil_reference/
+
 # VIDE project files (external tool, not part of VPy)
 examples/vide project/
 
@@ -57,3 +60,4 @@ vide/
 
 # Christman2024 - Reference ROM for music playback (malbanGit)
 Christman2024/
+VRelease_2017_04_29/

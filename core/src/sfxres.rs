@@ -455,84 +455,156 @@ impl SfxResource {
     
     /// Compile to ASM data for embedding in ROM
     pub fn compile_to_asm(&self) -> String {
-        let label = format!("_{}_SFX", self.name.to_uppercase().replace(" ", "_"));
+        let label = format!("_{}_SFX", self.name.to_uppercase().replace(" ", "_").replace("-", "_"));
         
         // Calculate PSG period from frequency
         // PSG clock = 1.5 MHz, period = clock / (32 * freq)
-        let psg_period = if self.oscillator.frequency > 0 {
-            1_500_000u32 / (32 * self.oscillator.frequency as u32)
+        let base_period = if self.oscillator.frequency > 0 {
+            (1_500_000u32 / (32 * self.oscillator.frequency as u32)).min(4095) as u16
         } else {
-            0
+            440 // Default to A4 (440Hz) = period 106
         };
-        let psg_period = psg_period.min(4095) as u16; // 12-bit max
         
         // Duration in frames (50 FPS for Vectrex)
-        let duration_frames = (self.duration_ms as u32 * 50 / 1000).max(1) as u8;
+        let total_frames = (self.duration_ms as u32 * 50 / 1000).max(1) as usize;
         
-        // Envelope times in frames
-        let attack_frames = (self.envelope.attack as u32 * 50 / 1000).min(255) as u8;
-        let decay_frames = (self.envelope.decay as u32 * 50 / 1000).min(255) as u8;
-        let release_frames = (self.envelope.release as u32 * 50 / 1000).min(255) as u8;
-        
-        // Pitch sweep data (fixed-point 8.8)
-        let start_mult_fp = (self.pitch.start_mult * 256.0) as u16;
-        let end_mult_fp = (self.pitch.end_mult * 256.0) as u16;
+        // Envelope timing
+        let attack_frames = ((self.envelope.attack as u32 * 50 / 1000).max(1) as f32).min(total_frames as f32 * 0.3) as usize;
+        let decay_frames = ((self.envelope.decay as u32 * 50 / 1000).max(1) as f32).min(total_frames as f32 * 0.3) as usize;
+        let release_frames = ((self.envelope.release as u32 * 50 / 1000).max(1) as f32).min(total_frames as f32 * 0.3) as usize;
+        let sustain_frames = total_frames.saturating_sub(attack_frames + decay_frames + release_frames);
         
         let mut asm = String::new();
-        asm.push_str(&format!("{}:\n", label));
-        asm.push_str(&format!("    ; SFX: {} ({})\n", self.name, format!("{:?}", self.category).to_lowercase()));
+        asm.push_str(&format!("{}:
+", label));
+        asm.push_str(&format!("    ; SFX: {} ({})
+", self.name, 
+            format!("{:?}", self.category).to_lowercase()));
+        asm.push_str(&format!("    ; Duration: {}ms ({}fr), Freq: {}Hz, Channel: {}
+",
+            self.duration_ms, total_frames, self.oscillator.frequency, self.oscillator.channel));
         
-        // Header: flags + duration
-        let flags: u8 = 
-            (if self.pitch.enabled { 0x01 } else { 0 }) |
-            (if self.noise.enabled { 0x02 } else { 0 }) |
-            (if self.modulation.arpeggio { 0x04 } else { 0 }) |
-            (if self.modulation.vibrato { 0x08 } else { 0 });
+        // Generate AYFX frame-by-frame
+        let mut last_period: Option<u16> = None;
+        let mut last_noise: Option<u8> = None;
         
-        asm.push_str(&format!("    FCB ${:02X}        ; flags (pitch={}, noise={}, arp={}, vib={})\n",
-            flags,
-            if self.pitch.enabled { 1 } else { 0 },
-            if self.noise.enabled { 1 } else { 0 },
-            if self.modulation.arpeggio { 1 } else { 0 },
-            if self.modulation.vibrato { 1 } else { 0 }
-        ));
-        asm.push_str(&format!("    FCB {}         ; duration (frames)\n", duration_frames));
-        asm.push_str(&format!("    FCB {}          ; channel\n", self.oscillator.channel));
-        
-        // Oscillator
-        asm.push_str(&format!("    FDB {}        ; base period (PSG)\n", psg_period));
-        
-        // Envelope (ADSR)
-        asm.push_str(&format!("    FCB {}, {}, {}, {} ; A, D, S, R (frames/level)\n",
-            attack_frames, decay_frames, self.envelope.sustain, release_frames));
-        asm.push_str(&format!("    FCB {}         ; peak volume\n", self.envelope.peak));
-        
-        // Pitch envelope (if enabled)
-        if self.pitch.enabled {
-            asm.push_str(&format!("    FDB ${:04X}     ; pitch start mult (8.8 fixed)\n", start_mult_fp));
-            asm.push_str(&format!("    FDB ${:04X}     ; pitch end mult (8.8 fixed)\n", end_mult_fp));
-            asm.push_str(&format!("    FCB {}          ; pitch curve\n", self.pitch.curve as i8));
-        }
-        
-        // Noise (if enabled)
-        if self.noise.enabled {
-            let noise_decay_frames = (self.noise.decay_ms as u32 * 50 / 1000).min(255) as u8;
-            asm.push_str(&format!("    FCB {}         ; noise period\n", self.noise.period));
-            asm.push_str(&format!("    FCB {}         ; noise volume\n", self.noise.volume));
-            asm.push_str(&format!("    FCB {}         ; noise decay (frames)\n", noise_decay_frames));
-        }
-        
-        // Arpeggio (if enabled)
-        if self.modulation.arpeggio && !self.modulation.arpeggio_notes.is_empty() {
-            let arp_speed_frames = (self.modulation.arpeggio_speed as u32 * 50 / 1000).max(1).min(255) as u8;
-            asm.push_str(&format!("    FCB {}          ; arpeggio note count\n", self.modulation.arpeggio_notes.len()));
-            asm.push_str(&format!("    FCB {}          ; arpeggio speed (frames)\n", arp_speed_frames));
-            for note in &self.modulation.arpeggio_notes {
-                asm.push_str(&format!("    FCB {}          ; arpeggio semitone\n", *note));
+        for frame in 0..total_frames {
+            // Calculate envelope volume (ADSR)
+            let volume = if frame < attack_frames {
+                // Attack phase: 0 -> peak
+                ((frame as f32 / attack_frames as f32) * self.envelope.peak as f32) as u8
+            } else if frame < attack_frames + decay_frames {
+                // Decay phase: peak -> sustain
+                let decay_progress = (frame - attack_frames) as f32 / decay_frames as f32;
+                let vol_diff = self.envelope.peak.saturating_sub(self.envelope.sustain) as f32;
+                self.envelope.peak.saturating_sub((decay_progress * vol_diff) as u8)
+            } else if frame < attack_frames + decay_frames + sustain_frames {
+                // Sustain phase: constant
+                self.envelope.sustain
+            } else {
+                // Release phase: sustain -> 0
+                let release_progress = (frame - attack_frames - decay_frames - sustain_frames) as f32 / release_frames as f32;
+                ((1.0 - release_progress) * self.envelope.sustain as f32) as u8
+            };
+            
+            // Calculate pitch: arpeggio OR pitch sweep
+            let mut current_period = base_period;
+            
+            if self.modulation.arpeggio && !self.modulation.arpeggio_notes.is_empty() {
+                // ARPEGGIO: distribute notes across frame duration
+                // arpeggio_speed determines ms per note
+                let frame_time_ms = frame as f32 * 20.0; // 50 FPS = 20ms per frame
+                let note_index = (frame_time_ms / self.modulation.arpeggio_speed as f32) as usize 
+                    % self.modulation.arpeggio_notes.len();
+                let note_offset = self.modulation.arpeggio_notes[note_index];
+                
+                // Convert frequency to base MIDI note
+                // frequency = 440 * 2^((midi_note - 69) / 12)
+                // Solve for midi_note: midi_note = 69 + 12 * log2(frequency / 440)
+                let base_freq = self.oscillator.frequency as f32;
+                let base_midi_note = 69.0 + 12.0 * (base_freq / 440.0).log2();
+                // Apply note offset, then lower by one octave (12 semitones)
+                let current_midi = (base_midi_note + note_offset as f32 - 12.0).round() as i32;
+                
+                // Convert MIDI note to PSG period
+                // freq = 440 * 2^((midi - 69) / 12)
+                // period = 1_500_000 / (32 * freq)
+                let frequency = 440.0 * 2.0_f32.powf((current_midi - 69) as f32 / 12.0);
+                current_period = (1_500_000.0 / (32.0 * frequency)).round() as u16;
+                current_period = current_period.max(1).min(4095);
+            } else if self.pitch.enabled && total_frames > 1 {
+                // PITCH SWEEP: smooth frequency change
+                let t = frame as f32 / (total_frames - 1) as f32;
+                // Apply reverse only if start_mult > end_mult (descending sweep)
+                let t_adjusted = if self.pitch.start_mult > self.pitch.end_mult {
+                    1.0 - t  // Reverse for descending sweeps
+                } else {
+                    t  // Normal for ascending sweeps
+                };
+                let mult = self.pitch.start_mult + (self.pitch.end_mult - self.pitch.start_mult) * t_adjusted;
+
+                current_period = ((base_period as f32) * mult) as u16;
+                // Lower by one octave: multiply period by 2 (halves the frequency)
+                current_period = (current_period as u32 * 2) as u16;
+                current_period = current_period.max(1).min(4095);
+            }
+            
+            // Build flag byte
+            let mut flag: u8 = volume & 0x0F; // Bits 0-3: volume
+            
+            // VRelease optimization: only include data when it changes
+            // EXCEPTION: if arpeggio is active, ALWAYS emit tone (notes change every frame)
+            // This prevents desync where player reads wrong bytes
+            let include_tone = self.modulation.arpeggio || last_period != Some(current_period);
+            // Include noise if: (1) period changed, OR (2) tone is being emitted now
+            // This ensures noise stays active during tone+noise sections
+            let include_noise = self.noise.enabled && (last_noise != Some(self.noise.period) || include_tone);
+            
+            if include_tone {
+                flag |= 0x20; // Bit 5: tone data present
+            }
+            if include_noise {
+                flag |= 0x40; // Bit 6: noise data present
+            }
+            
+            // Bit 4: disable tone (never for simple SFX)
+            // Bit 7: disable noise (set if noise not enabled)
+            if !self.noise.enabled {
+                flag |= 0x80;
+            }
+            
+            // Emit frame data
+            asm.push_str(&format!("    FCB ${:02X}         ; Frame {} - flags (vol={}, tone={}, noise={})
+",
+                flag, frame, volume,
+                if include_tone { "Y" } else { "N" },
+                if include_noise { "Y" } else { "N" }
+            ));
+            
+            // Emit tone frequency if changed (big-endian for M6809 LDX)
+            if include_tone {
+                let high = (current_period >> 8) & 0xFF;
+                let low = current_period & 0xFF;
+                asm.push_str(&format!("    FCB ${:02X}, ${:02X}  ; Tone period = {} (big-endian)
+",
+                    high, low, current_period));
+                last_period = Some(current_period);
+            }
+            
+            // Emit noise period if changed
+            if include_noise {
+                asm.push_str(&format!("    FCB ${:02X}         ; Noise period
+", self.noise.period));
+                last_noise = Some(self.noise.period);
             }
         }
         
-        asm.push_str("\n");
+        // End marker
+        asm.push_str("    FCB $D0, $20    ; End of effect marker
+");
+        asm.push_str("
+");
+        
         asm
     }
 }

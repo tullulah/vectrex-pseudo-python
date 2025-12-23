@@ -526,6 +526,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         // === LOGIC ===
         "ANDA" => emit_anda(emitter, operand, equates),
         "ANDB" => emit_andb(emitter, operand, equates),
+        "BITB" => emit_bitb(emitter, operand, equates),
+        "ORB" => emit_orb(emitter, operand, equates),
         "ORA" => emit_ora(emitter, operand, equates),
         "EORA" => emit_eora(emitter, operand, equates),
         
@@ -1565,6 +1567,43 @@ fn emit_andb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
                 }
             }
         }
+    }
+}
+
+fn emit_bitb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.bitb_immediate(val);
+        Ok(())
+    } else {
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.bitb_extended(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.emit(0xF5); // BITB extended
+                    emitter.emit_word(0);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_orb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.orb_immediate(val);
+        Ok(())
+    } else {
+        // ORB solo soporta modo inmediato (#$xx)
+        Err(format!("ORB solo soporta modo inmediato (#$xx), encontrado: {}", operand))
     }
 }
 

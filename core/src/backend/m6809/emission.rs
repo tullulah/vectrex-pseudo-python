@@ -255,8 +255,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             ; ============================================================================\n\
             UPDATE_MUSIC_PSG:\n\
             ; CRITICAL: Set VIA to PSG mode BEFORE accessing PSG (don't assume state)\n\
-            LDA #$00       ; VIA_cntl = $00 (PSG mode)\n\
-            STA >$D00C     ; VIA_cntl\n\
+            ; DISABLED: Conflicts with SFX which uses Sound_Byte (HANDSHAKE mode)\n\
+            ; LDA #$00       ; VIA_cntl = $00 (PSG mode)\n\
+            ; STA >$D00C     ; VIA_cntl\n\
             LDA #$01\n\
             STA >PSG_MUSIC_ACTIVE  ; Mark music system active (for PSG logging)\n\
             LDA >PSG_IS_PLAYING ; Check if playing (extended - var at 0xC8A0)\n\
@@ -333,267 +334,195 @@ PSG_update_done:\n\
             CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)\n\
             ; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing\n\
             RTS\n\
+            \n\
+            ; ============================================================================\n\
+            ; AUDIO_UPDATE - Unified music + SFX update (auto-injected after WAIT_RECAL)\n\
+            ; ============================================================================\n\
+            ; Processes both music (channel B) and SFX (channel C) in one pass\n\
+            ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems\n\
+            ; Sets DP=$D0 once at entry, restores at exit\n\
+            AUDIO_UPDATE:\n\
+            PSHS DP                 ; Save current DP\n\
+            LDA #$D0                ; Set DP=$D0 (Sound_Byte requirement)\n\
+            TFR A,DP\n\
+            \n\
+            ; UPDATE MUSIC (channel B: registers 9, 11-14)\n\
+            LDA >PSG_IS_PLAYING     ; Check if music is playing\n\
+            BEQ AU_SKIP_MUSIC       ; Skip if not\n\
+            \n\
+            LDX >PSG_MUSIC_PTR      ; Load music pointer\n\
+            BEQ AU_SKIP_MUSIC       ; Skip if null\n\
+            \n\
+            LDB ,X+                 ; Read frame count\n\
+            BEQ AU_MUSIC_ENDED      ; Check for end\n\
+            CMPB #$FF               ; Check for loop\n\
+            BEQ AU_MUSIC_LOOP       ; Handle loop\n\
+            \n\
+            PSHS B                  ; Save count\n\
+            \n\
+            AU_MUSIC_WRITE_LOOP:\n\
+            LDA ,X+                 ; Load register number\n\
+            LDB ,X+                 ; Load register value\n\
+            PSHS X                  ; Save pointer\n\
+            JSR Sound_Byte          ; Write to PSG using BIOS (DP=$D0)\n\
+            PULS X                  ; Restore pointer\n\
+            PULS B                  ; Get counter\n\
+            DECB                    ; Decrement\n\
+            BEQ AU_MUSIC_DONE       ; Done if count=0\n\
+            PSHS B                  ; Save counter\n\
+            BRA AU_MUSIC_WRITE_LOOP ; Continue\n\
+            \n\
+            AU_MUSIC_DONE:\n\
+            STX >PSG_MUSIC_PTR      ; Update music pointer\n\
+            BRA AU_UPDATE_SFX       ; Now update SFX\n\
+            \n\
+            AU_MUSIC_ENDED:\n\
+            CLR >PSG_IS_PLAYING     ; Stop music\n\
+            BRA AU_UPDATE_SFX       ; Continue to SFX\n\
+            \n\
+            AU_MUSIC_LOOP:\n\
+            LDD ,X                  ; Load loop target\n\
+            STD >PSG_MUSIC_PTR      ; Set music pointer to loop\n\
+            BRA AU_UPDATE_SFX       ; Continue to SFX\n\
+            \n\
+            AU_SKIP_MUSIC:\n\
+            BRA AU_UPDATE_SFX       ; Skip music, go to SFX\n\
+            \n\
+            ; UPDATE SFX (channel C: registers 4/5=tone, 6=noise, 10=volume, 7=mixer)\n\
+            AU_UPDATE_SFX:\n\
+            LDA >sfx_status         ; Check if SFX is active\n\
+            BEQ AU_DONE             ; Skip if not active\n\
+            \n\
+            JSR sfx_doframe         ; Process one SFX frame (uses Sound_Byte internally)\n\
+            \n\
+            AU_DONE:\n\
+            PULS DP                 ; Restore original DP\n\
+            RTS\n\
             \n"
         );
     }
     
     // PLAY_SFX_RUNTIME: Sound effects player for .vsfx assets (parametric sounds)
     // Only emit if PLAY_SFX() builtin is actually used in code
+    // PLAY_SFX_RUNTIME: AYFX player (Richard Chadd system - 1 channel, channel C)
+    // Only emit if PLAY_SFX() builtin is actually used in code
     if w.contains("PLAY_SFX_RUNTIME") {
         out.push_str(
             "; ============================================================================\n\
-            ; PSG SOUND EFFECTS PLAYER RUNTIME (.vsfx format)\n\
+            ; AYFX SOUND EFFECTS PLAYER (Richard Chadd original system)\n\
             ; ============================================================================\n\
-            ; SFX data structure (.vsfx compiled format):\n\
-            ;   +0: FCB flags (bit0=pitch, bit1=noise, bit2=arp, bit3=vib)\n\
-            ;   +1: FCB duration (frames)\n\
-            ;   +2: FCB channel (0=A, 1=B, 2=C)\n\
-            ;   +3: FDB base_period (PSG period, 12-bit)\n\
-            ;   +5: FCB attack, decay, sustain, release (frames/level)\n\
-            ;   +9: FCB peak_volume (0-15)\n\
-            ;   +10: [optional] FDB pitch_start_mult, pitch_end_mult, FCB curve (if flag bit0)\n\
-            ;   +15: [optional] FCB noise_period, noise_volume, noise_decay (if flag bit1)\n\
-            ;\n\
-            ; RAM variables (defined in RAM section):\n\
-            ;   SFX_PTR     - Pointer to current SFX data\n\
-            ;   SFX_TICK    - Current frame counter (16-bit enough for SFX)\n\
-            ;   SFX_ACTIVE  - 0=stopped, 1=playing\n\
-            ;   SFX_PHASE   - 0=attack, 1=decay, 2=sustain, 3=release\n\
-            ;   SFX_VOL     - Current volume (0-15)\n\
+            ; Uses channel C (registers 4/5=tone, 6=noise, 10=volume, 7=mixer bit2/bit5)\n\
+            ; RAM variables: sfx_pointer (16-bit), sfx_status (8-bit)\n\
+            ; AYFX format: flag byte + optional data per frame, end marker $D0 $20\n\
+            ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,\n\
+            ;            6=noise data present, 7=disable noise\n\
             ; ============================================================================\n\
             \n\
-            ; PLAY_SFX_RUNTIME - Initialize and start SFX playback\n\
-            ; Input: X = pointer to SFX data structure\n\
+            ; RAM variables for SFX\n\
+            sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer\n\
+            sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)\n\
+            \n\
+            ; PLAY_SFX_RUNTIME - Start SFX playback\n\
+            ; Input: X = pointer to AYFX data\n\
             PLAY_SFX_RUNTIME:\n\
-                STX SFX_PTR           ; Store SFX pointer\n\
-                \n\
-                ; Reset playback state\n\
-                CLRA\n\
-                CLRB\n\
-                STD SFX_TICK          ; Reset frame counter\n\
-                STA SFX_PHASE         ; Start in attack phase\n\
-                STA SFX_VOL           ; Start at 0 volume\n\
-                \n\
-                ; Mark as active\n\
-                LDA #1\n\
-                STA SFX_ACTIVE\n\
-                \n\
-                ; Set initial frequency from base period\n\
-                LDD 3,X               ; Load base period\n\
-                JSR SFX_SET_FREQ      ; Set PSG frequency\n\
-                \n\
+                STX sfx_pointer        ; Store pointer\n\
+                LDA #$01\n\
+                STA sfx_status         ; Mark as active\n\
                 RTS\n\
             \n\
-            ; ============================================================================\n\
-            ; SFX_UPDATE - Process one frame of SFX (call from loop, AFTER MUSIC_UPDATE)\n\
-            ; ============================================================================\n\
+            ; SFX_UPDATE - Process one AYFX frame (call once per frame in loop)\n\
             SFX_UPDATE:\n\
-                PSHS A,B,X,Y,U\n\
-                \n\
-                ; Check if SFX is active\n\
-                TST SFX_ACTIVE\n\
-                BEQ SFX_UPDATE_done   ; Not playing, skip\n\
-                \n\
-                LDX SFX_PTR           ; Load SFX data pointer\n\
-                \n\
-                ; Increment frame counter\n\
-                LDD SFX_TICK\n\
-                ADDD #1\n\
-                STD SFX_TICK\n\
-                \n\
-                ; Check if duration exceeded\n\
-                LDB 1,X               ; Duration in frames\n\
-                CLRA\n\
-                CMPD SFX_TICK         ; Compare duration with current tick\n\
-                BLS SFX_STOP          ; Stop if tick >= duration\n\
-                \n\
-                ; Process envelope (ADSR)\n\
-                JSR SFX_ENVELOPE\n\
-                \n\
-                ; Process pitch sweep (if enabled)\n\
-                LDA ,X                ; Load flags\n\
-                BITA #$01             ; Check pitch flag\n\
-                BEQ SFX_NO_PITCH\n\
-                JSR SFX_PITCH_SWEEP\n\
-            SFX_NO_PITCH:\n\
-                \n\
-                ; Process noise (if enabled)\n\
-                LDA ,X\n\
-                BITA #$02             ; Check noise flag\n\
-                BEQ SFX_UPDATE_done\n\
-                JSR SFX_NOISE\n\
-                \n\
-            SFX_UPDATE_done:\n\
-                PULS A,B,X,Y,U\n\
-                RTS\n\
-                \n\
-            SFX_STOP:\n\
-                ; Turn off sound on this channel\n\
-                LDX SFX_PTR\n\
-                LDB 2,X               ; Channel number\n\
-                CLRA                  ; Volume = 0\n\
-                JSR SFX_SET_VOL\n\
-                CLR SFX_ACTIVE\n\
-                PULS A,B,X,Y,U\n\
+                LDA sfx_status         ; Check if active\n\
+                BEQ noay               ; Not active, skip\n\
+                JSR sfx_doframe        ; Process one frame\n\
+            noay:\n\
                 RTS\n\
             \n\
-            ; ============================================================================\n\
-            ; SFX_ENVELOPE - Process ADSR envelope\n\
-            ; ============================================================================\n\
-            SFX_ENVELOPE:\n\
-                LDX SFX_PTR\n\
-                LDA SFX_PHASE         ; Current phase\n\
-                \n\
-                CMPA #0               ; Attack?\n\
-                BNE SFX_ENV_DECAY\n\
-                ; Attack phase: ramp up to peak\n\
-                LDB 9,X               ; Peak volume\n\
-                LDA SFX_VOL\n\
-                INCA                  ; Increase volume\n\
-                CMPA 9,X              ; Reached peak?\n\
-                BLO SFX_ENV_SET\n\
-                LDA 9,X               ; Clamp to peak\n\
-                LDB #1\n\
-                STB SFX_PHASE         ; Move to decay phase\n\
-                BRA SFX_ENV_SET\n\
-                \n\
-            SFX_ENV_DECAY:\n\
-                CMPA #1               ; Decay?\n\
-                BNE SFX_ENV_SUSTAIN\n\
-                ; Decay phase: ramp down to sustain\n\
-                LDA SFX_VOL\n\
-                DECA                  ; Decrease volume\n\
-                BMI SFX_ENV_TO_SUSTAIN\n\
-                CMPA 7,X              ; Reached sustain level?\n\
-                BHI SFX_ENV_SET\n\
-            SFX_ENV_TO_SUSTAIN:\n\
-                LDA 7,X               ; Sustain level\n\
-                LDB #2\n\
-                STB SFX_PHASE         ; Move to sustain\n\
-                BRA SFX_ENV_SET\n\
-                \n\
-            SFX_ENV_SUSTAIN:\n\
-                CMPA #2               ; Sustain?\n\
-                BNE SFX_ENV_RELEASE\n\
-                ; Sustain: hold at sustain level\n\
-                LDA 7,X               ; Sustain level\n\
-                ; Check if we should transition to release\n\
-                LDD SFX_TICK          ; Current tick\n\
-                LDB 1,X               ; Total duration\n\
-                SUBB 8,X              ; Minus release time\n\
-                BCS SFX_ENV_SET       ; If release > duration, stay in sustain\n\
-                CLRA\n\
-                CMPD SFX_TICK\n\
-                BHI SFX_ENV_SET       ; Still in sustain period\n\
-                ; Time for release\n\
-                LDA 7,X               ; Sustain level\n\
-                LDB #3\n\
-                STB SFX_PHASE\n\
-                BRA SFX_ENV_SET\n\
-                \n\
-            SFX_ENV_RELEASE:\n\
-                ; Release: ramp down to 0\n\
-                LDA SFX_VOL\n\
-                BEQ SFX_ENV_SET       ; Already at 0\n\
-                DECA\n\
-                \n\
-            SFX_ENV_SET:\n\
-                STA SFX_VOL\n\
-                LDB 2,X               ; Channel\n\
-                JSR SFX_SET_VOL       ; Set PSG volume\n\
+            ; sfx_doframe - AYFX frame parser (Richard Chadd original)\n\
+            sfx_doframe:\n\
+                LDU sfx_pointer        ; Get current frame pointer\n\
+                LDB ,U                 ; Read flag byte (NO auto-increment)\n\
+                CMPB #$D0              ; Check end marker (first byte)\n\
+                BNE sfx_checktonefreq  ; Not end, continue\n\
+                LDB 1,U                ; Check second byte at offset 1\n\
+                CMPB #$20              ; End marker $D0 $20?\n\
+                BEQ sfx_endofeffect    ; Yes, stop\n\
+            \n\
+            sfx_checktonefreq:\n\
+                LEAY 1,U               ; Y = pointer to tone/noise data\n\
+                LDB ,U                 ; Reload flag byte (Sound_Byte corrupts B)\n\
+                BITB #$20              ; Bit 5: tone data present?\n\
+                BEQ sfx_checknoisefreq ; No, skip tone\n\
+                ; Set tone frequency (channel C = reg 4/5)\n\
+                LDB 2,U                ; Get LOW byte (fine tune)\n\
+                LDA #$04               ; Register 4\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+                LDB 1,U                ; Get HIGH byte (coarse tune)\n\
+                LDA #$05               ; Register 5\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+                LEAY 2,Y               ; Skip 2 tone bytes\n\
+            \n\
+            sfx_checknoisefreq:\n\
+                LDB ,U                 ; Reload flag byte\n\
+                BITB #$40              ; Bit 6: noise data present?\n\
+                BEQ sfx_checkvolume    ; No, skip noise\n\
+                LDB ,Y                 ; Get noise period\n\
+                LDA #$06               ; Register 6\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+                LEAY 1,Y               ; Skip 1 noise byte\n\
+            \n\
+            sfx_checkvolume:\n\
+                LDB ,U                 ; Reload flag byte\n\
+                ANDB #$0F              ; Get volume from bits 0-3\n\
+                LDA #$0A               ; Register 10 (volume C)\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+            \n\
+            sfx_checktonedisable:\n\
+                LDB ,U                 ; Reload flag byte\n\
+                BITB #$10              ; Bit 4: disable tone?\n\
+                BEQ sfx_enabletone\n\
+            sfx_disabletone:\n\
+                LDB $C807              ; Read mixer shadow (MUST be B register)\n\
+                ORB #$04               ; Set bit 2 (disable tone C)\n\
+                LDA #$07               ; Register 7 (mixer)\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+                BRA sfx_checknoisedisable  ; Continue to noise check\n\
+            \n\
+            sfx_enabletone:\n\
+                LDB $C807              ; Read mixer shadow (MUST be B register)\n\
+                ANDB #$FB              ; Clear bit 2 (enable tone C)\n\
+                LDA #$07               ; Register 7 (mixer)\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+            \n\
+            sfx_checknoisedisable:\n\
+                LDB ,U                 ; Reload flag byte\n\
+                BITB #$80              ; Bit 7: disable noise?\n\
+                BEQ sfx_enablenoise\n\
+            sfx_disablenoise:\n\
+                LDB $C807              ; Read mixer shadow (MUST be B register)\n\
+                ORB #$20               ; Set bit 5 (disable noise C)\n\
+                LDA #$07               ; Register 7 (mixer)\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+                BRA sfx_nextframe      ; Done, update pointer\n\
+            \n\
+            sfx_enablenoise:\n\
+                LDB $C807              ; Read mixer shadow (MUST be B register)\n\
+                ANDB #$DF              ; Clear bit 5 (enable noise C)\n\
+                LDA #$07               ; Register 7 (mixer)\n\
+                JSR Sound_Byte         ; Write to PSG\n\
+            \n\
+            sfx_nextframe:\n\
+                STY sfx_pointer        ; Update pointer for next frame\n\
                 RTS\n\
             \n\
-            ; ============================================================================\n\
-            ; SFX_PITCH_SWEEP - Linear pitch interpolation\n\
-            ; ============================================================================\n\
-            SFX_PITCH_SWEEP:\n\
-                ; Simple linear interpolation between start and end frequency\n\
-                ; Using base period * multiplier (8.8 fixed point)\n\
-                LDX SFX_PTR\n\
-                LDD 3,X               ; Base period\n\
-                ; For now, just use base period (full pitch sweep requires more math)\n\
-                ; TODO: Implement proper interpolation with 8.8 fixed point\n\
-                JSR SFX_SET_FREQ\n\
-                RTS\n\
-            \n\
-            ; ============================================================================\n\
-            ; SFX_NOISE - Process noise channel\n\
-            ; ============================================================================\n\
-            SFX_NOISE:\n\
-                ; Get noise parameters from SFX data\n\
-                ; Offset depends on whether pitch sweep is enabled\n\
-                LDX SFX_PTR\n\
-                LDA ,X                ; Flags\n\
-                BITA #$01             ; Pitch enabled?\n\
-                BEQ SFX_NOISE_NO_PITCH\n\
-                LDY #15               ; Offset with pitch data\n\
-                BRA SFX_NOISE_READ\n\
-            SFX_NOISE_NO_PITCH:\n\
-                LDY #10               ; Offset without pitch data\n\
-            SFX_NOISE_READ:\n\
-                ; Read noise period and set PSG noise register\n\
-                LDA A,X               ; Noise period (Y offset in A is wrong, use indexed)\n\
-                ; TODO: Proper indexed access\n\
-                ; For now, use fixed noise\n\
-                LDA #8                ; Default noise period\n\
-                STA >$D006            ; PSG noise period register\n\
-                RTS\n\
-            \n\
-            ; ============================================================================\n\
-            ; SFX_SET_FREQ - Set PSG frequency for SFX channel\n\
-            ; Input: D = period (12-bit), X = SFX_PTR\n\
-            ; ============================================================================\n\
-            SFX_SET_FREQ:\n\
-                PSHS D\n\
-                LDX SFX_PTR\n\
-                LDB 2,X               ; Channel (0/1/2)\n\
-                \n\
-                ; Channel A = $D000/$D001, B = $D002/$D003, C = $D004/$D005\n\
-                ASLB                  ; Channel * 2\n\
-                TFR B,Y               ; Y = register offset\n\
-                \n\
-                PULS D                ; Restore period\n\
-                \n\
-                ; Set VIA for PSG access\n\
-                LDA #$FF\n\
-                STA >$D003            ; VIA port A direction = output\n\
-                \n\
-                ; Write low byte of period\n\
-                TFR B,A               ; Low 8 bits\n\
-                STA >$D001            ; Data to port A\n\
-                TFR Y,A               ; Register number (0/2/4)\n\
-                ORA #$80              ; Set write bit\n\
-                STA >$D000            ; Select register\n\
-                ANDA #$7F             ; Clear write bit\n\
-                STA >$D000            ; Latch\n\
-                \n\
-                ; Write high 4 bits of period\n\
-                PULS D                ; Original D (stored on stack twice? fix)\n\
-                ; TODO: Fix period high bits\n\
-                RTS\n\
-            \n\
-            ; ============================================================================\n\
-            ; SFX_SET_VOL - Set PSG volume for channel\n\
-            ; Input: A = volume (0-15), B = channel (0/1/2)\n\
-            ; ============================================================================\n\
-            SFX_SET_VOL:\n\
-                ; Volume registers are 8/9/10 for channels A/B/C\n\
-                ADDB #8               ; Register = 8 + channel\n\
-                \n\
-                ; Set VIA for PSG access\n\
-                PSHS A,B\n\
-                LDA #$FF\n\
-                STA >$D003            ; VIA port A direction = output\n\
-                PULS A,B\n\
-                \n\
-                ; Write volume\n\
-                PSHS B\n\
-                STA >$D001            ; Volume to port A\n\
-                PULS A                ; Register number from B\n\
-                ORA #$80              ; Set write bit\n\
-                STA >$D000            ; Select register\n\
-                ANDA #$7F             ; Clear write bit\n\
-                STA >$D000            ; Latch\n\
+            sfx_endofeffect:\n\
+                ; Stop SFX - set volume to 0\n\
+                CLR sfx_status         ; Mark as inactive\n\
+                LDA #$0A               ; Register 10 (volume C)\n\
+                LDB #$00               ; Volume = 0\n\
+                JSR Sound_Byte\n\
+                LDD #$0000\n\
+                STD sfx_pointer        ; Clear pointer\n\
                 RTS\n\
             \n"
         );

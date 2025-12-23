@@ -55,8 +55,9 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("DRAW_VECTOR_EX", 4),  // Draw vector with transformations: name, x, y, mirror (0=normal, 1=flip X)
     ("PLAY_MUSIC", 1),      // Play background music in loop: name
     ("PLAY_SFX", 1),        // Play sound effect (one-shot): name
-    ("MUSIC_UPDATE", 0),    // Process music events per frame
-    ("SFX_UPDATE", 0),      // Process SFX envelope/pitch per frame
+    ("AUDIO_UPDATE", 0),    // Update music + SFX (auto-injected after WAIT_RECAL)
+    ("MUSIC_UPDATE", 0),    // Process music events per frame (deprecated - use AUDIO_UPDATE)
+    ("SFX_UPDATE", 0),      // Process SFX envelope/pitch per frame (deprecated - use AUDIO_UPDATE)
     ("STOP_MUSIC", 0),      // Stop background music
     
     // Malban algorithm (vector list processing)

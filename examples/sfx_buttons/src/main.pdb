@@ -1,0 +1,103 @@
+{
+  "version": "1.0",
+  "source": "main.vpy",
+  "asm": "main.asm",
+  "binary": "main.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "START": "0x0524",
+    "MAIN": "0x056D",
+    "LOOP_BODY": "0x057A"
+  },
+  "lineMap": {
+    "18": "0x057C",
+    "14": "0x0561",
+    "49": "0x0895",
+    "67": "0x0AAD",
+    "68": "0x0AC8",
+    "75": "0x0B7F",
+    "44": "0x083D",
+    "65": "0x0A49",
+    "63": "0x09FA",
+    "19": "0x0597",
+    "24": "0x0651",
+    "45": "0x0851",
+    "54": "0x08EE",
+    "31": "0x06F9",
+    "70": "0x0B2C",
+    "33": "0x072D",
+    "25": "0x066C",
+    "23": "0x0625",
+    "38": "0x07B0",
+    "74": "0x0B77",
+    "62": "0x09CA",
+    "66": "0x0A79",
+    "21": "0x05DE",
+    "43": "0x0808",
+    "51": "0x08DE",
+    "42": "0x07D4",
+    "57": "0x096B",
+    "26": "0x0698",
+    "37": "0x077B",
+    "32": "0x0713",
+    "61": "0x09AF",
+    "48": "0x0861",
+    "12": "0x054D",
+    "60": "0x097B",
+    "71": "0x0B47",
+    "30": "0x06DF",
+    "69": "0x0AF8",
+    "50": "0x08CA",
+    "22": "0x060A",
+    "36": "0x0747",
+    "27": "0x06B3",
+    "55": "0x0922",
+    "20": "0x05C3",
+    "56": "0x0957",
+    "39": "0x07C4",
+    "64": "0x0A2E"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x056D",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x057A",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "23": "VECTREX_PRINT_TEXT",
+    "32": "J1_BUTTON_3",
+    "65": "VECTREX_PRINT_TEXT",
+    "33": "J1_BUTTON_4",
+    "12": "VECTREX_SET_INTENSITY",
+    "19": "VECTREX_PRINT_TEXT",
+    "21": "VECTREX_PRINT_TEXT",
+    "71": "VECTREX_PRINT_TEXT",
+    "62": "VECTREX_PRINT_TEXT",
+    "68": "VECTREX_PRINT_TEXT",
+    "74": "UPDATE_MUSIC_PSG",
+    "27": "VECTREX_PRINT_TEXT",
+    "31": "J1_BUTTON_2",
+    "30": "J1_BUTTON_1",
+    "25": "VECTREX_PRINT_TEXT"
+  },
+  "asmFunctions": {
+    "VECTREX_PRINT_TEXT": {
+      "name": "VECTREX_PRINT_TEXT",
+      "file": "main.asm",
+      "startLine": 47,
+      "endLine": 62,
+      "type": "native"
+    }
+  },
+  "asmAddressMap": {}
+}
