@@ -710,6 +710,113 @@ export const SFXEditor: React.FC<SFXEditorProps> = ({
               <Slider label="Decay" value={sfx.noise.decay_ms} min={10} max={1000} unit="ms" onChange={v => updateNoise({ decay_ms: v })} />
             </>
           )}
+
+          {/* Arpeggio */}
+          <div style={{ fontSize: 11, color: '#666', marginTop: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Arpeggio (Chord Mode)
+            <input
+              type="checkbox"
+              checked={sfx.modulation.arpeggio}
+              onChange={e => {
+                const newMod = { ...sfx.modulation, arpeggio: e.target.checked };
+                if (e.target.checked && newMod.arpeggio_notes.length === 0) {
+                  newMod.arpeggio_notes = [0];
+                }
+                updateSfx({ modulation: newMod });
+              }}
+            />
+          </div>
+          {sfx.modulation.arpeggio && (
+            <>
+              <div style={{ fontSize: 10, color: '#888', marginBottom: 8 }}>
+                Semitone offsets (0=base, 12=octave). Preset: [0,4,7]=major chord
+              </div>
+              <div style={{ 
+                backgroundColor: '#1a1a2e', 
+                border: '1px solid #333', 
+                borderRadius: 4, 
+                padding: 8, 
+                marginBottom: 8,
+                maxHeight: 120,
+                overflowY: 'auto'
+              }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {sfx.modulation.arpeggio_notes.map((note, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="number"
+                        value={note}
+                        onChange={e => {
+                          const newNotes = [...sfx.modulation.arpeggio_notes];
+                          newNotes[idx] = Math.max(0, Math.min(24, Number(e.target.value)));
+                          updateSfx({ modulation: { ...sfx.modulation, arpeggio_notes: newNotes } });
+                        }}
+                        style={{
+                          width: 40,
+                          backgroundColor: '#0f3460',
+                          border: '1px solid #444',
+                          color: '#fff',
+                          borderRadius: 2,
+                          padding: '2px 4px',
+                          fontSize: 10,
+                        }}
+                        min="0"
+                        max="24"
+                      />
+                      <button
+                        onClick={() => {
+                          const newNotes = sfx.modulation.arpeggio_notes.filter((_, i) => i !== idx);
+                          updateSfx({ modulation: { ...sfx.modulation, arpeggio_notes: newNotes || [0] } });
+                        }}
+                        style={{
+                          padding: '1px 6px',
+                          backgroundColor: '#c92a2a',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 2,
+                          fontSize: 10,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const newNotes = [...sfx.modulation.arpeggio_notes];
+                  if (newNotes.length < 8) {
+                    newNotes.push(newNotes[newNotes.length - 1] + 1);
+                  }
+                  updateSfx({ modulation: { ...sfx.modulation, arpeggio_notes: newNotes } });
+                }}
+                style={{
+                  width: '100%',
+                  padding: '4px 8px',
+                  backgroundColor: '#2ed573',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: 3,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginBottom: 8,
+                }}
+              >
+                + Add Note
+              </button>
+              <Slider 
+                label="Arp Speed" 
+                value={sfx.modulation.arpeggio_speed} 
+                min={10} 
+                max={200} 
+                unit="ms"
+                onChange={v => updateSfx({ modulation: { ...sfx.modulation, arpeggio_speed: v } })} 
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
