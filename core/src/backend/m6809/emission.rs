@@ -211,7 +211,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
-    if w.contains("PLAY_MUSIC_RUNTIME") || w.contains("STOP_MUSIC_RUNTIME") || has_music_assets {
+    // CRITICAL: AUDIO_UPDATE is ALWAYS auto-injected in mod.rs line 524, so it MUST ALWAYS be defined here
+    // to avoid undefined symbol errors in projects without music/SFX
+    if true /* ALWAYS emit AUDIO_UPDATE and related functions */ {
         out.push_str(
             "; ============================================================================\n\
             ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)\n\
@@ -236,10 +238,10 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             ; ============================================================================\n\
             \n\
             ; RAM variables (defined in RAM section above)\n\
-            ; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)\n\
-            ; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)\n\
-            ; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)\n\
-            ; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG\n\
+            PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes\n\
+            PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes\n\
+            PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte\n\
+            PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte - Set=1 during UPDATE_MUSIC_PSG\n\
             \n\
             ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
             ; Input: X = pointer to PSG music data\n\
