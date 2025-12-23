@@ -60,6 +60,48 @@ VECTREX_PRINT_TEXT:
     ; DO NOT RESTORE DP - Keep it at $D0 for subsequent vector drawing
     ; BIOS calls after this will handle DP correctly
     RTS
+VECTREX_MOVE_TO:
+    LDA VAR_ARG1+1 ; Y
+    LDB VAR_ARG0+1 ; X
+    JSR Moveto_d
+    ; store new current position
+    LDA VAR_ARG0+1
+    STA VCUR_X
+    LDA VAR_ARG1+1
+    STA VCUR_Y
+    RTS
+; Draw from current (VCUR_X,VCUR_Y) to new (x,y) provided in low bytes VAR_ARG0/1.
+; Semántica: igual a MOVE_TO seguido de línea, pero preserva origen previo como punto inicial.
+; Deltas pueden ser ±127 (hardware Vectrex soporta rango completo).
+VECTREX_DRAW_TO:
+    ; Cargar destino (x,y)
+    LDA VAR_ARG0+1  ; Xdest en A temporalmente
+    STA VLINE_DX    ; reutilizar buffer temporal (bajo) para Xdest
+    LDA VAR_ARG1+1  ; Ydest en A
+    STA VLINE_DY    ; reutilizar buffer temporal para Ydest
+    ; Calcular dx = Xdest - VCUR_X
+    LDA VLINE_DX
+    SUBA VCUR_X
+    STA VLINE_DX
+    ; Calcular dy = Ydest - VCUR_Y
+    LDA VLINE_DY
+    SUBA VCUR_Y
+    STA VLINE_DY
+    ; No clamping needed - signed byte arithmetic handles ±127 correctly
+    ; Mover haz al origen previo (VCUR_Y en A, VCUR_X en B)
+    LDA VCUR_Y
+    LDB VCUR_X
+    JSR Moveto_d
+    ; Dibujar línea usando deltas (A=dy, B=dx)
+    LDA VLINE_DY
+    LDB VLINE_DX
+    JSR Draw_Line_d
+    ; Actualizar posición actual al destino exacto original
+    LDA VAR_ARG0+1
+    STA VCUR_X
+    LDA VAR_ARG1+1
+    STA VCUR_Y
+    RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
     LDA #$98       ; VIA_cntl = $98 (DAC mode)
@@ -68,6 +110,9 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
+    RTS
+VECTREX_WAIT_RECAL:
+    JSR Wait_Recal
     RTS
 ; ============================================================================
 ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)
@@ -728,20 +773,27 @@ MAIN:
 
 LOOP_BODY:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX
-    ; DEBUG: Processing 5 statements in loop() body
+    ; DEBUG: Processing 10 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:11
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 11
-    JSR VECTREX_SET_INTENSITY
+    ; VPy_LINE:7
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 7
+    JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
     ; VPy_LINE:12
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 12
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 2 - Discriminant(8)
+    ; VPy_LINE:13
     LDD #65486
     STD RESULT
     LDD RESULT
@@ -754,39 +806,99 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 12
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 13
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:14
-; DRAW_VECTOR("vector", x, y) - 1 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDX #_VECTOR_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
-    LDD #0
-    STD RESULT
     ; DEBUG: Statement 3 - Discriminant(8)
     ; VPy_LINE:16
-    LDD #80
+    LDD #0
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 16
-    JSR VECTREX_SET_INTENSITY
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+; NATIVE_CALL: VECTREX_MOVE_TO at line 16
+    JSR VECTREX_MOVE_TO
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 4 - Discriminant(8)
     ; VPy_LINE:17
+    LDD #30
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+; NATIVE_CALL: VECTREX_DRAW_TO at line 17
+    JSR VECTREX_DRAW_TO
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 5 - Discriminant(8)
+    ; VPy_LINE:18
+    LDD #30
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #30
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+; NATIVE_CALL: VECTREX_DRAW_TO at line 18
+    JSR VECTREX_DRAW_TO
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 6 - Discriminant(8)
+    ; VPy_LINE:19
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #30
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+; NATIVE_CALL: VECTREX_DRAW_TO at line 19
+    JSR VECTREX_DRAW_TO
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 7 - Discriminant(8)
+    ; VPy_LINE:20
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+; NATIVE_CALL: VECTREX_DRAW_TO at line 20
+    JSR VECTREX_DRAW_TO
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 8 - Discriminant(8)
+    ; VPy_LINE:22
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 22
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 9 - Discriminant(8)
+    ; VPy_LINE:23
     LDD #30
     STD RESULT
     LDD RESULT
@@ -799,7 +911,7 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 17
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 23
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
@@ -824,28 +936,9 @@ VAR_ARG2 EQU $C8B6
 VAR_ARG3 EQU $C8B8
 
 ; ========================================
-; ASSET DATA SECTION
-; Embedded 1 of 10 assets (unused assets excluded)
+; NO ASSETS EMBEDDED
+; All 9 discovered assets are unused in code
 ; ========================================
-
-; Vector asset: vector
-; Generated from vector.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-15, max=15, width=30
-; Center: (0, 5)
-
-_VECTOR_WIDTH EQU 30
-_VECTOR_CENTER_X EQU 0
-_VECTOR_CENTER_Y EQU 5
-
-_VECTOR_VECTORS:  ; Main entry
-_VECTOR_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
-    FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
-    FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
-    FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
-    FCB 2                ; End marker
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:
@@ -854,7 +947,13 @@ STR_0:
 STR_1:
     FCC "TEST2"
     FCB $80
-DRAW_VEC_X EQU RESULT+0
-DRAW_VEC_Y EQU RESULT+1
-MIRROR_X EQU RESULT+2
-MIRROR_Y EQU RESULT+3
+VCUR_X EQU RESULT+0
+VCUR_Y EQU RESULT+1
+VLINE_DX EQU RESULT+2
+VLINE_DY EQU RESULT+3
+VLINE_STEPS EQU RESULT+4
+VLINE_LIST EQU RESULT+5
+DRAW_VEC_X EQU RESULT+7
+DRAW_VEC_Y EQU RESULT+8
+MIRROR_X EQU RESULT+9
+MIRROR_Y EQU RESULT+10

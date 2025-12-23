@@ -11,7 +11,12 @@ def loop():
     SET_INTENSITY(80)
     PRINT_TEXT(-50, -40, "Test1")
     
-    DRAW_VECTOR("vector", 0,0)
+    # Simple shape with lines - no vector assets needed
+    MOVE_TO(0, 0)
+    DRAW_TO(30, 0)
+    DRAW_TO(30, 30)
+    DRAW_TO(0, 30)
+    DRAW_TO(0, 0)
     
     SET_INTENSITY(80)
     PRINT_TEXT(30, 40, "Test2")

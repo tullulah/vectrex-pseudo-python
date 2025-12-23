@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "name": "test_rectangle",
+  "name": "vector",
   "canvas": {
     "width": 256,
     "height": 256,
@@ -12,14 +12,22 @@
       "visible": true,
       "paths": [
         {
-          "name": "rect",
+          "name": "shape",
           "intensity": 127,
           "closed": true,
           "points": [
-            { "x": -20, "y": -20 },
-            { "x": 20, "y": -20 },
-            { "x": 20, "y": 20 },
-            { "x": -20, "y": 20 }
+            {
+              "x": 0,
+              "y": 20
+            },
+            {
+              "x": -15,
+              "y": -10
+            },
+            {
+              "x": 15,
+              "y": -10
+            }
           ]
         }
       ]
