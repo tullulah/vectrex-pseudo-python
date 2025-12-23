@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "name": "test_rectangle",
+  "canvas": {
+    "width": 256,
+    "height": 256,
+    "origin": "center"
+  },
+  "layers": [
+    {
+      "name": "default",
+      "visible": true,
+      "paths": [
+        {
+          "name": "rect",
+          "intensity": 127,
+          "closed": true,
+          "points": [
+            { "x": -20, "y": -20 },
+            { "x": 20, "y": -20 },
+            { "x": 20, "y": 20 },
+            { "x": -20, "y": 20 }
+          ]
+        }
+      ]
+    }
+  ]
+}
