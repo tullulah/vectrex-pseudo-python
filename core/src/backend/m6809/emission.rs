@@ -341,6 +341,11 @@ PSG_update_done:\n\
             ; Processes both music (channel B) and SFX (channel C) in one pass\n\
             ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems\n\
             ; Sets DP=$D0 once at entry, restores at exit\n\
+            \n\
+            ; RAM variables (always defined, even if SFX not used)\n\
+            sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer\n\
+            sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)\n\
+            \n\
             AUDIO_UPDATE:\n\
             PSHS DP                 ; Save current DP\n\
             LDA #$D0                ; Set DP=$D0 (Sound_Byte requirement)\n\
@@ -417,10 +422,7 @@ PSG_update_done:\n\
             ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,\n\
             ;            6=noise data present, 7=disable noise\n\
             ; ============================================================================\n\
-            \n\
-            ; RAM variables for SFX\n\
-            sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer\n\
-            sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)\n\
+            ; (RAM variables defined in AUDIO_UPDATE section above)\n\
             \n\
             ; PLAY_SFX_RUNTIME - Start SFX playback\n\
             ; Input: X = pointer to AYFX data\n\
@@ -528,6 +530,18 @@ PSG_update_done:\n\
         );
     }
     
+    // Stub sfx_doframe - always defined (empty if SFX not used, real if used via PLAY_SFX_RUNTIME)
+    // This ensures AUDIO_UPDATE can always call it without linker errors
+    // Check if AUDIO_UPDATE was emitted but sfx_doframe wasn't (no PLAY_SFX_RUNTIME)
+    if out.contains("AUDIO_UPDATE") && !out.contains("sfx_doframe:") {
+        out.push_str(
+            r#"; sfx_doframe stub (SFX not used in this project)
+sfx_doframe:
+	RTS
+
+"#
+        );
+    }
     // Trig tables are emitted later in data section.
     
     // ===========================================================================

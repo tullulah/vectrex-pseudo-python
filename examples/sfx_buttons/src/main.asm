@@ -181,6 +181,11 @@ RTS
 ; Processes both music (channel B) and SFX (channel C) in one pass
 ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems
 ; Sets DP=$D0 once at entry, restores at exit
+
+; RAM variables (always defined, even if SFX not used)
+sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer
+sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)
+
 AUDIO_UPDATE:
 PSHS DP                 ; Save current DP
 LDA #$D0                ; Set DP=$D0 (Sound_Byte requirement)
@@ -248,10 +253,7 @@ RTS
 ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,
 ;            6=noise data present, 7=disable noise
 ; ============================================================================
-
-; RAM variables for SFX
-sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer
-sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)
+; (RAM variables defined in AUDIO_UPDATE section above)
 
 ; PLAY_SFX_RUNTIME - Start SFX playback
 ; Input: X = pointer to AYFX data
