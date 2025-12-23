@@ -17,8 +17,8 @@
   },
   "pitch": {
     "enabled": false,
-    "start_mult": 1.0,
-    "end_mult": 1.0,
+    "start_mult": 1,
+    "end_mult": 1,
     "curve": 0
   },
   "noise": {
