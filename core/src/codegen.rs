@@ -63,6 +63,13 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     // Malban algorithm (vector list processing)
     ("DRAW_VECTOR_LIST", 4), // Draw vector list: (list_ptr, y, x, scale)
     
+    // Drawing functions - Variable arity (use large number to allow any count)
+    ("DRAW_POLYGON", 999),   // Variable arity: n, [intensity], x0, y0, x1, y1, ..., xn, yn
+    ("DRAW_CIRCLE", 999),    // Variable arity: xc, yc, diam, [intensity]
+    ("DRAW_CIRCLE_SEG", 999),// Variable arity: nseg, xc, yc, diam, [intensity]
+    ("DRAW_ARC", 999),       // Variable arity - arc drawing
+    ("DRAW_SPIRAL", 999),    // Variable arity - spiral drawing
+    
     // Funciones específicas de vectorlist
     ("DRAW_VL", 2),
     ("FRAME_BEGIN", 1),
@@ -113,6 +120,28 @@ fn expected_builtin_arity(name: &str) -> Option<usize> {
     let core = if let Some(stripped) = upper.strip_prefix("VECTREX_") { stripped } else { upper.as_str() };
     for (n,a) in BUILTIN_ARITIES { if *n == core { return Some(*a); } }
     None
+}
+
+// Check if a function call has valid arity, including variable-arity functions
+fn is_valid_builtin_arity(name: &str, arg_count: usize) -> bool {
+    let upper = name.to_ascii_uppercase();
+    
+    // Variable-arity functions: minimum argument count check
+    match upper.as_str() {
+        "DRAW_POLYGON" => arg_count >= 4,        // n, intensity?, x0, y0, x1, y1, ...
+        "DRAW_CIRCLE" => arg_count >= 3,         // xc, yc, diam, intensity?
+        "DRAW_CIRCLE_SEG" => arg_count >= 4,     // nseg, xc, yc, diam, intensity?
+        "DRAW_ARC" => arg_count >= 4,            // Arc drawing variadic
+        "DRAW_SPIRAL" => arg_count >= 3,         // Spiral drawing variadic
+        _ => {
+            // Fixed-arity functions
+            if let Some(exp) = expected_builtin_arity(name) {
+                exp != 999 && arg_count == exp  // 999 is placeholder for variable arity
+            } else {
+                false
+            }
+        }
+    }
 }
 
 // Re-export backend emitters under stable names.
@@ -825,10 +854,40 @@ fn validate_expr_collect(
         }
         Expr::Call(ci) => {
             // Verificar si es builtin o función definida
-            if let Some(exp) = expected_builtin_arity(&ci.name) {
-                // Es builtin - verificar aridad
-                if ci.args.len() != exp {
-                    TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { severity: DiagnosticSeverity::Error, code: DiagnosticCode::ArityMismatch, message: format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", ci.name, ci.args.len(), exp), line: Some(ci.source_line), col: Some(ci.col) }));
+            if expected_builtin_arity(&ci.name).is_some() {
+                // Es builtin - verificar aridad (incluyendo variable-arity)
+                if !is_valid_builtin_arity(&ci.name, ci.args.len()) {
+                    let upper = ci.name.to_ascii_uppercase();
+                    let (min_args, desc) = match upper.as_str() {
+                        "DRAW_POLYGON" => (4, "DRAW_POLYGON(n_sides, intensity?, x0, y0, x1, y1, ...)"),
+                        "DRAW_CIRCLE" => (3, "DRAW_CIRCLE(xc, yc, diameter, intensity?)"),
+                        "DRAW_CIRCLE_SEG" => (4, "DRAW_CIRCLE_SEG(n_segments, xc, yc, diameter, intensity?)"),
+                        "DRAW_ARC" => (4, "DRAW_ARC(x, y, radius, angle_start, angle_end, ...)"),
+                        "DRAW_SPIRAL" => (3, "DRAW_SPIRAL(x, y, scale, ...)"),
+                        _ => {
+                            if let Some(exp) = expected_builtin_arity(&ci.name) {
+                                (exp, "")
+                            } else {
+                                (0, "")
+                            }
+                        }
+                    };
+                    
+                    let msg = if desc.is_empty() {
+                        format!("SemanticsErrorArity: llamada a '{}' con {} argumentos; se esperaban {}.", 
+                                ci.name, ci.args.len(), min_args)
+                    } else {
+                        format!("SemanticsErrorArity: llamada a '{}' con {} argumentos. Uso: {}", 
+                                ci.name, ci.args.len(), desc)
+                    };
+                    
+                    TL_ACCUM.with(|acc| acc.borrow_mut().push(Diagnostic { 
+                        severity: DiagnosticSeverity::Error, 
+                        code: DiagnosticCode::ArityMismatch, 
+                        message: msg,
+                        line: Some(ci.source_line), 
+                        col: Some(ci.col) 
+                    }));
                 }
             } else {
                 // No es builtin - verificar que la función existe

@@ -330,6 +330,7 @@ LBEQ DSL_DONE           ; Exit if end (long branch)
 CMPA #1                 ; Check next path marker
 LBEQ DSL_NEXT_PATH      ; Process next path (long branch)
 ; Draw line
+CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)
 LDB ,X+                 ; dy
 LDA ,X+                 ; dx
 PSHS A                  ; Save dx
@@ -467,6 +468,7 @@ LBEQ DSLA_DONE
 CMPA #1                 ; Check next path marker
 LBEQ DSLA_NEXT_PATH
 ; Draw line
+CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)
 LDB ,X+                 ; dy
 LDA ,X+                 ; dx
 PSHS A                  ; Save dx
@@ -728,20 +730,20 @@ MAIN:
 
 LOOP_BODY:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX
-    ; DEBUG: Processing 5 statements in loop() body
+    ; DEBUG: Processing 7 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:11
+    ; VPy_LINE:9
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 11
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 9
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:12
+    ; VPy_LINE:10
     LDD #65486
     STD RESULT
     LDD RESULT
@@ -754,13 +756,13 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 12
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 10
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:14
+    ; VPy_LINE:12
 ; DRAW_VECTOR("vector", x, y) - 1 path(s) at position
     LDD #0
     STD RESULT
@@ -775,18 +777,60 @@ LOOP_BODY:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 3 - Discriminant(8)
-    ; VPy_LINE:16
+    ; VPy_LINE:14
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 16
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 14
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:17
+    ; VPy_LINE:16
+    JSR Intensity_5F
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    LDA #$EC
+    LDB #$28
+    JSR Moveto_d
+    CLR Vec_Misc_Count
+    LDA #$0A
+    LDB #$07
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$0A
+    LDB #$08
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$00
+    LDB #$E2
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$F6
+    LDB #$07
+    JSR Draw_Line_d
+    CLR Vec_Misc_Count
+    LDA #$F6
+    LDB #$08
+    JSR Draw_Line_d
+    LDD #0
+    STD RESULT
+    ; DEBUG: Statement 5 - Discriminant(8)
+    ; VPy_LINE:18
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 18
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 6 - Discriminant(8)
+    ; VPy_LINE:19
     LDD #30
     STD RESULT
     LDD RESULT
@@ -799,7 +843,7 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 17
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 19
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
@@ -822,6 +866,8 @@ VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
 VAR_ARG2 EQU $C8B6
 VAR_ARG3 EQU $C8B8
+VAR_ARG4 EQU $C8BA
+VAR_ARG5 EQU $C8BC
 
 ; ========================================
 ; ASSET DATA SECTION
@@ -845,8 +891,7 @@ _VECTOR_PATH0:    ; Path 0
     FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
     FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
     FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
-    FCB 1                ; Path end marker (flush/finalize)
-    FCB 2                ; List end marker
+    FCB 2                ; End marker (path complete)
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:

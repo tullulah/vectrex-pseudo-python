@@ -640,6 +640,7 @@ sfx_doframe:
         CMPA #1                 ; Check next path marker\n\
         LBEQ DSL_NEXT_PATH      ; Process next path (long branch)\n\
         ; Draw line\n\
+        CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)\n\
         LDB ,X+                 ; dy\n\
         LDA ,X+                 ; dx\n\
         PSHS A                  ; Save dx\n\
@@ -776,6 +777,7 @@ sfx_doframe:
         CMPA #1                 ; Check next path marker\n\
         LBEQ DSLA_NEXT_PATH\n\
         ; Draw line\n\
+        CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)\n\
         LDB ,X+                 ; dy\n\
         LDA ,X+                 ; dx\n\
         PSHS A                  ; Save dx\n\

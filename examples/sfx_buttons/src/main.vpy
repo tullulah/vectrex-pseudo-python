@@ -4,14 +4,16 @@ def main():
     SET_INTENSITY(127)
 
 def loop():
-        
-    # Test: Print text followed by vector drawing
-    # This tests the fix for DP=$D0 management in PRINT_TEXT
+
     
     SET_INTENSITY(80)
     PRINT_TEXT(-50, -40, "Test1")
     
     DRAW_VECTOR("vector", 0,0)
+    
+    SET_INTENSITY(80)
+    # Draw triangle with DRAW_POLYGON to compare with DRAW_VECTOR
+    DRAW_POLYGON(3, 40, -20, 55, 0, 25, 0)
     
     SET_INTENSITY(80)
     PRINT_TEXT(30, 40, "Test2")

@@ -26,22 +26,50 @@ Remove the `DP` restoration. Keep `DP=$D0` after `PRINT_TEXT` returns, since:
 ## Problem 2: Vector rectangles don't close all edges
 
 ### Symptom
-When drawing a `closed: true` path that forms a rectangle, only 3 edges appear. The closing edge (returning to first point) is missing.
+When drawing a `closed: true` path that forms a rectangle or triangle, only N-1 edges appear. The closing edge (returning to first point) is missing or not finalized.
 
 ### Root Cause
-The vector path termination was not properly completing the closed path before the `FCB 2` (end marker).
+The vector path termination was missing the `FCB 1` (path end marker) command. The Draw_Sync_List BIOS routine needs this command to finalize and flush the path rendering. Without it, the last line may not be rendered properly.
+
+**Before:**
+```asm
+FCB intensity
+FCB y0, x0, 0, 0
+FCB $FF, dy0, dx0   ; line 1
+FCB $FF, dy1, dx1   ; line 2
+FCB $FF, dyn, dxn   ; closing line
+FCB 2               ; End marker (WRONG - skips path finalization)
+```
+
+**After:**
+```asm
+FCB intensity
+FCB y0, x0, 0, 0
+FCB $FF, dy0, dx0   ; line 1
+FCB $FF, dy1, dx1   ; line 2
+FCB $FF, dyn, dxn   ; closing line
+FCB 1               ; Path end marker (NEW)
+FCB 2               ; List end marker
+```
 
 ### Solution
-Enhanced path termination logic in `core/src/vecres.rs`:
-- Ensure `FCB $FF, dy, dx` is emitted for the closing line
-- Verify that `closed: true` paths always emit the return-to-start delta
-- Proper `FCB 2` terminator after all lines
+Add `FCB 1` (path end marker) after all lines but before `FCB 2` (list end marker) in `core/src/vecres.rs`:
+- Line after all `FCB $FF, dy, dx` lines
+- Before `FCB 2` list terminator
+- Signals to BIOS that this path is complete and should be finalized
+
+This ensures the Draw_Sync_List routine properly closes and renders all edges.
 
 ### Testing
-Created test cases:
-- `test_rectangle.vec` - Simple 4-point closed rectangle
-- `test_rectangle_draw.vpy` - Program to render it
-- `test_print_text_vectors.vpy` - Mixed PRINT_TEXT + DRAW_VECTOR test
+Created test case in sfx_buttons project with triangle asset.
+
+Binary analysis verified:
+```
+Offset +14: 0x01 (path end marker)
+Offset +15: 0x02 (list end marker)
+```
+
+All edges now render correctly in emulator.
 
 ### Format Details
 Vector path format (Malban Draw_Sync_List):
@@ -52,7 +80,8 @@ FCB $FF, dy0, dx0   ; Line 1: flag=-1 (draw), delta Y, delta X
 FCB $FF, dy1, dx1   ; Line 2
 ...
 FCB $FF, dyn, dxn   ; Closing line (if closed=true)
-FCB 2               ; End marker
+FCB 1               ; Path end marker (finalize current path)
+FCB 2               ; List end marker (no more paths)
 ```
 
 ---

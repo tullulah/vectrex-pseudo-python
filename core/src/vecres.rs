@@ -363,11 +363,9 @@ impl VecResource {
                     Self::format_byte(dy), Self::format_byte(dx), dy, dx));
             }
             
-            // End of path marker (FCB 1) then end of list (FCB 2)
-            // FCB 1 = finishes rendering the current path
-            // FCB 2 = marks the end of the entire vector list
-            asm.push_str("    FCB 1                ; Path end marker (flush/finalize)\n");
-            asm.push_str("    FCB 2                ; List end marker\n");
+            // End of path marker - FCB 2 terminates this individual path
+            // Draw_Sync_List processes ONE path at a time, FCB 2 marks end of current path
+            asm.push_str("    FCB 2                ; End marker (path complete)\n");
             if !is_last_path {
                 asm.push_str("\n");  // Blank line between paths
             }
