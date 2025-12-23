@@ -385,17 +385,6 @@ PSG_update_done:\n\
             \n\
             AU_MUSIC_ENDED:\n\
             CLR >PSG_IS_PLAYING     ; Stop music\n\
-            ; CRITICAL: Silence all channels when music ends\n\
-            ; Otherwise notes/noise stay stuck at last value\n\
-            LDA #$08                ; Register 8 (volume A)\n\
-            LDB #$00                ; Set volume to 0\n\
-            JSR Sound_Byte          ; Silence channel A\n\
-            LDA #$09                ; Register 9 (volume B)\n\
-            LDB #$00\n\
-            JSR Sound_Byte          ; Silence channel B\n\
-            LDA #$0A                ; Register 10 (volume C)\n\
-            LDB #$00\n\
-            JSR Sound_Byte          ; Silence channel C\n\
             BRA AU_UPDATE_SFX       ; Continue to SFX\n\
             \n\
             AU_MUSIC_LOOP:\n\
