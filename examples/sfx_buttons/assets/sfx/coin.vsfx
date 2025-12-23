@@ -23,9 +23,9 @@
   },
   "noise": {
     "enabled": false,
-    "period": 15,
-    "volume": 0,
-    "decay_ms": 0
+    "period": 14,
+    "volume": 13,
+    "decay_ms": 936
   },
   "modulation": {
     "arpeggio": true,
