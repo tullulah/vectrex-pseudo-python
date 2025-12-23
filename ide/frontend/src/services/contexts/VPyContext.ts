@@ -123,19 +123,57 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
   {
     name: "PLAY_MUSIC",
     syntax: "PLAY_MUSIC(name)",
-    description: "Plays PSG music from embedded .vmus file",
+    description: "Starts playback of PSG music from embedded .vmus asset",
     parameters: [
       { name: "name", type: "string", description: "Name of the music asset (without .vmus extension)", required: true }
     ],
     examples: [
       "def main():",
-      "    PLAY_MUSIC(\"theme\")",
+      "    PLAY_MUSIC(\"theme\")  # Start theme music",
+      "",
       "def loop():",
+      "    SET_INTENSITY(127)",
       "    DRAW_VECTOR(\"player\", x, y)  # All drawing here",
-      "    MUSIC_UPDATE()  # ← Place at END after drawing"
+      "    # Audio updates auto-injected by compiler"
     ],
     category: "assets",
-    notes: "CRITICAL: Must be at END of loop() AFTER all drawing. Placing at start causes audio glitches during heavy drawing (e.g., logo screen)"
+    notes: "IMPORTANT: Audio (music + SFX) is automatically updated every frame via AUDIO_UPDATE (auto-injected by compiler). No manual MUSIC_UPDATE() calls needed. Music continues playing across frames once started."
+  },
+  {
+    name: "PLAY_SFX",
+    syntax: "PLAY_SFX(name)",
+    description: "Plays a sound effect from embedded .vsfx AYFX asset",
+    parameters: [
+      { name: "name", type: "string", description: "Name of the SFX asset (without .vsfx extension)", required: true }
+    ],
+    examples: [
+      "def main():",
+      "    PLAY_SFX(\"coin\")  # Load SFX (doesn't start yet)",
+      "",
+      "def loop():",
+      "    if J1_BUTTON_1():",
+      "        PLAY_SFX(\"jump\")  # Trigger jump sound effect",
+      "    # Audio updates auto-injected (plays SFX frame-by-frame)"
+    ],
+    category: "assets",
+    notes: "SFX uses AYFX format (Richard Chadd system, channel C). Can play simultaneously with PLAY_MUSIC. Audio updates are automatic via AUDIO_UPDATE (compiler auto-injected). Each PLAY_SFX() call restarts the effect from beginning."
+  },
+  {
+    name: "AUDIO_UPDATE",
+    syntax: "AUDIO_UPDATE()",
+    description: "Updates both music and SFX playback (auto-injected - call not required)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    WAIT_RECAL()  # 50 FPS sync",
+      "    # AUDIO_UPDATE() is HERE (auto-injected by compiler)",
+      "    ",
+      "    # Your drawing code",
+      "    DRAW_VECTOR(\"player\", x, y)",
+      "    # Audio updates completed automatically"
+    ],
+    category: "assets",
+    notes: "AUTOMATIC: Compiler auto-injects this after WAIT_RECAL in loop(). Updates music (channel B) and SFX (channel C) together. Sets DP=$D0 for BIOS Sound_Byte calls. No manual call needed - it's built-in."
   },
   {
     name: "J1_X",
@@ -451,6 +489,22 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "builtin",
     notes: "Often used with min() for clamping values to ranges."
+  },
+  {
+    name: "WAIT_RECAL",
+    syntax: "WAIT_RECAL()",
+    description: "Waits for screen refresh and recalibrates the vector beam (50 FPS sync)",
+    parameters: [],
+    examples: [
+      "def loop():",
+      "    WAIT_RECAL()  # Sync with screen refresh (~20ms at 50 FPS)",
+      "    SET_INTENSITY(127)",
+      "    DRAW_VECTOR(\"player\", x, y)",
+      "    # AUDIO_UPDATE auto-injected here by compiler"
+    ],
+    category: "control",
+    vectrexAddress: "0xF192 (Wait_Recal)",
+    notes: "MANDATORY at start of loop(). Synchronizes execution with screen refresh (20ms). Auto-injected by compiler if missing. AUDIO_UPDATE auto-injected immediately after."
   }
 ];
 
