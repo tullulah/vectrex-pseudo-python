@@ -211,9 +211,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
-    // CRITICAL: AUDIO_UPDATE is ALWAYS auto-injected in mod.rs line 524, so it MUST ALWAYS be defined here
-    // to avoid undefined symbol errors in projects without music/SFX
-    if true /* ALWAYS emit AUDIO_UPDATE and related functions */ {
+    // CRITICAL: AUDIO_UPDATE is only auto-injected in mod.rs if has_audio() is true
+    // So we only emit it if there are music or SFX assets (avoids dead code in ROM)
+    if opts.has_audio() {
         out.push_str(
             "; ============================================================================\n\
             ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)\n\
@@ -532,7 +532,7 @@ PSG_update_done:\n\
         );
     }
     
-    // Stub sfx_doframe - always defined (empty if SFX not used, real if used via PLAY_SFX_RUNTIME)
+    // Stub sfx_doframe - only defined if AUDIO_UPDATE was emitted (has audio assets)
     // This ensures AUDIO_UPDATE can always call it without linker errors
     // Check if AUDIO_UPDATE was emitted but sfx_doframe wasn't (no PLAY_SFX_RUNTIME)
     if out.contains("AUDIO_UPDATE") && !out.contains("sfx_doframe:") {

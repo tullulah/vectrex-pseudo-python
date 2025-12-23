@@ -190,6 +190,13 @@ pub struct CodegenOptions {
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
+impl CodegenOptions {
+    /// Check if any music or SFX assets are present
+    pub fn has_audio(&self) -> bool {
+        self.assets.iter().any(|a| a.asset_type == AssetType::Music || a.asset_type == AssetType::Sfx)
+    }
+}
+
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
     let (asm, diags) = emit_asm_with_diagnostics(module, target, opts);

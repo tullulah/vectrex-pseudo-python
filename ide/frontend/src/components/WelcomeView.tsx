@@ -318,7 +318,7 @@ const RecentList: React.FC = () => {
 export const welcomeStyles = `
 .vpy-welcome-root { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:32px; color:#bbb; font-size:14px; padding:20px; }
 .vpy-welcome-branding { text-align:center; }
-.vpy-welcome-branding .title { font-size:48px; font-weight:300; letter-spacing:1px; color:#4fc1ff; margin-bottom:6px; }
+.vpy-welcome-branding .title { font-size:48px; font-weight:300; letter-spacing:1px; color:#4fc1ff; margin-bottom:6px;}
 .vpy-welcome-branding .subtitle { font-size:16px; color:#aaa; }
 
 .vpy-welcome-actions { display:flex; gap:24px; flex-wrap:wrap; justify-content:center; }

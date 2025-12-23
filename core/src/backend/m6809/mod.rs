@@ -519,9 +519,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
-                    // Auto-inject AUDIO_UPDATE after WAIT_RECAL for synchronized PSG updates
+                    // Auto-inject AUDIO_UPDATE after WAIT_RECAL only if there's music or SFX
                     // This ensures music and SFX are processed every frame in correct order
-                    out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX\n");
+                    // But avoids dead code if project has no audio assets
+                    if opts.has_audio() {
+                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX\n");
+                    }
                     
                     // Collect locals and allocate stack frame (same as emit_function)
                     let locals = collect_locals(&f.body, &global_names);
