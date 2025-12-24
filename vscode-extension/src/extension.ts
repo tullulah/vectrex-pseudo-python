@@ -89,6 +89,8 @@ export function activate(context: vscode.ExtensionContext) {
   const diagCollection = vscode.languages.createDiagnosticCollection('vpy');
   context.subscriptions.push(diagCollection);
 
+  // Debounce LSP analysis - avoid running on every keystroke
+  let analysisTimeout: NodeJS.Timeout | undefined;
   const recomputeDiagnostics = (doc: vscode.TextDocument) => {
     if (doc.languageId !== 'vpy') return;
     const diags: vscode.Diagnostic[] = [];
@@ -103,7 +105,15 @@ export function activate(context: vscode.ExtensionContext) {
   if (vscode.window.activeTextEditor) {
     recomputeDiagnostics(vscode.window.activeTextEditor.document);
   }
-  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => recomputeDiagnostics(e.document)));
+  
+  // Debounce handler: only recompute after user stops typing for 500ms
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => {
+    if (analysisTimeout) clearTimeout(analysisTimeout);
+    analysisTimeout = setTimeout(() => {
+      recomputeDiagnostics(e.document);
+    }, 500); // 500ms debounce delay
+  }));
+  
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => recomputeDiagnostics(doc)));
 
   // Real LSP server: spawn compiled Rust binary (expects cargo build executed previously)

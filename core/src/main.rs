@@ -794,18 +794,18 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
     let original_size = binary.len();
     eprintln!("✓ Assembler generated: {} bytes", original_size);
     
-    // Pad to minimum 8K so BIOS detects cartridge instead of launching MineStorm
+    // Pad to 32KB cartridge size
     let mut data = binary;
-    if original_size < 0x2000 { 
-        data.resize(0x2000, 0); 
-        let remaining = 0x2000 - original_size;
-        eprintln!("✓ Padded to 8192 bytes (available space: {} bytes / {} KB)", 
+    if original_size <= 0x8000 { 
+        data.resize(0x8000, 0); 
+        let remaining = 0x8000 - original_size;
+        eprintln!("✓ Padded to 32KB (available space: {} bytes / {} KB)", 
             remaining, remaining / 1024);
-    } else if original_size == 0x2000 {
-        eprintln!("⚠ Cartridge is at maximum size (8KB)");
+    } else if original_size == 0x8000 {
+        eprintln!("⚠ Cartridge is at maximum size (32KB)");
     } else {
-        eprintln!("❌ Binary size exceeds 8KB cartridge limit by {} bytes", 
-            original_size - 0x2000);
+        eprintln!("❌ Binary size exceeds 32KB cartridge limit by {} bytes", 
+            original_size - 0x8000);
     }
     
     // Write final binary to file

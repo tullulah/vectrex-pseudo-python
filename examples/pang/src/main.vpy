@@ -9,7 +9,8 @@ title_state = 0 # 0 up 1 down
 
 def main():
     # Called once at startup
-    screen =0
+    screen = 0
+    PLAY_MUSIC("pang_theme")  # ¡Reproduce la música!
 
 def loop():
     # Pantalla de presentación con logo
@@ -18,15 +19,15 @@ def loop():
     if screen == 0:
         draw_title_screen()
 
-        but1 = J1_BUTTON_1()
-        but2 = J1_BUTTON_2()
-        but3 = J1_BUTTON_3()
-        but4 = J1_BUTTON_4()
+        btn1 = J1_BUTTON_1()
+        btn2 = J1_BUTTON_2()
+        btn3 = J1_BUTTON_3()
+        btn4 = J1_BUTTON_4()
 
-        DEBUG_PRINT(btn1)
-        DEBUG_PRINT(btn2)
-        DEBUG_PRINT(btn3)
-        DEBUG_PRINT(btn4)
+        if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
+            #PLAY_SFX("coin")
+            screen = 1 
+
 
 
 def draw_title_screen():
@@ -48,12 +49,3 @@ def draw_title_screen():
     
     if (title_intensity == 30):
         title_state = 0
-
-
-    
-    
-
-
-    
-
-   

@@ -92,10 +92,10 @@ VECTREX_SET_INTENSITY:
 ; ============================================================================
 
 ; RAM variables (defined in RAM section above)
-; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
-; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
-; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
-; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
+PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes
+PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes
+PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte
+PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte - Set=1 during UPDATE_MUSIC_PSG
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data

@@ -66,7 +66,7 @@ interface VectorEditorProps {
   height?: number;
 }
 
-type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'pan';
+type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'pan' | 'background';
 type ViewMode = 'xy' | 'xz' | 'yz' | '3d';
 
 const defaultResource: VecResource = {
@@ -688,6 +688,8 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
   const [showBackground, setShowBackground] = useState(true);
+  const [backgroundOffset, setBackgroundOffset] = useState({ x: 0, y: 0 });
+  const [isBackgroundSelected, setIsBackgroundSelected] = useState(false);
   
   // Edge detection settings
   const [edgeOptions, setEdgeOptions] = useState<EdgeDetectionOptions>(defaultEdgeOptions);
@@ -828,10 +830,20 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         drawWidth = (height * imgAspect) * zoom;
       }
       
-      drawX = (width - drawWidth) / 2 + pan.x;
-      drawY = (height - drawHeight) / 2 + pan.y;
+      drawX = (width - drawWidth) / 2 + pan.x + backgroundOffset.x;
+      drawY = (height - drawHeight) / 2 + pan.y + backgroundOffset.y;
       
       ctx.drawImage(backgroundImage, drawX, drawY, drawWidth, drawHeight);
+      
+      // Draw selection highlight if background is selected
+      if (isBackgroundSelected) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(drawX, drawY, drawWidth, drawHeight);
+        ctx.setLineDash([]);
+      }
+      
       ctx.restore();
     }
 
@@ -1070,7 +1082,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
-  }, [resource, currentLayerIndex, currentPathIndex, selectedPointIndex, selectedPoints, tempPoints, pan, zoom, width, height, resourceToCanvas, backgroundImage, backgroundOpacity, showBackground, isBoxSelecting, boxStart, boxEnd, showPreview, previewPaths, showEdgeSettings]);
+  }, [resource, currentLayerIndex, currentPathIndex, selectedPointIndex, selectedPoints, tempPoints, pan, zoom, width, height, resourceToCanvas, backgroundImage, backgroundOpacity, showBackground, isBoxSelecting, boxStart, boxEnd, showPreview, previewPaths, showEdgeSettings, isBackgroundSelected, backgroundOffset]);
 
   useEffect(() => {
     draw();
@@ -1161,6 +1173,17 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
     
+    // With background tool, allow moving the background image
+    if (currentTool === 'background') {
+      // Check if clicking on background
+      if (backgroundImage && showBackground) {
+        dragStartRef.current = { x: canvasX, y: canvasY, panX: backgroundOffset.x, panY: backgroundOffset.y };
+        setIsBackgroundSelected(true);
+        setIsDrawing(true);
+      }
+      return;
+    }
+    
     // With pan tool, allow rotation in 3D or panning in ortho views
     if (currentTool === 'pan') {
       dragStartRef.current = { x: canvasX, y: canvasY, panX: pan.x, panY: pan.y };
@@ -1230,6 +1253,18 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
     
+    // Handle background movement with background tool
+    if (currentTool === 'background' && isDrawing && dragStartRef.current && isBackgroundSelected) {
+      const deltaX = canvasX - dragStartRef.current.x;
+      const deltaY = canvasY - dragStartRef.current.y;
+      
+      setBackgroundOffset({
+        x: dragStartRef.current.panX + deltaX,
+        y: dragStartRef.current.panY + deltaY,
+      });
+      return;
+    }
+    
     // Handle rotation/panning with pan tool
     if (currentTool === 'pan' && isDrawing && dragStartRef.current) {
       const deltaX = canvasX - dragStartRef.current.x;
@@ -1272,6 +1307,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const handleMouseUp = () => {
     // Clear drag state for 3D rotation
     dragStartRef.current = null;
+    setIsBackgroundSelected(false);
     
     // Complete box selection
     if (isBoxSelecting && boxStart && boxEnd) {
@@ -1522,6 +1558,22 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       >
         {viewMode === '3d' ? '🔄 Rotate' : '✋ Pan'}
       </button>
+      {backgroundImage && (
+        <button
+          onClick={() => setCurrentTool('background')}
+          style={{
+            padding: '8px 12px',
+            background: currentTool === 'background' ? '#8a6a4a' : '#5a4a3a',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+          title="Move background - drag to reposition the background image"
+        >
+          🖼️ Move BG
+        </button>
+      )}
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
       
@@ -2178,6 +2230,8 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
                 ? 'grab'
                 : currentTool === 'pan'
                 ? 'move'
+                : currentTool === 'background'
+                ? isBackgroundSelected ? 'grabbing' : 'grab'
                 : 'default',
             }}
           />
@@ -2190,6 +2244,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
           {currentTool === 'pen' && viewMode !== '3d' && `Drawing on ${viewMode.toUpperCase()} plane. Click to add points. Double-click to finish path.`}
           {currentTool === 'pen' && viewMode === '3d' && 'Switch to XY/XZ/YZ view to draw. 3D view is for visualization only.'}
           {currentTool === 'select' && 'Click to select points. Drag to move.'}
+          {currentTool === 'background' && '🖼️ Drag to move the background image.'}
           {currentTool === 'pan' && viewMode === '3d' && '🔄 Drag to rotate 3D view. Scroll to zoom.'}
           {currentTool === 'pan' && viewMode !== '3d' && '✋ Drag to pan. Scroll to zoom.'}
           {backgroundImage && ' | 📷 Background image loaded - use Auto-Trace to detect edges.'}

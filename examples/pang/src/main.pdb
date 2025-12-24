@@ -5,33 +5,69 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "START": "0x033E",
-    "LOOP_BODY": "0x036D",
-    "MAIN": "0x0360"
+    "START": "0x0461",
+    "MAIN": "0x04A1",
+    "LOOP_BODY": "0x04AE"
   },
   "lineMap": {
-    "11": "0x036D",
-    "8": "0x034C"
+    "47": "0x0807",
+    "42": "0x0772",
+    "45": "0x07D7",
+    "50": "0x0851",
+    "29": "0x066A",
+    "27": "0x0567",
+    "41": "0x073D",
+    "17": "0x04B3",
+    "25": "0x054D",
+    "23": "0x0519",
+    "20": "0x04FC",
+    "39": "0x0711",
+    "19": "0x04C7",
+    "37": "0x06D1",
+    "12": "0x0484",
+    "38": "0x06E5",
+    "48": "0x083C",
+    "51": "0x0886",
+    "24": "0x0533",
+    "13": "0x0495",
+    "22": "0x04FF",
+    "35": "0x0689",
+    "44": "0x07A2"
   },
   "functions": {
     "main": {
       "name": "main",
-      "address": "0x0360",
+      "address": "0x04A1",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "loop": {
       "name": "loop",
-      "address": "0x036D",
+      "address": "0x04AE",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "8": "VECTREX_SET_INTENSITY"
+    "22": "J1_BUTTON_1",
+    "24": "J1_BUTTON_3",
+    "25": "J1_BUTTON_4",
+    "38": "VECTREX_PRINT_TEXT",
+    "37": "VECTREX_SET_INTENSITY",
+    "17": "VECTREX_SET_INTENSITY",
+    "39": "VECTREX_PRINT_TEXT",
+    "23": "J1_BUTTON_2"
   },
-  "asmFunctions": {},
+  "asmFunctions": {
+    "VECTREX_PRINT_TEXT": {
+      "name": "VECTREX_PRINT_TEXT",
+      "file": "main.asm",
+      "startLine": 47,
+      "endLine": 62,
+      "type": "native"
+    }
+  },
   "asmAddressMap": {}
 }
