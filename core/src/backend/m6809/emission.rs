@@ -233,10 +233,10 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             ; ============================================================================\n\
             \n\
             ; RAM variables (defined in RAM section above)\n\
-            PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes\n\
-            PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes\n\
-            PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte\n\
-            PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte - Set=1 during UPDATE_MUSIC_PSG\n\
+            ; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)\n\
+            ; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)\n\
+            ; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)\n\
+            ; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG\n\
             \n\
             ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
             ; Input: X = pointer to PSG music data\n\
@@ -329,22 +329,7 @@ PSG_update_done:\n\
             CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)\n\
             CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)\n\
             CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)\n\
-            ; CRITICAL: Silence all channels when stopping music\n\
-            ; Must set DP=$D0 for Sound_Byte (like AUDIO_UPDATE does)\n\
-            PSHS DP                 ; Save current DP\n\
-            LDA #$D0\n\
-            TFR A,DP\n\
-            ; Silence all 3 tone channels\n\
-            LDA #$08                ; Register 8 (volume A)\n\
-            LDB #$00                ; Set volume to 0\n\
-            JSR Sound_Byte\n\
-            LDA #$09                ; Register 9 (volume B)\n\
-            LDB #$00\n\
-            JSR Sound_Byte\n\
-            LDA #$0A                ; Register 10 (volume C)\n\
-            LDB #$00\n\
-            JSR Sound_Byte\n\
-            PULS DP                 ; Restore original DP\n\
+            ; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing\n\
             RTS\n\
             \n\
             ; ============================================================================\n\
@@ -378,15 +363,15 @@ PSG_update_done:\n\
             PSHS B                  ; Save count\n\
             \n\
             AU_MUSIC_WRITE_LOOP:\n\
-            PULS B                  ; Get counter (restored from stack)\n\
-            DECB                    ; Decrement\n\
-            BEQ AU_MUSIC_DONE       ; Done if count=0\n\
-            PSHS B                  ; Save decremented counter for next iteration\n\
             LDA ,X+                 ; Load register number\n\
             LDB ,X+                 ; Load register value\n\
             PSHS X                  ; Save pointer\n\
             JSR Sound_Byte          ; Write to PSG using BIOS (DP=$D0)\n\
             PULS X                  ; Restore pointer\n\
+            PULS B                  ; Get counter\n\
+            DECB                    ; Decrement\n\
+            BEQ AU_MUSIC_DONE       ; Done if count=0\n\
+            PSHS B                  ; Save counter\n\
             BRA AU_MUSIC_WRITE_LOOP ; Continue\n\
             \n\
             AU_MUSIC_DONE:\n\

@@ -92,10 +92,10 @@ VECTREX_SET_INTENSITY:
 ; ============================================================================
 
 ; RAM variables (defined in RAM section above)
-PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes
-PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes
-PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte
-PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte - Set=1 during UPDATE_MUSIC_PSG
+; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
+; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
+; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
+; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data
@@ -188,22 +188,7 @@ STOP_MUSIC_RUNTIME:
 CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)
 CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)
 CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)
-; CRITICAL: Silence all channels when stopping music
-; Must set DP=$D0 for Sound_Byte (like AUDIO_UPDATE does)
-PSHS DP                 ; Save current DP
-LDA #$D0
-TFR A,DP
-; Silence all 3 tone channels
-LDA #$08                ; Register 8 (volume A)
-LDB #$00                ; Set volume to 0
-JSR Sound_Byte
-LDA #$09                ; Register 9 (volume B)
-LDB #$00
-JSR Sound_Byte
-LDA #$0A                ; Register 10 (volume C)
-LDB #$00
-JSR Sound_Byte
-PULS DP                 ; Restore original DP
+; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing
 RTS
 
 ; ============================================================================
@@ -237,15 +222,15 @@ BEQ AU_MUSIC_LOOP       ; Handle loop
 PSHS B                  ; Save count
 
 AU_MUSIC_WRITE_LOOP:
-PULS B                  ; Get counter (restored from stack)
-DECB                    ; Decrement
-BEQ AU_MUSIC_DONE       ; Done if count=0
-PSHS B                  ; Save decremented counter for next iteration
 LDA ,X+                 ; Load register number
 LDB ,X+                 ; Load register value
 PSHS X                  ; Save pointer
 JSR Sound_Byte          ; Write to PSG using BIOS (DP=$D0)
 PULS X                  ; Restore pointer
+PULS B                  ; Get counter
+DECB                    ; Decrement
+BEQ AU_MUSIC_DONE       ; Done if count=0
+PSHS B                  ; Save counter
 BRA AU_MUSIC_WRITE_LOOP ; Continue
 
 AU_MUSIC_DONE:
@@ -978,7 +963,7 @@ IF_END_0:
 DRAW_TITLE_SCREEN: ; function
 ; --- function draw_title_screen ---
     ; VPy_LINE:35
-; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
+; DRAW_VECTOR("logo", x, y) - 16 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
@@ -1000,6 +985,24 @@ DRAW_TITLE_SCREEN: ; function
     LDX #_LOGO_PATH5  ; Path 5
     JSR Draw_Sync_List_At
     LDX #_LOGO_PATH6  ; Path 6
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH7  ; Path 7
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH8  ; Path 8
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH9  ; Path 9
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH10  ; Path 10
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH11  ; Path 11
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH12  ; Path 12
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH13  ; Path 13
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH14  ; Path 14
+    JSR Draw_Sync_List_At
+    LDX #_LOGO_PATH15  ; Path 15
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
@@ -1218,23 +1221,23 @@ VAR_ARG3 EQU $C8B8
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 2 of 5 assets (unused assets excluded)
+; Embedded 2 of 6 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: logo
 ; Generated from logo.vec (Malban Draw_Sync_List format)
-; Total paths: 7, points: 68
-; X bounds: min=-82, max=81, width=163
-; Center: (0, 0)
+; Total paths: 16, points: 77
+; X bounds: min=-82, max=104, width=186
+; Center: (11, -3)
 
-_LOGO_WIDTH EQU 163
-_LOGO_CENTER_X EQU 0
-_LOGO_CENTER_Y EQU 0
+_LOGO_WIDTH EQU 186
+_LOGO_CENTER_X EQU 11
+_LOGO_CENTER_Y EQU -3
 
 _LOGO_VECTORS:  ; Main entry
 _LOGO_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $13,$AE,0,0        ; path0: header (y=19, x=-82, relative to center)
+    FCB $16,$A3,0,0        ; path0: header (y=22, x=-93, relative to center)
     FCB $FF,$EF,$06          ; line 0: flag=-1, dy=-17, dx=6
     FCB $FF,$02,$07          ; line 1: flag=-1, dy=2, dx=7
     FCB $FF,$D6,$09          ; line 2: flag=-1, dy=-42, dx=9
@@ -1252,7 +1255,7 @@ _LOGO_PATH0:    ; Path 0
 
 _LOGO_PATH1:
     FCB 127              ; path1: intensity
-    FCB $FB,$E3,0,0        ; path1: header (y=-5, x=-29, relative to center)
+    FCB $FE,$D8,0,0        ; path1: header (y=-2, x=-40, relative to center)
     FCB $FF,$E7,$F8          ; line 0: flag=-1, dy=-25, dx=-8
     FCB $FF,$04,$10          ; line 1: flag=-1, dy=4, dx=16
     FCB $FF,$0C,$02          ; line 2: flag=-1, dy=12, dx=2
@@ -1268,7 +1271,7 @@ _LOGO_PATH1:
 
 _LOGO_PATH2:
     FCB 127              ; path2: intensity
-    FCB $07,$CE,0,0        ; path2: header (y=7, x=-50, relative to center)
+    FCB $0A,$C3,0,0        ; path2: header (y=10, x=-61, relative to center)
     FCB $FF,$F8,$02          ; line 0: flag=-1, dy=-8, dx=2
     FCB $FF,$07,$08          ; line 1: flag=-1, dy=7, dx=8
     FCB $FF,$01,$F6          ; line 2: flag=-1, dy=1, dx=-10
@@ -1277,7 +1280,7 @@ _LOGO_PATH2:
 
 _LOGO_PATH3:
     FCB 127              ; path3: intensity
-    FCB $06,$F4,0,0        ; path3: header (y=6, x=-12, relative to center)
+    FCB $09,$E9,0,0        ; path3: header (y=9, x=-23, relative to center)
     FCB $FF,$F6,$FD          ; line 0: flag=-1, dy=-10, dx=-3
     FCB $FF,$02,$07          ; line 1: flag=-1, dy=2, dx=7
     FCB $FF,$08,$FC          ; line 2: flag=-1, dy=8, dx=-4
@@ -1286,15 +1289,15 @@ _LOGO_PATH3:
 
 _LOGO_PATH4:
     FCB 127              ; path4: intensity
-    FCB $F4,$0A,0,0        ; path4: header (y=-12, x=10, relative to center)
-    FCB $FF,$28,$02          ; line 0: flag=-1, dy=40, dx=2
+    FCB $F6,$FF,0,0        ; path4: header (y=-10, x=-1, relative to center)
+    FCB $FF,$29,$02          ; line 0: flag=-1, dy=41, dx=2
     FCB $FF,$02,$0D          ; line 1: flag=-1, dy=2, dx=13
     FCB $FF,$EB,$0A          ; line 2: flag=-1, dy=-21, dx=10
     FCB $FF,$1A,$07          ; line 3: flag=-1, dy=26, dx=7
     FCB $FF,$03,$14          ; line 4: flag=-1, dy=3, dx=20
     FCB $FF,$D8,$EF          ; line 5: flag=-1, dy=-40, dx=-17
-    FCB $FF,$FE,$F6          ; line 6: flag=-1, dy=-2, dx=-10
-    FCB $FF,$0D,$F5          ; line 7: flag=-1, dy=13, dx=-11
+    FCB $FF,$FE,$F3          ; line 6: flag=-1, dy=-2, dx=-13
+    FCB $FF,$0D,$F8          ; line 7: flag=-1, dy=13, dx=-8
     FCB $FF,$EE,$FC          ; line 8: flag=-1, dy=-18, dx=-4
     FCB $FF,$FC,$F6          ; line 9: flag=-1, dy=-4, dx=-10
     FCB $FF,$00,$00          ; line 10: flag=-1, dy=0, dx=0
@@ -1302,7 +1305,7 @@ _LOGO_PATH4:
 
 _LOGO_PATH5:
     FCB 127              ; path5: intensity
-    FCB $06,$45,0,0        ; path5: header (y=6, x=69, relative to center)
+    FCB $09,$3A,0,0        ; path5: header (y=9, x=58, relative to center)
     FCB $FF,$08,$F5          ; line 0: flag=-1, dy=8, dx=-11
     FCB $FF,$F4,$F7          ; line 1: flag=-1, dy=-12, dx=-9
     FCB $FF,$F7,$01          ; line 2: flag=-1, dy=-9, dx=1
@@ -1313,19 +1316,40 @@ _LOGO_PATH5:
     FCB $FF,$F3,$FD          ; line 7: flag=-1, dy=-13, dx=-3
     FCB $FF,$F9,$EE          ; line 8: flag=-1, dy=-7, dx=-18
     FCB $FF,$04,$F0          ; line 9: flag=-1, dy=4, dx=-16
-    FCB $FF,$09,$FA          ; line 10: flag=-1, dy=9, dx=-6
-    FCB $FF,$00,$00          ; line 11: flag=-1, dy=0, dx=0
+    FCB $FF,$0B,$F8          ; line 10: flag=-1, dy=11, dx=-8
     FCB 2                ; End marker (path complete)
 
 _LOGO_PATH6:
     FCB 127              ; path6: intensity
-    FCB $06,$45,0,0        ; path6: header (y=6, x=69, relative to center)
+    FCB $09,$3A,0,0        ; path6: header (y=9, x=58, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB $FF,$0C,$F8          ; line 1: flag=-1, dy=12, dx=-8
-    FCB $FF,$03,$F6          ; line 2: flag=-1, dy=3, dx=-10
-    FCB $FF,$00,$FA          ; line 3: flag=-1, dy=0, dx=-6
-    FCB $FF,$FB,$FC          ; line 4: flag=-1, dy=-5, dx=-4
-    FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
+    FCB $FF,$03,$F0          ; line 2: flag=-1, dy=3, dx=-16
+    FCB $FF,$FB,$FC          ; line 3: flag=-1, dy=-5, dx=-4
+    FCB 2                ; End marker (path complete)
+
+_LOGO_PATH7:
+_LOGO_PATH8:
+_LOGO_PATH9:
+_LOGO_PATH10:
+_LOGO_PATH11:
+_LOGO_PATH12:
+    FCB 127              ; path12: intensity
+    FCB $D8,$5D,0,0        ; path12: header (y=-40, x=93, relative to center)
+    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_LOGO_PATH13:
+_LOGO_PATH14:
+    FCB 127              ; path14: intensity
+    FCB $D8,$BF,0,0        ; path14: header (y=-40, x=-65, relative to center)
+    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_LOGO_PATH15:
+    FCB 127              ; path15: intensity
+    FCB $DB,$BF,0,0        ; path15: header (y=-37, x=-65, relative to center)
+    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
 ; Generated from pang_theme.vmus (internal name: pang_theme)

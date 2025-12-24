@@ -76,10 +76,10 @@ VECTREX_SET_INTENSITY:
 ; ============================================================================
 
 ; RAM variables (defined in RAM section above)
-PSG_MUSIC_PTR    EQU RESULT+26  ; 2 bytes
-PSG_MUSIC_START  EQU RESULT+28  ; 2 bytes
-PSG_IS_PLAYING   EQU RESULT+30  ; 1 byte
-PSG_MUSIC_ACTIVE EQU RESULT+31  ; 1 byte - Set=1 during UPDATE_MUSIC_PSG
+; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
+; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
+; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
+; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data
@@ -172,22 +172,7 @@ STOP_MUSIC_RUNTIME:
 CLR >PSG_IS_PLAYING ; Clear playing flag (extended - var at 0xC8A0)
 CLR >PSG_MUSIC_PTR     ; Clear pointer high byte (force extended)
 CLR >PSG_MUSIC_PTR+1   ; Clear pointer low byte (force extended)
-; CRITICAL: Silence all channels when stopping music
-; Must set DP=$D0 for Sound_Byte (like AUDIO_UPDATE does)
-PSHS DP                 ; Save current DP
-LDA #$D0
-TFR A,DP
-; Silence all 3 tone channels
-LDA #$08                ; Register 8 (volume A)
-LDB #$00                ; Set volume to 0
-JSR Sound_Byte
-LDA #$09                ; Register 9 (volume B)
-LDB #$00
-JSR Sound_Byte
-LDA #$0A                ; Register 10 (volume C)
-LDB #$00
-JSR Sound_Byte
-PULS DP                 ; Restore original DP
+; NOTE: Do NOT write PSG registers here - corrupts VIA for vector drawing
 RTS
 
 ; ============================================================================
@@ -221,15 +206,15 @@ BEQ AU_MUSIC_LOOP       ; Handle loop
 PSHS B                  ; Save count
 
 AU_MUSIC_WRITE_LOOP:
-PULS B                  ; Get counter (restored from stack)
-DECB                    ; Decrement
-BEQ AU_MUSIC_DONE       ; Done if count=0
-PSHS B                  ; Save decremented counter for next iteration
 LDA ,X+                 ; Load register number
 LDB ,X+                 ; Load register value
 PSHS X                  ; Save pointer
 JSR Sound_Byte          ; Write to PSG using BIOS (DP=$D0)
 PULS X                  ; Restore pointer
+PULS B                  ; Get counter
+DECB                    ; Decrement
+BEQ AU_MUSIC_DONE       ; Done if count=0
+PSHS B                  ; Save counter
 BRA AU_MUSIC_WRITE_LOOP ; Continue
 
 AU_MUSIC_DONE:
