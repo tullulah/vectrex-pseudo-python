@@ -393,7 +393,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
         if !suppress_runtime {
-            emit_builtin_helpers(&mut out, &rt_usage, opts, &mut debug_info);
+            emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
         }
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
@@ -519,10 +519,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
-                    // Auto-inject AUDIO_UPDATE after WAIT_RECAL only if there's music or SFX
+                    // Auto-inject AUDIO_UPDATE if there's music or SFX (assets or code calls)
                     // This ensures music and SFX are processed every frame in correct order
-                    // But avoids dead code if project has no audio assets
-                    if opts.has_audio() {
+                    if opts.has_audio(module) {
                         out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX\n");
                     }
                     

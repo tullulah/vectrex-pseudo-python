@@ -191,9 +191,59 @@ pub struct CodegenOptions {
 }
 
 impl CodegenOptions {
-    /// Check if any music or SFX assets are present
-    pub fn has_audio(&self) -> bool {
-        self.assets.iter().any(|a| a.asset_type == AssetType::Music || a.asset_type == AssetType::Sfx)
+    /// Check if any music or SFX assets are present or if code uses PLAY_MUSIC/PLAY_SFX
+    pub fn has_audio(&self, module: &Module) -> bool {
+        // Check for audio assets
+        if self.assets.iter().any(|a| a.asset_type == AssetType::Music || a.asset_type == AssetType::Sfx) {
+            return true;
+        }
+        
+        // Check for PLAY_MUSIC or PLAY_SFX calls in the module
+        fn check_expr_for_audio(expr: &Expr) -> bool {
+            match expr {
+                Expr::Call(call_info) => {
+                    call_info.name == "PLAY_MUSIC" || call_info.name == "PLAY_SFX"
+                },
+                _ => false,
+            }
+        }
+        
+        fn check_stmt_for_audio(stmt: &Stmt) -> bool {
+            match stmt {
+                Stmt::Expr(expr, _) => check_expr_for_audio(expr),
+                Stmt::If { cond, body, elifs, else_body, .. } => {
+                    check_expr_for_audio(cond) ||
+                    body.iter().any(|s| check_stmt_for_audio(s)) ||
+                    elifs.iter().any(|(e, b)| check_expr_for_audio(e) || b.iter().any(|s| check_stmt_for_audio(s))) ||
+                    else_body.as_ref().map_or(false, |body| body.iter().any(|s| check_stmt_for_audio(s)))
+                },
+                Stmt::While { cond, body, .. } => {
+                    check_expr_for_audio(cond) || body.iter().any(|s| check_stmt_for_audio(s))
+                },
+                Stmt::For { start, end, step, body, .. } => {
+                    check_expr_for_audio(start) || check_expr_for_audio(end) ||
+                    step.as_ref().map_or(false, |e| check_expr_for_audio(e)) ||
+                    body.iter().any(|s| check_stmt_for_audio(s))
+                },
+                Stmt::Switch { expr, cases, default, .. } => {
+                    check_expr_for_audio(expr) ||
+                    cases.iter().any(|(e, b)| check_expr_for_audio(e) || b.iter().any(|s| check_stmt_for_audio(s))) ||
+                    default.as_ref().map_or(false, |body| body.iter().any(|s| check_stmt_for_audio(s)))
+                },
+                _ => false,
+            }
+        }
+        
+        // Check all functions in the module
+        for item in &module.items {
+            if let Item::Function(f) = item {
+                if f.body.iter().any(|s| check_stmt_for_audio(s)) {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
 }
 

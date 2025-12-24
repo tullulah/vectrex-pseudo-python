@@ -1,5 +1,5 @@
 // Emission - High-level code emission functions for M6809 backend
-use crate::ast::{Function, Stmt};
+use crate::ast::{Function, Stmt, Module, Expr};
 use crate::codegen::CodegenOptions;
 use super::{LoopCtx, FuncCtx, emit_stmt, collect_locals, collect_locals_with_params, RuntimeUsage, LineTracker, DebugInfo};
 use super::analyze_var_types; // Import the new function
@@ -72,7 +72,7 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
 }
 
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
-pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions, debug_info: &mut DebugInfo) {
+pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions, module: &Module, debug_info: &mut DebugInfo) {
     let w = &usage.wrappers_used;
     // Only emit vector phase helper if referenced
     if w.contains("VECTREX_VECTOR_PHASE_BEGIN") {
@@ -207,13 +207,8 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     
     // PLAY_MUSIC_RUNTIME: Direct PSG music player (inspired by Christman2024/malbanGit)
     // Writes directly to PSG chip, bypassing BIOS
-    // Force generation if music assets exist (for auto-inject UPDATE_MUSIC_PSG)
-    let has_music_assets = opts.assets.iter().any(|a| {
-        matches!(a.asset_type, crate::codegen::AssetType::Music)
-    });
-    // CRITICAL: AUDIO_UPDATE is only auto-injected in mod.rs if has_audio() is true
-    // So we only emit it if there are music or SFX assets (avoids dead code in ROM)
-    if opts.has_audio() {
+    // Force generation if music assets exist or PLAY_MUSIC/PLAY_SFX calls are in code
+    if opts.has_audio(module) {
         out.push_str(
             "; ============================================================================\n\
             ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)\n\
