@@ -133,14 +133,62 @@ async function createWindow() {
       {
         label: 'Edit',
         submenu: [
-          { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
-          { label: 'Redo', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+          { 
+            label: 'Undo', 
+            accelerator: 'CmdOrCtrl+Z',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.undo();
+            }
+          },
+          { 
+            label: 'Redo', 
+            accelerator: 'Shift+CmdOrCtrl+Z',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.redo();
+            }
+          },
           { type: 'separator' },
-          { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
-          { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
-          { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+          { 
+            label: 'Cut', 
+            accelerator: 'CmdOrCtrl+X',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.cut();
+            }
+          },
+          { 
+            label: 'Copy', 
+            accelerator: 'CmdOrCtrl+C',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.copy();
+            }
+          },
+          { 
+            label: 'Paste', 
+            accelerator: 'CmdOrCtrl+V',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.paste();
+            }
+          },
           { type: 'separator' },
-          { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' },
+          { 
+            label: 'Select All', 
+            accelerator: 'CmdOrCtrl+A',
+            registerAccelerator: false,  // Let Monaco handle it
+            click: () => {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) win.webContents.selectAll();
+            }
+          },
           { type: 'separator' },
           { label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: false },
           { label: 'Format Document', accelerator: 'Shift+Alt+F', enabled: false }
@@ -149,8 +197,8 @@ async function createWindow() {
       {
         label: 'Build',
         submenu: [
-          { label: 'Build', accelerator: 'F7', click: () => mainWindow?.webContents.send('command', 'build.build') },
-          { label: 'Build & Run', accelerator: 'F5', click: () => mainWindow?.webContents.send('command', 'build.run') },
+          { label: 'Build', accelerator: 'CmdOrCtrl+F7', click: () => mainWindow?.webContents.send('command', 'build.build') },
+          { label: 'Build & Run', accelerator: 'CmdOrCtrl+F5', click: () => mainWindow?.webContents.send('command', 'build.run') },
           { label: 'Clean', click: () => mainWindow?.webContents.send('command', 'build.clean') }
         ]
       },

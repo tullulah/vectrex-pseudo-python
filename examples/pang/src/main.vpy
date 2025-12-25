@@ -23,8 +23,7 @@ intensityval = 0
 
 def main():
     # Called once at startup - START MUSIC HERE (before first loop frame)
-    PLAY_MUSIC("pang_theme")
-    current_music = 0
+    
     screen = 0
 
 def loop():
@@ -32,6 +31,10 @@ def loop():
     SET_INTENSITY(127)
     
     if screen == 0: # Music already started in main()
+        if (current_music == -1):
+            PLAY_MUSIC("pang_theme")
+            current_music = 0
+        
         draw_title_screen()
 
         btn1 = J1_BUTTON_1()
@@ -91,8 +94,7 @@ def draw_map_screen():
             intensityval = 70  # Dimmer for non-selected
         
         # Draw marker polygon (small triangle pointing up)
-        # DRAW_POLYGON(3, intensityval, x_coord, y_coord + 6, x_coord - 5, 
-        # y_coord - 6, x_coord + 5, y_coord - 6)
+        DRAW_POLYGON(3, intensityval, x_coord, y_coord + 6, x_coord - 5, y_coord - 6, x_coord + 5, y_coord - 6)
         
         i = i + 1
     

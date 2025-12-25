@@ -1122,6 +1122,17 @@ def loop():
     }
   }, [documents, openDocument, activeBinName, openVpyProject, closeVpyProject]);
 
+  // Listen for commands from native menu (macOS)
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.onCommand) return;
+
+    electronAPI.onCommand((commandId: string, payload?: any) => {
+      logger.debug('App', `Menu command: ${commandId}`);
+      commandExec(commandId, payload);
+    });
+  }, [commandExec]);
+
   // Keyboard shortcuts mapping (similar to VS conventions)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1132,20 +1143,19 @@ def loop():
       else if (ctrl && e.key.toLowerCase() === 'o' && !e.shiftKey) { e.preventDefault(); commandExec('file.open'); }
       else if (ctrl && e.key.toLowerCase() === 'o' && e.shiftKey) { e.preventDefault(); commandExec('project.open'); }
       else if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); commandExec('file.new.vpy'); }
-      // Build / Run
-      else if (e.key === 'F7') { e.preventDefault(); commandExec('build.build'); }
-      else if (e.key === 'F5' && !ctrl && !e.shiftKey) { 
+      // Build / Run (Cmd/Ctrl+F7 and Cmd/Ctrl+F5 for macOS compatibility)
+      else if (ctrl && e.key === 'F7') { e.preventDefault(); commandExec('build.build'); }
+      else if (ctrl && e.key === 'F5' && !e.shiftKey) { 
         e.preventDefault(); 
-        // Smart F5: If in debug session, continue. Otherwise, build and run.
+        // Smart Cmd/Ctrl+F5: If in debug session, start debugging. Otherwise, build and run.
         const debugState = useDebugStore.getState().state;
         if (debugState !== 'stopped') {
-          commandExec('debug.continue');
+          commandExec('debug.start');
         } else {
           commandExec('build.run');
         }
       }
-      // Debug - Ctrl+F5 on Windows, Cmd+D on macOS (Cmd+F5 triggers VoiceOver)
-      else if (ctrl && e.key === 'F5') { e.preventDefault(); commandExec('debug.start'); }
+      // Debug shortcuts
       else if (ctrl && e.key.toLowerCase() === 'd' && !e.shiftKey) { e.preventDefault(); commandExec('debug.start'); }
       else if (e.key === 'F9') { e.preventDefault(); commandExec('debug.toggleBreakpoint'); }
       else if (e.key === 'F10') { e.preventDefault(); commandExec('debug.stepOver'); }
@@ -1156,7 +1166,7 @@ def loop():
       else if (ctrl && e.key.toLowerCase() === 'g' && !e.shiftKey) { e.preventDefault(); commandExec('git.checkout'); } // Ctrl+G = Git checkout branch
       else if (ctrl && e.key.toLowerCase() === 'g' && e.shiftKey) { e.preventDefault(); commandExec('git.history'); } // Ctrl+Shift+G = Git history
       else if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); commandExec('git.stage'); } // Ctrl+K = stage (mnemonic: "checK in")
-      else if (ctrl && e.key.toLowerCase() === 'c') { e.preventDefault(); commandExec('git.commit'); } // Ctrl+C = commit (but in VSCode it's Ctrl+K Ctrl+C, we'll use simple)
+      else if (ctrl && e.key.toLowerCase() === 'c' && e.shiftKey) { e.preventDefault(); commandExec('git.commit'); } // Ctrl+Shift+C = commit (changed from Ctrl+C to not block copy)
       else if (ctrl && e.key.toLowerCase() === 'j') { e.preventDefault(); commandExec('git.push'); } // Ctrl+J = push (mnemonic: "Jump to remote")
       else if (ctrl && e.key.toLowerCase() === 'l') { e.preventDefault(); commandExec('git.pull'); } // Ctrl+L = pull (mnemonic: "puLl")
       else if (ctrl && e.key.toLowerCase() === 'f' && e.shiftKey) { e.preventDefault(); commandExec('git.search'); } // Ctrl+Shift+F = search commits
@@ -1291,7 +1301,7 @@ def loop():
           </MenuRoot>
           {/* Build menu */}
           <MenuRoot label={t('menu.build', 'Build')} open={openMenu==='build'} setOpen={()=>setOpenMenu(openMenu==='build'?null:'build')}>
-            <MenuItem label={`${t('build.build', 'Build')}	F7`} onClick={()=>{ commandExec('build.build'); setOpenMenu(null); }} />
+            <MenuItem label={`${t('build.build', 'Build')}	⌘F7`} onClick={()=>{ commandExec('build.build'); setOpenMenu(null); }} />
             <MenuItem label={`${t('build.buildAndRun', 'Build && Run')}	F5`} onClick={()=>{ commandExec('build.run'); setOpenMenu(null); }} />
             <MenuItem label={t('build.clean', 'Clean')} onClick={()=>{ commandExec('build.clean'); setOpenMenu(null); }} />
             <MenuSeparator />
