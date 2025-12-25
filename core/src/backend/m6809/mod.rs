@@ -358,11 +358,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)\n");
         out.push_str("PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)\n");
         out.push_str("PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)\n");
+        out.push_str("PSG_DELAY_FRAMES EQU $C8A3   ; Frames to wait before reading next music data (RESULT+$23, 1 byte)\n");
         out.push_str("PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)\n");
         out.push_str("PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)\n");
+        out.push_str("PSG_DELAY_FRAMES_DP EQU $A3 ; DP-relative offset (for lwasm compatibility)\n");
     }
     
     // SFX_PTR: Only if SFX assets exist

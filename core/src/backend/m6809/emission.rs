@@ -237,12 +237,14 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             ; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)\n\
             ; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)\n\
             ; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG\n\
+            ; PSG_DELAY_FRAMES EQU RESULT+32  (1 byte) - Frames to wait before reading next data\n\
             \n\
             ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
             ; Input: X = pointer to PSG music data\n\
             PLAY_MUSIC_RUNTIME:\n\
             STX >PSG_MUSIC_PTR     ; Store current music pointer (force extended)\n\
             STX >PSG_MUSIC_START   ; Store start pointer for loops (force extended)\n\
+            CLR >PSG_DELAY_FRAMES  ; Clear delay counter\n\
             LDA #$01\n\
             STA >PSG_IS_PLAYING ; Mark as playing (extended - var at 0xC8A0)\n\
             RTS\n\
@@ -352,15 +354,52 @@ PSG_update_done:\n\
             LDA >PSG_IS_PLAYING     ; Check if music is playing\n\
             BEQ AU_SKIP_MUSIC       ; Skip if not\n\
             \n\
+            ; Check delay counter first\n\
+            LDA >PSG_DELAY_FRAMES   ; Load delay counter\n\
+            BEQ AU_MUSIC_READ       ; If zero, read next frame data\n\
+            DECA                    ; Decrement delay\n\
+            STA >PSG_DELAY_FRAMES   ; Store back\n\
+            CMPA #0                 ; Check if it just reached zero\n\
+            BNE AU_UPDATE_SFX       ; If not zero yet, skip this frame\n\
+            \n\
+            ; Delay just reached zero, X points to count byte already\n\
+            LDX >PSG_MUSIC_PTR      ; Load music pointer (points to count)\n\
+            BEQ AU_SKIP_MUSIC       ; Skip if null\n\
+            BRA AU_MUSIC_READ_COUNT ; Skip delay read, go straight to count\n\
+            \n\
+            AU_MUSIC_READ:\n\
             LDX >PSG_MUSIC_PTR      ; Load music pointer\n\
             BEQ AU_SKIP_MUSIC       ; Skip if null\n\
             \n\
-            LDB ,X+                 ; Read frame count\n\
-            BEQ AU_MUSIC_ENDED      ; Check for end\n\
-            CMPB #$FF               ; Check for loop\n\
+            ; Check if we need to read delay or we're ready for count\n\
+            ; PSG_DELAY_FRAMES just reached 0, so we read delay byte first\n\
+            LDB ,X+                 ; Read delay counter (X now points to count byte)\n\
+            CMPB #$FF               ; Check for loop marker\n\
             BEQ AU_MUSIC_LOOP       ; Handle loop\n\
+            CMPB #0                 ; Check if delay is 0\n\
+            BNE AU_MUSIC_HAS_DELAY  ; If not 0, process delay\n\
             \n\
+            ; Delay is 0, read count immediately\n\
+            AU_MUSIC_NO_DELAY:\n\
+            AU_MUSIC_READ_COUNT:\n\
+            LDB ,X+                 ; Read count (number of register writes)\n\
+            BEQ AU_MUSIC_ENDED      ; If 0, end of music\n\
+            CMPB #$FF               ; Check for loop marker (can appear after delay)\n\
+            BEQ AU_MUSIC_LOOP       ; Handle loop\n\
+            BRA AU_MUSIC_PROCESS_WRITES\n\
+            \n\
+            AU_MUSIC_HAS_DELAY:\n\
+            ; B has delay > 0, store it and skip to next frame\n\
+            DECB                    ; Delay-1 (we consume this frame)\n\
+            STB >PSG_DELAY_FRAMES   ; Save delay counter\n\
+            STX >PSG_MUSIC_PTR      ; Save pointer (X points to count byte)\n\
+            BRA AU_UPDATE_SFX       ; Skip reading data this frame\n\
+            \n\
+            AU_MUSIC_PROCESS_WRITES:\n\
             PSHS B                  ; Save count\n\
+            \n\
+            ; Mark that next time we should read delay, not count\n\
+            ; (This is implicit - after processing, X points to next delay byte)\n\
             \n\
             AU_MUSIC_WRITE_LOOP:\n\
             LDA ,X+                 ; Load register number\n\
@@ -385,6 +424,7 @@ PSG_update_done:\n\
             AU_MUSIC_LOOP:\n\
             LDD ,X                  ; Load loop target\n\
             STD >PSG_MUSIC_PTR      ; Set music pointer to loop\n\
+            CLR >PSG_DELAY_FRAMES   ; Clear delay on loop\n\
             BRA AU_UPDATE_SFX       ; Continue to SFX\n\
             \n\
             AU_SKIP_MUSIC:\n\

@@ -196,7 +196,11 @@ impl MusicResource {
         let mut current_frame = 0u32;
         let max_frame = tick_to_frame(self.total_ticks) + 10; // Add some padding
         
-        // Process frames - only emit when something changes
+        // Track last emitted state to detect changes
+        let mut last_reg_writes: Vec<(u8, u8)> = Vec::new();
+        let mut last_emitted_frame = 0u32; // Track when we last emitted data
+        
+        // Process frames - emit only when something changes, add delay counter for unchanged frames
         while current_frame <= max_frame {
             let mut something_changed = false;
             
@@ -247,107 +251,121 @@ impl MusicResource {
                 continue;
             }
             
-            // Emit EVERY frame with active events (player reads one frame per call)
-            // Can't skip frames because player has no timing mechanism
-            if true {
-                let mut reg_writes = Vec::new();
-                
-                // Build current channel state
-                let mut chan_data: [Option<&NoteEvent>; 3] = [None, None, None];
-                for (_end, note) in &active_notes {
-                    let ch = note.channel.min(2) as usize;
-                    chan_data[ch] = Some(note);
-                }
-                
-                // Handle noise events FIRST to know which channels have active noise
-                let mut noise_period = 0u8;
-                let mut noise_channels = 0u8; // Bitfield: 1=A, 2=B, 4=C
-                let mut noise_volume = 0u8;
-                for (_end, noise) in &active_noise {
-                    noise_period = noise.period.min(31);
-                    noise_channels = noise.channels;
-                    // Use noise velocity (0-15) for PSG volume
-                    noise_volume = noise.velocity.min(15);
-                }
-                
-                // Generate register writes for active NOTE channels
-                for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
-                    if let Some(note) = maybe_note {
-                        let period = Self::midi_to_psg_period(note.note);
-                        let volume = note.velocity.min(15);
-                        
-                        // Frequency registers (2 per channel: low 8 bits, high 4 bits)
-                        let reg_lo = (ch_idx * 2) as u8;
-                        let reg_hi = (ch_idx * 2 + 1) as u8;
-                        reg_writes.push((reg_lo, (period & 0xFF) as u8));
-                        reg_writes.push((reg_hi, ((period >> 8) & 0x0F) as u8));
-                        
-                        // Volume register
-                        let reg_vol = (8 + ch_idx) as u8;
-                        reg_writes.push((reg_vol, volume));
-                    } else {
-                        // Only silence this channel if it doesn't have active noise
-                        let has_noise = (noise_channels & (1 << ch_idx)) != 0;
-                        if !has_noise {
-                            let reg_vol = (8 + ch_idx) as u8;
-                            reg_writes.push((reg_vol, 0));
-                        }
-                    }
-                }
-                
-                // Mixer register (enable/disable channels)
-                // Bits 0-2: tone enable (0=on, 1=off) for channels A,B,C
-                // Bits 3-5: noise enable (0=on, 1=off) for channels A,B,C
-                let mut mixer = 0xFF; // Start with all disabled
-                
-                // Enable tones for active note channels
-                for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
-                    if maybe_note.is_some() {
-                        mixer &= !(1 << ch_idx); // Enable tone for this channel (clear bit 0-2)
-                    }
-                }
-                
-                // Enable noise for active noise channels AND set volume
-                if noise_channels > 0 {
-                    if (noise_channels & 1) != 0 { 
-                        mixer &= !0x08; // Enable noise on channel A (clear bit 3)
-                        // Set volume for channel A if it doesn't have a note
-                        if chan_data[0].is_none() {
-                            reg_writes.push((8, noise_volume)); // Vol A
-                        }
-                    }
-                    if (noise_channels & 2) != 0 { 
-                        mixer &= !0x10; // Enable noise on channel B (clear bit 4)
-                        // Set volume for channel B if it doesn't have a note
-                        if chan_data[1].is_none() {
-                            reg_writes.push((9, noise_volume)); // Vol B
-                        }
-                    }
-                    if (noise_channels & 4) != 0 { 
-                        mixer &= !0x20; // Enable noise on channel C (clear bit 5)
-                        // Set volume for channel C if it doesn't have a note
-                        if chan_data[2].is_none() {
-                            reg_writes.push((10, noise_volume)); // Vol C
-                        }
-                    }
+            // Build current channel state and generate register writes
+            let mut reg_writes = Vec::new();
+            
+            // Build current channel state
+            let mut chan_data: [Option<&NoteEvent>; 3] = [None, None, None];
+            for (_end, note) in &active_notes {
+                let ch = note.channel.min(2) as usize;
+                chan_data[ch] = Some(note);
+            }
+            
+            // Handle noise events FIRST to know which channels have active noise
+            let mut noise_period = 0u8;
+            let mut noise_channels = 0u8; // Bitfield: 1=A, 2=B, 4=C
+            let mut noise_volume = 0u8;
+            for (_end, noise) in &active_noise {
+                noise_period = noise.period.min(31);
+                noise_channels = noise.channels;
+                // Use noise velocity (0-15) for PSG volume
+                noise_volume = noise.velocity.min(15);
+            }
+            
+            // Generate register writes for active NOTE channels
+            for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
+                if let Some(note) = maybe_note {
+                    let period = Self::midi_to_psg_period(note.note);
+                    let volume = note.velocity.min(15);
                     
-                    // Only write noise period register if there are active noise events
-                    reg_writes.push((6, noise_period)); // Reg 6: Noise period
+                    // Frequency registers (2 per channel: low 8 bits, high 4 bits)
+                    let reg_lo = (ch_idx * 2) as u8;
+                    let reg_hi = (ch_idx * 2 + 1) as u8;
+                    reg_writes.push((reg_lo, (period & 0xFF) as u8));
+                    reg_writes.push((reg_hi, ((period >> 8) & 0x0F) as u8));
+                    
+                    // Volume register
+                    let reg_vol = (8 + ch_idx) as u8;
+                    reg_writes.push((reg_vol, volume));
+                } else {
+                    // Only silence this channel if it doesn't have active noise
+                    let has_noise = (noise_channels & (1 << ch_idx)) != 0;
+                    if !has_noise {
+                        let reg_vol = (8 + ch_idx) as u8;
+                        reg_writes.push((reg_vol, 0));
+                    }
+                }
+            }
+            
+            // Mixer register (enable/disable channels)
+            // Bits 0-2: tone enable (0=on, 1=off) for channels A,B,C
+            // Bits 3-5: noise enable (0=on, 1=off) for channels A,B,C
+            let mut mixer = 0xFF; // Start with all disabled
+            
+            // Enable tones for active note channels
+            for (ch_idx, maybe_note) in chan_data.iter().enumerate() {
+                if maybe_note.is_some() {
+                    mixer &= !(1 << ch_idx); // Enable tone for this channel (clear bit 0-2)
+                }
+            }
+            
+            // Enable noise for active noise channels AND set volume
+            if noise_channels > 0 {
+                if (noise_channels & 1) != 0 { 
+                    mixer &= !0x08; // Enable noise on channel A (clear bit 3)
+                    // Set volume for channel A if it doesn't have a note
+                    if chan_data[0].is_none() {
+                        reg_writes.push((8, noise_volume)); // Vol A
+                    }
+                }
+                if (noise_channels & 2) != 0 { 
+                    mixer &= !0x10; // Enable noise on channel B (clear bit 4)
+                    // Set volume for channel B if it doesn't have a note
+                    if chan_data[1].is_none() {
+                        reg_writes.push((9, noise_volume)); // Vol B
+                    }
+                }
+                if (noise_channels & 4) != 0 { 
+                    mixer &= !0x20; // Enable noise on channel C (clear bit 5)
+                    // Set volume for channel C if it doesn't have a note
+                    if chan_data[2].is_none() {
+                        reg_writes.push((10, noise_volume)); // Vol C
+                    }
                 }
                 
-                // Write mixer register
-                reg_writes.push((7, mixer));
+                // Only write noise period register if there are active noise events
+                reg_writes.push((6, noise_period)); // Reg 6: Noise period
+            }
+            
+            // Write mixer register
+            reg_writes.push((7, mixer));
+            
+            // Check if state changed compared to last frame
+            let state_changed = reg_writes != last_reg_writes;
+            
+            if state_changed {
+                // Calculate how many frames to wait before applying this change
+                let frames_since_last = current_frame - last_emitted_frame;
                 
-                // Emit frame data
-                asm.push_str(&format!("    FCB     {}              ; Frame {} - {} writes\n", 
+                // ALWAYS emit delay counter first (0 for first frame, >0 for subsequent)
+                // This makes format consistent: FCB delay, FCB count, pairs...
+                asm.push_str(&format!("    FCB     {}              ; Delay {} frames (maintain previous state)\n",
+                    frames_since_last, frames_since_last));
+                
+                // Emit frame data (number of register writes)
+                asm.push_str(&format!("    FCB     {}              ; Frame {} - {} register writes\n", 
                     reg_writes.len(), current_frame, reg_writes.len()));
-                for (reg, val) in reg_writes {
+                for (reg, val) in &reg_writes {
                     // CRITICAL FIX: Generate TWO separate FCB statements per register write
                     // Old format "FCB 0,$59" generates [00, 59] but UPDATE_MUSIC_PSG reads pairs
                     // New format generates separate bytes for register number and value
                     asm.push_str(&format!("    FCB     {}               ; Reg {} number\n", reg, reg));
                     asm.push_str(&format!("    FCB     ${:02X}             ; Reg {} value\n", val, reg));
                 }
+                
+                // Update last state
+                last_reg_writes = reg_writes;
+                last_emitted_frame = current_frame;
             }
             
             // Check if we should continue BEFORE incrementing frame
@@ -367,6 +385,15 @@ impl MusicResource {
         let loop_end_frame = tick_to_frame(self.loop_end);
         
         if loop_start_frame < loop_end_frame && loop_end_frame > 0 {
+            // Calculate delay until loop point (how many frames to wait after last change)
+            let frames_until_loop = loop_end_frame.saturating_sub(last_emitted_frame);
+            
+            if frames_until_loop > 0 {
+                // Emit delay before loop marker to maintain last note duration
+                asm.push_str(&format!("    FCB     {}              ; Delay {} frames before loop\n",
+                    frames_until_loop, frames_until_loop));
+            }
+            
             // Loop marker: FCB $FF (special value that can't be a frame count), FDB address
             // Using absolute address instead of relying on PSG_MUSIC_START memory variable
             asm.push_str(&format!("    FCB     $FF             ; Loop command ($FF never valid as count)\n"));
