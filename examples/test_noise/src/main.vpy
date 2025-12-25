@@ -5,9 +5,10 @@ def main():
     PLAY_MUSIC("minimal_noise")
 
 def loop():
-    MUSIC_UPDATE()
-    #PRINT_TEXT(0, 0, "NOISE")
+    #MUSIC_UPDATE()
+    
     DRAW_VECTOR("test", 0, 20)
+    PRINT_TEXT(0, 0, "NOISE")
     
     
     

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLspStdout: (cb: (line: string) => void) => ipcRenderer.on('lsp://stdout', (_e: IpcRendererEvent, data: string) => cb(data)),
   onLspStderr: (cb: (line: string) => void) => ipcRenderer.on('lsp://stderr', (_e: IpcRendererEvent, data: string) => cb(data)),
   onCommand: (cb: (cmd: string, payload?: any) => void) => ipcRenderer.on('command', (_e, cmd, payload) => cb(cmd, payload)),
+  updateRecentProjects: (recents: Array<{name: string; path: string}>) => ipcRenderer.invoke('menu:updateRecentProjects', recents),
   // Legacy emulator IPC removed. All runtime control now via WASM service in renderer.
   emuAssemble: (args: { asmPath: string; outPath?: string; extra?: string[] }) => ipcRenderer.invoke('emu:assemble', args) as Promise<{ ok?: boolean; error?: string; binPath?: string; size?: number; base64?: string; stdout?: string; stderr?: string }>,
   runCompile: (args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean }) => ipcRenderer.invoke('run:compile', args) as Promise<{ ok?: boolean; error?: string; binPath?: string; size?: number; stdout?: string; stderr?: string; conflict?: boolean; currentMTime?: number }>,

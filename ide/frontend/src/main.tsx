@@ -71,22 +71,6 @@ function App() {
     return () => electronAPI.ipcRenderer.removeListener('file://changed', handler);
   }, [updateContent]);
 
-  // Listen for commands from Electron main process
-  useEffect(() => {
-    const electronAPI = (window as any).electronAPI;
-    if (!electronAPI?.onCommand) return;
-    
-    const handler = (id: string, _payload?: any) => {
-      if (id === 'app.hardRefreshBlocked') {
-        logger.error('App', '🚨 Hard refresh blocked! This would clear ALL settings and API keys.');
-        logger.info('App', '💡 To reload the IDE, close and reopen the window instead.');
-        alert('⚠️ Hard Refresh Blocked!\n\nCmd+Shift+R would delete all your settings, API keys, and chat history.\n\nTo reload the IDE properly, close and reopen the window instead.');
-      }
-    };
-    
-    electronAPI.onCommand(handler);
-  }, []);
-
   // Optional auto-open demo disabled: show Welcome when no docs. Uncomment block below if you want the sample on fresh start.
   /*useEffect(() => {
     if (documents.length === 0 && process.env.VPY_AUTO_DEMO === '1') {
@@ -527,7 +511,7 @@ function App() {
     }
   }, [documents]);
 
-  const commandExec = useCallback(async (id: string) => {
+  const commandExec = useCallback(async (id: string, payload?: any) => {
     const apiFiles: any = (window as any).files;
     switch (id) {
       case 'file.new': 
@@ -1030,6 +1014,79 @@ def loop():
         }
         break;
       }
+      case 'project.openRecent': {
+        // Open project from recent projects (called from native menu)
+        const projectPath = payload || '';
+        if (!projectPath) {
+          logger.error('Project', 'No project path provided for openRecent');
+          break;
+        }
+        
+        const success = await openVpyProject(projectPath);
+        if (success) {
+          const apiFiles: any = (window as any).files;
+          
+          // Try to restore previously open files
+          const savedState = useProjectStore.getState().getProjectState(projectPath);
+          if (savedState && savedState.openFiles.length > 0) {
+            logger.info('Project', `Restoring ${savedState.openFiles.length} open files`);
+            
+            for (const uri of savedState.openFiles) {
+              let diskPath = uri.replace('file:///', '').replace('file://', '');
+              if (diskPath.match(/^[A-Za-z]:\//)) {
+                // Windows path
+              } else if (!diskPath.startsWith('/')) {
+                diskPath = '/' + diskPath;
+              }
+              
+              if (apiFiles?.readFile) {
+                try {
+                  const fileResult = await apiFiles.readFile(diskPath);
+                  if (fileResult && !fileResult.error) {
+                    openDocument({
+                      uri,
+                      language: diskPath.endsWith('.vpy') ? 'vpy' : 'plaintext',
+                      content: fileResult.content,
+                      dirty: false,
+                      diagnostics: [],
+                      diskPath,
+                      mtime: fileResult.mtime,
+                      lastSavedContent: fileResult.content
+                    });
+                  }
+                } catch (e) {
+                  logger.warn('Project', `Could not restore file: ${diskPath}`);
+                }
+              }
+            }
+            
+            if (savedState.activeFile) {
+              useEditorStore.getState().setActive(savedState.activeFile);
+            }
+          } else {
+            // No saved state - open entry file
+            const entryPath = useProjectStore.getState().getEntryPath();
+            if (entryPath && apiFiles?.readFile) {
+              const fileResult = await apiFiles.readFile(entryPath);
+              if (fileResult && !fileResult.error) {
+                const normPath = entryPath.replace(/\\/g, '/');
+                const uri = normPath.match(/^[A-Za-z]:\//) ? `file:///${normPath}` : `file://${normPath}`;
+                openDocument({
+                  uri,
+                  language: 'vpy',
+                  content: fileResult.content,
+                  dirty: false,
+                  diagnostics: [],
+                  diskPath: entryPath,
+                  mtime: fileResult.mtime,
+                  lastSavedContent: fileResult.content
+                });
+              }
+            }
+          }
+        }
+        break;
+      }
       case 'project.close': {
         // Check for unsaved files
         const unsavedDocs = documents.filter(d => d.dirty);
@@ -1120,6 +1177,45 @@ def loop():
     return () => window.removeEventListener('vpy-command', handler as EventListener);
   }, [commandExec]);
 
+  // Listen for commands from Electron main process (native menu items)
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.onCommand) return;
+    
+    const handler = (id: string, payload?: any) => {
+      if (id === 'app.hardRefreshBlocked') {
+        logger.error('App', '🚨 Hard refresh blocked! This would clear ALL settings and API keys.');
+        logger.info('App', '💡 To reload the IDE, close and reopen the window instead.');
+        alert('⚠️ Hard Refresh Blocked!\n\nCmd+Shift+R would delete all your settings, API keys, and chat history.\n\nTo reload the IDE properly, close and reopen the window instead.');
+      } else if (id === 'project.openRecent' && payload) {
+        // Handle recent project with payload
+        commandExec(id, payload);
+      } else {
+        // Execute any command from native menu
+        commandExec(id);
+      }
+    };
+    
+    electronAPI.onCommand(handler);
+  }, [commandExec]);
+
+  // Update native menu with recent projects
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.updateRecentProjects) return;
+    
+    // Send recent projects to native menu
+    const recents = useProjectStore.getState().recentWorkspaces || [];
+    electronAPI.updateRecentProjects(recents);
+    
+    // Subscribe to changes
+    const unsubscribe = useProjectStore.subscribe((state) => {
+      electronAPI.updateRecentProjects(state.recentWorkspaces || []);
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
   // Auto-initialize LSP once when first document becomes available (or language changes with no init yet)
   useEffect(() => {
     if (!(window as any).electronAPI) return; // no backend in web build
@@ -1134,9 +1230,13 @@ def loop():
     })();
   }, [documents.length, i18n.language]);
 
+  // Detectar si estamos en macOS con menú nativo
+  const isMacOS = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
+  const hasNativeMenu = isMacOS && typeof (window as any).electronAPI !== 'undefined';
+
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100vh', fontFamily:'sans-serif'}}>
-      <header style={{padding:'2px 8px', background:'#222', color:'#eee', display:'flex', alignItems:'stretch', userSelect:'none'}}
+      <header style={{padding:'2px 8px', background:'#222', color:'#eee', display: hasNativeMenu ? 'none' : 'flex', alignItems:'stretch', userSelect:'none'}}
         onMouseLeave={()=>setOpenMenu(null)}>
         <div style={{display:'flex', gap:0}}>
           {/* File menu (merged with Project) */}

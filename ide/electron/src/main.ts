@@ -73,8 +73,147 @@ let lsp: LspChild | null = null;
 async function createWindow() {
   const verbose = process.env.VPY_IDE_VERBOSE_LSP === '1';
   if (verbose) console.log('[IDE] createWindow() start');
-  // Asegurar que no exista menú antes de crear la ventana
-  try { Menu.setApplicationMenu(null); } catch {}
+  
+  // Setup native macOS menu (only on macOS)
+  if (process.platform === 'darwin') {
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: 'Vectrex Studio',
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'File',
+        submenu: [
+          {
+            label: 'New',
+            submenu: [
+              { label: 'Project...', click: () => mainWindow?.webContents.send('command', 'project.new') },
+              { type: 'separator' },
+              { label: 'VPy File', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('command', 'file.new.vpy') },
+              { label: 'C/C++ File', click: () => mainWindow?.webContents.send('command', 'file.new.c') },
+              { label: 'Vector List (.vec)', click: () => mainWindow?.webContents.send('command', 'file.new.vec') },
+              { label: 'Music File (.vmus)', click: () => mainWindow?.webContents.send('command', 'file.new.vmus') },
+              { label: 'Sound Effect (.vsfx)', click: () => mainWindow?.webContents.send('command', 'file.new.vsfx') }
+            ]
+          },
+          {
+            label: 'Open',
+            submenu: [
+              { label: 'Project...', accelerator: 'CmdOrCtrl+Shift+O', click: () => mainWindow?.webContents.send('command', 'project.open') },
+              { label: 'File...', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('command', 'file.open') }
+            ]
+          },
+          { type: 'separator' },
+          { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('command', 'file.save') },
+          { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow?.webContents.send('command', 'file.saveAs') },
+          { type: 'separator' },
+          { label: 'Close File', click: () => mainWindow?.webContents.send('command', 'file.close') },
+          { label: 'Close Project', click: () => mainWindow?.webContents.send('command', 'project.close') },
+          { type: 'separator' },
+          {
+            label: 'Recent Projects',
+            submenu: [
+              { label: 'No recent projects', enabled: false }
+            ]
+          },
+          { type: 'separator' },
+          { label: 'Reset Layout', click: () => mainWindow?.webContents.send('command', 'layout.reset') }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+          { label: 'Redo', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+          { type: 'separator' },
+          { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+          { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+          { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+          { type: 'separator' },
+          { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' },
+          { type: 'separator' },
+          { label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: false },
+          { label: 'Format Document', accelerator: 'Shift+Alt+F', enabled: false }
+        ]
+      },
+      {
+        label: 'Build',
+        submenu: [
+          { label: 'Build', accelerator: 'F7', click: () => mainWindow?.webContents.send('command', 'build.build') },
+          { label: 'Build & Run', accelerator: 'F5', click: () => mainWindow?.webContents.send('command', 'build.run') },
+          { label: 'Clean', click: () => mainWindow?.webContents.send('command', 'build.clean') }
+        ]
+      },
+      {
+        label: 'Debug',
+        submenu: [
+          { label: 'Start Debugging', accelerator: 'CmdOrCtrl+F5', click: () => mainWindow?.webContents.send('command', 'debug.start') },
+          { label: 'Stop Debugging', accelerator: 'Shift+F5', click: () => mainWindow?.webContents.send('command', 'debug.stop') },
+          { type: 'separator' },
+          { label: 'Step Over', accelerator: 'F10', click: () => mainWindow?.webContents.send('command', 'debug.stepOver') },
+          { label: 'Step Into', accelerator: 'F11', click: () => mainWindow?.webContents.send('command', 'debug.stepInto') },
+          { label: 'Step Out', accelerator: 'Shift+F11', click: () => mainWindow?.webContents.send('command', 'debug.stepOut') },
+          { type: 'separator' },
+          { label: 'Toggle Breakpoint', accelerator: 'F9', click: () => mainWindow?.webContents.send('command', 'debug.toggleBreakpoint') }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { label: 'Emulator', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.emulator') },
+          { label: 'Dual Test', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.dual-emulator') },
+          { label: 'Debug', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.debug') },
+          { label: 'Errors', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.errors') },
+          { label: 'Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.output') },
+          { label: 'Build Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.build-output') },
+          { label: 'Compiler Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.compiler-output') },
+          { label: 'Memory', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.memory') },
+          { label: 'Trace', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.trace') },
+          { label: 'PSG Log', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.psglog') },
+          { label: 'PyPilot', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.ai-assistant') },
+          { type: 'separator' },
+          { label: 'Hide Active Panel', click: () => mainWindow?.webContents.send('command', 'view.hideActivePanel') },
+          { label: 'Pin/Unpin Active Panel', click: () => mainWindow?.webContents.send('command', 'view.togglePinActivePanel') },
+          { type: 'separator' },
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' }
+        ]
+      },
+      {
+        label: 'Window',
+        submenu: [
+          { role: 'minimize' },
+          { role: 'zoom' },
+          { type: 'separator' },
+          { role: 'front' },
+          { role: 'close' }
+        ]
+      }
+    ];
+    
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  } else {
+    // On other platforms, remove menu completely
+    Menu.setApplicationMenu(null);
+  }
+  
   const isDev = !!process.env.VITE_DEV_SERVER_URL;
   const sandboxEnabled = process.env.VPY_IDE_SANDBOX !== '0'; // Permitir desactivar sólo si hay problema específico con preload
   mainWindow = new BrowserWindow({
@@ -101,11 +240,11 @@ async function createWindow() {
     frame: true,
   });
   if (verbose) console.log('[IDE] sandbox=', sandboxEnabled, 'dev=', isDev);
-  // Refuerzo: eliminar menú y ocultar barra (Windows a veces muestra placeholder en primer frame)
-  try {
-    mainWindow.setMenu(null);
-    mainWindow.setMenuBarVisibility(false);
-  } catch {}
+  
+  // CRITICAL: Remove window menu bar completely (required even on macOS to hide HTML menu)
+  mainWindow.setMenu(null);
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.removeMenu();
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
@@ -144,6 +283,20 @@ async function createWindow() {
     });
   }
   if (verbose) console.log('[IDE] createWindow() end');
+  
+  // Hide HTML menu bar on macOS (native menu is used instead)
+  if (process.platform === 'darwin') {
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow?.webContents.insertCSS(`
+        .menu-container, .menu-bar, [class*="MenuRoot"], [class*="menubar"] {
+          display: none !important;
+          visibility: hidden !important;
+          height: 0 !important;
+          opacity: 0 !important;
+        }
+      `);
+    });
+  }
   
   // Initialize MCP server with main window reference
   const mcpServer = getMCPServer();
@@ -315,6 +468,148 @@ ipcMain.handle('list:sources', async (_e, args: { limit?: number } = {}) => {
   const cwd = process.cwd();
   const exDir = join(cwd, 'examples');
   const results: Array<{ path:string; kind:'vpy'|'asm'; size:number; mtime:number }> = [];
+
+// Update native menu with recent projects
+ipcMain.handle('menu:updateRecentProjects', async (_e, recents: Array<{name: string; path: string}>) => {
+  if (process.platform !== 'darwin' || !mainWindow) return;
+  
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Vectrex Studio',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New',
+          submenu: [
+            { label: 'Project...', click: () => mainWindow?.webContents.send('command', 'project.new') },
+            { type: 'separator' },
+            { label: 'VPy File', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('command', 'file.new.vpy') },
+            { label: 'C/C++ File', click: () => mainWindow?.webContents.send('command', 'file.new.c') },
+            { label: 'Vector List (.vec)', click: () => mainWindow?.webContents.send('command', 'file.new.vec') },
+            { label: 'Music File (.vmus)', click: () => mainWindow?.webContents.send('command', 'file.new.vmus') },
+            { label: 'Sound Effect (.vsfx)', click: () => mainWindow?.webContents.send('command', 'file.new.vsfx') }
+          ]
+        },
+        {
+          label: 'Open',
+          submenu: [
+            { label: 'Project...', accelerator: 'CmdOrCtrl+Shift+O', click: () => mainWindow?.webContents.send('command', 'project.open') },
+            { label: 'File...', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('command', 'file.open') }
+          ]
+        },
+        { type: 'separator' },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('command', 'file.save') },
+        { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow?.webContents.send('command', 'file.saveAs') },
+        { type: 'separator' },
+        { label: 'Close File', click: () => mainWindow?.webContents.send('command', 'file.close') },
+        { label: 'Close Project', click: () => mainWindow?.webContents.send('command', 'project.close') },
+        { type: 'separator' },
+        {
+          label: 'Recent Projects',
+          submenu: recents.length > 0 
+            ? recents.map(r => ({
+                label: r.name,
+                click: () => mainWindow?.webContents.send('command', 'project.openPath', r.path)
+              }))
+            : [{ label: 'No recent projects', enabled: false }]
+        },
+        { type: 'separator' },
+        { label: 'Reset Layout', click: () => mainWindow?.webContents.send('command', 'layout.reset') }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+        { type: 'separator' },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: false },
+        { label: 'Format Document', accelerator: 'Shift+Alt+F', enabled: false }
+      ]
+    },
+    {
+      label: 'Build',
+      submenu: [
+        { label: 'Build', accelerator: 'F7', click: () => mainWindow?.webContents.send('command', 'build.build') },
+        { label: 'Build & Run', accelerator: 'F5', click: () => mainWindow?.webContents.send('command', 'build.run') },
+        { label: 'Clean', click: () => mainWindow?.webContents.send('command', 'build.clean') }
+      ]
+    },
+    {
+      label: 'Debug',
+      submenu: [
+        { label: 'Start Debugging', accelerator: 'CmdOrCtrl+F5', click: () => mainWindow?.webContents.send('command', 'debug.start') },
+        { label: 'Stop Debugging', accelerator: 'Shift+F5', click: () => mainWindow?.webContents.send('command', 'debug.stop') },
+        { type: 'separator' },
+        { label: 'Step Over', accelerator: 'F10', click: () => mainWindow?.webContents.send('command', 'debug.stepOver') },
+        { label: 'Step Into', accelerator: 'F11', click: () => mainWindow?.webContents.send('command', 'debug.stepInto') },
+        { label: 'Step Out', accelerator: 'Shift+F11', click: () => mainWindow?.webContents.send('command', 'debug.stepOut') },
+        { type: 'separator' },
+        { label: 'Toggle Breakpoint', accelerator: 'F9', click: () => mainWindow?.webContents.send('command', 'debug.toggleBreakpoint') }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Emulator', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.emulator') },
+        { label: 'Dual Test', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.dual-emulator') },
+        { label: 'Debug', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.debug') },
+        { label: 'Errors', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.errors') },
+        { label: 'Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.output') },
+        { label: 'Build Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.build-output') },
+        { label: 'Compiler Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.compiler-output') },
+        { label: 'Memory', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.memory') },
+        { label: 'Trace', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.trace') },
+        { label: 'PSG Log', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.psglog') },
+        { label: 'PyPilot', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.ai-assistant') },
+        { type: 'separator' },
+        { label: 'Hide Active Panel', click: () => mainWindow?.webContents.send('command', 'view.hideActivePanel') },
+        { label: 'Pin/Unpin Active Panel', click: () => mainWindow?.webContents.send('command', 'view.togglePinActivePanel') },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+        { role: 'close' }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+});
   async function scanDir(dir:string, depth:number){
     if (results.length >= limit) return;
     try {
@@ -1076,6 +1371,151 @@ ipcMain.handle('recents:write', async (_e, list: any[]) => {
   recentsCache = Array.isArray(list) ? list : [];
   await persistRecents();
   return { ok: true };
+});
+
+// Update native macOS menu with recent projects
+ipcMain.handle('menu:updateRecentProjects', async (_e, recents: Array<{name: string; path: string}>) => {
+  if (process.platform !== 'darwin' || !mainWindow) return;
+  
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Vectrex Studio',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New',
+          submenu: [
+            { label: 'Project...', click: () => mainWindow?.webContents.send('command', 'project.new') },
+            { type: 'separator' },
+            { label: 'VPy File', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('command', 'file.new.vpy') },
+            { label: 'C/C++ File', click: () => mainWindow?.webContents.send('command', 'file.new.c') },
+            { label: 'Vector List (.vec)', click: () => mainWindow?.webContents.send('command', 'file.new.vec') },
+            { label: 'Music File (.vmus)', click: () => mainWindow?.webContents.send('command', 'file.new.vmus') },
+            { label: 'Sound Effect (.vsfx)', click: () => mainWindow?.webContents.send('command', 'file.new.vsfx') }
+          ]
+        },
+        {
+          label: 'Open',
+          submenu: [
+            { label: 'Project...', accelerator: 'CmdOrCtrl+Shift+O', click: () => mainWindow?.webContents.send('command', 'project.open') },
+            { label: 'File...', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('command', 'file.open') }
+          ]
+        },
+        { type: 'separator' },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('command', 'file.save') },
+        { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow?.webContents.send('command', 'file.saveAs') },
+        { type: 'separator' },
+        { label: 'Close File', click: () => mainWindow?.webContents.send('command', 'file.close') },
+        { label: 'Close Project', click: () => mainWindow?.webContents.send('command', 'project.close') },
+        { type: 'separator' },
+        {
+          label: 'Recent Projects',
+          submenu: recents.length > 0 
+            ? recents.map(r => ({
+                label: r.name,
+                click: () => {
+                  // Send project path as payload
+                  mainWindow?.webContents.send('command', 'project.openRecent', r.path);
+                }
+              }))
+            : [{ label: 'No recent projects', enabled: false }]
+        },
+        { type: 'separator' },
+        { label: 'Reset Layout', click: () => mainWindow?.webContents.send('command', 'layout.reset') }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+        { type: 'separator' },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Toggle Comment', accelerator: 'CmdOrCtrl+/', enabled: false },
+        { label: 'Format Document', accelerator: 'Shift+Alt+F', enabled: false }
+      ]
+    },
+    {
+      label: 'Build',
+      submenu: [
+        { label: 'Build', accelerator: 'F7', click: () => mainWindow?.webContents.send('command', 'build.build') },
+        { label: 'Build & Run', accelerator: 'F5', click: () => mainWindow?.webContents.send('command', 'build.run') },
+        { label: 'Clean', click: () => mainWindow?.webContents.send('command', 'build.clean') }
+      ]
+    },
+    {
+      label: 'Debug',
+      submenu: [
+        { label: 'Start Debugging', accelerator: 'CmdOrCtrl+F5', click: () => mainWindow?.webContents.send('command', 'debug.start') },
+        { label: 'Stop Debugging', accelerator: 'Shift+F5', click: () => mainWindow?.webContents.send('command', 'debug.stop') },
+        { type: 'separator' },
+        { label: 'Step Over', accelerator: 'F10', click: () => mainWindow?.webContents.send('command', 'debug.stepOver') },
+        { label: 'Step Into', accelerator: 'F11', click: () => mainWindow?.webContents.send('command', 'debug.stepInto') },
+        { label: 'Step Out', accelerator: 'Shift+F11', click: () => mainWindow?.webContents.send('command', 'debug.stepOut') },
+        { type: 'separator' },
+        { label: 'Toggle Breakpoint', accelerator: 'F9', click: () => mainWindow?.webContents.send('command', 'debug.toggleBreakpoint') }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Emulator', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.emulator') },
+        { label: 'Dual Test', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.dual-emulator') },
+        { label: 'Debug', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.debug') },
+        { label: 'Errors', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.errors') },
+        { label: 'Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.output') },
+        { label: 'Build Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.build-output') },
+        { label: 'Compiler Output', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.compiler-output') },
+        { label: 'Memory', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.memory') },
+        { label: 'Trace', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.trace') },
+        { label: 'PSG Log', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.psglog') },
+        { label: 'PyPilot', type: 'checkbox', click: () => mainWindow?.webContents.send('command', 'view.toggle.ai-assistant') },
+        { type: 'separator' },
+        { label: 'Hide Active Panel', click: () => mainWindow?.webContents.send('command', 'view.hideActivePanel') },
+        { label: 'Pin/Unpin Active Panel', click: () => mainWindow?.webContents.send('command', 'view.togglePinActivePanel') },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+        { role: 'close' }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 });
 
 // ============================================
