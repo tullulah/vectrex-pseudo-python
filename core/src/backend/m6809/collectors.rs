@@ -62,3 +62,14 @@ pub fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
     vars
 }
 
+/// Collect constant declarations (const name = value)
+/// These are stored in ROM only, not allocated as RAM variables
+pub fn collect_const_vars(module: &Module) -> Vec<(String, Expr)> {
+    let mut consts = Vec::new();
+    for item in &module.items {
+        if let Item::Const { name, value } = item {
+            consts.push((name.clone(), value.clone()));
+        }
+    }
+    consts
+}

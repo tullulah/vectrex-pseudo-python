@@ -241,7 +241,30 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut out = String::new();
     // CORREGIDO: Usar solo variables GLOBALES, no todas (que incluye locales)
     let global_vars = collect_global_vars(module); // Collect global variables with initial values
-    let syms: Vec<String> = global_vars.iter().map(|(name, _)| name.clone()).collect(); // Only global names
+    
+    // Collect const declarations (go to ROM only, NO RAM allocation or initialization)
+    let const_vars = collect_const_vars(module);
+    
+    // Build set of const array names to exclude from RAM allocation
+    let const_array_names: std::collections::HashSet<String> = const_vars
+        .iter()
+        .filter_map(|(name, value)| {
+            if matches!(value, Expr::List(_)) {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    // Create non-const variable list for RAM allocation (exclude const arrays)
+    let non_const_vars: Vec<(String, Expr)> = global_vars
+        .iter()
+        .filter(|(name, _)| !const_array_names.contains(name))
+        .cloned()
+        .collect();
+    
+    let syms: Vec<String> = non_const_vars.iter().map(|(name, _)| name.clone()).collect(); // Only non-const global names
     let global_names = syms.clone(); // Same list for passing to collectors
     let string_map = collect_string_literals(module);
     
@@ -475,10 +498,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         
         // CRITICAL: Initialize global variables even if main() has no content
         // This must happen ONCE before the loop starts
-        if !main_has_content && !global_vars.is_empty() {
-            out.push_str("    ; Initialize global variables\n");
+        // IMPORTANT: DO NOT initialize const arrays - they only exist in ROM
+        if !main_has_content && !non_const_vars.is_empty() {
+            out.push_str("    ; Initialize global variables (excluding const arrays)\n");
             let mut array_counter = 0;
-            for (name, value) in &global_vars {
+            for (name, value) in &non_const_vars {
                 if let Expr::List(_elements) = value {
                     // Array literal: load address of pre-generated array data
                     let array_label = format!("ARRAY_{}", array_counter);
@@ -971,9 +995,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     
     // ✅ ARRAY LITERAL DATA SECTION
-    // Collect all array literals from global variables and generate data
+    // Collect all array literals from NON-CONST global variables and generate data
+    // (Const arrays are emitted separately in CONST ARRAY DATA SECTION)
     let mut array_counter = 0;
-    for (name, value) in &global_vars {
+    for (name, value) in &non_const_vars {
         if let Expr::List(elements) = value {
             let array_label = format!("ARRAY_{}", array_counter);
             out.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
@@ -987,6 +1012,26 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             }
             out.push_str("\n");
             array_counter += 1;
+        }
+    }
+    
+    // ✅ CONST ARRAY DATA SECTION
+    // Emit array literals from const declarations (read-only in ROM)
+    let mut const_array_counter = 0;
+    for (name, value) in &const_vars {
+        if let Expr::List(elements) = value {
+            let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
+            out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
+            out.push_str(&format!("{}:\n", const_array_label));
+            for (i, elem) in elements.iter().enumerate() {
+                if let Expr::Number(n) = elem {
+                    out.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+                } else {
+                    out.push_str(&format!("    FDB 0    ; Element {} (non-constant)\n", i));
+                }
+            }
+            out.push_str("\n");
+            const_array_counter += 1;
         }
     }
     

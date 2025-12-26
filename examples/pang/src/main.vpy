@@ -11,11 +11,10 @@ delay = 0
 stage = 0
 
 # Location selection system
-# NOTE: Array support in VPy is incomplete - initialization causes memory corruption
-# TODO: Implement proper array handling in the compiler
-#location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
-#location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
-#num_locations = 2
+# Using const arrays - stored in ROM only, no initialization overhead
+const location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
+const location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
+const num_locations = 2
 current_location = 0  # Currently selected location (0 to num_locations-1)
 location_glow_intensity = 60
 location_glow_direction = 0  # 0 = increasing, 1 = decreasing
