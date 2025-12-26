@@ -340,34 +340,46 @@ function App() {
   const activeUri = activeDoc?.uri;
   const activeBinName = activeUri ? deriveBinaryName(activeUri) : 'output.bin';
 
+  // CRITICAL: Ref to prevent parallel compilations
+  const isCompilingRef = useRef(false);
+
   // Función para manejar build y run
   const handleBuild = useCallback(async (autoRun: boolean = false) => {
-    const electronAPI: any = (window as any).electronAPI;
-    if (!electronAPI?.runCompile) {
-      logger.warn('Build', 'electronAPI.runCompile not available');
+    // CRITICAL: Prevent parallel compilations - return early if already compiling
+    if (isCompilingRef.current) {
+      logger.warn('Build', 'Build already in progress, skipping duplicate request');
       return;
     }
-
-    // CRITICAL: Stop emulator BEFORE compilation to avoid hanging
-    const vecx = (window as any).vecx;
-    if (vecx?.stop) {
-      vecx.stop();
-      // Also update debug store state
-      const useDebugStore = (window as any).useDebugStore;
-      if (useDebugStore) {
-        useDebugStore.getState().setState('stopped');
+    
+    isCompilingRef.current = true;
+    
+    try {
+      const electronAPI: any = (window as any).electronAPI;
+      if (!electronAPI?.runCompile) {
+        logger.warn('Build', 'electronAPI.runCompile not available');
+        return;
       }
-      logger.debug('Build', 'Emulator stopped and debug state reset before compilation');
-    }
 
-    // Clear debug messages/variables on new build
-    if ((window as any).clearDebugMessages) {
-      (window as any).clearDebugMessages();
-      logger.debug('Build', 'Debug messages cleared for new build');
-    }
+      // CRITICAL: Stop emulator BEFORE compilation to avoid hanging
+      const vecx = (window as any).vecx;
+      if (vecx?.stop) {
+        vecx.stop();
+        // Also update debug store state
+        const useDebugStore = (window as any).useDebugStore;
+        if (useDebugStore) {
+          useDebugStore.getState().setState('stopped');
+        }
+        logger.debug('Build', 'Emulator stopped and debug state reset before compilation');
+      }
 
-    const editorState = useEditorStore.getState();
-    const projectState = useProjectStore.getState();
+      // Clear debug messages/variables on new build
+      if ((window as any).clearDebugMessages) {
+        (window as any).clearDebugMessages();
+        logger.debug('Build', 'Debug messages cleared for new build');
+      }
+
+      const editorState = useEditorStore.getState();
+      const projectState = useProjectStore.getState();
     
     // If we have a project, use project entry point
     let activeDoc;
@@ -411,7 +423,6 @@ function App() {
     const fileName = filePath.split('/').pop() || filePath;
     logger.info('Build', `${autoRun ? 'Build & Run' : 'Build'} starting: ${fileName}`);
 
-    try {
       // Preparar argumentos para runCompile
       // filePath is already set above from project or active doc
       
@@ -515,6 +526,10 @@ function App() {
       }
     } catch (error) {
       logger.error('Build', 'Build process failed:', error);
+    } finally {
+      // CRITICAL: Clear compilation flag when done
+      isCompilingRef.current = false;
+      logger.debug('Build', 'Build process completed, flag cleared');
     }
   }, [documents]);
 

@@ -1822,6 +1822,7 @@ ipcMain.handle('project:find', async (_e, startDir: string) => {
 
 // File watcher system
 const watchers = new Map<string, ReturnType<typeof watch>>();
+const recentChanges = new Map<string, { timestamp: number; type: string }>(); // Debounce duplicate events
 
 ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
   try {
@@ -1847,6 +1848,14 @@ ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
         return;
       }
       
+      // Debounce: Skip if same file changed within last 500ms
+      const now = Date.now();
+      const recent = recentChanges.get(fullPath);
+      if (recent && (now - recent.timestamp) < 500) {
+        console.log(`[FileWatcher] DEBOUNCED (too soon): ${filename}`);
+        return;
+      }
+      
       // Determine if it's a directory by trying to stat it
       let isDir = false;
       try {
@@ -1867,6 +1876,9 @@ ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
         changeType = 'removed';
       }
       
+      // Record this change
+      recentChanges.set(fullPath, { timestamp: now, type: changeType });
+      
       console.log(`[FileWatcher] ${changeType}: ${filename} (dir: ${isDir})`);
       
       // Notify renderer
@@ -1875,6 +1887,16 @@ ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
         path: filename,
         isDir
       });
+      
+      // Cleanup old entries from debounce map (keep only last 100)
+      if (recentChanges.size > 100) {
+        const sorted = Array.from(recentChanges.entries())
+          .sort((a, b) => b[1].timestamp - a[1].timestamp)
+          .slice(100);
+        for (const [key] of sorted) {
+          recentChanges.delete(key);
+        }
+      }
     });
     
     watchers.set(dirPath, watcher);
