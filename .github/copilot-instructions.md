@@ -1118,5 +1118,151 @@ If joystick always reads extreme values (stuck at 1):
 - [ ] Two-player support (J2_X, J2_Y for second joystick)
 - [ ] Reading JSVecx alg_jch0/alg_jch1 directly (skip RAM, avoid collisions)
 
+## 20. Const Arrays - ROM-Only Data (IMPLEMENTED 2025-12-19)
+
+### 20.1 Architecture Overview
+- **Problem Solved**: Array initialization caused memory corruption when variable offsets shifted
+- **Solution**: `const` keyword marks arrays as ROM-only, no RAM allocation or initialization
+- **Status**: ✅ Fully implemented and tested
+
+### 20.2 Syntax and Usage
+
+#### Declaration
+```python
+# Array in ROM - no RAM space allocated
+const player_x = [10, 20, 30, 40]
+const player_y = [50, 60, 70, 80]
+
+# Regular variable (allocated in RAM)
+current_player = 0
+```
+
+#### Key Differences
+| Feature | `let array = [...]` | `const array = [...]` |
+|---------|-----|-----|
+| **Storage** | RAM | ROM |
+| **Mutability** | Mutable (can modify elements) | Immutable (read-only) |
+| **Initialization** | Code in `main()` (`LDX #ARRAY_0; STX VAR_*`) | None (data emitted directly) |
+| **RAM Allocation** | `VAR_* EQU $CF10+offset` | Not allocated |
+| **Label** | `ARRAY_n` | `CONST_ARRAY_n` |
+| **Memory Footprint** | +2 bytes RAM + data in ROM | Data in ROM only |
+| **Performance** | Load from RAM via pointer | Direct ROM reference |
+
+### 20.3 Implementation Details
+
+#### Compiler Pipeline
+1. **Phase 2-3**: Parser recognizes `const name = value` syntax (already supported)
+2. **Phase 4 - Collection**:
+   - `collect_const_vars()` extracts all `Item::Const` declarations
+   - `non_const_vars` list filters out const arrays from RAM allocation
+3. **Phase 4 - RAM Allocation**:
+   - `syms` list only contains non-const variable names
+   - `VAR_*` EQU definitions skip const arrays
+4. **Phase 4 - Initialization**:
+   - `main()` initialization skips `const_array_names` set
+   - Only `non_const_vars` get `LDX #ARRAY_n; STX VAR_*` code
+5. **Phase 4 - ROM Emission**:
+   - Regular arrays emitted as `ARRAY_0, ARRAY_1, ...` (from `non_const_vars`)
+   - Const arrays emitted as `CONST_ARRAY_0, CONST_ARRAY_1, ...` (from `const_vars`)
+
+#### Code Locations
+- **Parser**: `core/src/parser.rs` line 147 (already handles `const`)
+- **Collector**: `core/src/backend/m6809/collectors.rs` lines 68-76 (`collect_const_vars()`)
+- **Compiler**: `core/src/backend/m6809/mod.rs`:
+  - Line 246: `let const_vars = collect_const_vars(module)`
+  - Lines 258-273: Build `non_const_vars` excluding const arrays
+  - Lines 495-518: Skip const arrays in `main()` initialization
+  - Lines 997-1016: Emit `ARRAY_n` only for non-const arrays
+  - Lines 1018-1039: Emit `CONST_ARRAY_n` for const arrays
+
+### 20.4 Generated Assembly Example
+
+**Input VPy**:
+```python
+const location_y = [0, 0]
+const location_x = [0, 0]
+current_location = 0
+```
+
+**Generated ASM** (excerpt):
+```asm
+; Const array literal for 'location_y' (2 elements)
+CONST_ARRAY_0:
+    FDB 0   ; Element 0
+    FDB 0   ; Element 1
+
+; Const array literal for 'location_x' (2 elements)
+CONST_ARRAY_1:
+    FDB 0   ; Element 0
+    FDB 0   ; Element 1
+
+; ... (no VAR_LOCATION_Y or VAR_LOCATION_X defined)
+
+; Variables (in RAM)
+VAR_CURRENT_LOCATION EQU $CF10+0
+
+; ... (no initialization for const arrays in main())
+```
+
+### 20.5 Memory Layout Benefits
+
+**Before (arrays as variables)**:
+```
+RAM $CF10:  VAR_LOCATION_Y (2 bytes) → initialized via LDX #ARRAY_0; STX VAR_LOCATION_Y
+RAM $CF12:  VAR_LOCATION_X (2 bytes) → initialized via LDX #ARRAY_1; STX VAR_LOCATION_X
+RAM $CF14:  VAR_CURRENT_LOCATION (2 bytes)
+RAM $CF16:  [other variables, shifted if arrays added/removed]
+```
+
+**After (const arrays in ROM)**:
+```
+ROM section: CONST_ARRAY_0 (4 bytes) → [0, 0]
+ROM section: CONST_ARRAY_1 (4 bytes) → [0, 0]
+RAM $CF10:  VAR_CURRENT_LOCATION (2 bytes) → offset never shifts!
+RAM $CF12:  [other variables, stable offsets]
+```
+
+### 20.6 Why This Solves the Bug
+
+**Original Problem**:
+- Adding/removing arrays shifted all `VAR_*` offsets
+- When offsets shifted, different memory corrupted
+- Example: `VAR_INTENSITYVAL` at `$CF10+24` → `$CF10+26` when variable order changed
+- Result: Audio or graphics glitches from mysterious memory overwrites
+
+**Solution with Const Arrays**:
+- Const arrays don't allocate RAM space
+- Only actual mutable variables in RAM list
+- Offsets stable even when arrays added/removed
+- No more cryptic memory corruption
+
+### 20.7 Testing
+
+**Test files**:
+- `test_const_arrays.vpy`: Basic const array compilation
+- `test_const_array_usage.vpy`: Using const arrays with variables
+- `examples/pang/src/main.vpy`: Real-world example with location arrays
+
+**Verification checklist**:
+- ✅ Const arrays compile without errors
+- ✅ `CONST_ARRAY_n` labels emitted to ROM
+- ✅ No `VAR_*` definitions for const arrays
+- ✅ No initialization code in `main()` for const arrays
+- ✅ Regular variables still use RAM (unchanged behavior)
+- ✅ Mixed const + regular arrays work correctly
+
+### 20.8 Limitations and Future Work
+
+**Current Limitations**:
+- ⚠️ Array indexing with const arrays not yet implemented
+- ⚠️ Passing const arrays to functions requires manual LDX loading
+- ⚠️ Const numbers still supported (inline replacement) but arrays always ROM
+
+**Future Enhancements**:
+- [ ] Support const array indexing: `value = const_array[i]`
+- [ ] Automatic address loading in function calls with const arrays
+- [ ] Const struct data (similar ROM-only approach)
+- [ ] Const strings (potentially ROM-only, currently FCC)
+
 ---
-Última actualización: 2025-12-18 - Sección 19 added: Joystick Input System (complete architecture)Última actualización: 2025-12-18 - Sección 17.4 actualizada: DRAW_VECTOR_EX unificada con arquitectura de mirrors
+Última actualización: 2025-12-19 - Sección 20 added: Const Arrays implementation complete
