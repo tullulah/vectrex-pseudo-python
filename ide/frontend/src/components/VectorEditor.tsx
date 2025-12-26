@@ -698,6 +698,9 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [previewPaths, setPreviewPaths] = useState<VecPath[]>([]); // Preview paths before applying
   const [showPreview, setShowPreview] = useState(true);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Mouse coordinates in Vectrex space
+  const [mouseVectrexCoords, setMouseVectrexCoords] = useState<{ x: number; y: number } | null>(null);
 
   // Generate preview when edge settings change
   useEffect(() => {
@@ -1252,6 +1255,10 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
 
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
+    
+    // Update Vectrex coordinates display
+    const vectrexPoint = canvasToResource(canvasX, canvasY);
+    setMouseVectrexCoords({ x: vectrexPoint.x, y: vectrexPoint.y });
     
     // Handle background movement with background tool
     if (currentTool === 'background' && isDrawing && dragStartRef.current && isBackgroundSelected) {
@@ -2250,6 +2257,11 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
           {backgroundImage && ' | 📷 Background image loaded - use Auto-Trace to detect edges.'}
         </span>
         <span style={{ display: 'flex', gap: '16px', fontSize: '11px' }}>
+          {mouseVectrexCoords && (
+            <span style={{ color: '#6af', fontWeight: 'bold' }}>
+              Vectrex: X={mouseVectrexCoords.x} Y={mouseVectrexCoords.y}
+            </span>
+          )}
           <span>View: <strong>{viewMode.toUpperCase()}</strong></span>
           {viewMode === '3d' && (
             <span>

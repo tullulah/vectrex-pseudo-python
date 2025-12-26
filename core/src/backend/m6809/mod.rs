@@ -10,6 +10,7 @@ mod expressions;
 mod analysis;
 mod emission;
 mod collectors;
+mod ram_layout;
 
 // Re-export for backward compatibility
 pub use utils::*;
@@ -20,6 +21,7 @@ pub use expressions::*;
 pub use analysis::*;
 pub use emission::*;
 pub use collectors::*;
+pub use ram_layout::*;
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
@@ -373,43 +375,105 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
-    // ========================================================================
-    // CRITICAL FIX: Emit RAM EQU definitions EARLY (before helpers)
-    // This ensures symbols like PSG_MUSIC_PTR are defined before being used
-    // ========================================================================
-    out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
-    out.push_str("; Must be defined BEFORE builtin helpers that reference them\n");
-    out.push_str("RESULT         EQU $C880   ; Main result temporary\n");
-    
-    // PSG_MUSIC_PTR: Only if music assets exist
+    // Check for music/sfx assets (needed for RAM allocation)
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
     });
-    if has_music_assets {
-        out.push_str("PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)\n");
-        out.push_str("PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)\n");
-        out.push_str("PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)\n");
-        out.push_str("PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)\n");
-        out.push_str("PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)\n");
-        out.push_str("PSG_DELAY_FRAMES EQU $C8A3   ; Frames to wait before reading next music data (RESULT+$23, 1 byte)\n");
-        out.push_str("PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)\n");
-        out.push_str("PSG_DELAY_FRAMES_DP EQU $A3 ; DP-relative offset (for lwasm compatibility)\n");
-    }
-    
-    // SFX_PTR: Only if SFX assets exist
     let has_sfx_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
+    
+    // ========================================================================
+    // AUTOMATIC RAM LAYOUT - Calculates all offsets automatically
+    // No more hardcoded offsets, no collisions, always compact
+    // ========================================================================
+    let mut ram = RamLayout::new(0xC880);
+    
+    // 1. RESULT (always needed)
+    ram.allocate("RESULT", 2, "Main result temporary");
+    
+    // 2. Runtime temporaries (if needed)
+    if !suppress_runtime && rt_usage.needs_tmp_left {
+        ram.allocate("TMPLEFT", 2, "Left operand temp");
+    }
+    if !suppress_runtime && rt_usage.needs_tmp_right {
+        ram.allocate("TMPRIGHT", 2, "Right operand temp");
+    }
+    if !suppress_runtime && rt_usage.needs_tmp_ptr {
+        ram.allocate("TMPPTR", 2, "Pointer temp");
+    }
+    
+    // 3. Multiply helper (if needed)
+    if rt_usage.needs_mul_helper {
+        ram.allocate("MUL_A", 2, "Multiplicand A");
+        ram.allocate("MUL_B", 2, "Multiplicand B");
+        ram.allocate("MUL_RES", 2, "Multiply result");
+        ram.allocate("MUL_TMP", 2, "Multiply temporary");
+        ram.allocate("MUL_CNT", 2, "Multiply counter");
+    }
+    
+    // 4. Division helper (if needed)
+    if rt_usage.needs_div_helper {
+        ram.allocate("DIV_A", 2, "Dividend");
+        ram.allocate("DIV_B", 2, "Divisor");
+        ram.allocate("DIV_Q", 2, "Quotient");
+        ram.allocate("DIV_R", 2, "Remainder");
+    }
+    
+    // 5. Coordinate temporaries (for Draw_Sync_List)
+    ram.allocate("TEMP_YX", 2, "Temporary y,x storage");
+    ram.allocate("TEMP_X", 1, "Temporary x storage");
+    ram.allocate("TEMP_Y", 1, "Temporary y storage");
+    
+    // 6. PSG Music variables (if music assets exist)
+    if has_music_assets {
+        ram.allocate("PSG_MUSIC_PTR", 2, "Current music position pointer");
+        ram.allocate("PSG_MUSIC_START", 2, "Music start pointer (for loops)");
+        ram.allocate("PSG_IS_PLAYING", 1, "Playing flag ($00=stopped, $01=playing)");
+        ram.allocate("PSG_MUSIC_ACTIVE", 1, "Set during UPDATE_MUSIC_PSG");
+        ram.allocate("PSG_FRAME_COUNT", 1, "Frame register write count");
+        ram.allocate("PSG_DELAY_FRAMES", 1, "Frames to wait before next read");
+    }
+    
+    // 7. SFX variables (if SFX assets exist)
     if has_sfx_assets {
-        out.push_str("SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)\n");
-        out.push_str("SFX_TICK       EQU $C8AA   ; Current frame counter (RESULT+$2A, 2 bytes)\n");
-        out.push_str("SFX_ACTIVE     EQU $C8AC   ; Playback state (RESULT+$2C, 1 byte)\n");
-        out.push_str("SFX_PHASE      EQU $C8AD   ; Envelope phase: 0=A,1=D,2=S,3=R (RESULT+$2D, 1 byte)\n");
-        out.push_str("SFX_VOL        EQU $C8AE   ; Current volume 0-15 (RESULT+$2E, 1 byte)\n");
+        ram.allocate("SFX_PTR", 2, "Current SFX data pointer");
+        ram.allocate("SFX_TICK", 2, "Current frame counter");
+        ram.allocate("SFX_ACTIVE", 1, "Playback state ($00=stopped, $01=playing)");
+        ram.allocate("SFX_PHASE", 1, "Envelope phase (0=A,1=D,2=S,3=R)");
+        ram.allocate("SFX_VOL", 1, "Current volume level (0-15)");
+    }
+    
+    // 8. PRINT_NUMBER buffer (always allocate if not suppressed)
+    if !suppress_runtime {
+        ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
+    }
+    
+    out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
+    out.push_str("; AUTO-GENERATED - All offsets calculated automatically\n");
+    out.push_str(&format!("; Total RAM used: {} bytes\n", ram.total_size()));
+    out.push_str(&ram.emit_equ_definitions());
+    
+    // DP-relative offsets for PSG (lwasm compatibility)
+    if has_music_assets {
+        if let Some(offset) = ram.get_offset("PSG_MUSIC_PTR") {
+            out.push_str(&format!("PSG_MUSIC_PTR_DP   EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("PSG_MUSIC_START") {
+            out.push_str(&format!("PSG_MUSIC_START_DP EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("PSG_IS_PLAYING") {
+            out.push_str(&format!("PSG_IS_PLAYING_DP  EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("PSG_MUSIC_ACTIVE") {
+            out.push_str(&format!("PSG_MUSIC_ACTIVE_DP EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("PSG_FRAME_COUNT") {
+            out.push_str(&format!("PSG_FRAME_COUNT_DP EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("PSG_DELAY_FRAMES") {
+            out.push_str(&format!("PSG_DELAY_FRAMES_DP EQU ${:02X}  ; DP-relative\n", offset));
+        }
     }
     out.push_str("\n");
     
@@ -799,11 +863,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
-    // Align ROM size to next 4K boundary: compute remainder via assembler can't do complex IF here, approximate with macro-style logic.
-    // Fallback: emit a padding block sized by repeating labels (simple approach): not portable across all assemblers, so disabled for now.
-    // NOTE: External packer should align to desired bank size (4K/8K). No internal alignment performed.
-    // Optional bank alignment (4K/8K). Use ALIGN macro if bank_size is power-of-two.
-    // Bank padding handled at end of file now.
     
     // Determine max args used (0..5) BEFORE evaluating suppress_runtime
     let max_args = compute_max_args_used(module);
@@ -815,63 +874,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                                  string_map.is_empty() && max_args == 0;
     suppress_runtime = main_inlined || no_runtime_vars_needed;
     
-    // RAM variables: either emit ORG or symbolic EQU addresses.
+    // RAM variables: emit storage allocations if using ORG mode
     if suppress_runtime { /* skip RAM ORG and temp vars entirely */ }
     else if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
-    }
-    if !suppress_runtime { out.push_str("; Variables (in RAM)\n"); }
-    // NOTE: RESULT EQU is now defined earlier (before helpers)
-    // Only emit storage allocation here (FDB) if not using EQU mode
-    if !opts.exclude_ram_org { out.push_str("RESULT:   FDB 0\n"); }
-    if !suppress_runtime && rt_usage.needs_tmp_left { if opts.exclude_ram_org { out.push_str("TMPLEFT   EQU RESULT+2\n"); } else { out.push_str("TMPLEFT:  FDB 0\n"); } }
-    if !suppress_runtime && rt_usage.needs_tmp_right { if opts.exclude_ram_org { out.push_str("TMPRIGHT  EQU RESULT+4\n"); } else { out.push_str("TMPRIGHT: FDB 0\n"); } }
-    if !suppress_runtime && rt_usage.needs_tmp_ptr { if opts.exclude_ram_org { out.push_str("TMPPTR    EQU RESULT+6\n"); } else { out.push_str("TMPPTR:   FDB 0\n"); } }
-    if rt_usage.needs_mul_helper || rt_usage.needs_div_helper { // MUL vars shared with MOD too
-        if rt_usage.needs_mul_helper {
-            if opts.exclude_ram_org { out.push_str("MUL_A    EQU RESULT+8\nMUL_B    EQU RESULT+10\nMUL_RES  EQU RESULT+12\nMUL_TMP  EQU RESULT+14\nMUL_CNT  EQU RESULT+16\n"); }
-            else { out.push_str("MUL_A:    FDB 0\nMUL_B:    FDB 0\nMUL_RES:  FDB 0\nMUL_TMP:  FDB 0\nMUL_CNT:  FDB 0\n"); }
-        }
-    }
-    if rt_usage.needs_div_helper {
-        if opts.exclude_ram_org { out.push_str("DIV_A   EQU RESULT+18\nDIV_B   EQU RESULT+20\nDIV_Q   EQU RESULT+22\nDIV_R   EQU RESULT+24\n"); }
-        else { out.push_str("DIV_A:    FDB 0\nDIV_B:    FDB 0\nDIV_Q:   FDB 0\nDIV_R:   FDB 0\n"); }
-    }
-    
-    // TEMP_YX: Temporary storage for y,x coordinates (used by Draw_Sync_List)
-    if opts.exclude_ram_org {
-        out.push_str("TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)\n");
-        out.push_str("TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)\n");
-        out.push_str("TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)\n");
-    } else {
-        out.push_str("TEMP_YX:   FDB 0   ; Temporary y,x storage\n");
-        out.push_str("TEMP_X:    FCB 0   ; Temporary x storage\n");
-        out.push_str("TEMP_Y:    FCB 0   ; Temporary y storage\n");
-    }
-    
-    // NOTE: PSG_MUSIC_PTR/PSG_IS_PLAYING EQU definitions moved earlier (before helpers)
-    // Only emit storage allocation here (FDB/FCB) if not using EQU mode
-    let has_music_assets_storage = opts.assets.iter().any(|a| {
-        matches!(a.asset_type, crate::codegen::AssetType::Music)
-    });
-    if has_music_assets_storage && !opts.exclude_ram_org {
-        out.push_str("PSG_MUSIC_PTR:     FDB 0          ; Pointer to current PSG music position\n");
-        out.push_str("PSG_MUSIC_START:   FDB 0          ; Pointer to start of PSG music (for loops)\n");
-        out.push_str("PSG_IS_PLAYING:    FCB 0          ; Playing flag ($00=stopped, $01=playing)\n");
-        out.push_str("PSG_MUSIC_ACTIVE:  FCB 0          ; Set=1 during UPDATE_MUSIC_PSG (for logging)\n");
-    }
-    
-    // NOTE: SFX EQU definitions moved earlier (before helpers)
-    // Only emit storage allocation here if not using EQU mode
-    let has_sfx_assets_storage = opts.assets.iter().any(|a| {
-        matches!(a.asset_type, crate::codegen::AssetType::Sfx)
-    });
-    if has_sfx_assets_storage && !opts.exclude_ram_org {
-        out.push_str("SFX_PTR:       FDB 0   ; Pointer to current SFX data\n");
-        out.push_str("SFX_TICK:      FDB 0   ; Current frame counter\n");
-        out.push_str("SFX_ACTIVE:    FCB 0   ; 0=stopped, 1=playing\n");
-        out.push_str("SFX_PHASE:     FCB 0   ; Envelope phase (0=A,1=D,2=S,3=R)\n");
-        out.push_str("SFX_VOL:       FCB 0   ; Current volume level\n");
+        out.push_str("; Variables (in RAM)\n");
+        out.push_str(&ram.emit_storage_allocations());
     }
     
     // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
@@ -1027,6 +1035,35 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     // ✅ CONST ARRAY DATA SECTION
     // Emit array literals from const declarations (read-only in ROM)
+    // ✅ CONST ARRAY DATA SECTION
+    // Emit array literals from const declarations (read-only in ROM)
+    // Helper closure to evaluate constant expressions (e.g., 0 - 100 = -100)
+    let eval_const_expr = |expr: &Expr| -> i32 {
+        match expr {
+            Expr::Number(n) => *n,
+            Expr::Binary { op, left, right } => {
+                let left_val = match left.as_ref() {
+                    Expr::Number(n) => *n,
+                    _ => 0,
+                };
+                let right_val = match right.as_ref() {
+                    Expr::Number(n) => *n,
+                    _ => 0,
+                };
+                match op {
+                    BinOp::Add => left_val + right_val,
+                    BinOp::Sub => left_val - right_val,
+                    BinOp::Mul => left_val * right_val,
+                    BinOp::Div => if right_val != 0 { left_val / right_val } else { 0 },
+                    BinOp::FloorDiv => if right_val != 0 { left_val / right_val } else { 0 },
+                    BinOp::Mod => if right_val != 0 { left_val % right_val } else { 0 },
+                    _ => 0,
+                }
+            }
+            _ => 0,
+        }
+    };
+    
     let mut const_array_counter = 0;
     for (name, value) in &const_vars {
         if let Expr::List(elements) = value {
@@ -1034,11 +1071,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
             out.push_str(&format!("{}:\n", const_array_label));
             for (i, elem) in elements.iter().enumerate() {
-                if let Expr::Number(n) = elem {
-                    out.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
-                } else {
-                    out.push_str(&format!("    FDB 0    ; Element {} (non-constant)\n", i));
-                }
+                let elem_value = eval_const_expr(elem);
+                out.push_str(&format!("    FDB {}   ; Element {}\n", elem_value, i));
             }
             out.push_str("\n");
             const_array_counter += 1;

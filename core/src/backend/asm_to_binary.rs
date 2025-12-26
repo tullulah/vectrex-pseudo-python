@@ -1994,6 +1994,13 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
 
 fn parse_immediate(s: &str) -> Result<u8, String> {
     let trimmed = s.trim();
+    
+    // Check for character literal: 'X' (ASCII value of X)
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() == 3 {
+        let ch = trimmed.chars().nth(1).unwrap();
+        return Ok(ch as u8);
+    }
+    
     if trimmed.starts_with('$') {
         u8::from_str_radix(&trimmed[1..], 16)
             .map_err(|_| format!("Valor inmediato hex inválido: {}", s))
@@ -2027,6 +2034,33 @@ fn parse_immediate_16(s: &str) -> Result<u16, String> {
     } else {
         trimmed.parse::<u16>()
             .map_err(|_| format!("Valor inmediato 16-bit decimal inválido: {}", s))
+    }
+}
+
+fn parse_immediate_16_with_symbols(s: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
+    let trimmed = s.trim();
+    
+    // Try standard numeric parsing first
+    if trimmed.starts_with('$') {
+        return u16::from_str_radix(&trimmed[1..], 16)
+            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s));
+    } else if trimmed.starts_with("0x") {
+        return u16::from_str_radix(&trimmed[2..], 16)
+            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s));
+    } else if trimmed.starts_with('-') {
+        return trimmed.parse::<i16>()
+            .map(|v| v as u16)
+            .map_err(|_| format!("Valor inmediato 16-bit decimal inválido: {}", s));
+    } else if let Ok(num) = trimmed.parse::<u16>() {
+        return Ok(num);
+    }
+    
+    // If not a number, try to resolve as symbol
+    let symbol_name = trimmed.to_uppercase();
+    if let Some(&value) = equates.get(&symbol_name) {
+        Ok(value)
+    } else {
+        Err(format!("Símbolo no resuelto: {}", trimmed))
     }
 }
 
@@ -2249,12 +2283,15 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         // Immediate mode
         let value_part = &operand[1..];
-        let upper = value_part.to_uppercase();
-        if let Some(&value) = equates.get(&upper) {
-            emitter.ldu_immediate(value);
-        } else {
-            let value = parse_immediate_16(value_part)?;
-            emitter.ldu_immediate(value);
+        
+        // Try to resolve as numeric value or symbol from equates
+        match parse_immediate_16_with_symbols(value_part, equates) {
+            Ok(value) => emitter.ldu_immediate(value),
+            Err(_) => {
+                // If it fails, treat it as a forward reference symbol
+                // (will be resolved in second pass)
+                emitter.ldu_immediate_sym(value_part);
+            }
         }
     } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
         // Indexed mode: ,X  X++  ,X++  5,X  A,X  etc.

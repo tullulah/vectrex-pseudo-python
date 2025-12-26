@@ -457,7 +457,7 @@ impl BinaryEmitter {
     /// ORA #immediate (opcode 0x8A)
     pub fn ora_immediate(&mut self, value: u8) {
         self.record_line_mapping();
-        self.emit(0x8A);
+        self.emit(0xAA);  // ORAA #immediate (was 0x8A = ORCC, WRONG!)
         self.emit(value);
     }
 
@@ -859,6 +859,14 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0xCE);
         self.emit_word(value);
+    }
+
+    /// LDU #immediate con símbolo (opcode 0xCE + symbol ref)
+    pub fn ldu_immediate_sym(&mut self, symbol: &str) {
+        self.record_line_mapping();
+        self.emit(0xCE);
+        self.add_symbol_ref(symbol, false, 2);
+        self.emit_word(0); // Placeholder for symbol resolution
     }
 
     /// LDU indexed (opcode 0xEE)

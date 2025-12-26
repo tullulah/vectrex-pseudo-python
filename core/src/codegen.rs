@@ -42,6 +42,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     // Funciones unificadas (global + vectorlist)
     ("MOVE", 2),            // was MOVE_TO
     ("PRINT_TEXT", 3),
+    ("PRINT_NUMBER", 3),    // Print number at position: x, y, number
     ("DRAW_TO", 2),
     ("DRAW_LINE", 5),
     ("SET_ORIGIN", 0),

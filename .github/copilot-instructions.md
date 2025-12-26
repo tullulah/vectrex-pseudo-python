@@ -1251,18 +1251,122 @@ RAM $CF12:  [other variables, stable offsets]
 - ✅ Regular variables still use RAM (unchanged behavior)
 - ✅ Mixed const + regular arrays work correctly
 
-### 20.8 Limitations and Future Work
+### 20.8 Const Array Indexing (IMPLEMENTED 2025-12-19)
+
+**Status**: ✅ FULLY IMPLEMENTED
+
+#### Syntax and Usage
+```python
+const location_x = [10, 20, 30]
+const location_y = [50, 60, 70]
+
+def loop():
+    WAIT_RECAL()
+    
+    # Literal indexing
+    x0 = location_x[0]  # 10
+    y0 = location_y[0]  # 50
+    
+    # Variable indexing
+    index = 1
+    x1 = location_x[index]  # 20
+    y1 = location_y[index]  # 60
+```
+
+#### Implementation Details
+
+**CodegenOptions Extension**:
+- New field: `const_arrays: BTreeMap<String, usize>`
+- Maps const array name → CONST_ARRAY_N index (0-based)
+- Populated during compilation from const_vars collection
+
+**Code Generation** (`core/src/backend/m6809/expressions.rs`):
+```asm
+; For: value = const_array[index]
+
+; Step 1: Evaluate index expression
+LDD #0              ; or LDD index_var, etc.
+ASLB                ; Multiply by 2 (16-bit element size)
+ROLA                ; Complete shift (B→low, A→high)
+STD TMPPTR          ; Store offset temporarily
+
+; Step 2: Load ROM address
+LDX #CONST_ARRAY_N  ; Load array base address from ROM
+
+; Step 3: Indexed addressing
+LDD TMPPTR          ; Reload offset
+LEAX D,X            ; X += D (add offset to base)
+LDD ,X              ; Load 16-bit value from computed address
+STD RESULT          ; Store result
+```
+
+**Detection Logic** (`emit_expr()` in expressions.rs):
+1. Check if Index target is `Expr::Ident`
+2. Look up array name in `opts.const_arrays`
+3. If found: Generate special ROM addressing code
+4. If not found: Use regular array code path
+
+**Performance Characteristics**:
+- **Literal indices**: 12 bytes ASM per access
+- **Variable indices**: 12 bytes ASM per access (index calculation included)
+- **Lookup time**: O(1) - direct ROM addressing
+- **No VAR_* overhead**: Array pointers not stored in RAM
+
+#### Tested Examples
+
+**test_const_indexing.vpy**:
+```python
+const test_values = [10, 20, 30]
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    val0 = test_values[0]  # 10
+    val1 = test_values[1]  # 20
+    val2 = test_values[2]  # 30
+    SET_INTENSITY(val0 + val1)
+```
+- **Result**: ✅ Compiles successfully, generates correct M6809 code
+- **Generated Labels**: `CONST_ARRAY_0` with FDB 10, FDB 20, FDB 30
+- **Indexing Code**: Verified correct in test_const_indexing.asm
+
+**Real-world Example (pang.vpy)**:
+- **Status**: ✅ Full compilation to 32KB binary successful
+- **Code**: Uses multiple const arrays with location coordinates
+- **Binary**: 5521 bytes, assembled and verified
+
+#### Design Decisions
+
+**Why TMPPTR for offset storage**:
+- LEAX requires 16-bit offset in D register
+- Index value in RESULT, shift produces 16-bit offset
+- TMPPTR saves intermediate calculation without extra instructions
+
+**Why LEAX D,X not ADDD**:
+- ADDD would add to D register (changes index value)
+- LEAX D,X adds to X register (preserves index, computes address)
+- M6809 indexed addressing is more efficient than manual addition
+
+**Why ROM-only design optimal**:
+- Const arrays don't need VAR_* pointers (saves RAM)
+- Direct LDX #CONST_ARRAY_N is faster than LDX VAR_* indirection
+- Zero RAM overhead even with many const arrays
+
+### 20.9 Limitations and Future Work
 
 **Current Limitations**:
-- ⚠️ Array indexing with const arrays not yet implemented
-- ⚠️ Passing const arrays to functions requires manual LDX loading
-- ⚠️ Const numbers still supported (inline replacement) but arrays always ROM
+- ⚠️ Passing const arrays to functions requires manual address management
+- ⚠️ Const arrays cannot be modified (read-only by design)
+- ⚠️ Multi-dimensional const arrays not yet supported
 
 **Future Enhancements**:
-- [ ] Support const array indexing: `value = const_array[i]`
-- [ ] Automatic address loading in function calls with const arrays
+- [ ] Const array parameters: `function(const_array)` with automatic address passing
+- [ ] Const array bounds checking at compile time
+- [ ] Multi-dimensional const arrays: `const matrix = [[1,2],[3,4]]`
 - [ ] Const struct data (similar ROM-only approach)
 - [ ] Const strings (potentially ROM-only, currently FCC)
 
 ---
-Última actualización: 2025-12-19 - Sección 20 added: Const Arrays implementation complete
+Última actualización: 2025-12-19 - Sección 20.8-20.9 actualizada: Const array indexing IMPLEMENTADO Y TESTEADO

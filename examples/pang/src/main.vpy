@@ -10,22 +10,34 @@ current_music = -1  # Track which music is playing (-1=none, 0=pang_theme, 1=map
 delay = 0
 stage = 0
 
-# Location selection system
-# NOTE: Array support in VPy is incomplete - initialization causes memory corruption
-# TODO: Implement proper array handling in the compiler
-const location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
-const location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
-const num_locations = 2
-current_location = 0  # Currently selected location (0 to num_locations-1)
+# Location selection system - 17 locations matching the arcade game
+const location_x_coords = [40, 40, -40, -10, 20, 50, 80, -85, -50, -15, 15, 50, 85, -90, -45, 0, 45]
+const location_y_coords = [110, 79, -20, 10, 40, 70, 100, -40, -10, 30, 60, 90, 20, 50, 0, -60, -30]
+
+# Mount Fuji, Mount Keirin, the Temple of the Emerald Buddha, Angkor Wat, Ayers Rock, the Taj Mahal, Leningrad, Paris, London, Barcelona, Athens, Egypt, Mount Kilimanjaro, New York, Mayan ruins, Antarctica, and finally Easter Island.
+
+const location_names = ["MOUNT FUJI - JAPAN","MOUNT KEIRIN - CHINA","TEMPLE OF THE EMERALD BUDDHA - THAILAND", "ANGKOR WAT - CAMBODIA","AYERS ROCK - AUSTRALIA", "TAJ MAHAL - INDIA","LENINGRAD - RUSSIA","PARIS - FRANCE","LONDON - UK","BARCELONA - SPAIN","ATHENS - GREECE", "PYRAMIDS - EGYPT", "MOUNT KILIMANJARO - TANZANIA", "NEW YORK - USA","MAYAN RUINS - MEXICO","ANTARCTICA","EASTER ISLAND - CHILE"
+];
+
+num_locations = 17
+current_location = 0
 location_glow_intensity = 60
-location_glow_direction = 0  # 0 = increasing, 1 = decreasing
-prev_joy_x = 0  # Previous joystick X state for edge detection
+location_glow_direction = 0
+prev_joy_x = 0
+prev_joy_y = 0
 intensityval = 0
 
 
 def main():
     # Called once at startup
     SET_INTENSITY(80)
+    
+    # Initialize location selection variables (once at startup)
+    current_location = 0
+    prev_joy_x = 0
+    prev_joy_y = 0
+    location_glow_intensity = 60
+    location_glow_direction = 0
 
 def loop():
     # Pantalla de presentación con logo
@@ -60,16 +72,37 @@ def loop():
         if(delay<10):
             delay += 1
 
+        # Handle joystick input for location selection
+        joy_x = J1_X()
+        joy_y = J1_Y()
+        
+        # Navigate locations with joystick (circular navigation)
+        if joy_x == 1 and prev_joy_x != 1:
+            current_location = current_location + 1
+            if current_location >= num_locations:
+                current_location = 0
+        elif joy_x == -1 and prev_joy_x != -1:
+            current_location = current_location - 1
+            if current_location < 0:
+                current_location = num_locations - 1
+        elif joy_y == 1 and prev_joy_y != 1:
+            current_location = current_location + 1
+            if current_location >= num_locations:
+                current_location = 0
+        elif joy_y == -1 and prev_joy_y != -1:
+            current_location = current_location - 1
+            if current_location < 0:
+                current_location = num_locations - 1
+        
+        prev_joy_x = joy_x
+        prev_joy_y = joy_y
+
         draw_map_screen()
 
 def draw_map_screen():
     # Draw background map
     SET_INTENSITY(100)
     DRAW_VECTOR("map", 0, 20)
-    
-    # Joystick navigation for location selection
-    joy_x = J1_X()
-    prev_joy_x = joy_x
     
     # Update glow intensity (oscillating effect)
     if location_glow_direction == 0:
@@ -78,20 +111,22 @@ def draw_map_screen():
             location_glow_direction = 1
     else:
         location_glow_intensity = location_glow_intensity - 3
-        if location_glow_intensity <= 50:
+        if location_glow_intensity <= 30:
             location_glow_direction = 0
     
-    # Draw location triangles with glow effect
+    # Draw only the selected location with glow effect
     SET_INTENSITY(location_glow_intensity)
-    
-    # Draw triangle at first location (hardcoded coordinates for now)
-    MOVE_TO(0, 0)
-    DRAW_POLYGON(3, 0, 10, -8, -5, 8, -5)
-    
-    # Draw triangle at second location (hardcoded coordinates for now)
-    MOVE_TO(50, 50)
-    DRAW_POLYGON(3, 0, 10, -8, -5, 8, -5)
 
+    loc_x = location_x_coords[current_location]
+    loc_y = location_y_coords[current_location]
+
+    DRAW_VECTOR("location", location_y_coords[current_location], location_x_coords[current_location])
+    
+    PRINT_TEXT(-90, -100, "SELECT A STAGE") 
+    #PRINT_TEXT(-70, -120, location_names[current_location])
+    # Show current location number
+    SET_INTENSITY(80)
+    
 
 def draw_title_screen():
     #Dibujar logo centrado
