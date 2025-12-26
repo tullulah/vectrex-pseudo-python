@@ -1835,8 +1835,15 @@ ipcMain.handle('file:watchDirectory', async (_e, dirPath: string) => {
       
       const fullPath = join(dirPath, filename);
       
-      // Skip temporary files and hidden files
+      // Skip temporary files, hidden files, and generated build files
       if (filename.startsWith('.') || filename.includes('~') || filename.endsWith('.tmp')) {
+        return;
+      }
+      
+      // Skip generated files that trigger recompilation loops
+      if (filename.endsWith('.asm') || filename.endsWith('.bin') || filename.endsWith('.pdb') || 
+          filename.endsWith('.map') || filename.includes('build/')) {
+        console.log(`[FileWatcher] Ignoring generated file: ${filename}`);
         return;
       }
       

@@ -2,7 +2,7 @@
   "version": "1.0",
   "name": "Simple Loop Test",
   "author": "Test",
-  "tempo": 120,
+  "tempo": 130,
   "ticksPerBeat": 24,
   "totalTicks": 72,
   "notes": [

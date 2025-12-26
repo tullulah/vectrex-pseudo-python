@@ -11,9 +11,11 @@ delay = 0
 stage = 0
 
 # Location selection system
-location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
-location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
-num_locations = 2
+# NOTE: Array support in VPy is incomplete - initialization causes memory corruption
+# TODO: Implement proper array handling in the compiler
+# location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
+# location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
+# num_locations = 2
 current_location = 0  # Currently selected location (0 to num_locations-1)
 location_glow_intensity = 60
 location_glow_direction = 0  # 0 = increasing, 1 = decreasing
@@ -22,9 +24,8 @@ intensityval = 0
 
 
 def main():
-    # Called once at startup - START MUSIC HERE (before first loop frame)
-    
-    screen = 0
+    # Called once at startup
+    SET_INTENSITY(80)
 
 def loop():
     # Pantalla de presentación con logo
@@ -66,37 +67,9 @@ def draw_map_screen():
     SET_INTENSITY(100)
     DRAW_VECTOR("map", 0, 20)
     
-    #Joystick navigation for location selection
+    # Joystick navigation for location selection
     joy_x = J1_X()
-    
-    # Edge detection: only trigger on joystick press (not continuously held)
-    if joy_x == 1 and prev_joy_x == 0:  # RIGHT pressed
-        current_location = current_location + 1
-        if current_location >= num_locations:
-            current_location = 0
-    elif joy_x == -1 and prev_joy_x == 0:  # LEFT pressed
-        current_location = current_location - 1
-        if current_location < 0:
-            current_location = num_locations - 1
-    
     prev_joy_x = joy_x
-    
-    # Draw location markers
-    i = 0
-    while i < num_locations:
-        y_coord = location_y_coords[i]
-        x_coord = location_x_coords[i]
-        
-        # Glow effect on currently selected location
-        if i == current_location:
-            intensityval = location_glow_intensity
-        else:
-            intensityval = 70  # Dimmer for non-selected
-        
-        # Draw marker polygon (small triangle pointing up)
-        DRAW_POLYGON(3, intensityval, x_coord, y_coord + 6, x_coord - 5, y_coord - 6, x_coord + 5, y_coord - 6)
-        
-        i = i + 1
     
     # Update glow intensity (oscillating effect)
     if location_glow_direction == 0:

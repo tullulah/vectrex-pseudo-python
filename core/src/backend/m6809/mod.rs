@@ -521,11 +521,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else if opts.auto_loop && f.name == "loop" {
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
-                    // Auto-inject AUDIO_UPDATE if there's music or SFX (assets or code calls)
-                    // This ensures music and SFX are processed every frame in correct order
-                    if opts.has_audio(module) {
-                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX\n");
-                    }
                     
                     // Collect locals and allocate stack frame (same as emit_function)
                     let locals = collect_locals(&f.body, &global_names);
@@ -551,6 +546,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
+                    }
+                    
+                    // Auto-inject AUDIO_UPDATE at END of loop (after all drawing/logic)
+                    // This ensures PSG updates happen after all game code completes
+                    // Prevents interruption during BIOS calls like DRAW_VECTOR
+                    if opts.has_audio(module) {
+                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (at end)\n");
                     }
                     
                     // Free locals before RTS (same as emit_function)

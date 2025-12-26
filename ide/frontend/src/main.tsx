@@ -348,6 +348,18 @@ function App() {
       return;
     }
 
+    // CRITICAL: Stop emulator BEFORE compilation to avoid hanging
+    const vecx = (window as any).vecx;
+    if (vecx?.stop) {
+      vecx.stop();
+      // Also update debug store state
+      const useDebugStore = (window as any).useDebugStore;
+      if (useDebugStore) {
+        useDebugStore.getState().setState('stopped');
+      }
+      logger.debug('Build', 'Emulator stopped and debug state reset before compilation');
+    }
+
     // Clear debug messages/variables on new build
     if ((window as any).clearDebugMessages) {
       (window as any).clearDebugMessages();
@@ -480,20 +492,15 @@ function App() {
 
       logger.info('Build', 'Compilation successful:', result.binPath, `(${result.size} bytes)`);
       
-      // Load debug symbols (.pdb file) if available
-      if (result.binPath) {
+      // Load debug symbols (.pdb data) if compilation provided them
+      // The backend (main.ts) reads the .pdb file and includes pdbData in the result
+      // The EmulatorPanel also gets pdbData via emu://compiledBin event
+      if (result.pdbData) {
         try {
-          const pdbPath = result.binPath.replace(/\.bin$/, '.pdb');
-          const pdbRes = await (window as any).files.readFile(pdbPath);
-          if ('error' in pdbRes) {
-            logger.warn('Build', 'No .pdb file found:', pdbPath);
-          } else {
-            const pdbData = JSON.parse(pdbRes.content);
-            useDebugStore.getState().loadPdbData(pdbData);
-            logger.info('Build', 'Loaded debug symbols from:', pdbPath);
-          }
+          useDebugStore.getState().loadPdbData(result.pdbData);
+          logger.info('Build', 'Loaded debug symbols from compilation result');
         } catch (pdbError) {
-          logger.warn('Build', 'Failed to load .pdb:', pdbError);
+          logger.debug('Build', 'Failed to load debug symbols:', pdbError);
         }
       }
       

@@ -28,33 +28,25 @@ These guidelines are critical for ongoing work in this repository. Keep them in 
 
 **POR QUÉ**: `WAIT_RECAL()` sincroniza con el refresco de pantalla (50 FPS). El compilador lo maneja automáticamente en M6809 - no debe escribirse en VPy.
 
-## 0.1.6. MÚSICA: MUSIC_UPDATE() AL FINAL DEL LOOP
-⚠️ **REGLA CRÍTICA**: 
-- `MUSIC_UPDATE()` DEBE colocarse al **FINAL del loop()**, después de todo el drawing
-- ❌ MAL: `def loop(): MUSIC_UPDATE(); [drawing]`
-- ✅ BIEN: `def loop(): [drawing]; MUSIC_UPDATE()`
-- **ESTRUCTURA CORRECTA**:
-  ```vpy
-  def loop():
-      # Logo drawing (si aplica)
-      if screen == 0:
-          draw_logo_screen()
-      
-      # Game drawing
-      if screen == 1:
-          # ... todos los DRAW_VECTOR calls ...
-          pass
-      
-      # ✅ MUSIC_UPDATE AL FINAL (después de todo)
-      MUSIC_UPDATE()
+## 0.1.6. MÚSICA: AUDIO_UPDATE INYECTADO AUTOMÁTICAMENTE
+⚠️ **REGLA IMPLEMENTADA**: 
+- ❌ **NUNCA** escribir `MUSIC_UPDATE()` o `AUDIO_UPDATE()` manualmente en el código VPy
+- ✅ El compilador inyecta `AUDIO_UPDATE` automáticamente **AL FINAL del `loop()`**, después de todo el drawing
+- La inyección se hace en `core/src/backend/m6809/mod.rs` líneas ~550 (después del loop de `emit_stmt`)
+- El loop generado es:
+  ```asm
+  LOOP_BODY:
+      [código del loop...]
+      JSR AUDIO_UPDATE  ; ← Inyectado automáticamente por compilador (DESPUÉS del drawing)
+      LEAS N,S          ; Free locals
+      RTS
   ```
 
-**POR QUÉ**: 
-- `MUSIC_UPDATE()` es una operación crítica de timing (actualiza PSG cada frame)
+**POR QUÉ AL FINAL**: 
+- `AUDIO_UPDATE` es una operación crítica de timing (actualiza PSG cada frame)
 - Si se ejecuta al inicio, puede interrumpirse durante los calls de drawing (que son costosos)
 - Colocar al final garantiza que se completa sin interrupciones entre frames
-- **Problema visto**: Drawing del logo (11 paths) clavaba música cuando MUSIC_UPDATE estaba al inicio
-- **Solución**: Mover MUSIC_UPDATE() al final solventa la sincronización
+- **Problema resuelto**: Drawing del logo (11 paths) clavaba música cuando AUDIO_UPDATE estaba al inicio (commit 2025-12-26)
 
 ## 0.2. REGLA CRÍTICA: VERIFICACIÓN 1:1 OBLIGATORIA
 **ANTES DE CREAR CUALQUIER ARCHIVO O API**:
