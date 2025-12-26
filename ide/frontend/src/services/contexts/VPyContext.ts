@@ -597,11 +597,18 @@ Refer to docs/ folder for comprehensive documentation.
 - 'var' = Global (outside functions)
 - 'let' = Local (inside functions)
 - **ARRAYS**: Static fixed-size arrays supported!
-  var enemies = [0, 0, 0, 0, 0]  # Array of 5 integers
-  let x = enemies[0]              # Access element
-  enemies[2] = 100                # Modify element
-  for enemy in enemies:           # Iterate
-  let count = len(enemies)        # Get length
+  - **MUTABLE arrays** (stored in RAM):
+    var enemies = [0, 0, 0, 0, 0]  # Array of 5 integers in RAM
+    let x = enemies[0]              # Access element
+    enemies[2] = 100                # Modify element (writes to RAM)
+    for enemy in enemies:           # Iterate
+    let count = len(enemies)        # Get length
+  
+  - **CONST arrays** (immutable, stored in ROM only - 2025-12-19):
+    const player_coords = [10, 20, 30]  # Read-only in ROM (no RAM allocation)
+    const health_pool = [100, 100, 100] # No initialization overhead
+    # ⚠️ NOTE: Direct const array usage/indexing still in development
+    # Currently emitted to ROM correctly, indexing support coming soon
 
 ### Structs (User-Defined Types):
 - **Define**: struct Name: followed by field definitions
@@ -729,6 +736,36 @@ See docs/vectrex-hardware.md for comprehensive hardware information.
 - ALWAYS ≤127 (0x7F)
 - Values 128-255 = invisible lines + CRT damage risk
 - Use: 127 (max), 80 (medium), 64 (low), 48 (dim), 0 (off)
+
+## Const Arrays (ROM-Only Storage - 2025-12-19)
+Immutable arrays stored in ROM with zero memory corruption risk:
+
+**Syntax**:
+\`\`\`python
+const player_x = [10, 20, 30]    # Array stored in ROM only
+const player_y = [40, 50, 60]    # No RAM allocation, no initialization
+current_player = 0               # Regular mutable variable (RAM)
+\`\`\`
+
+**Benefits**:
+- ✅ Zero RAM overhead (stored in ROM)
+- ✅ No initialization code (no startup LDX/STX)
+- ✅ Stable variable offsets (no memory corruption from shifting arrays)
+- ✅ Read-only, immutable data
+
+**Key Differences from regular arrays**:
+| Feature | Regular Array | Const Array |
+|---------|--|--|
+| Storage | RAM | ROM |
+| RAM allocation | Yes (+2 bytes per array) | No |
+| Mutable | Yes | No |
+| Initialization | LDX #ARRAY; STX VAR_ | None |
+| When to use | Modifiable data | Fixed lookup tables |
+
+**Problem Solved**:
+Previously, adding/removing array variables caused variable offsets to shift,
+corrupting adjacent memory. Const arrays eliminate this by storing data in ROM,
+keeping RAM allocation stable and predictable.
 
 ## Coordinate System
 - Center: (0, 0) - NOT top-left!
