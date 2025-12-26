@@ -11,7 +11,8 @@ delay = 0
 stage = 0
 
 # Location selection system
-# Using const arrays - stored in ROM only, no initialization overhead
+# NOTE: Array support in VPy is incomplete - initialization causes memory corruption
+# TODO: Implement proper array handling in the compiler
 const location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
 const location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
 const num_locations = 2
