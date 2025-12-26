@@ -1,6 +1,11 @@
 META TITLE = "Noise Test"
 
 song = -1
+# TODO: Implement proper array handling in the compiler
+location_y_coords = [0, 0]  # Y coordinates for locations (adjust as needed)
+location_x_coords = [0, 0]  # X coordinates for locations (adjust as needed)
+# num_locations = 2
+
 
 def main():
     SET_INTENSITY(80)

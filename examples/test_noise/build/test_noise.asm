@@ -753,12 +753,16 @@ START:
     ; *** DEBUG *** main() function code inline (initialization)
     LDD #65535
     STD VAR_SONG
-    ; VPy_LINE:6
+    LDX #ARRAY_0    ; Array literal
+    STX VAR_LOCATION_Y_COORDS
+    LDX #ARRAY_1    ; Array literal
+    STX VAR_LOCATION_X_COORDS
+    ; VPy_LINE:11
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 6
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 11
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -776,8 +780,8 @@ LOOP_BODY:
     LEAS -8,S ; allocate locals
     ; DEBUG: Processing 9 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(0)
-    ; VPy_LINE:12
-; NATIVE_CALL: J1_BUTTON_1 at line 12
+    ; VPy_LINE:17
+; NATIVE_CALL: J1_BUTTON_1 at line 17
 ; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -792,8 +796,8 @@ LOOP_BODY:
     LDX RESULT
     STX 0 ,S
     ; DEBUG: Statement 1 - Discriminant(0)
-    ; VPy_LINE:13
-; NATIVE_CALL: J1_BUTTON_2 at line 13
+    ; VPy_LINE:18
+; NATIVE_CALL: J1_BUTTON_2 at line 18
 ; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -808,8 +812,8 @@ LOOP_BODY:
     LDX RESULT
     STX 2 ,S
     ; DEBUG: Statement 2 - Discriminant(0)
-    ; VPy_LINE:14
-; NATIVE_CALL: J1_BUTTON_3 at line 14
+    ; VPy_LINE:19
+; NATIVE_CALL: J1_BUTTON_3 at line 19
 ; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -824,8 +828,8 @@ LOOP_BODY:
     LDX RESULT
     STX 4 ,S
     ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:15
-; NATIVE_CALL: J1_BUTTON_4 at line 15
+    ; VPy_LINE:20
+; NATIVE_CALL: J1_BUTTON_4 at line 20
 ; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -840,7 +844,7 @@ LOOP_BODY:
     LDX RESULT
     STX 6 ,S
     ; DEBUG: Statement 4 - Discriminant(9)
-    ; VPy_LINE:17
+    ; VPy_LINE:22
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -861,7 +865,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
-    ; VPy_LINE:18
+    ; VPy_LINE:23
     LDD VAR_SONG
     STD RESULT
     LDD RESULT
@@ -882,13 +886,13 @@ CT_6:
 CE_7:
     LDD RESULT
     LBEQ IF_NEXT_5
-    ; VPy_LINE:19
+    ; VPy_LINE:24
 ; PLAY_MUSIC("minimal_noise") - play music asset
     LDX #_MINIMAL_NOISE_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:20
+    ; VPy_LINE:25
     LDD #1
     STD RESULT
     LDX RESULT
@@ -902,7 +906,7 @@ IF_END_4:
 IF_NEXT_1:
 IF_END_0:
     ; DEBUG: Statement 5 - Discriminant(9)
-    ; VPy_LINE:22
+    ; VPy_LINE:27
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -923,7 +927,7 @@ CT_10:
 CE_11:
     LDD RESULT
     LBEQ IF_NEXT_9
-    ; VPy_LINE:23
+    ; VPy_LINE:28
     LDD VAR_SONG
     STD RESULT
     LDD RESULT
@@ -944,13 +948,13 @@ CT_14:
 CE_15:
     LDD RESULT
     LBEQ IF_NEXT_13
-    ; VPy_LINE:24
+    ; VPy_LINE:29
 ; PLAY_MUSIC("pang_theme") - play music asset
     LDX #_PANG_THEME_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:25
+    ; VPy_LINE:30
     LDD #2
     STD RESULT
     LDX RESULT
@@ -964,7 +968,7 @@ IF_END_12:
 IF_NEXT_9:
 IF_END_8:
     ; DEBUG: Statement 6 - Discriminant(9)
-    ; VPy_LINE:27
+    ; VPy_LINE:32
     LDD VAR_SONG
     STD RESULT
     LDD RESULT
@@ -985,7 +989,7 @@ CT_18:
 CE_19:
     LDD RESULT
     LBEQ IF_NEXT_17
-    ; VPy_LINE:28
+    ; VPy_LINE:33
     LDD #0
     STD RESULT
     LDD RESULT
@@ -998,7 +1002,7 @@ CE_19:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 28
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 33
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
@@ -1007,7 +1011,7 @@ CE_19:
 IF_NEXT_17:
 IF_END_16:
     ; DEBUG: Statement 7 - Discriminant(9)
-    ; VPy_LINE:29
+    ; VPy_LINE:34
     LDD VAR_SONG
     STD RESULT
     LDD RESULT
@@ -1028,7 +1032,7 @@ CT_22:
 CE_23:
     LDD RESULT
     LBEQ IF_NEXT_21
-    ; VPy_LINE:30
+    ; VPy_LINE:35
     LDD #0
     STD RESULT
     LDD RESULT
@@ -1041,7 +1045,7 @@ CE_23:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 30
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 35
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
@@ -1050,7 +1054,7 @@ CE_23:
 IF_NEXT_21:
 IF_END_20:
     ; DEBUG: Statement 8 - Discriminant(8)
-    ; VPy_LINE:32
+    ; VPy_LINE:37
 ; DRAW_VECTOR("test", x, y) - 2 path(s) at position
     LDD #0
     STD RESULT
@@ -1085,6 +1089,8 @@ VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 VAR_SONG EQU $CF10+0
+VAR_LOCATION_Y_COORDS EQU $CF10+2
+VAR_LOCATION_X_COORDS EQU $CF10+4
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
@@ -2317,6 +2323,16 @@ _PANG_THEME_MUSIC:
     FDB     _PANG_THEME_MUSIC       ; Jump to start (absolute address)
 
 
+; Array literal for variable 'location_y_coords' (2 elements)
+ARRAY_0:
+    FDB 0   ; Element 0
+    FDB 0   ; Element 1
+
+; Array literal for variable 'location_x_coords' (2 elements)
+ARRAY_1:
+    FDB 0   ; Element 0
+    FDB 0   ; Element 1
+
 ; String literals (classic FCC + $80 terminator)
 STR_0:
     FCC "SONG 1"
@@ -2324,7 +2340,7 @@ STR_0:
 STR_1:
     FCC "SONG 2"
     FCB $80
-DRAW_VEC_X EQU RESULT+2
-DRAW_VEC_Y EQU RESULT+3
-MIRROR_X EQU RESULT+4
-MIRROR_Y EQU RESULT+5
+DRAW_VEC_X EQU RESULT+6
+DRAW_VEC_Y EQU RESULT+7
+MIRROR_X EQU RESULT+8
+MIRROR_Y EQU RESULT+9
