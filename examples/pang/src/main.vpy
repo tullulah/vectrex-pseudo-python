@@ -83,16 +83,14 @@ def draw_map_screen():
     
     # Draw location triangles with glow effect
     SET_INTENSITY(location_glow_intensity)
-    for i in range(num_locations):
-        if i == 0:
-            x = location_x_coords[0]
-            y = location_y_coords[0]
-        else:
-            x = location_x_coords[1]
-            y = location_y_coords[1]
-        
-        # Draw triangle for location
-        DRAW_POLYGON(x, y, [(0, 10), (-8, -5), (8, -5)])
+    
+    # Draw triangle at first location (hardcoded coordinates for now)
+    MOVE_TO(0, 0)
+    DRAW_POLYGON(3, 0, 10, -8, -5, 8, -5)
+    
+    # Draw triangle at second location (hardcoded coordinates for now)
+    MOVE_TO(50, 50)
+    DRAW_POLYGON(3, 0, 10, -8, -5, 8, -5)
 
 
 def draw_title_screen():

@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "source": "test_const_indexing.vpy",
+  "asm": "test_const_indexing.asm",
+  "binary": "test_const_indexing.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "MAIN": "0x0378",
+    "START": "0x0356",
+    "LOOP_BODY": "0x0385"
+  },
+  "lineMap": {
+    "9": "0x0387",
+    "12": "0x038F",
+    "6": "0x0364",
+    "13": "0x03B3",
+    "14": "0x03D7",
+    "17": "0x03FB"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x0378",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x0385",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "17": "VECTREX_SET_INTENSITY",
+    "9": "VECTREX_WAIT_RECAL",
+    "6": "VECTREX_SET_INTENSITY"
+  },
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

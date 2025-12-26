@@ -512,6 +512,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
                 assets: vec![], // TODO: Implement asset discovery
                 const_values: std::collections::BTreeMap::new(), // Will be populated by backend
+                const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
                 type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
             });
@@ -547,6 +548,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             assets,
             const_values: std::collections::BTreeMap::new(), // Will be populated by backend
+            const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
             type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
         });

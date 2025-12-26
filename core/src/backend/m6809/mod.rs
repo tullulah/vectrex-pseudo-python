@@ -277,6 +277,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             }
         }
     }
+    
+    // Poblar const_arrays map para indexación en tiempo de compilación
+    let mut const_array_index = 0;
+    for (name, value) in &const_vars {
+        if matches!(value, Expr::List(_)) {
+            opts_with_consts.const_arrays.insert(name.clone(), const_array_index);
+            const_array_index += 1;
+        }
+    }
+    
     let opts = &opts_with_consts; // Use the modified opts
     
         let rt_usage = analyze_runtime_usage(module);

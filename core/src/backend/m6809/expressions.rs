@@ -238,6 +238,34 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
         }
         Expr::Index { target, index } => {
             // Array indexing: arr[index]
+            // Special handling for const arrays (ROM-only data)
+            if let Expr::Ident(target_name) = target.as_ref() {
+                if let Some(&const_array_idx) = opts.const_arrays.get(&target_name.name) {
+                    // This is a const array in ROM - generate special code
+                    out.push_str(&format!("    ; ===== Const array indexing: {} =====\n", target_name.name));
+                    
+                    // 1. Evaluate index expression
+                    emit_expr_depth(index, out, fctx, string_map, opts, depth + 1);
+                    
+                    // 2. Index is in RESULT, multiply by 2 (each element is 2 bytes)
+                    out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // D = index * 2
+                    out.push_str("    STD TMPPTR\n"); // Save offset temporarily
+                    
+                    // 3. Load const array base address and add offset
+                    let const_array_label = format!("CONST_ARRAY_{}", const_array_idx);
+                    out.push_str(&format!("    LDX #{}\n", const_array_label)); // X = CONST_ARRAY_n address
+                    out.push_str("    LDD TMPPTR\n"); // D = offset (index * 2)
+                    
+                    // 4. Add offset to base address
+                    out.push_str("    LEAX D,X\n"); // X += D (X = base + offset)
+                    
+                    // 5. Load value from computed address
+                    out.push_str("    LDD ,X\n    STD RESULT\n");
+                    return;
+                }
+            }
+            
+            // Regular array (variable in RAM)
             // 1. Evaluate array expression (should return address)
             emit_expr_depth(target, out, fctx, string_map, opts, depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPPTR\n"); // Save array base address
