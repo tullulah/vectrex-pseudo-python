@@ -14,9 +14,7 @@ stage = 0
 const location_x_coords = [40, 40, -40, -10, 20, 50, 80, -85, -50, -15, 15, 50, 85, -90, -45, 0, 45]
 const location_y_coords = [110, 79, -20, 10, 40, 70, 100, -40, -10, 30, 60, 90, 20, 50, 0, -60, -30]
 
-# Mount Fuji, Mount Keirin, the Temple of the Emerald Buddha, Angkor Wat, Ayers Rock, the Taj Mahal, Leningrad, Paris, London, Barcelona, Athens, Egypt, Mount Kilimanjaro, New York, Mayan ruins, Antarctica, and finally Easter Island.
-
-const location_names = ["MOUNT FUJI - JAPAN","MOUNT KEIRIN - CHINA","TEMPLE OF THE EMERALD BUDDHA - THAILAND", "ANGKOR WAT - CAMBODIA","AYERS ROCK - AUSTRALIA", "TAJ MAHAL - INDIA","LENINGRAD - RUSSIA","PARIS - FRANCE","LONDON - UK","BARCELONA - SPAIN","ATHENS - GREECE", "PYRAMIDS - EGYPT", "MOUNT KILIMANJARO - TANZANIA", "NEW YORK - USA","MAYAN RUINS - MEXICO","ANTARCTICA","EASTER ISLAND - CHILE"
+const location_names = ["MOUNT FUJI (JP)","MOUNT KEIRIN (CN)","EMERALD BUDDHA TEMPLE (TH)", "ANGKOR WAT (KH)","AYERS ROCK (AU)", "TAJ MAHAL (IN)","LENINGRAD (RU)","PARIS (FR)","LONDON (UK)","BARCELONA (ES)","ATHENS (GR)", "PYRAMIDS (EG)", "MOUNT KILIMANJARO (TZ)", "NEW YORK (US)","MAYAN RUINS (MX)","ANTARCTICA (AQ)","EASTER ISLAND (CL)"
 ];
 
 num_locations = 17
@@ -30,7 +28,6 @@ intensityval = 0
 
 def main():
     # Called once at startup
-    SET_INTENSITY(80)
     
     # Initialize location selection variables (once at startup)
     current_location = 0
@@ -42,7 +39,6 @@ def main():
 
 def loop():
     # Pantalla de presentación con logo
-    SET_INTENSITY(127)
     
     if screen == 0: # Music already started in main()
         if (current_music == -1):
@@ -103,12 +99,10 @@ def loop():
 def draw_map_screen():
     # Draw background map
     SET_INTENSITY(100)
-    PRINT_TEXT(-90, -100, "SELECT A STAGE") 
-    
-    # Show current location number
-    SET_INTENSITY(80)
+    PRINT_TEXT(-127, -100, "SELECT A STAGE")  # Uses BIOS defaults
+    PRINT_TEXT(-127, -120, location_names[current_location], -6, 60)  # Small size (auto-restores defaults after)
 
-    DRAW_VECTOR("map", 0, 20)
+    DRAW_VECTOR_EX("map", 0, 20, 0, 50)
     
     # Update glow intensity (oscillating effect)
     if location_glow_direction == 0:
@@ -124,12 +118,7 @@ def draw_map_screen():
     loc_x = location_x_coords[current_location]
     loc_y = location_y_coords[current_location]
 
-    DRAW_VECTOR_EX("location", loc_y, loc_x, 0, location_glow_intensity)
-    
-    PRINT_TEXT(-90, -100, "SELECT A STAGE") 
-    PRINT_TEXT(-70, -120, location_names[current_location])
-    # Show current location number
-    SET_INTENSITY(80)
+    DRAW_VECTOR_EX("location_marker", loc_y, loc_x, 0, location_glow_intensity)
     
 
 def draw_title_screen():

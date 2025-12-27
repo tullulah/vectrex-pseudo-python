@@ -1303,6 +1303,56 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         ));
         return true;
     }
+    // PRINT_TEXT: Support 3 or 5 parameters
+    // 3 params: PRINT_TEXT(x, y, text) - uses BIOS defaults
+    // 5 params: PRINT_TEXT(x, y, text, height, width) - custom size + restore defaults after
+    if matches!(up.as_str(), "PRINT_TEXT"|"VECTREX_PRINT_TEXT") {
+        if args.len() == 5 {
+            out.push_str("; PRINT_TEXT(x, y, text, height, width) - custom size\n");
+            
+            // Set height (arg[3]) to Vec_Text_Height ($C82A)
+            emit_expr(&args[3], out, fctx, string_map, opts);
+            out.push_str("    LDA RESULT+1  ; Height (negative value)\n");
+            out.push_str("    STA $C82A     ; Vec_Text_Height\n");
+            
+            // Set width (arg[4]) to Vec_Text_Width ($C82B)
+            emit_expr(&args[4], out, fctx, string_map, opts);
+            out.push_str("    LDA RESULT+1  ; Width (positive value)\n");
+            out.push_str("    STA $C82B     ; Vec_Text_Width\n");
+            
+            // Now handle x, y, text normally (args 0-2)
+            for i in 0..3 {
+                emit_expr(&args[i], out, fctx, string_map, opts);
+                out.push_str("    LDD RESULT\n");
+                out.push_str(&format!("    STD VAR_ARG{}\n", i));
+            }
+            
+            add_native_call_comment(out, "VECTREX_PRINT_TEXT");
+            if opts.force_extended_jsr {
+                out.push_str("    JSR >VECTREX_PRINT_TEXT\n");
+            } else {
+                out.push_str("    JSR VECTREX_PRINT_TEXT\n");
+            }
+            
+            // CRITICAL: Restore BIOS default values after rendering
+            out.push_str("    LDA #$F8      ; Default height (-8 in two's complement)\n");
+            out.push_str("    STA $C82A     ; Restore Vec_Text_Height\n");
+            out.push_str("    LDA #72       ; Default width (72)\n");
+            out.push_str("    STA $C82B     ; Restore Vec_Text_Width\n");
+            
+            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+            return true;
+        } else if args.len() == 3 {
+            out.push_str("; PRINT_TEXT(x, y, text) - uses BIOS defaults\n");
+            // Normal 3-parameter version - fall through to generic handling below
+        } else {
+            // Wrong number of arguments - generate error comment
+            out.push_str(&format!("; ERROR: PRINT_TEXT expects 3 or 5 arguments, got {}\n", args.len()));
+            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+            return true;
+        }
+    }
+    
     // Trig functions
     if matches!(up.as_str(), "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN") {
         // Expect 1 arg
