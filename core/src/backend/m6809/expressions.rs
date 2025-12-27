@@ -259,8 +259,15 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                     // 4. Add offset to base address
                     out.push_str("    LEAX D,X\n"); // X += D (X = base + offset)
                     
-                    // 5. Load value from computed address
-                    out.push_str("    LDD ,X\n    STD RESULT\n");
+                    // 5. For string arrays: Return pointer itself. For number arrays: Load value
+                    if opts.const_string_arrays.contains(&target_name.name) {
+                        // String array - return pointer (address in X)
+                        out.push_str("    ; String array - load pointer from table\n");
+                        out.push_str("    LDD ,X\n    STD RESULT\n"); // Load pointer from FDB table
+                    } else {
+                        // Number array - return value
+                        out.push_str("    LDD ,X\n    STD RESULT\n");
+                    }
                     return;
                 }
             }

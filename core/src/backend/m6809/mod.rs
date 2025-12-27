@@ -101,10 +101,10 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match expr {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
-                // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror), 
+                // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
                 // PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
-                   (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 4) ||
+                   (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
                    (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
@@ -286,6 +286,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if matches!(value, Expr::List(_)) {
             opts_with_consts.const_arrays.insert(name.clone(), const_array_index);
             const_array_index += 1;
+        }
+    }
+    
+    // Poblar const_string_arrays set para identificar arrays de strings
+    for (name, value) in &const_vars {
+        if let Expr::List(elements) = value {
+            // Check if all elements are StringLit
+            let is_string_array = elements.iter().all(|e| matches!(e, Expr::StringLit(_)));
+            if is_string_array {
+                opts_with_consts.const_string_arrays.insert(name.clone());
+            }
         }
     }
     
@@ -1067,14 +1078,43 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut const_array_counter = 0;
     for (name, value) in &const_vars {
         if let Expr::List(elements) = value {
-            let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
-            out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
-            out.push_str(&format!("{}:\n", const_array_label));
-            for (i, elem) in elements.iter().enumerate() {
-                let elem_value = eval_const_expr(elem);
-                out.push_str(&format!("    FDB {}   ; Element {}\n", elem_value, i));
+            // Check if this is a string array (all elements are StringLit)
+            let is_string_array = elements.iter().all(|e| matches!(e, Expr::StringLit(_)));
+            
+            if is_string_array {
+                // String array: emit strings first, then pointer table
+                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
+                out.push_str(&format!("; Const string array for '{}' ({} strings)\n", name, elements.len()));
+                
+                // Emit individual strings
+                let mut string_labels = Vec::new();
+                for (i, elem) in elements.iter().enumerate() {
+                    if let Expr::StringLit(s) = elem {
+                        let str_label = format!("{}_STR_{}", const_array_label, i);
+                        string_labels.push(str_label.clone());
+                        out.push_str(&format!("{}:\n", str_label));
+                        out.push_str(&format!("    FCC \"{}\"\n", s.to_ascii_uppercase()));
+                        out.push_str("    FCB $80   ; String terminator\n");
+                    }
+                }
+                
+                // Emit pointer table
+                out.push_str(&format!("{}:  ; Pointer table for {}\n", const_array_label, name));
+                for str_label in string_labels {
+                    out.push_str(&format!("    FDB {}  ; Pointer to string\n", str_label));
+                }
+                out.push_str("\n");
+            } else {
+                // Number array (original code)
+                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
+                out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
+                out.push_str(&format!("{}:\n", const_array_label));
+                for (i, elem) in elements.iter().enumerate() {
+                    let elem_value = eval_const_expr(elem);
+                    out.push_str(&format!("    FDB {}   ; Element {}\n", elem_value, i));
+                }
+                out.push_str("\n");
             }
-            out.push_str("\n");
             const_array_counter += 1;
         }
     }
@@ -1121,9 +1161,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str(&format!("DRAW_VEC_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
         out.push_str(&format!("MIRROR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
         out.push_str(&format!("MIRROR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_VEC_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
     } else {
         out.push_str("; DRAW_VECTOR position offset\nDRAW_VEC_X: FCB 0\nDRAW_VEC_Y: FCB 0\n");
         out.push_str("; Mirror flags for DRAW_VECTOR_EX unified function\nMIRROR_X: FCB 0\nMIRROR_Y: FCB 0\n");
+        out.push_str("; Intensity override (0=use vector's intensity, non-zero=override)\nDRAW_VEC_INTENSITY: FCB 0\n");
     }
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function

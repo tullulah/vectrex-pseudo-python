@@ -38,6 +38,7 @@ def main():
     prev_joy_y = 0
     location_glow_intensity = 60
     location_glow_direction = 0
+    screen = 1
 
 def loop():
     # Pantalla de presentación con logo
@@ -102,6 +103,11 @@ def loop():
 def draw_map_screen():
     # Draw background map
     SET_INTENSITY(100)
+    PRINT_TEXT(-90, -100, "SELECT A STAGE") 
+    
+    # Show current location number
+    SET_INTENSITY(80)
+
     DRAW_VECTOR("map", 0, 20)
     
     # Update glow intensity (oscillating effect)
@@ -115,15 +121,13 @@ def draw_map_screen():
             location_glow_direction = 0
     
     # Draw only the selected location with glow effect
-    SET_INTENSITY(location_glow_intensity)
-
     loc_x = location_x_coords[current_location]
     loc_y = location_y_coords[current_location]
 
-    DRAW_VECTOR("location", location_y_coords[current_location], location_x_coords[current_location])
+    DRAW_VECTOR_EX("location", loc_y, loc_x, 0, location_glow_intensity)
     
     PRINT_TEXT(-90, -100, "SELECT A STAGE") 
-    #PRINT_TEXT(-70, -120, location_names[current_location])
+    PRINT_TEXT(-70, -120, location_names[current_location])
     # Show current location number
     SET_INTENSITY(80)
     

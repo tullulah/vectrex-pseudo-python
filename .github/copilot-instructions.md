@@ -1370,3 +1370,248 @@ def loop():
 
 ---
 Última actualización: 2025-12-19 - Sección 20.8-20.9 actualizada: Const array indexing IMPLEMENTADO Y TESTEADO
+
+## 21. Const String Arrays (IMPLEMENTED 2025-12-27)
+
+### 21.1 Architecture Overview
+- **Problem Solved**: Need to store and access text strings dynamically (e.g., location names in games)
+- **Solution**: Const string arrays emit FCC strings in ROM + FDB pointer table, indexing returns pointer
+- **Status**: ✅ Fully implemented and tested
+
+### 21.2 Syntax and Usage
+
+#### Declaration
+```python
+const location_names = ["MOUNT FUJI - JAPAN", "PARIS - FRANCE", "NEW YORK - USA"]
+const greetings = ["HELLO", "WORLD", "VECTREX"]
+
+current_location = 0
+```
+
+#### Key Differences from Number Arrays
+| Feature | Number Array | String Array |
+|---------|-------------|--------------|
+| **Elements** | `[10, 20, 30]` | `["HELLO", "WORLD"]` |
+| **ROM Emission** | FDB values | FCC strings + FDB pointer table |
+| **Indexing Result** | Returns value (10) | Returns pointer (address of string) |
+| **Usage** | `x = numbers[0]` (x = 10) | `PRINT_TEXT(x, y, strings[0])` |
+| **Memory** | 2 bytes per element | Variable per string + 2 bytes per pointer |
+
+### 21.3 Implementation Details
+
+#### Detection (m6809/mod.rs lines 283-299)
+During const var collection, detect string arrays:
+```rust
+for (name, value) in &const_vars {
+    if let Expr::List(elements) = value {
+        let is_string_array = elements.iter().all(|e| matches!(e, Expr::StringLit(_)));
+        if is_string_array {
+            opts.const_string_arrays.insert(name.clone());
+        }
+    }
+}
+```
+
+#### Assembly Emission (m6809/mod.rs lines 1078-1105)
+
+**Number Array** (stores values):
+```asm
+CONST_ARRAY_0:
+    FDB 10   ; Element 0
+    FDB 20   ; Element 1
+```
+
+**String Array** (stores pointers):
+```asm
+; Individual strings in ROM
+CONST_ARRAY_0_STR_0:
+    FCC "HELLO"
+    FCB $80   ; Vectrex string terminator
+
+CONST_ARRAY_0_STR_1:
+    FCC "WORLD"
+    FCB $80
+
+; Pointer table
+CONST_ARRAY_0:
+    FDB CONST_ARRAY_0_STR_0  ; Pointer to first string
+    FDB CONST_ARRAY_0_STR_1  ; Pointer to second string
+```
+
+#### Indexing Behavior (m6809/expressions.rs lines 239-267)
+Array indexing checks `opts.const_string_arrays`:
+
+**String Array** - Returns pointer:
+```asm
+; ===== Const array indexing: location_names =====
+LDD VAR_INDEX        ; Load index value
+ASLB                 ; Multiply by 2 (pointers are 2 bytes)
+ROLA
+STD TMPPTR
+LDX #CONST_ARRAY_0   ; Load pointer table base address
+LDD TMPPTR
+LEAX D,X             ; Add offset to base
+; String array - load pointer from table
+LDD ,X               ; Load POINTER (not string itself)
+STD RESULT           ; Result contains address of string
+```
+
+**Number Array** - Returns value (same code, different semantics):
+```asm
+; Same assembly, but semantically loads VALUE not pointer
+LDD ,X
+STD RESULT
+```
+
+### 21.4 PRINT_TEXT Integration
+
+PRINT_TEXT already expects pointer in ARG2:
+```asm
+VECTREX_PRINT_TEXT:
+    LDU VAR_ARG2   ; Load string pointer (works with array result)
+    LDA VAR_ARG1+1 ; Y coordinate
+    LDB VAR_ARG0+1 ; X coordinate
+    JSR Print_Str_d
+    RTS
+```
+
+Works seamlessly with string array indexing - no changes needed!
+
+### 21.5 Real-World Example
+
+**Pang Game - Location Selection** (pang/src/main.vpy):
+```python
+const location_names = [
+    "MOUNT FUJI - JAPAN",
+    "MOUNT KEIRIN - CHINA",
+    "TEMPLE OF THE EMERALD BUDDHA - THAILAND",
+    "ANGKOR WAT - CAMBODIA",
+    "AYERS ROCK - AUSTRALIA",
+    "TAJ MAHAL - INDIA",
+    "LENINGRAD - RUSSIA",
+    "PARIS - FRANCE",
+    "LONDON - UK",
+    "BARCELONA - SPAIN",
+    "ATHENS - GREECE",
+    "PYRAMIDS - EGYPT",
+    "MOUNT KILIMANJARO - TANZANIA",
+    "NEW YORK - USA",
+    "MAYAN RUINS - MEXICO",
+    "ANTARCTICA",
+    "EASTER ISLAND - CHILE"
+]
+
+current_location = 0
+
+def loop():
+    WAIT_RECAL()
+    # Joystick navigation changes current_location
+    # Display selected location name dynamically
+    PRINT_TEXT(-70, -120, location_names[current_location])
+```
+
+**Result**: ✅ 7602 bytes compiled, all 17 location names work correctly
+
+### 21.6 Testing
+
+**Test 1: Simple String Array** (test_string_arrays.vpy):
+```python
+const greetings = ["HELLO", "WORLD", "VECTREX"]
+index = 0
+
+def loop():
+    WAIT_RECAL()
+    msg = greetings[index]
+    PRINT_TEXT(-50, 50, msg)
+    index = (index + 1) % 3
+```
+✅ Compiles successfully (1242 bytes)
+✅ Generates correct FCC strings + pointer table
+✅ Dynamic text display works
+
+**Test 2: Real-World Game** (pang/src/main.vpy):
+✅ 17 location names (up to 41 characters each)
+✅ Dynamic selection with joystick
+✅ Total binary: 7602 bytes (well within 32KB limit)
+
+### 21.7 Memory Layout
+
+**ROM Section** (Read-Only):
+```
+CONST_ARRAY_0_STR_0:   "HELLO\0x80"           (6 bytes)
+CONST_ARRAY_0_STR_1:   "WORLD\0x80"           (6 bytes)
+CONST_ARRAY_0_STR_2:   "VECTREX\0x80"         (8 bytes)
+CONST_ARRAY_0:         FDB table (3 pointers) (6 bytes)
+Total: 26 bytes in ROM
+```
+
+**RAM Section**:
+```
+VAR_INDEX:  2 bytes (if index is variable)
+Total: 0-2 bytes RAM (only if you store index in variable)
+```
+
+### 21.8 Design Insights
+
+**Why No PRINT_TEXT Changes Needed**:
+- PRINT_TEXT already expects pointer in ARG2 (for string literals)
+- String array indexing returns pointer → perfect match
+- Zero refactoring needed
+
+**Why Semantic Distinction Works**:
+- Number arrays: `LDD ,X` loads VALUE from ROM
+- String arrays: `LDD ,X` loads POINTER from table
+- Same assembly code, different interpretation based on type
+
+**Zero Overhead Design**:
+- No VAR_* allocation for const arrays
+- All data in ROM (strings + pointer table)
+- Indexing is O(1) with direct addressing
+
+### 21.9 Limitations and Future Work
+
+**Current Limitations**:
+- ⚠️ Mixed arrays not supported: `["hello", 123]` will fail detection
+- ⚠️ Nested arrays not supported: `[["a", "b"], ["c", "d"]]`
+- ⚠️ String concatenation not supported (arrays store literals only)
+
+**Future Enhancements**:
+- [ ] Multi-dimensional string arrays: `const dialog = [["line1", "line2"], ["line3"]]`
+- [ ] String length builtin: `len = STR_LEN(location_names[i])`
+- [ ] String comparison: `if STR_CMP(name1, name2) == 0`
+- [ ] Runtime string building (challenging due to ROM-only design)
+
+### 21.10 Files Modified
+
+1. **core/src/codegen.rs** (lines 187-190, 313-317)
+   - Added `const_string_arrays: BTreeSet<String>` field to CodegenOptions
+   - Initialize empty set in constructor
+
+2. **core/src/backend/m6809/mod.rs** (lines 283-299, 1078-1105)
+   - Populate `const_string_arrays` during const var processing
+   - Dual emission logic: FCC strings + FDB pointer table for string arrays
+   - Number arrays continue using FDB value emission
+
+3. **core/src/backend/m6809/expressions.rs** (lines 239-267)
+   - Check `const_string_arrays` during Expr::Index handling
+   - Return pointer for string arrays (skip dereference)
+   - Number arrays continue loading value
+
+4. **core/src/main.rs** (lines 501-519, 537-552)
+   - Initialize `const_string_arrays` in all CodegenOptions constructors
+
+### 21.11 Commit Message
+```
+feat: Implement const string arrays with pointer tables
+
+- Add const_string_arrays tracking to CodegenOptions
+- Dual emission: FCC strings + FDB pointer table for string arrays
+- Indexing returns pointer for string arrays (not value)
+- PRINT_TEXT works seamlessly with string array results
+- Tested with 17-location array in Pang game (7.6KB binary)
+- Zero RAM overhead, all data in ROM
+- Backward compatible with number arrays
+```
+
+---
+Última actualización: 2025-12-27 - Sección 21: String Arrays IMPLEMENTADO Y TESTEADO

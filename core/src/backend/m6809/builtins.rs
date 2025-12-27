@@ -122,10 +122,11 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         }
     }
     
-    // DRAW_VECTOR_EX: Draw vector asset with transformations (position + mirror)
-    // Usage: DRAW_VECTOR_EX("player", x, y, mirror) -> draws vector at (x, y) with optional X/Y mirroring
+    // DRAW_VECTOR_EX: Draw vector asset with transformations (position + mirror + intensity)
+    // Usage: DRAW_VECTOR_EX("player", x, y, mirror, intensity) -> draws vector at (x, y) with mirroring and custom intensity
     // mirror modes: 0 = normal (no flip), 1 = flip X-axis, 2 = flip Y-axis, 3 = flip both axes
-    if up == "DRAW_VECTOR_EX" && args.len() == 4 {
+    // intensity: 0-127 (overrides intensity in .vec file)
+    if up == "DRAW_VECTOR_EX" && args.len() == 5 {
         if let Expr::StringLit(asset_name) = &args[0] {
             // Check if asset exists in opts.assets
             let asset_exists = opts.assets.iter().any(|a| {
@@ -193,12 +194,19 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA MIRROR_Y\n");
                 out.push_str(&format!("{}:\n", call_label));
                 
+                // Evaluate and set intensity override (arg 4)
+                out.push_str("    ; Set intensity override for drawing\n");
+                emit_expr(&args[4], out, fctx, string_map, opts);
+                out.push_str("    LDA RESULT+1  ; Intensity (0-127)\n");
+                out.push_str("    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)\n");
+                
                 // Generate code to draw each path using unified mirrored function
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags\n");
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY\n");
                 }
                 
+                out.push_str("    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw\n");
                 out.push_str("    LDD #0\n    STD RESULT\n");
                 return true;
             } else {
