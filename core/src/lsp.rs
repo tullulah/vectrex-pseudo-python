@@ -62,7 +62,7 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "ARC" => Some(AritySpec::Exact(3)),                     // r, startAngle, endAngle
         "SPIRAL" => Some(AritySpec::Exact(2)),                  // r, turns
         "POLYGON" => Some(AritySpec::Variable(3)),              // n, x1, y1, ... (minimum 3: count + at least one point)
-        "PRINT_TEXT" => Some(AritySpec::Exact(3)),              // x, y, text
+        "PRINT_TEXT" => Some(AritySpec::Variable(3)),        // x, y, text [, height, width] - min 3, accepts up to 5
         "DEBUG_PRINT" => Some(AritySpec::Exact(1)),             // value - debug output to console
         "DEBUG_PRINT_LABELED" => Some(AritySpec::Exact(2)),     // label, value - debug output with label
         

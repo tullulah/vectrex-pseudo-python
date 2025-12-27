@@ -78,6 +78,39 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     notes: "Works in both global code and vectorlist contexts with same syntax"
   },
   {
+    name: "PRINT_TEXT",
+    syntax: "PRINT_TEXT(x, y, text[, height, width])",
+    description: "Displays text on screen at specified position with optional custom size",
+    parameters: [
+      { name: "x", type: "number", description: "X position (-127 to 127, center=0)", required: true },
+      { name: "y", type: "number", description: "Y position (-127 to 127, center=0)", required: true },
+      { name: "text", type: "string", description: "String to display (or array element returning pointer)", required: true },
+      { name: "height", type: "int", description: "Text height (-128 to -1, NEGATIVE, larger magnitude = taller). Optional, defaults to BIOS value.", required: false },
+      { name: "width", type: "int", description: "Text width (1 to 127, POSITIVE, larger = wider). Optional, defaults to BIOS value.", required: false }
+    ],
+    examples: [
+      "# Basic usage (3 parameters, uses BIOS defaults)",
+      "PRINT_TEXT(0, 50, \"HELLO\")",
+      "PRINT_TEXT(-60, -60, \"SCORE: 1000\")",
+      "",
+      "# With string arrays",
+      "const location_names = [\"MOUNT FUJI\", \"PARIS\", \"NEW YORK\"]",
+      "PRINT_TEXT(-70, -120, location_names[current_location])",
+      "",
+      "# Custom size (5 parameters) - Small text",
+      "PRINT_TEXT(-70, -120, location_names[i], -4, 32)",
+      "",
+      "# Large title text",
+      "PRINT_TEXT(-50, 0, \"GAME OVER\", -12, 96)",
+      "",
+      "# Medium menu text",
+      "PRINT_TEXT(-40, 30, \"START GAME\", -6, 48)"
+    ],
+    category: "unified",
+    vectrexAddress: "$F373 (Print_Str_d), $C82A (Vec_Text_Height), $C82B (Vec_Text_Width)",
+    notes: "The last 2 parameters (height, width) are OPTIONAL. When used: height MUST be NEGATIVE (-4 = small, -6 = medium, -8 to -12 = large), width MUST be POSITIVE (32 = narrow, 48 = medium, 72-96 = wide). Custom size writes to Vec_Text_Height/Width before rendering."
+  },
+  {
     name: "DRAW_VECTOR",
     syntax: "DRAW_VECTOR(name, x, y)",
     description: "Draws a vector asset at absolute position (x, y)",
@@ -98,27 +131,28 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
   },
   {
     name: "DRAW_VECTOR_EX",
-    syntax: "DRAW_VECTOR_EX(name, x, y, mirror)",
-    description: "Draws a vector asset with position offset and optional mirror transformation",
+    syntax: "DRAW_VECTOR_EX(name, x, y, mirror, intensity)",
+    description: "Draws a vector asset with position offset, mirror transformation, and custom intensity",
     parameters: [
       { name: "name", type: "string", description: "Name of the vector asset (without .vec extension)", required: true },
       { name: "x", type: "number", description: "X position offset (-127 to 126)", required: true },
       { name: "y", type: "number", description: "Y position offset (-120 to 120)", required: true },
-      { name: "mirror", type: "number", description: "Mirror mode: 0=normal, 1=X-flip (horizontal), 2=Y-flip (vertical), 3=both (180° rotation)", required: true }
+      { name: "mirror", type: "number", description: "Mirror mode: 0=normal, 1=X-flip (horizontal), 2=Y-flip (vertical), 3=both (180° rotation)", required: true },
+      { name: "intensity", type: "number", description: "Custom intensity (0-127, overrides .vec file intensity)", required: true }
     ],
     examples: [
+      "# Glow effect with dynamic intensity",
+      "glow_intensity = 60",
       "def loop():",
-      "    # Draw normal sprite",
-      "    DRAW_VECTOR_EX(\"player\", 0, 50, 0)",
-      "    # Draw horizontally mirrored (facing opposite direction)",
-      "    DRAW_VECTOR_EX(\"player\", 0, -50, 1)",
-      "    # Draw vertically mirrored (upside down)",
-      "    DRAW_VECTOR_EX(\"player\", -50, 0, 2)",
-      "    # Draw both axes mirrored (180° rotation)",
-      "    DRAW_VECTOR_EX(\"player\", 50, 0, 3)"
+      "    # Draw with variable brightness",
+      "    DRAW_VECTOR_EX(\"star\", 0, 50, 0, glow_intensity)",
+      "    # Update glow animation",
+      "    glow_intensity = glow_intensity + 3",
+      "    if glow_intensity >= 127:",
+      "        glow_intensity = 30"
     ],
     category: "assets",
-    notes: "Mirror modes: 0=normal (no transformation), 1=X-flip (left-right), 2=Y-flip (top-bottom), 3=XY-flip (both axes, 180° rotation). Screen bounds: X: -127 to 126, Y: -120 to 120."
+    notes: "The intensity parameter allows dynamic brightness control, perfect for glow effects, pulsing animations, or dimming sprites. Mirror modes: 0=normal, 1=X-flip (left-right), 2=Y-flip (top-bottom), 3=XY-flip (180° rotation). Intensity overrides the value in .vec file."
   },
   {
     name: "PLAY_MUSIC",
@@ -740,6 +774,7 @@ See docs/vectrex-hardware.md for comprehensive hardware information.
 ## Const Arrays (ROM-Only Storage - 2025-12-19)
 Immutable arrays stored in ROM with zero memory corruption risk:
 
+### Number Arrays
 **Syntax**:
 \`\`\`python
 const player_x = [10, 20, 30]    # Array stored in ROM only
@@ -753,14 +788,51 @@ current_player = 0               # Regular mutable variable (RAM)
 - ✅ Stable variable offsets (no memory corruption from shifting arrays)
 - ✅ Read-only, immutable data
 
+### String Arrays (NEW - 2025-12-27)
+**Syntax**:
+\`\`\`python
+const location_names = ["MOUNT FUJI - JAPAN", "PARIS - FRANCE", "NEW YORK - USA"]
+
+def loop():
+    current_location = 0
+    # Indexing returns pointer to string (not the string itself)
+    name_ptr = location_names[current_location]
+    # Use directly with PRINT_TEXT
+    PRINT_TEXT(-70, -120, location_names[current_location])
+\`\`\`
+
+**Implementation Details**:
+- Each string stored as FCC (Form Constant Character) with $80 terminator
+- Pointer table (FDB) with addresses to each string
+- Indexing returns POINTER (not value), perfect for PRINT_TEXT
+- Zero RAM overhead - all data in ROM
+
+**Generated Assembly**:
+\`\`\`asm
+; Individual strings
+CONST_ARRAY_0_STR_0:
+    FCC "MOUNT FUJI - JAPAN"
+    FCB $80   ; Vectrex string terminator
+
+CONST_ARRAY_0_STR_1:
+    FCC "PARIS - FRANCE"
+    FCB $80
+
+; Pointer table
+CONST_ARRAY_0:
+    FDB CONST_ARRAY_0_STR_0  ; Address of first string
+    FDB CONST_ARRAY_0_STR_1  ; Address of second string
+\`\`\`
+
 **Key Differences from regular arrays**:
-| Feature | Regular Array | Const Array |
-|---------|--|--|
-| Storage | RAM | ROM |
-| RAM allocation | Yes (+2 bytes per array) | No |
-| Mutable | Yes | No |
-| Initialization | LDX #ARRAY; STX VAR_ | None |
-| When to use | Modifiable data | Fixed lookup tables |
+| Feature | Regular Array | Const Number Array | Const String Array |
+|---------|--|--|--|
+| Storage | RAM | ROM | ROM |
+| RAM allocation | Yes (+2 bytes per array) | No | No |
+| Mutable | Yes | No | No |
+| Element size | 2 bytes | 2 bytes | Variable (string length) |
+| Indexing returns | Value | Value | Pointer |
+| Usage | Modifiable data | Fixed lookup tables | Text/labels |
 
 **Problem Solved**:
 Previously, adding/removing array variables caused variable offsets to shift,

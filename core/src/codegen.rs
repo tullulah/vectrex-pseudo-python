@@ -41,7 +41,8 @@ thread_local! {
 static BUILTIN_ARITIES: &[(&str, usize)] = &[
     // Funciones unificadas (global + vectorlist)
     ("MOVE", 2),            // was MOVE_TO
-    ("PRINT_TEXT", 3),
+    // PRINT_TEXT: 3 params (default) or 5 params (custom height/width)
+    // No entry here - validation handled in emit_builtin_call
     ("PRINT_NUMBER", 3),    // Print number at position: x, y, number
     ("DRAW_TO", 2),
     ("DRAW_LINE", 5),
@@ -129,6 +130,7 @@ fn is_valid_builtin_arity(name: &str, arg_count: usize) -> bool {
     
     // Variable-arity functions: minimum argument count check
     match upper.as_str() {
+        "PRINT_TEXT" => arg_count == 3 || arg_count == 5,  // 3 (basic) or 5 (with height/width)
         "DRAW_POLYGON" => arg_count >= 4,        // n, intensity?, x0, y0, x1, y1, ...
         "DRAW_CIRCLE" => arg_count >= 3,         // xc, yc, diam, intensity?
         "DRAW_CIRCLE_SEG" => arg_count >= 4,     // nseg, xc, yc, diam, intensity?
@@ -915,7 +917,10 @@ fn validate_expr_collect(
         }
         Expr::Call(ci) => {
             // Verificar si es builtin o función definida
-            if expected_builtin_arity(&ci.name).is_some() {
+            let is_builtin = expected_builtin_arity(&ci.name).is_some() || 
+                             ci.name.to_ascii_uppercase() == "PRINT_TEXT";
+            
+            if is_builtin {
                 // Es builtin - verificar aridad (incluyendo variable-arity)
                 if !is_valid_builtin_arity(&ci.name, ci.args.len()) {
                     let upper = ci.name.to_ascii_uppercase();
