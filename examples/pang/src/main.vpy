@@ -3,7 +3,12 @@
 
 META TITLE = "PANG"
 
-screen = 0
+# Game states
+const STATE_TITLE = 0
+const STATE_MAP = 1
+const STATE_GAME = 2
+
+screen = STATE_TITLE
 title_intensity = 30
 title_state = 0 # 0 up 1 down
 current_music = -1  # Track which music is playing (-1=none, 0=pang_theme, 1=map_theme)
@@ -14,8 +19,7 @@ stage = 0
 const location_x_coords = [40, 40, -40, -10, 20, 50, 80, -85, -50, -15, 15, 50, 85, -90, -45, 0, 45]
 const location_y_coords = [110, 79, -20, 10, 40, 70, 100, -40, -10, 30, 60, 90, 20, 50, 0, -60, -30]
 
-const location_names = ["MOUNT FUJI (JP)","MOUNT KEIRIN (CN)","EMERALD BUDDHA TEMPLE (TH)", "ANGKOR WAT (KH)","AYERS ROCK (AU)", "TAJ MAHAL (IN)","LENINGRAD (RU)","PARIS (FR)","LONDON (UK)","BARCELONA (ES)","ATHENS (GR)", "PYRAMIDS (EG)", "MOUNT KILIMANJARO (TZ)", "NEW YORK (US)","MAYAN RUINS (MX)","ANTARCTICA (AQ)","EASTER ISLAND (CL)"
-];
+const location_names = ["MOUNT FUJI (JP)","MOUNT KEIRIN (CN)","EMERALD BUDDHA TEMPLE (TH)", "ANGKOR WAT (KH)","AYERS ROCK (AU)", "TAJ MAHAL (IN)","LENINGRAD (RU)","PARIS (FR)","LONDON (UK)","BARCELONA (ES)","ATHENS (GR)", "PYRAMIDS (EG)", "MOUNT KILIMANJARO (TZ)", "NEW YORK (US)","MAYAN RUINS (MX)","ANTARCTICA (AQ)","EASTER ISLAND (CL)"];
 
 num_locations = 17
 current_location = 0
@@ -24,6 +28,12 @@ location_glow_direction = 0
 prev_joy_x = 0
 prev_joy_y = 0
 intensityval = 0
+
+# Game state variables
+countdown_timer = 0      # Countdown from 180 frames (~3 seconds at 60fps)
+countdown_active = 0     # 0=inactive, 1=active
+max_level_unlocked = 0   # Player progression (0-16)
+prev_btn_1 = 0           # Edge detection for button 1
 
 
 def main():
@@ -35,12 +45,18 @@ def main():
     prev_joy_y = 0
     location_glow_intensity = 60
     location_glow_direction = 0
-    screen = 1
+    screen = STATE_TITLE
+    
+    # Initialize game state variables
+    countdown_timer = 0
+    countdown_active = 0
+    max_level_unlocked = 0
+    prev_btn_1 = 0
 
 def loop():
     # Pantalla de presentación con logo
     
-    if screen == 0: # Music already started in main()
+    if screen == STATE_TITLE: # Music already started in main()
         if (current_music == -1):
             PLAY_MUSIC("pang_theme")
             current_music = 0
@@ -54,10 +70,10 @@ def loop():
 
         if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
             #PLAY_SFX("coin")
-            screen = 1 
+            screen = STATE_MAP 
             current_music = -1  # Reset music tracker to trigger map_theme
 
-    if(screen == 1):
+    if(screen == STATE_MAP):
         # Play gameplay music (only start if not already playing)
         if (delay ==0):
             STOP_MUSIC()
@@ -93,8 +109,40 @@ def loop():
         
         prev_joy_x = joy_x
         prev_joy_y = joy_y
+        
+        # Button detection (edge-triggered) to start level
+        btn1 = J1_BUTTON_1()
+        if btn1 == 1 and prev_btn_1 == 0:
+            # Start level - transition to game state
+            screen = STATE_GAME
+            countdown_active = 1
+            countdown_timer = 180  # 3 seconds at 60fps
+        
+        prev_btn_1 = btn1
 
         draw_map_screen()
+    
+    if screen == STATE_GAME:
+        # Countdown "GET READY" phase
+        if countdown_active == 1:
+            SET_INTENSITY(127)
+            PRINT_TEXT(-50, 40, "GET READY")
+            
+            # Show selected location name
+            SET_INTENSITY(100)
+            PRINT_TEXT(-127, 10, location_names[current_location], -6, 60)
+            
+            # Decrement countdown timer
+            countdown_timer = countdown_timer - 1
+            
+            # When countdown finishes, start actual game
+            if countdown_timer <= 0:
+                countdown_active = 0
+        else:
+            # Actual game after countdown
+            SET_INTENSITY(100)
+            PRINT_TEXT(-50, 0, "PLAYING...")
+            PRINT_TEXT(-70, -20, "game logic here")
 
 def draw_map_screen():
     # Draw background map
