@@ -78,7 +78,7 @@ def loop():
         btn4 = J1_BUTTON_4()
 
         if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
-            #PLAY_SFX("coin")
+            PLAY_SFX("coin")
             screen = STATE_MAP 
             current_music = -1  # Reset music tracker to trigger map_theme
 

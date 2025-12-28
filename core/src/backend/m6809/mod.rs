@@ -513,9 +513,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             matches!(a.asset_type, crate::codegen::AssetType::Music | crate::codegen::AssetType::Sfx)
         });
         
+        // Check specifically for SFX assets
+        let has_sfx_assets = opts.assets.iter().any(|a| {
+            matches!(a.asset_type, crate::codegen::AssetType::Sfx)
+        });
+        
         // BIOS music system: Initialize music buffer to silence
         if has_audio_assets {
             out.push_str("    JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence\n");
+        }
+        
+        // CRITICAL: Initialize SFX system variables to prevent garbage data interference
+        if has_sfx_assets {
+            out.push_str("    ; Initialize SFX variables to prevent random noise on startup\n");
+            out.push_str("    CLR sfx_status         ; Mark SFX as inactive (0=off)\n");
+            out.push_str("    LDD #$0000\n");
+            out.push_str("    STD sfx_pointer        ; Clear SFX pointer\n");
         }
         
         out.push_str("\n");
