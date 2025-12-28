@@ -347,22 +347,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // J1_X: Default to digital (fast, suitable for 60fps)
     if up == "J1_X" && args.is_empty() {
         add_native_call_comment(out, "J1_X");
-        out.push_str("; J1_X() - Read Joystick 1 X axis (Digital from RAM)\n");
-        out.push_str("; Frontend writes unsigned 0-255 to $CF00 (128=center)\n");
-        out.push_str("    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)\n");
-        out.push_str("; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)\n");
-        out.push_str("    CMPB #108    ; Check if < 108 (left)\n");
-        out.push_str("    BLO J1X_LEFT ; Branch if lower (unsigned)\n");
-        out.push_str("    CMPB #148    ; Check if > 148 (right)\n");
-        out.push_str("    BHI J1X_RIGHT ; Branch if higher (unsigned)\n");
-        out.push_str("    LDD #0       ; Center\n");
-        out.push_str("    BRA J1X_END\n");
-        out.push_str("J1X_LEFT:\n");
-        out.push_str("    LDD #$FFFF   ; Left (-1)\n");
-        out.push_str("    BRA J1X_END\n");
-        out.push_str("J1X_RIGHT:\n");
-        out.push_str("    LDD #1       ; Right (+1)\n");
-        out.push_str("J1X_END:\n");
+        out.push_str("    JSR J1X_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -411,22 +396,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // NOTE: Joy_Digital is MUCH faster than Joy_Analog (suitable for 60fps)
     if up == "J1_Y" && args.is_empty() {
         add_native_call_comment(out, "J1_Y");
-        out.push_str("; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)\n");
-        out.push_str("; Frontend writes unsigned 0-255 to $CF01 (128=center)\n");
-        out.push_str("    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)\n");
-        out.push_str("; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)\n");
-        out.push_str("    CMPB #108    ; Check if < 108 (down)\n");
-        out.push_str("    BLO J1Y_DOWN ; Branch if lower (unsigned)\n");
-        out.push_str("    CMPB #148    ; Check if > 148 (up)\n");
-        out.push_str("    BHI J1Y_UP   ; Branch if higher (unsigned)\n");
-        out.push_str("    LDD #0       ; Center\n");
-        out.push_str("    BRA J1Y_END\n");
-        out.push_str("J1Y_DOWN:\n");
-        out.push_str("    LDD #$FFFF   ; Down (-1)\n");
-        out.push_str("    BRA J1Y_END\n");
-        out.push_str("J1Y_UP:\n");
-        out.push_str("    LDD #1       ; Up (+1)\n");
-        out.push_str("J1Y_END:\n");
+        out.push_str("    JSR J1Y_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }

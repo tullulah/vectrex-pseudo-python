@@ -35,6 +35,11 @@ countdown_active = 0     # 0=inactive, 1=active
 max_level_unlocked = 0   # Player progression (0-16)
 prev_btn_1 = 0           # Edge detection for button 1
 
+# Player variables
+player_x = 0             # Player X position
+player_y = -100          # Player Y position (on ground)
+player_speed = 2         # Movement speed
+
 
 def main():
     # Called once at startup
@@ -140,9 +145,7 @@ def loop():
                 countdown_active = 0
         else:
             # Actual game after countdown
-            SET_INTENSITY(100)
-            PRINT_TEXT(-50, 0, "PLAYING...")
-            PRINT_TEXT(-70, -20, "game logic here")
+            draw_game_level()
 
 def draw_map_screen():
     # Draw background map
@@ -188,3 +191,27 @@ def draw_title_screen():
     
     if (title_intensity == 30):
         title_state = 0
+
+def draw_game_level():
+    # Draw Monte Fuji background
+    SET_INTENSITY(60)
+    DRAW_VECTOR("fuji_bg", 0, 50)
+    
+    # Draw ground line
+    SET_INTENSITY(100)
+    DRAW_LINE(-120, -100, 120, -100, 100)
+    
+    # Draw player placeholder
+    SET_INTENSITY(127)
+    DRAW_VECTOR("player", player_x, player_y)
+    
+    # # Handle player movement
+    # joy_x = J1_X()
+    # if joy_x == -1:
+    #     player_x = player_x - player_speed
+    #     if player_x < -110:
+    #         player_x = -110
+    # elif joy_x == 1:
+    #     player_x = player_x + player_speed
+    #     if player_x > 110:
+    #         player_x = 110

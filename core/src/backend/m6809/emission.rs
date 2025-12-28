@@ -74,6 +74,45 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
 // emit_builtin_helpers: simple placeholder wrappers for Vectrex intrinsics.
 pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions, module: &Module, debug_info: &mut DebugInfo) {
     let w = &usage.wrappers_used;
+    
+    // Joystick builtins (always emit since they're commonly used)
+    out.push_str("; === JOYSTICK BUILTIN SUBROUTINES ===\n");
+    out.push_str("; J1_X() - Read Joystick 1 X axis (Digital from RAM)\n");
+    out.push_str("; Frontend writes unsigned 0-255 to $CF00 (128=center)\n");
+    out.push_str("; Returns: D = -1 (left), 0 (center), +1 (right)\n");
+    out.push_str("J1X_BUILTIN:\n");
+    out.push_str("    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)\n");
+    out.push_str("    CMPB #108    ; Check if < 108 (left)\n");
+    out.push_str("    BLO .J1X_LEFT\n");
+    out.push_str("    CMPB #148    ; Check if > 148 (right)\n");
+    out.push_str("    BHI .J1X_RIGHT\n");
+    out.push_str("    LDD #0       ; Center\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1X_LEFT:\n");
+    out.push_str("    LDD #$FFFF   ; Left (-1)\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1X_RIGHT:\n");
+    out.push_str("    LDD #1       ; Right (+1)\n");
+    out.push_str("    RTS\n\n");
+    
+    out.push_str("; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)\n");
+    out.push_str("; Frontend writes unsigned 0-255 to $CF01 (128=center)\n");
+    out.push_str("; Returns: D = -1 (down), 0 (center), +1 (up)\n");
+    out.push_str("J1Y_BUILTIN:\n");
+    out.push_str("    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)\n");
+    out.push_str("    CMPB #108    ; Check if < 108 (down)\n");
+    out.push_str("    BLO .J1Y_DOWN\n");
+    out.push_str("    CMPB #148    ; Check if > 148 (up)\n");
+    out.push_str("    BHI .J1Y_UP\n");
+    out.push_str("    LDD #0       ; Center\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1Y_DOWN:\n");
+    out.push_str("    LDD #$FFFF   ; Down (-1)\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1Y_UP:\n");
+    out.push_str("    LDD #1       ; Up (+1)\n");
+    out.push_str("    RTS\n\n");
+    
     // Only emit vector phase helper if referenced
     if w.contains("VECTREX_VECTOR_PHASE_BEGIN") {
         if opts.fast_wait {
