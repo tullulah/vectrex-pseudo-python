@@ -113,6 +113,57 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    LDD #1       ; Up (+1)\n");
     out.push_str("    RTS\n\n");
     
+    // Button builtins (commonly used in games)
+    out.push_str("; === BUTTON BUILTIN SUBROUTINES ===\n");
+    out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)\n");
+    out.push_str("; Returns: D = 0 (released), 1 (pressed)\n");
+    out.push_str("J1B1_BUILTIN:\n");
+    out.push_str("    JSR $F1BA    ; Read_Btns\n");
+    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+    out.push_str("    ANDA #$01\n");
+    out.push_str("    BEQ .J1B1_OFF\n");
+    out.push_str("    LDD #1\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1B1_OFF:\n");
+    out.push_str("    LDD #0\n");
+    out.push_str("    RTS\n\n");
+    
+    out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)\n");
+    out.push_str("J1B2_BUILTIN:\n");
+    out.push_str("    JSR $F1BA    ; Read_Btns\n");
+    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+    out.push_str("    ANDA #$02\n");
+    out.push_str("    BEQ .J1B2_OFF\n");
+    out.push_str("    LDD #1\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1B2_OFF:\n");
+    out.push_str("    LDD #0\n");
+    out.push_str("    RTS\n\n");
+    
+    out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)\n");
+    out.push_str("J1B3_BUILTIN:\n");
+    out.push_str("    JSR $F1BA    ; Read_Btns\n");
+    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+    out.push_str("    ANDA #$04\n");
+    out.push_str("    BEQ .J1B3_OFF\n");
+    out.push_str("    LDD #1\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1B3_OFF:\n");
+    out.push_str("    LDD #0\n");
+    out.push_str("    RTS\n\n");
+    
+    out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)\n");
+    out.push_str("J1B4_BUILTIN:\n");
+    out.push_str("    JSR $F1BA    ; Read_Btns\n");
+    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
+    out.push_str("    ANDA #$08\n");
+    out.push_str("    BEQ .J1B4_OFF\n");
+    out.push_str("    LDD #1\n");
+    out.push_str("    RTS\n");
+    out.push_str(".J1B4_OFF:\n");
+    out.push_str("    LDD #0\n");
+    out.push_str("    RTS\n\n");
+    
     // Only emit vector phase helper if referenced
     if w.contains("VECTREX_VECTOR_PHASE_BEGIN") {
         if opts.fast_wait {

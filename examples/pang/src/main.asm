@@ -24,25 +24,37 @@
 ;***************************************************************************
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
-; Must be defined BEFORE builtin helpers that reference them
-RESULT         EQU $C880   ; Main result temporary
-PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)
-PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)
-PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)
-PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)
-PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)
-PSG_DELAY_FRAMES EQU $C8A3   ; Frames to wait before reading next music data (RESULT+$23, 1 byte)
-PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)
-PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)
-PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)
-PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)
-PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)
-PSG_DELAY_FRAMES_DP EQU $A3 ; DP-relative offset (for lwasm compatibility)
-SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)
-SFX_TICK       EQU $C8AA   ; Current frame counter (RESULT+$2A, 2 bytes)
-SFX_ACTIVE     EQU $C8AC   ; Playback state (RESULT+$2C, 1 byte)
-SFX_PHASE      EQU $C8AD   ; Envelope phase: 0=A,1=D,2=S,3=R (RESULT+$2D, 1 byte)
-SFX_VOL        EQU $C8AE   ; Current volume 0-15 (RESULT+$2E, 1 byte)
+; AUTO-GENERATED - All offsets calculated automatically
+; Total RAM used: 37 bytes
+RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
+TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
+TMPRIGHT             EQU $C880+$04   ; Right operand temp (2 bytes)
+TMPPTR               EQU $C880+$06   ; Pointer temp (2 bytes)
+DIV_A                EQU $C880+$08   ; Dividend (2 bytes)
+DIV_B                EQU $C880+$0A   ; Divisor (2 bytes)
+DIV_Q                EQU $C880+$0C   ; Quotient (2 bytes)
+DIV_R                EQU $C880+$0E   ; Remainder (2 bytes)
+TEMP_YX              EQU $C880+$10   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$12   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$13   ; Temporary y storage (1 bytes)
+PSG_MUSIC_PTR        EQU $C880+$14   ; Current music position pointer (2 bytes)
+PSG_MUSIC_START      EQU $C880+$16   ; Music start pointer (for loops) (2 bytes)
+PSG_IS_PLAYING       EQU $C880+$18   ; Playing flag ($00=stopped, $01=playing) (1 bytes)
+PSG_MUSIC_ACTIVE     EQU $C880+$19   ; Set during UPDATE_MUSIC_PSG (1 bytes)
+PSG_FRAME_COUNT      EQU $C880+$1A   ; Frame register write count (1 bytes)
+PSG_DELAY_FRAMES     EQU $C880+$1B   ; Frames to wait before next read (1 bytes)
+SFX_PTR              EQU $C880+$1C   ; Current SFX data pointer (2 bytes)
+SFX_TICK             EQU $C880+$1E   ; Current frame counter (2 bytes)
+SFX_ACTIVE           EQU $C880+$20   ; Playback state ($00=stopped, $01=playing) (1 bytes)
+SFX_PHASE            EQU $C880+$21   ; Envelope phase (0=A,1=D,2=S,3=R) (1 bytes)
+SFX_VOL              EQU $C880+$22   ; Current volume level (0-15) (1 bytes)
+NUM_STR              EQU $C880+$23   ; String buffer for PRINT_NUMBER (2 bytes)
+PSG_MUSIC_PTR_DP   EQU $14  ; DP-relative
+PSG_MUSIC_START_DP EQU $16  ; DP-relative
+PSG_IS_PLAYING_DP  EQU $18  ; DP-relative
+PSG_MUSIC_ACTIVE_DP EQU $19  ; DP-relative
+PSG_FRAME_COUNT_DP EQU $1A  ; DP-relative
+PSG_DELAY_FRAMES_DP EQU $1B  ; DP-relative
 
     JMP START
 
@@ -62,44 +74,113 @@ VECTREX_PRINT_TEXT:
     ; DO NOT RESTORE DP - Keep it at $D0 for subsequent vector drawing
     ; BIOS calls after this will handle DP correctly
     RTS
-VECTREX_PRINT_NUMBER:
-    ; Print number at position
-    ; ARG0 = X position, ARG1 = Y position, ARG2 = number value
-    ; Simple implementation: convert number to string and print
-    LDA VAR_ARG1+1   ; Y position
-    LDB VAR_ARG0+1   ; X position
-    JSR Moveto_d     ; Move to position
-    
-    ; Convert number to string (simple: just show low byte as hex)
-    LDA VAR_ARG2+1   ; Load number value
-    
-    ; Convert high nibble to ASCII
-    LSRA
-    LSRA
-    LSRA
-    LSRA
-    ANDA #$0F
-    CMPA #10
-    BLO PN_DIGIT1
-    ADDA #7          ; A-F
-PN_DIGIT1:
-    ADDA #'0'
-    STA NUM_STR      ; Store first digit
-    
-    ; Convert low nibble to ASCII  
-    LDA VAR_ARG2+1
-    ANDA #$0F
-    CMPA #10
-    BLO PN_DIGIT2
-    ADDA #7          ; A-F
-PN_DIGIT2:
-    ADDA #'0'
-    ORA #$80         ; Set high bit for string termination
-    STA NUM_STR+1    ; Store second digit with high bit
-    
-    ; Print the string
-    LDU #NUM_STR     ; Point to our number string
-    JSR Print_Str_d  ; Print using BIOS
+; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly
+; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.
+; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).
+DRAW_LINE_WRAPPER:
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)
+    STA >$D00C     ; VIA_cntl
+    ; Set DP to hardware registers
+    LDA #$D0
+    TFR A,DP
+    ; ALWAYS set intensity (no optimization)
+    LDA VAR_ARG4+1
+    JSR Intensity_a
+    ; Move to start (y in A, x in B) - use signed byte values
+    LDA VAR_ARG1+1  ; Y start (signed byte)
+    LDB VAR_ARG0+1  ; X start (signed byte)
+    JSR Moveto_d
+    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes
+    ; dx = x1 - x0 (treating as signed)
+    LDD VAR_ARG2    ; x1 (16-bit)
+    SUBD VAR_ARG0   ; subtract x0 (16-bit)
+    ; Clamp D to signed byte range (-128 to +127)
+    CMPD #127
+    BLE DLW_DX_CLAMP_HI_OK
+    LDD #127
+DLW_DX_CLAMP_HI_OK:
+    CMPD #-128
+    BGE DLW_DX_CLAMP_LO_OK
+    LDD #-128
+DLW_DX_CLAMP_LO_OK:
+    STB VLINE_DX    ; Store dx as signed byte
+    ; dy = y1 - y0 (treating as signed)
+    LDD VAR_ARG3    ; y1 (16-bit)
+    SUBD VAR_ARG1   ; subtract y0 (16-bit)
+    ; Clamp D to signed byte range (-128 to +127)
+    CMPD #127
+    BLE DLW_DY_CLAMP_HI_OK
+    LDD #127
+DLW_DY_CLAMP_HI_OK:
+    CMPD #-128
+    BGE DLW_DY_CLAMP_LO_OK
+    LDD #-128
+DLW_DY_CLAMP_LO_OK:
+    STB VLINE_DY    ; Store dy as signed byte
+    ; dx and dy are already clamped to ±127 - no further clamping needed
+    ; Vectrex hardware supports full ±127 delta range
+    LDA VLINE_DX
+    STA VLINE_DX    ; Keep full range
+    LDA VLINE_DY
+    STA VLINE_DY    ; Keep full range
+    ; Clear Vec_Misc_Count for proper timing
+    CLR Vec_Misc_Count
+    ; Draw line (A=dy, B=dx)
+    LDA VLINE_DY
+    LDB VLINE_DX
+    JSR Draw_Line_d
+    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code
+    TFR A,DP
+    RTS
+
+; DRAW_LINE_FAST - optimized version that skips redundant setup
+; Use this for multiple consecutive draws with same intensity
+; Args: (x0,y0,x1,y1) only - intensity must be set beforehand
+DRAW_LINE_FAST:
+    ; Move to start (y in A, x in B) - use signed byte values
+    LDA VAR_ARG1+1  ; Y start (signed byte)
+    LDB VAR_ARG0+1  ; X start (signed byte)
+    JSR Moveto_d
+    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes
+    ; dx = x1 - x0 (treating as signed)
+    LDD VAR_ARG2    ; x1 (16-bit)
+    SUBD VAR_ARG0   ; subtract x0 (16-bit)
+    ; Clamp D to signed byte range (-128 to +127)
+    CMPD #127
+    BLE DLF_DX_CLAMP_HI_OK
+    LDD #127
+DLF_DX_CLAMP_HI_OK:
+    CMPD #-128
+    BGE DLF_DX_CLAMP_LO_OK
+    LDD #-128
+DLF_DX_CLAMP_LO_OK:
+    STB VLINE_DX    ; Store dx as signed byte
+    ; dy = y1 - y0 (treating as signed)
+    LDD VAR_ARG3    ; y1 (16-bit)
+    SUBD VAR_ARG1   ; subtract y0 (16-bit)
+    ; Clamp D to signed byte range (-128 to +127)
+    CMPD #127
+    BLE DLF_DY_CLAMP_HI_OK
+    LDD #127
+DLF_DY_CLAMP_HI_OK:
+    CMPD #-128
+    BGE DLF_DY_CLAMP_LO_OK
+    LDD #-128
+DLF_DY_CLAMP_LO_OK:
+    STB VLINE_DY    ; Store dy as signed byte
+    ; dx and dy are already clamped to ±127 - no further clamping needed
+    ; Vectrex hardware supports full ±127 delta range
+    LDA VLINE_DX
+    STA VLINE_DX    ; Keep full range
+    LDA VLINE_DY
+    STA VLINE_DY    ; Keep full range
+    ; Clear Vec_Misc_Count for proper timing
+    CLR Vec_Misc_Count
+    ; Draw line (A=dy, B=dx)
+    LDA VLINE_DY
+    LDB VLINE_DX
+    JSR Draw_Line_d
     RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
@@ -109,6 +190,9 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
+    RTS
+VECTREX_WAIT_RECAL:
+    JSR Wait_Recal
     RTS
 ; ============================================================================
 ; PSG DIRECT MUSIC PLAYER (inspired by Christman2024/malbanGit)
@@ -626,7 +710,13 @@ RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
 ; Conditionally negates X and/or Y coordinates and deltas
-LDA ,X+                 ; intensity
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
+BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
+LDA ,X+                 ; Otherwise, read intensity from vector data
+BRA DSWM_SET_INTENSITY
+DSWM_USE_OVERRIDE:
+LEAX 1,X                ; Skip intensity byte in vector data
+DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
 PULS A                  ; Restore intensity
@@ -722,7 +812,14 @@ BRA DSWM_LOOP
 DSWM_NEXT_PATH:
 TFR X,D
 PSHS D
-LDA ,X+                 ; Read intensity
+; Check intensity override (same logic as start)
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
+BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
+LDA ,X+                 ; Otherwise, read intensity from vector data
+BRA DSWM_NEXT_SET_INTENSITY
+DSWM_NEXT_USE_OVERRIDE:
+LEAX 1,X                ; Skip intensity byte in vector data
+DSWM_NEXT_SET_INTENSITY:
 PSHS A
 LDB ,X+                 ; y_start
 TST MIRROR_Y
@@ -791,6 +888,7 @@ START:
 
     ; *** DEBUG *** main() function code inline (initialization)
     LDD #0
+    STD RESULT
     STD VAR_SCREEN
     LDD #30
     STD VAR_TITLE_INTENSITY
@@ -803,7 +901,15 @@ START:
     LDD #0
     STD VAR_STAGE
     LDD #0
+    STD VAR_COUNTDOWN_TIMER
+    LDD #0
+    STD VAR_COUNTDOWN_ACTIVE
+    LDD #17
+    STD VAR_NUM_LOCATIONS
+    LDD #0
     STD VAR_CURRENT_LOCATION
+    LDD #0
+    STD VAR_MAX_LEVEL_UNLOCKED
     LDD #60
     STD VAR_LOCATION_GLOW_INTENSITY
     LDD #0
@@ -811,17 +917,101 @@ START:
     LDD #0
     STD VAR_PREV_JOY_X
     LDD #0
+    STD VAR_PREV_JOY_Y
+    LDD #0
+    STD VAR_PREV_BTN_1
+    LDD #0
     STD VAR_INTENSITYVAL
-    ; VPy_LINE:26
-    LDD #80
+    LDD #0
+    STD VAR_PLAYER_X
+    LDD #65436
+    STD VAR_PLAYER_Y
+    LDD #2
+    STD VAR_PLAYER_SPEED
+    ; VPy_LINE:62
+    LDD #0
     STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 26
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:63
+    LDD #0
     STD RESULT
+    LDX RESULT
+    LDU #VAR_MAX_LEVEL_UNLOCKED
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:64
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_JOY_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:65
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_JOY_Y
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:66
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_BTN_1
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:67
+    LDD #60
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_INTENSITY
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:68
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_DIRECTION
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:69
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_SCREEN
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:70
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_TIMER
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:71
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_ACTIVE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:74
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:75
+    LDD #65436
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
 
 MAIN:
     JSR Wait_Recal
@@ -831,55 +1021,23 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-NUM_LOCATIONS EQU 17
+STATE_TITLE EQU 0
+STATE_MAP EQU 1
+STATE_GAME EQU 2
+STATE_LEVEL_COMPLETE EQU 3
+STATE_GAME_OVER EQU 4
 LOOP_BODY:
-    LEAS -10,S ; allocate locals
-    ; DEBUG: Processing 7 statements in loop() body
+    LEAS -12,S ; allocate locals
+    ; DEBUG: Processing 2 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:30
-    LDD #127
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 30
-    JSR VECTREX_SET_INTENSITY
+    ; VPy_LINE:78
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 78
+    JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(0)
-    ; VPy_LINE:33
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 2 - Discriminant(0)
-    ; VPy_LINE:34
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PREV_JOY_X
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:35
-    LDD #60
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 4 - Discriminant(0)
-    ; VPy_LINE:36
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 5 - Discriminant(9)
-    ; VPy_LINE:38
+    ; DEBUG: Statement 1 - Discriminant(9)
+    ; VPy_LINE:81
     LDD VAR_SCREEN
     STD RESULT
     LDD RESULT
@@ -900,7 +1058,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
-    ; VPy_LINE:39
+    ; VPy_LINE:82
     LDD VAR_CURRENT_MUSIC
     STD RESULT
     LDD RESULT
@@ -921,13 +1079,13 @@ CT_6:
 CE_7:
     LDD RESULT
     LBEQ IF_NEXT_5
-    ; VPy_LINE:40
+    ; VPy_LINE:83
 ; PLAY_MUSIC("pang_theme") - play music asset
     LDX #_PANG_THEME_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:41
+    ; VPy_LINE:84
     LDD #0
     STD RESULT
     LDX RESULT
@@ -937,10 +1095,10 @@ CE_7:
     LBRA IF_END_4
 IF_NEXT_5:
 IF_END_4:
-    ; VPy_LINE:43
+    ; VPy_LINE:86
     JSR DRAW_TITLE_SCREEN
-    ; VPy_LINE:45
-; NATIVE_CALL: J1_BUTTON_1 at line 45
+    ; VPy_LINE:88
+; NATIVE_CALL: J1_BUTTON_1 at line 88
 ; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -954,8 +1112,8 @@ IF_END_4:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:46
-; NATIVE_CALL: J1_BUTTON_2 at line 46
+    ; VPy_LINE:89
+; NATIVE_CALL: J1_BUTTON_2 at line 89
 ; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -969,8 +1127,8 @@ IF_END_4:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:47
-; NATIVE_CALL: J1_BUTTON_3 at line 47
+    ; VPy_LINE:90
+; NATIVE_CALL: J1_BUTTON_3 at line 90
 ; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -984,8 +1142,8 @@ IF_END_4:
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:48
-; NATIVE_CALL: J1_BUTTON_4 at line 48
+    ; VPy_LINE:91
+; NATIVE_CALL: J1_BUTTON_4 at line 91
 ; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
     JSR $F1BA    ; Read_Btns
     LDA $C80F    ; Vec_Btn_State
@@ -999,7 +1157,7 @@ IF_END_4:
     STD RESULT
     LDX RESULT
     STX 6 ,S
-    ; VPy_LINE:50
+    ; VPy_LINE:93
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -1107,18 +1265,25 @@ OR_TRUE_10:
 OR_END_11:
     LDD RESULT
     LBEQ IF_NEXT_9
-    ; VPy_LINE:52
+    ; VPy_LINE:94
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_SCREEN
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:53
+    ; VPy_LINE:95
     LDD #65535
     STD RESULT
     LDX RESULT
     LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:96
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_DELAY
     STU TMPPTR
     STX ,U
     LBRA IF_END_8
@@ -1126,9 +1291,6 @@ IF_NEXT_9:
 IF_END_8:
     LBRA IF_END_0
 IF_NEXT_1:
-IF_END_0:
-    ; DEBUG: Statement 6 - Discriminant(9)
-    ; VPy_LINE:55
     LDD VAR_SCREEN
     STD RESULT
     LDD RESULT
@@ -1139,17 +1301,17 @@ IF_END_0:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_26
+    BEQ CT_25
     LDD #0
     STD RESULT
-    BRA CE_27
-CT_26:
+    BRA CE_26
+CT_25:
     LDD #1
     STD RESULT
-CE_27:
+CE_26:
     LDD RESULT
-    LBEQ IF_NEXT_25
-    ; VPy_LINE:57
+    LBEQ IF_NEXT_24
+    ; VPy_LINE:100
     LDD VAR_DELAY
     STD RESULT
     LDD RESULT
@@ -1160,26 +1322,26 @@ CE_27:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_30
+    BEQ CT_29
     LDD #0
     STD RESULT
-    BRA CE_31
-CT_30:
+    BRA CE_30
+CT_29:
     LDD #1
     STD RESULT
-CE_31:
+CE_30:
     LDD RESULT
-    LBEQ IF_NEXT_29
-    ; VPy_LINE:58
-; NATIVE_CALL: STOP_MUSIC at line 58
+    LBEQ IF_NEXT_28
+    ; VPy_LINE:101
+; NATIVE_CALL: STOP_MUSIC at line 101
 ; STOP_MUSIC() - stop background music
     JSR STOP_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    LBRA IF_END_28
-IF_NEXT_29:
-IF_END_28:
-    ; VPy_LINE:60
+    LBRA IF_END_27
+IF_NEXT_28:
+IF_END_27:
+    ; VPy_LINE:103
     LDD VAR_CURRENT_MUSIC
     STD RESULT
     LDD RESULT
@@ -1190,16 +1352,16 @@ IF_END_28:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BNE CT_34
+    BNE CT_33
     LDD #0
     STD RESULT
-    BRA CE_35
-CT_34:
+    BRA CE_34
+CT_33:
     LDD #1
     STD RESULT
-CE_35:
+CE_34:
     LDD RESULT
-    BEQ AND_FALSE_36
+    BEQ AND_FALSE_35
     LDD VAR_DELAY
     STD RESULT
     LDD RESULT
@@ -1210,42 +1372,42 @@ CE_35:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_38
+    BEQ CT_37
     LDD #0
     STD RESULT
-    BRA CE_39
-CT_38:
+    BRA CE_38
+CT_37:
     LDD #1
     STD RESULT
-CE_39:
+CE_38:
     LDD RESULT
-    BEQ AND_FALSE_36
+    BEQ AND_FALSE_35
     LDD #1
     STD RESULT
-    BRA AND_END_37
-AND_FALSE_36:
+    BRA AND_END_36
+AND_FALSE_35:
     LDD #0
     STD RESULT
-AND_END_37:
+AND_END_36:
     LDD RESULT
-    LBEQ IF_NEXT_33
-    ; VPy_LINE:61
+    LBEQ IF_NEXT_32
+    ; VPy_LINE:104
 ; PLAY_MUSIC("map_theme") - play music asset
     LDX #_MAP_THEME_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:62
+    ; VPy_LINE:105
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_CURRENT_MUSIC
     STU TMPPTR
     STX ,U
-    LBRA IF_END_32
-IF_NEXT_33:
-IF_END_32:
-    ; VPy_LINE:64
+    LBRA IF_END_31
+IF_NEXT_32:
+IF_END_31:
+    ; VPy_LINE:107
     LDD VAR_DELAY
     STD RESULT
     LDD RESULT
@@ -1256,17 +1418,17 @@ IF_END_32:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_42
+    BLT CT_41
     LDD #0
     STD RESULT
-    BRA CE_43
-CT_42:
+    BRA CE_42
+CT_41:
     LDD #1
     STD RESULT
-CE_43:
+CE_42:
     LDD RESULT
-    LBEQ IF_NEXT_41
-    ; VPy_LINE:65
+    LBEQ IF_NEXT_40
+    ; VPy_LINE:108
     LDD VAR_DELAY
     STD RESULT
     LDD RESULT
@@ -1282,11 +1444,11 @@ CE_43:
     LDU #VAR_DELAY
     STU TMPPTR
     STX ,U
-    LBRA IF_END_40
-IF_NEXT_41:
-IF_END_40:
-    ; VPy_LINE:68
-; NATIVE_CALL: J1_X at line 68
+    LBRA IF_END_39
+IF_NEXT_40:
+IF_END_39:
+    ; VPy_LINE:110
+; NATIVE_CALL: J1_X at line 110
 ; J1_X() - Read Joystick 1 X axis (Digital from RAM)
 ; Frontend writes unsigned 0-255 to $CF00 (128=center)
     LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
@@ -1306,7 +1468,28 @@ J1X_END:
     STD RESULT
     LDX RESULT
     STX 8 ,S
-    ; VPy_LINE:71
+    ; VPy_LINE:111
+; NATIVE_CALL: J1_Y at line 111
+; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF01 (128=center)
+    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)
+; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)
+    CMPB #108    ; Check if < 108 (down)
+    BLO J1Y_DOWN ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (up)
+    BHI J1Y_UP   ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1Y_END
+J1Y_DOWN:
+    LDD #$FFFF   ; Down (-1)
+    BRA J1Y_END
+J1Y_UP:
+    LDD #1       ; Up (+1)
+J1Y_END:
+    STD RESULT
+    LDX RESULT
+    STX 10 ,S
+    ; VPy_LINE:113
     LDD 8 ,S
     STD RESULT
     LDD RESULT
@@ -1317,16 +1500,16 @@ J1X_END:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_46
+    BEQ CT_45
     LDD #0
     STD RESULT
-    BRA CE_47
-CT_46:
+    BRA CE_46
+CT_45:
     LDD #1
     STD RESULT
-CE_47:
+CE_46:
     LDD RESULT
-    BEQ AND_FALSE_48
+    BEQ AND_FALSE_47
     LDD VAR_PREV_JOY_X
     STD RESULT
     LDD RESULT
@@ -1337,56 +1520,47 @@ CE_47:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BNE CT_50
+    BNE CT_49
     LDD #0
     STD RESULT
-    BRA CE_51
-CT_50:
+    BRA CE_50
+CT_49:
     LDD #1
     STD RESULT
-CE_51:
+CE_50:
     LDD RESULT
-    BEQ AND_FALSE_48
+    BEQ AND_FALSE_47
     LDD #1
     STD RESULT
-    BRA AND_END_49
-AND_FALSE_48:
+    BRA AND_END_48
+AND_FALSE_47:
     LDD #0
     STD RESULT
-AND_END_49:
+AND_END_48:
     LDD RESULT
-    LBEQ IF_NEXT_45
-    ; VPy_LINE:73
+    LBEQ IF_NEXT_44
+    ; VPy_LINE:114
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #17
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
+    LDD VAR_MAX_LEVEL_UNLOCKED
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_54
+    BLT CT_53
     LDD #0
     STD RESULT
-    BRA CE_55
-CT_54:
+    BRA CE_54
+CT_53:
     LDD #1
     STD RESULT
-CE_55:
+CE_54:
     LDD RESULT
-    LBEQ IF_NEXT_53
-    ; VPy_LINE:74
+    LBEQ IF_NEXT_52
+    ; VPy_LINE:115
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -1402,11 +1576,11 @@ CE_55:
     LDU #VAR_CURRENT_LOCATION
     STU TMPPTR
     STX ,U
-    LBRA IF_END_52
-IF_NEXT_53:
-IF_END_52:
-    LBRA IF_END_44
-IF_NEXT_45:
+    LBRA IF_END_51
+IF_NEXT_52:
+IF_END_51:
+    LBRA IF_END_43
+IF_NEXT_44:
     LDD 8 ,S
     STD RESULT
     LDD RESULT
@@ -1455,8 +1629,8 @@ AND_FALSE_58:
     STD RESULT
 AND_END_59:
     LDD RESULT
-    LBEQ IF_END_44
-    ; VPy_LINE:77
+    LBEQ IF_NEXT_55
+    ; VPy_LINE:117
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -1477,7 +1651,7 @@ CT_64:
 CE_65:
     LDD RESULT
     LBEQ IF_NEXT_63
-    ; VPy_LINE:78
+    ; VPy_LINE:118
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -1496,37 +1670,2063 @@ CE_65:
     LBRA IF_END_62
 IF_NEXT_63:
 IF_END_62:
-    LBRA IF_END_44
-IF_END_44:
-    ; VPy_LINE:80
+    LBRA IF_END_43
+IF_NEXT_55:
+    LDD 10 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_67
+    LDD #0
+    STD RESULT
+    BRA CE_68
+CT_67:
+    LDD #1
+    STD RESULT
+CE_68:
+    LDD RESULT
+    BEQ AND_FALSE_69
+    LDD VAR_PREV_JOY_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_71
+    LDD #0
+    STD RESULT
+    BRA CE_72
+CT_71:
+    LDD #1
+    STD RESULT
+CE_72:
+    LDD RESULT
+    BEQ AND_FALSE_69
+    LDD #1
+    STD RESULT
+    BRA AND_END_70
+AND_FALSE_69:
+    LDD #0
+    STD RESULT
+AND_END_70:
+    LDD RESULT
+    LBEQ IF_NEXT_66
+    ; VPy_LINE:120
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_MAX_LEVEL_UNLOCKED
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_75
+    LDD #0
+    STD RESULT
+    BRA CE_76
+CT_75:
+    LDD #1
+    STD RESULT
+CE_76:
+    LDD RESULT
+    LBEQ IF_NEXT_74
+    ; VPy_LINE:121
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_73
+IF_NEXT_74:
+IF_END_73:
+    LBRA IF_END_43
+IF_NEXT_66:
+    LDD 10 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_77
+    LDD #0
+    STD RESULT
+    BRA CE_78
+CT_77:
+    LDD #1
+    STD RESULT
+CE_78:
+    LDD RESULT
+    BEQ AND_FALSE_79
+    LDD VAR_PREV_JOY_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_81
+    LDD #0
+    STD RESULT
+    BRA CE_82
+CT_81:
+    LDD #1
+    STD RESULT
+CE_82:
+    LDD RESULT
+    BEQ AND_FALSE_79
+    LDD #1
+    STD RESULT
+    BRA AND_END_80
+AND_FALSE_79:
+    LDD #0
+    STD RESULT
+AND_END_80:
+    LDD RESULT
+    LBEQ IF_END_43
+    ; VPy_LINE:123
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_85
+    LDD #0
+    STD RESULT
+    BRA CE_86
+CT_85:
+    LDD #1
+    STD RESULT
+CE_86:
+    LDD RESULT
+    LBEQ IF_NEXT_84
+    ; VPy_LINE:124
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_83
+IF_NEXT_84:
+IF_END_83:
+    LBRA IF_END_43
+IF_END_43:
+    ; VPy_LINE:126
     LDD 8 ,S
     STD RESULT
     LDX RESULT
     LDU #VAR_PREV_JOY_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:82
+    ; VPy_LINE:127
+    LDD 10 ,S
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_JOY_Y
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:129
+; NATIVE_CALL: J1_BUTTON_1 at line 129
+; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$01
+    BEQ .j1b1_not_pressed
+    LDD #1
+    BRA .j1b1_done
+.j1b1_not_pressed:
+    LDD #0
+.j1b1_done:
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:130
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_89
+    LDD #0
+    STD RESULT
+    BRA CE_90
+CT_89:
+    LDD #1
+    STD RESULT
+CE_90:
+    LDD RESULT
+    BEQ AND_FALSE_91
+    LDD VAR_PREV_BTN_1
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_93
+    LDD #0
+    STD RESULT
+    BRA CE_94
+CT_93:
+    LDD #1
+    STD RESULT
+CE_94:
+    LDD RESULT
+    BEQ AND_FALSE_91
+    LDD #1
+    STD RESULT
+    BRA AND_END_92
+AND_FALSE_91:
+    LDD #0
+    STD RESULT
+AND_END_92:
+    LDD RESULT
+    LBEQ IF_NEXT_88
+    ; VPy_LINE:131
+    LDD #2
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_SCREEN
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:132
+    LDD #180
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_TIMER
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:133
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_ACTIVE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:134
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:135
+    LDD #65535
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_87
+IF_NEXT_88:
+IF_END_87:
+    ; VPy_LINE:137
+    LDD 0 ,S
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_BTN_1
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:139
     JSR DRAW_MAP_SCREEN
-    LBRA IF_END_24
-IF_NEXT_25:
-IF_END_24:
+    LBRA IF_END_0
+IF_NEXT_24:
+    LDD VAR_SCREEN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_95
+    LDD #0
+    STD RESULT
+    BRA CE_96
+CT_95:
+    LDD #1
+    STD RESULT
+CE_96:
+    LDD RESULT
+    LBEQ IF_END_0
+    ; VPy_LINE:143
+    LDD VAR_COUNTDOWN_ACTIVE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_99
+    LDD #0
+    STD RESULT
+    BRA CE_100
+CT_99:
+    LDD #1
+    STD RESULT
+CE_100:
+    LDD RESULT
+    LBEQ IF_NEXT_98
+    ; VPy_LINE:144
+    JSR DRAW_COUNTDOWN_SCREEN
+    ; VPy_LINE:145
+    LDD VAR_COUNTDOWN_TIMER
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_TIMER
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:147
+    LDD VAR_COUNTDOWN_TIMER
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLE CT_103
+    LDD #0
+    STD RESULT
+    BRA CE_104
+CT_103:
+    LDD #1
+    STD RESULT
+CE_104:
+    LDD RESULT
+    LBEQ IF_NEXT_102
+    ; VPy_LINE:148
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_ACTIVE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:149
+; PLAY_MUSIC("map_theme") - play music asset
+    LDX #_MAP_THEME_MUSIC
+    JSR PLAY_MUSIC_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:150
+    LDD #2
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_101
+IF_NEXT_102:
+IF_END_101:
+    LBRA IF_END_97
+IF_NEXT_98:
+    ; VPy_LINE:152
+    JSR HANDLE_GAMEPLAY
+IF_END_97:
+    LBRA IF_END_0
+IF_END_0:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (at end)
-    LEAS 10,S ; free locals
+    LEAS 12,S ; free locals
     RTS
 
-DRAW_MAP_SCREEN: ; function
-; --- function draw_map_screen ---
-    ; VPy_LINE:86
+HANDLE_GAMEPLAY: ; function
+; --- function handle_gameplay ---
+    LEAS -2,S ; allocate locals
+    ; VPy_LINE:155
+; NATIVE_CALL: J1_X at line 155
+; J1_X() - Read Joystick 1 X axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF00 (128=center)
+    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
+; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)
+    CMPB #108    ; Check if < 108 (left)
+    BLO J1X_LEFT ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (right)
+    BHI J1X_RIGHT ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1X_END
+J1X_LEFT:
+    LDD #$FFFF   ; Left (-1)
+    BRA J1X_END
+J1X_RIGHT:
+    LDD #1       ; Right (+1)
+J1X_END:
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:156
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_107
+    LDD #0
+    STD RESULT
+    BRA CE_108
+CT_107:
+    LDD #1
+    STD RESULT
+CE_108:
+    LDD RESULT
+    LBEQ IF_NEXT_106
+    ; VPy_LINE:157
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_PLAYER_SPEED
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:158
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65416
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_111
+    LDD #0
+    STD RESULT
+    BRA CE_112
+CT_111:
+    LDD #1
+    STD RESULT
+CE_112:
+    LDD RESULT
+    LBEQ IF_NEXT_110
+    ; VPy_LINE:159
+    LDD #65416
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_109
+IF_NEXT_110:
+IF_END_109:
+    LBRA IF_END_105
+IF_NEXT_106:
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_113
+    LDD #0
+    STD RESULT
+    BRA CE_114
+CT_113:
+    LDD #1
+    STD RESULT
+CE_114:
+    LDD RESULT
+    LBEQ IF_END_105
+    ; VPy_LINE:161
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_PLAYER_SPEED
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:162
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #120
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_117
+    LDD #0
+    STD RESULT
+    BRA CE_118
+CT_117:
+    LDD #1
+    STD RESULT
+CE_118:
+    LDD RESULT
+    LBEQ IF_NEXT_116
+    ; VPy_LINE:163
+    LDD #120
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_115
+IF_NEXT_116:
+IF_END_115:
+    LBRA IF_END_105
+IF_END_105:
+    ; VPy_LINE:165
+    JSR DRAW_GAME_SCENE
+    LEAS 2,S ; free locals
+    RTS
+
+HANDLE_TITLE_SCREEN: ; function
+; --- function handle_title_screen ---
+    LEAS -8,S ; allocate locals
+    ; VPy_LINE:169
+    LDD VAR_CURRENT_MUSIC
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_121
+    LDD #0
+    STD RESULT
+    BRA CE_122
+CT_121:
+    LDD #1
+    STD RESULT
+CE_122:
+    LDD RESULT
+    LBEQ IF_NEXT_120
+    ; VPy_LINE:170
+; PLAY_MUSIC("pang_theme") - play music asset
+    LDX #_PANG_THEME_MUSIC
+    JSR PLAY_MUSIC_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:171
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_119
+IF_NEXT_120:
+IF_END_119:
+    ; VPy_LINE:173
+    JSR DRAW_TITLE_SCREEN
+    ; VPy_LINE:176
+; NATIVE_CALL: J1_BUTTON_1 at line 176
+; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$01
+    BEQ .j1b1_not_pressed
+    LDD #1
+    BRA .j1b1_done
+.j1b1_not_pressed:
+    LDD #0
+.j1b1_done:
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:177
+; NATIVE_CALL: J1_BUTTON_2 at line 177
+; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$02
+    BEQ .j1b2_not_pressed
+    LDD #1
+    BRA .j1b2_done
+.j1b2_not_pressed:
+    LDD #0
+.j1b2_done:
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; VPy_LINE:178
+; NATIVE_CALL: J1_BUTTON_3 at line 178
+; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$04
+    BEQ .j1b3_not_pressed
+    LDD #1
+    BRA .j1b3_done
+.j1b3_not_pressed:
+    LDD #0
+.j1b3_done:
+    STD RESULT
+    LDX RESULT
+    STX 4 ,S
+    ; VPy_LINE:179
+; NATIVE_CALL: J1_BUTTON_4 at line 179
+; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$08
+    BEQ .j1b4_not_pressed
+    LDD #1
+    BRA .j1b4_done
+.j1b4_not_pressed:
+    LDD #0
+.j1b4_done:
+    STD RESULT
+    LDX RESULT
+    STX 6 ,S
+    ; VPy_LINE:181
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_131
+    LDD #0
+    STD RESULT
+    BRA CE_132
+CT_131:
+    LDD #1
+    STD RESULT
+CE_132:
+    LDD RESULT
+    BNE OR_TRUE_129
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_133
+    LDD #0
+    STD RESULT
+    BRA CE_134
+CT_133:
+    LDD #1
+    STD RESULT
+CE_134:
+    LDD RESULT
+    BNE OR_TRUE_129
+    LDD #0
+    STD RESULT
+    BRA OR_END_130
+OR_TRUE_129:
+    LDD #1
+    STD RESULT
+OR_END_130:
+    LDD RESULT
+    BNE OR_TRUE_127
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_135
+    LDD #0
+    STD RESULT
+    BRA CE_136
+CT_135:
+    LDD #1
+    STD RESULT
+CE_136:
+    LDD RESULT
+    BNE OR_TRUE_127
+    LDD #0
+    STD RESULT
+    BRA OR_END_128
+OR_TRUE_127:
+    LDD #1
+    STD RESULT
+OR_END_128:
+    LDD RESULT
+    BNE OR_TRUE_125
+    LDD 6 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_137
+    LDD #0
+    STD RESULT
+    BRA CE_138
+CT_137:
+    LDD #1
+    STD RESULT
+CE_138:
+    LDD RESULT
+    BNE OR_TRUE_125
+    LDD #0
+    STD RESULT
+    BRA OR_END_126
+OR_TRUE_125:
+    LDD #1
+    STD RESULT
+OR_END_126:
+    LDD RESULT
+    LBEQ IF_NEXT_124
+    ; VPy_LINE:182
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_SCREEN
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:183
+    LDD #65535
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:184
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_DELAY
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_123
+IF_NEXT_124:
+IF_END_123:
+    LEAS 8,S ; free locals
+    RTS
+
+HANDLE_MAP_SCREEN: ; function
+; --- function handle_map_screen ---
+    LEAS -6,S ; allocate locals
+    ; VPy_LINE:188
+    LDD VAR_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_141
+    LDD #0
+    STD RESULT
+    BRA CE_142
+CT_141:
+    LDD #1
+    STD RESULT
+CE_142:
+    LDD RESULT
+    LBEQ IF_NEXT_140
+    ; VPy_LINE:189
+; NATIVE_CALL: STOP_MUSIC at line 189
+; STOP_MUSIC() - stop background music
+    JSR STOP_MUSIC_RUNTIME
+    LDD #0
+    STD RESULT
+    LBRA IF_END_139
+IF_NEXT_140:
+IF_END_139:
+    ; VPy_LINE:191
+    LDD VAR_CURRENT_MUSIC
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_145
+    LDD #0
+    STD RESULT
+    BRA CE_146
+CT_145:
+    LDD #1
+    STD RESULT
+CE_146:
+    LDD RESULT
+    BEQ AND_FALSE_147
+    LDD VAR_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_149
+    LDD #0
+    STD RESULT
+    BRA CE_150
+CT_149:
+    LDD #1
+    STD RESULT
+CE_150:
+    LDD RESULT
+    BEQ AND_FALSE_147
+    LDD #1
+    STD RESULT
+    BRA AND_END_148
+AND_FALSE_147:
+    LDD #0
+    STD RESULT
+AND_END_148:
+    LDD RESULT
+    LBEQ IF_NEXT_144
+    ; VPy_LINE:192
+; PLAY_MUSIC("map_theme") - play music asset
+    LDX #_MAP_THEME_MUSIC
+    JSR PLAY_MUSIC_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:193
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_143
+IF_NEXT_144:
+IF_END_143:
+    ; VPy_LINE:195
+    LDD VAR_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_153
+    LDD #0
+    STD RESULT
+    BRA CE_154
+CT_153:
+    LDD #1
+    STD RESULT
+CE_154:
+    LDD RESULT
+    LBEQ IF_NEXT_152
+    ; VPy_LINE:196
+    LDD VAR_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_DELAY
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_151
+IF_NEXT_152:
+IF_END_151:
+    ; VPy_LINE:199
+; NATIVE_CALL: J1_X at line 199
+; J1_X() - Read Joystick 1 X axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF00 (128=center)
+    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
+; Convert unsigned to digital: <108=left(-1), 108-148=center(0), >148=right(+1)
+    CMPB #108    ; Check if < 108 (left)
+    BLO J1X_LEFT ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (right)
+    BHI J1X_RIGHT ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1X_END
+J1X_LEFT:
+    LDD #$FFFF   ; Left (-1)
+    BRA J1X_END
+J1X_RIGHT:
+    LDD #1       ; Right (+1)
+J1X_END:
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; VPy_LINE:200
+; NATIVE_CALL: J1_Y at line 200
+; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)
+; Frontend writes unsigned 0-255 to $CF01 (128=center)
+    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)
+; Convert unsigned to digital: <108=down(-1), 108-148=center(0), >148=up(+1)
+    CMPB #108    ; Check if < 108 (down)
+    BLO J1Y_DOWN ; Branch if lower (unsigned)
+    CMPB #148    ; Check if > 148 (up)
+    BHI J1Y_UP   ; Branch if higher (unsigned)
+    LDD #0       ; Center
+    BRA J1Y_END
+J1Y_DOWN:
+    LDD #$FFFF   ; Down (-1)
+    BRA J1Y_END
+J1Y_UP:
+    LDD #1       ; Up (+1)
+J1Y_END:
+    STD RESULT
+    LDX RESULT
+    STX 4 ,S
+    ; VPy_LINE:203
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_157
+    LDD #0
+    STD RESULT
+    BRA CE_158
+CT_157:
+    LDD #1
+    STD RESULT
+CE_158:
+    LDD RESULT
+    BEQ AND_FALSE_159
+    LDD VAR_PREV_JOY_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_161
+    LDD #0
+    STD RESULT
+    BRA CE_162
+CT_161:
+    LDD #1
+    STD RESULT
+CE_162:
+    LDD RESULT
+    BEQ AND_FALSE_159
+    LDD #1
+    STD RESULT
+    BRA AND_END_160
+AND_FALSE_159:
+    LDD #0
+    STD RESULT
+AND_END_160:
+    LDD RESULT
+    LBEQ IF_NEXT_156
+    ; VPy_LINE:204
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_MAX_LEVEL_UNLOCKED
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_165
+    LDD #0
+    STD RESULT
+    BRA CE_166
+CT_165:
+    LDD #1
+    STD RESULT
+CE_166:
+    LDD RESULT
+    LBEQ IF_NEXT_164
+    ; VPy_LINE:205
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_163
+IF_NEXT_164:
+IF_END_163:
+    LBRA IF_END_155
+IF_NEXT_156:
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_168
+    LDD #0
+    STD RESULT
+    BRA CE_169
+CT_168:
+    LDD #1
+    STD RESULT
+CE_169:
+    LDD RESULT
+    BEQ AND_FALSE_170
+    LDD VAR_PREV_JOY_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_172
+    LDD #0
+    STD RESULT
+    BRA CE_173
+CT_172:
+    LDD #1
+    STD RESULT
+CE_173:
+    LDD RESULT
+    BEQ AND_FALSE_170
+    LDD #1
+    STD RESULT
+    BRA AND_END_171
+AND_FALSE_170:
+    LDD #0
+    STD RESULT
+AND_END_171:
+    LDD RESULT
+    LBEQ IF_NEXT_167
+    ; VPy_LINE:207
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_176
+    LDD #0
+    STD RESULT
+    BRA CE_177
+CT_176:
+    LDD #1
+    STD RESULT
+CE_177:
+    LDD RESULT
+    LBEQ IF_NEXT_175
+    ; VPy_LINE:208
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_174
+IF_NEXT_175:
+IF_END_174:
+    LBRA IF_END_155
+IF_NEXT_167:
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_179
+    LDD #0
+    STD RESULT
+    BRA CE_180
+CT_179:
+    LDD #1
+    STD RESULT
+CE_180:
+    LDD RESULT
+    BEQ AND_FALSE_181
+    LDD VAR_PREV_JOY_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_183
+    LDD #0
+    STD RESULT
+    BRA CE_184
+CT_183:
+    LDD #1
+    STD RESULT
+CE_184:
+    LDD RESULT
+    BEQ AND_FALSE_181
+    LDD #1
+    STD RESULT
+    BRA AND_END_182
+AND_FALSE_181:
+    LDD #0
+    STD RESULT
+AND_END_182:
+    LDD RESULT
+    LBEQ IF_NEXT_178
+    ; VPy_LINE:210
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD VAR_MAX_LEVEL_UNLOCKED
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_187
+    LDD #0
+    STD RESULT
+    BRA CE_188
+CT_187:
+    LDD #1
+    STD RESULT
+CE_188:
+    LDD RESULT
+    LBEQ IF_NEXT_186
+    ; VPy_LINE:211
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_185
+IF_NEXT_186:
+IF_END_185:
+    LBRA IF_END_155
+IF_NEXT_178:
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_189
+    LDD #0
+    STD RESULT
+    BRA CE_190
+CT_189:
+    LDD #1
+    STD RESULT
+CE_190:
+    LDD RESULT
+    BEQ AND_FALSE_191
+    LDD VAR_PREV_JOY_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #65535
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BNE CT_193
+    LDD #0
+    STD RESULT
+    BRA CE_194
+CT_193:
+    LDD #1
+    STD RESULT
+CE_194:
+    LDD RESULT
+    BEQ AND_FALSE_191
+    LDD #1
+    STD RESULT
+    BRA AND_END_192
+AND_FALSE_191:
+    LDD #0
+    STD RESULT
+AND_END_192:
+    LDD RESULT
+    LBEQ IF_END_155
+    ; VPy_LINE:213
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_197
+    LDD #0
+    STD RESULT
+    BRA CE_198
+CT_197:
+    LDD #1
+    STD RESULT
+CE_198:
+    LDD RESULT
+    LBEQ IF_NEXT_196
+    ; VPy_LINE:214
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_LOCATION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_195
+IF_NEXT_196:
+IF_END_195:
+    LBRA IF_END_155
+IF_END_155:
+    ; VPy_LINE:216
+    LDD 2 ,S
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_JOY_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:217
+    LDD 4 ,S
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_JOY_Y
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:220
+; NATIVE_CALL: J1_BUTTON_1 at line 220
+; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$01
+    BEQ .j1b1_not_pressed
+    LDD #1
+    BRA .j1b1_done
+.j1b1_not_pressed:
+    LDD #0
+.j1b1_done:
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:221
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_201
+    LDD #0
+    STD RESULT
+    BRA CE_202
+CT_201:
+    LDD #1
+    STD RESULT
+CE_202:
+    LDD RESULT
+    BEQ AND_FALSE_203
+    LDD VAR_PREV_BTN_1
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_205
+    LDD #0
+    STD RESULT
+    BRA CE_206
+CT_205:
+    LDD #1
+    STD RESULT
+CE_206:
+    LDD RESULT
+    BEQ AND_FALSE_203
+    LDD #1
+    STD RESULT
+    BRA AND_END_204
+AND_FALSE_203:
+    LDD #0
+    STD RESULT
+AND_END_204:
+    LDD RESULT
+    LBEQ IF_NEXT_200
+    ; VPy_LINE:223
+    LDD #2
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_SCREEN
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:224
+    LDD #180
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_TIMER
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:225
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_ACTIVE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:226
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:227
+    LDD #65535
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_199
+IF_NEXT_200:
+IF_END_199:
+    ; VPy_LINE:229
+    LDD 0 ,S
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PREV_BTN_1
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:231
+    JSR DRAW_MAP_SCREEN
+    LEAS 6,S ; free locals
+    RTS
+
+HANDLE_GAME_SCREEN: ; function
+; --- function handle_game_screen ---
+    ; VPy_LINE:235
+    LDD VAR_COUNTDOWN_ACTIVE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_209
+    LDD #0
+    STD RESULT
+    BRA CE_210
+CT_209:
+    LDD #1
+    STD RESULT
+CE_210:
+    LDD RESULT
+    LBEQ IF_NEXT_208
+    ; VPy_LINE:236
+    JSR DRAW_COUNTDOWN_SCREEN
+    ; VPy_LINE:237
+    LDD VAR_COUNTDOWN_TIMER
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_TIMER
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:239
+    LDD VAR_COUNTDOWN_TIMER
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLE CT_213
+    LDD #0
+    STD RESULT
+    BRA CE_214
+CT_213:
+    LDD #1
+    STD RESULT
+CE_214:
+    LDD RESULT
+    LBEQ IF_NEXT_212
+    ; VPy_LINE:240
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_COUNTDOWN_ACTIVE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:242
+; PLAY_MUSIC("map_theme") - play music asset
+    LDX #_MAP_THEME_MUSIC
+    JSR PLAY_MUSIC_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:243
+    LDD #2
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_CURRENT_MUSIC
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_211
+IF_NEXT_212:
+IF_END_211:
+    ; VPy_LINE:245
+    RTS
+    LBRA IF_END_207
+IF_NEXT_208:
+IF_END_207:
+    RTS
+
+DRAW_COUNTDOWN_SCREEN: ; function
+; --- function draw_countdown_screen ---
+    LEAS -2,S ; allocate locals
+    ; VPy_LINE:251
     LDD #100
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 86
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 251
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:90
+    ; VPy_LINE:254
+; PRINT_TEXT(x, y, text, height, width) - custom size
+    LDD #65532
+    STD RESULT
+    LDA RESULT+1  ; Height (negative value)
+    STA $C82A     ; Vec_Text_Height
+    LDD #32
+    STD RESULT
+    LDA RESULT+1  ; Width (positive value)
+    STA $C82B     ; Vec_Text_Width
+    LDD #65409
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    ; ===== Const array indexing: location_names =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_2
+    LDD TMPPTR
+    LEAX D,X
+    ; String array - load pointer from table
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 254
+    JSR VECTREX_PRINT_TEXT
+    LDA #$F8      ; Default height (-8 in two's complement)
+    STA $C82A     ; Restore Vec_Text_Height
+    LDA #72       ; Default width (72)
+    STA $C82B     ; Restore Vec_Text_Width
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:257
+    LDD #127
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 257
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:258
+; PRINT_TEXT(x, y, text, height, width) - custom size
+    LDD #65528
+    STD RESULT
+    LDA RESULT+1  ; Height (negative value)
+    STA $C82A     ; Vec_Text_Height
+    LDD #72
+    STD RESULT
+    LDA RESULT+1  ; Width (positive value)
+    STA $C82B     ; Vec_Text_Width
+    LDD #65486
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_10
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 258
+    JSR VECTREX_PRINT_TEXT
+    LDA #$F8      ; Default height (-8 in two's complement)
+    STA $C82A     ; Restore Vec_Text_Height
+    LDA #72       ; Default width (72)
+    STA $C82B     ; Restore Vec_Text_Width
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:261
+    LDD VAR_COUNTDOWN_TIMER
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    STD DIV_A
+    LDD TMPRIGHT
+    STD DIV_B
+    JSR DIV16
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:262
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_217
+    LDD #0
+    STD RESULT
+    BRA CE_218
+CT_217:
+    LDD #1
+    STD RESULT
+CE_218:
+    LDD RESULT
+    LBEQ IF_NEXT_216
+    ; VPy_LINE:263
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #65526
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65496
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_2
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 263
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_215
+IF_NEXT_216:
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_220
+    LDD #0
+    STD RESULT
+    BRA CE_221
+CT_220:
+    LDD #1
+    STD RESULT
+CE_221:
+    LDD RESULT
+    LBEQ IF_NEXT_219
+    ; VPy_LINE:265
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #65526
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65496
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_1
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 265
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_215
+IF_NEXT_219:
+    ; VPy_LINE:267
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #65526
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65496
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_0
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 267
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_215:
+    LEAS 2,S ; free locals
+    RTS
+
+DRAW_GAME_SCENE: ; function
+; --- function draw_game_scene ---
+    ; VPy_LINE:271
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 271
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:272
+    LDA #$D0
+    TFR A,DP
+    LDA #$50
+    JSR Intensity_a
+    CLR Vec_Misc_Count
+    LDA #$00
+    LDB #$F0
+    JSR Draw_Line_d
+    LDA #$C8
+    TFR A,DP
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:275
+    LDD #127
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 275
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:276
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65436
+    STD VAR_ARG1
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+    LDD #65456
+    STD VAR_ARG3
+    LDD #127
+    STD VAR_ARG4
+    JSR DRAW_LINE_WRAPPER
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:281
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 281
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:282
+; PRINT_TEXT(x, y, text, height, width) - custom size
+    LDD #65530
+    STD RESULT
+    LDA RESULT+1  ; Height (negative value)
+    STA $C82A     ; Vec_Text_Height
+    LDD #48
+    STD RESULT
+    LDA RESULT+1  ; Width (positive value)
+    STA $C82B     ; Vec_Text_Width
+    LDD #65409
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_12
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 282
+    JSR VECTREX_PRINT_TEXT
+    LDA #$F8      ; Default height (-8 in two's complement)
+    STA $C82A     ; Restore Vec_Text_Height
+    LDA #72       ; Default width (72)
+    STA $C82B     ; Restore Vec_Text_Width
+    CLRA
+    CLRB
+    STD RESULT
+    RTS
+
+DRAW_MAP_SCREEN: ; function
+; --- function draw_map_screen ---
+    LEAS -4,S ; allocate locals
+    ; VPy_LINE:287
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 287
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:288
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #65409
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65436
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_22
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 288
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:289
+; PRINT_TEXT(x, y, text, height, width) - custom size
+    LDD #65530
+    STD RESULT
+    LDA RESULT+1  ; Height (negative value)
+    STA $C82A     ; Vec_Text_Height
+    LDD #60
+    STD RESULT
+    LDA RESULT+1  ; Width (positive value)
+    STA $C82B     ; Vec_Text_Width
+    LDD #65409
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #65416
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    ; ===== Const array indexing: location_names =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_2
+    LDD TMPPTR
+    LEAX D,X
+    ; String array - load pointer from table
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 289
+    JSR VECTREX_PRINT_TEXT
+    LDA #$F8      ; Default height (-8 in two's complement)
+    STA $C82A     ; Restore Vec_Text_Height
+    LDA #72       ; Default width (72)
+    STA $C82B     ; Restore Vec_Text_Width
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:291
+; DRAW_VECTOR_EX("map", x, y, mirror) - 15 path(s), width=242, center_x=-6
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD #20
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDD #0
+    STD RESULT
+    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
+    ; Decode mirror mode into separate flags:
+    CLR MIRROR_X  ; Clear X flag
+    CLR MIRROR_Y  ; Clear Y flag
+    CMPB #1       ; Check if X-mirror (mode 1)
+    BNE DSVEX_CHK_Y_222
+    LDA #1
+    STA MIRROR_X
+DSVEX_CHK_Y_222:
+    CMPB #2       ; Check if Y-mirror (mode 2)
+    BNE DSVEX_CHK_XY_223
+    LDA #1
+    STA MIRROR_Y
+DSVEX_CHK_XY_223:
+    CMPB #3       ; Check if both-mirror (mode 3)
+    BNE DSVEX_CALL_224
+    LDA #1
+    STA MIRROR_X
+    STA MIRROR_Y
+DSVEX_CALL_224:
+    ; Set intensity override for drawing
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Intensity (0-127)
+    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    LDX #_MAP_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH5  ; Path 5
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH6  ; Path 6
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH7  ; Path 7
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH8  ; Path 8
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH9  ; Path 9
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH10  ; Path 10
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH11  ; Path 11
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH12  ; Path 12
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH13  ; Path 13
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH14  ; Path 14
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:294
     LDD VAR_LOCATION_GLOW_DIRECTION
     STD RESULT
     LDD RESULT
@@ -1537,17 +3737,17 @@ DRAW_MAP_SCREEN: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_68
+    BEQ CT_227
     LDD #0
     STD RESULT
-    BRA CE_69
-CT_68:
+    BRA CE_228
+CT_227:
     LDD #1
     STD RESULT
-CE_69:
+CE_228:
     LDD RESULT
-    LBEQ IF_NEXT_67
-    ; VPy_LINE:91
+    LBEQ IF_NEXT_226
+    ; VPy_LINE:295
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1563,7 +3763,7 @@ CE_69:
     LDU #VAR_LOCATION_GLOW_INTENSITY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:92
+    ; VPy_LINE:296
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1574,29 +3774,29 @@ CE_69:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGE CT_72
+    BGE CT_231
     LDD #0
     STD RESULT
-    BRA CE_73
-CT_72:
+    BRA CE_232
+CT_231:
     LDD #1
     STD RESULT
-CE_73:
+CE_232:
     LDD RESULT
-    LBEQ IF_NEXT_71
-    ; VPy_LINE:93
+    LBEQ IF_NEXT_230
+    ; VPy_LINE:297
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_LOCATION_GLOW_DIRECTION
     STU TMPPTR
     STX ,U
-    LBRA IF_END_70
-IF_NEXT_71:
-IF_END_70:
-    LBRA IF_END_66
-IF_NEXT_67:
-    ; VPy_LINE:95
+    LBRA IF_END_229
+IF_NEXT_230:
+IF_END_229:
+    LBRA IF_END_225
+IF_NEXT_226:
+    ; VPy_LINE:299
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1612,50 +3812,39 @@ IF_NEXT_67:
     LDU #VAR_LOCATION_GLOW_INTENSITY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:96
+    ; VPy_LINE:300
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #50
+    LDD #30
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLE CT_76
+    BLE CT_235
     LDD #0
     STD RESULT
-    BRA CE_77
-CT_76:
+    BRA CE_236
+CT_235:
     LDD #1
     STD RESULT
-CE_77:
+CE_236:
     LDD RESULT
-    LBEQ IF_NEXT_75
-    ; VPy_LINE:97
+    LBEQ IF_NEXT_234
+    ; VPy_LINE:301
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_LOCATION_GLOW_DIRECTION
     STU TMPPTR
     STX ,U
-    LBRA IF_END_74
-IF_NEXT_75:
-IF_END_74:
-IF_END_66:
-    ; VPy_LINE:100
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 100
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:101
-; DRAW_VECTOR_EX("location", x, y, mirror) - 1 path(s), width=16, center_x=0
+    LBRA IF_END_233
+IF_NEXT_234:
+IF_END_233:
+IF_END_225:
+    ; VPy_LINE:304
     ; ===== Const array indexing: location_x_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -1668,8 +3857,9 @@ IF_END_66:
     LEAX D,X
     LDD ,X
     STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:305
     ; ===== Const array indexing: location_y_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -1682,6 +3872,16 @@ IF_END_66:
     LEAX D,X
     LDD ,X
     STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; VPy_LINE:307
+; DRAW_VECTOR_EX("location_marker", x, y, mirror) - 1 path(s), width=22, center_x=0
+    LDD 2 ,S
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD 0 ,S
+    STD RESULT
     LDA RESULT+1  ; Y position (low byte)
     STA DRAW_VEC_Y
     LDD #0
@@ -1691,76 +3891,37 @@ IF_END_66:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_78
+    BNE DSVEX_CHK_Y_237
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_78:
+DSVEX_CHK_Y_237:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_79
+    BNE DSVEX_CHK_XY_238
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_79:
+DSVEX_CHK_XY_238:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_80
+    BNE DSVEX_CALL_239
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_80:
-    LDX #_LOCATION_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X and MIRROR_Y flags
+DSVEX_CALL_239:
+    ; Set intensity override for drawing
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDA RESULT+1  ; Intensity (0-127)
+    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    LDX #_LOCATION_MARKER_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    ; VPy_LINE:104
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 104
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:105
-    LDD #65476
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_0
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 105
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:106
-    LDD #65436
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_NUMBER at line 106
-    JSR VECTREX_PRINT_NUMBER
-    CLRA
-    CLRB
-    STD RESULT
+    LEAS 4,S ; free locals
     RTS
 
 DRAW_TITLE_SCREEN: ; function
 ; --- function draw_title_screen ---
-    ; VPy_LINE:116
+    ; VPy_LINE:312
 ; DRAW_VECTOR("logo", x, y) - 16 path(s) at position
     LDD #0
     STD RESULT
@@ -1804,17 +3965,18 @@ DRAW_TITLE_SCREEN: ; function
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    ; VPy_LINE:118
+    ; VPy_LINE:314
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 118
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 314
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:119
+    ; VPy_LINE:315
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #65446
     STD RESULT
     LDD RESULT
@@ -1823,16 +3985,17 @@ DRAW_TITLE_SCREEN: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_1
+    LDX #STR_20
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 119
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 315
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:120
+    ; VPy_LINE:316
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #65486
     STD RESULT
     LDD RESULT
@@ -1841,16 +4004,16 @@ DRAW_TITLE_SCREEN: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_2
+    LDX #STR_24
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 120
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 316
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:122
+    ; VPy_LINE:318
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -1861,17 +4024,17 @@ DRAW_TITLE_SCREEN: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_83
+    BEQ CT_242
     LDD #0
     STD RESULT
-    BRA CE_84
-CT_83:
+    BRA CE_243
+CT_242:
     LDD #1
     STD RESULT
-CE_84:
+CE_243:
     LDD RESULT
-    LBEQ IF_NEXT_82
-    ; VPy_LINE:123
+    LBEQ IF_NEXT_241
+    ; VPy_LINE:319
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1887,10 +4050,10 @@ CE_84:
     LDU #VAR_TITLE_INTENSITY
     STU TMPPTR
     STX ,U
-    LBRA IF_END_81
-IF_NEXT_82:
-IF_END_81:
-    ; VPy_LINE:125
+    LBRA IF_END_240
+IF_NEXT_241:
+IF_END_240:
+    ; VPy_LINE:321
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -1901,17 +4064,17 @@ IF_END_81:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_87
+    BEQ CT_246
     LDD #0
     STD RESULT
-    BRA CE_88
-CT_87:
+    BRA CE_247
+CT_246:
     LDD #1
     STD RESULT
-CE_88:
+CE_247:
     LDD RESULT
-    LBEQ IF_NEXT_86
-    ; VPy_LINE:126
+    LBEQ IF_NEXT_245
+    ; VPy_LINE:322
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1927,10 +4090,10 @@ CE_88:
     LDU #VAR_TITLE_INTENSITY
     STU TMPPTR
     STX ,U
-    LBRA IF_END_85
-IF_NEXT_86:
-IF_END_85:
-    ; VPy_LINE:128
+    LBRA IF_END_244
+IF_NEXT_245:
+IF_END_244:
+    ; VPy_LINE:324
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1941,27 +4104,27 @@ IF_END_85:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_91
+    BEQ CT_250
     LDD #0
     STD RESULT
-    BRA CE_92
-CT_91:
+    BRA CE_251
+CT_250:
     LDD #1
     STD RESULT
-CE_92:
+CE_251:
     LDD RESULT
-    LBEQ IF_NEXT_90
-    ; VPy_LINE:129
+    LBEQ IF_NEXT_249
+    ; VPy_LINE:325
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_TITLE_STATE
     STU TMPPTR
     STX ,U
-    LBRA IF_END_89
-IF_NEXT_90:
-IF_END_89:
-    ; VPy_LINE:131
+    LBRA IF_END_248
+IF_NEXT_249:
+IF_END_248:
+    ; VPy_LINE:327
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -1972,39 +4135,52 @@ IF_END_89:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_95
+    BEQ CT_254
     LDD #0
     STD RESULT
-    BRA CE_96
-CT_95:
+    BRA CE_255
+CT_254:
     LDD #1
     STD RESULT
-CE_96:
+CE_255:
     LDD RESULT
-    LBEQ IF_NEXT_94
-    ; VPy_LINE:132
+    LBEQ IF_NEXT_253
+    ; VPy_LINE:328
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_TITLE_STATE
     STU TMPPTR
     STX ,U
-    LBRA IF_END_93
-IF_NEXT_94:
-IF_END_93:
+    LBRA IF_END_252
+IF_NEXT_253:
+IF_END_252:
+    RTS
+
+DIV16:
+    LDD #0
+    STD DIV_Q
+    LDD DIV_A
+    STD DIV_R
+    LDD DIV_B
+    BEQ DIV16_DONE
+DIV16_LOOP:
+    LDD DIV_R
+    SUBD DIV_B
+    BLO DIV16_DONE
+    STD DIV_R
+    LDD DIV_Q
+    ADDD #1
+    STD DIV_Q
+    BRA DIV16_LOOP
+DIV16_DONE:
+    LDD DIV_Q
+    STD RESULT
     RTS
 
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-; Variables (in RAM)
-TMPLEFT   EQU RESULT+2
-TMPRIGHT  EQU RESULT+4
-TMPPTR    EQU RESULT+6
-TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
-TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)
-TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)
-NUM_STR   EQU RESULT+30   ; String buffer for PRINT_NUMBER (2 bytes)
 VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
@@ -2015,41 +4191,32 @@ VAR_TITLE_STATE EQU $CF10+4
 VAR_CURRENT_MUSIC EQU $CF10+6
 VAR_DELAY EQU $CF10+8
 VAR_STAGE EQU $CF10+10
-VAR_CURRENT_LOCATION EQU $CF10+12
-VAR_LOCATION_GLOW_INTENSITY EQU $CF10+14
-VAR_LOCATION_GLOW_DIRECTION EQU $CF10+16
-VAR_PREV_JOY_X EQU $CF10+18
-VAR_INTENSITYVAL EQU $CF10+20
+VAR_COUNTDOWN_TIMER EQU $CF10+12
+VAR_COUNTDOWN_ACTIVE EQU $CF10+14
+VAR_NUM_LOCATIONS EQU $CF10+16
+VAR_CURRENT_LOCATION EQU $CF10+18
+VAR_MAX_LEVEL_UNLOCKED EQU $CF10+20
+VAR_LOCATION_GLOW_INTENSITY EQU $CF10+22
+VAR_LOCATION_GLOW_DIRECTION EQU $CF10+24
+VAR_PREV_JOY_X EQU $CF10+26
+VAR_PREV_JOY_Y EQU $CF10+28
+VAR_PREV_BTN_1 EQU $CF10+30
+VAR_INTENSITYVAL EQU $CF10+32
+VAR_PLAYER_X EQU $CF10+34
+VAR_PLAYER_Y EQU $CF10+36
+VAR_PLAYER_SPEED EQU $CF10+38
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
 VAR_ARG2 EQU $C8B6
 VAR_ARG3 EQU $C8B8
 VAR_ARG4 EQU $C8BA
+VAR_ARG5 EQU $C8BC
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 4 of 8 assets (unused assets excluded)
+; Embedded 5 of 9 assets (unused assets excluded)
 ; ========================================
-
-; Vector asset: location
-; Generated from location.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-8, max=8, width=16
-; Center: (0, 2)
-
-_LOCATION_WIDTH EQU 16
-_LOCATION_CENTER_X EQU 0
-_LOCATION_CENTER_Y EQU 2
-
-_LOCATION_VECTORS:  ; Main entry
-_LOCATION_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
-    FCB $FF,$F1,$F8          ; line 0: flag=-1, dy=-15, dx=-8
-    FCB $FF,$00,$10          ; line 1: flag=-1, dy=0, dx=16
-    FCB $FF,$0F,$F8          ; closing line: flag=-1, dy=15, dx=-8
-    FCB 2                ; End marker (path complete)
 
 ; Vector asset: logo
 ; Generated from logo.vec (Malban Draw_Sync_List format)
@@ -2177,6 +4344,268 @@ _LOGO_PATH15:
     FCB 127              ; path15: intensity
     FCB $DB,$BF,0,0        ; path15: header (y=-37, x=-65, relative to center)
     FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+; Vector asset: map
+; Generated from map.vec (Malban Draw_Sync_List format)
+; Total paths: 15, points: 165
+; X bounds: min=-127, max=115, width=242
+; Center: (-6, -3)
+
+_MAP_WIDTH EQU 242
+_MAP_CENTER_X EQU -6
+_MAP_CENTER_Y EQU -3
+
+_MAP_VECTORS:  ; Main entry
+_MAP_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $22,$D7,0,0        ; path0: header (y=34, x=-41, relative to center)
+    FCB $FF,$0E,$1A          ; line 0: flag=-1, dy=14, dx=26
+    FCB $FF,$07,$0C          ; line 1: flag=-1, dy=7, dx=12
+    FCB $FF,$06,$00          ; line 2: flag=-1, dy=6, dx=0
+    FCB $FF,$09,$0C          ; line 3: flag=-1, dy=9, dx=12
+    FCB $FF,$00,$0E          ; line 4: flag=-1, dy=0, dx=14
+    FCB $FF,$08,$0A          ; line 5: flag=-1, dy=8, dx=10
+    FCB $FF,$00,$21          ; line 6: flag=-1, dy=0, dx=33
+    FCB $FF,$FC,$03          ; line 7: flag=-1, dy=-4, dx=3
+    FCB $FF,$FF,$14          ; line 8: flag=-1, dy=-1, dx=20
+    FCB $FF,$EE,$20          ; line 9: flag=-1, dy=-18, dx=32
+    FCB $FF,$FB,$FC          ; line 10: flag=-1, dy=-5, dx=-4
+    FCB $FF,$F9,$FE          ; line 11: flag=-1, dy=-7, dx=-2
+    FCB $FF,$06,$FA          ; line 12: flag=-1, dy=6, dx=-6
+    FCB $FF,$02,$F0          ; line 13: flag=-1, dy=2, dx=-16
+    FCB $FF,$F4,$06          ; line 14: flag=-1, dy=-12, dx=6
+    FCB $FF,$E2,$FE          ; line 15: flag=-1, dy=-30, dx=-2
+    FCB $FF,$FB,$FB          ; line 16: flag=-1, dy=-5, dx=-5
+    FCB $FF,$F8,$FE          ; line 17: flag=-1, dy=-8, dx=-2
+    FCB $FF,$FF,$F6          ; line 18: flag=-1, dy=-1, dx=-10
+    FCB $FF,$F7,$05          ; line 19: flag=-1, dy=-9, dx=5
+    FCB $FF,$FC,$FD          ; line 20: flag=-1, dy=-4, dx=-3
+    FCB $FF,$0E,$F6          ; line 21: flag=-1, dy=14, dx=-10
+    FCB $FF,$05,$01          ; line 22: flag=-1, dy=5, dx=1
+    FCB $FF,$06,$FD          ; line 23: flag=-1, dy=6, dx=-3
+    FCB $FF,$EA,$F7          ; line 24: flag=-1, dy=-22, dx=-9
+    FCB $FF,$20,$F0          ; line 25: flag=-1, dy=32, dx=-16
+    FCB $FF,$05,$F9          ; line 26: flag=-1, dy=5, dx=-7
+    FCB $FF,$F9,$03          ; line 27: flag=-1, dy=-7, dx=3
+    FCB $FF,$F5,$F9          ; line 28: flag=-1, dy=-11, dx=-7
+    FCB $FF,$0E,$F3          ; line 29: flag=-1, dy=14, dx=-13
+    FCB $FF,$FD,$FD          ; line 30: flag=-1, dy=-3, dx=-3
+    FCB $FF,$F2,$0C          ; line 31: flag=-1, dy=-14, dx=12
+    FCB $FF,$00,$03          ; line 32: flag=-1, dy=0, dx=3
+    FCB $FF,$F2,$F7          ; line 33: flag=-1, dy=-14, dx=-9
+    FCB $FF,$F3,$FE          ; line 34: flag=-1, dy=-13, dx=-2
+    FCB $FF,$EC,$ED          ; line 35: flag=-1, dy=-20, dx=-19
+    FCB $FF,$0D,$F3          ; line 36: flag=-1, dy=13, dx=-13
+    FCB $FF,$0E,$00          ; line 37: flag=-1, dy=14, dx=0
+    FCB $FF,$09,$F8          ; line 38: flag=-1, dy=9, dx=-8
+    FCB $FF,$00,$F0          ; line 39: flag=-1, dy=0, dx=-16
+    FCB $FF,$08,$F8          ; line 40: flag=-1, dy=8, dx=-8
+    FCB $FF,$0B,$00          ; line 41: flag=-1, dy=11, dx=0
+    FCB $FF,$0B,$0A          ; line 42: flag=-1, dy=11, dx=10
+    FCB $FF,$01,$22          ; line 43: flag=-1, dy=1, dx=34
+    FCB $FF,$09,$F4          ; line 44: flag=-1, dy=9, dx=-12
+    FCB $FF,$FA,$EE          ; line 45: flag=-1, dy=-6, dx=-18
+    FCB $FF,$FF,$F3          ; line 46: flag=-1, dy=-1, dx=-13
+    FCB $FF,$0A,$00          ; line 47: flag=-1, dy=10, dx=0
+    FCB $FF,$00,$00          ; line 48: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH1:
+    FCB 127              ; path1: intensity
+    FCB $38,$DE,0,0        ; path1: header (y=56, x=-34, relative to center)
+    FCB $FF,$04,$06          ; line 0: flag=-1, dy=4, dx=6
+    FCB $FF,$FC,$01          ; line 1: flag=-1, dy=-4, dx=1
+    FCB $FF,$FD,$FC          ; line 2: flag=-1, dy=-3, dx=-4
+    FCB $FF,$00,$FD          ; line 3: flag=-1, dy=0, dx=-3
+    FCB $FF,$03,$00          ; line 4: flag=-1, dy=3, dx=0
+    FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH2:
+    FCB 127              ; path2: intensity
+    FCB $34,$E5,0,0        ; path2: header (y=52, x=-27, relative to center)
+    FCB $FF,$06,$0A          ; line 0: flag=-1, dy=6, dx=10
+    FCB $FF,$06,$FE          ; line 1: flag=-1, dy=6, dx=-2
+    FCB $FF,$02,$05          ; line 2: flag=-1, dy=2, dx=5
+    FCB $FF,$FB,$FE          ; line 3: flag=-1, dy=-5, dx=-2
+    FCB $FF,$F6,$02          ; line 4: flag=-1, dy=-10, dx=2
+    FCB $FF,$FF,$F4          ; line 5: flag=-1, dy=-1, dx=-12
+    FCB $FF,$02,$FF          ; line 6: flag=-1, dy=2, dx=-1
+    FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH3:
+    FCB 127              ; path3: intensity
+    FCB $BD,$70,0,0        ; path3: header (y=-67, x=112, relative to center)
+    FCB $FF,$08,$05          ; line 0: flag=-1, dy=8, dx=5
+    FCB $FF,$14,$00          ; line 1: flag=-1, dy=20, dx=0
+    FCB $FF,$06,$FB          ; line 2: flag=-1, dy=6, dx=-5
+    FCB $FF,$F8,$FE          ; line 3: flag=-1, dy=-8, dx=-2
+    FCB $FF,$06,$EE          ; line 4: flag=-1, dy=6, dx=-18
+    FCB $FF,$F3,$F1          ; line 5: flag=-1, dy=-13, dx=-15
+    FCB $FF,$F5,$07          ; line 6: flag=-1, dy=-11, dx=7
+    FCB $FF,$03,$0C          ; line 7: flag=-1, dy=3, dx=12
+    FCB $FF,$F4,$10          ; line 8: flag=-1, dy=-12, dx=16
+    FCB $FF,$00,$00          ; line 9: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH4:
+    FCB 127              ; path4: intensity
+    FCB $ED,$66,0,0        ; path4: header (y=-19, x=102, relative to center)
+    FCB $FF,$F1,$00          ; line 0: flag=-1, dy=-15, dx=0
+    FCB $FF,$04,$F8          ; line 1: flag=-1, dy=4, dx=-8
+    FCB $FF,$05,$00          ; line 2: flag=-1, dy=5, dx=0
+    FCB $FF,$06,$09          ; line 3: flag=-1, dy=6, dx=9
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH5:
+    FCB 127              ; path5: intensity
+    FCB $EE,$57,0,0        ; path5: header (y=-18, x=87, relative to center)
+    FCB $FF,$F8,$05          ; line 0: flag=-1, dy=-8, dx=5
+    FCB $FF,$F9,$FF          ; line 1: flag=-1, dy=-7, dx=-1
+    FCB $FF,$05,$FA          ; line 2: flag=-1, dy=5, dx=-6
+    FCB $FF,$0A,$02          ; line 3: flag=-1, dy=10, dx=2
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH6:
+    FCB 127              ; path6: intensity
+    FCB $E6,$72,0,0        ; path6: header (y=-26, x=114, relative to center)
+    FCB $FF,$FD,$FB          ; line 0: flag=-1, dy=-3, dx=-5
+    FCB $FF,$FB,$08          ; line 1: flag=-1, dy=-5, dx=8
+    FCB $FF,$04,$00          ; line 2: flag=-1, dy=4, dx=0
+    FCB $FF,$04,$FD          ; line 3: flag=-1, dy=4, dx=-3
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH7:
+    FCB 127              ; path7: intensity
+    FCB $DD,$1A,0,0        ; path7: header (y=-35, x=26, relative to center)
+    FCB $FF,$09,$08          ; line 0: flag=-1, dy=9, dx=8
+    FCB $FF,$01,$FA          ; line 1: flag=-1, dy=1, dx=-6
+    FCB $FF,$F7,$FA          ; line 2: flag=-1, dy=-9, dx=-6
+    FCB $FF,$FE,$05          ; line 3: flag=-1, dy=-2, dx=5
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH8:
+    FCB 127              ; path8: intensity
+    FCB $4C,$B0,0,0        ; path8: header (y=76, x=-80, relative to center)
+    FCB $FF,$FC,$0D          ; line 0: flag=-1, dy=-4, dx=13
+    FCB $FF,$FD,$00          ; line 1: flag=-1, dy=-3, dx=0
+    FCB $FF,$FA,$08          ; line 2: flag=-1, dy=-6, dx=8
+    FCB $FF,$09,$06          ; line 3: flag=-1, dy=9, dx=6
+    FCB $FF,$09,$F2          ; line 4: flag=-1, dy=9, dx=-14
+    FCB $FF,$FF,$F6          ; line 5: flag=-1, dy=-1, dx=-10
+    FCB $FF,$FC,$FD          ; line 6: flag=-1, dy=-4, dx=-3
+    FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH9:
+    FCB 127              ; path9: intensity
+    FCB $2D,$87,0,0        ; path9: header (y=45, x=-121, relative to center)
+    FCB $FF,$F7,$08          ; line 0: flag=-1, dy=-9, dx=8
+    FCB $FF,$F7,$F9          ; line 1: flag=-1, dy=-9, dx=-7
+    FCB $FF,$E4,$17          ; line 2: flag=-1, dy=-28, dx=23
+    FCB $FF,$FE,$16          ; line 3: flag=-1, dy=-2, dx=22
+    FCB $FF,$09,$F6          ; line 4: flag=-1, dy=9, dx=-10
+    FCB $FF,$00,$FA          ; line 5: flag=-1, dy=0, dx=-6
+    FCB $FF,$0D,$FE          ; line 6: flag=-1, dy=13, dx=-2
+    FCB $FF,$09,$0E          ; line 7: flag=-1, dy=9, dx=14
+    FCB $FF,$F9,$06          ; line 8: flag=-1, dy=-7, dx=6
+    FCB $FF,$18,$13          ; line 9: flag=-1, dy=24, dx=19
+    FCB $FF,$10,$F5          ; line 10: flag=-1, dy=16, dx=-11
+    FCB $FF,$F4,$FD          ; line 11: flag=-1, dy=-12, dx=-3
+    FCB $FF,$04,$F5          ; line 12: flag=-1, dy=4, dx=-11
+    FCB $FF,$08,$01          ; line 13: flag=-1, dy=8, dx=1
+    FCB $FF,$0A,$EE          ; line 14: flag=-1, dy=10, dx=-18
+    FCB $FF,$06,$E7          ; line 15: flag=-1, dy=6, dx=-25
+    FCB $FF,$DF,$01          ; line 16: flag=-1, dy=-33, dx=1
+    FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH10:
+    FCB 127              ; path10: intensity
+    FCB $04,$BE,0,0        ; path10: header (y=4, x=-66, relative to center)
+    FCB $FF,$ED,$F8          ; line 0: flag=-1, dy=-19, dx=-8
+    FCB $FF,$F9,$06          ; line 1: flag=-1, dy=-7, dx=6
+    FCB $FF,$E0,$05          ; line 2: flag=-1, dy=-32, dx=5
+    FCB $FF,$19,$14          ; line 3: flag=-1, dy=25, dx=20
+    FCB $FF,$FF,$08          ; line 4: flag=-1, dy=-1, dx=8
+    FCB $FF,$10,$00          ; line 5: flag=-1, dy=16, dx=0
+    FCB $FF,$03,$F7          ; line 6: flag=-1, dy=3, dx=-9
+    FCB $FF,$09,$F8          ; line 7: flag=-1, dy=9, dx=-8
+    FCB $FF,$06,$F3          ; line 8: flag=-1, dy=6, dx=-13
+    FCB $FF,$01,$00          ; line 9: flag=-1, dy=1, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH11:
+    FCB 127              ; path11: intensity
+    FCB $B0,$AE,0,0        ; path11: header (y=-80, x=-82, relative to center)
+    FCB $FF,$0D,$0C          ; line 0: flag=-1, dy=13, dx=12
+    FCB $FF,$FB,$0D          ; line 1: flag=-1, dy=-5, dx=13
+    FCB $FF,$F9,$08          ; line 2: flag=-1, dy=-7, dx=8
+    FCB $FF,$FE,$DF          ; line 3: flag=-1, dy=-2, dx=-33
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH12:
+    FCB 127              ; path12: intensity
+    FCB $0E,$69,0,0        ; path12: header (y=14, x=105, relative to center)
+    FCB $FF,$08,$FC          ; line 0: flag=-1, dy=8, dx=-4
+    FCB $FF,$01,$01          ; line 1: flag=-1, dy=1, dx=1
+    FCB $FF,$02,$03          ; line 2: flag=-1, dy=2, dx=3
+    FCB $FF,$F5,$00          ; line 3: flag=-1, dy=-11, dx=0
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH13:
+    FCB 127              ; path13: intensity
+    FCB $24,$69,0,0        ; path13: header (y=36, x=105, relative to center)
+    FCB $FF,$04,$07          ; line 0: flag=-1, dy=4, dx=7
+    FCB $FF,$04,$F9          ; line 1: flag=-1, dy=4, dx=-7
+    FCB $FF,$F8,$00          ; line 2: flag=-1, dy=-8, dx=0
+    FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_MAP_PATH14:
+    FCB 127              ; path14: intensity
+    FCB $21,$6D,0,0        ; path14: header (y=33, x=109, relative to center)
+    FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
+    FCB $FF,$FB,$02          ; line 1: flag=-1, dy=-5, dx=2
+    FCB $FF,$FF,$03          ; line 2: flag=-1, dy=-1, dx=3
+    FCB $FF,$05,$04          ; line 3: flag=-1, dy=5, dx=4
+    FCB $FF,$08,$FC          ; line 4: flag=-1, dy=8, dx=-4
+    FCB $FF,$00,$FE          ; line 5: flag=-1, dy=0, dx=-2
+    FCB $FF,$00,$00          ; line 6: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+; Vector asset: location_marker
+; Generated from location_marker.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 10
+; X bounds: min=-11, max=11, width=22
+; Center: (0, 1)
+
+_LOCATION_MARKER_WIDTH EQU 22
+_LOCATION_MARKER_CENTER_X EQU 0
+_LOCATION_MARKER_CENTER_Y EQU 1
+
+_LOCATION_MARKER_VECTORS:  ; Main entry
+_LOCATION_MARKER_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $0B,$00,0,0        ; path0: header (y=11, x=0, relative to center)
+    FCB $FF,$F8,$04          ; line 0: flag=-1, dy=-8, dx=4
+    FCB $FF,$00,$07          ; line 1: flag=-1, dy=0, dx=7
+    FCB $FF,$F9,$FC          ; line 2: flag=-1, dy=-7, dx=-4
+    FCB $FF,$F9,$00          ; line 3: flag=-1, dy=-7, dx=0
+    FCB $FF,$05,$F9          ; line 4: flag=-1, dy=5, dx=-7
+    FCB $FF,$FB,$F9          ; line 5: flag=-1, dy=-5, dx=-7
+    FCB $FF,$07,$00          ; line 6: flag=-1, dy=7, dx=0
+    FCB $FF,$07,$FC          ; line 7: flag=-1, dy=7, dx=-4
+    FCB $FF,$00,$07          ; line 8: flag=-1, dy=0, dx=7
+    FCB $FF,$08,$04          ; closing line: flag=-1, dy=8, dx=4
     FCB 2                ; End marker (path complete)
 
 ; Generated from pang_theme.vmus (internal name: pang_theme)
@@ -3375,8 +5804,8 @@ _MAP_THEME_MUSIC:
 
 ; Const array literal for 'location_x_coords' (17 elements)
 CONST_ARRAY_0:
-    FDB 65436   ; Element 0
-    FDB 65466   ; Element 1
+    FDB 40   ; Element 0
+    FDB 40   ; Element 1
     FDB 65496   ; Element 2
     FDB 65526   ; Element 3
     FDB 20   ; Element 4
@@ -3395,8 +5824,8 @@ CONST_ARRAY_0:
 
 ; Const array literal for 'location_y_coords' (17 elements)
 CONST_ARRAY_1:
-    FDB 65456   ; Element 0
-    FDB 65486   ; Element 1
+    FDB 110   ; Element 0
+    FDB 79   ; Element 1
     FDB 65516   ; Element 2
     FDB 10   ; Element 3
     FDB 40   ; Element 4
@@ -3413,17 +5842,159 @@ CONST_ARRAY_1:
     FDB 65476   ; Element 15
     FDB 65506   ; Element 16
 
+; Const string array for 'location_names' (17 strings)
+CONST_ARRAY_2_STR_0:
+    FCC "MOUNT FUJI (JP)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_1:
+    FCC "MOUNT KEIRIN (CN)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_2:
+    FCC "EMERALD BUDDHA TEMPLE (TH)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_3:
+    FCC "ANGKOR WAT (KH)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_4:
+    FCC "AYERS ROCK (AU)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_5:
+    FCC "TAJ MAHAL (IN)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_6:
+    FCC "LENINGRAD (RU)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_7:
+    FCC "PARIS (FR)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_8:
+    FCC "LONDON (UK)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_9:
+    FCC "BARCELONA (ES)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_10:
+    FCC "ATHENS (GR)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_11:
+    FCC "PYRAMIDS (EG)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_12:
+    FCC "MOUNT KILIMANJARO (TZ)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_13:
+    FCC "NEW YORK (US)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_14:
+    FCC "MAYAN RUINS (MX)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_15:
+    FCC "ANTARCTICA (AQ)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2_STR_16:
+    FCC "EASTER ISLAND (CL)"
+    FCB $80   ; String terminator
+CONST_ARRAY_2:  ; Pointer table for location_names
+    FDB CONST_ARRAY_2_STR_0  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_1  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_2  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_3  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_4  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_5  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_6  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_7  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_8  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_9  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_10  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_11  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_12  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_13  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_14  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_15  ; Pointer to string
+    FDB CONST_ARRAY_2_STR_16  ; Pointer to string
+
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "LOCATION"
+    FCC "1"
     FCB $80
 STR_1:
-    FCC "PRESS A BUTTON"
+    FCC "2"
     FCB $80
 STR_2:
+    FCC "3"
+    FCB $80
+STR_3:
+    FCC "ANGKOR WAT (KH)"
+    FCB $80
+STR_4:
+    FCC "ANTARCTICA (AQ)"
+    FCB $80
+STR_5:
+    FCC "ATHENS (GR)"
+    FCB $80
+STR_6:
+    FCC "AYERS ROCK (AU)"
+    FCB $80
+STR_7:
+    FCC "BARCELONA (ES)"
+    FCB $80
+STR_8:
+    FCC "EASTER ISLAND (CL)"
+    FCB $80
+STR_9:
+    FCC "EMERALD BUDDHA TEMPLE (TH)"
+    FCB $80
+STR_10:
+    FCC "GET READY"
+    FCB $80
+STR_11:
+    FCC "LENINGRAD (RU)"
+    FCB $80
+STR_12:
+    FCC "LEVEL:"
+    FCB $80
+STR_13:
+    FCC "LONDON (UK)"
+    FCB $80
+STR_14:
+    FCC "MAYAN RUINS (MX)"
+    FCB $80
+STR_15:
+    FCC "MOUNT FUJI (JP)"
+    FCB $80
+STR_16:
+    FCC "MOUNT KEIRIN (CN)"
+    FCB $80
+STR_17:
+    FCC "MOUNT KILIMANJARO (TZ)"
+    FCB $80
+STR_18:
+    FCC "NEW YORK (US)"
+    FCB $80
+STR_19:
+    FCC "PARIS (FR)"
+    FCB $80
+STR_20:
+    FCC "PRESS A BUTTON"
+    FCB $80
+STR_21:
+    FCC "PYRAMIDS (EG)"
+    FCB $80
+STR_22:
+    FCC "SELECT A STAGE"
+    FCB $80
+STR_23:
+    FCC "TAJ MAHAL (IN)"
+    FCB $80
+STR_24:
     FCC "TO START"
     FCB $80
-DRAW_VEC_X EQU RESULT+22
-DRAW_VEC_Y EQU RESULT+23
-MIRROR_X EQU RESULT+24
-MIRROR_Y EQU RESULT+25
+VLINE_DX EQU RESULT+40
+VLINE_DY EQU RESULT+41
+VLINE_STEPS EQU RESULT+42
+VLINE_LIST EQU RESULT+43
+DRAW_VEC_X EQU RESULT+45
+DRAW_VEC_Y EQU RESULT+46
+MIRROR_X EQU RESULT+47
+MIRROR_Y EQU RESULT+48
+DRAW_VEC_INTENSITY EQU RESULT+49

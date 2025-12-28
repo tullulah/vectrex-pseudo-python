@@ -39,6 +39,10 @@ prev_btn_1 = 0           # Edge detection for button 1
 player_x = 0             # Player X position
 player_y = -100          # Player Y position (on ground)
 player_speed = 2         # Movement speed
+player_anim_frame = 1    # Current animation frame (1-5)
+player_anim_counter = 0  # Frame counter for animation timing
+player_anim_speed = 5    # Frames per animation frame
+player_facing = 1        # Direction facing: 1=right, -1=left
 
 
 def main():
@@ -201,17 +205,56 @@ def draw_game_level():
     SET_INTENSITY(100)
     DRAW_LINE(-120, -100, 120, -100, 100)
     
-    # Draw player placeholder
-    SET_INTENSITY(127)
-    DRAW_VECTOR("player", player_x, player_y)
+    # Handle player movement
+    joy_x = J1_X()
     
-    # # Handle player movement
-    # joy_x = J1_X()
-    # if joy_x == -1:
-    #     player_x = player_x - player_speed
-    #     if player_x < -110:
-    #         player_x = -110
-    # elif joy_x == 1:
-    #     player_x = player_x + player_speed
-    #     if player_x > 110:
-    #         player_x = 110
+    if joy_x == -1:
+        player_x = player_x - player_speed
+        if player_x < -110:
+            player_x = -110
+        player_facing = -1
+        
+        # Animate walking
+        player_anim_counter = player_anim_counter + 1
+        if player_anim_counter >= player_anim_speed:
+            player_anim_counter = 0
+            player_anim_frame = player_anim_frame + 1
+            if player_anim_frame > 5:
+                player_anim_frame = 1
+    elif joy_x == 1:
+        player_x = player_x + player_speed
+        if player_x > 110:
+            player_x = 110
+        player_facing = 1
+        
+        # Animate walking
+        player_anim_counter = player_anim_counter + 1
+        if player_anim_counter >= player_anim_speed:
+            player_anim_counter = 0
+            player_anim_frame = player_anim_frame + 1
+            if player_anim_frame > 5:
+                player_anim_frame = 1
+    else:
+        # Not moving - reset to idle frame
+        player_anim_frame = 1
+        player_anim_counter = 0
+    
+    # Draw player with animation
+    SET_INTENSITY(127)
+    
+    # Determine mirror mode based on facing direction
+    mirror_mode = 0
+    if player_facing == -1:
+        mirror_mode = 1  # Mirror X (flip horizontally)
+    
+    # Draw animated sprite
+    if player_anim_frame == 1:
+        DRAW_VECTOR_EX("player_walk_1", player_x, player_y, mirror_mode, 127)
+    elif player_anim_frame == 2:
+        DRAW_VECTOR_EX("player_walk_2", player_x, player_y, mirror_mode, 127)
+    elif player_anim_frame == 3:
+        DRAW_VECTOR_EX("player_walk_3", player_x, player_y, mirror_mode, 127)
+    elif player_anim_frame == 4:
+        DRAW_VECTOR_EX("player_walk_4", player_x, player_y, mirror_mode, 127)
+    else:
+        DRAW_VECTOR_EX("player_walk_5", player_x, player_y, mirror_mode, 127)

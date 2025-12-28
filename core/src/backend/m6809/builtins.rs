@@ -425,16 +425,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // Returns 0 if released, 1 if pressed
     if up == "J1_BUTTON_1" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_1");
-        out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)\n");
-        out.push_str("    JSR $F1BA    ; Read_Btns\n");
-        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-        out.push_str("    ANDA #$01\n");
-        out.push_str("    BEQ .j1b1_not_pressed\n");
-        out.push_str("    LDD #1\n");
-        out.push_str("    BRA .j1b1_done\n");
-        out.push_str(".j1b1_not_pressed:\n");
-        out.push_str("    LDD #0\n");
-        out.push_str(".j1b1_done:\n");
+        out.push_str("    JSR J1B1_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -442,16 +433,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // J1_BUTTON_2: Read Joystick 1 button 2 via BIOS Read_Btns
     if up == "J1_BUTTON_2" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_2");
-        out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)\n");
-        out.push_str("    JSR $F1BA    ; Read_Btns\n");
-        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-        out.push_str("    ANDA #$02\n");
-        out.push_str("    BEQ .j1b2_not_pressed\n");
-        out.push_str("    LDD #1\n");
-        out.push_str("    BRA .j1b2_done\n");
-        out.push_str(".j1b2_not_pressed:\n");
-        out.push_str("    LDD #0\n");
-        out.push_str(".j1b2_done:\n");
+        out.push_str("    JSR J1B2_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -459,16 +441,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // J1_BUTTON_3: Read Joystick 1 button 3 via BIOS Read_Btns
     if up == "J1_BUTTON_3" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_3");
-        out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)\n");
-        out.push_str("    JSR $F1BA    ; Read_Btns\n");
-        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-        out.push_str("    ANDA #$04\n");
-        out.push_str("    BEQ .j1b3_not_pressed\n");
-        out.push_str("    LDD #1\n");
-        out.push_str("    BRA .j1b3_done\n");
-        out.push_str(".j1b3_not_pressed:\n");
-        out.push_str("    LDD #0\n");
-        out.push_str(".j1b3_done:\n");
+        out.push_str("    JSR J1B3_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -476,16 +449,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     // J1_BUTTON_4: Read Joystick 1 button 4 via BIOS Read_Btns
     if up == "J1_BUTTON_4" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_4");
-        out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)\n");
-        out.push_str("    JSR $F1BA    ; Read_Btns\n");
-        out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-        out.push_str("    ANDA #$08\n");
-        out.push_str("    BEQ .j1b4_not_pressed\n");
-        out.push_str("    LDD #1\n");
-        out.push_str("    BRA .j1b4_done\n");
-        out.push_str(".j1b4_not_pressed:\n");
-        out.push_str("    LDD #0\n");
-        out.push_str(".j1b4_done:\n");
+        out.push_str("    JSR J1B4_BUILTIN\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
