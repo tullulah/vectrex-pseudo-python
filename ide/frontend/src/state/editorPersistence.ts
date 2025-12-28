@@ -51,11 +51,51 @@ export function restoreEditorState() {
       }
     }
     if (parsed.active) setActive(parsed.active);
+    
+    // After UI is stable, check for externally modified files asynchronously
+    setTimeout(() => checkRestoredFilesForChanges(parsed.docs), 100);
   } catch (e) {
     console.warn('[editorPersistence] restore failed', e);
   } finally {
     restoring = false;
   }
+}
+
+// Check if restored files were modified on disk and reload them
+function checkRestoredFilesForChanges(docs: Array<any>) {
+  const w = typeof window !== 'undefined' ? window : undefined;
+  const files = (w as any)?.files;
+  if (!files?.getFileInfo || !files?.readFile) return;
+
+  const updateContent = useEditorStore.getState().updateContent;
+
+  docs.forEach((d) => {
+    if (!d.diskPath) return; // Skip in-memory files
+
+    files.getFileInfo(d.diskPath).then((infoResult: any) => {
+      if (infoResult.ok && infoResult.mtime !== d.mtime) {
+        // File changed on disk - reload fresh content
+        console.log('[editorPersistence] File changed on disk, reloading:', d.diskPath);
+        files.readFile(d.diskPath).then((readResult: any) => {
+          if (!readResult.error && readResult.content !== undefined) {
+            // Update content and mark as not dirty
+            updateContent(d.uri, readResult.content);
+            useEditorStore.setState(s => ({
+              documents: s.documents.map(doc => 
+                doc.uri === d.uri 
+                  ? { ...doc, dirty: false, mtime: infoResult.mtime, lastSavedContent: readResult.content }
+                  : doc
+              )
+            }));
+          }
+        }).catch(() => {
+          console.warn('[editorPersistence] Failed to reload changed file:', d.diskPath);
+        });
+      }
+    }).catch(() => {
+      // Silently ignore files that no longer exist
+    });
+  });
 }
 
 export function persistEditorState() {

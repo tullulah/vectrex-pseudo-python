@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('files', {
   openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ path: string } | null>,
   readDirectory: (path: string) => ipcRenderer.invoke('file:readDirectory', path) as Promise<{ files: Array<{ name: string; path: string; isDir: boolean; children?: any[] }> } | { error: string }>,
   readFile: (path: string) => ipcRenderer.invoke('file:read', path) as Promise<{ path: string; content: string; mtime: number; size: number; name: string } | { error: string }>,
+  getFileInfo: (path: string) => ipcRenderer.invoke('file:getInfo', path) as Promise<{ ok: boolean; path: string; mtime: number; size: number; name: string } | { ok: false; error: string }>,
   readFileBin: (path: string) => ipcRenderer.invoke('file:readBin', path) as Promise<{ path: string; base64: string; size: number; name: string } | { error: string }>,
   openBin: () => ipcRenderer.invoke('bin:open') as Promise<{ path: string; base64: string; size: number } | { error: string } | null>,
   deleteFile: (path: string) => ipcRenderer.invoke('file:delete', path) as Promise<{ success: boolean; path: string } | { error: string }>,

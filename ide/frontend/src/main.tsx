@@ -48,22 +48,34 @@ function App() {
     if (!electronAPI?.ipcRenderer) return;
 
     const handler = async (_event: any, payload: { type: string; path: string; isDir: boolean }) => {
-      if (payload.type !== 'changed' || payload.isDir) return;
+      console.log('[FileWatcher] Event received:', payload);
+      
+      if (payload.type !== 'changed' || payload.isDir) {
+        console.log('[FileWatcher] Ignored (not a file change)');
+        return;
+      }
 
       const editorState = useEditorStore.getState();
+      console.log('[FileWatcher] Open documents:', editorState.documents.map(d => ({ uri: d.uri, diskPath: d.diskPath, dirty: d.dirty })));
+      
       const changedDoc = editorState.documents.find(d => d.diskPath?.endsWith(payload.path));
+      console.log('[FileWatcher] Found changed doc:', changedDoc ? changedDoc.uri : 'NOT FOUND');
       
       if (changedDoc && !changedDoc.dirty) {
         logger.info('App', `📄 Reloading externally modified file: ${payload.path}`);
         try {
           const result = await electronAPI.readFile(changedDoc.diskPath);
-          if (result.ok && result.content !== undefined) {
+          console.log('[FileWatcher] Read result:', { hasError: !!result.error, hasContent: result.content !== undefined });
+          
+          if (!result.error && result.content !== undefined) {
             updateContent(changedDoc.uri, result.content);
             logger.debug('App', `✓ Reloaded ${changedDoc.uri}`);
           }
         } catch (error) {
           logger.error('App', `Failed to reload ${payload.path}:`, error);
         }
+      } else if (changedDoc && changedDoc.dirty) {
+        console.log('[FileWatcher] Document is dirty, not reloading');
       }
     };
 

@@ -1253,6 +1253,17 @@ ipcMain.handle('file:read', async (_e, path: string) => {
   }
 });
 
+// Get file info (mtime, size) without reading content
+ipcMain.handle('file:getInfo', async (_e, path: string) => {
+  if (!path) return { error: 'no_path' };
+  try {
+    const stat = await fs.stat(path);
+    return { ok: true, path, mtime: stat.mtimeMs, size: stat.size, name: basename(path) };
+  } catch (e:any) {
+    return { ok: false, error: e?.message || 'stat_failed' };
+  }
+});
+
 // Read arbitrary binary file and return base64 (for emulator program loading without file:// fetch)
 ipcMain.handle('file:readBin', async (_e, path: string) => {
   if (!path) return { error: 'no_path' };

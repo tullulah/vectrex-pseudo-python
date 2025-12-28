@@ -184,6 +184,41 @@ export const FileTreePanel: React.FC = () => {
             if (!isSubscribed) return;
             console.log('FileTreePanel: File change detected:', event);
             
+            // If a file changed, check if it's open in the editor and reload it
+            if (event.type === 'changed' && !event.isDir) {
+              const editorStore = (window as any).__editorStore__;
+              if (editorStore) {
+                const state = editorStore.getState();
+                const changedDoc = state.documents.find((d: any) => d.diskPath?.endsWith(event.path));
+                
+                if (changedDoc && !changedDoc.dirty) {
+                  console.log('FileTreePanel: Reloading changed file:', event.path);
+                  const w = window as any;
+                  if (w.files?.readFile) {
+                    w.files.readFile(changedDoc.diskPath).then((result: any) => {
+                      if (!result.error && result.content !== undefined) {
+                        // Update content
+                        state.updateContent(changedDoc.uri, result.content);
+                        
+                        // Mark as not dirty and update lastSavedContent since this is the disk version
+                        editorStore.setState((s: any) => ({
+                          documents: s.documents.map((doc: any) =>
+                            doc.uri === changedDoc.uri
+                              ? { ...doc, dirty: false, lastSavedContent: result.content, mtime: result.mtime }
+                              : doc
+                          )
+                        }));
+                        
+                        console.log('FileTreePanel: ✓ Reloaded', changedDoc.uri);
+                      }
+                    }).catch((error: any) => {
+                      console.error('FileTreePanel: Failed to reload', event.path, error);
+                    });
+                  }
+                }
+              }
+            }
+            
             // Refresh the workspace after a short delay to batch changes
             setTimeout(() => {
               if (isSubscribed) {
