@@ -21,6 +21,12 @@ const location_y_coords = [110, 79, -20, 10, 40, 70, 100, -40, -10, 30, 60, 90, 
 
 const location_names = ["MOUNT FUJI (JP)","MOUNT KEIRIN (CN)","EMERALD BUDDHA TEMPLE (TH)", "ANGKOR WAT (KH)","AYERS ROCK (AU)", "TAJ MAHAL (IN)","LENINGRAD (RU)","PARIS (FR)","LONDON (UK)","BARCELONA (ES)","ATHENS (GR)", "PYRAMIDS (EG)", "MOUNT KILIMANJARO (TZ)", "NEW YORK (US)","MAYAN RUINS (MX)","ANTARCTICA (AQ)","EASTER ISLAND (CL)"];
 
+# Level configuration - backgrounds and difficulty
+const level_backgrounds = ["fuji_bg", "keirin_bg", "buddha_bg", "angkor_bg", "ayers_bg", "taj_bg", "leningrad_bg", "paris_bg", "london_bg", "barcelona_bg", "athens_bg", "pyramids_bg", "kilimanjaro_bg", "newyork_bg", "mayan_bg", "antarctica_bg", "easter_bg"]
+
+const level_enemy_count = [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7]
+const level_enemy_speed = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5]
+
 num_locations = 17
 current_location = 0
 location_glow_intensity = 60
@@ -196,10 +202,49 @@ def draw_title_screen():
     if (title_intensity == 30):
         title_state = 0
 
-def draw_game_level():
-    # Draw Monte Fuji background
+def draw_level_background():
+    # Draws the background specific to current_location
     SET_INTENSITY(60)
-    DRAW_VECTOR("fuji_bg", 0, 50)
+    
+    # Select background based on current_location (0-16)
+    if current_location == 0:
+        DRAW_VECTOR("fuji_bg", 0, 50)
+    elif current_location == 1:
+        DRAW_VECTOR("keirin_bg", 0, 50)
+    elif current_location == 2:
+        DRAW_VECTOR("buddha_bg", 0, 50)
+    elif current_location == 3:
+        DRAW_VECTOR("angkor_bg", 0, 50)
+    elif current_location == 4:
+        DRAW_VECTOR("ayers_bg", 0, 50)
+    elif current_location == 5:
+        DRAW_VECTOR("taj_bg", 0, 50)
+    elif current_location == 6:
+        DRAW_VECTOR("leningrad_bg", 0, 50)
+    elif current_location == 7:
+        DRAW_VECTOR("paris_bg", 0, 50)
+    elif current_location == 8:
+        DRAW_VECTOR("london_bg", 0, 50)
+    elif current_location == 9:
+        DRAW_VECTOR("barcelona_bg", 0, 50)
+    elif current_location == 10:
+        DRAW_VECTOR("athens_bg", 0, 50)
+    elif current_location == 11:
+        DRAW_VECTOR("pyramids_bg", 0, 50)
+    elif current_location == 12:
+        DRAW_VECTOR("kilimanjaro_bg", 0, 50)
+    elif current_location == 13:
+        DRAW_VECTOR("newyork_bg", 0, 50)
+    elif current_location == 14:
+        DRAW_VECTOR("mayan_bg", 0, 50)
+    elif current_location == 15:
+        DRAW_VECTOR("antarctica_bg", 0, 50)
+    else:  # current_location == 16
+        DRAW_VECTOR("easter_bg", 0, 50)
+
+def draw_game_level():
+    # Draw level-specific background
+    draw_level_background()
     
     # Draw ground line
     SET_INTENSITY(100)
