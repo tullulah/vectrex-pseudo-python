@@ -1106,6 +1106,7 @@ STATE_MAP EQU 1
 STATE_GAME EQU 2
 LOOP_BODY:
     LEAS -12,S ; allocate locals
+    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (consistent timing)
     ; DEBUG: Processing 3 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(9)
     ; VPy_LINE:68
@@ -2192,7 +2193,6 @@ IF_END_100:
     LBRA IF_END_96
 IF_NEXT_97:
 IF_END_96:
-    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (at end)
     LEAS 12,S ; free locals
     RTS
 
