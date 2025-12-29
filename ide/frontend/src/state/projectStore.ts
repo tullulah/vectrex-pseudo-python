@@ -292,6 +292,36 @@ export const useProjectStore = create<ProjectState>()(
           
           get().setVpyProject(loaded);
           
+          // Store project path globally for breakpoint persistence
+          (window as any).__currentProjectPath__ = result.path;
+          
+          // Load breakpoints from database for this project
+          if (typeof (window as any).__editorStore__ !== 'undefined') {
+            const editorStore = (window as any).__editorStore__.getState();
+            if (editorStore.loadBreakpointsFromDb) {
+              editorStore.loadBreakpointsFromDb(result.path).catch((err: any) => {
+                logger.error('Project', 'Failed to load breakpoints:', err);
+              });
+            }
+          }
+          
+          // Load existing PDB file if available
+          const debugAPI = (window as any).debug;
+          if (debugAPI && result.config.project.entry) {
+            const mainFile = `${result.rootDir}/src/${result.config.project.entry}`;
+            debugAPI.loadPdb(mainFile).then((pdbResult: any) => {
+              if (pdbResult.success && pdbResult.pdbData) {
+                logger.info('Project', 'Auto-loaded debug symbols from existing .pdb file');
+                const { useDebugStore } = require('./debugStore');
+                useDebugStore.getState().loadPdbData(pdbResult.pdbData);
+              } else {
+                logger.debug('Project', 'No existing .pdb file found (compile to generate)');
+              }
+            }).catch((err: any) => {
+              logger.debug('Project', 'Could not load PDB:', err);
+            });
+          }
+          
           // Also set as workspace for file explorer
           const files = await (window as any).files?.readDirectory?.(loaded.rootDir);
           if (files?.files) {

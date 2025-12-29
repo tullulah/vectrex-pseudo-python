@@ -24,27 +24,153 @@
 ;***************************************************************************
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
-; Must be defined BEFORE builtin helpers that reference them
-RESULT         EQU $C880   ; Main result temporary
-PSG_MUSIC_PTR    EQU $C89C   ; Pointer to current PSG music position (RESULT+$1C, 2 bytes)
-PSG_MUSIC_START  EQU $C89E   ; Pointer to start of PSG music for loops (RESULT+$1E, 2 bytes)
-PSG_IS_PLAYING   EQU $C8A0   ; Playing flag (RESULT+$20, 1 byte)
-PSG_MUSIC_ACTIVE EQU $C8A1   ; Set=1 during UPDATE_MUSIC_PSG (for logging, 1 byte)
-PSG_FRAME_COUNT  EQU $C8A2   ; Current frame register write count (RESULT+$22, 1 byte)
-PSG_DELAY_FRAMES EQU $C8A3   ; Frames to wait before reading next music data (RESULT+$23, 1 byte)
-PSG_MUSIC_PTR_DP   EQU $9C  ; DP-relative offset (for lwasm compatibility)
-PSG_MUSIC_START_DP EQU $9E  ; DP-relative offset (for lwasm compatibility)
-PSG_IS_PLAYING_DP  EQU $A0  ; DP-relative offset (for lwasm compatibility)
-PSG_MUSIC_ACTIVE_DP EQU $A1 ; DP-relative offset (for lwasm compatibility)
-PSG_FRAME_COUNT_DP EQU $A2  ; DP-relative offset (for lwasm compatibility)
-PSG_DELAY_FRAMES_DP EQU $A3 ; DP-relative offset (for lwasm compatibility)
-SFX_PTR        EQU $C8A8   ; Current SFX pointer (RESULT+$28, 2 bytes)
-SFX_TICK       EQU $C8AA   ; Current frame counter (RESULT+$2A, 2 bytes)
-SFX_ACTIVE     EQU $C8AC   ; Playback state (RESULT+$2C, 1 byte)
-SFX_PHASE      EQU $C8AD   ; Envelope phase: 0=A,1=D,2=S,3=R (RESULT+$2D, 1 byte)
-SFX_VOL        EQU $C8AE   ; Current volume 0-15 (RESULT+$2E, 1 byte)
+; AUTO-GENERATED - All offsets calculated automatically
+; Total RAM used: 35 bytes
+RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
+TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
+TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
+TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
+TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
+TMPPTR               EQU $C880+$0A   ; Pointer temp (2 bytes)
+TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
+PSG_MUSIC_PTR        EQU $C880+$12   ; Current music position pointer (2 bytes)
+PSG_MUSIC_START      EQU $C880+$14   ; Music start pointer (for loops) (2 bytes)
+PSG_IS_PLAYING       EQU $C880+$16   ; Playing flag ($00=stopped, $01=playing) (1 bytes)
+PSG_MUSIC_ACTIVE     EQU $C880+$17   ; Set during UPDATE_MUSIC_PSG (1 bytes)
+PSG_FRAME_COUNT      EQU $C880+$18   ; Frame register write count (1 bytes)
+PSG_DELAY_FRAMES     EQU $C880+$19   ; Frames to wait before next read (1 bytes)
+SFX_PTR              EQU $C880+$1A   ; Current SFX data pointer (2 bytes)
+SFX_TICK             EQU $C880+$1C   ; Current frame counter (2 bytes)
+SFX_ACTIVE           EQU $C880+$1E   ; Playback state ($00=stopped, $01=playing) (1 bytes)
+SFX_PHASE            EQU $C880+$1F   ; Envelope phase (0=A,1=D,2=S,3=R) (1 bytes)
+SFX_VOL              EQU $C880+$20   ; Current volume level (0-15) (1 bytes)
+NUM_STR              EQU $C880+$21   ; String buffer for PRINT_NUMBER (2 bytes)
+PSG_MUSIC_PTR_DP   EQU $12  ; DP-relative
+PSG_MUSIC_START_DP EQU $14  ; DP-relative
+PSG_IS_PLAYING_DP  EQU $16  ; DP-relative
+PSG_MUSIC_ACTIVE_DP EQU $17  ; DP-relative
+PSG_FRAME_COUNT_DP EQU $18  ; DP-relative
+PSG_DELAY_FRAMES_DP EQU $19  ; DP-relative
 
     JMP START
+
+;**** CONST DECLARATIONS (NUMBER-ONLY) ****
+
+; === JOYSTICK BUILTIN SUBROUTINES ===
+; J1_X() - Read Joystick 1 X axis (BIOS Analog with deadzone)
+; Uses Joy_Analog ($F1F5) to respect Vectrex analog hardware
+; Applies deadzone to convert -127..+127 → -1/0/+1
+; Returns: D = -1 (left), 0 (center), +1 (right)
+J1X_BUILTIN:
+    LDA #$80
+    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)
+    LDA #1
+    STA $C81F    ; Vec_Joy_Mux_1_X (enable X axis)
+    CLR $C820    ; Vec_Joy_Mux_1_Y (disable Y for speed)
+    LDA #$D0
+    TFR A,DP     ; Set DP=$D0 (BIOS requirement)
+    JSR $F1F5    ; Joy_Analog (reads real hardware)
+    LDA #$C8
+    TFR A,DP     ; Restore DP=$C8
+    LDB $C81B    ; Vec_Joy_1_X (signed -127..+127)
+    SEX          ; Sign-extend to D
+    ; Apply deadzone: -40..+40 = center (0)
+    CMPB #$D8    ; Compare with -40 (0xD8)
+    BGT .J1X_CHK_RIGHT
+    LDD #$FFFF   ; Left (-1)
+    RTS
+.J1X_CHK_RIGHT:
+    CMPB #40     ; Compare with +40
+    BLT .J1X_CENTER
+    LDD #1       ; Right (+1)
+    RTS
+.J1X_CENTER:
+    LDD #0       ; Center (0)
+    RTS
+
+; J1_Y() - Read Joystick 1 Y axis (BIOS Analog with deadzone)
+; Uses Joy_Analog ($F1F5) to respect Vectrex analog hardware
+; Applies deadzone to convert -127..+127 → -1/0/+1
+; Returns: D = -1 (down), 0 (center), +1 (up)
+J1Y_BUILTIN:
+    LDA #$80
+    STA $C81A    ; Vec_Joy_Resltn (resolution: $80=fast)
+    CLR $C81F    ; Vec_Joy_Mux_1_X (disable X for speed)
+    LDA #1
+    STA $C820    ; Vec_Joy_Mux_1_Y (enable Y axis)
+    LDA #$D0
+    TFR A,DP     ; Set DP=$D0 (BIOS requirement)
+    JSR $F1F5    ; Joy_Analog (reads real hardware)
+    LDA #$C8
+    TFR A,DP     ; Restore DP=$C8
+    LDB $C81C    ; Vec_Joy_1_Y (signed -127..+127)
+    SEX          ; Sign-extend to D
+    ; Apply deadzone: -40..+40 = center (0)
+    CMPB #$D8    ; Compare with -40 (0xD8)
+    BGT .J1Y_CHK_UP
+    LDD #$FFFF   ; Down (-1)
+    RTS
+.J1Y_CHK_UP:
+    CMPB #40     ; Compare with +40
+    BLT .J1Y_CENTER
+    LDD #1       ; Up (+1)
+    RTS
+.J1Y_CENTER:
+    LDD #0       ; Center (0)
+    RTS
+
+; === BUTTON BUILTIN SUBROUTINES ===
+; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+; Returns: D = 0 (released), 1 (pressed)
+J1B1_BUILTIN:
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$01
+    BEQ .J1B1_OFF
+    LDD #1
+    RTS
+.J1B1_OFF:
+    LDD #0
+    RTS
+
+; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
+J1B2_BUILTIN:
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$02
+    BEQ .J1B2_OFF
+    LDD #1
+    RTS
+.J1B2_OFF:
+    LDD #0
+    RTS
+
+; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
+J1B3_BUILTIN:
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$04
+    BEQ .J1B3_OFF
+    LDD #1
+    RTS
+.J1B3_OFF:
+    LDD #0
+    RTS
+
+; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
+J1B4_BUILTIN:
+    JSR $F1BA    ; Read_Btns
+    LDA $C80F    ; Vec_Btn_State
+    ANDA #$08
+    BEQ .J1B4_OFF
+    LDD #1
+    RTS
+.J1B4_OFF:
+    LDD #0
+    RTS
 
 VECTREX_PRINT_TEXT:
     ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)
@@ -587,7 +713,13 @@ RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
 ; Conditionally negates X and/or Y coordinates and deltas
-LDA ,X+                 ; intensity
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
+BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
+LDA ,X+                 ; Otherwise, read intensity from vector data
+BRA DSWM_SET_INTENSITY
+DSWM_USE_OVERRIDE:
+LEAX 1,X                ; Skip intensity byte in vector data
+DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
 PULS A                  ; Restore intensity
@@ -683,7 +815,14 @@ BRA DSWM_LOOP
 DSWM_NEXT_PATH:
 TFR X,D
 PSHS D
-LDA ,X+                 ; Read intensity
+; Check intensity override (same logic as start)
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
+BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
+LDA ,X+                 ; Otherwise, read intensity from vector data
+BRA DSWM_NEXT_SET_INTENSITY
+DSWM_NEXT_USE_OVERRIDE:
+LEAX 1,X                ; Skip intensity byte in vector data
+DSWM_NEXT_SET_INTENSITY:
 PSHS A
 LDB ,X+                 ; y_start
 TST MIRROR_Y
@@ -741,6 +880,180 @@ CLR VIA_shift_reg
 BRA DSWM_LOOP
 DSWM_DONE:
 RTS
+; ============================================================================
+; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters
+; ============================================================================
+; Follows Draw_Sync_List_At pattern: read params BEFORE DP change
+; Inputs: DRAW_CIRCLE_XC, DRAW_CIRCLE_YC, DRAW_CIRCLE_DIAM, DRAW_CIRCLE_INTENSITY (bytes in RAM)
+; Uses 8 segments (octagon) with lookup table for efficiency
+DRAW_CIRCLE_RUNTIME:
+; Read ALL parameters into registers/stack BEFORE changing DP (critical!)
+; (These are byte variables, use LDB not LDD)
+LDB DRAW_CIRCLE_INTENSITY
+PSHS B                 ; Save intensity on stack
+
+LDB DRAW_CIRCLE_DIAM
+SEX                    ; Sign-extend to 16-bit (diameter is unsigned 0..255)
+LSRA                   ; Divide by 2 to get radius
+RORB
+STD DRAW_CIRCLE_TEMP   ; DRAW_CIRCLE_TEMP = radius (16-bit)
+
+LDB DRAW_CIRCLE_XC     ; xc (signed -128..127)
+SEX
+STD DRAW_CIRCLE_TEMP+2 ; Save xc
+
+LDB DRAW_CIRCLE_YC     ; yc (signed -128..127)
+SEX
+STD DRAW_CIRCLE_TEMP+4 ; Save yc
+
+; NOW safe to setup BIOS (all params are in DRAW_CIRCLE_TEMP+stack)
+LDA #$D0
+TFR A,DP
+JSR Reset0Ref
+
+; Set intensity (from stack)
+PULS A                 ; Get intensity from stack
+CMPA #$5F
+BEQ DCR_intensity_5F
+JSR Intensity_a
+BRA DCR_after_intensity
+DCR_intensity_5F:
+JSR Intensity_5F
+DCR_after_intensity:
+
+; Move to start position: (xc + radius, yc)
+; radius = DRAW_CIRCLE_TEMP, xc = DRAW_CIRCLE_TEMP+2, yc = DRAW_CIRCLE_TEMP+4
+LDD DRAW_CIRCLE_TEMP   ; D = radius
+ADDD DRAW_CIRCLE_TEMP+2 ; D = xc + radius
+TFR B,B                ; Keep X in B (low byte)
+PSHS B                 ; Save X on stack
+LDD DRAW_CIRCLE_TEMP+4 ; Load yc
+TFR B,A                ; Y to A
+PULS B                 ; X to B
+JSR Moveto_d
+
+; Loop through 8 segments using lookup table
+LDX #DCR_DELTA_TABLE   ; Point to delta table
+LDB #8                 ; 8 segments
+PSHS B                 ; Save counter on stack
+
+DCR_LOOP:
+CLR Vec_Misc_Count     ; Relative drawing
+
+; Load delta multipliers from table
+LDA ,X+                ; dx multiplier (-1, 0, 1, or 2 for half)
+LDB ,X+                ; dy multiplier
+PSHS A,B               ; Save multipliers
+
+; Calculate dy = (dy_mult * radius) / 2 if needed
+LDD DRAW_CIRCLE_TEMP   ; Load radius
+PULS A,B               ; Get multipliers (A=dx_mult, B=dy_mult)
+PSHS A                 ; Save dx_mult
+
+; Process dy_mult
+TSTB
+BEQ DCR_dy_zero        ; dy = 0
+CMPB #2
+BEQ DCR_dy_half        ; dy = r/2
+CMPB #$FE              ; -2 (half negative)
+BEQ DCR_dy_neg_half
+CMPB #1
+BEQ DCR_dy_pos         ; dy = r
+; dy = -r
+LDD DRAW_CIRCLE_TEMP
+NEGA
+NEGB
+SBCA #0
+BRA DCR_dy_done
+DCR_dy_zero:
+LDD #0                 ; Clear both A and B
+BRA DCR_dy_done
+DCR_dy_half:
+LDD DRAW_CIRCLE_TEMP
+LSRA
+RORB
+BRA DCR_dy_done
+DCR_dy_neg_half:
+LDD DRAW_CIRCLE_TEMP
+LSRA
+RORB
+NEGA
+NEGB
+SBCA #0
+BRA DCR_dy_done
+DCR_dy_pos:
+LDD DRAW_CIRCLE_TEMP
+DCR_dy_done:
+TFR B,A                ; Move dy result to A (we only need 8-bit for Vectrex coordinates)
+PSHS A                 ; Save dy on stack
+
+; Process dx_mult (same logic)
+LDB 1,S                ; Get dx_mult from stack
+TSTB
+BEQ DCR_dx_zero
+CMPB #2
+BEQ DCR_dx_half
+CMPB #$FE
+BEQ DCR_dx_neg_half
+CMPB #1
+BEQ DCR_dx_pos
+; dx = -r
+LDD DRAW_CIRCLE_TEMP
+NEGA
+NEGB
+SBCA #0
+BRA DCR_dx_done
+DCR_dx_zero:
+LDD #0                 ; Clear both A and B
+BRA DCR_dx_done
+DCR_dx_half:
+LDD DRAW_CIRCLE_TEMP
+LSRA
+RORB
+BRA DCR_dx_done
+DCR_dx_neg_half:
+LDD DRAW_CIRCLE_TEMP
+LSRA
+RORB
+NEGA
+NEGB
+SBCA #0
+BRA DCR_dx_done
+DCR_dx_pos:
+LDD DRAW_CIRCLE_TEMP
+DCR_dx_done:
+TFR B,B                ; dx in B
+PULS A                 ; dy in A
+LEAS 1,S               ; Drop dx_mult
+
+; Draw line with calculated deltas (preserve X - it points to table)
+PSHS X                 ; Save table pointer
+JSR Draw_Line_d
+PULS X                 ; Restore table pointer
+
+; Loop control
+DEC ,S                 ; Decrement counter
+BNE DCR_LOOP
+
+LEAS 1,S               ; Clean counter from stack
+
+; DP is ALREADY $D0 from BIOS, no need to restore (Draw_Sync_List_At doesn't restore either)
+RTS
+
+RTS
+
+; Delta multiplier table: 8 segments (dx_mult, dy_mult)
+; 0=zero, 1=r, -1=$FF=-r, 2=r/2, -2=$FE=-r/2
+DCR_DELTA_TABLE:
+FCB 2,2      ; Seg 1: dx=r/2, dy=r/2 (right-up)
+FCB 0,1      ; Seg 2: dx=0, dy=r (up)
+FCB $FE,2    ; Seg 3: dx=-r/2, dy=r/2 (left-up)
+FCB $FF,0    ; Seg 4: dx=-r, dy=0 (left)
+FCB $FE,$FE  ; Seg 5: dx=-r/2, dy=-r/2 (left-down)
+FCB 0,$FF    ; Seg 6: dx=0, dy=-r (down)
+FCB 2,$FE    ; Seg 7: dx=r/2, dy=-r/2 (right-down)
+FCB 1,0      ; Seg 8: dx=r, dy=0 (right)
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -749,14 +1062,35 @@ START:
     LDX #Vec_Default_Stk
     TFR X,S
     JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence
+    ; Initialize SFX variables to prevent random noise on startup
+    CLR sfx_status         ; Mark SFX as inactive (0=off)
+    LDD #$0000
+    STD sfx_pointer        ; Clear SFX pointer
 
     ; *** DEBUG *** main() function code inline (initialization)
+    ; VPy_LINE:3
     LDD #65535
     STD VAR_SONG
-    LDX #ARRAY_0    ; Array literal
-    STX VAR_LOCATION_Y_COORDS
-    LDX #ARRAY_1    ; Array literal
-    STX VAR_LOCATION_X_COORDS
+    ; VPy_LINE:5
+    ; Copy array 'location_y_coords' from ROM to RAM (2 elements)
+    LDX #ARRAY_0       ; Source: ROM array data
+    LDU #VAR_LOCATION_Y_COORDS_DATA ; Dest: RAM array space
+    LDD #2        ; Number of elements
+COPY_LOOP_0:
+    LDY ,X++        ; Load word from ROM, increment source
+    STY ,U++        ; Store word to RAM, increment dest
+    SUBD #1         ; Decrement counter
+    BNE COPY_LOOP_0 ; Loop until done
+    ; VPy_LINE:6
+    ; Copy array 'location_x_coords' from ROM to RAM (2 elements)
+    LDX #ARRAY_1       ; Source: ROM array data
+    LDU #VAR_LOCATION_X_COORDS_DATA ; Dest: RAM array space
+    LDD #2        ; Number of elements
+COPY_LOOP_1:
+    LDY ,X++        ; Load word from ROM, increment source
+    STY ,U++        ; Store word to RAM, increment dest
+    SUBD #1         ; Decrement counter
+    BNE COPY_LOOP_1 ; Loop until done
     ; VPy_LINE:11
     LDD #80
     STD RESULT
@@ -767,6 +1101,7 @@ START:
     CLRA
     CLRB
     STD RESULT
+; VPy_LINE:10
 
 MAIN:
     JSR Wait_Recal
@@ -776,70 +1111,36 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
+    ; VPy_LINE:14
 LOOP_BODY:
     LEAS -8,S ; allocate locals
+    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (consistent timing)
     ; DEBUG: Processing 9 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(0)
     ; VPy_LINE:17
 ; NATIVE_CALL: J1_BUTTON_1 at line 17
-; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$01
-    BEQ .j1b1_not_pressed
-    LDD #1
-    BRA .j1b1_done
-.j1b1_not_pressed:
-    LDD #0
-.j1b1_done:
+    JSR J1B1_BUILTIN
     STD RESULT
     LDX RESULT
     STX 0 ,S
     ; DEBUG: Statement 1 - Discriminant(0)
     ; VPy_LINE:18
 ; NATIVE_CALL: J1_BUTTON_2 at line 18
-; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$02
-    BEQ .j1b2_not_pressed
-    LDD #1
-    BRA .j1b2_done
-.j1b2_not_pressed:
-    LDD #0
-.j1b2_done:
+    JSR J1B2_BUILTIN
     STD RESULT
     LDX RESULT
     STX 2 ,S
     ; DEBUG: Statement 2 - Discriminant(0)
     ; VPy_LINE:19
 ; NATIVE_CALL: J1_BUTTON_3 at line 19
-; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$04
-    BEQ .j1b3_not_pressed
-    LDD #1
-    BRA .j1b3_done
-.j1b3_not_pressed:
-    LDD #0
-.j1b3_done:
+    JSR J1B3_BUILTIN
     STD RESULT
     LDX RESULT
     STX 4 ,S
     ; DEBUG: Statement 3 - Discriminant(0)
     ; VPy_LINE:20
 ; NATIVE_CALL: J1_BUTTON_4 at line 20
-; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$08
-    BEQ .j1b4_not_pressed
-    LDD #1
-    BRA .j1b4_done
-.j1b4_not_pressed:
-    LDD #0
-.j1b4_done:
+    JSR J1B4_BUILTIN
     STD RESULT
     LDX RESULT
     STX 6 ,S
@@ -990,6 +1291,7 @@ CE_19:
     LDD RESULT
     LBEQ IF_NEXT_17
     ; VPy_LINE:33
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #0
     STD RESULT
     LDD RESULT
@@ -1033,6 +1335,7 @@ CE_23:
     LDD RESULT
     LBEQ IF_NEXT_21
     ; VPy_LINE:35
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #0
     STD RESULT
     LDD RESULT
@@ -1070,27 +1373,19 @@ IF_END_20:
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (at end)
     LEAS 8,S ; free locals
     RTS
 
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-; Variables (in RAM)
-TMPLEFT   EQU RESULT+2
-TMPRIGHT  EQU RESULT+4
-TMPPTR    EQU RESULT+6
-TEMP_YX   EQU RESULT+26   ; Temporary y,x storage (2 bytes)
-TEMP_X    EQU RESULT+28   ; Temporary x storage (1 byte)
-TEMP_Y    EQU RESULT+29   ; Temporary y storage (1 byte)
 VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 VAR_SONG EQU $CF10+0
-VAR_LOCATION_Y_COORDS EQU $CF10+2
-VAR_LOCATION_X_COORDS EQU $CF10+4
+VAR_LOCATION_Y_COORDS_DATA EQU $CF10+2  ; Array data (2 elements)
+VAR_LOCATION_X_COORDS_DATA EQU $CF10+6  ; Array data (2 elements)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
@@ -2340,7 +2635,13 @@ STR_0:
 STR_1:
     FCC "SONG 2"
     FCB $80
-DRAW_VEC_X EQU RESULT+6
-DRAW_VEC_Y EQU RESULT+7
-MIRROR_X EQU RESULT+8
-MIRROR_Y EQU RESULT+9
+DRAW_VEC_X EQU RESULT+10
+DRAW_VEC_Y EQU RESULT+11
+MIRROR_X EQU RESULT+12
+MIRROR_Y EQU RESULT+13
+DRAW_VEC_INTENSITY EQU RESULT+14
+DRAW_CIRCLE_XC EQU RESULT+15
+DRAW_CIRCLE_YC EQU RESULT+16
+DRAW_CIRCLE_DIAM EQU RESULT+17
+DRAW_CIRCLE_INTENSITY EQU RESULT+18
+DRAW_CIRCLE_TEMP EQU RESULT+19

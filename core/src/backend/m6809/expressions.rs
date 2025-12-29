@@ -4,10 +4,10 @@ use crate::codegen::CodegenOptions;
 use super::{FuncCtx, emit_builtin_call, fresh_label, power_of_two_const, format_expr_ref};
 
 pub fn emit_expr(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions) {
-    emit_expr_depth(expr, out, fctx, string_map, opts, 0);
+    emit_expr_depth(expr, out, fctx, string_map, opts, 0, 0);
 }
 
-pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, depth: usize) {
+pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map: &std::collections::BTreeMap<String,String>, opts: &CodegenOptions, depth: usize, stack_depth: usize) {
     // Safety: Prevent stack overflow with deep recursion
     const MAX_DEPTH: usize = 500;
     if depth > MAX_DEPTH {
@@ -32,13 +32,19 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             let upper_name = name.name.to_uppercase();
             // Check if it's a local variable first
             if let Some(off) = fctx.offset_of(&name.name) { 
-                out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", off)); 
+                let adjusted_offset = off + (stack_depth * 2) as i32;
+                out.push_str(&format!("    LDD {} ,S\n    STD RESULT\n", adjusted_offset)); 
             } 
             // Check if it's a compile-time constant
             else if let Some(value) = opts.const_values.get(&upper_name) {
                 out.push_str(&format!("    LDD #{}\n    STD RESULT\n", value));
             }
-            // Otherwise it's a global variable
+            // Check if it's a mutable array (need address of VAR_NAME_DATA, not value)
+            else if opts.mutable_arrays.contains(&name.name) {
+                // Load immediate address of array data (native assembler now supports EQU in immediate mode)
+                out.push_str(&format!("    LDD #VAR_{}_DATA\n    STD RESULT\n", upper_name));
+            }
+            // Otherwise it's a regular global variable
             else { 
                 out.push_str(&format!("    LDD VAR_{}\n    STD RESULT\n", upper_name)); 
             }
@@ -49,7 +55,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             }
             for (i, arg) in ci.args.iter().enumerate() {
                 if i >= 5 { break; }
-                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i));
             }
@@ -76,17 +82,18 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             if let Expr::Ident(info) = &*mc.target {
                 if let Some(off) = fctx.offset_of(&info.name) {
                     // Local struct: compute address with LEAX
-                    out.push_str(&format!("    LEAX {},S  ; Compute address of local struct\n", off));
+                    let adjusted_offset = off + (stack_depth * 2) as i32;
+                    out.push_str(&format!("    LEAX {},S  ; Compute address of local struct\n", adjusted_offset));
                     out.push_str("    STX VAR_ARG0\n");
                 } else {
                     // Global struct or parameter: load value and pass as pointer
-                    emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
+                    emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1, stack_depth);
                     out.push_str("    LDD RESULT\n");
                     out.push_str("    STD VAR_ARG0\n");
                 }
             } else {
                 // Complex expression: evaluate and pass result as pointer
-                emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(&mc.target, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str("    LDD RESULT\n");
                 out.push_str("    STD VAR_ARG0\n");
             }
@@ -94,7 +101,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // Emit remaining arguments
             for (i, arg) in mc.args.iter().enumerate() {
                 if i >= 4 { break; } // Only 5 args total (ARG0-ARG4), first is self
-                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(arg, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str("    LDD RESULT\n");
                 out.push_str(&format!("    STD VAR_ARG{}\n", i + 1));
             }
@@ -121,7 +128,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
         Expr::Binary { op, left, right } => {
             // x+x and x-x peepholes
             if matches!(op, BinOp::Add) && format_expr_ref(left) == format_expr_ref(right) {
-                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str("    LDD RESULT\n    ADDD RESULT\n    STD RESULT\n");
                 return;
             }
@@ -132,13 +139,13 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // Generalized power-of-two multiply via shifts (any 2^k) using ASLB/ROLA.
             if matches!(op, BinOp::Mul) {
                 if let Some(shift) = power_of_two_const(right) {
-                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    ASLB\n    ROLA\n"); }
                     out.push_str("    STD RESULT\n");
                     return;
                 } else if let Some(shift) = power_of_two_const(left) {
-                    emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
+                    emit_expr_depth(right, out, fctx, string_map, opts, depth + 1, stack_depth);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    ASLB\n    ROLA\n"); }
                     out.push_str("    STD RESULT\n");
@@ -148,7 +155,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             // Generalized power-of-two division via shifts (only when RHS is const).
             if matches!(op, BinOp::Div) {
                 if let Some(shift) = power_of_two_const(right) {
-                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+                    emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
                     out.push_str("    LDD RESULT\n");
                     for _ in 0..shift { out.push_str("    LSRA\n    RORB\n"); }
                     out.push_str("    STD RESULT\n");
@@ -156,10 +163,13 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                 }
             }
             // Fallback general operations via temporaries / helpers.
-            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
-            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
+            // ALWAYS use stack to preserve left operand from corruption by right operand
+            out.push_str("    PSHS D\n");
+            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1, stack_depth + 1);
             out.push_str("    LDD RESULT\n    STD TMPRIGHT\n");
+            out.push_str("    PULS D\n    STD TMPLEFT\n");
             match op {
                 BinOp::Add => out.push_str("    LDD TMPLEFT\n    ADDD TMPRIGHT\n    STD RESULT\n"),
                 BinOp::Sub => out.push_str("    LDD TMPLEFT\n    SUBD TMPRIGHT\n    STD RESULT\n"),
@@ -175,13 +185,13 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             }
         }
         Expr::BitNot(inner) => {
-            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str("    LDD RESULT\n    COMA\n    COMB\n    STD RESULT\n");
         }
         Expr::Compare { op, left, right } => {
-            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str("    LDD RESULT\n    STD TMPLEFT\n");
-            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(right, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str("    LDD RESULT\n    STD TMPRIGHT\n    LDD TMPLEFT\n    SUBD TMPRIGHT\n");
             // DON'T overwrite result before branch - execute branch immediately after SUBD
             let lt = fresh_label("CT");
@@ -194,11 +204,11 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
         }
         Expr::Logic { op, left, right } => match op {
             LogicOp::And => {
-                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
                 let fl = fresh_label("AND_FALSE");
                 let en = fresh_label("AND_END");
                 out.push_str(&format!("    LDD RESULT\n    BEQ {}\n", fl));
-                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str(&format!(
                     "    LDD RESULT\n    BEQ {}\n    LDD #1\n    STD RESULT\n    BRA {}\n{}:\n    LDD #0\n    STD RESULT\n{}:\n",
                     fl, en, fl, en
@@ -207,9 +217,9 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             LogicOp::Or => {
                 let tr = fresh_label("OR_TRUE");
                 let en = fresh_label("OR_END");
-                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(left, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str(&format!("    LDD RESULT\n    BNE {}\n", tr));
-                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1);
+                emit_expr_depth(right, out, fctx, string_map, opts, depth + 1, stack_depth);
                 out.push_str(&format!(
                     "    LDD RESULT\n    BNE {}\n    LDD #0\n    STD RESULT\n    BRA {}\n{}:\n    LDD #1\n    STD RESULT\n{}:\n",
                     tr, en, tr, en
@@ -217,7 +227,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             }
         },
         Expr::Not(inner) => {
-            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(inner, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str(
                 "    LDD RESULT\n    BEQ NOT_TRUE\n    LDD #0\n    STD RESULT\n    BRA NOT_END\nNOT_TRUE:\n    LDD #1\n    STD RESULT\nNOT_END:\n",
             );
@@ -245,7 +255,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                     out.push_str(&format!("    ; ===== Const array indexing: {} =====\n", target_name.name));
                     
                     // 1. Evaluate index expression
-                    emit_expr_depth(index, out, fctx, string_map, opts, depth + 1);
+                    emit_expr_depth(index, out, fctx, string_map, opts, depth + 1, stack_depth);
                     
                     // 2. Index is in RESULT, multiply by 2 (each element is 2 bytes)
                     out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // D = index * 2
@@ -274,11 +284,11 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
             
             // Regular array (variable in RAM)
             // 1. Evaluate array expression (should return address)
-            emit_expr_depth(target, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(target, out, fctx, string_map, opts, depth + 1, stack_depth);
             out.push_str("    LDD RESULT\n    STD TMPPTR\n"); // Save array base address
             
             // 2. Evaluate index expression
-            emit_expr_depth(index, out, fctx, string_map, opts, depth + 1);
+            emit_expr_depth(index, out, fctx, string_map, opts, depth + 1, stack_depth);
             
             // 3. Multiply index by 2 (each element is 2 bytes)
             out.push_str("    LDD RESULT\n    ASLB\n    ROLA\n"); // D = index * 2
@@ -349,7 +359,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
                             if let Some(layout) = opts.structs.get(type_name) {
                                 if let Some(field_layout) = layout.get_field(field) {
                                     let field_offset_bytes = field_layout.offset as i32; // offset is already in bytes
-                                    let total_offset = base_offset + field_offset_bytes;
+                                    let total_offset = base_offset + field_offset_bytes + (stack_depth * 2) as i32;
                                     out.push_str(&format!("    ; FieldAccess {}.{} (struct {} offset {})\n", var_name, field, type_name, total_offset));
                                     out.push_str(&format!("    LDD {},S\n    STD RESULT\n", total_offset));
                                 } else {

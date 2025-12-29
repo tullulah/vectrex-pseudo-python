@@ -514,6 +514,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 const_values: std::collections::BTreeMap::new(), // Will be populated by backend
                 const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
                 const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
+                mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
                 type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
             });
@@ -551,6 +552,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             const_values: std::collections::BTreeMap::new(), // Will be populated by backend
             const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
             const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
+            mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
             type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
         });

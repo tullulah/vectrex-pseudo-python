@@ -190,6 +190,7 @@ pub struct CodegenOptions {
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
     pub const_arrays: std::collections::BTreeMap<String, usize>, // Maps const array name -> CONST_ARRAY_N index for ROM-only data
     pub const_string_arrays: std::collections::BTreeSet<String>, // Set of const array names that are string arrays (not number arrays)
+    pub mutable_arrays: std::collections::BTreeSet<String>, // Set of mutable (non-const) array names that need RAM allocation
     pub structs: StructRegistry, // Struct layout information (Phase 2)
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     // future: fast_wait_counter could toggle increment of a frame counter
@@ -314,6 +315,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         structs: struct_registry, // Add struct registry to options
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
+        mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         ..opts.clone() 
     };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }

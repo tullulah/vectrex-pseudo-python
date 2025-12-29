@@ -20,6 +20,14 @@ export interface PyPilotMessage {
   metadata?: string; // JSON string
 }
 
+export interface ProjectBreakpoint {
+  id: number;
+  projectPath: string;
+  fileUri: string;
+  lineNumber: number;
+  createdAt: number; // timestamp
+}
+
 let db: Database.Database | null = null;
 
 /**
@@ -64,6 +72,24 @@ export function initPyPilotDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(isActive);
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(sessionId);
     CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+  `);
+
+  // Create breakpoints table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS breakpoints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      projectPath TEXT NOT NULL,
+      fileUri TEXT NOT NULL,
+      lineNumber INTEGER NOT NULL,
+      createdAt INTEGER NOT NULL,
+      UNIQUE(projectPath, fileUri, lineNumber)
+    )
+  `);
+
+  // Create indexes for breakpoints
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_breakpoints_project ON breakpoints(projectPath);
+    CREATE INDEX IF NOT EXISTS idx_breakpoints_file ON breakpoints(fileUri);
   `);
 
   console.log('[PyPilotDB] Database initialized:', dbPath);
@@ -237,4 +263,72 @@ export function closePyPilotDb(): void {
     db = null;
     console.log('[PyPilotDB] Database closed');
   }
+}
+
+/**
+ * Add a breakpoint for a project
+ */
+export function addBreakpoint(projectPath: string, fileUri: string, lineNumber: number): void {
+  const db = getPyPilotDb();
+  const now = Date.now();
+  
+  db.prepare(`
+    INSERT OR IGNORE INTO breakpoints (projectPath, fileUri, lineNumber, createdAt)
+    VALUES (?, ?, ?, ?)
+  `).run(projectPath, fileUri, lineNumber, now);
+  
+  console.log(`[PyPilotDB] Breakpoint added: ${fileUri}:${lineNumber}`);
+}
+
+/**
+ * Remove a breakpoint
+ */
+export function removeBreakpoint(projectPath: string, fileUri: string, lineNumber: number): void {
+  const db = getPyPilotDb();
+  
+  db.prepare(`
+    DELETE FROM breakpoints 
+    WHERE projectPath = ? AND fileUri = ? AND lineNumber = ?
+  `).run(projectPath, fileUri, lineNumber);
+  
+  console.log(`[PyPilotDB] Breakpoint removed: ${fileUri}:${lineNumber}`);
+}
+
+/**
+ * Get all breakpoints for a project
+ */
+export function getBreakpoints(projectPath: string): ProjectBreakpoint[] {
+  const db = getPyPilotDb();
+  
+  return db.prepare(`
+    SELECT * FROM breakpoints 
+    WHERE projectPath = ? 
+    ORDER BY fileUri, lineNumber
+  `).all(projectPath) as ProjectBreakpoint[];
+}
+
+/**
+ * Get breakpoints for a specific file in a project
+ */
+export function getFileBreakpoints(projectPath: string, fileUri: string): number[] {
+  const db = getPyPilotDb();
+  
+  const rows = db.prepare(`
+    SELECT lineNumber FROM breakpoints 
+    WHERE projectPath = ? AND fileUri = ? 
+    ORDER BY lineNumber
+  `).all(projectPath, fileUri) as { lineNumber: number }[];
+  
+  return rows.map(r => r.lineNumber);
+}
+
+/**
+ * Clear all breakpoints for a project
+ */
+export function clearBreakpoints(projectPath: string): void {
+  const db = getPyPilotDb();
+  
+  db.prepare('DELETE FROM breakpoints WHERE projectPath = ?').run(projectPath);
+  
+  console.log(`[PyPilotDB] All breakpoints cleared for project: ${projectPath}`);
 }

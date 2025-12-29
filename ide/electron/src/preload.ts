@@ -391,4 +391,18 @@ contextBridge.exposeInMainWorld('pypilot', {
   getMessageCount: (sessionId: number) => ipcRenderer.invoke('pypilot:getMessageCount', sessionId),
 });
 
+// Breakpoints API
+contextBridge.exposeInMainWorld('breakpoints', {
+  add: (projectPath: string, fileUri: string, lineNumber: number) => ipcRenderer.invoke('breakpoints:add', projectPath, fileUri, lineNumber),
+  remove: (projectPath: string, fileUri: string, lineNumber: number) => ipcRenderer.invoke('breakpoints:remove', projectPath, fileUri, lineNumber),
+  getAll: (projectPath: string) => ipcRenderer.invoke('breakpoints:getAll', projectPath),
+  getFile: (projectPath: string, fileUri: string) => ipcRenderer.invoke('breakpoints:getFile', projectPath, fileUri),
+  clear: (projectPath: string) => ipcRenderer.invoke('breakpoints:clear', projectPath),
+});
+
+// Debug API
+contextBridge.exposeInMainWorld('debug', {
+  loadPdb: (sourcePath: string) => ipcRenderer.invoke('debug:loadPdb', sourcePath),
+});
+
 export {};

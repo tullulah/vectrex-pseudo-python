@@ -25,6 +25,7 @@ interface EditorState {
   setHadFocus: (uri: string, focused: boolean) => void;
   toggleBreakpoint: (uri: string, lineNumber: number) => void;
   clearAllBreakpoints: (uri?: string) => void;
+  loadBreakpointsFromDb: (projectPath: string) => Promise<void>;
 }
 
 // Detect language from file extension
@@ -211,6 +212,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     
     useEditorStore.setState({ breakpoints: { ...s.breakpoints, [uri]: newBps } });
     
+    // Persist to SQLite (async, fire-and-forget)
+    const breakpointsAPI = (window as any).breakpoints;
+    if (breakpointsAPI) {
+      const projectPath = (window as any).__currentProjectPath__;
+      if (projectPath) {
+        if (wasAdded) {
+          breakpointsAPI.add(projectPath, uri, lineNumber)
+            .catch((err: any) => console.error('[EditorStore] Error persisting breakpoint add:', err));
+        } else {
+          breakpointsAPI.remove(projectPath, uri, lineNumber)
+            .catch((err: any) => console.error('[EditorStore] Error persisting breakpoint remove:', err));
+        }
+      }
+    }
+    
     // Notify debugStore for dynamic breakpoint synchronization
     // This allows adding/removing breakpoints during active debugging session
     if (wasAdded) {
@@ -227,7 +243,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       logger.debug('App', 'Cleared all breakpoints in all files');
       return { breakpoints: {} };
     }
-  })
+  }),
+  
+  loadBreakpointsFromDb: async (projectPath: string) => {
+    const breakpointsAPI = (window as any).breakpoints;
+    if (!breakpointsAPI) {
+      logger.warn('EditorStore', 'Cannot load breakpoints: breakpoints API not available');
+      return;
+    }
+    
+    try {
+      const result = await breakpointsAPI.getAll(projectPath);
+      
+      if (result.success && result.breakpoints) {
+        // Convert flat array to Record<uri, Set<lineNumber>>
+        const breakpointMap: Record<string, Set<number>> = {};
+        
+        for (const bp of result.breakpoints) {
+          if (!breakpointMap[bp.fileUri]) {
+            breakpointMap[bp.fileUri] = new Set<number>();
+          }
+          breakpointMap[bp.fileUri].add(bp.lineNumber);
+        }
+        
+        useEditorStore.setState({ breakpoints: breakpointMap });
+        logger.info('EditorStore', `Loaded ${result.breakpoints.length} breakpoint(s) from database`);
+      }
+    } catch (error) {
+      logger.error('EditorStore', 'Error loading breakpoints from database:', error);
+    }
+  }
 }));
 
 // Expose store globally for MCP server access

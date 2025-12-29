@@ -82,90 +82,94 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     
     // Joystick builtins (always emit since they're commonly used)
     out.push_str("; === JOYSTICK BUILTIN SUBROUTINES ===\n");
-    out.push_str("; J1_X() - Read Joystick 1 X axis (Digital from RAM)\n");
-    out.push_str("; Frontend writes unsigned 0-255 to $CF00 (128=center)\n");
-    out.push_str("; Returns: D = -1 (left), 0 (center), +1 (right)\n");
+    out.push_str("; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)\n");
+    out.push_str("; Returns: D = raw value from $C81B after Joy_Analog call\n");
     out.push_str("J1X_BUILTIN:\n");
-    out.push_str("    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)\n");
-    out.push_str("    CMPB #108    ; Check if < 108 (left)\n");
-    out.push_str("    BLO .J1X_LEFT\n");
-    out.push_str("    CMPB #148    ; Check if > 148 (right)\n");
-    out.push_str("    BHI .J1X_RIGHT\n");
-    out.push_str("    LDD #0       ; Center\n");
-    out.push_str("    RTS\n");
-    out.push_str(".J1X_LEFT:\n");
-    out.push_str("    LDD #$FFFF   ; Left (-1)\n");
-    out.push_str("    RTS\n");
-    out.push_str(".J1X_RIGHT:\n");
-    out.push_str("    LDD #1       ; Right (+1)\n");
+    out.push_str("    PSHS X       ; Save X (Joy_Analog uses it)\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)\n");
+    out.push_str("    JSR $F1F5    ; Joy_Analog (updates $C81B from hardware)\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81B)\n");
+    out.push_str("    LDB $C81B    ; Vec_Joy_1_X (now updated by Joy_Analog)\n");
+    out.push_str("    SEX          ; Sign-extend B to D\n");
+    out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     
-    out.push_str("; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)\n");
-    out.push_str("; Frontend writes unsigned 0-255 to $CF01 (128=center)\n");
-    out.push_str("; Returns: D = -1 (down), 0 (center), +1 (up)\n");
+    out.push_str("; J1_Y() - Read Joystick 1 Y axis (INCREMENTAL - with state preservation)\n");
+    out.push_str("; Returns: D = raw value from $C81C after Joy_Analog call\n");
     out.push_str("J1Y_BUILTIN:\n");
-    out.push_str("    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)\n");
-    out.push_str("    CMPB #108    ; Check if < 108 (down)\n");
-    out.push_str("    BLO .J1Y_DOWN\n");
-    out.push_str("    CMPB #148    ; Check if > 148 (up)\n");
-    out.push_str("    BHI .J1Y_UP\n");
-    out.push_str("    LDD #0       ; Center\n");
-    out.push_str("    RTS\n");
-    out.push_str(".J1Y_DOWN:\n");
-    out.push_str("    LDD #$FFFF   ; Down (-1)\n");
-    out.push_str("    RTS\n");
-    out.push_str(".J1Y_UP:\n");
-    out.push_str("    LDD #1       ; Up (+1)\n");
+    out.push_str("    PSHS X       ; Save X (Joy_Analog uses it)\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)\n");
+    out.push_str("    JSR $F1F5    ; Joy_Analog (updates $C81C from hardware)\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81C)\n");
+    out.push_str("    LDB $C81C    ; Vec_Joy_1_Y (now updated by Joy_Analog)\n");
+    out.push_str("    SEX          ; Sign-extend B to D\n");
+    out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     
     // Button builtins (commonly used in games)
     out.push_str("; === BUTTON BUILTIN SUBROUTINES ===\n");
     out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)\n");
     out.push_str("; Returns: D = 0 (released), 1 (pressed)\n");
+    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B1_BUILTIN:\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$01\n");
     out.push_str("    BEQ .J1B1_OFF\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B1_OFF:\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
     out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)\n");
+    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B2_BUILTIN:\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$02\n");
     out.push_str("    BEQ .J1B2_OFF\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B2_OFF:\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
     out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)\n");
+    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B3_BUILTIN:\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$04\n");
     out.push_str("    BEQ .J1B3_OFF\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B3_OFF:\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
     out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)\n");
+    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B4_BUILTIN:\n");
+    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$08\n");
     out.push_str("    BEQ .J1B4_OFF\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B4_OFF:\n");
+    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
@@ -191,7 +195,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     }
     if w.contains("VECTREX_PRINT_TEXT") {
         let start_line = out.lines().count() + 1;
-        let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG2   ; string pointer (ARG2 = third param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG0+1 ; X (ARG0 = first param)\n    JSR Print_Str_d\n    ; DO NOT RESTORE DP - Keep it at $D0 for subsequent vector drawing\n    ; BIOS calls after this will handle DP correctly\n    RTS\n";
+        let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG2   ; string pointer (ARG2 = third param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG0+1 ; X (ARG0 = first param)\n    JSR Print_Str_d\n    JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)\n    RTS\n";
         out.push_str(function_code);
         let end_line = out.lines().count();
         

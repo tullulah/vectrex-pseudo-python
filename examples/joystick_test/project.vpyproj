@@ -1,0 +1,10 @@
+[project]
+name = "joystick_test"
+version = "1.0.0"
+entry = "src/main.vpy"
+
+[build]
+output = "build/joystick_test.bin"
+optimization = 2
+debug_symbols = true
+

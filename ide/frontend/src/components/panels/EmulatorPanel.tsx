@@ -524,19 +524,17 @@ export const EmulatorPanel: React.FC = () => {
         vecx.upHeld = (y > 0.3) || dpadUp;
 
 
-        // Write analog joystick values to RAM ($CF00/$CF01)
-        // VPy's J1_X/J1_Y functions read from these addresses
-        // Values are unsigned 0-255 with 128=center
+        // Write analog joystick values to JSVecX hardware emulation
+        // JSVecX emulates real Vectrex analog hardware: alg_jch0/alg_jch1
+        // Range: 0-255 with 128=center (matches hardware pot values)
         const analogX = Math.round((x + 1) * 127.5); // 0-255 (128=center)
         const analogY = Math.round((y + 1) * 127.5); // 0-255 (128=center)
         
-        if (typeof vecx.write8 !== 'function') {
-          console.error('[EmulatorPanel] ❌ vecx.write8 is not a function! Type:', typeof vecx.write8);
-          return;
-        }
+        // Write to JSVecX analog channels (emulated hardware pots)
+        // BIOS Joy_Analog ($F1F5) reads these, converts via ADC, writes to $C81B/$C81C
+        vecx.alg_jch0 = analogX; // Channel 0 = X axis
+        vecx.alg_jch1 = analogY; // Channel 1 = Y axis
         
-        vecx.write8(0xCF00, analogX); // Vec_Joy_1_X
-        vecx.write8(0xCF01, analogY); // Vec_Joy_1_Y
         // Read button states and build PSG register 14 value
         let psgReg14 = 0xFF; // Default: all buttons released (bits high)
         
@@ -864,17 +862,11 @@ export const EmulatorPanel: React.FC = () => {
                   console.log(`[EmulatorPanel] Step Over: line ${currentLine} → ${nextLine} (0x${targetAddr.toString(16)})`);
                   vecx.debugStepOver(targetAddr);
                 } else {
-                  // No next line - find SMALLEST line that creates a valid loop cycle
-                  // (avoid jumping to setup code before loop, find actual loop entry point)
-                  // Strategy: Find the smallest line that's >= 50% of current line
-                  // This assumes loop() starts around halfway through the file
-                  const loopStartThreshold = Math.floor(currentLine! * 0.5);
-                  const loopStartLine = sortedLines.find(l => l >= loopStartThreshold) || sortedLines[0];
-                  
-                  if (loopStartLine && stepOverPdbData.lineMap[loopStartLine]) {
-                    const targetAddr = parseInt(stepOverPdbData.lineMap[loopStartLine], 16);
-                    console.log(`[EmulatorPanel] Step Over: wrapping from line ${currentLine} → ${loopStartLine} (loop entry at 0x${targetAddr.toString(16)})`);
-                    vecx.debugStepOver(targetAddr);
+                  // No next line found - stop execution instead of auto-wrapping
+                  console.log(`[EmulatorPanel] ⚠️ Step Over: No next line after ${currentLine}, stopping execution`);
+                  debugStoreForStepOver.setState('paused');
+                  if (vecx.running) {
+                    vecx.stop();
                   }
                 }
               }

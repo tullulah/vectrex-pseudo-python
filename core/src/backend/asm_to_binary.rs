@@ -566,10 +566,10 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "CMPA" => emit_cmpa(emitter, operand),
         "CMPB" => emit_cmpb(emitter, operand),
         "CMPD" => emit_cmpd(emitter, operand, equates),
-        "CMPX" => emit_cmpx(emitter, operand),
-        "CMPY" => emit_cmpy(emitter, operand),
-        "CMPU" => emit_cmpu(emitter, operand),
-        "CMPS" => emit_cmps(emitter, operand),
+        "CMPX" => emit_cmpx(emitter, operand, equates),
+        "CMPY" => emit_cmpy(emitter, operand, equates),
+        "CMPU" => emit_cmpu(emitter, operand, equates),
+        "CMPS" => emit_cmps(emitter, operand, equates),
         
         // === 16-BIT LOAD/STORE ===
         "JMP" => emit_jmp(emitter, operand),
@@ -784,7 +784,7 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 
 fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.ldd_immediate(val);
     } else if operand.contains(',') {
         // Indexed mode - parse postbyte
@@ -1516,7 +1516,7 @@ fn emit_subb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
 
 fn emit_addd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.addd_immediate(val);
         Ok(())
     } else {
@@ -1542,7 +1542,7 @@ fn emit_addd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
 
 fn emit_subd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.subd_immediate(val);
         Ok(())
     } else if operand.contains(',') {
@@ -1781,7 +1781,7 @@ fn emit_cmpb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
 
 fn emit_cmpd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpd_immediate(val);
         Ok(())
     } else {
@@ -1800,9 +1800,9 @@ fn emit_cmpd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     }
 }
 
-fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpx_immediate(val);
         Ok(())
     } else {
@@ -1810,9 +1810,9 @@ fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_cmpy(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmpy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpy_immediate(val);
         Ok(())
     } else {
@@ -1820,9 +1820,9 @@ fn emit_cmpy(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_cmpu(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmpu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpu_immediate(val);
         Ok(())
     } else {
@@ -1830,9 +1830,9 @@ fn emit_cmpu(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     }
 }
 
-fn emit_cmps(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmps(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16(&operand[1..])?;
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmps_immediate(val);
         Ok(())
     } else {

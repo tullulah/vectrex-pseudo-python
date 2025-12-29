@@ -31,6 +31,8 @@ num_locations = 17
 current_location = 0
 location_glow_intensity = 60
 location_glow_direction = 0
+joy_x = 0
+joy_y = 0
 prev_joy_x = 0
 prev_joy_y = 0
 intensityval = 0
@@ -39,12 +41,18 @@ intensityval = 0
 countdown_timer = 0      # Countdown from 180 frames (~3 seconds at 60fps)
 countdown_active = 0     # 0=inactive, 1=active
 max_level_unlocked = 0   # Player progression (0-16)
-prev_btn_1 = 0           # Edge detection for button 1
+btn_debounce = 0         # Debounce counter for button press
+BTN_DEBOUNCE_FRAMES = 15  # Frames to hold before registering press (~0.25s at 60fps)
+startup_delay = 0        # Initial delay to stabilize hardware (60 frames = 1 second)
+joystick_poll_counter = 0  # Counter to poll joystick every N frames
 
 # Player variables
 player_x = 0             # Player X position
 player_y = -100          # Player Y position (on ground)
-player_speed = 2         # Movement speed
+player_speed = 2         # Base movement speed
+move_speed = 0           # Current movement speed (calculated from joystick)
+abs_joy = 0              # Helper for absolute value calculation
+speed_multiplier = 0     # Speed multiplier based on joystick position
 player_anim_frame = 1    # Current animation frame (1-5)
 player_anim_counter = 0  # Frame counter for animation timing
 player_anim_speed = 5    # Frames per animation frame
@@ -60,7 +68,7 @@ enemy_vy = [0, 0, 0, 0, 0, 0, 0, 0]            # Y velocities
 enemy_size = [0, 0, 0, 0, 0, 0, 0, 0]          # Size: 4=huge, 3=large, 2=medium, 1=small
 
 # Physics constants
-const GRAVITY = 1         # Downward acceleration
+const GRAVITY = 2         # Downward acceleration (increased from 1 for visible movement)
 const BOUNCE_DAMPING = 9  # Velocity retained after bounce (9/10 = 90%)
 const GROUND_Y = -80      # Y position of ground
 
@@ -80,30 +88,42 @@ def main():
     countdown_timer = 0
     countdown_active = 0
     max_level_unlocked = 0
-    prev_btn_1 = 0
+    btn_debounce = 0
+    startup_delay = 0  # Reset startup delay counter
     
     # Initialize enemy system
     init_enemies()
 
 def loop():
-    # Pantalla de presentación con logo
-
-    if screen == STATE_TITLE: # Music already started in main()
+    # Hardware stabilization delay (1 second at 60fps)
+    # This prevents false button presses on real Vectrex hardware at startup
+    if startup_delay < 60:
+        startup_delay += 1
+        draw_title_screen()  # Show logo during stabilization
+    elif screen == STATE_TITLE: # Music already started in main()
         if (current_music == -1):
             PLAY_MUSIC("pang_theme")
             current_music = 0
         
         draw_title_screen()
 
-        btn1 = J1_BUTTON_1()
-        btn2 = J1_BUTTON_2()
-        btn3 = J1_BUTTON_3()
-        btn4 = J1_BUTTON_4()
+        # Decrement cooldown if active
+        if btn_debounce > 0:
+            btn_debounce -= 1
+        
+        # Only check button if not in cooldown
+        if btn_debounce == 0:
+            btn1 = J1_BUTTON_1()
+            btn2 = J1_BUTTON_2()
+            btn3 = J1_BUTTON_3()
+            btn4 = J1_BUTTON_4()
 
-        if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
-            #PLAY_SFX("coin")
-            screen = STATE_MAP 
-            current_music = -1  # Reset music tracker to trigger map_theme
+            # Register press immediately and start cooldown
+            if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
+                #PLAY_SFX("coin")
+                screen = STATE_MAP 
+                current_music = -1  # Reset music tracker to trigger map_theme
+                btn_debounce = BTN_DEBOUNCE_FRAMES  # Start cooldown
 
     if(screen == STATE_MAP):
         # Play gameplay music (only start if not already playing)
@@ -117,24 +137,28 @@ def loop():
         if(delay<10):
             delay += 1
 
-        # Handle joystick input for location selection
-        joy_x = J1_X()
-        joy_y = J1_Y()
+        # Poll joystick only every 15 frames (to reduce CPU load from Joy_Analog)
+        joystick_poll_counter += 1
+        if joystick_poll_counter >= 15:
+            joystick_poll_counter = 0
+            joy_x = J1_X()
+            joy_y = J1_Y()
         
         # Navigate locations with joystick (circular navigation)
-        if joy_x == 1 and prev_joy_x != 1:
+        # joy_x/joy_y are now raw values (-127 to +127), use thresholds
+        if joy_x > 40 and prev_joy_x <= 40:  # Right threshold
             current_location = current_location + 1
             if current_location >= num_locations:
                 current_location = 0
-        elif joy_x == -1 and prev_joy_x != -1:
+        elif joy_x < -40 and prev_joy_x >= -40:  # Left threshold
             current_location = current_location - 1
             if current_location < 0:
                 current_location = num_locations - 1
-        elif joy_y == 1 and prev_joy_y != 1:
+        elif joy_y > 40 and prev_joy_y <= 40:  # Up threshold
             current_location = current_location + 1
             if current_location >= num_locations:
                 current_location = 0
-        elif joy_y == -1 and prev_joy_y != -1:
+        elif joy_y < -40 and prev_joy_y >= -40:  # Down threshold
             current_location = current_location - 1
             if current_location < 0:
                 current_location = num_locations - 1
@@ -142,26 +166,34 @@ def loop():
         prev_joy_x = joy_x
         prev_joy_y = joy_y
         
-        # Button detection (edge-triggered) to start level
-        btn1 = J1_BUTTON_1()
-        if btn1 == 1 and prev_btn_1 == 0:
-            # Start level - transition to game state
-            screen = STATE_GAME
-            countdown_active = 1
-            countdown_timer = 180  # 3 seconds at 60fps
-            # Spawn enemies immediately when entering game state
-            spawn_level_enemies()
+        # Decrement cooldown if active
+        if btn_debounce > 0:
+            btn_debounce -= 1
         
-        prev_btn_1 = btn1
+        # Only check button if not in cooldown
+        if btn_debounce == 0:
+            btn1 = J1_BUTTON_1()
+            
+            # Register press immediately and start cooldown
+            if btn1 == 1:
+                # Start level - transition to game state
+                screen = STATE_GAME
+                countdown_active = 1
+                countdown_timer = 180  # 3 seconds at 60fps
+                btn_debounce = BTN_DEBOUNCE_FRAMES  # Start cooldown
 
         draw_map_screen()
     
     if screen == STATE_GAME:
         # Countdown "GET READY" phase
         if countdown_active == 1:
+            # Spawn enemies only once when countdown starts
+            if countdown_timer >= 180:
+                spawn_level_enemies()
+            
             # Draw background and enemies during countdown
             draw_level_background()
-            
+          
             # Draw ground line
             SET_INTENSITY(100)
             DRAW_LINE(-120, -100, 120, -100, 100)
@@ -280,31 +312,56 @@ def draw_game_level():
     SET_INTENSITY(100)
     DRAW_LINE(-120, -100, 120, -100, 100)
     
-    # Handle player movement
+    # Handle player movement - use analog values for speed control
     joy_x = J1_X()
+    # Note: No axis inversion needed - hardware provides correct values
     
-    if joy_x == -1:
-        player_x = player_x - player_speed
+    # Apply deadzone threshold (±20)
+    if joy_x < -20 or joy_x > 20:
+        # Simple proportional speed: map joystick to 1-4 pixels per frame
+        # joy_x range: -127 to +127 (excluding deadzone ±20)
+        abs_joy = joy_x
+        if abs_joy < 0:
+            abs_joy = -abs_joy
+        
+        # Map 20-127 to speed 1-4
+        # At minimum tilt (20): speed = 1
+        # At maximum tilt (127): speed = 4
+        if abs_joy < 40:
+            move_speed = 1
+        elif abs_joy < 70:
+            move_speed = 2
+        elif abs_joy < 100:
+            move_speed = 3
+        else:
+            move_speed = 4
+        
+        # Apply direction
+        if joy_x < 0:
+            move_speed = -move_speed
+        
+        player_x = player_x + move_speed
+        
+        # Clamp to screen bounds
         if player_x < -110:
             player_x = -110
-        player_facing = -1
-        
-        # Animate walking
-        player_anim_counter = player_anim_counter + 1
-        if player_anim_counter >= player_anim_speed:
-            player_anim_counter = 0
-            player_anim_frame = player_anim_frame + 1
-            if player_anim_frame > 5:
-                player_anim_frame = 1
-    elif joy_x == 1:
-        player_x = player_x + player_speed
         if player_x > 110:
             player_x = 110
-        player_facing = 1
         
-        # Animate walking
+        # Update facing direction
+        if joy_x < 0:
+            player_facing = -1
+        else:
+            player_facing = 1
+        
+        # Animate walking (faster animation with higher speed)
         player_anim_counter = player_anim_counter + 1
-        if player_anim_counter >= player_anim_speed:
+        # Animation speed inversely proportional to joystick value
+        anim_threshold = player_anim_speed
+        if joy_x < -80 or joy_x > 80:
+            anim_threshold = player_anim_speed / 2  # Faster animation
+        
+        if player_anim_counter >= anim_threshold:
             player_anim_counter = 0
             player_anim_frame = player_anim_frame + 1
             if player_anim_frame > 5:
@@ -345,19 +402,13 @@ def draw_game_level():
         if enemy_active[i] == 1:
             active_count = active_count + 1
         i = i + 1
-    
-    SET_INTENSITY(127)
-    if active_count > 0:
-        PRINT_TEXT(-120, 100, "ENEMIES: ")
-        # Show positions of first enemy for debugging
-        if enemy_active[0] == 1:
-            PRINT_TEXT(-120, 90, "X: ")
-            PRINT_TEXT(-120, 80, "Y: ")
 
 def init_enemies():
     # Initialize enemy system (called once at startup)
     i = 0
     while i < MAX_ENEMIES:
+        PRINT_TEXT(-127, -120, "INIT") 
+
         enemy_active[i] = 0
         enemy_x[i] = 0
         enemy_y[i] = 0
@@ -370,7 +421,7 @@ def spawn_level_enemies():
     # Spawn enemies for current level
     num_enemies = level_enemy_count[current_location]
     base_speed = level_enemy_speed[current_location]
-    
+  
     i = 0
     while i < num_enemies and i < MAX_ENEMIES:
         enemy_active[i] = 1
@@ -392,7 +443,6 @@ def update_enemies():
     i = 0
     while i < MAX_ENEMIES:
         if enemy_active[i] == 1:
-            # Apply gravity
             enemy_vy[i] = enemy_vy[i] - GRAVITY
             
             # Update position

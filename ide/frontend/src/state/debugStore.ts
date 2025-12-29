@@ -225,15 +225,17 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   onBreakpointAdded: (uri, line) => {
     const { pdbData } = get();
     
+    // Always allow adding breakpoint (will be persisted to SQLite by editorStore)
+    // Only sync to WASM emulator if PDB is loaded
     if (!pdbData) {
-      console.warn(`[DebugStore] ⚠️ Cannot add breakpoint: no PDB data loaded yet`);
+      console.log(`[DebugStore] 📍 Breakpoint added (not yet synced to emulator, waiting for PDB): ${uri}:${line}`);
       return;
     }
     
     const address = pdbData.lineMap[line.toString()];
     
     if (address) {
-      console.log(`[DebugStore] ➕ Breakpoint added: line ${line} → ${address}`);
+      console.log(`[DebugStore] ➕ Breakpoint added and synced to emulator: line ${line} → ${address}`);
       window.postMessage({
         type: 'debug-add-breakpoint',
         address,

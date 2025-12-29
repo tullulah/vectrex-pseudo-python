@@ -27,7 +27,12 @@ import {
   getMessages,
   clearMessages,
   getMessageCount,
-  closePyPilotDb
+  closePyPilotDb,
+  addBreakpoint,
+  removeBreakpoint,
+  getBreakpoints,
+  getFileBreakpoints,
+  clearBreakpoints
 } from './pypilotDb.js';
 
 let mainWindow: BrowserWindow | null = null;
@@ -2060,6 +2065,89 @@ ipcMain.handle('pypilot:getMessageCount', async (_e, sessionId: number) => {
     return { success: true, count };
   } catch (error: any) {
     console.error('[PyPilot] Error getting message count:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// Breakpoints (Debug Persistence)
+// ============================================
+
+// Add breakpoint
+ipcMain.handle('breakpoints:add', async (_e, projectPath: string, fileUri: string, lineNumber: number) => {
+  try {
+    addBreakpoint(projectPath, fileUri, lineNumber);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Breakpoints] Error adding breakpoint:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Remove breakpoint
+ipcMain.handle('breakpoints:remove', async (_e, projectPath: string, fileUri: string, lineNumber: number) => {
+  try {
+    removeBreakpoint(projectPath, fileUri, lineNumber);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Breakpoints] Error removing breakpoint:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get all breakpoints for project
+ipcMain.handle('breakpoints:getAll', async (_e, projectPath: string) => {
+  try {
+    const breakpoints = getBreakpoints(projectPath);
+    return { success: true, breakpoints };
+  } catch (error: any) {
+    console.error('[Breakpoints] Error getting breakpoints:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get breakpoints for specific file
+ipcMain.handle('breakpoints:getFile', async (_e, projectPath: string, fileUri: string) => {
+  try {
+    const lines = getFileBreakpoints(projectPath, fileUri);
+    return { success: true, lines };
+  } catch (error: any) {
+    console.error('[Breakpoints] Error getting file breakpoints:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear all breakpoints for project
+ipcMain.handle('breakpoints:clear', async (_e, projectPath: string) => {
+  try {
+    clearBreakpoints(projectPath);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Breakpoints] Error clearing breakpoints:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// Debug Symbols (PDB)
+// ============================================
+
+// Load existing PDB file for a project
+ipcMain.handle('debug:loadPdb', async (_e, sourcePath: string) => {
+  try {
+    const pdbPath = sourcePath.replace(/\.vpy$/, '.pdb');
+    const pdbExists = await fs.access(pdbPath).then(() => true).catch(() => false);
+    
+    if (!pdbExists) {
+      return { success: false, error: 'PDB file not found' };
+    }
+    
+    const pdbContent = await fs.readFile(pdbPath, 'utf-8');
+    const pdbData = JSON.parse(pdbContent);
+    console.log('[Debug] Loaded PDB:', pdbPath);
+    return { success: true, pdbData };
+  } catch (error: any) {
+    console.error('[Debug] Error loading PDB:', error);
     return { success: false, error: error.message };
   }
 });

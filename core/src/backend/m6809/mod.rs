@@ -302,6 +302,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     
+    // Poblar mutable_arrays set para identificar arrays mutables (non-const)
+    for (name, value) in &non_const_vars {
+        if matches!(value, Expr::List(_)) {
+            opts_with_consts.mutable_arrays.insert(name.clone());
+        }
+    }
+    
     let opts = &opts_with_consts; // Use the modified opts
     
         let rt_usage = analyze_runtime_usage(module);
@@ -408,12 +415,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // 2. Runtime temporaries (if needed)
     if !suppress_runtime && rt_usage.needs_tmp_left {
         ram.allocate("TMPLEFT", 2, "Left operand temp");
+        ram.allocate("TMPLEFT2", 2, "Left operand temp 2 (for nested operations)");
     }
     if !suppress_runtime && rt_usage.needs_tmp_right {
         ram.allocate("TMPRIGHT", 2, "Right operand temp");
+        ram.allocate("TMPRIGHT2", 2, "Right operand temp 2 (for nested operations)");
     }
     if !suppress_runtime && rt_usage.needs_tmp_ptr {
         ram.allocate("TMPPTR", 2, "Pointer temp");
+        ram.allocate("TMPPTR2", 2, "Pointer temp 2 (for nested array operations)");
     }
     
     // 3. Multiply helper (if needed)
@@ -582,11 +592,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 tracker.set_line(*source_line);
                 out.push_str(&format!("    ; VPy_LINE:{}\n", source_line));
                 
-                if let Expr::List(_elements) = value {
-                    // Array literal: load address of pre-generated array data
+                if let Expr::List(elements) = value {
+                    // Mutable array: copy from ROM (ARRAY_N) to RAM (VAR_NAME_DATA)
                     let array_label = format!("ARRAY_{}", array_counter);
-                    out.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
-                    out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                    let array_len = elements.len();
+                    out.push_str(&format!("    ; Copy array '{}' from ROM to RAM ({} elements)\n", name, array_len));
+                    out.push_str(&format!("    LDX #{}       ; Source: ROM array data\n", array_label));
+                    out.push_str(&format!("    LDU #VAR_{}_DATA ; Dest: RAM array space\n", name.to_uppercase()));
+                    out.push_str(&format!("    LDD #{}        ; Number of elements\n", array_len));
+                    out.push_str(&format!("COPY_LOOP_{}:\n", array_counter));
+                    out.push_str("    LDY ,X++        ; Load word from ROM, increment source\n");
+                    out.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
+                    out.push_str("    SUBD #1         ; Decrement counter\n");
+                    out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", array_counter));
                     array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
@@ -626,6 +644,23 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
         
         out.push_str(&format!("\n{}:\n", main_label));
+        
+        // Initialize joystick mux ONCE (following pattern from other Vectrex games)
+        // This must be done before any Joy_Analog calls
+        // CRITICAL: Need DP=$C8 to access RAM variables $C81A, $C81F-$C822, $C823
+        out.push_str("    JSR $F1AF    ; DP_to_C8 (required for RAM access)\n");
+        out.push_str("    ; === Initialize Joystick (one-time setup) ===\n");
+        out.push_str("    CLR $C823    ; CRITICAL: Clear analog mode flag (Joy_Analog does DEC on this)\n");
+        out.push_str("    LDA #$01     ; CRITICAL: Resolution threshold (power of 2: $40=fast, $01=accurate)\n");
+        out.push_str("    STA $C81A    ; Vec_Joy_Resltn (loop terminates when B=this value after LSRBs)\n");
+        out.push_str("    LDA #$01\n");
+        out.push_str("    STA $C81F    ; Vec_Joy_Mux_1_X (enable X axis reading)\n");
+        out.push_str("    LDA #$03\n");
+        out.push_str("    STA $C820    ; Vec_Joy_Mux_1_Y (enable Y axis reading)\n");
+        out.push_str("    LDA #$00\n");
+        out.push_str("    STA $C821    ; Vec_Joy_Mux_2_X (disable joystick 2 - CRITICAL!)\n");
+        out.push_str("    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)\n");
+        out.push_str("    ; Mux configured - J1_X()/J1_Y() can now be called\n\n");
         
         out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
         // NOTE: UPDATE_MUSIC_PSG now called at START of LOOP_BODY, not here
@@ -712,6 +747,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     if frame_size > 0 {
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
+                    
+                    // Ensure DP=$C8 at start of loop (BIOS calls may have changed it to $D0)
+                    // This must happen BEFORE any variable access
+                    out.push_str("    JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)\n");
                     
                     // Auto-inject AUDIO_UPDATE at START of loop (after WAIT_RECAL, before drawing)
                     // This ensures consistent 50Hz timing regardless of drawing complexity
@@ -971,13 +1010,33 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     
     let mut var_offset = 0; // Variables start at separate base, not after RESULT temps
+    
+    // Build a map of array sizes for proper RAM allocation
+    let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (name, value) in &non_const_vars {
+        if let Expr::List(elements) = value {
+            array_sizes.insert(name.clone(), elements.len());
+        }
+    }
+    
     for v in syms {
         if opts.exclude_ram_org {
             // FIX: Use separate memory area for global variables, not RESULT+offset
             // Global variables should persist between function calls, but RESULT is temporary
             // Use $CF10 to avoid collision with debug RAM at $CF00-$CF03
-            out.push_str(&format!("VAR_{} EQU $CF10+{}\n", v.to_uppercase(), var_offset));
-            var_offset += 2;
+            
+            // Check if this variable is an array - if so, allocate space for actual array data
+            if let Some(&array_len) = array_sizes.get(&v) {
+                // Arrays need space for the actual data (N elements * 2 bytes each)
+                out.push_str(&format!("VAR_{}_DATA EQU $CF10+{}  ; Array data ({} elements)\n", 
+                    v.to_uppercase(), var_offset, array_len));
+                var_offset += array_len * 2;  // Reserve space for all elements
+                // Note: We don't create VAR_NAME anymore - code will use VAR_NAME_DATA directly
+            } else {
+                // Regular scalar variables - 2 bytes each
+                out.push_str(&format!("VAR_{} EQU $CF10+{}\n", v.to_uppercase(), var_offset));
+                var_offset += 2;
+            }
         } else {
             out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
         }

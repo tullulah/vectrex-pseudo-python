@@ -46,8 +46,11 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     if let Some(off) = fctx.offset_of(array_name) {
                         // Local array: load pointer from stack
                         out.push_str(&format!("    LDD {} ,S\n", off));
+                    } else if opts.mutable_arrays.contains(array_name) {
+                        // Global mutable array: use direct RAM address
+                        out.push_str(&format!("    LDD #VAR_{}_DATA\n", array_name.to_uppercase()));
                     } else {
-                        // Global array: load pointer from variable
+                        // Global array pointer (legacy): load pointer from variable
                         out.push_str(&format!("    LDD VAR_{}\n", array_name.to_uppercase()));
                     }
                     
@@ -55,13 +58,13 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     out.push_str("    TFR D,X\n"); // X = array base pointer
                     out.push_str("    LDD TMPPTR\n"); // D = offset
                     out.push_str("    LEAX D,X\n"); // X = base + offset
-                    out.push_str("    STX TMPPTR\n"); // Save computed address
+                    out.push_str("    STX TMPPTR2\n"); // Save computed address in TMPPTR2 (avoid collision with expr evaluation)
                     
                     // 4. Evaluate value to assign
                     emit_expr(value, out, fctx, string_map, opts);
                     
                     // 5. Store value at computed address
-                    out.push_str("    LDX TMPPTR\n    LDD RESULT\n    STD ,X\n");
+                    out.push_str("    LDX TMPPTR2\n    LDD RESULT\n    STD ,X\n"); // Use TMPPTR2
                 }
                 crate::ast::AssignTarget::FieldAccess { target, field, .. } => {
                     // Phase 3 - struct field assignment codegen
