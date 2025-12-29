@@ -329,9 +329,15 @@ export const EmulatorPanel: React.FC = () => {
         console.warn('[EmulatorPanel] Could not configure willReadFrequently, using default context');
       }
       
-      const vecx = (window as any).vecx;
+      let vecx = (window as any).vecx;
       if (!vecx) {
         console.error('[EmulatorPanel] Global vecx instance not found');
+        return;
+      }
+      
+      // CRITICAL: Don't re-initialize if emulator is already running/debugging
+      if (vecx.running) {
+        console.log('[EmulatorPanel] 🛑 Skipping re-initialization - emulator already running');
         return;
       }
       
@@ -343,6 +349,10 @@ export const EmulatorPanel: React.FC = () => {
       vecx.reset();
       console.log('[EmulatorPanel] ✓ vecx.reset() successful');        vecx.main();
         console.log('[EmulatorPanel] ✓ vecx.main() called successfully');
+        
+        // CRITICAL: Set debugState to 'running' so breakpoints are detected
+        vecx.debugState = 'running';
+        console.log('[EmulatorPanel] ✓ JSVecx debugState set to running (auto-start)');
         
         if (!cancelled) {
           setStatus('running');
@@ -361,7 +371,13 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [setStatus, canvasSize]); // Re-inicializar si cambia canvasSize (puede indicar que se hizo visible)
+  }, [setStatus, canvasSize.width, canvasSize.height]); // Use individual values instead of object reference
+
+  // LOG: Detectar cambios en canvasSize
+  useEffect(() => {
+    console.log(`[EmulatorPanel] 🔍 canvasSize changed to:`, canvasSize);
+    console.log(`[EmulatorPanel] 🔍 Stack trace:`, new Error().stack);
+  }, [canvasSize]);
 
   // Actualizar dimensiones del canvas sin re-inicializar JSVecX
   useEffect(() => {
@@ -399,6 +415,7 @@ export const EmulatorPanel: React.FC = () => {
   // Phase 3: Breakpoint management functions
   const addBreakpoint = useCallback((address: number) => {
     console.log(`[EmulatorPanel] addBreakpoint called with:`, address, `type: ${typeof address}`);
+    console.log(`[EmulatorPanel] 📊 Current canvasSize before add:`, canvasSize);
     setBreakpoints(prev => {
       const next = new Set(prev);
       next.add(address);
@@ -407,7 +424,8 @@ export const EmulatorPanel: React.FC = () => {
       console.log(`[EmulatorPanel] 📍 Raw Set contents:`, Array.from(next));
       return next;
     });
-  }, []);
+    console.log(`[EmulatorPanel] 📊 Current canvasSize after add:`, canvasSize);
+  }, [canvasSize]);
 
   const removeBreakpoint = useCallback((address: number) => {
     setBreakpoints(prev => {
@@ -451,7 +469,7 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       delete (window as any).emulatorDebug;
     };
-  }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
+  }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints]);
 
   // Gamepad Manager: Poll HTML5 Gamepad API and inject into JSVecX memory
   useEffect(() => {
@@ -460,7 +478,8 @@ export const EmulatorPanel: React.FC = () => {
 
     const gamepadPollInterval = setInterval(() => {
       const vecx = (window as any).vecx;
-      if (!vecx || status !== 'running') return;
+      // Allow gamepad to work even when paused (for testing controls during debugging)
+      if (!vecx) return;
 
       const gamepads = navigator.getGamepads();
       if (!gamepads) return;
@@ -510,6 +529,12 @@ export const EmulatorPanel: React.FC = () => {
         // Values are unsigned 0-255 with 128=center
         const analogX = Math.round((x + 1) * 127.5); // 0-255 (128=center)
         const analogY = Math.round((y + 1) * 127.5); // 0-255 (128=center)
+        
+        if (typeof vecx.write8 !== 'function') {
+          console.error('[EmulatorPanel] ❌ vecx.write8 is not a function! Type:', typeof vecx.write8);
+          return;
+        }
+        
         vecx.write8(0xCF00, analogX); // Vec_Joy_1_X
         vecx.write8(0xCF01, analogY); // Vec_Joy_1_Y
         // Read button states and build PSG register 14 value
@@ -1291,6 +1316,7 @@ export const EmulatorPanel: React.FC = () => {
         
         // Si estaba corriendo, reiniciar
         if (status === 'running') {
+          vecx.debugState = 'running';
           vecx.start();
           console.log('[EmulatorPanel] ✓ Restarted after ROM load');
         }
@@ -1408,6 +1434,7 @@ export const EmulatorPanel: React.FC = () => {
     const vecx = (window as any).vecx;
     if (vecx) {
       initPsgLogging();
+      vecx.debugState = 'running';
       vecx.start();
       setStatus('running');
       useDebugStore.getState().setState('running');
@@ -1449,6 +1476,7 @@ export const EmulatorPanel: React.FC = () => {
       vecx.reset();
       if (status === 'running') {
         initPsgLogging();
+        vecx.debugState = 'running';
         vecx.start();
         console.log('[EmulatorPanel] JSVecX restarted after reset');
       }
@@ -1512,6 +1540,7 @@ export const EmulatorPanel: React.FC = () => {
         
         // Si estaba corriendo, reiniciar
         if (status === 'running') {
+          vecx.debugState = 'running';
           vecx.start();
           console.log('[EmulatorPanel] ✓ Restarted after ROM load');
         }
@@ -1646,6 +1675,10 @@ export const EmulatorPanel: React.FC = () => {
             vecx.main();
             console.log('[EmulatorPanel] ✓ JSVecX main() successful');
             
+            // CRITICAL: Set debugState to 'running' after initialization
+            vecx.debugState = 'running';
+            console.log('[EmulatorPanel] ✓ JSVecx debugState set to running (after main)');
+            
             // Fase 3: CRITICAL - Inicializar joystick input state a valores neutros
             // Sin esto, las variables de joystick contienen basura y causan movimiento fantasma
             vecx.leftHeld = false;
@@ -1685,6 +1718,7 @@ export const EmulatorPanel: React.FC = () => {
         
         if (!loadingForDebug) {
           // Compilación normal → siempre auto-start
+          vecx.debugState = 'running';
           vecx.start();
           console.log('[EmulatorPanel] ✓ Emulator started (normal mode)');
         } else {

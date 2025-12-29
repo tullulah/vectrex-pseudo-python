@@ -419,6 +419,20 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
+    /// SBCA #immediate (opcode 0x82) - Subtract with Carry from A
+    pub fn sbca_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0x82);
+        self.emit(value);
+    }
+
+    /// SBCB #immediate (opcode 0xC2) - Subtract with Carry from B
+    pub fn sbcb_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0xC2);
+        self.emit(value);
+    }
+
     /// ANDA #immediate (opcode 0x84)
     pub fn anda_immediate(&mut self, value: u8) {
         self.record_line_mapping();

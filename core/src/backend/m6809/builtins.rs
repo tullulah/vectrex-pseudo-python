@@ -861,9 +861,9 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                         let y = (*yc as f64) + r*ang.sin();
                         verts.push((x.round() as i32, y.round() as i32));
                     }
-                    // Emit optimized similar to polygon
-                    out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+                    // Emit optimized similar to polygon - intensity FIRST, then Reset0Ref
                     if intensity == 0x5F { out.push_str("    JSR Intensity_5F\n"); } else { out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF)); }
+                    out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
                     let (sx,sy)=verts[0];
                     out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", (sy & 0xFF), (sx & 0xFF)));
                     for i in 0..segs {
@@ -878,6 +878,43 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                     return true;
         }
     }
+    
+    // DRAW_CIRCLE with variables - runtime version (follows DRAW_VECTOR pattern)
+    // DRAW_CIRCLE(xc, yc, diam) or DRAW_CIRCLE(xc, yc, diam, intensity)
+    if up == "DRAW_CIRCLE" && (args.len() == 3 || args.len() == 4) {
+        // Store all parameters BEFORE calling runtime (like DRAW_VECTOR does)
+        
+        // Evaluate xc and store low byte
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDB RESULT+1  ; xc (low byte, signed -128..127)\n");
+        out.push_str("    STB DRAW_CIRCLE_XC\n");
+        
+        // Evaluate yc and store low byte
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDB RESULT+1  ; yc (low byte, signed -128..127)\n");
+        out.push_str("    STB DRAW_CIRCLE_YC\n");
+        
+        // Evaluate diameter and store low byte
+        emit_expr(&args[2], out, fctx, string_map, opts);
+        out.push_str("    LDB RESULT+1  ; diameter (low byte, 0..255)\n");
+        out.push_str("    STB DRAW_CIRCLE_DIAM\n");
+        
+        // Evaluate intensity
+        if args.len() == 4 {
+            emit_expr(&args[3], out, fctx, string_map, opts);
+            out.push_str("    LDB RESULT+1  ; intensity (low byte, 0..127)\n");
+            out.push_str("    STB DRAW_CIRCLE_INTENSITY\n");
+        } else {
+            out.push_str("    LDB #$5F\n");
+            out.push_str("    STB DRAW_CIRCLE_INTENSITY\n");
+        }
+        
+        // Call runtime helper (reads params from simple byte vars)
+        out.push_str("    JSR DRAW_CIRCLE_RUNTIME\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
     // DRAW_CIRCLE_SEG(nseg, xc,yc,diam[,intensity]) variable segments
     if up == "DRAW_CIRCLE_SEG" && (args.len()==4 || args.len()==5) && args.iter().all(|a| matches!(a, Expr::Number(_))) {
         if let (Expr::Number(nseg),Expr::Number(xc),Expr::Number(yc),Expr::Number(diam)) = (&args[0],&args[1],&args[2],&args[3]) {

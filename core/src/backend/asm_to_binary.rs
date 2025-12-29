@@ -522,6 +522,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "SUBA" => emit_suba(emitter, operand, equates),
         "SUBB" => emit_subb(emitter, operand, equates),
         "SUBD" => emit_subd(emitter, operand, equates),
+        "SBCA" => emit_sbca(emitter, operand, equates),
+        "SBCB" => emit_sbcb(emitter, operand, equates),
         
         // === LOGIC ===
         "ANDA" => emit_anda(emitter, operand, equates),
@@ -1419,6 +1421,62 @@ fn emit_suba(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
                     let symbol = &msg[7..];
                     emitter.add_symbol_ref(symbol, false, 2);
                     emitter.emit(0xB0); // SUBA extended opcode
+                    emitter.emit_word(0); // Placeholder
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_sbca(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.sbca_immediate(val);
+        Ok(())
+    } else {
+        // Extended mode
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.emit(0xB2); // SBCA extended opcode
+                emitter.emit_word(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.emit(0xB2); // SBCA extended opcode
+                    emitter.emit_word(0); // Placeholder
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_sbcb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.sbcb_immediate(val);
+        Ok(())
+    } else {
+        // Extended mode
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.emit(0xF2); // SBCB extended opcode
+                emitter.emit_word(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.emit(0xF2); // SBCB extended opcode
                     emitter.emit_word(0); // Placeholder
                     Ok(())
                 } else {

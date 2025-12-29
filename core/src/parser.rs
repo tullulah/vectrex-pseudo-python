@@ -134,6 +134,13 @@ fn const_eval(e: &Expr) -> Option<i32> {
 struct Parser<'a> { tokens: &'a [Token], pos: usize, filename: String }
 
 impl<'a> Parser<'a> {
+    /// Get the current line number from the current token
+    fn current_line(&self) -> usize {
+        self.tokens.get(self.pos)
+            .map(|t| t.line)
+            .unwrap_or(1)
+    }
+    
     fn parse_module(&mut self) -> Result<Module> {
         let mut items = Vec::new();
         let mut meta = ModuleMeta::default();
@@ -144,12 +151,13 @@ impl<'a> Parser<'a> {
             while self.match_kind(&TokenKind::Dedent) {}
             if self.check(TokenKind::Eof) { break; }
             if self.match_kind(&TokenKind::Const) || self.match_ident_case("CONST") {
+                let const_line = self.current_line();
                 let name = self.identifier()?;
                 self.consume(TokenKind::Equal)?;
                 let value = self.expression()?;
                 self.consume(TokenKind::Newline)?;
                 if name.eq_ignore_ascii_case("TITLE") { if let Expr::StringLit(s)=&value { meta.title_override = Some(s.clone()); } }
-                items.push(Item::Const { name, value });
+                items.push(Item::Const { name, value, source_line: const_line });
                 continue;
             }
             // Global variable declaration: identifier = expression (Python-style, no keyword)
@@ -157,9 +165,10 @@ impl<'a> Parser<'a> {
                 let checkpoint = self.pos;
                 if let Ok(name) = self.identifier() {
                     if self.match_kind(&TokenKind::Equal) {
+                        let global_line = self.current_line();
                         let value = self.expression()?;
                         self.consume(TokenKind::Newline)?;
-                        items.push(Item::GlobalLet { name, value });
+                        items.push(Item::GlobalLet { name, value, source_line: global_line });
                         continue;
                     }
                 }

@@ -55,8 +55,19 @@ pub fn collect_symbols(module: &Module) -> Vec<String> {
 pub fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
     let mut vars = Vec::new();
     for item in &module.items {
-        if let Item::GlobalLet { name, value } = item {
+        if let Item::GlobalLet { name, value, .. } = item {
             vars.push((name.clone(), value.clone()));
+        }
+    }
+    vars
+}
+
+/// Collect global variables WITH source line numbers
+pub fn collect_global_vars_with_line(module: &Module) -> Vec<(String, Expr, usize)> {
+    let mut vars = Vec::new();
+    for item in &module.items {
+        if let Item::GlobalLet { name, value, source_line } = item {
+            vars.push((name.clone(), value.clone(), *source_line));
         }
     }
     vars
@@ -67,8 +78,19 @@ pub fn collect_global_vars(module: &Module) -> Vec<(String, Expr)> {
 pub fn collect_const_vars(module: &Module) -> Vec<(String, Expr)> {
     let mut consts = Vec::new();
     for item in &module.items {
-        if let Item::Const { name, value } = item {
+        if let Item::Const { name, value, .. } = item {
             consts.push((name.clone(), value.clone()));
+        }
+    }
+    consts
+}
+
+/// Collect constant variables WITH source line numbers
+pub fn collect_const_vars_with_line(module: &Module) -> Vec<(String, Expr, usize)> {
+    let mut consts = Vec::new();
+    for item in &module.items {
+        if let Item::Const { name, value, source_line } = item {
+            consts.push((name.clone(), value.clone(), *source_line));
         }
     }
     consts

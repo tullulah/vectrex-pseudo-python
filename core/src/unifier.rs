@@ -194,7 +194,7 @@ pub fn unify_modules(
                     let unified_func = rewrite_function(f, &unified_name, &module_id, &symbols, &name_map, options);
                     unified_items.push(Item::Function(unified_func));
                 }
-                Item::Const { name, value } => {
+                Item::Const { name, value, source_line } => {
                     let unified_name = name_map.get(&(module_id.clone(), name.clone()))
                         .cloned()
                         .unwrap_or_else(|| name.clone());
@@ -202,10 +202,11 @@ pub fn unify_modules(
                     let unified_value = rewrite_expr(value, &module_id, &symbols, &name_map, options);
                     unified_items.push(Item::Const { 
                         name: unified_name, 
-                        value: unified_value 
+                        value: unified_value,
+                        source_line: *source_line
                     });
                 }
-                Item::GlobalLet { name, value } => {
+                Item::GlobalLet { name, value, source_line } => {
                     let unified_name = name_map.get(&(module_id.clone(), name.clone()))
                         .cloned()
                         .unwrap_or_else(|| name.clone());
@@ -213,7 +214,8 @@ pub fn unify_modules(
                     let unified_value = rewrite_expr(value, &module_id, &symbols, &name_map, options);
                     unified_items.push(Item::GlobalLet { 
                         name: unified_name, 
-                        value: unified_value 
+                        value: unified_value,
+                        source_line: *source_line
                     });
                 }
                 Item::VectorList { name, entries } => {

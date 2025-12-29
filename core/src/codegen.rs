@@ -1005,8 +1005,8 @@ fn validate_expr_collect(
 fn opt_item(it: &Item) -> Item { 
     match it { 
         Item::Function(f) => Item::Function(opt_function(f)), 
-        Item::Const { name, value } => Item::Const { name: name.clone(), value: opt_expr(value) }, 
-        Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: opt_expr(value) }, 
+        Item::Const { name, value, source_line } => Item::Const { name: name.clone(), value: opt_expr(value), source_line: *source_line }, 
+        Item::GlobalLet { name, value, source_line } => Item::GlobalLet { name: name.clone(), value: opt_expr(value), source_line: *source_line }, 
         Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
         Item::ExprStatement(expr) => Item::ExprStatement(opt_expr(expr)),
         Item::Export(e) => Item::Export(e.clone()),
@@ -1239,8 +1239,8 @@ fn dead_code_elim(m: &Module) -> Module {
     Module { 
         items: m.items.iter().map(|it| match it { 
             Item::Function(f) => Item::Function(dce_function(f)), 
-            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
-            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::Const { name, value, source_line } => Item::Const { name: name.clone(), value: value.clone(), source_line: *source_line }, 
+            Item::GlobalLet { name, value, source_line } => Item::GlobalLet { name: name.clone(), value: value.clone(), source_line: *source_line }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
@@ -1533,15 +1533,15 @@ fn propagate_constants(m: &Module) -> Module {
     let mut globals: HashMap<String, i32> = HashMap::new();
     // Collect global const numeric values (only if literal number after folding)
     for it in &m.items {
-        if let Item::Const { name, value: Expr::Number(n) } = it {
+        if let Item::Const { name, value: Expr::Number(n), .. } = it {
             globals.insert(name.clone(), *n);
         }
     }
     Module { 
         items: m.items.iter().map(|it| match it { 
             Item::Function(f) => Item::Function(cp_function_with_globals(f, &globals)), 
-            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
-            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::Const { name, value, source_line } => Item::Const { name: name.clone(), value: value.clone(), source_line: *source_line }, 
+            Item::GlobalLet { name, value, source_line } => Item::GlobalLet { name: name.clone(), value: value.clone(), source_line: *source_line }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),
@@ -1733,8 +1733,8 @@ fn fold_const_switches(m: &Module) -> Module {
     Module { 
         items: m.items.iter().map(|it| match it { 
             Item::Function(f) => Item::Function(fold_const_switches_function(f)), 
-            Item::Const { name, value } => Item::Const { name: name.clone(), value: value.clone() }, 
-            Item::GlobalLet { name, value } => Item::GlobalLet { name: name.clone(), value: value.clone() }, 
+            Item::Const { name, value, source_line } => Item::Const { name: name.clone(), value: value.clone(), source_line: *source_line }, 
+            Item::GlobalLet { name, value, source_line } => Item::GlobalLet { name: name.clone(), value: value.clone(), source_line: *source_line }, 
             Item::VectorList { name, entries } => Item::VectorList { name: name.clone(), entries: entries.clone() },
             Item::ExprStatement(expr) => Item::ExprStatement(expr.clone()),
             Item::Export(e) => Item::Export(e.clone()),

@@ -66,7 +66,7 @@ interface VectorEditorProps {
   height?: number;
 }
 
-type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'pan' | 'background';
+type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'circle' | 'arc' | 'pan' | 'background';
 type ViewMode = 'xy' | 'xz' | 'yz' | '3d';
 
 const defaultResource: VecResource = {
@@ -621,6 +621,13 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   
+  // Circle/Arc tool settings
+  const [circleSegments, setCircleSegments] = useState(16);
+  const [arcStartAngle, setArcStartAngle] = useState(0);
+  const [arcEndAngle, setArcEndAngle] = useState(180);
+  const [circleCenter, setCircleCenter] = useState<Point | null>(null);
+  const [circleRadius, setCircleRadius] = useState(0);
+  
   // Track if we're the source of changes to avoid loops
   const isInternalChange = useRef(false);
   
@@ -683,6 +690,45 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
+  
+  // Helper functions for circle/arc generation
+  const generateCirclePoints = (center: Point, radius: number, segments: number, closed: boolean = true): Point[] => {
+    const points: Point[] = [];
+    const angleStep = (Math.PI * 2) / segments;
+    
+    for (let i = 0; i < (closed ? segments : segments + 1); i++) {
+      const angle = i * angleStep;
+      points.push({
+        x: Math.round(center.x + Math.cos(angle) * radius),
+        y: Math.round(center.y + Math.sin(angle) * radius),
+      });
+    }
+    
+    return points;
+  };
+  
+  const generateArcPoints = (center: Point, radius: number, startAngle: number, endAngle: number, segments: number): Point[] => {
+    const points: Point[] = [];
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    let angleDiff = endRad - startRad;
+    
+    // Normalize angle difference to 0-2π range
+    while (angleDiff < 0) angleDiff += Math.PI * 2;
+    while (angleDiff > Math.PI * 2) angleDiff -= Math.PI * 2;
+    
+    const angleStep = angleDiff / segments;
+    
+    for (let i = 0; i <= segments; i++) {
+      const angle = startRad + i * angleStep;
+      points.push({
+        x: Math.round(center.x + Math.cos(angle) * radius),
+        y: Math.round(center.y + Math.sin(angle) * radius),
+      });
+    }
+    
+    return points;
+  };
   
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
@@ -1013,6 +1059,57 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       }
     }
     
+    // Draw circle/arc preview while dragging
+    if ((currentTool === 'circle' || currentTool === 'arc') && circleCenter && circleRadius > 0) {
+      const previewPoints = currentTool === 'circle'
+        ? generateCirclePoints(circleCenter, circleRadius, circleSegments, true)
+        : generateArcPoints(circleCenter, circleRadius, arcStartAngle, arcEndAngle, circleSegments);
+      
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      
+      if (previewPoints.length > 0) {
+        const startPt = resourceToCanvas(previewPoints[0]);
+        ctx.moveTo(startPt.x, startPt.y);
+        for (let i = 1; i < previewPoints.length; i++) {
+          const pt = resourceToCanvas(previewPoints[i]);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        if (currentTool === 'circle') {
+          ctx.closePath();
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Draw center point
+      const centerCanvas = resourceToCanvas(circleCenter);
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(centerCanvas.x, centerCanvas.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw radius line
+      if (previewPoints.length > 0) {
+        const firstPt = resourceToCanvas(previewPoints[0]);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(centerCanvas.x, centerCanvas.y);
+        ctx.lineTo(firstPt.x, firstPt.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw radius text
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '12px monospace';
+        ctx.fillText(`R: ${circleRadius}`, centerCanvas.x + 10, centerCanvas.y - 10);
+      }
+    }
+    
     // Draw box selection rectangle
     if (isBoxSelecting && boxStart && boxEnd) {
       ctx.strokeStyle = '#00aaff';
@@ -1199,6 +1296,11 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     if (currentTool === 'pen') {
       setTempPoints([...tempPoints, point]);
       setIsDrawing(true);
+    } else if (currentTool === 'circle' || currentTool === 'arc') {
+      // Start drawing circle/arc - set center
+      setCircleCenter(point);
+      setCircleRadius(0);
+      setIsDrawing(true);
     } else if (currentTool === 'select') {
       // Check if clicking on a point
       let closestDist = Infinity;
@@ -1300,6 +1402,16 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       return;
     }
     
+    // Handle circle/arc radius dragging
+    if ((currentTool === 'circle' || currentTool === 'arc') && isDrawing && circleCenter) {
+      const point = canvasToResource(canvasX, canvasY);
+      const dx = point.x - circleCenter.x;
+      const dy = point.y - circleCenter.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      setCircleRadius(Math.round(radius));
+      return;
+    }
+
     if (!isDrawing || currentTool !== 'select') return;
 
     const point = canvasToResource(canvasX, canvasY);
@@ -1315,6 +1427,29 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     // Clear drag state for 3D rotation
     dragStartRef.current = null;
     setIsBackgroundSelected(false);
+    
+    // Finalize circle/arc
+    if ((currentTool === 'circle' || currentTool === 'arc') && isDrawing && circleCenter && circleRadius > 0) {
+      const points = currentTool === 'circle'
+        ? generateCirclePoints(circleCenter, circleRadius, circleSegments, true)
+        : generateArcPoints(circleCenter, circleRadius, arcStartAngle, arcEndAngle, circleSegments);
+      
+      const newPath: VecPath = {
+        name: currentTool === 'circle' ? `circle_${Date.now()}` : `arc_${Date.now()}`,
+        intensity: 127,
+        closed: currentTool === 'circle',
+        points,
+      };
+      
+      const newResource = { ...resource };
+      const layer = newResource.layers[currentLayerIndex];
+      layer.paths.push(newPath);
+      updateResource(newResource);
+      
+      // Reset circle/arc state
+      setCircleCenter(null);
+      setCircleRadius(0);
+    }
     
     // Complete box selection
     if (isBoxSelecting && boxStart && boxEnd) {
@@ -1369,7 +1504,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     
     // Calculate new zoom
     const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newZoom = Math.max(0.1, Math.min(10, zoom * zoomFactor));
+    const newZoom = Math.max(0.5, Math.min(4, zoom * zoomFactor));
     
     // Calculate new pan to keep world position under cursor
     const newPanX = mouseX - centerX - worldX * scale * newZoom;
@@ -1565,6 +1700,34 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       >
         {viewMode === '3d' ? '🔄 Rotate' : '✋ Pan'}
       </button>
+      <button
+        onClick={() => setCurrentTool('circle')}
+        style={{
+          padding: '8px 12px',
+          background: currentTool === 'circle' ? '#4a4a8e' : '#3a3a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Circle tool - click center, drag to set radius"
+      >
+        ⭕ Circle
+      </button>
+      <button
+        onClick={() => setCurrentTool('arc')}
+        style={{
+          padding: '8px 12px',
+          background: currentTool === 'arc' ? '#4a4a8e' : '#3a3a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+        title="Arc tool - click center, drag to set radius"
+      >
+        ◔ Arc
+      </button>
       {backgroundImage && (
         <button
           onClick={() => setCurrentTool('background')}
@@ -1756,7 +1919,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         +
       </button>
       <button
-        onClick={() => setZoom(z => Math.max(z / 1.2, 0.25))}
+        onClick={() => setZoom(z => Math.max(z / 1.2, 0.5))}
         style={{ padding: '8px 12px', background: '#3a3a5e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
       >
         -
@@ -1764,6 +1927,83 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       <span style={{ color: '#aaa', padding: '8px' }}>{Math.round(zoom * 100)}%</span>
     </div>
   );
+
+  const CircleArcSettings = () => {
+    if (currentTool !== 'circle' && currentTool !== 'arc') return null;
+    
+    return (
+      <div style={{ background: '#2a2a4e', padding: '10px', borderRadius: '4px', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#aaa', fontSize: '12px' }}>
+            <span>Segments:</span>
+            <input
+              type="number"
+              min="3"
+              max="64"
+              value={circleSegments}
+              onChange={(e) => setCircleSegments(Math.max(3, Math.min(64, parseInt(e.target.value) || 8)))}
+              style={{
+                width: '60px',
+                padding: '4px',
+                background: '#1a1a3e',
+                color: 'white',
+                border: '1px solid #4a4a6e',
+                borderRadius: '4px',
+              }}
+            />
+          </label>
+          
+          {currentTool === 'arc' && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#aaa', fontSize: '12px' }}>
+                <span>Start Angle (°):</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="360"
+                  value={arcStartAngle}
+                  onChange={(e) => setArcStartAngle(parseInt(e.target.value) || 0)}
+                  style={{
+                    width: '60px',
+                    padding: '4px',
+                    background: '#1a1a3e',
+                    color: 'white',
+                    border: '1px solid #4a4a6e',
+                    borderRadius: '4px',
+                  }}
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#aaa', fontSize: '12px' }}>
+                <span>End Angle (°):</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="360"
+                  value={arcEndAngle}
+                  onChange={(e) => setArcEndAngle(parseInt(e.target.value) || 180)}
+                  style={{
+                    width: '60px',
+                    padding: '4px',
+                    background: '#1a1a3e',
+                    color: 'white',
+                    border: '1px solid #4a4a6e',
+                    borderRadius: '4px',
+                  }}
+                />
+              </label>
+            </>
+          )}
+          
+          <div style={{ color: '#888', fontSize: '11px' }}>
+            {currentTool === 'circle' 
+              ? `Click center, drag to set radius. ${circleSegments} segments.`
+              : `Click center, drag to set radius. Arc from ${arcStartAngle}° to ${arcEndAngle}° (${circleSegments} segments).`
+            }
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const EdgeSettingsPanel = () => {
     const previewPointCount = previewPaths.reduce((sum, p) => sum + p.points.length, 0);
@@ -2210,9 +2450,10 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
       <Toolbar />
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <CircleArcSettings />
+      <div style={{ display: 'flex', gap: '8px', overflow: 'hidden' }}>
         <div style={{ position: 'relative' }}>
           <canvas
             ref={canvasRef}
@@ -2231,6 +2472,8 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
               display: 'block',
               cursor: currentTool === 'pen' 
                 ? 'crosshair' 
+                : currentTool === 'circle' || currentTool === 'arc'
+                ? 'crosshair'
                 : currentTool === 'pan' && viewMode === '3d' && isDrawing
                 ? 'grabbing'
                 : currentTool === 'pan' && viewMode === '3d'
@@ -2251,6 +2494,8 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
           {currentTool === 'pen' && viewMode !== '3d' && `Drawing on ${viewMode.toUpperCase()} plane. Click to add points. Double-click to finish path.`}
           {currentTool === 'pen' && viewMode === '3d' && 'Switch to XY/XZ/YZ view to draw. 3D view is for visualization only.'}
           {currentTool === 'select' && 'Click to select points. Drag to move.'}
+          {currentTool === 'circle' && '⭕ Click center, drag to set radius. Circle will be generated with specified segments.'}
+          {currentTool === 'arc' && '◔ Click center, drag to set radius. Arc from start angle to end angle.'}
           {currentTool === 'background' && '🖼️ Drag to move the background image.'}
           {currentTool === 'pan' && viewMode === '3d' && '🔄 Drag to rotate 3D view. Scroll to zoom.'}
           {currentTool === 'pan' && viewMode !== '3d' && '✋ Drag to pan. Scroll to zoom.'}

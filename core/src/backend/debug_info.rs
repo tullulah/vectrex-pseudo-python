@@ -294,6 +294,7 @@ fn estimate_instruction_size(line: &str) -> u16 {
         
         // 8-bit accumulator instructions (LDA, STA, etc.)
         "LDA" | "LDB" | "STA" | "STB" | "ADDA" | "ADDB" | "SUBA" | "SUBB" |
+        "SBCA" | "SBCB" |
         "CMPA" | "CMPB" | "ANDA" | "ANDB" | "ORA" | "ORB" | "EORA" | "EORB" |
         "BITA" | "BITB" => {
             if is_immediate {
@@ -440,13 +441,27 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             continue;
         }
         
-        // Skip empty lines and pure comments
-        if trimmed.is_empty() || (trimmed.starts_with(';') && !trimmed.starts_with("; VPy_LINE:")) || trimmed.starts_with('*') {
+        // Skip empty lines and pure comments (but NOT pseudo-labels)
+        if trimmed.is_empty() || (trimmed.starts_with(';') && !trimmed.starts_with("; VPy_LINE:") && !trimmed.starts_with("; _")) || trimmed.starts_with('*') {
             continue;
         }
         
-        // Skip labels (lines ending with ':')
+        // Handle pseudo-labels in comments (e.g., "; _CONST_DECL_0:" for const declarations)
+        if trimmed.starts_with("; _") && trimmed.ends_with(':') {
+            // Treat pseudo-labels like regular labels for pending marker registration
+            if let Some(line_num) = pending_marker.take() {
+                line_map.insert(line_num, format!("0x{:04X}", current_address));
+            }
+            continue;
+        }
+        
+        // Handle labels - they may have a pending marker to record
         if trimmed.ends_with(':') {
+            // If we have a pending marker and we're hitting a label, record the marker at the label address
+            // (This happens for declarations like `main:` or `const` arrays that need line mapping)
+            if let Some(line_num) = pending_marker.take() {
+                line_map.insert(line_num, format!("0x{:04X}", current_address));
+            }
             continue;
         }
         
@@ -460,9 +475,15 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             continue;
         }
         
-        // Skip non-code directives
+        // Skip non-code directives that don't generate bytes
         if trimmed.starts_with("INCLUDE ") || trimmed.starts_with("EQU ") {
             continue;
+        }
+        
+        // IMPORTANT: Register pending_marker BEFORE processing data directives
+        // This ensures const arrays and other data sections get mapped to current address
+        if let Some(line_num) = pending_marker.take() {
+            line_map.insert(line_num, format!("0x{:04X}", current_address));
         }
         
         // Data directives that add bytes
@@ -499,13 +520,14 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             continue;
         }
         
-        // If we have a pending marker, record it at current address (next instruction)
-        if let Some(line_num) = pending_marker.take() {
-            line_map.insert(line_num, format!("0x{:04X}", current_address));
-        }
-        
         // Regular instruction - estimate size and advance address
         current_address += estimate_instruction_size(line);
+    }
+    
+    // Register any pending marker at end of file
+    // (This handles const declarations that may be followed by blank lines/comments only)
+    if let Some(line_num) = pending_marker.take() {
+        line_map.insert(line_num, format!("0x{:04X}", current_address));
     }
     
     line_map

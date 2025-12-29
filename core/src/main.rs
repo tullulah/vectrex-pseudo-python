@@ -637,43 +637,28 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             }
             eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
             
-            // Phase 6.5: Generate ASM address mapping (DISABLED - BinaryEmitter already has correct addresses)
-            // TODO: Export emitter.symbols from assemble_asm_to_binary() and use those instead of re-estimating
+            // Phase 6.5: Write PDB with BinaryEmitter addresses (no re-estimation needed)
             if let Some(ref mut dbg) = debug_info_mut {
-                eprintln!("Phase 6.5: ASM address mapping (skipped - using BinaryEmitter addresses)...");
-                let _bin_path = out_path.with_extension("bin");
+                eprintln!("Phase 6.5: Writing debug symbols with binary addresses...");
                 
-                // DISABLED: This re-estimates addresses and gets them wrong for large binaries
-                // match backend::asm_address_mapper::generate_asm_address_map(&out_path, &bin_path, dbg) {
-                if false {
-                    // Ok(()) => {
-                        eprintln!("✓ Phase 6.5 SUCCESS: ASM address mapping complete");
-                        
-                        // Write updated PDB with address mappings
-                        let pdb_path = out_path.with_extension("pdb");
-                        match dbg.to_json() {
-                            Ok(json) => {
-                                fs::write(&pdb_path, json).map_err(|e| {
-                                    eprintln!("⚠ Warning: Cannot write updated debug symbols file");
-                                    eprintln!("   Output path: {}", pdb_path.display());
-                                    eprintln!("   Error: {}", e);
-                                    e
-                                })?;
-                                eprintln!("✓ Updated debug symbols with ASM address mappings: {}", pdb_path.display());
-                            },
-                            Err(e) => {
-                                eprintln!("⚠ Warning: Failed to serialize updated debug symbols: {}", e);
-                            }
-                        }
-                    // },
-                    // Err(e) => {
-                    //     eprintln!("⚠ Phase 6.5 WARNING: ASM address mapping failed: {}", e);
-                    //     eprintln!("   Debugging will work but without precise ASM line mapping");
-                    // }
+                // Write PDB with addresses from BinaryEmitter (already populated during Phase 6)
+                let pdb_path = out_path.with_extension("pdb");
+                match dbg.to_json() {
+                    Ok(json) => {
+                        fs::write(&pdb_path, json).map_err(|e| {
+                            eprintln!("⚠ Warning: Cannot write debug symbols file");
+                            eprintln!("   Output path: {}", pdb_path.display());
+                            eprintln!("   Error: {}", e);
+                            e
+                        })?;
+                        eprintln!("✓ Phase 6.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                    },
+                    Err(e) => {
+                        eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                    }
                 }
-                eprintln!("✓ Phase 6.5 SKIPPED - Using BinaryEmitter symbol addresses (more accurate)");
             } else {
-                eprintln!("Phase 6.5: ASM address mapping skipped (no debug info available)");
+                eprintln!("Phase 6.5: Debug symbols write skipped (no debug info available)");
             }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");

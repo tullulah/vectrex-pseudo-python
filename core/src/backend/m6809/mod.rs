@@ -243,9 +243,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut out = String::new();
     // CORREGIDO: Usar solo variables GLOBALES, no todas (que incluye locales)
     let global_vars = collect_global_vars(module); // Collect global variables with initial values
+    let global_vars_with_line = collect_global_vars_with_line(module); // WITH line numbers for PDB
     
     // Collect const declarations (go to ROM only, NO RAM allocation or initialization)
     let const_vars = collect_const_vars(module);
+    let const_vars_with_line = collect_const_vars_with_line(module); // WITH line numbers for PDB
     
     // Build set of const array names to exclude from RAM allocation
     let const_array_names: std::collections::HashSet<String> = const_vars
@@ -273,7 +275,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Recolectar constantes para inline en expresiones - actualizar opts
     let mut opts_with_consts = opts.clone(); // Clone opts to modify
     for item in &module.items {
-        if let Item::Const { name, value } = item {
+        if let Item::Const { name, value, .. } = item {
             if let Expr::Number(n) = value {
                 opts_with_consts.const_values.insert(name.to_uppercase(), *n);
             }
@@ -501,6 +503,23 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // main() has real content - use START structure
         out.push_str("    JMP START\n\n");
         
+        // ✅ Emit line markers for const NUMBER declarations (not arrays)
+        // These are inlined in expressions, so we need to record them for PDB coverage
+        // Place them here (after ORG, before START) so they have valid addresses
+        out.push_str(";**** CONST DECLARATIONS (NUMBER-ONLY) ****\n");
+        let mut const_decl_counter = 0;
+        for (name, value, source_line) in &const_vars_with_line {
+            // Only emit for non-array consts (arrays already handled)
+            if !matches!(value, Expr::List(_)) {
+                tracker.set_line(*source_line);
+                out.push_str(&format!("; VPy_LINE:{}\n", source_line));
+                // Emit a dummy label for parser to register the pending marker
+                out.push_str(&format!("; _CONST_DECL_{}:  ; const {}\n", const_decl_counter, name));
+                const_decl_counter += 1;
+            }
+        }
+        out.push_str("\n");
+        
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
         if !suppress_runtime {
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
@@ -550,9 +569,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if main_has_content {
             out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
             
-            // NEW: Initialize global variables with their initial values (ONCE at startup)
+            // Initialize global variables with their initial values (ONCE at startup)
+            // Use global_vars_with_line to emit line markers for PDB coverage
             let mut array_counter = 0;
-            for (name, value) in &global_vars {
+            for (name, value, source_line) in &global_vars_with_line {
+                // Skip const arrays (they're already in ROM)
+                if const_array_names.contains(name) {
+                    continue;
+                }
+                
+                // Register line number in PDB
+                tracker.set_line(*source_line);
+                out.push_str(&format!("    ; VPy_LINE:{}\n", source_line));
+                
                 if let Expr::List(_elements) = value {
                     // Array literal: load address of pre-generated array data
                     let array_label = format!("ARRAY_{}", array_counter);
@@ -589,6 +618,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         
         // Choose label based on whether we have START or not
         let main_label = if main_has_content { "MAIN" } else { "main" };
+        
+        // ✅ Register main() definition line in .pdb
+        if let Some(main_func) = user_main {
+            tracker.set_line(main_func.line);
+            out.push_str(&format!("; VPy_LINE:{}\n", main_func.line));
+        }
+        
         out.push_str(&format!("\n{}:\n", main_label));
         
         out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
@@ -597,10 +633,20 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // CRITICAL: Initialize global variables even if main() has no content
         // This must happen ONCE before the loop starts
         // IMPORTANT: DO NOT initialize const arrays - they only exist in ROM
-        if !main_has_content && !non_const_vars.is_empty() {
+        // Use global_vars_with_line to emit line markers for PDB coverage
+        if !main_has_content && !global_vars_with_line.is_empty() {
             out.push_str("    ; Initialize global variables (excluding const arrays)\n");
             let mut array_counter = 0;
-            for (name, value) in &non_const_vars {
+            for (name, value, source_line) in &global_vars_with_line {
+                // Skip const arrays (they're already in ROM)
+                if const_array_names.contains(name) {
+                    continue;
+                }
+                
+                // Register line number in PDB
+                tracker.set_line(*source_line);
+                out.push_str(&format!("    ; VPy_LINE:{}\n", source_line));
+                
                 if let Expr::List(_elements) = value {
                     // Array literal: load address of pre-generated array data
                     let array_label = format!("ARRAY_{}", array_counter);
@@ -641,6 +687,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Skip main function in auto_loop mode - it's inlined in START/MAIN
                     continue;
                 } else if opts.auto_loop && f.name == "loop" {
+                    // ✅ CRITICAL: Record the loop() definition line in .pdb
+                    tracker.set_line(f.line);
+                    out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
+                    
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
                     
@@ -825,14 +875,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         if let Some(e) = c.extra { out.push_str(&format!("    FCB ${:02X} ; intensity value\n", e)); }
                     }
                 }
-            Item::Const { name, value } => {
+            Item::Const { name, value, .. } => {
                 let up = name.to_uppercase();
                 if !emitted_consts.contains(&up) {
                     if let Expr::Number(n) = value { out.push_str(&format!("{} EQU {}\n", up, n & 0xFFFF)); }
                     emitted_consts.insert(up);
                 }
             }
-            Item::GlobalLet { name, value } => {
+            Item::GlobalLet { name, value, .. } => {
                 if let Expr::Number(n) = value { global_mutables.push((name.clone(), *n)); } else { global_mutables.push((name.clone(), 0)); }
             }
             Item::ExprStatement(_expr) => {
@@ -1089,8 +1139,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     };
     
     let mut const_array_counter = 0;
-    for (name, value) in &const_vars {
+    for (name, value, source_line) in &const_vars_with_line {
         if let Expr::List(elements) = value {
+            // ✅ Register const array definition line in .pdb
+            tracker.set_line(*source_line);
+            out.push_str(&format!("; VPy_LINE:{}\n", source_line));
+            
             // Check if this is a string array (all elements are StringLit)
             let is_string_array = elements.iter().all(|e| matches!(e, Expr::StringLit(_)));
             
@@ -1180,6 +1234,24 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("; Mirror flags for DRAW_VECTOR_EX unified function\nMIRROR_X: FCB 0\nMIRROR_Y: FCB 0\n");
         out.push_str("; Intensity override (0=use vector's intensity, non-zero=override)\nDRAW_VEC_INTENSITY: FCB 0\n");
     }
+    
+    // DRAW_CIRCLE runtime variables (changed to bytes to avoid DP issues)
+    if opts.exclude_ram_org {
+        out.push_str(&format!("DRAW_CIRCLE_XC EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_CIRCLE_YC EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_CIRCLE_DIAM EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_CIRCLE_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
+        out.push_str(&format!("DRAW_CIRCLE_TEMP EQU RESULT+{}\n", var_offset)); var_offset += 8; // TEMP is still 8 bytes (radius=2, xc=2, yc=2, spare=2)
+    } else {
+        out.push_str("; DRAW_CIRCLE runtime variables (bytes, not words - to avoid DP corruption)\n");
+        out.push_str("DRAW_CIRCLE_XC: FCB 0\n");
+        out.push_str("DRAW_CIRCLE_YC: FCB 0\n");
+        out.push_str("DRAW_CIRCLE_DIAM: FCB 0\n");
+        out.push_str("DRAW_CIRCLE_INTENSITY: FCB 0\n");
+        out.push_str("; DRAW_CIRCLE_TEMP still needs 8 bytes for internal calculations\n");
+        out.push_str("DRAW_CIRCLE_TEMP: FDB 0,0,0,0  ; radius(2), xc(2), yc(2), spare(2)\n");
+    }
+    
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function
     
