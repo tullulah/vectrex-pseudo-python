@@ -122,6 +122,7 @@ def loop():
             if (btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1):
                 #PLAY_SFX("coin")
                 screen = STATE_MAP 
+                delay = 0  # CRITICAL: Reset delay for STATE_MAP music timing
                 current_music = -1  # Reset music tracker to trigger map_theme
                 btn_debounce = BTN_DEBOUNCE_FRAMES  # Start cooldown
 
@@ -187,7 +188,7 @@ def loop():
     if screen == STATE_GAME:
         # Countdown "GET READY" phase
         if countdown_active == 1:
-            # Spawn enemies only once when countdown starts
+            #Spawn enemies only once when countdown starts
             if countdown_timer >= 180:
                 spawn_level_enemies()
             
