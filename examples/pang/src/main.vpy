@@ -48,7 +48,7 @@ joystick_poll_counter = 0  # Counter to poll joystick every N frames
 hook_active = 0          # 0=inactive, 1=active
 hook_x = 0               # X position of hook (captured at fire time)
 hook_y = -100            # Y position of hook (starts at ground level)
-hook_max_y = 72          # Maximum Y position (well up the screen, signed value)
+hook_max_y = 127          # Maximum Y position (well up the screen, signed value)
 hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
 hook_gun_y = 0           # Gun Y position at fire time (stays fixed while hook travels)
 hook_init_y = 0          # Initial Y position of gun (stays fixed for rope start point)
@@ -86,7 +86,7 @@ def main():
     current_location = 0
     prev_joy_x = 0
     prev_joy_y = 0
-    location_glow_intensity = 60
+    location_glow_intensity = 80
     location_glow_direction = 0
     screen = STATE_TITLE
     
@@ -223,7 +223,7 @@ def loop():
 
 def draw_map_screen():
     # Draw background map
-    SET_INTENSITY(100)
+    SET_INTENSITY(80)
     DRAW_VECTOR_EX("map", 0, 20, 0, 50)
     
     # Update glow intensity (oscillating effect)
@@ -233,7 +233,7 @@ def draw_map_screen():
             location_glow_direction = 1
     else:
         location_glow_intensity = location_glow_intensity - 3
-        if location_glow_intensity <= 30:
+        if location_glow_intensity <= 80:
             location_glow_direction = 0
     
     PRINT_TEXT(-120, -80, location_names[current_location])
@@ -247,6 +247,7 @@ def draw_map_screen():
 
 def draw_title_screen():
     #Dibujar logo centrado
+    SET_INTENSITY(80)
     DRAW_VECTOR("logo", 0, 20)
 
     SET_INTENSITY(title_intensity)
@@ -259,7 +260,7 @@ def draw_title_screen():
     if (title_state == 1):
         title_intensity -= 1    
 
-    if (title_intensity == 127):
+    if (title_intensity == 80):
         title_state = 1
     
     if (title_intensity == 30):
@@ -308,9 +309,6 @@ def draw_level_background():
 def draw_game_level():
     # Draw level-specific background
     draw_level_background()
-    
-    # Draw ground line
-    SET_INTENSITY(100)
     
     # Handle player movement - use analog values for speed control
     joy_x = joystick1_state[0]
@@ -370,10 +368,7 @@ def draw_game_level():
         # Not moving - reset to idle frame
         player_anim_frame = 1
         player_anim_counter = 0
-    
-    # Draw player with animation
-    SET_INTENSITY(127)
-    
+   
     # Determine mirror mode based on facing direction
     mirror_mode = 0
     if player_facing == -1:
@@ -381,15 +376,15 @@ def draw_game_level():
     
     # Draw animated sprite
     if player_anim_frame == 1:
-        DRAW_VECTOR_EX("player_walk_1", player_x, player_y, mirror_mode, 127)
+        DRAW_VECTOR_EX("player_walk_1", player_x, player_y, mirror_mode, 80)
     elif player_anim_frame == 2:
-        DRAW_VECTOR_EX("player_walk_2", player_x, player_y, mirror_mode, 127)
+        DRAW_VECTOR_EX("player_walk_2", player_x, player_y, mirror_mode, 80)
     elif player_anim_frame == 3:
-        DRAW_VECTOR_EX("player_walk_3", player_x, player_y, mirror_mode, 127)
+        DRAW_VECTOR_EX("player_walk_3", player_x, player_y, mirror_mode, 80)
     elif player_anim_frame == 4:
-        DRAW_VECTOR_EX("player_walk_4", player_x, player_y, mirror_mode, 127)
+        DRAW_VECTOR_EX("player_walk_4", player_x, player_y, mirror_mode, 80)
     else:
-        DRAW_VECTOR_EX("player_walk_5", player_x, player_y, mirror_mode, 127)
+        DRAW_VECTOR_EX("player_walk_5", player_x, player_y, mirror_mode, 80)
     
     # Update and draw enemies
     #update_enemies()
@@ -404,11 +399,6 @@ def draw_game_level():
         SET_INTENSITY(100)
 
         DRAW_VECTOR_EX("hook", hook_x, hook_y, 0, 100)
-
-        DEBUG_PRINT(hook_gun_x)
-
-        #DEBUG_PRINT(hook_x)
-
     
     # DEBUG: Show enemy count
     active_count = 0

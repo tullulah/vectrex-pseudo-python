@@ -469,7 +469,7 @@ export const EmulatorPanel: React.FC = () => {
     return () => {
       delete (window as any).emulatorDebug;
     };
-  }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints]);
+  }, [addBreakpoint, removeBreakpoint, toggleBreakpoint, clearAllBreakpoints, breakpoints]);
 
   // Gamepad Manager: Poll HTML5 Gamepad API and inject into JSVecX memory
   useEffect(() => {

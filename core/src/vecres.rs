@@ -307,22 +307,19 @@ impl VecResource {
         }
         
         // Generate individual labels for each path (_NAME_PATH0, _NAME_PATH1, ...)
-        // AND main label (_NAME_VECTORS) and _NAME_PATH0 both pointing to first path
+        // Main label (_NAME_VECTORS) points to first path (PATH0)
         asm.push_str(&format!("_{}_VECTORS:  ; Main entry\n", symbol_name));
-        asm.push_str(&format!("_{}_PATH0:    ; Path 0\n", symbol_name));
         
         for (path_idx, path) in self.visible_paths().iter().enumerate() {
             let is_last_path = path_idx == self.visible_paths().len() - 1;
             
-            // Individual path label (for paths 1+)
-            if path_idx > 0 {
-                asm.push_str(&format!("_{}_PATH{}:\n", symbol_name, path_idx));
-            }
+            // Create label for each path (PATH0, PATH1, etc.)
+            asm.push_str(&format!("_{}_PATH{}:    ; Path {}\n", symbol_name, path_idx, path_idx));
             
-            if path.points.len() < 2 {
-                // Empty path - skip or mark with end
+            if path.points.is_empty() {
+                // Completely empty path - skip
                 if is_last_path {
-                    asm.push_str("    FCB 2                ; end marker (< 2 points)\n");
+                    asm.push_str("    FCB 2                ; end marker (no points)\n");
                 }
                 continue;
             }

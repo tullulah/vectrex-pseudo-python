@@ -609,7 +609,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   };
   
   const [resource, setResource] = useState<VecResource>(() => normalizeResource(initialResource));
-  const [currentTool, setCurrentTool] = useState<Tool>('pen');
+  const [currentTool, setCurrentTool] = useState<Tool>('select');
   const [currentLayerIndex, setCurrentLayerIndex] = useState(0);
   const [currentPathIndex, setCurrentPathIndex] = useState(-1);
   const [selectedPointIndex, setSelectedPointIndex] = useState(-1);
@@ -628,6 +628,10 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [circleCenter, setCircleCenter] = useState<Point | null>(null);
   const [circleRadius, setCircleRadius] = useState(0);
   
+  // Undo/Redo history
+  const [history, setHistory] = useState<VecResource[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  
   // Track if we're the source of changes to avoid loops
   const isInternalChange = useRef(false);
   
@@ -638,13 +642,20 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       return;
     }
     if (initialResource) {
-      setResource(normalizeResource(initialResource));
+      const normalized = normalizeResource(initialResource);
+      const pointsCount = normalized.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+      console.log('[VectorEditor] LOAD: Initializing from resource with', pointsCount, 'points');
+      console.log('[VectorEditor] LOAD: Setting history to:', [normalized]);
+      setResource(normalized);
+      // Initialize history with the loaded resource - THIS MUST PERSIST
+      setHistory([normalized]);
+      setHistoryIndex(0);
     }
   }, [initialResource]);
   
   // Wrapper to set resource and notify parent
-  const updateResource = useCallback((newResource: VecResource) => {
-    console.log('[VectorEditor] updateResource called');
+  // IMPORTANT: Takes the PREVIOUS resource as first parameter to save to history
+  const updateResource = useCallback((previousResource: VecResource, newResource: VecResource) => {
     // Recalculate center whenever resource changes
     const { centerX, centerY } = calculateCenter(newResource);
     const withCenter = {
@@ -652,11 +663,67 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       center_x: Math.round(centerX),
       center_y: Math.round(centerY),
     };
-    console.log('[VectorEditor] Calling onChange with updated resource');
-    isInternalChange.current = true;
+    const previousPointsCount = previousResource.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+    const newPointsCount = withCenter.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+    
+    // IMPORTANT: Save the PREVIOUS resource to history, not the new state
+    setHistory(prev => {
+      // Properly handle redo history: if we're not at the end of history, truncate
+      const truncatedHistory = prev.slice(0, historyIndex + 1);
+      // Save the PREVIOUS resource with its center
+      const { centerX, centerY } = calculateCenter(previousResource);
+      const previousWithCenter = {
+        ...previousResource,
+        center_x: Math.round(centerX),
+        center_y: Math.round(centerY),
+      };
+      const newHistory = [...truncatedHistory, previousWithCenter];
+      console.log('[VectorEditor] UPDATE_RESOURCE: Saving', previousPointsCount, 'points', 
+                  '| New state has', newPointsCount, 'points',
+                  '| History:', prev.length, '→', newHistory.length);
+      return newHistory;
+    });
+    
+    setHistoryIndex(prev => prev + 1);
+    
+    isInternalChange.current = true; // Set flag BEFORE changing state
     setResource(withCenter);
     onChange?.(withCenter);
-  }, [onChange]);
+  }, [onChange, historyIndex]);
+
+  // Undo: go back one step in history
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const previousState = history[newIndex];
+      const pointsBefore = resource.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+      const pointsInHistory = previousState.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+      
+      // Log entire history state
+      const historyPointsPerIndex = history.map((h, idx) => {
+        const pts = h.layers[0].paths.reduce((sum, p) => sum + p.points.length, 0);
+        return `[${idx}]:${pts}`;
+      }).join(' ');
+      
+      console.log('[VectorEditor] UNDO: From index', historyIndex, 'to', newIndex);
+      console.log('[VectorEditor] UNDO: Current points:', pointsBefore, '→ Will restore:', pointsInHistory);
+      console.log('[VectorEditor] UNDO: Full history:', historyPointsPerIndex);
+      setHistoryIndex(newIndex);
+      setResource(previousState);
+      // Don't call onChange - undo is local only, no need to notify parent
+    }
+  }, [history, historyIndex, resource]);
+
+  // Redo: go forward one step in history
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const nextState = history[newIndex];
+      setHistoryIndex(newIndex);
+      setResource(nextState);
+      // Don't call onChange - redo is local only, no need to notify parent
+    }
+  }, [history, historyIndex]);
 
   // Scale all points by a factor
   const handleScale = (factor: number) => {
@@ -683,7 +750,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     
     console.log('[VectorEditor] Scaled', pointsScaled, 'points with factor', factor);
     console.log('[VectorEditor] Scaled resource:', JSON.stringify(scaled, null, 2));
-    updateResource(scaled);
+    updateResource(resource, scaled);
   };
   
   // Box selection state
@@ -848,6 +915,22 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       y: centerY - projected.y * scale * zoom + pan.y,
     };
   }, [width, height, resource.canvas.width, pan, zoom, project3DTo2D]);
+
+  // Helper function to calculate distance from point to line segment
+  const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+    
+    let t = ((px - x1) * dx + (py - y1) * dy) / (len * len);
+    t = Math.max(0, Math.min(1, t));
+    
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+    
+    return Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2);
+  };
 
   // Draw the canvas
   const draw = useCallback(() => {
@@ -1203,7 +1286,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         
         // Save the image data URL in the resource so it persists
         const newResource = { ...resource, backgroundImage: dataUrl };
-        updateResource(newResource);
+        updateResource(resource, newResource);
       };
       img.src = dataUrl;
     };
@@ -1250,7 +1333,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         }
         // Add traced paths to the main layer
         newResource.layers[0].paths.push(...paths);
-        updateResource(newResource);
+        updateResource(resource, newResource);
       } else {
         alert('No edges detected. Try adjusting the threshold values.');
       }
@@ -1302,13 +1385,16 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       setCircleRadius(0);
       setIsDrawing(true);
     } else if (currentTool === 'select') {
-      // Check if clicking on a point
+      // Check if clicking on a point or near a path line
       let closestDist = Infinity;
       let closestPath = -1;
       let closestPoint = -1;
+      let closestPathLineDistance = Infinity;
 
       const layer = resource.layers[currentLayerIndex];
       if (!layer || !Array.isArray(layer.paths)) return;
+      
+      // First check for point clicks
       for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
         const path = layer.paths[pathIdx];
         if (!path || !Array.isArray(path.points)) continue;
@@ -1325,16 +1411,50 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         }
       }
 
+      // If no point clicked, check if clicking near a path line
+      if (closestPath < 0) {
+        for (let pathIdx = 0; pathIdx < layer.paths.length; pathIdx++) {
+          const path = layer.paths[pathIdx];
+          if (!path || !Array.isArray(path.points) || path.points.length < 2) continue;
+          
+          // Check distance to path lines
+          for (let i = 0; i < path.points.length - 1; i++) {
+            const p1Raw = path.points[i];
+            const p2Raw = path.points[i + 1];
+            if (!p1Raw || !p2Raw) continue;
+            
+            const p1 = resourceToCanvas(p1Raw);
+            const p2 = resourceToCanvas(p2Raw);
+            
+            // Distance from point to line segment
+            const dist = pointToLineDistance(canvasX, canvasY, p1.x, p1.y, p2.x, p2.y);
+            if (dist < closestPathLineDistance && dist < 8) {
+              closestPathLineDistance = dist;
+              closestPath = pathIdx;
+              closestPoint = -1; // No specific point, just the path
+            }
+          }
+        }
+      }
+
       if (closestPath >= 0) {
-        // Clicked on a point - select it
+        // Clicked on a point or path - select it
         setCurrentPathIndex(closestPath);
-        setSelectedPointIndex(closestPoint);
-        const key = `${closestPath}-${closestPoint}`;
-        if (e.shiftKey) {
-          // Add to selection
-          setSelectedPoints(prev => new Set([...prev, key]));
+        if (closestPoint >= 0) {
+          setSelectedPointIndex(closestPoint);
+          const key = `${closestPath}-${closestPoint}`;
+          if (e.shiftKey) {
+            // Add to selection
+            setSelectedPoints(prev => new Set([...prev, key]));
+          } else {
+            setSelectedPoints(new Set([key]));
+          }
         } else {
-          setSelectedPoints(new Set([key]));
+          // Clicked on path line but not a point - just select the path
+          setSelectedPointIndex(-1);
+          if (!e.shiftKey) {
+            setSelectedPoints(new Set());
+          }
         }
         setIsDrawing(true); // Enable dragging
       } else {
@@ -1419,7 +1539,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     if (selectedPointIndex >= 0 && currentPathIndex >= 0) {
       const newResource = { ...resource };
       newResource.layers[currentLayerIndex].paths[currentPathIndex].points[selectedPointIndex] = point;
-      updateResource(newResource);
+      updateResource(resource, newResource);
     }
   };
 
@@ -1444,7 +1564,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       const newResource = { ...resource };
       const layer = newResource.layers[currentLayerIndex];
       layer.paths.push(newPath);
-      updateResource(newResource);
+      updateResource(resource, newResource);
       
       // Reset circle/arc state
       setCircleCenter(null);
@@ -1518,8 +1638,13 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const handleDeleteSelected = useCallback(() => {
     if (selectedPoints.size === 0) return;
     
-    const newResource = { ...resource };
+    // DEEP COPY to avoid modifying the original resource
+    const newResource = JSON.parse(JSON.stringify(resource)) as VecResource;
     const layer = newResource.layers[currentLayerIndex];
+    
+    // Count total points before deletion
+    const pointsBefore = layer.paths.reduce((sum, p) => sum + p.points.length, 0);
+    console.log('[VectorEditor] DELETE: Points before:', pointsBefore, 'Deleting:', selectedPoints.size);
     
     // Group selections by path and sort in reverse order to delete from end
     const pointsByPath: Map<number, number[]> = new Map();
@@ -1542,7 +1667,11 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     // Remove empty paths
     layer.paths = layer.paths.filter(p => p.points.length > 0);
     
-    updateResource(newResource);
+    // Count total points after deletion
+    const pointsAfter = layer.paths.reduce((sum, p) => sum + p.points.length, 0);
+    console.log('[VectorEditor] DELETE: Points after:', pointsAfter);
+    
+    updateResource(resource, newResource);
     setSelectedPoints(new Set());
     setSelectedPointIndex(-1);
     setCurrentPathIndex(-1);
@@ -1559,13 +1688,25 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
 
       const newResource = { ...resource };
       newResource.layers[currentLayerIndex].paths.push(newPath);
-      updateResource(newResource);
+      updateResource(resource, newResource);
       setTempPoints([]);
       setCurrentPathIndex(newResource.layers[currentLayerIndex].paths.length - 1);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Undo/Redo shortcuts (Ctrl+Z, Ctrl+Shift+Z or Cmd+Z, Cmd+Shift+Z on Mac)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      e.stopPropagation();
+      return;
+    }
+    
     // View switching shortcuts
     if (e.key === '1') {
       setViewMode('xy');
@@ -1589,12 +1730,18 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       setBoxStart(null);
       setBoxEnd(null);
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      e.stopPropagation(); // Prevent FileTreePanel from handling this event
       if (selectedPoints.size > 0) {
         handleDeleteSelected();
       } else if (selectedPointIndex >= 0 && currentPathIndex >= 0) {
         const newResource = { ...resource };
+        const pointsBefore = newResource.layers[currentLayerIndex].paths[currentPathIndex].points.length;
+        console.log('[VectorEditor] DELETE POINT: Path', currentPathIndex, 'Point', selectedPointIndex, 'Before:', pointsBefore);
         newResource.layers[currentLayerIndex].paths[currentPathIndex].points.splice(selectedPointIndex, 1);
-        updateResource(newResource);
+        const pointsAfter = newResource.layers[currentLayerIndex].paths[currentPathIndex].points.length;
+        console.log('[VectorEditor] DELETE POINT: After:', pointsAfter);
+        updateResource(resource, newResource);
         setSelectedPointIndex(-1);
       }
     }
@@ -1620,7 +1767,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       });
     });
 
-    updateResource(newResource);
+    updateResource(resource, newResource);
   }, [resource, updateResource]);
 
   // Mirror vector X - flip horizontally (negate X coordinates only)
@@ -1636,7 +1783,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       });
     });
 
-    updateResource(newResource);
+    updateResource(resource, newResource);
   }, [resource, updateResource]);
 
   // Mirror vector Y - flip vertically (negate Y coordinates only)
@@ -1652,7 +1799,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       });
     });
 
-    updateResource(newResource);
+    updateResource(resource, newResource);
   }, [resource, updateResource]);
 
   // UI Components
@@ -1801,6 +1948,42 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         title="Delete selected points (Delete key)"
       >
         🗑️ Delete {selectedPoints.size > 0 ? `(${selectedPoints.size})` : ''}
+      </button>
+      
+      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
+      
+      {/* Undo/Redo buttons */}
+      <button
+        onClick={handleUndo}
+        disabled={historyIndex <= 0}
+        style={{
+          padding: '8px 12px',
+          background: historyIndex > 0 ? '#3a5a3e' : '#4a4a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: historyIndex > 0 ? 'pointer' : 'not-allowed',
+          opacity: historyIndex > 0 ? 1 : 0.5,
+        }}
+        title="Undo (Ctrl+Z / Cmd+Z)"
+      >
+        ↶ Undo
+      </button>
+      <button
+        onClick={handleRedo}
+        disabled={historyIndex >= history.length - 1}
+        style={{
+          padding: '8px 12px',
+          background: historyIndex < history.length - 1 ? '#3a5a3e' : '#4a4a5e',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: historyIndex < history.length - 1 ? 'pointer' : 'not-allowed',
+          opacity: historyIndex < history.length - 1 ? 1 : 0.5,
+        }}
+        title="Redo (Ctrl+Shift+Z / Cmd+Shift+Z)"
+      >
+        ↷ Redo
       </button>
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
@@ -2208,7 +2391,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
                     // Remove from resource
                     const newResource = { ...resource };
                     delete newResource.backgroundImage;
-                    updateResource(newResource);
+                    updateResource(resource, newResource);
                   }
                 }}
                 style={{
@@ -2258,6 +2441,100 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
             {selectedPoints.size} point{selectedPoints.size !== 1 ? 's' : ''} selected
           </div>
         )}
+      </div>
+    );
+  };
+
+  // Path properties panel - shows when a path is selected
+  const PathPropertiesPanel = () => {
+    if (currentPathIndex < 0) return null;
+    
+    const mainLayer = resource.layers[0];
+    if (!mainLayer || !mainLayer.paths[currentPathIndex]) return null;
+    
+    const path = mainLayer.paths[currentPathIndex];
+    
+    const handleIntensityChange = (newIntensity: number) => {
+      const newResource = JSON.parse(JSON.stringify(resource)) as VecResource;
+      if (newResource.layers[0] && newResource.layers[0].paths[currentPathIndex]) {
+        newResource.layers[0].paths[currentPathIndex].intensity = newIntensity;
+        updateResource(resource, newResource);
+      }
+    };
+    
+    return (
+      <div style={{ background: '#2a2a4e', padding: '8px', borderRadius: '4px', marginTop: '8px' }}>
+        <div style={{ color: '#6af', marginBottom: '8px', fontSize: '12px', fontWeight: 'bold' }}>
+          Path {currentPathIndex + 1} Properties
+        </div>
+        
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '4px' }}>
+            Intensity: <strong>{path.intensity}</strong>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="127"
+            value={path.intensity}
+            onChange={(e) => handleIntensityChange(parseInt(e.target.value))}
+            style={{
+              width: '100%',
+              cursor: 'pointer',
+            }}
+            title="Adjust path intensity (brightness)"
+          />
+          <div style={{ display: 'flex', gap: '4px', marginTop: '4px', fontSize: '10px' }}>
+            <button
+              onClick={() => handleIntensityChange(Math.max(0, path.intensity - 10))}
+              style={{
+                flex: 1,
+                padding: '4px',
+                background: '#3a5a3a',
+                border: '1px solid #5a8a5a',
+                color: '#aaa',
+                borderRadius: '3px',
+                cursor: 'pointer',
+              }}
+            >
+              -10
+            </button>
+            <button
+              onClick={() => handleIntensityChange(127)}
+              style={{
+                flex: 1,
+                padding: '4px',
+                background: '#4a4a7e',
+                border: '1px solid #6a6aae',
+                color: '#aaa',
+                borderRadius: '3px',
+                cursor: 'pointer',
+              }}
+            >
+              Max
+            </button>
+            <button
+              onClick={() => handleIntensityChange(Math.min(127, path.intensity + 10))}
+              style={{
+                flex: 1,
+                padding: '4px',
+                background: '#5a3a3a',
+                border: '1px solid #8a5a5a',
+                color: '#aaa',
+                borderRadius: '3px',
+                cursor: 'pointer',
+              }}
+            >
+              +10
+            </button>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '11px', color: '#888' }}>
+          <div>Points: {path.points.length}</div>
+          <div>Closed: {path.closed ? 'Yes' : 'No'}</div>
+          <div style={{ marginTop: '4px', color: '#666' }}>{path.name}</div>
+        </div>
       </div>
     );
   };
@@ -2443,8 +2720,9 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
 
   // Right side panel - simplified for single view layout
   const RightPanel = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
       <LayersPanel />
+      <PathPropertiesPanel />
       <EdgeSettingsPanel />
     </div>
   );

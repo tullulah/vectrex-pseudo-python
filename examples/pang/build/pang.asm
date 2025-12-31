@@ -192,16 +192,6 @@ VECTREX_PRINT_TEXT:
     JSR Print_Str_d
     JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)
     RTS
-VECTREX_DEBUG_PRINT:
-    ; Debug print to console - writes to gap area (C000-C7FF)
-    ; Write both high and low bytes for proper 16-bit signed interpretation
-    LDA VAR_ARG0     ; Load high byte (for signed interpretation)
-    STA $C002        ; Debug output high byte in gap
-    LDA VAR_ARG0+1   ; Load low byte
-    STA $C000        ; Debug output low byte in unmapped gap
-    LDA #$42         ; Debug marker
-    STA $C001        ; Debug marker to indicate new output
-    RTS
 ; DRAW_LINE unified wrapper - handles 16-bit signed coordinates
 ; Args: (x0,y0,x1,y1,intensity) as 16-bit words
 ; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).
@@ -1273,7 +1263,7 @@ COPY_LOOP_0:
     LDD #-100
     STD VAR_HOOK_Y
     ; VPy_LINE:51
-    LDD #72
+    LDD #127
     STD VAR_HOOK_MAX_Y
     ; VPy_LINE:52
     LDD #0
@@ -1396,7 +1386,7 @@ COPY_LOOP_6:
     STU TMPPTR
     STX ,U
     ; VPy_LINE:89
-    LDD #60
+    LDD #80
     STD RESULT
     LDX RESULT
     LDU #VAR_LOCATION_GLOW_INTENSITY
@@ -2970,7 +2960,7 @@ DRAW_MAP_SCREEN: ; function
 ; --- function draw_map_screen ---
     LEAS -4,S ; allocate locals
     ; VPy_LINE:226
-    LDD #100
+    LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
@@ -3146,7 +3136,7 @@ IF_NEXT_136:
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #30
+    LDD #80
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -3282,14 +3272,28 @@ DSVEX_CALL_149:
 DRAW_TITLE_SCREEN: ; function
 ; --- function draw_title_screen ---
     ; VPy_LINE:250
-; DRAW_VECTOR("logo", x, y) - 16 path(s) at position
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 250
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:251
+; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #20
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_LOGO_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3305,37 +3309,19 @@ DRAW_TITLE_SCREEN: ; function
     JSR Draw_Sync_List_At
     LDX #_LOGO_PATH6  ; Path 6
     JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH7  ; Path 7
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH8  ; Path 8
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH9  ; Path 9
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH10  ; Path 10
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH11  ; Path 11
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH12  ; Path 12
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH13  ; Path 13
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH14  ; Path 14
-    JSR Draw_Sync_List_At
-    LDX #_LOGO_PATH15  ; Path 15
-    JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    ; VPy_LINE:252
+    ; VPy_LINE:253
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 252
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 253
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:253
+    ; VPy_LINE:254
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -3349,12 +3335,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 253
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 254
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:254
+    ; VPy_LINE:255
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-50
     STD RESULT
@@ -3368,12 +3354,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 254
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 255
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:256
+    ; VPy_LINE:257
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -3394,7 +3380,7 @@ CT_152:
 CE_153:
     LDD RESULT
     LBEQ IF_NEXT_151
-    ; VPy_LINE:257
+    ; VPy_LINE:258
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3416,7 +3402,7 @@ CE_153:
     LBRA IF_END_150
 IF_NEXT_151:
 IF_END_150:
-    ; VPy_LINE:259
+    ; VPy_LINE:260
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -3437,7 +3423,7 @@ CT_156:
 CE_157:
     LDD RESULT
     LBEQ IF_NEXT_155
-    ; VPy_LINE:260
+    ; VPy_LINE:261
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3459,12 +3445,12 @@ CE_157:
     LBRA IF_END_154
 IF_NEXT_155:
 IF_END_154:
-    ; VPy_LINE:262
+    ; VPy_LINE:263
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #127
+    LDD #80
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -3480,7 +3466,7 @@ CT_160:
 CE_161:
     LDD RESULT
     LBEQ IF_NEXT_159
-    ; VPy_LINE:263
+    ; VPy_LINE:264
     LDD #1
     STD RESULT
     LDX RESULT
@@ -3490,7 +3476,7 @@ CE_161:
     LBRA IF_END_158
 IF_NEXT_159:
 IF_END_158:
-    ; VPy_LINE:265
+    ; VPy_LINE:266
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3511,7 +3497,7 @@ CT_164:
 CE_165:
     LDD RESULT
     LBEQ IF_NEXT_163
-    ; VPy_LINE:266
+    ; VPy_LINE:267
     LDD #0
     STD RESULT
     LDX RESULT
@@ -3523,20 +3509,20 @@ IF_NEXT_163:
 IF_END_162:
     RTS
 
-    ; VPy_LINE:268
+    ; VPy_LINE:269
 DRAW_LEVEL_BACKGROUND: ; function
 ; --- function draw_level_background ---
-    ; VPy_LINE:270
+    ; VPy_LINE:271
     LDD #60
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 270
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 271
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:273
+    ; VPy_LINE:274
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -3557,15 +3543,19 @@ CT_168:
 CE_169:
     LDD RESULT
     LBEQ IF_NEXT_167
-    ; VPy_LINE:274
+    ; VPy_LINE:275
 ; DRAW_VECTOR("fuji_bg", x, y) - 6 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_FUJI_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3603,15 +3593,19 @@ CT_171:
 CE_172:
     LDD RESULT
     LBEQ IF_NEXT_170
-    ; VPy_LINE:276
+    ; VPy_LINE:277
 ; DRAW_VECTOR("keirin_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_KEIRIN_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3643,15 +3637,19 @@ CT_174:
 CE_175:
     LDD RESULT
     LBEQ IF_NEXT_173
-    ; VPy_LINE:278
+    ; VPy_LINE:279
 ; DRAW_VECTOR("buddha_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BUDDHA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3685,15 +3683,19 @@ CT_177:
 CE_178:
     LDD RESULT
     LBEQ IF_NEXT_176
-    ; VPy_LINE:280
+    ; VPy_LINE:281
 ; DRAW_VECTOR("angkor_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_ANGKOR_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3725,15 +3727,19 @@ CT_180:
 CE_181:
     LDD RESULT
     LBEQ IF_NEXT_179
-    ; VPy_LINE:282
+    ; VPy_LINE:283
 ; DRAW_VECTOR("ayers_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_AYERS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3765,15 +3771,19 @@ CT_183:
 CE_184:
     LDD RESULT
     LBEQ IF_NEXT_182
-    ; VPy_LINE:284
+    ; VPy_LINE:285
 ; DRAW_VECTOR("taj_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_TAJ_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3807,15 +3817,19 @@ CT_186:
 CE_187:
     LDD RESULT
     LBEQ IF_NEXT_185
-    ; VPy_LINE:286
+    ; VPy_LINE:287
 ; DRAW_VECTOR("leningrad_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_LENINGRAD_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3851,15 +3865,19 @@ CT_189:
 CE_190:
     LDD RESULT
     LBEQ IF_NEXT_188
-    ; VPy_LINE:288
+    ; VPy_LINE:289
 ; DRAW_VECTOR("paris_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_PARIS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3895,15 +3913,19 @@ CT_192:
 CE_193:
     LDD RESULT
     LBEQ IF_NEXT_191
-    ; VPy_LINE:290
+    ; VPy_LINE:291
 ; DRAW_VECTOR("london_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_LONDON_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3937,15 +3959,19 @@ CT_195:
 CE_196:
     LDD RESULT
     LBEQ IF_NEXT_194
-    ; VPy_LINE:292
+    ; VPy_LINE:293
 ; DRAW_VECTOR("barcelona_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BARCELONA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -3979,15 +4005,19 @@ CT_198:
 CE_199:
     LDD RESULT
     LBEQ IF_NEXT_197
-    ; VPy_LINE:294
+    ; VPy_LINE:295
 ; DRAW_VECTOR("athens_bg", x, y) - 7 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_ATHENS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4027,15 +4057,19 @@ CT_201:
 CE_202:
     LDD RESULT
     LBEQ IF_NEXT_200
-    ; VPy_LINE:296
+    ; VPy_LINE:297
 ; DRAW_VECTOR("pyramids_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_PYRAMIDS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4069,15 +4103,19 @@ CT_204:
 CE_205:
     LDD RESULT
     LBEQ IF_NEXT_203
-    ; VPy_LINE:298
+    ; VPy_LINE:299
 ; DRAW_VECTOR("kilimanjaro_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_KILIMANJARO_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4111,15 +4149,19 @@ CT_207:
 CE_208:
     LDD RESULT
     LBEQ IF_NEXT_206
-    ; VPy_LINE:300
+    ; VPy_LINE:301
 ; DRAW_VECTOR("newyork_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_NEWYORK_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4155,15 +4197,19 @@ CT_210:
 CE_211:
     LDD RESULT
     LBEQ IF_NEXT_209
-    ; VPy_LINE:302
+    ; VPy_LINE:303
 ; DRAW_VECTOR("mayan_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_MAYAN_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4199,15 +4245,19 @@ CT_213:
 CE_214:
     LDD RESULT
     LBEQ IF_NEXT_212
-    ; VPy_LINE:304
+    ; VPy_LINE:305
 ; DRAW_VECTOR("antarctica_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_ANTARCTICA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4221,15 +4271,19 @@ CE_214:
     STD RESULT
     LBRA IF_END_166
 IF_NEXT_212:
-    ; VPy_LINE:306
+    ; VPy_LINE:307
 ; DRAW_VECTOR("easter_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_EASTER_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
@@ -4246,23 +4300,13 @@ IF_NEXT_212:
 IF_END_166:
     RTS
 
-    ; VPy_LINE:308
+    ; VPy_LINE:309
 DRAW_GAME_LEVEL: ; function
 ; --- function draw_game_level ---
     LEAS -8,S ; allocate locals
-    ; VPy_LINE:310
+    ; VPy_LINE:311
     JSR DRAW_LEVEL_BACKGROUND
-    ; VPy_LINE:313
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 313
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:316
+    ; VPy_LINE:314
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -4280,7 +4324,7 @@ DRAW_GAME_LEVEL: ; function
     LDU #VAR_JOY_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:320
+    ; VPy_LINE:318
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4330,14 +4374,14 @@ OR_TRUE_217:
 OR_END_218:
     LDD RESULT
     LBEQ IF_NEXT_216
-    ; VPy_LINE:323
+    ; VPy_LINE:321
     LDD VAR_JOY_X
     STD RESULT
     LDX RESULT
     LDU #VAR_ABS_JOY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:324
+    ; VPy_LINE:322
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4358,7 +4402,7 @@ CT_225:
 CE_226:
     LDD RESULT
     LBEQ IF_NEXT_224
-    ; VPy_LINE:325
+    ; VPy_LINE:323
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4380,7 +4424,7 @@ CE_226:
     LBRA IF_END_223
 IF_NEXT_224:
 IF_END_223:
-    ; VPy_LINE:330
+    ; VPy_LINE:328
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4401,7 +4445,7 @@ CT_229:
 CE_230:
     LDD RESULT
     LBEQ IF_NEXT_228
-    ; VPy_LINE:331
+    ; VPy_LINE:329
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4430,7 +4474,7 @@ CT_232:
 CE_233:
     LDD RESULT
     LBEQ IF_NEXT_231
-    ; VPy_LINE:333
+    ; VPy_LINE:331
     LDD #2
     STD RESULT
     LDX RESULT
@@ -4459,7 +4503,7 @@ CT_235:
 CE_236:
     LDD RESULT
     LBEQ IF_NEXT_234
-    ; VPy_LINE:335
+    ; VPy_LINE:333
     LDD #3
     STD RESULT
     LDX RESULT
@@ -4468,7 +4512,7 @@ CE_236:
     STX ,U
     LBRA IF_END_227
 IF_NEXT_234:
-    ; VPy_LINE:337
+    ; VPy_LINE:335
     LDD #4
     STD RESULT
     LDX RESULT
@@ -4476,7 +4520,7 @@ IF_NEXT_234:
     STU TMPPTR
     STX ,U
 IF_END_227:
-    ; VPy_LINE:340
+    ; VPy_LINE:338
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4497,7 +4541,7 @@ CT_239:
 CE_240:
     LDD RESULT
     LBEQ IF_NEXT_238
-    ; VPy_LINE:341
+    ; VPy_LINE:339
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4519,7 +4563,7 @@ CE_240:
     LBRA IF_END_237
 IF_NEXT_238:
 IF_END_237:
-    ; VPy_LINE:343
+    ; VPy_LINE:341
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4538,7 +4582,7 @@ IF_END_237:
     LDU #VAR_PLAYER_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:346
+    ; VPy_LINE:344
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4559,7 +4603,7 @@ CT_243:
 CE_244:
     LDD RESULT
     LBEQ IF_NEXT_242
-    ; VPy_LINE:347
+    ; VPy_LINE:345
     LDD #-110
     STD RESULT
     LDX RESULT
@@ -4569,7 +4613,7 @@ CE_244:
     LBRA IF_END_241
 IF_NEXT_242:
 IF_END_241:
-    ; VPy_LINE:348
+    ; VPy_LINE:346
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4590,7 +4634,7 @@ CT_247:
 CE_248:
     LDD RESULT
     LBEQ IF_NEXT_246
-    ; VPy_LINE:349
+    ; VPy_LINE:347
     LDD #110
     STD RESULT
     LDX RESULT
@@ -4600,7 +4644,7 @@ CE_248:
     LBRA IF_END_245
 IF_NEXT_246:
 IF_END_245:
-    ; VPy_LINE:352
+    ; VPy_LINE:350
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4621,7 +4665,7 @@ CT_251:
 CE_252:
     LDD RESULT
     LBEQ IF_NEXT_250
-    ; VPy_LINE:353
+    ; VPy_LINE:351
     LDD #-1
     STD RESULT
     LDX RESULT
@@ -4630,7 +4674,7 @@ CE_252:
     STX ,U
     LBRA IF_END_249
 IF_NEXT_250:
-    ; VPy_LINE:355
+    ; VPy_LINE:353
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4638,7 +4682,7 @@ IF_NEXT_250:
     STU TMPPTR
     STX ,U
 IF_END_249:
-    ; VPy_LINE:358
+    ; VPy_LINE:356
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
     LDD RESULT
@@ -4657,12 +4701,12 @@ IF_END_249:
     LDU #VAR_PLAYER_ANIM_COUNTER
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:360
+    ; VPy_LINE:358
     LDD VAR_PLAYER_ANIM_SPEED
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:361
+    ; VPy_LINE:359
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4712,7 +4756,7 @@ OR_TRUE_255:
 OR_END_256:
     LDD RESULT
     LBEQ IF_NEXT_254
-    ; VPy_LINE:362
+    ; VPy_LINE:360
     LDD VAR_PLAYER_ANIM_SPEED
     STD RESULT
     LDD RESULT
@@ -4724,7 +4768,7 @@ OR_END_256:
     LBRA IF_END_253
 IF_NEXT_254:
 IF_END_253:
-    ; VPy_LINE:364
+    ; VPy_LINE:362
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
     LDD RESULT
@@ -4745,14 +4789,14 @@ CT_263:
 CE_264:
     LDD RESULT
     LBEQ IF_NEXT_262
-    ; VPy_LINE:365
+    ; VPy_LINE:363
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_ANIM_COUNTER
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:366
+    ; VPy_LINE:364
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4771,7 +4815,7 @@ CE_264:
     LDU #VAR_PLAYER_ANIM_FRAME
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:367
+    ; VPy_LINE:365
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4792,7 +4836,7 @@ CT_267:
 CE_268:
     LDD RESULT
     LBEQ IF_NEXT_266
-    ; VPy_LINE:368
+    ; VPy_LINE:366
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4807,14 +4851,14 @@ IF_NEXT_262:
 IF_END_261:
     LBRA IF_END_215
 IF_NEXT_216:
-    ; VPy_LINE:371
+    ; VPy_LINE:369
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_ANIM_FRAME
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:372
+    ; VPy_LINE:370
     LDD #0
     STD RESULT
     LDX RESULT
@@ -4822,22 +4866,12 @@ IF_NEXT_216:
     STU TMPPTR
     STX ,U
 IF_END_215:
-    ; VPy_LINE:375
-    LDD #127
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 375
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:378
+    ; VPy_LINE:373
     LDD #0
     STD RESULT
     LDX RESULT
     STX 6 ,S
-    ; VPy_LINE:379
+    ; VPy_LINE:374
     LDD VAR_PLAYER_FACING
     STD RESULT
     LDD RESULT
@@ -4858,7 +4892,7 @@ CT_271:
 CE_272:
     LDD RESULT
     LBEQ IF_NEXT_270
-    ; VPy_LINE:380
+    ; VPy_LINE:375
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4866,7 +4900,7 @@ CE_272:
     LBRA IF_END_269
 IF_NEXT_270:
 IF_END_269:
-    ; VPy_LINE:383
+    ; VPy_LINE:378
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4887,7 +4921,7 @@ CT_275:
 CE_276:
     LDD RESULT
     LBEQ IF_NEXT_274
-    ; VPy_LINE:384
+    ; VPy_LINE:379
 ; DRAW_VECTOR_EX("player_walk_1", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -4920,7 +4954,7 @@ DSVEX_CHK_XY_278:
     STA MIRROR_Y
 DSVEX_CALL_279:
     ; Set intensity override for drawing
-    LDD #127
+    LDD #80
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
@@ -4983,7 +5017,7 @@ CT_281:
 CE_282:
     LDD RESULT
     LBEQ IF_NEXT_280
-    ; VPy_LINE:386
+    ; VPy_LINE:381
 ; DRAW_VECTOR_EX("player_walk_2", x, y, mirror) - 17 path(s), width=21, center_x=0
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5016,7 +5050,7 @@ DSVEX_CHK_XY_284:
     STA MIRROR_Y
 DSVEX_CALL_285:
     ; Set intensity override for drawing
-    LDD #127
+    LDD #80
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
@@ -5079,7 +5113,7 @@ CT_287:
 CE_288:
     LDD RESULT
     LBEQ IF_NEXT_286
-    ; VPy_LINE:388
+    ; VPy_LINE:383
 ; DRAW_VECTOR_EX("player_walk_3", x, y, mirror) - 17 path(s), width=20, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5112,7 +5146,7 @@ DSVEX_CHK_XY_290:
     STA MIRROR_Y
 DSVEX_CALL_291:
     ; Set intensity override for drawing
-    LDD #127
+    LDD #80
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
@@ -5175,7 +5209,7 @@ CT_293:
 CE_294:
     LDD RESULT
     LBEQ IF_NEXT_292
-    ; VPy_LINE:390
+    ; VPy_LINE:385
 ; DRAW_VECTOR_EX("player_walk_4", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5208,7 +5242,7 @@ DSVEX_CHK_XY_296:
     STA MIRROR_Y
 DSVEX_CALL_297:
     ; Set intensity override for drawing
-    LDD #127
+    LDD #80
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
@@ -5251,7 +5285,7 @@ DSVEX_CALL_297:
     STD RESULT
     LBRA IF_END_273
 IF_NEXT_292:
-    ; VPy_LINE:392
+    ; VPy_LINE:387
 ; DRAW_VECTOR_EX("player_walk_5", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5284,7 +5318,7 @@ DSVEX_CHK_XY_299:
     STA MIRROR_Y
 DSVEX_CALL_300:
     ; Set intensity override for drawing
-    LDD #127
+    LDD #80
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
@@ -5326,7 +5360,7 @@ DSVEX_CALL_300:
     LDD #0
     STD RESULT
 IF_END_273:
-    ; VPy_LINE:399
+    ; VPy_LINE:394
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -5347,7 +5381,7 @@ CT_303:
 CE_304:
     LDD RESULT
     LBEQ IF_NEXT_302
-    ; VPy_LINE:402
+    ; VPy_LINE:397
     LDD VAR_HOOK_GUN_X
     STD RESULT
     LDD RESULT
@@ -5365,17 +5399,17 @@ CE_304:
     LDD RESULT
     STD VAR_ARG3
     JSR DRAW_HOOK_ROPE
-    ; VPy_LINE:404
+    ; VPy_LINE:399
     LDD #100
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 404
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 399
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:406
+    ; VPy_LINE:401
 ; DRAW_VECTOR_EX("hook", x, y, mirror) - 1 path(s), width=12, center_x=0
     LDD VAR_HOOK_X
     STD RESULT
@@ -5417,39 +5451,21 @@ DSVEX_CALL_307:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    ; VPy_LINE:408
-    LDD VAR_HOOK_GUN_X
-    STD RESULT
-; NATIVE_CALL: DEBUG_PRINT(hook_gun_x) at line 408
-    LDD RESULT
-    STA $C002
-    STB $C000
-    LDA #$FE
-    STA $C001
-    LDX #DEBUG_LABEL_HOOK_GUN_X
-    STX $C004
-    BRA DEBUG_SKIP_DATA_308
-DEBUG_LABEL_HOOK_GUN_X:
-    FCC "hook_gun_x"
-    FCB $00
-DEBUG_SKIP_DATA_308:
-    LDD #0
-    STD RESULT
     LBRA IF_END_301
 IF_NEXT_302:
 IF_END_301:
-    ; VPy_LINE:414
+    ; VPy_LINE:404
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:415
+    ; VPy_LINE:405
     LDD #0
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:416
-WH_309: ; while start
+    ; VPy_LINE:406
+WH_308: ; while start
     LDD 4 ,S
     STD RESULT
     LDD RESULT
@@ -5460,17 +5476,17 @@ WH_309: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_311
+    BLT CT_310
     LDD #0
     STD RESULT
-    BRA CE_312
-CT_311:
+    BRA CE_311
+CT_310:
     LDD #1
     STD RESULT
-CE_312:
+CE_311:
     LDD RESULT
-    LBEQ WH_END_310
-    ; VPy_LINE:417
+    LBEQ WH_END_309
+    ; VPy_LINE:407
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -5492,17 +5508,17 @@ CE_312:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_315
+    BEQ CT_314
     LDD #0
     STD RESULT
-    BRA CE_316
-CT_315:
+    BRA CE_315
+CT_314:
     LDD #1
     STD RESULT
-CE_316:
+CE_315:
     LDD RESULT
-    LBEQ IF_NEXT_314
-    ; VPy_LINE:418
+    LBEQ IF_NEXT_313
+    ; VPy_LINE:408
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5519,10 +5535,10 @@ CE_316:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA IF_END_313
-IF_NEXT_314:
-IF_END_313:
-    ; VPy_LINE:419
+    LBRA IF_END_312
+IF_NEXT_313:
+IF_END_312:
+    ; VPy_LINE:409
     LDD 4 ,S
     STD RESULT
     LDD RESULT
@@ -5539,22 +5555,22 @@ IF_END_313:
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    LBRA WH_309
-WH_END_310: ; while end
+    LBRA WH_308
+WH_END_309: ; while end
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:421
+    ; VPy_LINE:411
 INIT_ENEMIES: ; function
 ; --- function init_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:423
+    ; VPy_LINE:413
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:424
-WH_317: ; while start
+    ; VPy_LINE:414
+WH_316: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5565,17 +5581,17 @@ WH_317: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_319
+    BLT CT_318
     LDD #0
     STD RESULT
-    BRA CE_320
-CT_319:
+    BRA CE_319
+CT_318:
     LDD #1
     STD RESULT
-CE_320:
+CE_319:
     LDD RESULT
-    LBEQ WH_END_318
-    ; VPy_LINE:425
+    LBEQ WH_END_317
+    ; VPy_LINE:415
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5592,7 +5608,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:426
+    ; VPy_LINE:416
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5609,7 +5625,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:427
+    ; VPy_LINE:417
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5626,7 +5642,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:428
+    ; VPy_LINE:418
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5643,7 +5659,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:429
+    ; VPy_LINE:419
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5660,7 +5676,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:430
+    ; VPy_LINE:420
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5677,7 +5693,7 @@ CE_320:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:431
+    ; VPy_LINE:421
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5694,16 +5710,16 @@ CE_320:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_317
-WH_END_318: ; while end
+    LBRA WH_316
+WH_END_317: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:433
+    ; VPy_LINE:423
 SPAWN_LEVEL_ENEMIES: ; function
 ; --- function spawn_level_enemies ---
     LEAS -6,S ; allocate locals
-    ; VPy_LINE:435
+    ; VPy_LINE:425
     ; ===== Const array indexing: level_enemy_count =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -5718,7 +5734,7 @@ SPAWN_LEVEL_ENEMIES: ; function
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:436
+    ; VPy_LINE:426
     ; ===== Const array indexing: level_enemy_speed =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -5733,13 +5749,13 @@ SPAWN_LEVEL_ENEMIES: ; function
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:438
+    ; VPy_LINE:428
     LDD #0
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:439
-WH_321: ; while start
+    ; VPy_LINE:429
+WH_320: ; while start
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5750,16 +5766,16 @@ WH_321: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_323
+    BLT CT_322
     LDD #0
     STD RESULT
-    BRA CE_324
-CT_323:
+    BRA CE_323
+CT_322:
     LDD #1
     STD RESULT
-CE_324:
+CE_323:
     LDD RESULT
-    BEQ AND_FALSE_325
+    BEQ AND_FALSE_324
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5770,26 +5786,26 @@ CE_324:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_327
+    BLT CT_326
     LDD #0
     STD RESULT
-    BRA CE_328
-CT_327:
+    BRA CE_327
+CT_326:
     LDD #1
     STD RESULT
-CE_328:
+CE_327:
     LDD RESULT
-    BEQ AND_FALSE_325
+    BEQ AND_FALSE_324
     LDD #1
     STD RESULT
-    BRA AND_END_326
-AND_FALSE_325:
+    BRA AND_END_325
+AND_FALSE_324:
     LDD #0
     STD RESULT
-AND_END_326:
+AND_END_325:
     LDD RESULT
-    LBEQ WH_END_322
-    ; VPy_LINE:440
+    LBEQ WH_END_321
+    ; VPy_LINE:430
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5806,7 +5822,7 @@ AND_END_326:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:441
+    ; VPy_LINE:431
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5849,7 +5865,7 @@ AND_END_326:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:442
+    ; VPy_LINE:432
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5866,7 +5882,7 @@ AND_END_326:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:445
+    ; VPy_LINE:435
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5883,7 +5899,7 @@ AND_END_326:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:446
+    ; VPy_LINE:436
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5920,17 +5936,17 @@ AND_END_326:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_331
+    BEQ CT_330
     LDD #0
     STD RESULT
-    BRA CE_332
-CT_331:
+    BRA CE_331
+CT_330:
     LDD #1
     STD RESULT
-CE_332:
+CE_331:
     LDD RESULT
-    LBEQ IF_NEXT_330
-    ; VPy_LINE:447
+    LBEQ IF_NEXT_329
+    ; VPy_LINE:437
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5959,10 +5975,10 @@ CE_332:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_329
-IF_NEXT_330:
-IF_END_329:
-    ; VPy_LINE:449
+    LBRA IF_END_328
+IF_NEXT_329:
+IF_END_328:
+    ; VPy_LINE:439
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5979,7 +5995,7 @@ IF_END_329:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:450
+    ; VPy_LINE:440
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5996,7 +6012,7 @@ IF_END_329:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:452
+    ; VPy_LINE:442
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -6013,22 +6029,22 @@ IF_END_329:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA WH_321
-WH_END_322: ; while end
+    LBRA WH_320
+WH_END_321: ; while end
     LEAS 6,S ; free locals
     RTS
 
-    ; VPy_LINE:454
+    ; VPy_LINE:444
 UPDATE_ENEMIES: ; function
 ; --- function update_enemies ---
     LEAS -4,S ; allocate locals
-    ; VPy_LINE:456
+    ; VPy_LINE:446
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:457
-WH_333: ; while start
+    ; VPy_LINE:447
+WH_332: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6039,17 +6055,17 @@ WH_333: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_335
+    BLT CT_334
     LDD #0
     STD RESULT
-    BRA CE_336
-CT_335:
+    BRA CE_335
+CT_334:
     LDD #1
     STD RESULT
-CE_336:
+CE_335:
     LDD RESULT
-    LBEQ WH_END_334
-    ; VPy_LINE:458
+    LBEQ WH_END_333
+    ; VPy_LINE:448
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -6071,17 +6087,17 @@ CE_336:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_339
+    BEQ CT_338
     LDD #0
     STD RESULT
-    BRA CE_340
-CT_339:
+    BRA CE_339
+CT_338:
     LDD #1
     STD RESULT
-CE_340:
+CE_339:
     LDD RESULT
-    LBEQ IF_NEXT_338
-    ; VPy_LINE:459
+    LBEQ IF_NEXT_337
+    ; VPy_LINE:449
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6121,7 +6137,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:462
+    ; VPy_LINE:452
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6152,7 +6168,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:463
+    ; VPy_LINE:453
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6183,12 +6199,12 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:466
+    ; VPy_LINE:456
     LDD #10
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:467
+    ; VPy_LINE:457
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6210,23 +6226,23 @@ CE_340:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_343
+    BEQ CT_342
     LDD #0
     STD RESULT
-    BRA CE_344
-CT_343:
+    BRA CE_343
+CT_342:
     LDD #1
     STD RESULT
-CE_344:
+CE_343:
     LDD RESULT
-    LBEQ IF_NEXT_342
-    ; VPy_LINE:468
+    LBEQ IF_NEXT_341
+    ; VPy_LINE:458
     LDD #25
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA IF_END_341
-IF_NEXT_342:
+    LBRA IF_END_340
+IF_NEXT_341:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6248,23 +6264,23 @@ IF_NEXT_342:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_346
+    BEQ CT_345
     LDD #0
     STD RESULT
-    BRA CE_347
-CT_346:
+    BRA CE_346
+CT_345:
     LDD #1
     STD RESULT
-CE_347:
+CE_346:
     LDD RESULT
-    LBEQ IF_NEXT_345
-    ; VPy_LINE:470
+    LBEQ IF_NEXT_344
+    ; VPy_LINE:460
     LDD #20
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA IF_END_341
-IF_NEXT_345:
+    LBRA IF_END_340
+IF_NEXT_344:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6286,24 +6302,24 @@ IF_NEXT_345:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_348
+    BEQ CT_347
     LDD #0
     STD RESULT
-    BRA CE_349
-CT_348:
+    BRA CE_348
+CT_347:
     LDD #1
     STD RESULT
-CE_349:
+CE_348:
     LDD RESULT
-    LBEQ IF_END_341
-    ; VPy_LINE:472
+    LBEQ IF_END_340
+    ; VPy_LINE:462
     LDD #15
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA IF_END_341
-IF_END_341:
-    ; VPy_LINE:475
+    LBRA IF_END_340
+IF_END_340:
+    ; VPy_LINE:465
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
     LDD RESULT
@@ -6337,17 +6353,17 @@ IF_END_341:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_352
+    BLT CT_351
     LDD #0
     STD RESULT
-    BRA CE_353
-CT_352:
+    BRA CE_352
+CT_351:
     LDD #1
     STD RESULT
-CE_353:
+CE_352:
     LDD RESULT
-    LBEQ IF_NEXT_351
-    ; VPy_LINE:476
+    LBEQ IF_NEXT_350
+    ; VPy_LINE:466
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6372,280 +6388,280 @@ CE_353:
     STD TMPLEFT
     LDD TMPLEFT
     ADDD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:467
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VX_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #VAR_ENEMY_VX_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    LBRA IF_END_349
+IF_NEXT_350:
+    LDD #VAR_ENEMY_X_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #110
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_353
+    LDD #0
+    STD RESULT
+    BRA CE_354
+CT_353:
+    LDD #1
+    STD RESULT
+CE_354:
+    LDD RESULT
+    LBEQ IF_END_349
+    ; VPy_LINE:469
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_X_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #110
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:470
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VX_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #VAR_ENEMY_VX_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    LBRA IF_END_349
+IF_END_349:
+    ; VPy_LINE:473
+    LDD #VAR_ENEMY_Y_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-80
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_357
+    LDD #0
+    STD RESULT
+    BRA CE_358
+CT_357:
+    LDD #1
+    STD RESULT
+CE_358:
+    LDD RESULT
+    LBEQ IF_NEXT_356
+    ; VPy_LINE:474
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_Y_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #-80
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:475
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VY_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #VAR_ENEMY_VY_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
     ; VPy_LINE:477
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VX_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #VAR_ENEMY_VX_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_350
-IF_NEXT_351:
-    LDD #VAR_ENEMY_X_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #110
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_354
-    LDD #0
-    STD RESULT
-    BRA CE_355
-CT_354:
-    LDD #1
-    STD RESULT
-CE_355:
-    LDD RESULT
-    LBEQ IF_END_350
-    ; VPy_LINE:479
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_X_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #110
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:480
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VX_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #VAR_ENEMY_VX_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_350
-IF_END_350:
-    ; VPy_LINE:483
-    LDD #VAR_ENEMY_Y_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #-80
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_358
-    LDD #0
-    STD RESULT
-    BRA CE_359
-CT_358:
-    LDD #1
-    STD RESULT
-CE_359:
-    LDD RESULT
-    LBEQ IF_NEXT_357
-    ; VPy_LINE:484
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_Y_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #-80
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:485
-    LDD 0 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VY_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #VAR_ENEMY_VY_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:487
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6701,10 +6717,10 @@ CE_359:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_356
-IF_NEXT_357:
-IF_END_356:
-    ; VPy_LINE:490
+    LBRA IF_END_355
+IF_NEXT_356:
+IF_END_355:
+    ; VPy_LINE:480
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -6726,17 +6742,17 @@ IF_END_356:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_362
+    BGT CT_361
     LDD #0
     STD RESULT
-    BRA CE_363
-CT_362:
+    BRA CE_362
+CT_361:
     LDD #1
     STD RESULT
-CE_363:
+CE_362:
     LDD RESULT
-    LBEQ IF_NEXT_361
-    ; VPy_LINE:491
+    LBEQ IF_NEXT_360
+    ; VPy_LINE:481
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6753,7 +6769,7 @@ CE_363:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:492
+    ; VPy_LINE:482
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6793,13 +6809,13 @@ CE_363:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_360
-IF_NEXT_361:
-IF_END_360:
-    LBRA IF_END_337
-IF_NEXT_338:
-IF_END_337:
-    ; VPy_LINE:494
+    LBRA IF_END_359
+IF_NEXT_360:
+IF_END_359:
+    LBRA IF_END_336
+IF_NEXT_337:
+IF_END_336:
+    ; VPy_LINE:484
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6816,22 +6832,22 @@ IF_END_337:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_333
-WH_END_334: ; while end
+    LBRA WH_332
+WH_END_333: ; while end
     LEAS 4,S ; free locals
     RTS
 
-    ; VPy_LINE:496
+    ; VPy_LINE:486
 DRAW_ENEMIES: ; function
 ; --- function draw_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:498
+    ; VPy_LINE:488
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:499
-WH_364: ; while start
+    ; VPy_LINE:489
+WH_363: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6842,17 +6858,17 @@ WH_364: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_366
+    BLT CT_365
     LDD #0
     STD RESULT
-    BRA CE_367
-CT_366:
+    BRA CE_366
+CT_365:
     LDD #1
     STD RESULT
-CE_367:
+CE_366:
     LDD RESULT
-    LBEQ WH_END_365
-    ; VPy_LINE:500
+    LBEQ WH_END_364
+    ; VPy_LINE:490
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -6874,27 +6890,27 @@ CE_367:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_370
+    BEQ CT_369
     LDD #0
     STD RESULT
-    BRA CE_371
-CT_370:
+    BRA CE_370
+CT_369:
     LDD #1
     STD RESULT
-CE_371:
+CE_370:
     LDD RESULT
-    LBEQ IF_NEXT_369
-    ; VPy_LINE:501
+    LBEQ IF_NEXT_368
+    ; VPy_LINE:491
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 501
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 491
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:503
+    ; VPy_LINE:493
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6916,17 +6932,17 @@ CE_371:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_374
+    BEQ CT_373
     LDD #0
     STD RESULT
-    BRA CE_375
-CT_374:
+    BRA CE_374
+CT_373:
     LDD #1
     STD RESULT
-CE_375:
+CE_374:
     LDD RESULT
-    LBEQ IF_NEXT_373
-    ; VPy_LINE:504
+    LBEQ IF_NEXT_372
+    ; VPy_LINE:494
 ; DRAW_VECTOR("bubble_huge", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6942,7 +6958,7 @@ CE_375:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -6957,13 +6973,17 @@ CE_375:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BUBBLE_HUGE_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    LBRA IF_END_372
-IF_NEXT_373:
+    LBRA IF_END_371
+IF_NEXT_372:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6985,17 +7005,17 @@ IF_NEXT_373:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_377
+    BEQ CT_376
     LDD #0
     STD RESULT
-    BRA CE_378
-CT_377:
+    BRA CE_377
+CT_376:
     LDD #1
     STD RESULT
-CE_378:
+CE_377:
     LDD RESULT
-    LBEQ IF_NEXT_376
-    ; VPy_LINE:506
+    LBEQ IF_NEXT_375
+    ; VPy_LINE:496
 ; DRAW_VECTOR("bubble_large", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -7011,7 +7031,7 @@ CE_378:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -7026,13 +7046,17 @@ CE_378:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BUBBLE_LARGE_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    LBRA IF_END_372
-IF_NEXT_376:
+    LBRA IF_END_371
+IF_NEXT_375:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -7054,17 +7078,17 @@ IF_NEXT_376:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_380
+    BEQ CT_379
     LDD #0
     STD RESULT
-    BRA CE_381
-CT_380:
+    BRA CE_380
+CT_379:
     LDD #1
     STD RESULT
-CE_381:
+CE_380:
     LDD RESULT
-    LBEQ IF_NEXT_379
-    ; VPy_LINE:508
+    LBEQ IF_NEXT_378
+    ; VPy_LINE:498
 ; DRAW_VECTOR("bubble_medium", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -7080,7 +7104,7 @@ CE_381:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -7095,14 +7119,18 @@ CE_381:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BUBBLE_MEDIUM_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    LBRA IF_END_372
-IF_NEXT_379:
-    ; VPy_LINE:510
+    LBRA IF_END_371
+IF_NEXT_378:
+    ; VPy_LINE:500
 ; DRAW_VECTOR("bubble_small", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -7118,7 +7146,7 @@ IF_NEXT_379:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -7133,16 +7161,20 @@ IF_NEXT_379:
     LDD ,X
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_BUBBLE_SMALL_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-IF_END_372:
-    LBRA IF_END_368
-IF_NEXT_369:
-IF_END_368:
-    ; VPy_LINE:512
+IF_END_371:
+    LBRA IF_END_367
+IF_NEXT_368:
+IF_END_367:
+    ; VPy_LINE:502
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -7159,12 +7191,12 @@ IF_END_368:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_364
-WH_END_365: ; while end
+    LBRA WH_363
+WH_END_364: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:514
+    ; VPy_LINE:504
 DRAW_HOOK_ROPE: ; function
 ; --- function draw_hook_rope ---
     LEAS -8,S ; allocate locals
@@ -7176,7 +7208,7 @@ DRAW_HOOK_ROPE: ; function
     STD 4,S ; param 2
     LDD VAR_ARG3
     STD 6,S ; param 3
-    ; VPy_LINE:516
+    ; VPy_LINE:506
     LDD 0 ,S
     STD RESULT
     STD TMPPTR+0
@@ -7207,10 +7239,10 @@ DRAW_HOOK_ROPE: ; function
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:518
+    ; VPy_LINE:508
 READ_JOYSTICK1_STATE: ; function
 ; --- function read_joystick1_state ---
-    ; VPy_LINE:520
+    ; VPy_LINE:510
     LDD #0
     STD RESULT
     LDD RESULT
@@ -7222,13 +7254,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_X at line 520
+; NATIVE_CALL: J1_X at line 510
     JSR J1X_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:521
+    ; VPy_LINE:511
     LDD #1
     STD RESULT
     LDD RESULT
@@ -7240,13 +7272,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_Y at line 521
+; NATIVE_CALL: J1_Y at line 511
     JSR J1Y_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:526
+    ; VPy_LINE:516
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -7268,19 +7300,138 @@ READ_JOYSTICK1_STATE: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_384
+    BEQ CT_383
     LDD #0
     STD RESULT
-    BRA CE_385
-CT_384:
+    BRA CE_384
+CT_383:
     LDD #1
     STD RESULT
-CE_385:
+CE_384:
     LDD RESULT
-    LBEQ IF_NEXT_383
+    LBEQ IF_NEXT_382
+    ; VPy_LINE:518
+; NATIVE_CALL: J1_BUTTON_1 at line 518
+    JSR J1B1_BUILTIN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_387
+    LDD #0
+    STD RESULT
+    BRA CE_388
+CT_387:
+    LDD #1
+    STD RESULT
+CE_388:
+    LDD RESULT
+    LBEQ IF_NEXT_386
+    ; VPy_LINE:520
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #1
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    LBRA IF_END_385
+IF_NEXT_386:
+IF_END_385:
+    LBRA IF_END_381
+IF_NEXT_382:
+    ; VPy_LINE:523
+; NATIVE_CALL: J1_BUTTON_1 at line 523
+    JSR J1B1_BUILTIN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_391
+    LDD #0
+    STD RESULT
+    BRA CE_392
+CT_391:
+    LDD #1
+    STD RESULT
+CE_392:
+    LDD RESULT
+    LBEQ IF_NEXT_390
+    ; VPy_LINE:525
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    LBRA IF_END_389
+IF_NEXT_390:
+IF_END_389:
+IF_END_381:
     ; VPy_LINE:528
-; NATIVE_CALL: J1_BUTTON_1 at line 528
-    JSR J1B1_BUILTIN
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_395
+    LDD #0
+    STD RESULT
+    BRA CE_396
+CT_395:
+    LDD #1
+    STD RESULT
+CE_396:
+    LDD RESULT
+    LBEQ IF_NEXT_394
+    ; VPy_LINE:529
+; NATIVE_CALL: J1_BUTTON_2 at line 529
+    JSR J1B2_BUILTIN
     STD RESULT
     LDD RESULT
     STD TMPLEFT
@@ -7290,18 +7441,18 @@ CE_385:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_388
+    BEQ CT_399
     LDD #0
     STD RESULT
-    BRA CE_389
-CT_388:
+    BRA CE_400
+CT_399:
     LDD #1
     STD RESULT
-CE_389:
+CE_400:
     LDD RESULT
-    LBEQ IF_NEXT_387
+    LBEQ IF_NEXT_398
     ; VPy_LINE:530
-    LDD #2
+    LDD #3
     STD RESULT
     LDD RESULT
     ASLB
@@ -7317,35 +7468,35 @@ CE_389:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_386
-IF_NEXT_387:
-IF_END_386:
-    LBRA IF_END_382
-IF_NEXT_383:
+    LBRA IF_END_397
+IF_NEXT_398:
+IF_END_397:
+    LBRA IF_END_393
+IF_NEXT_394:
+    ; VPy_LINE:532
+; NATIVE_CALL: J1_BUTTON_2 at line 532
+    JSR J1B2_BUILTIN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_403
+    LDD #0
+    STD RESULT
+    BRA CE_404
+CT_403:
+    LDD #1
+    STD RESULT
+CE_404:
+    LDD RESULT
+    LBEQ IF_NEXT_402
     ; VPy_LINE:533
-; NATIVE_CALL: J1_BUTTON_1 at line 533
-    JSR J1B1_BUILTIN
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_392
-    LDD #0
-    STD RESULT
-    BRA CE_393
-CT_392:
-    LDD #1
-    STD RESULT
-CE_393:
-    LDD RESULT
-    LBEQ IF_NEXT_391
-    ; VPy_LINE:535
-    LDD #2
+    LDD #3
     STD RESULT
     LDD RESULT
     ASLB
@@ -7361,89 +7512,89 @@ CE_393:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_390
-IF_NEXT_391:
-IF_END_390:
-IF_END_382:
+    LBRA IF_END_401
+IF_NEXT_402:
+IF_END_401:
+IF_END_393:
+    ; VPy_LINE:536
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #4
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_407
+    LDD #0
+    STD RESULT
+    BRA CE_408
+CT_407:
+    LDD #1
+    STD RESULT
+CE_408:
+    LDD RESULT
+    LBEQ IF_NEXT_406
+    ; VPy_LINE:537
+; NATIVE_CALL: J1_BUTTON_3 at line 537
+    JSR J1B3_BUILTIN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_411
+    LDD #0
+    STD RESULT
+    BRA CE_412
+CT_411:
+    LDD #1
+    STD RESULT
+CE_412:
+    LDD RESULT
+    LBEQ IF_NEXT_410
     ; VPy_LINE:538
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD #3
+    LDD #4
     STD RESULT
     LDD RESULT
     ASLB
     ROLA
-    ADDD TMPPTR
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
     TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_396
-    LDD #0
-    STD RESULT
-    BRA CE_397
-CT_396:
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
     LDD #1
     STD RESULT
-CE_397:
+    LDX TMPPTR2
     LDD RESULT
-    LBEQ IF_NEXT_395
-    ; VPy_LINE:539
-; NATIVE_CALL: J1_BUTTON_2 at line 539
-    JSR J1B2_BUILTIN
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_400
-    LDD #0
-    STD RESULT
-    BRA CE_401
-CT_400:
-    LDD #1
-    STD RESULT
-CE_401:
-    LDD RESULT
-    LBEQ IF_NEXT_399
+    STD ,X
+    LBRA IF_END_409
+IF_NEXT_410:
+IF_END_409:
+    LBRA IF_END_405
+IF_NEXT_406:
     ; VPy_LINE:540
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #1
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_398
-IF_NEXT_399:
-IF_END_398:
-    LBRA IF_END_394
-IF_NEXT_395:
-    ; VPy_LINE:542
-; NATIVE_CALL: J1_BUTTON_2 at line 542
-    JSR J1B2_BUILTIN
+; NATIVE_CALL: J1_BUTTON_3 at line 540
+    JSR J1B3_BUILTIN
     STD RESULT
     LDD RESULT
     STD TMPLEFT
@@ -7453,18 +7604,18 @@ IF_NEXT_395:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_404
+    BEQ CT_415
     LDD #0
     STD RESULT
-    BRA CE_405
-CT_404:
+    BRA CE_416
+CT_415:
     LDD #1
     STD RESULT
-CE_405:
+CE_416:
     LDD RESULT
-    LBEQ IF_NEXT_403
-    ; VPy_LINE:543
-    LDD #3
+    LBEQ IF_NEXT_414
+    ; VPy_LINE:541
+    LDD #4
     STD RESULT
     LDD RESULT
     ASLB
@@ -7480,207 +7631,88 @@ CE_405:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_402
-IF_NEXT_403:
-IF_END_402:
-IF_END_394:
+    LBRA IF_END_413
+IF_NEXT_414:
+IF_END_413:
+IF_END_405:
+    ; VPy_LINE:544
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #5
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_419
+    LDD #0
+    STD RESULT
+    BRA CE_420
+CT_419:
+    LDD #1
+    STD RESULT
+CE_420:
+    LDD RESULT
+    LBEQ IF_NEXT_418
+    ; VPy_LINE:545
+; NATIVE_CALL: J1_BUTTON_4 at line 545
+    JSR J1B4_BUILTIN
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_423
+    LDD #0
+    STD RESULT
+    BRA CE_424
+CT_423:
+    LDD #1
+    STD RESULT
+CE_424:
+    LDD RESULT
+    LBEQ IF_NEXT_422
     ; VPy_LINE:546
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD #4
+    LDD #5
     STD RESULT
     LDD RESULT
     ASLB
     ROLA
-    ADDD TMPPTR
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
     TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_408
-    LDD #0
-    STD RESULT
-    BRA CE_409
-CT_408:
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
     LDD #1
     STD RESULT
-CE_409:
+    LDX TMPPTR2
     LDD RESULT
-    LBEQ IF_NEXT_407
-    ; VPy_LINE:547
-; NATIVE_CALL: J1_BUTTON_3 at line 547
-    JSR J1B3_BUILTIN
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_412
-    LDD #0
-    STD RESULT
-    BRA CE_413
-CT_412:
-    LDD #1
-    STD RESULT
-CE_413:
-    LDD RESULT
-    LBEQ IF_NEXT_411
+    STD ,X
+    LBRA IF_END_421
+IF_NEXT_422:
+IF_END_421:
+    LBRA IF_END_417
+IF_NEXT_418:
     ; VPy_LINE:548
-    LDD #4
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #1
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_410
-IF_NEXT_411:
-IF_END_410:
-    LBRA IF_END_406
-IF_NEXT_407:
-    ; VPy_LINE:550
-; NATIVE_CALL: J1_BUTTON_3 at line 550
-    JSR J1B3_BUILTIN
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_416
-    LDD #0
-    STD RESULT
-    BRA CE_417
-CT_416:
-    LDD #1
-    STD RESULT
-CE_417:
-    LDD RESULT
-    LBEQ IF_NEXT_415
-    ; VPy_LINE:551
-    LDD #4
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #0
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_414
-IF_NEXT_415:
-IF_END_414:
-IF_END_406:
-    ; VPy_LINE:554
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD #5
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_420
-    LDD #0
-    STD RESULT
-    BRA CE_421
-CT_420:
-    LDD #1
-    STD RESULT
-CE_421:
-    LDD RESULT
-    LBEQ IF_NEXT_419
-    ; VPy_LINE:555
-; NATIVE_CALL: J1_BUTTON_4 at line 555
-    JSR J1B4_BUILTIN
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_424
-    LDD #0
-    STD RESULT
-    BRA CE_425
-CT_424:
-    LDD #1
-    STD RESULT
-CE_425:
-    LDD RESULT
-    LBEQ IF_NEXT_423
-    ; VPy_LINE:556
-    LDD #5
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_JOYSTICK1_STATE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #1
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_422
-IF_NEXT_423:
-IF_END_422:
-    LBRA IF_END_418
-IF_NEXT_419:
-    ; VPy_LINE:558
-; NATIVE_CALL: J1_BUTTON_4 at line 558
+; NATIVE_CALL: J1_BUTTON_4 at line 548
     JSR J1B4_BUILTIN
     STD RESULT
     LDD RESULT
@@ -7691,17 +7723,17 @@ IF_NEXT_419:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_428
+    BEQ CT_427
     LDD #0
     STD RESULT
-    BRA CE_429
-CT_428:
+    BRA CE_428
+CT_427:
     LDD #1
     STD RESULT
-CE_429:
+CE_428:
     LDD RESULT
-    LBEQ IF_NEXT_427
-    ; VPy_LINE:559
+    LBEQ IF_NEXT_426
+    ; VPy_LINE:549
     LDD #5
     STD RESULT
     LDD RESULT
@@ -7718,10 +7750,10 @@ CE_429:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_426
-IF_NEXT_427:
-IF_END_426:
-IF_END_418:
+    LBRA IF_END_425
+IF_NEXT_426:
+IF_END_425:
+IF_END_417:
     RTS
 
 MUL16:
@@ -7859,13 +7891,13 @@ _PLAYER_WALK_1_PATH0:    ; Path 0
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH1:
+_PLAYER_WALK_1_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0C,$F9,0,0        ; path1: header (y=12, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH2:
+_PLAYER_WALK_1_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $0C,$FB,0,0        ; path2: header (y=12, x=-5, relative to center)
     FCB $FF,$00,$08          ; line 0: flag=-1, dy=0, dx=8
@@ -7874,7 +7906,7 @@ _PLAYER_WALK_1_PATH2:
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH3:
+_PLAYER_WALK_1_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $08,$FA,0,0        ; path3: header (y=8, x=-6, relative to center)
     FCB $FF,$00,$0A          ; line 0: flag=-1, dy=0, dx=10
@@ -7883,13 +7915,13 @@ _PLAYER_WALK_1_PATH3:
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH4:
+_PLAYER_WALK_1_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $07,$FA,0,0        ; path4: header (y=7, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH5:
+_PLAYER_WALK_1_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $06,$F9,0,0        ; path5: header (y=6, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -7898,7 +7930,7 @@ _PLAYER_WALK_1_PATH5:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH6:
+_PLAYER_WALK_1_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $00,$F9,0,0        ; path6: header (y=0, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -7907,13 +7939,13 @@ _PLAYER_WALK_1_PATH6:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH7:
+_PLAYER_WALK_1_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $07,$04,0,0        ; path7: header (y=7, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH8:
+_PLAYER_WALK_1_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $06,$06,0,0        ; path8: header (y=6, x=6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -7922,7 +7954,7 @@ _PLAYER_WALK_1_PATH8:
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH9:
+_PLAYER_WALK_1_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $04,$06,0,0        ; path9: header (y=4, x=6, relative to center)
     FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
@@ -7931,7 +7963,7 @@ _PLAYER_WALK_1_PATH9:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH10:
+_PLAYER_WALK_1_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $03,$07,0,0        ; path10: header (y=3, x=7, relative to center)
     FCB $FF,$00,$01          ; line 0: flag=-1, dy=0, dx=1
@@ -7940,7 +7972,7 @@ _PLAYER_WALK_1_PATH10:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH11:
+_PLAYER_WALK_1_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $FE,$FB,0,0        ; path11: header (y=-2, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -7949,7 +7981,7 @@ _PLAYER_WALK_1_PATH11:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH12:
+_PLAYER_WALK_1_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $F8,$FB,0,0        ; path12: header (y=-8, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -7958,7 +7990,7 @@ _PLAYER_WALK_1_PATH12:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH13:
+_PLAYER_WALK_1_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $F2,$FB,0,0        ; path13: header (y=-14, x=-5, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -7967,7 +7999,7 @@ _PLAYER_WALK_1_PATH13:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH14:
+_PLAYER_WALK_1_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $FE,$01,0,0        ; path14: header (y=-2, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -7976,7 +8008,7 @@ _PLAYER_WALK_1_PATH14:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH15:
+_PLAYER_WALK_1_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
     FCB $F8,$01,0,0        ; path15: header (y=-8, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -7985,7 +8017,7 @@ _PLAYER_WALK_1_PATH15:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_1_PATH16:
+_PLAYER_WALK_1_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
     FCB $F2,$01,0,0        ; path16: header (y=-14, x=1, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8014,13 +8046,13 @@ _PLAYER_WALK_2_PATH0:    ; Path 0
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH1:
+_PLAYER_WALK_2_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$FA,0,0        ; path1: header (y=13, x=-6, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH2:
+_PLAYER_WALK_2_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $0D,$FC,0,0        ; path2: header (y=13, x=-4, relative to center)
     FCB $FF,$00,$08          ; line 0: flag=-1, dy=0, dx=8
@@ -8029,7 +8061,7 @@ _PLAYER_WALK_2_PATH2:
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH3:
+_PLAYER_WALK_2_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $09,$FB,0,0        ; path3: header (y=9, x=-5, relative to center)
     FCB $FF,$00,$0A          ; line 0: flag=-1, dy=0, dx=10
@@ -8038,13 +8070,13 @@ _PLAYER_WALK_2_PATH3:
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH4:
+_PLAYER_WALK_2_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FB,0,0        ; path4: header (y=8, x=-5, relative to center)
     FCB $FF,$FF,$FE          ; line 0: flag=-1, dy=-1, dx=-2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH5:
+_PLAYER_WALK_2_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $07,$F9,0,0        ; path5: header (y=7, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8053,7 +8085,7 @@ _PLAYER_WALK_2_PATH5:
     FCB $FF,$04,$01          ; closing line: flag=-1, dy=4, dx=1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH6:
+_PLAYER_WALK_2_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $03,$F8,0,0        ; path6: header (y=3, x=-8, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8062,13 +8094,13 @@ _PLAYER_WALK_2_PATH6:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH7:
+_PLAYER_WALK_2_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$05,0,0        ; path7: header (y=8, x=5, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH8:
+_PLAYER_WALK_2_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $07,$07,0,0        ; path8: header (y=7, x=7, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8077,7 +8109,7 @@ _PLAYER_WALK_2_PATH8:
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH9:
+_PLAYER_WALK_2_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $05,$07,0,0        ; path9: header (y=5, x=7, relative to center)
     FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
@@ -8086,7 +8118,7 @@ _PLAYER_WALK_2_PATH9:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH10:
+_PLAYER_WALK_2_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $04,$08,0,0        ; path10: header (y=4, x=8, relative to center)
     FCB $FF,$00,$01          ; line 0: flag=-1, dy=0, dx=1
@@ -8095,7 +8127,7 @@ _PLAYER_WALK_2_PATH10:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH11:
+_PLAYER_WALK_2_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $FF,$FB,0,0        ; path11: header (y=-1, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8104,7 +8136,7 @@ _PLAYER_WALK_2_PATH11:
     FCB $FF,$06,$FF          ; closing line: flag=-1, dy=6, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH12:
+_PLAYER_WALK_2_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $F9,$FE,0,0        ; path12: header (y=-7, x=-2, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8113,7 +8145,7 @@ _PLAYER_WALK_2_PATH12:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH13:
+_PLAYER_WALK_2_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $F3,$00,0,0        ; path13: header (y=-13, x=0, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8122,7 +8154,7 @@ _PLAYER_WALK_2_PATH13:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH14:
+_PLAYER_WALK_2_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $FF,$02,0,0        ; path14: header (y=-1, x=2, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8131,7 +8163,7 @@ _PLAYER_WALK_2_PATH14:
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH15:
+_PLAYER_WALK_2_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
     FCB $F8,$03,0,0        ; path15: header (y=-8, x=3, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8140,7 +8172,7 @@ _PLAYER_WALK_2_PATH15:
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_2_PATH16:
+_PLAYER_WALK_2_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
     FCB $F1,$04,0,0        ; path16: header (y=-15, x=4, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8193,13 +8225,13 @@ _PLAYER_WALK_3_PATH0:    ; Path 0
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH1:
+_PLAYER_WALK_3_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$F9,0,0        ; path1: header (y=13, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH2:
+_PLAYER_WALK_3_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $0D,$FB,0,0        ; path2: header (y=13, x=-5, relative to center)
     FCB $FF,$00,$08          ; line 0: flag=-1, dy=0, dx=8
@@ -8208,7 +8240,7 @@ _PLAYER_WALK_3_PATH2:
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH3:
+_PLAYER_WALK_3_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $09,$FA,0,0        ; path3: header (y=9, x=-6, relative to center)
     FCB $FF,$00,$0A          ; line 0: flag=-1, dy=0, dx=10
@@ -8217,13 +8249,13 @@ _PLAYER_WALK_3_PATH3:
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH4:
+_PLAYER_WALK_3_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FA,0,0        ; path4: header (y=8, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH5:
+_PLAYER_WALK_3_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $07,$F9,0,0        ; path5: header (y=7, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8232,7 +8264,7 @@ _PLAYER_WALK_3_PATH5:
     FCB $FF,$07,$01          ; closing line: flag=-1, dy=7, dx=1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH6:
+_PLAYER_WALK_3_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $00,$F8,0,0        ; path6: header (y=0, x=-8, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8241,13 +8273,13 @@ _PLAYER_WALK_3_PATH6:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH7:
+_PLAYER_WALK_3_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$04,0,0        ; path7: header (y=8, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH8:
+_PLAYER_WALK_3_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $07,$06,0,0        ; path8: header (y=7, x=6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8256,7 +8288,7 @@ _PLAYER_WALK_3_PATH8:
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH9:
+_PLAYER_WALK_3_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $05,$06,0,0        ; path9: header (y=5, x=6, relative to center)
     FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
@@ -8265,7 +8297,7 @@ _PLAYER_WALK_3_PATH9:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH10:
+_PLAYER_WALK_3_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $04,$07,0,0        ; path10: header (y=4, x=7, relative to center)
     FCB $FF,$00,$01          ; line 0: flag=-1, dy=0, dx=1
@@ -8274,7 +8306,7 @@ _PLAYER_WALK_3_PATH10:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH11:
+_PLAYER_WALK_3_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $FF,$FA,0,0        ; path11: header (y=-1, x=-6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8283,7 +8315,7 @@ _PLAYER_WALK_3_PATH11:
     FCB $FF,$07,$01          ; closing line: flag=-1, dy=7, dx=1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH12:
+_PLAYER_WALK_3_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $F8,$FB,0,0        ; path12: header (y=-8, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8292,7 +8324,7 @@ _PLAYER_WALK_3_PATH12:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH13:
+_PLAYER_WALK_3_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $F2,$FB,0,0        ; path13: header (y=-14, x=-5, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8301,7 +8333,7 @@ _PLAYER_WALK_3_PATH13:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH14:
+_PLAYER_WALK_3_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $FF,$02,0,0        ; path14: header (y=-1, x=2, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8310,7 +8342,7 @@ _PLAYER_WALK_3_PATH14:
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH15:
+_PLAYER_WALK_3_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
     FCB $F8,$03,0,0        ; path15: header (y=-8, x=3, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8319,7 +8351,7 @@ _PLAYER_WALK_3_PATH15:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_3_PATH16:
+_PLAYER_WALK_3_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
     FCB $F2,$03,0,0        ; path16: header (y=-14, x=3, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8348,13 +8380,13 @@ _PLAYER_WALK_4_PATH0:    ; Path 0
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH1:
+_PLAYER_WALK_4_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$F9,0,0        ; path1: header (y=13, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH2:
+_PLAYER_WALK_4_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $0D,$FB,0,0        ; path2: header (y=13, x=-5, relative to center)
     FCB $FF,$00,$08          ; line 0: flag=-1, dy=0, dx=8
@@ -8363,7 +8395,7 @@ _PLAYER_WALK_4_PATH2:
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH3:
+_PLAYER_WALK_4_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $09,$FA,0,0        ; path3: header (y=9, x=-6, relative to center)
     FCB $FF,$00,$0A          ; line 0: flag=-1, dy=0, dx=10
@@ -8372,13 +8404,13 @@ _PLAYER_WALK_4_PATH3:
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH4:
+_PLAYER_WALK_4_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FA,0,0        ; path4: header (y=8, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH5:
+_PLAYER_WALK_4_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $07,$F9,0,0        ; path5: header (y=7, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8387,7 +8419,7 @@ _PLAYER_WALK_4_PATH5:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH6:
+_PLAYER_WALK_4_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $01,$F9,0,0        ; path6: header (y=1, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8396,13 +8428,13 @@ _PLAYER_WALK_4_PATH6:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH7:
+_PLAYER_WALK_4_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$04,0,0        ; path7: header (y=8, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH8:
+_PLAYER_WALK_4_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $07,$06,0,0        ; path8: header (y=7, x=6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8411,7 +8443,7 @@ _PLAYER_WALK_4_PATH8:
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH9:
+_PLAYER_WALK_4_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $05,$06,0,0        ; path9: header (y=5, x=6, relative to center)
     FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
@@ -8420,7 +8452,7 @@ _PLAYER_WALK_4_PATH9:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH10:
+_PLAYER_WALK_4_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $04,$07,0,0        ; path10: header (y=4, x=7, relative to center)
     FCB $FF,$00,$01          ; line 0: flag=-1, dy=0, dx=1
@@ -8429,7 +8461,7 @@ _PLAYER_WALK_4_PATH10:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH11:
+_PLAYER_WALK_4_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $FF,$FA,0,0        ; path11: header (y=-1, x=-6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8438,7 +8470,7 @@ _PLAYER_WALK_4_PATH11:
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH12:
+_PLAYER_WALK_4_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $F8,$FD,0,0        ; path12: header (y=-8, x=-3, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8447,7 +8479,7 @@ _PLAYER_WALK_4_PATH12:
     FCB $FF,$07,$00          ; closing line: flag=-1, dy=7, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH13:
+_PLAYER_WALK_4_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $F1,$FF,0,0        ; path13: header (y=-15, x=-1, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8456,7 +8488,7 @@ _PLAYER_WALK_4_PATH13:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH14:
+_PLAYER_WALK_4_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $FF,$01,0,0        ; path14: header (y=-1, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8465,7 +8497,7 @@ _PLAYER_WALK_4_PATH14:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH15:
+_PLAYER_WALK_4_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
     FCB $F9,$01,0,0        ; path15: header (y=-7, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8474,7 +8506,7 @@ _PLAYER_WALK_4_PATH15:
     FCB $FF,$06,$01          ; closing line: flag=-1, dy=6, dx=1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_4_PATH16:
+_PLAYER_WALK_4_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
     FCB $F3,$00,0,0        ; path16: header (y=-13, x=0, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8503,13 +8535,13 @@ _PLAYER_WALK_5_PATH0:    ; Path 0
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH1:
+_PLAYER_WALK_5_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0C,$F9,0,0        ; path1: header (y=12, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH2:
+_PLAYER_WALK_5_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $0C,$FB,0,0        ; path2: header (y=12, x=-5, relative to center)
     FCB $FF,$00,$08          ; line 0: flag=-1, dy=0, dx=8
@@ -8518,7 +8550,7 @@ _PLAYER_WALK_5_PATH2:
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH3:
+_PLAYER_WALK_5_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $08,$FA,0,0        ; path3: header (y=8, x=-6, relative to center)
     FCB $FF,$00,$0A          ; line 0: flag=-1, dy=0, dx=10
@@ -8527,13 +8559,13 @@ _PLAYER_WALK_5_PATH3:
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH4:
+_PLAYER_WALK_5_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $07,$FA,0,0        ; path4: header (y=7, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH5:
+_PLAYER_WALK_5_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $06,$F9,0,0        ; path5: header (y=6, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8542,7 +8574,7 @@ _PLAYER_WALK_5_PATH5:
     FCB $FF,$05,$00          ; closing line: flag=-1, dy=5, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH6:
+_PLAYER_WALK_5_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $01,$F9,0,0        ; path6: header (y=1, x=-7, relative to center)
     FCB $FF,$00,$FE          ; line 0: flag=-1, dy=0, dx=-2
@@ -8551,13 +8583,13 @@ _PLAYER_WALK_5_PATH6:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH7:
+_PLAYER_WALK_5_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $07,$04,0,0        ; path7: header (y=7, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH8:
+_PLAYER_WALK_5_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $06,$06,0,0        ; path8: header (y=6, x=6, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8566,7 +8598,7 @@ _PLAYER_WALK_5_PATH8:
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH9:
+_PLAYER_WALK_5_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $04,$06,0,0        ; path9: header (y=4, x=6, relative to center)
     FCB $FF,$00,$04          ; line 0: flag=-1, dy=0, dx=4
@@ -8575,7 +8607,7 @@ _PLAYER_WALK_5_PATH9:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH10:
+_PLAYER_WALK_5_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $03,$07,0,0        ; path10: header (y=3, x=7, relative to center)
     FCB $FF,$00,$01          ; line 0: flag=-1, dy=0, dx=1
@@ -8584,7 +8616,7 @@ _PLAYER_WALK_5_PATH10:
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH11:
+_PLAYER_WALK_5_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $FE,$FB,0,0        ; path11: header (y=-2, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8593,7 +8625,7 @@ _PLAYER_WALK_5_PATH11:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH12:
+_PLAYER_WALK_5_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $F8,$FB,0,0        ; path12: header (y=-8, x=-5, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8602,7 +8634,7 @@ _PLAYER_WALK_5_PATH12:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH13:
+_PLAYER_WALK_5_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $F2,$FB,0,0        ; path13: header (y=-14, x=-5, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8611,7 +8643,7 @@ _PLAYER_WALK_5_PATH13:
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH14:
+_PLAYER_WALK_5_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $FE,$01,0,0        ; path14: header (y=-2, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8620,7 +8652,7 @@ _PLAYER_WALK_5_PATH14:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH15:
+_PLAYER_WALK_5_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
     FCB $F8,$01,0,0        ; path15: header (y=-8, x=1, relative to center)
     FCB $FF,$00,$02          ; line 0: flag=-1, dy=0, dx=2
@@ -8629,7 +8661,7 @@ _PLAYER_WALK_5_PATH15:
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
     FCB 2                ; End marker (path complete)
 
-_PLAYER_WALK_5_PATH16:
+_PLAYER_WALK_5_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
     FCB $F2,$01,0,0        ; path16: header (y=-14, x=1, relative to center)
     FCB $FF,$00,$03          ; line 0: flag=-1, dy=0, dx=3
@@ -8697,14 +8729,14 @@ _NEWYORK_BG_PATH0:    ; Path 0
     FCB $FF,$FB,$00          ; line 2: flag=-1, dy=-5, dx=0
     FCB 2                ; End marker (path complete)
 
-_NEWYORK_BG_PATH1:
+_NEWYORK_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $0D,$00,0,0        ; path1: header (y=13, x=0, relative to center)
     FCB $FF,$0F,$0A          ; line 0: flag=-1, dy=15, dx=10
     FCB $FF,$05,$F6          ; line 1: flag=-1, dy=5, dx=-10
     FCB 2                ; End marker (path complete)
 
-_NEWYORK_BG_PATH2:
+_NEWYORK_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $0D,$F1,0,0        ; path2: header (y=13, x=-15, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
@@ -8712,7 +8744,7 @@ _NEWYORK_BG_PATH2:
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
     FCB 2                ; End marker (path complete)
 
-_NEWYORK_BG_PATH3:
+_NEWYORK_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
     FCB $0D,$EC,0,0        ; path3: header (y=13, x=-20, relative to center)
     FCB $FF,$0A,$05          ; line 0: flag=-1, dy=10, dx=5
@@ -8725,7 +8757,7 @@ _NEWYORK_BG_PATH3:
     FCB $FF,$F6,$05          ; line 7: flag=-1, dy=-10, dx=5
     FCB 2                ; End marker (path complete)
 
-_NEWYORK_BG_PATH4:
+_NEWYORK_BG_PATH4:    ; Path 4
     FCB 100              ; path4: intensity
     FCB $DB,$E7,0,0        ; path4: header (y=-37, x=-25, relative to center)
     FCB $FF,$00,$32          ; line 0: flag=-1, dy=0, dx=50
@@ -8749,19 +8781,19 @@ _PYRAMIDS_BG_PATH0:    ; Path 0
     FCB $FF,$A6,$50          ; line 1: flag=-1, dy=-90, dx=80
     FCB 2                ; End marker (path complete)
 
-_PYRAMIDS_BG_PATH1:
+_PYRAMIDS_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $D3,$A6,0,0        ; path1: header (y=-45, x=-90, relative to center)
     FCB $FF,$5A,$50          ; line 0: flag=-1, dy=90, dx=80
     FCB 2                ; End marker (path complete)
 
-_PYRAMIDS_BG_PATH2:
+_PYRAMIDS_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $2D,$F6,0,0        ; path2: header (y=45, x=-10, relative to center)
     FCB $FF,$A6,$50          ; line 0: flag=-1, dy=-90, dx=80
     FCB 2                ; End marker (path complete)
 
-_PYRAMIDS_BG_PATH3:
+_PYRAMIDS_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
     FCB $D3,$1E,0,0        ; path3: header (y=-45, x=30, relative to center)
     FCB $FF,$2D,$1E          ; line 0: flag=-1, dy=45, dx=30
@@ -8789,13 +8821,13 @@ _EASTER_BG_PATH0:    ; Path 0
     FCB $FF,$E2,$00          ; line 4: flag=-1, dy=-30, dx=0
     FCB 2                ; End marker (path complete)
 
-_EASTER_BG_PATH1:
+_EASTER_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $19,$00,0,0        ; path1: header (y=25, x=0, relative to center)
     FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
     FCB 2                ; End marker (path complete)
 
-_EASTER_BG_PATH2:
+_EASTER_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $1E,$F8,0,0        ; path2: header (y=30, x=-8, relative to center)
     FCB $FF,$05,$00          ; line 0: flag=-1, dy=5, dx=0
@@ -8804,7 +8836,7 @@ _EASTER_BG_PATH2:
     FCB $FF,$00,$FB          ; line 3: flag=-1, dy=0, dx=-5
     FCB 2                ; End marker (path complete)
 
-_EASTER_BG_PATH3:
+_EASTER_BG_PATH3:    ; Path 3
     FCB 110              ; path3: intensity
     FCB $05,$E2,0,0        ; path3: header (y=5, x=-30, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
@@ -8812,7 +8844,7 @@ _EASTER_BG_PATH3:
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
     FCB 2                ; End marker (path complete)
 
-_EASTER_BG_PATH4:
+_EASTER_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
     FCB $D3,$DD,0,0        ; path4: header (y=-45, x=-35, relative to center)
     FCB $FF,$00,$46          ; line 0: flag=-1, dy=0, dx=70
@@ -8838,14 +8870,14 @@ _KEIRIN_BG_PATH0:    ; Path 0
     FCB $FF,$BA,$32          ; line 3: flag=-1, dy=-70, dx=50
     FCB 2                ; End marker (path complete)
 
-_KEIRIN_BG_PATH1:
+_KEIRIN_BG_PATH1:    ; Path 1
     FCB 80              ; path1: intensity
     FCB $EC,$BA,0,0        ; path1: header (y=-20, x=-70, relative to center)
     FCB $FF,$1E,$1E          ; line 0: flag=-1, dy=30, dx=30
     FCB $FF,$0A,$1E          ; line 1: flag=-1, dy=10, dx=30
     FCB 2                ; End marker (path complete)
 
-_KEIRIN_BG_PATH2:
+_KEIRIN_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $14,$0A,0,0        ; path2: header (y=20, x=10, relative to center)
     FCB $FF,$F6,$1E          ; line 0: flag=-1, dy=-10, dx=30
@@ -8872,7 +8904,7 @@ _BARCELONA_BG_PATH0:    ; Path 0
     FCB $FF,$BA,$00          ; line 3: flag=-1, dy=-70, dx=0
     FCB 2                ; End marker (path complete)
 
-_BARCELONA_BG_PATH1:
+_BARCELONA_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $D6,$EC,0,0        ; path1: header (y=-42, x=-20, relative to center)
     FCB $FF,$4B,$00          ; line 0: flag=-1, dy=75, dx=0
@@ -8881,7 +8913,7 @@ _BARCELONA_BG_PATH1:
     FCB $FF,$B5,$00          ; line 3: flag=-1, dy=-75, dx=0
     FCB 2                ; End marker (path complete)
 
-_BARCELONA_BG_PATH2:
+_BARCELONA_BG_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $D6,$0A,0,0        ; path2: header (y=-42, x=10, relative to center)
     FCB $FF,$4B,$00          ; line 0: flag=-1, dy=75, dx=0
@@ -8890,7 +8922,7 @@ _BARCELONA_BG_PATH2:
     FCB $FF,$B5,$00          ; line 3: flag=-1, dy=-75, dx=0
     FCB 2                ; End marker (path complete)
 
-_BARCELONA_BG_PATH3:
+_BARCELONA_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
     FCB $D6,$28,0,0        ; path3: header (y=-42, x=40, relative to center)
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
@@ -8941,18 +8973,18 @@ _BUBBLE_SMALL_PATH0:    ; Path 0
 
 ; Vector asset: logo
 ; Generated from logo.vec (Malban Draw_Sync_List format)
-; Total paths: 16, points: 77
-; X bounds: min=-82, max=104, width=186
-; Center: (11, -3)
+; Total paths: 7, points: 65
+; X bounds: min=-82, max=81, width=163
+; Center: (0, 0)
 
-_LOGO_WIDTH EQU 186
-_LOGO_CENTER_X EQU 11
-_LOGO_CENTER_Y EQU -3
+_LOGO_WIDTH EQU 163
+_LOGO_CENTER_X EQU 0
+_LOGO_CENTER_Y EQU 0
 
 _LOGO_VECTORS:  ; Main entry
 _LOGO_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $16,$A3,0,0        ; path0: header (y=22, x=-93, relative to center)
+    FCB $13,$AE,0,0        ; path0: header (y=19, x=-82, relative to center)
     FCB $FF,$EF,$06          ; line 0: flag=-1, dy=-17, dx=6
     FCB $FF,$02,$07          ; line 1: flag=-1, dy=2, dx=7
     FCB $FF,$D6,$09          ; line 2: flag=-1, dy=-42, dx=9
@@ -8968,9 +9000,9 @@ _LOGO_PATH0:    ; Path 0
     FCB $FF,$00,$00          ; line 12: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH1:
+_LOGO_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
-    FCB $FE,$D8,0,0        ; path1: header (y=-2, x=-40, relative to center)
+    FCB $FB,$E3,0,0        ; path1: header (y=-5, x=-29, relative to center)
     FCB $FF,$E7,$F8          ; line 0: flag=-1, dy=-25, dx=-8
     FCB $FF,$04,$10          ; line 1: flag=-1, dy=4, dx=16
     FCB $FF,$0C,$02          ; line 2: flag=-1, dy=12, dx=2
@@ -8984,27 +9016,27 @@ _LOGO_PATH1:
     FCB $FF,$00,$00          ; line 10: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH2:
+_LOGO_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
-    FCB $0A,$C3,0,0        ; path2: header (y=10, x=-61, relative to center)
+    FCB $07,$CE,0,0        ; path2: header (y=7, x=-50, relative to center)
     FCB $FF,$F8,$02          ; line 0: flag=-1, dy=-8, dx=2
     FCB $FF,$07,$08          ; line 1: flag=-1, dy=7, dx=8
     FCB $FF,$01,$F6          ; line 2: flag=-1, dy=1, dx=-10
     FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH3:
+_LOGO_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
-    FCB $09,$E9,0,0        ; path3: header (y=9, x=-23, relative to center)
+    FCB $06,$F4,0,0        ; path3: header (y=6, x=-12, relative to center)
     FCB $FF,$F6,$FD          ; line 0: flag=-1, dy=-10, dx=-3
     FCB $FF,$02,$07          ; line 1: flag=-1, dy=2, dx=7
     FCB $FF,$08,$FC          ; line 2: flag=-1, dy=8, dx=-4
     FCB $FF,$FE,$01          ; line 3: flag=-1, dy=-2, dx=1
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH4:
+_LOGO_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
-    FCB $F6,$FF,0,0        ; path4: header (y=-10, x=-1, relative to center)
+    FCB $F3,$0A,0,0        ; path4: header (y=-13, x=10, relative to center)
     FCB $FF,$29,$02          ; line 0: flag=-1, dy=41, dx=2
     FCB $FF,$02,$0D          ; line 1: flag=-1, dy=2, dx=13
     FCB $FF,$EB,$0A          ; line 2: flag=-1, dy=-21, dx=10
@@ -9018,9 +9050,9 @@ _LOGO_PATH4:
     FCB $FF,$00,$00          ; line 10: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH5:
+_LOGO_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
-    FCB $09,$3A,0,0        ; path5: header (y=9, x=58, relative to center)
+    FCB $06,$45,0,0        ; path5: header (y=6, x=69, relative to center)
     FCB $FF,$08,$F5          ; line 0: flag=-1, dy=8, dx=-11
     FCB $FF,$F4,$F7          ; line 1: flag=-1, dy=-12, dx=-9
     FCB $FF,$F7,$01          ; line 2: flag=-1, dy=-9, dx=1
@@ -9034,37 +9066,13 @@ _LOGO_PATH5:
     FCB $FF,$0B,$F8          ; line 10: flag=-1, dy=11, dx=-8
     FCB 2                ; End marker (path complete)
 
-_LOGO_PATH6:
+_LOGO_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
-    FCB $09,$3A,0,0        ; path6: header (y=9, x=58, relative to center)
+    FCB $06,$45,0,0        ; path6: header (y=6, x=69, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
     FCB $FF,$0C,$F8          ; line 1: flag=-1, dy=12, dx=-8
     FCB $FF,$03,$F0          ; line 2: flag=-1, dy=3, dx=-16
     FCB $FF,$FB,$FC          ; line 3: flag=-1, dy=-5, dx=-4
-    FCB 2                ; End marker (path complete)
-
-_LOGO_PATH7:
-_LOGO_PATH8:
-_LOGO_PATH9:
-_LOGO_PATH10:
-_LOGO_PATH11:
-_LOGO_PATH12:
-    FCB 127              ; path12: intensity
-    FCB $D8,$5D,0,0        ; path12: header (y=-40, x=93, relative to center)
-    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (path complete)
-
-_LOGO_PATH13:
-_LOGO_PATH14:
-    FCB 127              ; path14: intensity
-    FCB $D8,$BF,0,0        ; path14: header (y=-40, x=-65, relative to center)
-    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (path complete)
-
-_LOGO_PATH15:
-    FCB 127              ; path15: intensity
-    FCB $DB,$BF,0,0        ; path15: header (y=-37, x=-65, relative to center)
-    FCB $FF,$00,$00          ; line 0: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
 ; Vector asset: angkor_bg
@@ -9088,7 +9096,7 @@ _ANGKOR_BG_PATH0:    ; Path 0
     FCB $FF,$BA,$00          ; line 4: flag=-1, dy=-70, dx=0
     FCB 2                ; End marker (path complete)
 
-_ANGKOR_BG_PATH1:
+_ANGKOR_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $E0,$C4,0,0        ; path1: header (y=-32, x=-60, relative to center)
     FCB $FF,$32,$00          ; line 0: flag=-1, dy=50, dx=0
@@ -9097,7 +9105,7 @@ _ANGKOR_BG_PATH1:
     FCB $FF,$CE,$00          ; line 3: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ANGKOR_BG_PATH2:
+_ANGKOR_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $E0,$28,0,0        ; path2: header (y=-32, x=40, relative to center)
     FCB $FF,$32,$00          ; line 0: flag=-1, dy=50, dx=0
@@ -9124,14 +9132,14 @@ _PARIS_BG_PATH0:    ; Path 0
     FCB $FF,$1E,$0A          ; line 1: flag=-1, dy=30, dx=10
     FCB 2                ; End marker (path complete)
 
-_PARIS_BG_PATH1:
+_PARIS_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $D1,$32,0,0        ; path1: header (y=-47, x=50, relative to center)
     FCB $FF,$1E,$E2          ; line 0: flag=-1, dy=30, dx=-30
     FCB $FF,$1E,$F6          ; line 1: flag=-1, dy=30, dx=-10
     FCB 2                ; End marker (path complete)
 
-_PARIS_BG_PATH2:
+_PARIS_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $0D,$F6,0,0        ; path2: header (y=13, x=-10, relative to center)
     FCB $FF,$14,$05          ; line 0: flag=-1, dy=20, dx=5
@@ -9139,14 +9147,14 @@ _PARIS_BG_PATH2:
     FCB $FF,$EC,$05          ; line 2: flag=-1, dy=-20, dx=5
     FCB 2                ; End marker (path complete)
 
-_PARIS_BG_PATH3:
+_PARIS_BG_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $21,$FB,0,0        ; path3: header (y=33, x=-5, relative to center)
     FCB $FF,$0F,$05          ; line 0: flag=-1, dy=15, dx=5
     FCB $FF,$F1,$05          ; line 1: flag=-1, dy=-15, dx=5
     FCB 2                ; End marker (path complete)
 
-_PARIS_BG_PATH4:
+_PARIS_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
     FCB $EF,$EC,0,0        ; path4: header (y=-17, x=-20, relative to center)
     FCB $FF,$00,$28          ; line 0: flag=-1, dy=0, dx=40
@@ -9171,19 +9179,19 @@ _BUDDHA_BG_PATH0:    ; Path 0
     FCB $FF,$EC,$14          ; line 2: flag=-1, dy=-20, dx=20
     FCB 2                ; End marker (path complete)
 
-_BUDDHA_BG_PATH1:
+_BUDDHA_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $14,$CE,0,0        ; path1: header (y=20, x=-50, relative to center)
     FCB $FF,$C4,$00          ; line 0: flag=-1, dy=-60, dx=0
     FCB 2                ; End marker (path complete)
 
-_BUDDHA_BG_PATH2:
+_BUDDHA_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $14,$32,0,0        ; path2: header (y=20, x=50, relative to center)
     FCB $FF,$C4,$00          ; line 0: flag=-1, dy=-60, dx=0
     FCB 2                ; End marker (path complete)
 
-_BUDDHA_BG_PATH3:
+_BUDDHA_BG_PATH3:    ; Path 3
     FCB 100              ; path3: intensity
     FCB $D8,$BA,0,0        ; path3: header (y=-40, x=-70, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
@@ -9209,7 +9217,7 @@ _TAJ_BG_PATH0:    ; Path 0
     FCB $FF,$EC,$0A          ; line 3: flag=-1, dy=-20, dx=10
     FCB 2                ; End marker (path complete)
 
-_TAJ_BG_PATH1:
+_TAJ_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $12,$D8,0,0        ; path1: header (y=18, x=-40, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
@@ -9217,13 +9225,13 @@ _TAJ_BG_PATH1:
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
     FCB 2                ; End marker (path complete)
 
-_TAJ_BG_PATH2:
+_TAJ_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $D6,$BA,0,0        ; path2: header (y=-42, x=-70, relative to center)
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
     FCB 2                ; End marker (path complete)
 
-_TAJ_BG_PATH3:
+_TAJ_BG_PATH3:    ; Path 3
     FCB 100              ; path3: intensity
     FCB $D6,$46,0,0        ; path3: header (y=-42, x=70, relative to center)
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
@@ -9246,7 +9254,7 @@ _MAYAN_BG_PATH0:    ; Path 0
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
     FCB 2                ; End marker (path complete)
 
-_MAYAN_BG_PATH1:
+_MAYAN_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $D8,$BA,0,0        ; path1: header (y=-40, x=-70, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
@@ -9254,7 +9262,7 @@ _MAYAN_BG_PATH1:
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAYAN_BG_PATH2:
+_MAYAN_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $E2,$C4,0,0        ; path2: header (y=-30, x=-60, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
@@ -9262,7 +9270,7 @@ _MAYAN_BG_PATH2:
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAYAN_BG_PATH3:
+_MAYAN_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
     FCB $EC,$CE,0,0        ; path3: header (y=-20, x=-50, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
@@ -9270,7 +9278,7 @@ _MAYAN_BG_PATH3:
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAYAN_BG_PATH4:
+_MAYAN_BG_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $F6,$D8,0,0        ; path4: header (y=-10, x=-40, relative to center)
     FCB $FF,$28,$00          ; line 0: flag=-1, dy=40, dx=0
@@ -9370,7 +9378,7 @@ _MAP_PATH0:    ; Path 0
     FCB $FF,$00,$00          ; line 48: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH1:
+_MAP_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $38,$DE,0,0        ; path1: header (y=56, x=-34, relative to center)
     FCB $FF,$04,$06          ; line 0: flag=-1, dy=4, dx=6
@@ -9381,7 +9389,7 @@ _MAP_PATH1:
     FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH2:
+_MAP_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $34,$E5,0,0        ; path2: header (y=52, x=-27, relative to center)
     FCB $FF,$06,$0A          ; line 0: flag=-1, dy=6, dx=10
@@ -9394,7 +9402,7 @@ _MAP_PATH2:
     FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH3:
+_MAP_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $BD,$70,0,0        ; path3: header (y=-67, x=112, relative to center)
     FCB $FF,$08,$05          ; line 0: flag=-1, dy=8, dx=5
@@ -9409,7 +9417,7 @@ _MAP_PATH3:
     FCB $FF,$00,$00          ; line 9: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH4:
+_MAP_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $ED,$66,0,0        ; path4: header (y=-19, x=102, relative to center)
     FCB $FF,$F1,$00          ; line 0: flag=-1, dy=-15, dx=0
@@ -9419,7 +9427,7 @@ _MAP_PATH4:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH5:
+_MAP_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $EE,$57,0,0        ; path5: header (y=-18, x=87, relative to center)
     FCB $FF,$F8,$05          ; line 0: flag=-1, dy=-8, dx=5
@@ -9429,7 +9437,7 @@ _MAP_PATH5:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH6:
+_MAP_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
     FCB $E6,$72,0,0        ; path6: header (y=-26, x=114, relative to center)
     FCB $FF,$FD,$FB          ; line 0: flag=-1, dy=-3, dx=-5
@@ -9439,7 +9447,7 @@ _MAP_PATH6:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH7:
+_MAP_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $DD,$1A,0,0        ; path7: header (y=-35, x=26, relative to center)
     FCB $FF,$09,$08          ; line 0: flag=-1, dy=9, dx=8
@@ -9449,7 +9457,7 @@ _MAP_PATH7:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH8:
+_MAP_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
     FCB $4C,$B0,0,0        ; path8: header (y=76, x=-80, relative to center)
     FCB $FF,$FC,$0D          ; line 0: flag=-1, dy=-4, dx=13
@@ -9462,7 +9470,7 @@ _MAP_PATH8:
     FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH9:
+_MAP_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
     FCB $2D,$87,0,0        ; path9: header (y=45, x=-121, relative to center)
     FCB $FF,$F7,$08          ; line 0: flag=-1, dy=-9, dx=8
@@ -9485,7 +9493,7 @@ _MAP_PATH9:
     FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH10:
+_MAP_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
     FCB $04,$BE,0,0        ; path10: header (y=4, x=-66, relative to center)
     FCB $FF,$ED,$F8          ; line 0: flag=-1, dy=-19, dx=-8
@@ -9500,7 +9508,7 @@ _MAP_PATH10:
     FCB $FF,$01,$00          ; line 9: flag=-1, dy=1, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH11:
+_MAP_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
     FCB $B0,$AE,0,0        ; path11: header (y=-80, x=-82, relative to center)
     FCB $FF,$0D,$0C          ; line 0: flag=-1, dy=13, dx=12
@@ -9510,7 +9518,7 @@ _MAP_PATH11:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH12:
+_MAP_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
     FCB $0E,$69,0,0        ; path12: header (y=14, x=105, relative to center)
     FCB $FF,$08,$FC          ; line 0: flag=-1, dy=8, dx=-4
@@ -9520,7 +9528,7 @@ _MAP_PATH12:
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH13:
+_MAP_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
     FCB $24,$69,0,0        ; path13: header (y=36, x=105, relative to center)
     FCB $FF,$04,$07          ; line 0: flag=-1, dy=4, dx=7
@@ -9529,7 +9537,7 @@ _MAP_PATH13:
     FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_MAP_PATH14:
+_MAP_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
     FCB $21,$6D,0,0        ; path14: header (y=33, x=109, relative to center)
     FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
@@ -9560,7 +9568,7 @@ _LONDON_BG_PATH0:    ; Path 0
     FCB $FF,$BA,$00          ; line 2: flag=-1, dy=-70, dx=0
     FCB 2                ; End marker (path complete)
 
-_LONDON_BG_PATH1:
+_LONDON_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $23,$F1,0,0        ; path1: header (y=35, x=-15, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
@@ -9569,14 +9577,14 @@ _LONDON_BG_PATH1:
     FCB $FF,$00,$E2          ; line 3: flag=-1, dy=0, dx=-30
     FCB 2                ; End marker (path complete)
 
-_LONDON_BG_PATH2:
+_LONDON_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $28,$00,0,0        ; path2: header (y=40, x=0, relative to center)
     FCB $FF,$05,$00          ; line 0: flag=-1, dy=5, dx=0
     FCB $FF,$FB,$08          ; line 1: flag=-1, dy=-5, dx=8
     FCB 2                ; End marker (path complete)
 
-_LONDON_BG_PATH3:
+_LONDON_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
     FCB $19,$EC,0,0        ; path3: header (y=25, x=-20, relative to center)
     FCB $FF,$0A,$05          ; line 0: flag=-1, dy=10, dx=5
@@ -9604,13 +9612,13 @@ _LENINGRAD_BG_PATH0:    ; Path 0
     FCB $FF,$EC,$0A          ; line 3: flag=-1, dy=-20, dx=10
     FCB 2                ; End marker (path complete)
 
-_LENINGRAD_BG_PATH1:
+_LENINGRAD_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $1E,$00,0,0        ; path1: header (y=30, x=0, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
     FCB 2                ; End marker (path complete)
 
-_LENINGRAD_BG_PATH2:
+_LENINGRAD_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $05,$E2,0,0        ; path2: header (y=5, x=-30, relative to center)
     FCB $FF,$D3,$00          ; line 0: flag=-1, dy=-45, dx=0
@@ -9618,7 +9626,7 @@ _LENINGRAD_BG_PATH2:
     FCB $FF,$2D,$00          ; line 2: flag=-1, dy=45, dx=0
     FCB 2                ; End marker (path complete)
 
-_LENINGRAD_BG_PATH3:
+_LENINGRAD_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
     FCB $EC,$EC,0,0        ; path3: header (y=-20, x=-20, relative to center)
     FCB $FF,$0F,$00          ; line 0: flag=-1, dy=15, dx=0
@@ -9627,7 +9635,7 @@ _LENINGRAD_BG_PATH3:
     FCB $FF,$00,$F6          ; line 3: flag=-1, dy=0, dx=-10
     FCB 2                ; End marker (path complete)
 
-_LENINGRAD_BG_PATH4:
+_LENINGRAD_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
     FCB $EC,$0A,0,0        ; path4: header (y=-20, x=10, relative to center)
     FCB $FF,$0F,$00          ; line 0: flag=-1, dy=15, dx=0
@@ -9684,14 +9692,14 @@ _AYERS_BG_PATH0:    ; Path 0
     FCB $FF,$CE,$14          ; line 5: flag=-1, dy=-50, dx=20
     FCB 2                ; End marker (path complete)
 
-_AYERS_BG_PATH1:
+_AYERS_BG_PATH1:    ; Path 1
     FCB 80              ; path1: intensity
     FCB $00,$CE,0,0        ; path1: header (y=0, x=-50, relative to center)
     FCB $FF,$0F,$14          ; line 0: flag=-1, dy=15, dx=20
     FCB $FF,$05,$1E          ; line 1: flag=-1, dy=5, dx=30
     FCB 2                ; End marker (path complete)
 
-_AYERS_BG_PATH2:
+_AYERS_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $14,$00,0,0        ; path2: header (y=20, x=0, relative to center)
     FCB $FF,$FB,$1E          ; line 0: flag=-1, dy=-5, dx=30
@@ -9710,8 +9718,12 @@ _FUJI_BG_CENTER_Y EQU 0
 
 _FUJI_BG_VECTORS:  ; Main entry
 _FUJI_BG_PATH0:    ; Path 0
-_FUJI_BG_PATH1:
-    FCB 127              ; path1: intensity
+    FCB 127              ; path0: intensity
+    FCB $CF,$83,0,0        ; path0: header (y=-49, x=-125, relative to center)
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH1:    ; Path 1
+    FCB 80              ; path1: intensity
     FCB $E8,$84,0,0        ; path1: header (y=-24, x=-124, relative to center)
     FCB $FF,$0A,$1E          ; line 0: flag=-1, dy=10, dx=30
     FCB $FF,$0E,$1E          ; line 1: flag=-1, dy=14, dx=30
@@ -9733,7 +9745,7 @@ _FUJI_BG_PATH1:
     FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_FUJI_BG_PATH2:
+_FUJI_BG_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
     FCB $1A,$F1,0,0        ; path2: header (y=26, x=-15, relative to center)
     FCB $FF,$06,$03          ; line 0: flag=-1, dy=6, dx=3
@@ -9744,7 +9756,7 @@ _FUJI_BG_PATH2:
     FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
-_FUJI_BG_PATH3:
+_FUJI_BG_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $1F,$07,0,0        ; path3: header (y=31, x=7, relative to center)
     FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
@@ -9757,7 +9769,7 @@ _FUJI_BG_PATH3:
     FCB $FF,$02,$FE          ; line 7: flag=-1, dy=2, dx=-2
     FCB 2                ; End marker (path complete)
 
-_FUJI_BG_PATH4:
+_FUJI_BG_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $21,$18,0,0        ; path4: header (y=33, x=24, relative to center)
     FCB $FF,$F7,$05          ; line 0: flag=-1, dy=-9, dx=5
@@ -9766,7 +9778,7 @@ _FUJI_BG_PATH4:
     FCB $FF,$07,$F5          ; line 3: flag=-1, dy=7, dx=-11
     FCB 2                ; End marker (path complete)
 
-_FUJI_BG_PATH5:
+_FUJI_BG_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
     FCB $05,$C7,0,0        ; path5: header (y=5, x=-57, relative to center)
     FCB $FF,$09,$1A          ; line 0: flag=-1, dy=9, dx=26
@@ -9814,21 +9826,21 @@ _KILIMANJARO_BG_PATH0:    ; Path 0
     FCB $FF,$C4,$32          ; line 3: flag=-1, dy=-60, dx=50
     FCB 2                ; End marker (path complete)
 
-_KILIMANJARO_BG_PATH1:
+_KILIMANJARO_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $1C,$E2,0,0        ; path1: header (y=28, x=-30, relative to center)
     FCB $FF,$0F,$1E          ; line 0: flag=-1, dy=15, dx=30
     FCB $FF,$F1,$00          ; line 1: flag=-1, dy=-15, dx=0
     FCB 2                ; End marker (path complete)
 
-_KILIMANJARO_BG_PATH2:
+_KILIMANJARO_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $1C,$00,0,0        ; path2: header (y=28, x=0, relative to center)
     FCB $FF,$0F,$00          ; line 0: flag=-1, dy=15, dx=0
     FCB $FF,$F1,$1E          ; line 1: flag=-1, dy=-15, dx=30
     FCB 2                ; End marker (path complete)
 
-_KILIMANJARO_BG_PATH3:
+_KILIMANJARO_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
     FCB $F4,$BA,0,0        ; path3: header (y=-12, x=-70, relative to center)
     FCB $FF,$14,$1E          ; line 0: flag=-1, dy=20, dx=30
@@ -9852,37 +9864,37 @@ _ATHENS_BG_PATH0:    ; Path 0
     FCB $FF,$F1,$50          ; line 1: flag=-1, dy=-15, dx=80
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH1:
+_ATHENS_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $12,$BA,0,0        ; path1: header (y=18, x=-70, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH2:
+_ATHENS_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $12,$D8,0,0        ; path2: header (y=18, x=-40, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH3:
+_ATHENS_BG_PATH3:    ; Path 3
     FCB 110              ; path3: intensity
     FCB $12,$F6,0,0        ; path3: header (y=18, x=-10, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH4:
+_ATHENS_BG_PATH4:    ; Path 4
     FCB 110              ; path4: intensity
     FCB $12,$14,0,0        ; path4: header (y=18, x=20, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH5:
+_ATHENS_BG_PATH5:    ; Path 5
     FCB 110              ; path5: intensity
     FCB $12,$32,0,0        ; path5: header (y=18, x=50, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB 2                ; End marker (path complete)
 
-_ATHENS_BG_PATH6:
+_ATHENS_BG_PATH6:    ; Path 6
     FCB 100              ; path6: intensity
     FCB $E0,$B0,0,0        ; path6: header (y=-32, x=-80, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
@@ -9906,7 +9918,7 @@ _ANTARCTICA_BG_PATH0:    ; Path 0
     FCB $FF,$C4,$14          ; line 1: flag=-1, dy=-60, dx=20
     FCB 2                ; End marker (path complete)
 
-_ANTARCTICA_BG_PATH1:
+_ANTARCTICA_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $DD,$E2,0,0        ; path1: header (y=-35, x=-30, relative to center)
     FCB $FF,$46,$14          ; line 0: flag=-1, dy=70, dx=20
@@ -9914,14 +9926,14 @@ _ANTARCTICA_BG_PATH1:
     FCB $FF,$BA,$14          ; line 2: flag=-1, dy=-70, dx=20
     FCB 2                ; End marker (path complete)
 
-_ANTARCTICA_BG_PATH2:
+_ANTARCTICA_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $DD,$28,0,0        ; path2: header (y=-35, x=40, relative to center)
     FCB $FF,$37,$14          ; line 0: flag=-1, dy=55, dx=20
     FCB $FF,$C9,$14          ; line 1: flag=-1, dy=-55, dx=20
     FCB 2                ; End marker (path complete)
 
-_ANTARCTICA_BG_PATH3:
+_ANTARCTICA_BG_PATH3:    ; Path 3
     FCB 80              ; path3: intensity
     FCB $DD,$88,0,0        ; path3: header (y=-35, x=-120, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127

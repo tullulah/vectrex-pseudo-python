@@ -74,14 +74,20 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 
                 out.push_str(&format!("; DRAW_VECTOR(\"{}\", x, y) - {} path(s) at position\n", asset_name, path_count));
                 
-                // Evaluate x position (arg 1)
+                // Evaluate x position (arg 1) - save immediately to avoid overwrite
                 emit_expr(&args[1], out, fctx, string_map, opts);
                 out.push_str("    LDA RESULT+1  ; X position (low byte)\n");
-                out.push_str("    STA DRAW_VEC_X\n");
+                out.push_str("    STA TMPPTR    ; Save X to temporary storage\n");
                 
-                // Evaluate y position (arg 2)
+                // Evaluate y position (arg 2) - now RESULT is overwritten, but X is saved
                 emit_expr(&args[2], out, fctx, string_map, opts);
                 out.push_str("    LDA RESULT+1  ; Y position (low byte)\n");
+                out.push_str("    STA TMPPTR+1  ; Save Y to temporary storage\n");
+                
+                // Restore X and Y from temporary storage and set positions
+                out.push_str("    LDA TMPPTR    ; X position\n");
+                out.push_str("    STA DRAW_VEC_X\n");
+                out.push_str("    LDA TMPPTR+1  ; Y position\n");
                 out.push_str("    STA DRAW_VEC_Y\n");
                 
                 // Generate code to draw each path at offset position
