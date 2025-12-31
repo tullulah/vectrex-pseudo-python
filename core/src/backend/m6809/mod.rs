@@ -29,7 +29,7 @@ use emission::{emit_function, emit_builtin_helpers};
 // Original imports
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::{DebugInfo, LineTracker, parse_asm_addresses, parse_native_call_comments};
+use super::debug_info::{DebugInfo, LineTracker, parse_asm_addresses, parse_native_call_comments, parse_asm_variables};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -1348,6 +1348,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Populate debug info with function symbols using REAL addresses from ASM parsing
     // Parse the generated ASM to extract label addresses
     let label_addresses = parse_asm_addresses(&out, 0x0000);
+    
+    // ✅ Parse variables from ASM EQU directives
+    let parsed_variables = parse_asm_variables(&out);
+    for (name, var_info) in parsed_variables {
+        debug_info.variables.insert(name, var_info);
+    }
     
     // Entry point is either START (if main has content) or main label
     debug_info.set_entry_point(0x0000); // Vectrex cartridges start at 0x0000

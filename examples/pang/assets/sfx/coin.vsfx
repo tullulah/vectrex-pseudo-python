@@ -13,7 +13,7 @@
     "decay": 96,
     "sustain": 7,
     "release": 259,
-    "peak": 14
+    "peak": 15
   },
   "pitch": {
     "enabled": true,

@@ -25,113 +25,134 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 14 bytes
+; Total RAM used: 20 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
-TMPRIGHT             EQU $C880+$04   ; Right operand temp (2 bytes)
-TMPPTR               EQU $C880+$06   ; Pointer temp (2 bytes)
-TEMP_YX              EQU $C880+$08   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$0A   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$0B   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$0C   ; String buffer for PRINT_NUMBER (2 bytes)
+TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
+TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
+TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
+TMPPTR               EQU $C880+$0A   ; Pointer temp (2 bytes)
+TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
+NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
 
     JMP START
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
+; VPy_LINE:12
+; _CONST_DECL_0:  ; const BTN_DEBOUNCE_FRAMES
 
 ; === JOYSTICK BUILTIN SUBROUTINES ===
-; J1_X() - Read Joystick 1 X axis (Digital from RAM)
-; Frontend writes unsigned 0-255 to $CF00 (128=center)
-; Returns: D = -1 (left), 0 (center), +1 (right)
+; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
+; Returns: D = raw value from $C81B after Joy_Analog call
 J1X_BUILTIN:
-    LDB $CF00    ; Vec_Joy_1_X (0=left, 128=center, 255=right)
-    CMPB #108    ; Check if < 108 (left)
-    BLO .J1X_LEFT
-    CMPB #148    ; Check if > 148 (right)
-    BHI .J1X_RIGHT
-    LDD #0       ; Center
-    RTS
-.J1X_LEFT:
-    LDD #$FFFF   ; Left (-1)
-    RTS
-.J1X_RIGHT:
-    LDD #1       ; Right (+1)
+    PSHS X       ; Save X (Joy_Analog uses it)
+    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
+    JSR $F1F5    ; Joy_Analog (updates $C81B from hardware)
+    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81B)
+    LDB $C81B    ; Vec_Joy_1_X (now updated by Joy_Analog)
+    SEX          ; Sign-extend B to D
+    PULS X       ; Restore X
     RTS
 
-; J1_Y() - Read Joystick 1 Y axis (Digital from RAM)
-; Frontend writes unsigned 0-255 to $CF01 (128=center)
-; Returns: D = -1 (down), 0 (center), +1 (up)
+; J1_Y() - Read Joystick 1 Y axis (INCREMENTAL - with state preservation)
+; Returns: D = raw value from $C81C after Joy_Analog call
 J1Y_BUILTIN:
-    LDB $CF01    ; Vec_Joy_1_Y (0=down, 128=center, 255=up)
-    CMPB #108    ; Check if < 108 (down)
-    BLO .J1Y_DOWN
-    CMPB #148    ; Check if > 148 (up)
-    BHI .J1Y_UP
-    LDD #0       ; Center
-    RTS
-.J1Y_DOWN:
-    LDD #$FFFF   ; Down (-1)
-    RTS
-.J1Y_UP:
-    LDD #1       ; Up (+1)
+    PSHS X       ; Save X (Joy_Analog uses it)
+    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
+    JSR $F1F5    ; Joy_Analog (updates $C81C from hardware)
+    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81C)
+    LDB $C81C    ; Vec_Joy_1_Y (now updated by Joy_Analog)
+    SEX          ; Sign-extend B to D
+    PULS X       ; Restore X
     RTS
 
 ; === BUTTON BUILTIN SUBROUTINES ===
 ; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
 ; Returns: D = 0 (released), 1 (pressed)
+; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B1_BUILTIN:
+    JSR $F1AA    ; DP_to_D0 (BIOS routine)
+    CLR >$C80F   ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
     JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
+    LDA >$C80F   ; Vec_Btn_State
     ANDA #$01
     BEQ .J1B1_OFF
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B1_OFF:
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
 ; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
+; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B2_BUILTIN:
+    JSR $F1AA    ; DP_to_D0 (BIOS routine)
+    CLR >$C80F   ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
     JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
+    LDA >$C80F   ; Vec_Btn_State
     ANDA #$02
     BEQ .J1B2_OFF
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B2_OFF:
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
 ; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
+; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B3_BUILTIN:
+    JSR $F1AA    ; DP_to_D0 (BIOS routine)
+    CLR >$C80F   ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
     JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
+    LDA >$C80F   ; Vec_Btn_State
     ANDA #$04
     BEQ .J1B3_OFF
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B3_OFF:
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
 ; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
+; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B4_BUILTIN:
+    JSR $F1AA    ; DP_to_D0 (BIOS routine)
+    CLR >$C80F   ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
     JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
+    LDA >$C80F   ; Vec_Btn_State
     ANDA #$08
     BEQ .J1B4_OFF
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B4_OFF:
+    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
-VECTREX_DEBUG_PRINT:
-    ; Debug print to console - writes to gap area (C000-C7FF)
-    LDA VAR_ARG0+1   ; Load value to debug print
-    STA $C000        ; Debug output value in unmapped gap
-    LDA #$42         ; Debug marker
-    STA $C001        ; Debug marker to indicate new output
+VECTREX_PRINT_TEXT:
+    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)
+    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)
+    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)
+    STA >$D00C     ; VIA_cntl
+    LDA #$D0
+    TFR A,DP       ; Set Direct Page to $D0 for BIOS
+    LDU VAR_ARG2   ; string pointer (ARG2 = third param)
+    LDA VAR_ARG1+1 ; Y (ARG1 = second param)
+    LDB VAR_ARG0+1 ; X (ARG0 = first param)
+    JSR Print_Str_d
+    JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)
     RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
@@ -589,6 +610,7 @@ BEQ DSWM_W3
 CLR VIA_shift_reg
 BRA DSWM_LOOP
 DSWM_DONE:
+JSR $F1AF    ; DP_to_C8 (restore DP after vector drawing)
 RTS
 ; ============================================================================
 ; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters
@@ -780,302 +802,279 @@ START:
     LDD #0
     STD VAR_PLAYER_Y
     ; VPy_LINE:11
+    LDD #0
+    STD VAR_BTN_DEBOUNCE
+    ; VPy_LINE:13
+    LDD #0
+    STD VAR_STARTUP_DELAY
+    ; VPy_LINE:16
+    LDD #0
+    STD VAR_BTN1
+    ; VPy_LINE:17
+    LDD #0
+    STD VAR_BTN2
+    ; VPy_LINE:18
+    LDD #0
+    STD VAR_BTN3
+    ; VPy_LINE:19
+    LDD #0
+    STD VAR_BTN4
+    ; VPy_LINE:22
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 11
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 22
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-; VPy_LINE:10
+    ; VPy_LINE:23
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_BTN_DEBOUNCE
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:24
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_STARTUP_DELAY
+    STU TMPPTR
+    STX ,U
+; VPy_LINE:21
 
 MAIN:
-    JSR Wait_Recal
+    JSR $F1AF    ; DP_to_C8 (required for RAM access)
+    ; === Initialize Joystick (one-time setup) ===
+    CLR $C823    ; CRITICAL: Clear analog mode flag (Joy_Analog does DEC on this)
+    LDA #$01     ; CRITICAL: Resolution threshold (power of 2: $40=fast, $01=accurate)
+    STA $C81A    ; Vec_Joy_Resltn (loop terminates when B=this value after LSRBs)
+    LDA #$01
+    STA $C81F    ; Vec_Joy_Mux_1_X (enable X axis reading)
+    LDA #$03
+    STA $C820    ; Vec_Joy_Mux_1_Y (enable Y axis reading)
+    LDA #$00
+    STA $C821    ; Vec_Joy_Mux_2_X (disable joystick 2 - CRITICAL!)
+    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)
+    ; Mux configured - J1_X()/J1_Y() can now be called
+
+    ; JSR Wait_Recal is now called at start of LOOP_BODY (see auto-inject)
     LDA #$80
     STA VIA_t1_cnt_lo
     ; *** Call loop() as subroutine (executed every frame)
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:13
+BTN_DEBOUNCE_FRAMES EQU 15
+    ; VPy_LINE:26
 LOOP_BODY:
-    LEAS -8,S ; allocate locals
-    ; DEBUG: Processing 15 statements in loop() body
-    ; DEBUG: Statement 0 - Discriminant(0)
-    ; VPy_LINE:16
-; NATIVE_CALL: J1_X at line 16
-    JSR J1X_BUILTIN
+    LEAS -4,S ; allocate locals
+    JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)
+    JSR Wait_Recal ; Auto-injected: sync with vector beam
+    ; DEBUG: Processing 25 statements in loop() body
+    ; DEBUG: Statement 0 - Discriminant(9)
+    ; VPy_LINE:29
+    LDD VAR_BTN_DEBOUNCE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_2
+    LDD #0
+    STD RESULT
+    BRA CE_3
+CT_2:
+    LDD #1
+    STD RESULT
+CE_3:
+    LDD RESULT
+    LBEQ IF_NEXT_1
+    ; VPy_LINE:30
+    LDD VAR_BTN_DEBOUNCE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    STX 4 ,S
-    ; DEBUG: Statement 1 - Discriminant(0)
-    ; VPy_LINE:17
-; NATIVE_CALL: J1_Y at line 17
-    JSR J1Y_BUILTIN
+    LDU #VAR_BTN_DEBOUNCE
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_0
+IF_NEXT_1:
+IF_END_0:
+    ; DEBUG: Statement 1 - Discriminant(9)
+    ; VPy_LINE:33
+    LDD VAR_STARTUP_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_6
+    LDD #0
+    STD RESULT
+    BRA CE_7
+CT_6:
+    LDD #1
+    STD RESULT
+CE_7:
+    LDD RESULT
+    LBEQ IF_NEXT_5
+    ; VPy_LINE:34
+    LDD VAR_STARTUP_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    STX 6 ,S
+    LDU #VAR_STARTUP_DELAY
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_4
+IF_NEXT_5:
+IF_END_4:
     ; DEBUG: Statement 2 - Discriminant(0)
-    ; VPy_LINE:23
-; NATIVE_CALL: J1_BUTTON_1 at line 23
-    JSR J1B1_BUILTIN
+    ; VPy_LINE:37
+; NATIVE_CALL: J1_X at line 37
+    JSR J1X_BUILTIN
     STD RESULT
     LDX RESULT
     STX 0 ,S
     ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:24
-; NATIVE_CALL: J1_BUTTON_2 at line 24
-    JSR J1B2_BUILTIN
+    ; VPy_LINE:38
+; NATIVE_CALL: J1_Y at line 38
+    JSR J1Y_BUILTIN
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:26
-    LDD 4 ,S
-    STD RESULT
-; NATIVE_CALL: DEBUG_PRINT(joy_x) at line 26
-    LDD RESULT
-    STB $C000
-    LDA #$FE
-    STA $C001
-    LDX #DEBUG_LABEL_JOY_X
-    STX $C002
-    BRA DEBUG_SKIP_DATA_0
-DEBUG_LABEL_JOY_X:
-    FCC "joy_x"
-    FCB $00
-DEBUG_SKIP_DATA_0:
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 5 - Discriminant(8)
-    ; VPy_LINE:27
-    LDD 6 ,S
-    STD RESULT
-; NATIVE_CALL: DEBUG_PRINT(joy_y) at line 27
-    LDD RESULT
-    STB $C000
-    LDA #$FE
-    STA $C001
-    LDX #DEBUG_LABEL_JOY_Y
-    STX $C002
-    BRA DEBUG_SKIP_DATA_1
-DEBUG_LABEL_JOY_Y:
-    FCC "joy_y"
-    FCB $00
-DEBUG_SKIP_DATA_1:
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 6 - Discriminant(9)
-    ; VPy_LINE:32
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #65535
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_4
-    LDD #0
-    STD RESULT
-    BRA CE_5
-CT_4:
-    LDD #1
-    STD RESULT
-CE_5:
-    LDD RESULT
-    LBEQ IF_NEXT_3
-    ; VPy_LINE:33
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
+    ; DEBUG: Statement 4 - Discriminant(0)
+    ; VPy_LINE:41
+; NATIVE_CALL: J1_BUTTON_1 at line 41
+    JSR J1B1_BUILTIN
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_X
+    LDU #VAR_BTN1
     STU TMPPTR
     STX ,U
-    LBRA IF_END_2
-IF_NEXT_3:
-IF_END_2:
-    ; DEBUG: Statement 7 - Discriminant(9)
-    ; VPy_LINE:34
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_8
-    LDD #0
-    STD RESULT
-    BRA CE_9
-CT_8:
-    LDD #1
-    STD RESULT
-CE_9:
-    LDD RESULT
-    LBEQ IF_NEXT_7
-    ; VPy_LINE:35
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_6
-IF_NEXT_7:
-IF_END_6:
-    ; DEBUG: Statement 8 - Discriminant(9)
-    ; VPy_LINE:36
-    LDD 6 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #65535
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_12
-    LDD #0
-    STD RESULT
-    BRA CE_13
-CT_12:
-    LDD #1
-    STD RESULT
-CE_13:
-    LDD RESULT
-    LBEQ IF_NEXT_11
-    ; VPy_LINE:37
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_10
-IF_NEXT_11:
-IF_END_10:
-    ; DEBUG: Statement 9 - Discriminant(9)
-    ; VPy_LINE:38
-    LDD 6 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_16
-    LDD #0
-    STD RESULT
-    BRA CE_17
-CT_16:
-    LDD #1
-    STD RESULT
-CE_17:
-    LDD RESULT
-    LBEQ IF_NEXT_15
-    ; VPy_LINE:39
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_14
-IF_NEXT_15:
-IF_END_14:
-    ; DEBUG: Statement 10 - Discriminant(9)
+    ; DEBUG: Statement 5 - Discriminant(0)
     ; VPy_LINE:42
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #65426
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_20
-    LDD #0
-    STD RESULT
-    BRA CE_21
-CT_20:
-    LDD #1
-    STD RESULT
-CE_21:
-    LDD RESULT
-    LBEQ IF_NEXT_19
-    ; VPy_LINE:43
-    LDD #65426
+; NATIVE_CALL: J1_BUTTON_2 at line 42
+    JSR J1B2_BUILTIN
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_X
+    LDU #VAR_BTN2
     STU TMPPTR
     STX ,U
-    LBRA IF_END_18
-IF_NEXT_19:
-IF_END_18:
-    ; DEBUG: Statement 11 - Discriminant(9)
+    ; DEBUG: Statement 6 - Discriminant(0)
+    ; VPy_LINE:43
+; NATIVE_CALL: J1_BUTTON_3 at line 43
+    JSR J1B3_BUILTIN
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_BTN3
+    STU TMPPTR
+    STX ,U
+    ; DEBUG: Statement 7 - Discriminant(0)
     ; VPy_LINE:44
-    LDD VAR_PLAYER_X
+; NATIVE_CALL: J1_BUTTON_4 at line 44
+    JSR J1B4_BUILTIN
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_BTN4
+    STU TMPPTR
+    STX ,U
+    ; DEBUG: Statement 8 - Discriminant(9)
+    ; VPy_LINE:47
+    LDD VAR_STARTUP_DELAY
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #110
+    LDD #60
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_24
+    BGE CT_10
+    LDD #0
+    STD RESULT
+    BRA CE_11
+CT_10:
+    LDD #1
+    STD RESULT
+CE_11:
+    LDD RESULT
+    BEQ AND_FALSE_12
+    LDD VAR_BTN_DEBOUNCE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_14
+    LDD #0
+    STD RESULT
+    BRA CE_15
+CT_14:
+    LDD #1
+    STD RESULT
+CE_15:
+    LDD RESULT
+    BEQ AND_FALSE_12
+    LDD #1
+    STD RESULT
+    BRA AND_END_13
+AND_FALSE_12:
+    LDD #0
+    STD RESULT
+AND_END_13:
+    LDD RESULT
+    LBEQ IF_NEXT_9
+    ; VPy_LINE:48
+    LDD VAR_BTN1
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_24
     LDD #0
     STD RESULT
     BRA CE_25
@@ -1084,30 +1083,47 @@ CT_24:
     STD RESULT
 CE_25:
     LDD RESULT
-    LBEQ IF_NEXT_23
-    ; VPy_LINE:45
-    LDD #110
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_22
-IF_NEXT_23:
-IF_END_22:
-    ; DEBUG: Statement 12 - Discriminant(9)
-    ; VPy_LINE:46
-    LDD VAR_PLAYER_Y
+    BNE OR_TRUE_22
+    LDD VAR_BTN2
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #65446
+    LDD #1
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_28
+    BEQ CT_26
+    LDD #0
+    STD RESULT
+    BRA CE_27
+CT_26:
+    LDD #1
+    STD RESULT
+CE_27:
+    LDD RESULT
+    BNE OR_TRUE_22
+    LDD #0
+    STD RESULT
+    BRA OR_END_23
+OR_TRUE_22:
+    LDD #1
+    STD RESULT
+OR_END_23:
+    LDD RESULT
+    BNE OR_TRUE_20
+    LDD VAR_BTN3
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_28
     LDD #0
     STD RESULT
     BRA CE_29
@@ -1116,19 +1132,332 @@ CT_28:
     STD RESULT
 CE_29:
     LDD RESULT
-    LBEQ IF_NEXT_27
-    ; VPy_LINE:47
-    LDD #65446
+    BNE OR_TRUE_20
+    LDD #0
+    STD RESULT
+    BRA OR_END_21
+OR_TRUE_20:
+    LDD #1
+    STD RESULT
+OR_END_21:
+    LDD RESULT
+    BNE OR_TRUE_18
+    LDD VAR_BTN4
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_30
+    LDD #0
+    STD RESULT
+    BRA CE_31
+CT_30:
+    LDD #1
+    STD RESULT
+CE_31:
+    LDD RESULT
+    BNE OR_TRUE_18
+    LDD #0
+    STD RESULT
+    BRA OR_END_19
+OR_TRUE_18:
+    LDD #1
+    STD RESULT
+OR_END_19:
+    LDD RESULT
+    LBEQ IF_NEXT_17
+    ; VPy_LINE:49
+    LDD #15
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_BTN_DEBOUNCE
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_16
+IF_NEXT_17:
+IF_END_16:
+    LBRA IF_END_8
+IF_NEXT_9:
+IF_END_8:
+    ; DEBUG: Statement 9 - Discriminant(9)
+    ; VPy_LINE:52
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_34
+    LDD #0
+    STD RESULT
+    BRA CE_35
+CT_34:
+    LDD #1
+    STD RESULT
+CE_35:
+    LDD RESULT
+    LBEQ IF_NEXT_33
+    ; VPy_LINE:53
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_32
+IF_NEXT_33:
+IF_END_32:
+    ; DEBUG: Statement 10 - Discriminant(9)
+    ; VPy_LINE:54
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_38
+    LDD #0
+    STD RESULT
+    BRA CE_39
+CT_38:
+    LDD #1
+    STD RESULT
+CE_39:
+    LDD RESULT
+    LBEQ IF_NEXT_37
+    ; VPy_LINE:55
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_36
+IF_NEXT_37:
+IF_END_36:
+    ; DEBUG: Statement 11 - Discriminant(9)
+    ; VPy_LINE:56
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_42
+    LDD #0
+    STD RESULT
+    BRA CE_43
+CT_42:
+    LDD #1
+    STD RESULT
+CE_43:
+    LDD RESULT
+    LBEQ IF_NEXT_41
+    ; VPy_LINE:57
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_Y
     STU TMPPTR
     STX ,U
-    LBRA IF_END_26
-IF_NEXT_27:
-IF_END_26:
+    LBRA IF_END_40
+IF_NEXT_41:
+IF_END_40:
+    ; DEBUG: Statement 12 - Discriminant(9)
+    ; VPy_LINE:58
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_46
+    LDD #0
+    STD RESULT
+    BRA CE_47
+CT_46:
+    LDD #1
+    STD RESULT
+CE_47:
+    LDD RESULT
+    LBEQ IF_NEXT_45
+    ; VPy_LINE:59
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_44
+IF_NEXT_45:
+IF_END_44:
     ; DEBUG: Statement 13 - Discriminant(9)
-    ; VPy_LINE:48
+    ; VPy_LINE:62
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-110
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_50
+    LDD #0
+    STD RESULT
+    BRA CE_51
+CT_50:
+    LDD #1
+    STD RESULT
+CE_51:
+    LDD RESULT
+    LBEQ IF_NEXT_49
+    ; VPy_LINE:63
+    LDD #-110
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_48
+IF_NEXT_49:
+IF_END_48:
+    ; DEBUG: Statement 14 - Discriminant(9)
+    ; VPy_LINE:64
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #110
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_54
+    LDD #0
+    STD RESULT
+    BRA CE_55
+CT_54:
+    LDD #1
+    STD RESULT
+CE_55:
+    LDD RESULT
+    LBEQ IF_NEXT_53
+    ; VPy_LINE:65
+    LDD #110
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_52
+IF_NEXT_53:
+IF_END_52:
+    ; DEBUG: Statement 15 - Discriminant(9)
+    ; VPy_LINE:66
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_58
+    LDD #0
+    STD RESULT
+    BRA CE_59
+CT_58:
+    LDD #1
+    STD RESULT
+CE_59:
+    LDD RESULT
+    LBEQ IF_NEXT_57
+    ; VPy_LINE:67
+    LDD #-90
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_56
+IF_NEXT_57:
+IF_END_56:
+    ; DEBUG: Statement 16 - Discriminant(9)
+    ; VPy_LINE:68
     LDD VAR_PLAYER_Y
     STD RESULT
     LDD RESULT
@@ -1139,42 +1468,397 @@ IF_END_26:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_32
+    BGT CT_62
     LDD #0
     STD RESULT
-    BRA CE_33
-CT_32:
+    BRA CE_63
+CT_62:
     LDD #1
     STD RESULT
-CE_33:
+CE_63:
     LDD RESULT
-    LBEQ IF_NEXT_31
-    ; VPy_LINE:49
+    LBEQ IF_NEXT_61
+    ; VPy_LINE:69
     LDD #90
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_Y
     STU TMPPTR
     STX ,U
-    LBRA IF_END_30
-IF_NEXT_31:
-IF_END_30:
-    ; DEBUG: Statement 14 - Discriminant(8)
-    ; VPy_LINE:51
+    LBRA IF_END_60
+IF_NEXT_61:
+IF_END_60:
+    ; DEBUG: Statement 17 - Discriminant(8)
+    ; VPy_LINE:72
 ; DRAW_VECTOR("test", x, y) - 1 path(s) at position
     LDD VAR_PLAYER_X
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    STA TMPPTR    ; Save X to temporary storage
     LDD VAR_PLAYER_Y
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
     LDX #_TEST_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    LEAS 8,S ; free locals
+    ; DEBUG: Statement 18 - Discriminant(8)
+    ; VPy_LINE:75
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 75
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 19 - Discriminant(9)
+    ; VPy_LINE:78
+    LDD VAR_BTN1
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_66
+    LDD #0
+    STD RESULT
+    BRA CE_67
+CT_66:
+    LDD #1
+    STD RESULT
+CE_67:
+    LDD RESULT
+    LBEQ IF_NEXT_65
+    ; VPy_LINE:79
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_1
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 79
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_64
+IF_NEXT_65:
+    ; VPy_LINE:81
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_0
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 81
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_64:
+    ; DEBUG: Statement 20 - Discriminant(9)
+    ; VPy_LINE:84
+    LDD VAR_BTN2
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_70
+    LDD #0
+    STD RESULT
+    BRA CE_71
+CT_70:
+    LDD #1
+    STD RESULT
+CE_71:
+    LDD RESULT
+    LBEQ IF_NEXT_69
+    ; VPy_LINE:85
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_3
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 85
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_68
+IF_NEXT_69:
+    ; VPy_LINE:87
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_2
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 87
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_68:
+    ; DEBUG: Statement 21 - Discriminant(9)
+    ; VPy_LINE:90
+    LDD VAR_BTN3
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_74
+    LDD #0
+    STD RESULT
+    BRA CE_75
+CT_74:
+    LDD #1
+    STD RESULT
+CE_75:
+    LDD RESULT
+    LBEQ IF_NEXT_73
+    ; VPy_LINE:91
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_5
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 91
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_72
+IF_NEXT_73:
+    ; VPy_LINE:93
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_4
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 93
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_72:
+    ; DEBUG: Statement 22 - Discriminant(9)
+    ; VPy_LINE:96
+    LDD VAR_BTN4
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_78
+    LDD #0
+    STD RESULT
+    BRA CE_79
+CT_78:
+    LDD #1
+    STD RESULT
+CE_79:
+    LDD RESULT
+    LBEQ IF_NEXT_77
+    ; VPy_LINE:97
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_7
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 97
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_76
+IF_NEXT_77:
+    ; VPy_LINE:99
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_6
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 99
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_76:
+    ; DEBUG: Statement 23 - Discriminant(9)
+    ; VPy_LINE:102
+    LDD VAR_BTN_DEBOUNCE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_82
+    LDD #0
+    STD RESULT
+    BRA CE_83
+CT_82:
+    LDD #1
+    STD RESULT
+CE_83:
+    LDD RESULT
+    LBEQ IF_NEXT_81
+    ; VPy_LINE:103
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_8
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 103
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_80
+IF_NEXT_81:
+IF_END_80:
+    ; DEBUG: Statement 24 - Discriminant(9)
+    ; VPy_LINE:106
+    LDD VAR_STARTUP_DELAY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_86
+    LDD #0
+    STD RESULT
+    BRA CE_87
+CT_86:
+    LDD #1
+    STD RESULT
+CE_87:
+    LDD RESULT
+    LBEQ IF_NEXT_85
+    ; VPy_LINE:107
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_9
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 107
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_84
+IF_NEXT_85:
+IF_END_84:
+    LEAS 4,S ; free locals
     RTS
 
 ;***************************************************************************
@@ -1186,6 +1870,12 @@ VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 VAR_PLAYER_X EQU $CF10+0
 VAR_PLAYER_Y EQU $CF10+2
+VAR_BTN_DEBOUNCE EQU $CF10+4
+VAR_STARTUP_DELAY EQU $CF10+6
+VAR_BTN1 EQU $CF10+8
+VAR_BTN2 EQU $CF10+10
+VAR_BTN3 EQU $CF10+12
+VAR_BTN4 EQU $CF10+14
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
@@ -1216,13 +1906,44 @@ _TEST_PATH0:    ; Path 0
     FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
     FCB 2                ; End marker (path complete)
 
-DRAW_VEC_X EQU RESULT+4
-DRAW_VEC_Y EQU RESULT+5
-MIRROR_X EQU RESULT+6
-MIRROR_Y EQU RESULT+7
-DRAW_VEC_INTENSITY EQU RESULT+8
-DRAW_CIRCLE_XC EQU RESULT+9
-DRAW_CIRCLE_YC EQU RESULT+10
-DRAW_CIRCLE_DIAM EQU RESULT+11
-DRAW_CIRCLE_INTENSITY EQU RESULT+12
-DRAW_CIRCLE_TEMP EQU RESULT+13
+; String literals (classic FCC + $80 terminator)
+STR_0:
+    FCC "BTN1: OFF"
+    FCB $80
+STR_1:
+    FCC "BTN1: ON "
+    FCB $80
+STR_2:
+    FCC "BTN2: OFF"
+    FCB $80
+STR_3:
+    FCC "BTN2: ON "
+    FCB $80
+STR_4:
+    FCC "BTN3: OFF"
+    FCB $80
+STR_5:
+    FCC "BTN3: ON "
+    FCB $80
+STR_6:
+    FCC "BTN4: OFF"
+    FCB $80
+STR_7:
+    FCC "BTN4: ON "
+    FCB $80
+STR_8:
+    FCC "DEBOUNCE"
+    FCB $80
+STR_9:
+    FCC "STARTING..."
+    FCB $80
+DRAW_VEC_X EQU RESULT+16
+DRAW_VEC_Y EQU RESULT+17
+MIRROR_X EQU RESULT+18
+MIRROR_Y EQU RESULT+19
+DRAW_VEC_INTENSITY EQU RESULT+20
+DRAW_CIRCLE_XC EQU RESULT+21
+DRAW_CIRCLE_YC EQU RESULT+22
+DRAW_CIRCLE_DIAM EQU RESULT+23
+DRAW_CIRCLE_INTENSITY EQU RESULT+24
+DRAW_CIRCLE_TEMP EQU RESULT+25

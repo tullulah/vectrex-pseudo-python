@@ -46,6 +46,27 @@ pub struct AsmFunctionLocation {
     pub func_type: String,
 }
 
+/// Variable metadata for memory visualization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VariableInfo {
+    /// Variable name (e.g., "player_x")
+    pub name: String,
+    
+    /// Memory address in hex (e.g., "0xCF10")
+    pub address: String,
+    
+    /// Size in bytes (2 for 16-bit variables, 4 for arrays, etc.)
+    pub size: usize,
+    
+    /// Variable type: "int", "array", "struct", "const"
+    #[serde(rename = "type")]
+    pub var_type: String,
+    
+    /// Line where variable is declared in VPy source
+    #[serde(rename = "declLine")]
+    pub decl_line: Option<usize>,
+}
+
 /// Debug information collected during compilation for mapping VPy source to binary
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DebugInfo {
@@ -86,6 +107,9 @@ pub struct DebugInfo {
     /// ASM address mapping: ASM line number (as string) -> binary address in hex
     #[serde(rename = "asmAddressMap")]
     pub asm_address_map: HashMap<String, String>,
+    
+    /// Variables metadata for memory visualization
+    pub variables: HashMap<String, VariableInfo>,
 }
 
 impl DebugInfo {
@@ -103,7 +127,20 @@ impl DebugInfo {
             native_calls: HashMap::new(),
             asm_functions: HashMap::new(),
             asm_address_map: HashMap::new(),
+            variables: HashMap::new(),
         }
+    }
+    
+    /// Add a variable with metadata
+    pub fn add_variable(&mut self, name: String, address: u16, size: usize, var_type: &str, decl_line: Option<usize>) {
+        let info = VariableInfo {
+            name: name.clone(),
+            address: format!("0x{:04X}", address),
+            size,
+            var_type: var_type.to_string(),
+            decl_line,
+        };
+        self.variables.insert(name, info);
     }
     
     /// Add a symbol (function name, label, etc.) with its address
@@ -417,6 +454,110 @@ pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
     }
     
     addresses
+}
+
+/// Parse variable definitions from ASM EQU directives
+/// Format: "VAR_NAME EQU $CF10+0" or "RESULT EQU $C880+$00"
+/// Returns: HashMap populated in debug_info.variables
+pub fn parse_asm_variables(asm: &str) -> HashMap<String, VariableInfo> {
+    let mut variables = HashMap::new();
+    
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Skip comments and empty lines
+        if trimmed.is_empty() || trimmed.starts_with(';') {
+            continue;
+        }
+        
+        // Look for EQU directives
+        if !trimmed.contains(" EQU ") {
+            continue;
+        }
+        
+        // Parse: "VAR_NAME EQU $CF10+0  ; Array data (5 elements)" or "RESULT EQU $C880+$00"
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        
+        let var_name = parts[0];
+        let address_expr = parts[2];
+        
+        // Parse address expression (e.g., "$CF10+0" or "$C880+$00")
+        let address = if address_expr.contains('+') {
+            // Calculate base + offset
+            let addr_parts: Vec<&str> = address_expr.split('+').collect();
+            if addr_parts.len() == 2 {
+                let base = parse_hex_or_decimal(addr_parts[0]).unwrap_or(0);
+                let offset = parse_hex_or_decimal(addr_parts[1]).unwrap_or(0);
+                base.wrapping_add(offset)
+            } else {
+                parse_hex_or_decimal(address_expr).unwrap_or(0)
+            }
+        } else {
+            parse_hex_or_decimal(address_expr).unwrap_or(0)
+        };
+        
+        // Determine variable type and size from name and comment
+        let comment = trimmed.split(';').nth(1).unwrap_or("").trim();
+        
+        let (var_type, size) = if var_name.contains("_DATA") {
+            // Array data - try to extract element count from comment
+            let element_count = if comment.contains("elements") {
+                // Extract number from "Array data (5 elements)"
+                comment
+                    .split('(')
+                    .nth(1)
+                    .and_then(|s| s.split(' ').next())
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(1)
+            } else {
+                1
+            };
+            ("array", element_count * 2)
+        } else if var_name.starts_with("VAR_ARG") {
+            ("arg", 2)
+        } else if var_name.starts_with("VAR_") {
+            ("int", 2)
+        } else if var_name.contains("PSG_") || var_name.contains("SFX_") || var_name.contains("MUSIC_") {
+            // Audio variables - some are 1 byte, some are 2
+            let is_byte = comment.contains("(1 byte)") || 
+                         var_name.ends_with("_ACTIVE") || 
+                         var_name.ends_with("_PLAYING") ||
+                         var_name.ends_with("_COUNT") ||
+                         var_name.ends_with("_FRAMES") ||
+                         var_name.ends_with("_PHASE") ||
+                         var_name.ends_with("_VOL");
+            ("audio", if is_byte { 1 } else { 2 })
+        } else if var_name.starts_with("RESULT") || var_name.starts_with("TMP") || 
+                  var_name.starts_with("MUL_") || var_name.starts_with("DIV_") {
+            ("system", 2)
+        } else {
+            ("unknown", 2)
+        };
+        
+        // Clean variable name (remove VAR_ prefix for user variables)
+        let clean_name = if var_name.starts_with("VAR_") {
+            var_name.strip_prefix("VAR_")
+                .unwrap_or(var_name)
+                .strip_suffix("_DATA")
+                .unwrap_or(var_name.strip_prefix("VAR_").unwrap_or(var_name))
+                .to_lowercase()
+        } else {
+            var_name.to_string()
+        };
+        
+        variables.insert(clean_name.clone(), VariableInfo {
+            name: clean_name,
+            address: format!("0x{:04X}", address),
+            size,
+            var_type: var_type.to_string(),
+            decl_line: None,
+        });
+    }
+    
+    variables
 }
 
 /// Parse VPy line markers from ASM and build lineMap with real addresses

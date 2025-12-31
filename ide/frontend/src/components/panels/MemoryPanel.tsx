@@ -1,6 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { MemoryGridView } from './MemoryGridView';
 
 interface Region { name:string; start:number; end:number; }
+
+interface VariableInfo {
+  name: string;
+  address: string;
+  size: number;
+  type: string;
+  declLine?: number;
+}
 
 // Memory map aligned with README (inclusive ranges)
 const REGIONS: Region[] = [
@@ -35,6 +44,34 @@ function dumpRegion(bytes: Uint8Array, r: Region): string {
 export const MemoryPanel: React.FC = () => {
   const [text, setText] = useState<string>('');
   const [ts, setTs] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<'text' | 'grid'>('grid');
+  const [memory, setMemory] = useState<Uint8Array>(new Uint8Array(65536));
+  const [variables, setVariables] = useState<Record<string, VariableInfo>>({});
+
+  // Load PDB file to get variable information
+  const loadPDB = useCallback(async () => {
+    try {
+      const Globals = (window as any).Globals;
+      if (!Globals?.projectPath) return;
+      
+      // Try to load main.pdb from project
+      const pdbPath = `${Globals.projectPath}/src/main.pdb`;
+      const response = await fetch(pdbPath);
+      if (!response.ok) return;
+      
+      const pdbData = await response.json();
+      if (pdbData.variables) {
+        setVariables(pdbData.variables);
+        console.log('[MemoryPanel] Loaded', Object.keys(pdbData.variables).length, 'variables from PDB');
+      }
+    } catch (e) {
+      console.warn('[MemoryPanel] Could not load PDB:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPDB();
+  }, [loadPDB]);
 
   const refresh = useCallback(() => {
     const vecx = (window as any).vecx;
@@ -52,10 +89,10 @@ export const MemoryPanel: React.FC = () => {
     }
     
     try {
-      // Crear snapshot de memoria de regiones importantes solamente
+      // Crear snapshot de memoria completa
       const snap = new Uint8Array(65536);
       
-      // Leer solo las regiones que realmente importan (no todo el espacio de direcciones)
+      // Leer regiones importantes
       const importantRegions = [
         { start: 0xC800, end: 0xCFFF }, // RAM
         { start: 0xD000, end: 0xD07F }, // VIA registers
@@ -71,12 +108,16 @@ export const MemoryPanel: React.FC = () => {
       // Para cartridge, leer solo las primeras páginas si hay ROM cargada
       const Globals = (window as any).Globals;
       if (Globals && Globals.cartdata && Globals.cartdata.length > 0) {
-        const maxCartRead = Math.min(0x2000, Globals.cartdata.length); // Primeras 8K máximo
+        const maxCartRead = Math.min(0x2000, Globals.cartdata.length);
         for (let addr = 0; addr < maxCartRead; addr++) {
           snap[addr] = vecx.read8(addr);
         }
       }
       
+      // Update memory state for grid view
+      setMemory(snap);
+      
+      // Generate text view
       const parts: string[] = [];
       REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
       setText(parts.join('\n\n'));
@@ -159,15 +200,52 @@ export const MemoryPanel: React.FC = () => {
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', fontFamily:'monospace'}}>
-      <div style={{padding:'4px', borderBottom:'1px solid #444', display:'flex', gap:8}}>
+      <div style={{padding:'4px', borderBottom:'1px solid #444', display:'flex', gap:8, alignItems:'center'}}>
         <button onClick={refresh}>Refresh</button>
         <button onClick={saveText}>Save TXT</button>
         <button onClick={saveBin}>Save BIN</button>
-        <span style={{marginLeft:'auto', opacity:0.7}}>Snapshot: {new Date(ts).toLocaleTimeString()}</span>
+        
+        {/* View mode toggle */}
+        <div style={{marginLeft:16, display:'flex', gap:4}}>
+          <button 
+            onClick={() => setViewMode('grid')}
+            style={{
+              backgroundColor: viewMode === 'grid' ? '#3498db' : 'transparent',
+              color: viewMode === 'grid' ? 'white' : 'inherit',
+              border: '1px solid #555',
+              padding: '4px 12px',
+              cursor: 'pointer'
+            }}
+          >
+            Grid
+          </button>
+          <button 
+            onClick={() => setViewMode('text')}
+            style={{
+              backgroundColor: viewMode === 'text' ? '#3498db' : 'transparent',
+              color: viewMode === 'text' ? 'white' : 'inherit',
+              border: '1px solid #555',
+              padding: '4px 12px',
+              cursor: 'pointer'
+            }}
+          >
+            Text
+          </button>
+        </div>
+        
+        <span style={{marginLeft:'auto', opacity:0.7}}>
+          Snapshot: {new Date(ts).toLocaleTimeString()}
+          {Object.keys(variables).length > 0 && ` • ${Object.keys(variables).length} vars`}
+        </span>
       </div>
-      <div style={{flex:1, overflow:'auto', padding:'4px', whiteSpace:'pre', fontSize:'11px', lineHeight:1.2}}>
-        {text || 'No data'}
-      </div>
+      
+      {viewMode === 'grid' ? (
+        <MemoryGridView memory={memory} variables={variables} timestamp={ts} />
+      ) : (
+        <div style={{flex:1, overflow:'auto', padding:'4px', whiteSpace:'pre', fontSize:'11px', lineHeight:1.2}}>
+          {text || 'No data'}
+        </div>
+      )}
     </div>
   );
 };

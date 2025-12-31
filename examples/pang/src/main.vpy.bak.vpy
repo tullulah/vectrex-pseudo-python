@@ -28,6 +28,11 @@ const level_enemy_speed = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5]
 
 joystick1_state = [0,0,0,0,0,0] # X, Y, BTN1, BTN2, BTN3, BTN4
 
+# Button debounce system (for real hardware)
+btn_debounce = 0
+const BTN_DEBOUNCE_FRAMES = 5
+startup_delay = 0
+
 num_locations = 17
 current_location = 0
 location_glow_intensity = 60
@@ -95,6 +100,10 @@ def main():
     countdown_active = 0
     max_level_unlocked = 0
     
+    # Initialize button debounce system
+    btn_debounce = 0
+    startup_delay = 0
+    
     # Initialize hook system
     hook_active = 0
     hook_x = 0
@@ -105,7 +114,17 @@ def main():
 
 def loop():
 
-    read_joystick1_state()
+    # Decrement debounce counter each frame
+    if btn_debounce > 0:
+        btn_debounce = btn_debounce - 1
+    
+    # Wait for hardware to stabilize at startup (30 frames = ~0.5 second at 60 FPS)
+    if startup_delay < 30:
+        startup_delay = startup_delay + 1
+    
+    # Read joystick axes only (no buttons - those are read directly in states)
+    joystick1_state[0] = J1_X()
+    joystick1_state[1] = J1_Y()
 
     if screen == STATE_TITLE: # Music already started in main()
         if (current_music == -1):
@@ -114,10 +133,17 @@ def loop():
         
         draw_title_screen()
 
-        if (joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1):
-            screen = STATE_MAP 
-            current_music = -1  # Reset music tracker to trigger map_theme
-            # PLAY_SFX("coin")
+        # Only check buttons when startup is complete AND debounce is ready
+        if startup_delay >= 30 and btn_debounce == 0:
+            btn1 = J1_BUTTON_1()
+            btn2 = J1_BUTTON_2()
+            btn3 = J1_BUTTON_3()
+            btn4 = J1_BUTTON_4()
+            
+            if btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1:
+                screen = STATE_MAP 
+                current_music = -1  # Reset music tracker to trigger map_theme
+                btn_debounce = BTN_DEBOUNCE_FRAMES
 
     if(screen == STATE_MAP):
         if (current_music != 1):
@@ -153,13 +179,16 @@ def loop():
         prev_joy_x = joy_x
         prev_joy_y = joy_y
         
-        btn1 = joystick1_state[2]
-        
-        if btn1 == 1:
-            # Start level - transition to game state
-            screen = STATE_GAME
-            countdown_active = 1
-            countdown_timer = 180  # 3 seconds at 60fps
+        # Only check buttons when startup is complete AND debounce is ready
+        if startup_delay >= 30 and btn_debounce == 0:
+            btn1 = J1_BUTTON_1()
+            
+            if btn1 == 1:
+                # Start level - transition to game state
+                screen = STATE_GAME
+                countdown_active = 1
+                countdown_timer = 180  # 3 seconds at 60fps
+                btn_debounce = BTN_DEBOUNCE_FRAMES
 
         draw_map_screen()
     
@@ -193,9 +222,14 @@ def loop():
         else:
             # Actual game after countdown
             
-            # Check for shoot input (any of 4 buttons)
-            if hook_active == 0:
-                if (joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1):
+            # Check for shoot input (any of 4 buttons) - read direct like joystick_test
+            if hook_active == 0 and startup_delay >= 30 and btn_debounce == 0:
+                btn1 = J1_BUTTON_1()
+                btn2 = J1_BUTTON_2()
+                btn3 = J1_BUTTON_3()
+                btn4 = J1_BUTTON_4()
+                
+                if btn1 == 1 or btn2 == 1 or btn3 == 1 or btn4 == 1:
                     hook_active = 1
                     hook_y = -100  # Start from ground level (direct signed value)
                     
@@ -210,6 +244,7 @@ def loop():
                     
                     # Hook moves vertically from gun position
                     hook_x = hook_gun_x
+                    btn_debounce = BTN_DEBOUNCE_FRAMES
             
             # Update hook position if active
             if hook_active == 1:

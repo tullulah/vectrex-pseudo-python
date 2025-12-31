@@ -5,49 +5,55 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "MAIN": "0x046D",
-    "START": "0x0448",
-    "LOOP_BODY": "0x047A"
+    "START": "0x0700",
+    "LOOP_BODY": "0x0773",
+    "MAIN": "0x074C"
   },
   "lineMap": {
-    "4": "0x0459",
-    "11": "0x04BD",
-    "14": "0x04F5",
-    "8": "0x047D",
-    "13": "0x04E1",
-    "9": "0x0491"
+    "12": "0x072C",
+    "21": "0x07DF",
+    "31": "0x08FB",
+    "33": "0x0940",
+    "34": "0x0950",
+    "5": "0x071A",
+    "23": "0x0801",
+    "7": "0x0720",
+    "9": "0x0726",
+    "20": "0x07AA",
+    "22": "0x07F0",
+    "29": "0x08B5",
+    "32": "0x090B",
+    "35": "0x0985",
+    "36": "0x0995",
+    "17": "0x0779",
+    "15": "0x0773",
+    "37": "0x09CA",
+    "28": "0x0880",
+    "13": "0x0740",
+    "24": "0x0832",
+    "25": "0x0867",
+    "30": "0x08C6",
+    "11": "0x074C"
   },
   "functions": {
-    "main": {
-      "name": "main",
-      "address": "0x046D",
+    "loop": {
+      "name": "loop",
+      "address": "0x0773",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
-    "loop": {
-      "name": "loop",
-      "address": "0x047A",
+    "main": {
+      "name": "main",
+      "address": "0x074C",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "4": "VECTREX_SET_INTENSITY",
-    "14": "VECTREX_PRINT_TEXT",
-    "9": "VECTREX_PRINT_TEXT",
-    "13": "VECTREX_SET_INTENSITY",
-    "8": "VECTREX_SET_INTENSITY"
+    "12": "VECTREX_SET_INTENSITY"
   },
-  "asmFunctions": {
-    "VECTREX_PRINT_TEXT": {
-      "name": "VECTREX_PRINT_TEXT",
-      "file": "main.asm",
-      "startLine": 47,
-      "endLine": 62,
-      "type": "native"
-    }
-  },
+  "asmFunctions": {},
   "asmAddressMap": {}
 }
