@@ -423,6 +423,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
 
     // J1_BUTTON_1: Read Joystick 1 button 1 via BIOS Read_Btns
     // Returns 0 if released, 1 if pressed
+    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
     if up == "J1_BUTTON_1" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_1");
         out.push_str("    JSR J1B1_BUILTIN\n");
@@ -431,6 +432,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     }
     
     // J1_BUTTON_2: Read Joystick 1 button 2 via BIOS Read_Btns
+    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
     if up == "J1_BUTTON_2" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_2");
         out.push_str("    JSR J1B2_BUILTIN\n");
@@ -439,6 +441,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     }
     
     // J1_BUTTON_3: Read Joystick 1 button 3 via BIOS Read_Btns
+    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
     if up == "J1_BUTTON_3" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_3");
         out.push_str("    JSR J1B3_BUILTIN\n");
@@ -447,6 +450,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     }
     
     // J1_BUTTON_4: Read Joystick 1 button 4 via BIOS Read_Btns
+    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
     if up == "J1_BUTTON_4" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_4");
         out.push_str("    JSR J1B4_BUILTIN\n");
@@ -748,41 +752,55 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         if let (Expr::Number(x0), Expr::Number(y0), Expr::Number(x1), Expr::Number(y1), Expr::Number(intensity)) 
             = (&args[0], &args[1], &args[2], &args[3], &args[4]) {
             // Calculate deltas from absolute coordinates
-            let dx = (*x1 - *x0) as i8;
-            let dy = (*y1 - *y0) as i8;
+            let dx = (*x1 - *x0) as i32;
+            let dy = (*y1 - *y0) as i32;
             
-            // Set DP and intensity
-            out.push_str("    LDA #$D0\n    TFR A,DP\n");
-            if *intensity == 0x5F {
-                out.push_str("    JSR Intensity_5F\n");
+            // If deltas require segmentation (> ±127), use DRAW_LINE_WRAPPER instead
+            if dy > 127 || dy < -128 || dx > 127 || dx < -128 {
+                // Fall through to wrapper version
             } else {
-                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity as u8));
+                // Deltas fit in 8-bit, use inline BIOS call
+                let dx8 = dx as i8;
+                let dy8 = dy as i8;
+                
+                // Set DP and intensity
+                out.push_str("    LDA #$D0\n    TFR A,DP\n");
+                if *intensity == 0x5F {
+                    out.push_str("    JSR Intensity_5F\n");
+                } else {
+                    out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", *intensity as u8));
+                }
+                // Clear Vec_Misc_Count for proper timing
+                out.push_str("    CLR Vec_Misc_Count\n");
+                // Draw line using RELATIVE deltas (A=dy, B=dx)
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                    dy8 as u8, dx8 as u8));
+                // Restore DP after BIOS call
+                out.push_str("    LDA #$C8\n    TFR A,DP\n");
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
             }
-            // Clear Vec_Misc_Count for proper timing
-            out.push_str("    CLR Vec_Misc_Count\n");
-            // Draw line using RELATIVE deltas (A=dy, B=dx)
-            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
-                dy as u8, dx as u8));
-            // Restore DP after BIOS call
-            out.push_str("    LDA #$C8\n    TFR A,DP\n");
-            out.push_str("    LDD #0\n    STD RESULT\n");
-            return true;
         }
     }
     
     // DRAW_LINE fallback: if not all constants, use wrapper
     if up == "DRAW_LINE" && args.len() == 5 {
-        // Optimized argument setup - emit directly to VAR_ARG when possible
+        // For constant arguments that require segmentation, still use wrapper
+        // Setup arguments using RESULT area + offsets (temporary storage for DRAW_LINE_WRAPPER)
+        // x0=0, y0=2, x1=4, y1=6, intensity=8 (relative to RESULT)
         for (i, arg) in args.iter().enumerate() {
+            let offset = i * 2;
             match arg {
                 Expr::Number(n) => {
-                    // Direct constant: skip RESULT, write directly to VAR_ARG
-                    out.push_str(&format!("    LDD #{}\n    STD VAR_ARG{}\n", *n & 0xFFFF, i));
+                    // Direct constant
+                    out.push_str(&format!("    LDD #{}\n", *n & 0xFFFF));
+                    out.push_str(&format!("    STD RESULT+{}\n", offset));
                 }
                 _ => {
                     // Complex expression: use RESULT intermediate
                     emit_expr(arg, out, fctx, string_map, opts);
-                    out.push_str(&format!("    LDD RESULT\n    STD VAR_ARG{}\n", i));
+                    out.push_str(&format!("    LDD RESULT\n"));
+                    out.push_str(&format!("    STD RESULT+{}\n", offset));
                 }
             }
         }
@@ -1135,11 +1153,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 let skip_label = fresh_label("DEBUG_SKIP_DATA");
                 
                 out.push_str("    LDD RESULT\n");
-                out.push_str("    STB $C000\n");      // Store low byte (B) to debug value
+                out.push_str("    STA $C002\n");      // Store high byte (A) to C002
+                out.push_str("    STB $C000\n");      // Store low byte (B) to C000
                 out.push_str("    LDA #$FE\n");       // Marker for LABELED debug output
                 out.push_str("    STA $C001\n");      // Write marker
                 out.push_str(&format!("    LDX #{}\n", label_name));
-                out.push_str("    STX $C002\n");      // Store label pointer (16-bit)
+                out.push_str("    STX $C004\n");      // Store label pointer to C004-C005 (not C002-C003)
                 out.push_str(&format!("    BRA {}\n", skip_label));
                 
                 // Emit label data inline (skipped by BRA)
@@ -1151,11 +1170,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 // Simple debug output (no label)
                 add_native_call_comment(out, "DEBUG_PRINT");
                 out.push_str("    LDD RESULT\n");
-                out.push_str("    STB $C000\n");      // Store low byte (B) to debug value
+                out.push_str("    STA $C002\n");      // Store high byte (A) to C002
+                out.push_str("    STB $C000\n");      // Store low byte (B) to C000
                 out.push_str("    LDA #$42\n");       // Marker for simple debug output
                 out.push_str("    STA $C001\n");      // Write marker
-                out.push_str("    CLR $C002\n");      // Clear label pointer high
-                out.push_str("    CLR $C003\n");      // Clear label pointer low
+                out.push_str("    CLR $C003\n");      // Clear label pointer
+                out.push_str("    CLR $C005\n");      // Clear label pointer
             }
         }
         out.push_str("    LDD #0\n    STD RESULT\n");

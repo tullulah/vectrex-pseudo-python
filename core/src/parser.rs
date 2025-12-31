@@ -123,10 +123,12 @@ fn const_eval(e: &Expr) -> Option<i32> {
                 BinOp::BitOr => l | r,
                 BinOp::BitXor => l ^ r,
             };
-            Some(v & 0xFFFF)
+            // Truncate to 16-bit SIGNED range, preserving negative sign
+            let truncated = ((v & 0xFFFF) as i16) as i32;
+            Some(truncated)
         }
         Expr::Not(inner) => const_eval(inner).map(|v| if (v & 0xFFFF)==0 {1} else {0}),
-        Expr::BitNot(inner) => const_eval(inner).map(|v| !v & 0xFFFF),
+        Expr::BitNot(inner) => const_eval(inner).map(|v| ((!v) & 0xFFFF) as i16 as i32),
         _ => None,
     }
 }

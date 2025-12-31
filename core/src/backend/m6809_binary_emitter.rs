@@ -627,6 +627,18 @@ impl BinaryEmitter {
         self.emit(0x54);
     }
 
+    /// ASRA (opcode 0x47) - Arithmetic Shift Right A
+    pub fn asra(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x47);
+    }
+
+    /// ASRB (opcode 0x57) - Arithmetic Shift Right B
+    pub fn asrb(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x57);
+    }
+
     /// RORA (opcode 0x46) - Rotate Right A
     pub fn rora(&mut self) {
         self.record_line_mapping();
@@ -652,6 +664,12 @@ impl BinaryEmitter {
     pub fn sex(&mut self) {
         self.record_line_mapping();
         self.emit(0x1D);
+    }
+
+    /// EXCH (opcode 0x1E) - Exchange A and B registers
+    pub fn exch(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x1E);
     }
 
     /// TSTA (opcode 0x4D) - Test A (actualiza flags sin modificar A)

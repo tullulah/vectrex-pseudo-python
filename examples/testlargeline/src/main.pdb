@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "source": "main.vpy",
+  "asm": "main.asm",
+  "binary": "main.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "MAIN": "0x05C1",
+    "LOOP_BODY": "0x05E8",
+    "START": "0x059F"
+  },
+  "lineMap": {
+    "10": "0x05E8",
+    "8": "0x05AD",
+    "14": "0x05EE",
+    "6": "0x05C1"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x05C1",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x05E8",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "8": "VECTREX_SET_INTENSITY"
+  },
+  "asmFunctions": {},
+  "asmAddressMap": {}
+}

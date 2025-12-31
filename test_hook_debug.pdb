@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "source": "test_hook_debug.vpy",
+  "asm": "test_hook_debug.asm",
+  "binary": "test_hook_debug.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "LOOP_BODY": "0x0553",
+    "START": "0x0501",
+    "MAIN": "0x0529"
+  },
+  "lineMap": {
+    "8": "0x0553",
+    "10": "0x055E",
+    "6": "0x0515",
+    "3": "0x050F",
+    "5": "0x0529",
+    "9": "0x0556"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x0529",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x0553",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "9": "VECTREX_WAIT_RECAL",
+    "6": "VECTREX_SET_INTENSITY",
+    "10": "DEBUG_PRINT(hook_y)"
+  },
+  "asmFunctions": {
+    "VECTREX_DEBUG_PRINT": {
+      "name": "VECTREX_DEBUG_PRINT",
+      "file": "test_hook_debug.asm",
+      "startLine": 134,
+      "endLine": 143,
+      "type": "native"
+    }
+  },
+  "asmAddressMap": {}
+}

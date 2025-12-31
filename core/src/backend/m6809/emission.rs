@@ -113,6 +113,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B1_BUILTIN:\n");
     out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
+    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$01\n");
@@ -129,6 +130,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B2_BUILTIN:\n");
     out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
+    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$02\n");
@@ -145,6 +147,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B3_BUILTIN:\n");
     out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
+    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$04\n");
@@ -161,6 +164,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B4_BUILTIN:\n");
     out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
+    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
     out.push_str("    JSR $F1BA    ; Read_Btns\n");
     out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
     out.push_str("    ANDA #$08\n");
@@ -210,7 +214,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     }
     if w.contains("VECTREX_DEBUG_PRINT") {
         let start_line = out.lines().count() + 1;
-        let function_code = "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to gap area (C000-C7FF)\n    LDA VAR_ARG0+1   ; Load value to debug print\n    STA $C000        ; Debug output value in unmapped gap\n    LDA #$42         ; Debug marker\n    STA $C001        ; Debug marker to indicate new output\n    RTS\n";
+        let function_code = "VECTREX_DEBUG_PRINT:\n    ; Debug print to console - writes to gap area (C000-C7FF)\n    ; Write both high and low bytes for proper 16-bit signed interpretation\n    LDA VAR_ARG0     ; Load high byte (for signed interpretation)\n    STA $C002        ; Debug output high byte in gap\n    LDA VAR_ARG0+1   ; Load low byte\n    STA $C000        ; Debug output low byte in unmapped gap\n    LDA #$42         ; Debug marker\n    STA $C001        ; Debug marker to indicate new output\n    RTS\n";
         out.push_str(function_code);
         let end_line = out.lines().count();
         
@@ -254,9 +258,140 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         );
     }
     if w.contains("DRAW_LINE_WRAPPER") {
-        out.push_str(
-            "; DRAW_LINE unified wrapper - handles 16-bit signed coordinates correctly\n; Args: (x0,y0,x1,y1,intensity) as 16-bit words, treating x/y as signed bytes.\n; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).\nDRAW_LINE_WRAPPER:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)\n    STA >$D00C     ; VIA_cntl\n    ; Set DP to hardware registers\n    LDA #$D0\n    TFR A,DP\n    ; ALWAYS set intensity (no optimization)\n    LDA VAR_ARG4+1\n    JSR Intensity_a\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DX_CLAMP_HI_OK\n    LDD #127\nDLW_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DX_CLAMP_LO_OK\n    LDD #-128\nDLW_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLW_DY_CLAMP_HI_OK\n    LDD #127\nDLW_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLW_DY_CLAMP_LO_OK\n    LDD #-128\nDLW_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; dx and dy are already clamped to ±127 - no further clamping needed\n    ; Vectrex hardware supports full ±127 delta range\n    LDA VLINE_DX\n    STA VLINE_DX    ; Keep full range\n    LDA VLINE_DY\n    STA VLINE_DY    ; Keep full range\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n    TFR A,DP\n    RTS\n\n; DRAW_LINE_FAST - optimized version that skips redundant setup\n; Use this for multiple consecutive draws with same intensity\n; Args: (x0,y0,x1,y1) only - intensity must be set beforehand\nDRAW_LINE_FAST:\n    ; Move to start (y in A, x in B) - use signed byte values\n    LDA VAR_ARG1+1  ; Y start (signed byte)\n    LDB VAR_ARG0+1  ; X start (signed byte)\n    JSR Moveto_d\n    ; Compute deltas using 16-bit arithmetic, then clamp to signed bytes\n    ; dx = x1 - x0 (treating as signed)\n    LDD VAR_ARG2    ; x1 (16-bit)\n    SUBD VAR_ARG0   ; subtract x0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DX_CLAMP_HI_OK\n    LDD #127\nDLF_DX_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DX_CLAMP_LO_OK\n    LDD #-128\nDLF_DX_CLAMP_LO_OK:\n    STB VLINE_DX    ; Store dx as signed byte\n    ; dy = y1 - y0 (treating as signed)\n    LDD VAR_ARG3    ; y1 (16-bit)\n    SUBD VAR_ARG1   ; subtract y0 (16-bit)\n    ; Clamp D to signed byte range (-128 to +127)\n    CMPD #127\n    BLE DLF_DY_CLAMP_HI_OK\n    LDD #127\nDLF_DY_CLAMP_HI_OK:\n    CMPD #-128\n    BGE DLF_DY_CLAMP_LO_OK\n    LDD #-128\nDLF_DY_CLAMP_LO_OK:\n    STB VLINE_DY    ; Store dy as signed byte\n    ; dx and dy are already clamped to ±127 - no further clamping needed\n    ; Vectrex hardware supports full ±127 delta range\n    LDA VLINE_DX\n    STA VLINE_DX    ; Keep full range\n    LDA VLINE_DY\n    STA VLINE_DY    ; Keep full range\n    ; Clear Vec_Misc_Count for proper timing\n    CLR Vec_Misc_Count\n    ; Draw line (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    RTS\n"
-        );
+        // Header and setup
+        out.push_str("; DRAW_LINE unified wrapper - handles 16-bit signed coordinates\n");
+        out.push_str("; Args: (x0,y0,x1,y1,intensity) as 16-bit words\n");
+        out.push_str("; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).\n");
+        out.push_str("DRAW_LINE_WRAPPER:\n");
+        out.push_str("    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n");
+        out.push_str("    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)\n");
+        out.push_str("    STA >$D00C     ; VIA_cntl\n");
+        out.push_str("    ; Set DP to hardware registers\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP\n");
+        
+        // Set intensity and move to start
+        out.push_str("    ; ALWAYS set intensity (no optimization)\n");
+        out.push_str("    LDA RESULT+8+1  ; intensity (RESULT+8, byte access)\n");
+        out.push_str("    JSR Intensity_a\n");
+        out.push_str("    ; Move to start ONCE (y in A, x in B) - use signed byte values\n");
+        out.push_str("    LDA RESULT+2+1  ; Y start (RESULT+2, byte access)\n");
+        out.push_str("    LDB RESULT+0+1  ; X start (RESULT+0, byte access)\n");
+        out.push_str("    JSR Moveto_d\n");
+        
+        // Compute deltas
+        out.push_str("    ; Compute deltas using 16-bit arithmetic\n");
+        out.push_str("    ; dx = x1 - x0 (treating as signed 16-bit)\n");
+        out.push_str("    LDD RESULT+4    ; x1 (RESULT+4, 16-bit)\n");
+        out.push_str("    SUBD RESULT+0   ; subtract x0 (RESULT+0, 16-bit)\n");
+        out.push_str("    STD VLINE_DX_16 ; Store full 16-bit dx\n");
+        out.push_str("    ; dy = y1 - y0 (treating as signed 16-bit)\n");
+        out.push_str("    LDD RESULT+6    ; y1 (RESULT+6, 16-bit)\n");
+        out.push_str("    SUBD RESULT+2   ; subtract y0 (RESULT+2, 16-bit)\n");
+        out.push_str("    STD VLINE_DY_16 ; Store full 16-bit dy\n");
+        
+        // SEGMENT 1: Clamp and draw first segment
+        out.push_str("    ; SEGMENT 1: Clamp dy to ±127 and draw\n");
+        out.push_str("    LDD VLINE_DY_16 ; Load full dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG1_DY_LO\n");
+        out.push_str("    LDA #127        ; dy > 127: use 127\n");
+        out.push_str("    BRA DLW_SEG1_DY_READY\n");
+        out.push_str("DLW_SEG1_DY_LO:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG1_DY_NO_CLAMP  ; -128 <= dy <= 127: use original (sign-extended)\n");
+        out.push_str("    LDA #$80        ; dy < -128: use -128\n");
+        out.push_str("    BRA DLW_SEG1_DY_READY\n");
+        out.push_str("DLW_SEG1_DY_NO_CLAMP:\n");
+        out.push_str("    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("DLW_SEG1_DY_READY:\n");
+        out.push_str("    STA VLINE_DY    ; Save clamped dy for segment 1\n");
+        
+        // Clamp dx for segment 1
+        out.push_str("    ; Clamp dx to ±127\n");
+        out.push_str("    LDD VLINE_DX_16\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG1_DX_LO\n");
+        out.push_str("    LDB #127        ; dx > 127: use 127\n");
+        out.push_str("    BRA DLW_SEG1_DX_READY\n");
+        out.push_str("DLW_SEG1_DX_LO:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG1_DX_NO_CLAMP  ; -128 <= dx <= 127: use original (sign-extended)\n");
+        out.push_str("    LDB #$80        ; dx < -128: use -128\n");
+        out.push_str("    BRA DLW_SEG1_DX_READY\n");
+        out.push_str("DLW_SEG1_DX_NO_CLAMP:\n");
+        out.push_str("    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("DLW_SEG1_DX_READY:\n");
+        out.push_str("    STB VLINE_DX    ; Save clamped dx for segment 1\n");
+        
+        // Draw segment 1
+        out.push_str("    ; Draw segment 1\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA VLINE_DY\n");
+        out.push_str("    LDB VLINE_DX\n");
+        out.push_str("    JSR Draw_Line_d ; Beam moves automatically\n");
+        
+        // Check if we need segment 2 - for BOTH dy > 127 AND dy < -128
+        out.push_str("    ; Check if we need SEGMENT 2 (dy outside ±127 range)\n");
+        out.push_str("    LDD VLINE_DY_16 ; Reload original dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BGT DLW_NEED_SEG2  ; dy > 127: needs segment 2\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BLT DLW_NEED_SEG2  ; dy < -128: needs segment 2\n");
+        out.push_str("    BRA DLW_DONE       ; dy in range ±127: no segment 2\n");
+        out.push_str("DLW_NEED_SEG2:\n");
+        
+        // SEGMENT 2: Handle remaining dy AND dx
+        out.push_str("    ; SEGMENT 2: Draw remaining dy and dx\n");
+        out.push_str("    ; Calculate remaining dy\n");
+        out.push_str("    LDD VLINE_DY_16 ; Load original full dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BGT DLW_SEG2_DY_POS  ; dy > 127\n");
+        out.push_str("    ; dy < -128, so we drew -128 in segment 1\n");
+        out.push_str("    ; remaining = dy - (-128) = dy + 128\n");
+        out.push_str("    ADDD #128       ; Add back the -128 we already drew\n");
+        out.push_str("    BRA DLW_SEG2_DY_DONE\n");
+        out.push_str("DLW_SEG2_DY_POS:\n");
+        out.push_str("    ; dy > 127, so we drew 127 in segment 1\n");
+        out.push_str("    ; remaining = dy - 127\n");
+        out.push_str("    SUBD #127       ; Subtract 127 we already drew\n");
+        out.push_str("DLW_SEG2_DY_DONE:\n");
+        out.push_str("    STD VLINE_DY_REMAINING  ; Store remaining dy (16-bit)\n");
+        
+        // Also calculate remaining dx
+        out.push_str("    ; Calculate remaining dx\n");
+        out.push_str("    LDD VLINE_DX_16 ; Load original full dx\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG2_DX_CHECK_NEG\n");
+        out.push_str("    ; dx > 127, so we drew 127 in segment 1\n");
+        out.push_str("    ; remaining = dx - 127\n");
+        out.push_str("    SUBD #127\n");
+        out.push_str("    BRA DLW_SEG2_DX_DONE\n");
+        out.push_str("DLW_SEG2_DX_CHECK_NEG:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG2_DX_NO_REMAIN  ; -128 <= dx <= 127: no remaining dx\n");
+        out.push_str("    ; dx < -128, so we drew -128 in segment 1\n");
+        out.push_str("    ; remaining = dx - (-128) = dx + 128\n");
+        out.push_str("    ADDD #128\n");
+        out.push_str("    BRA DLW_SEG2_DX_DONE\n");
+        out.push_str("DLW_SEG2_DX_NO_REMAIN:\n");
+        out.push_str("    LDD #0          ; No remaining dx\n");
+        out.push_str("DLW_SEG2_DX_DONE:\n");
+        out.push_str("    STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit) in VLINE_DX_REMAINING\n");
+        
+        // Draw segment 2 with both remaining dx and dy
+        out.push_str("    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)\n");
+        out.push_str("    ; Load remaining dy from VLINE_DY_REMAINING (already saved)\n");
+        out.push_str("    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy\n");
+        out.push_str("    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    JSR Draw_Line_d ; Beam continues from segment 1 endpoint\n");
+        
+        // Cleanup
+        out.push_str("DLW_DONE:\n");
+        out.push_str("    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n");
+        out.push_str("    TFR A,DP\n");
+        out.push_str("    RTS\n");
     }
     if w.contains("VECTREX_FRAME_BEGIN") {
         if opts.fast_wait {

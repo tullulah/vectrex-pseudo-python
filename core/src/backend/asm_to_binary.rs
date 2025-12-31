@@ -549,6 +549,9 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "ROLB" => { emitter.rolb(); Ok(()) },
         "LSRA" => { emitter.lsra(); Ok(()) },
         "LSRB" => { emitter.lsrb(); Ok(()) },
+        "ASRA" => { emitter.asra(); Ok(()) },
+        "ASRB" => { emitter.asrb(); Ok(()) },
+        "CLRA" => { emitter.clra(); Ok(()) },
         "RORA" => { emitter.rora(); Ok(()) },
         "RORB" => { emitter.rorb(); Ok(()) },
         "ABX" => { emitter.abx(); Ok(()) },
@@ -560,6 +563,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "COMA" => { emitter.coma(); Ok(()) },
         "COMB" => { emitter.comb(); Ok(()) },
         "SEX" => { emitter.sex(); Ok(()) },
+        "EXCH" => { emitter.exch(); Ok(()) },
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),

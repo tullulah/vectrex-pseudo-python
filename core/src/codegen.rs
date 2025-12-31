@@ -1096,7 +1096,10 @@ fn opt_stmt(s: &Stmt) -> Stmt {
 }
 
 const INT_MASK: i32 = 0xFFFF; // unify 16-bit integer model across backends
-fn trunc16(v: i32) -> i32 { v & INT_MASK }
+fn trunc16(v: i32) -> i32 { 
+    // Truncate to 16-bit SIGNED range, preserving negative sign
+    ((v & INT_MASK) as i16) as i32
+}
 
 fn opt_expr(e: &Expr) -> Expr {
     match e {

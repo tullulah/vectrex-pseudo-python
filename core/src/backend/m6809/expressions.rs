@@ -19,6 +19,7 @@ pub fn emit_expr_depth(expr: &Expr, out: &mut String, fctx: &FuncCtx, string_map
     
     match expr {
         Expr::Number(n) => {
+            // Emit numbers as-is in decimal format (assembler interprets negatives as signed)
             out.push_str(&format!("    LDD #{}\n    STD RESULT\n", *n));
         }
         Expr::StringLit(s) => {

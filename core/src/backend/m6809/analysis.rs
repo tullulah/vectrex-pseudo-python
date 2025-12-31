@@ -256,14 +256,31 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             if up == "VECTREX_DRAW_VECTORLIST" || up == "DRAW_VECTORLIST" {
                 usage.needs_vectorlist_runtime = true;
             }
-            // DRAW_LINE: only mark wrapper as needed if it can't be optimized inline
+            // DRAW_LINE: mark wrapper as needed if:
+            // 1. Not all args are constants (can't optimize inline), OR
+            // 2. Constants have deltas > ±127 (requires segmentation)
             if up == "DRAW_LINE" {
-                // Check if this call can be optimized inline (all 5 args are constants)
-                let can_optimize_inline = ci.args.len() == 5 && 
-                    ci.args.iter().all(|a| matches!(a, Expr::Number(_)));
+                let mut needs_wrapper = false;
                 
-                if !can_optimize_inline {
-                    // Only mark wrapper as needed if inline optimization isn't possible
+                // Check if this call can be optimized inline (all 5 args are constants)
+                if ci.args.len() == 5 && ci.args.iter().all(|a| matches!(a, Expr::Number(_))) {
+                    // All constants - check if deltas require segmentation
+                    if let (Expr::Number(x0), Expr::Number(y0), Expr::Number(x1), Expr::Number(y1), _) = 
+                        (&ci.args[0], &ci.args[1], &ci.args[2], &ci.args[3], &ci.args[4]) {
+                        let dx = (x1 - x0) as i32;
+                        let dy = (y1 - y0) as i32;
+                        
+                        // If deltas require segmentation (> ±127), need wrapper
+                        if dy > 127 || dy < -128 || dx > 127 || dx < -128 {
+                            needs_wrapper = true;
+                        }
+                    }
+                } else {
+                    // Not all constants - can't optimize inline
+                    needs_wrapper = true;
+                }
+                
+                if needs_wrapper {
                     usage.wrappers_used.insert("DRAW_LINE_WRAPPER".to_string());
                 }
             }

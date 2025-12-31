@@ -1,0 +1,57 @@
+{
+  "version": "1.0",
+  "source": "test_negative_init.vpy",
+  "asm": "test_negative_init.asm",
+  "binary": "test_negative_init.bin",
+  "entryPoint": "0x0000",
+  "symbols": {
+    "MAIN": "0x0542",
+    "LOOP_BODY": "0x056C",
+    "START": "0x050E"
+  },
+  "lineMap": {
+    "11": "0x056F",
+    "10": "0x056C",
+    "7": "0x0542",
+    "4": "0x0522",
+    "5": "0x0528",
+    "3": "0x051C",
+    "13": "0x059F",
+    "14": "0x05CA",
+    "8": "0x052E",
+    "12": "0x0577"
+  },
+  "functions": {
+    "main": {
+      "name": "main",
+      "address": "0x0542",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    },
+    "loop": {
+      "name": "loop",
+      "address": "0x056C",
+      "startLine": 0,
+      "endLine": 0,
+      "type": "vpy"
+    }
+  },
+  "nativeCalls": {
+    "13": "DEBUG_PRINT(another_var)",
+    "8": "VECTREX_SET_INTENSITY",
+    "11": "VECTREX_WAIT_RECAL",
+    "14": "DEBUG_PRINT(positive_var)",
+    "12": "DEBUG_PRINT(test_var)"
+  },
+  "asmFunctions": {
+    "VECTREX_DEBUG_PRINT": {
+      "name": "VECTREX_DEBUG_PRINT",
+      "file": "test_negative_init.asm",
+      "startLine": 134,
+      "endLine": 143,
+      "type": "native"
+    }
+  },
+  "asmAddressMap": {}
+}

@@ -607,6 +607,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", array_counter));
                     array_counter += 1;
                 } else if let Expr::Number(n) = value {
+                    // Emit numbers as decimal (assembler interprets negatives as signed)
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else if let Expr::StringLit(s) = value {
@@ -662,7 +663,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)\n");
         out.push_str("    ; Mux configured - J1_X()/J1_Y() can now be called\n\n");
         
-        out.push_str("    JSR Wait_Recal\n    LDA #$80\n    STA VIA_t1_cnt_lo\n");
+        // WAIT_RECAL now auto-injected in LOOP_BODY at start of every frame
+        out.push_str("    ; JSR Wait_Recal is now called at start of LOOP_BODY (see auto-inject)\n");
+        out.push_str("    LDA #$80\n    STA VIA_t1_cnt_lo\n");
         // NOTE: UPDATE_MUSIC_PSG now called at START of LOOP_BODY, not here
         
         // CRITICAL: Initialize global variables even if main() has no content
@@ -751,6 +754,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Ensure DP=$C8 at start of loop (BIOS calls may have changed it to $D0)
                     // This must happen BEFORE any variable access
                     out.push_str("    JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)\n");
+                    
+                    // Auto-inject WAIT_RECAL at START of loop for proper frame sync
+                    out.push_str("    JSR Wait_Recal ; Auto-injected: sync with vector beam\n");
                     
                     // Auto-inject AUDIO_UPDATE at START of loop (after WAIT_RECAL, before drawing)
                     // This ensures consistent 50Hz timing regardless of drawing complexity
@@ -1275,11 +1281,18 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     if rt_usage.needs_line_vars {
         if opts.exclude_ram_org {
-            out.push_str(&format!("VLINE_DX EQU RESULT+{}\n", var_offset)); var_offset += 1;
-            out.push_str(&format!("VLINE_DY EQU RESULT+{}\n", var_offset)); var_offset += 1;
-            out.push_str(&format!("VLINE_STEPS EQU RESULT+{}\n", var_offset)); var_offset += 1;
-            out.push_str(&format!("VLINE_LIST EQU RESULT+{}\n", var_offset)); var_offset += 2; // 2 bytes
-        } else { out.push_str("; Line drawing temps\nVLINE_DX: FCB 0\nVLINE_DY: FCB 0\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
+            // CRITICAL: DRAW_LINE_WRAPPER uses RESULT+0-9 for arguments
+            // Temporals must start at RESULT+10 to avoid overwriting arguments
+            out.push_str(&format!("VLINE_DX_16 EQU RESULT+10\n"));      // x1-x0 (16-bit)
+            out.push_str(&format!("VLINE_DY_16 EQU RESULT+12\n"));      // y1-y0 (16-bit)
+            out.push_str(&format!("VLINE_DX EQU RESULT+14\n"));         // clamped dx (8-bit)
+            out.push_str(&format!("VLINE_DY EQU RESULT+15\n"));         // clamped dy (8-bit)
+            out.push_str(&format!("VLINE_DY_REMAINING EQU RESULT+16\n")); // remaining dy segment 2 (16-bit)
+            out.push_str(&format!("VLINE_DX_REMAINING EQU RESULT+18\n")); // remaining dx segment 2 (16-bit)
+            out.push_str(&format!("VLINE_STEPS EQU RESULT+20\n"));
+            out.push_str(&format!("VLINE_LIST EQU RESULT+21\n"));       // 2-byte vector list
+            var_offset = 23;  // Next offset available
+        } else { out.push_str("; Line drawing temps\nVLINE_DX_16: FDB 0  ; 16-bit dx for long lines\nVLINE_DY_16: FDB 0  ; 16-bit dy for long lines\nVLINE_DX: FCB 0  ; clamped dx (8-bit)\nVLINE_DY: FCB 0  ; clamped dy (8-bit)\nVLINE_DY_REMAINING: FDB 0  ; 16-bit remaining dy for segment 2\nVLINE_DX_REMAINING: FDB 0  ; 16-bit remaining dx for segment 2\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
     }
     // DRAW_VECTOR offset position storage (always needed for DRAW_VECTOR)
     if opts.exclude_ram_org {

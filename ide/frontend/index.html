@@ -102,8 +102,14 @@
                 const result = originalVecxEmu(cycles, cyclesDone);
                 
                 // Poll debug memory after frame execution
-                const debugValue = window.debugRam[0] || 0xFF;
-                const debugMarker = window.debugRam[1] || 0;
+                const debugValueLow = window.debugRam[0] || 0;      // C000 = low byte
+                const debugMarker = window.debugRam[1] || 0;        // C001 = marker
+                const debugValueHigh = window.debugRam[2] || 0;     // C002 = high byte
+                
+                // Reconstruct 16-bit signed value from high/low bytes
+                const debugValue = (debugValueHigh << 8) | debugValueLow;
+                // Convert to signed 16-bit if necessary
+                const signedDebugValue = debugValue > 0x7FFF ? debugValue - 0x10000 : debugValue;
                 
                 // Log every 100 frames to reduce spam (DISABLED for performance)
                 window.pollFrameCount++;
@@ -125,8 +131,8 @@
                             // STRING debug output (M6809 big-endian: high byte first)
                             const strPtrHigh = window.debugRam[2] || 0;    // C002 = high byte
                             const strPtrLow = window.debugRam[3] || 0;     // C003 = low byte
-                            const labelPtrHigh = window.debugRam[4] || 0;  // C004 = high byte
-                            const labelPtrLow = window.debugRam[5] || 0;   // C005 = low byte
+                            const labelPtrHigh = window.debugRam[6] || 0;  // C006 = high byte (label pointer)
+                            const labelPtrLow = window.debugRam[7] || 0;   // C007 = low byte (label pointer)
                             const strPtr = (strPtrHigh << 8) | strPtrLow;
                             const labelPtr = (labelPtrHigh << 8) | labelPtrLow;
                             
@@ -163,9 +169,9 @@
                                 // console.log(`%c[DEBUG-POLL] 📋 String message: "${strContent}"`, 'color: #0ff; font-weight: bold');
                             }
                         } else if (debugMarker === 0xFE) {
-                            // Labeled debug output (numeric variable) - read label pointer from C002-C003
-                            const labelHigh = window.debugRam[2] || 0;
-                            const labelLow = window.debugRam[3] || 0;
+                            // Labeled debug output (numeric variable) - read label pointer from C004-C005
+                            const labelHigh = window.debugRam[4] || 0;
+                            const labelLow = window.debugRam[5] || 0;
                             const labelPtr = (labelHigh << 8) | labelLow;
                             
                             if (labelPtr !== 0) {
@@ -178,7 +184,7 @@
                                 
                                 // Update or add variable
                                 const oldValue = window.debugVariables[label];
-                                window.debugVariables[label] = debugValue;
+                                window.debugVariables[label] = signedDebugValue;
                                 
                                 // if (oldValue === undefined) {
                                 //     console.log(`%c[DEBUG-POLL] 📌 New variable tracked: ${label} = ${debugValue}`, 'color: #0f0; font-weight: bold');
@@ -188,7 +194,7 @@
                             }
                         } else {
                             // Simple debug output - add sequential message
-                            const message = `DEBUG: ${debugValue}`;
+                            const message = `DEBUG: ${signedDebugValue}`;
                             window.debugMessages.push(message);
                             // console.log(`%c[DEBUG-POLL] 📋 Message added: "${message}"`, 'color: #0f0; font-weight: bold');
                         }
