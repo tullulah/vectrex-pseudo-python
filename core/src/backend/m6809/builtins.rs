@@ -785,25 +785,36 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     
     // DRAW_LINE fallback: if not all constants, use wrapper
     if up == "DRAW_LINE" && args.len() == 5 {
-        // For constant arguments that require segmentation, still use wrapper
-        // Setup arguments using RESULT area + offsets (temporary storage for DRAW_LINE_WRAPPER)
-        // x0=0, y0=2, x1=4, y1=6, intensity=8 (relative to RESULT)
+        // For arguments with variables/expressions, use wrapper
+        // CRITICAL: Store arguments in TMPPTR area (not RESULT) to prevent
+        // emit_expr from overwriting values during complex expression evaluation
+        // 
+        // Argument layout in TMPPTR:
+        // TMPPTR+0 = x0, TMPPTR+2 = y0, TMPPTR+4 = x1, TMPPTR+6 = y1, TMPPTR+8 = intensity
         for (i, arg) in args.iter().enumerate() {
             let offset = i * 2;
             match arg {
                 Expr::Number(n) => {
-                    // Direct constant
+                    // Direct constant - load and store to TMPPTR area
                     out.push_str(&format!("    LDD #{}\n", *n & 0xFFFF));
-                    out.push_str(&format!("    STD RESULT+{}\n", offset));
+                    out.push_str(&format!("    STD TMPPTR+{}\n", offset));
                 }
                 _ => {
-                    // Complex expression: use RESULT intermediate
+                    // Complex expression: evaluate to RESULT, then copy to TMPPTR
+                    // This prevents RESULT from being overwritten during next emit_expr
                     emit_expr(arg, out, fctx, string_map, opts);
-                    out.push_str(&format!("    LDD RESULT\n"));
-                    out.push_str(&format!("    STD RESULT+{}\n", offset));
+                    // Value is in D, store to TMPPTR area
+                    out.push_str(&format!("    STD TMPPTR+{}\n", offset));
                 }
             }
         }
+        // Copy from TMPPTR to RESULT for DRAW_LINE_WRAPPER
+        // DRAW_LINE_WRAPPER expects arguments at RESULT+0-8
+        out.push_str("    LDD TMPPTR+0\n    STD RESULT+0\n");
+        out.push_str("    LDD TMPPTR+2\n    STD RESULT+2\n");
+        out.push_str("    LDD TMPPTR+4\n    STD RESULT+4\n");
+        out.push_str("    LDD TMPPTR+6\n    STD RESULT+6\n");
+        out.push_str("    LDD TMPPTR+8\n    STD RESULT+8\n");
         out.push_str("    JSR DRAW_LINE_WRAPPER\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
         return true;

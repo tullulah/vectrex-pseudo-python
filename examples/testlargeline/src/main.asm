@@ -25,12 +25,18 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 8 bytes
+; Total RAM used: 20 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
-TEMP_YX              EQU $C880+$02   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$04   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$05   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$06   ; String buffer for PRINT_NUMBER (2 bytes)
+TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
+TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
+TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
+TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
+TMPPTR               EQU $C880+$0A   ; Pointer temp (2 bytes)
+TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
+NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
 
     JMP START
 
@@ -142,11 +148,11 @@ DRAW_LINE_WRAPPER:
     LDA #$D0
     TFR A,DP
     ; ALWAYS set intensity (no optimization)
-    LDA RESULT+8+1  ; intensity (RESULT+8, byte access)
+    LDA RESULT+8+1  ; intensity (low byte of 16-bit value)
     JSR Intensity_a
-    ; Move to start ONCE (y in A, x in B) - use signed byte values
-    LDA RESULT+2+1  ; Y start (RESULT+2, byte access)
-    LDB RESULT+0+1  ; X start (RESULT+0, byte access)
+    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)
+    LDA RESULT+2+1  ; Y start (low byte of 16-bit value)
+    LDB RESULT+0+1  ; X start (low byte of 16-bit value)
     JSR Moveto_d
     ; Compute deltas using 16-bit arithmetic
     ; dx = x1 - x0 (treating as signed 16-bit)
@@ -165,8 +171,11 @@ DRAW_LINE_WRAPPER:
     BRA DLW_SEG1_DY_READY
 DLW_SEG1_DY_LO:
     CMPD #-128
-    BGE DLW_SEG1_DY_READY
+    BGE DLW_SEG1_DY_NO_CLAMP  ; -128 <= dy <= 127: use original (sign-extended)
     LDA #$80        ; dy < -128: use -128
+    BRA DLW_SEG1_DY_READY
+DLW_SEG1_DY_NO_CLAMP:
+    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)
 DLW_SEG1_DY_READY:
     STA VLINE_DY    ; Save clamped dy for segment 1
     ; Clamp dx to ±127
@@ -177,8 +186,11 @@ DLW_SEG1_DY_READY:
     BRA DLW_SEG1_DX_READY
 DLW_SEG1_DX_LO:
     CMPD #-128
-    BGE DLW_SEG1_DX_READY
+    BGE DLW_SEG1_DX_NO_CLAMP  ; -128 <= dx <= 127: use original (sign-extended)
     LDB #$80        ; dx < -128: use -128
+    BRA DLW_SEG1_DX_READY
+DLW_SEG1_DX_NO_CLAMP:
+    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)
 DLW_SEG1_DX_READY:
     STB VLINE_DX    ; Save clamped dx for segment 1
     ; Draw segment 1
@@ -228,10 +240,10 @@ DLW_SEG2_DX_NO_REMAIN:
     LDD #0          ; No remaining dx
 DLW_SEG2_DX_DONE:
     STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit) in VLINE_DX_REMAINING
-    ; Setup for Draw_Line_d: A=dx, B=dy
-    ; Load remaining dx from VLINE_DX_REMAINING (already saved)
-    LDA VLINE_DX_REMAINING+1  ; Low byte of remaining dx
-    LDB VLINE_DY_REMAINING+1  ; Low byte of remaining dy
+    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)
+    ; Load remaining dy from VLINE_DY_REMAINING (already saved)
+    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy
+    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx
     CLR Vec_Misc_Count
     JSR Draw_Line_d ; Beam continues from segment 1 endpoint
 DLW_DONE:
@@ -246,6 +258,9 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
+    RTS
+VECTREX_WAIT_RECAL:
+    JSR Wait_Recal
     RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -878,17 +893,20 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:8
+    ; VPy_LINE:6
+    LDD #-100
+    STD VAR_LINE_Y
+    ; VPy_LINE:10
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 8
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 10
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-; VPy_LINE:6
+; VPy_LINE:8
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -912,26 +930,109 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:10
+    ; VPy_LINE:12
 LOOP_BODY:
     JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)
     JSR Wait_Recal ; Auto-injected: sync with vector beam
-    ; DEBUG: Processing 1 statements in loop() body
+    ; DEBUG: Processing 4 statements in loop() body
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:14
-    LDD #0
-    STD RESULT+0
-    LDD #65436
-    STD RESULT+2
-    LDD #0
-    STD RESULT+4
-    LDD #72
-    STD RESULT+6
+    ; VPy_LINE:13
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 13
+    JSR VECTREX_WAIT_RECAL
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:16
+    LDD #65409
+    STD TMPPTR+0
+    LDD VAR_LINE_Y
+    STD RESULT
+    STD TMPPTR+2
+    LDD #127
+    STD TMPPTR+4
+    LDD VAR_LINE_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    STD TMPPTR+6
     LDD #80
+    STD TMPPTR+8
+    LDD TMPPTR+0
+    STD RESULT+0
+    LDD TMPPTR+2
+    STD RESULT+2
+    LDD TMPPTR+4
+    STD RESULT+4
+    LDD TMPPTR+6
+    STD RESULT+6
+    LDD TMPPTR+8
     STD RESULT+8
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; DEBUG: Statement 2 - Discriminant(0)
+    ; VPy_LINE:17
+    LDD VAR_LINE_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LINE_Y
+    STU TMPPTR
+    STX ,U
+    ; DEBUG: Statement 3 - Discriminant(9)
+    ; VPy_LINE:19
+    LDD VAR_LINE_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #50
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_2
+    LDD #0
+    STD RESULT
+    BRA CE_3
+CT_2:
+    LDD #1
+    STD RESULT
+CE_3:
+    LDD RESULT
+    LBEQ IF_NEXT_1
+    ; VPy_LINE:20
+    LDD #-100
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LINE_Y
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_0
+IF_NEXT_1:
+IF_END_0:
     RTS
 
 ;***************************************************************************
@@ -941,9 +1042,14 @@ VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
+VAR_LINE_Y EQU $CF10+0
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
+VAR_ARG2 EQU $C8B6
+VAR_ARG3 EQU $C8B8
+VAR_ARG4 EQU $C8BA
+VAR_ARG5 EQU $C8BC
 VLINE_DX_16 EQU RESULT+10
 VLINE_DY_16 EQU RESULT+12
 VLINE_DX EQU RESULT+14

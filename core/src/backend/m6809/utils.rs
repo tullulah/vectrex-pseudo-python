@@ -285,21 +285,34 @@ pub struct FuncCtx {
     pub var_info: std::collections::HashMap<String, (String, usize)>,
     // NEW: Track if we're in a struct method and which struct
     pub struct_type: Option<String>, // Some("Point") if in method, None if regular function
+    // NEW: Track function parameters (in order) for correct stack offset calculation
+    pub params: Vec<String>, // Parameter names in order (for correct stack positioning)
 }
 
 impl FuncCtx {
     pub fn offset_of(&self, name: &str) -> Option<i32> {
-        // Calculate offset based on actual sizes of preceding variables
-        let mut offset = 0;
+        // FIRST: Check if this is a parameter (they're always at fixed positions: 0,S, 2,S, 4,S, 6,S)
+        for (i, param) in self.params.iter().enumerate() {
+            if param.eq_ignore_ascii_case(name) {
+                // Parameter found - return its fixed stack position
+                return Some((i as i32) * 2); // Param 0 at 0,S, Param 1 at 2,S, etc.
+            }
+        }
+        
+        // If not a parameter, calculate offset for local variables
+        // Local variables come AFTER parameters in the stack
+        let param_space = (self.params.len() as i32) * 2; // Space taken by parameters
+        let mut local_offset = param_space; // Start after parameters
+        
         for var_name in &self.locals {
-            if var_name == name {
-                return Some(offset);
+            if var_name.eq_ignore_ascii_case(name) {
+                return Some(local_offset);
             }
             // Get size of this variable
             let size = self.var_info.get(var_name)
                 .map(|(_, s)| *s as i32)
                 .unwrap_or(2); // Default to 2 bytes for simple variables
-            offset += size;
+            local_offset += size;
         }
         None
     }

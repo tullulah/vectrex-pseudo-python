@@ -213,8 +213,6 @@ def loop():
             # Update hook position if active
             if hook_active == 1:
                 hook_y = hook_y + 3  # Move hook upward
-                
-                DEBUG_PRINT(hook_y)
 
                 # Check if hook reached top
                 if hook_y >= hook_max_y:
@@ -404,6 +402,11 @@ def draw_game_level():
         SET_INTENSITY(100)
 
         DRAW_VECTOR_EX("hook", hook_x, hook_y, 0, 100)
+
+        DEBUG_PRINT(hook_gun_x)
+
+        #DEBUG_PRINT(hook_x)
+
     
     # DEBUG: Show enemy count
     active_count = 0

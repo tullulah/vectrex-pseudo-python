@@ -42,18 +42,10 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
     
     if frame_size > 0 { out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size)); }
     // Copy parameters from VAR_ARG to stack locals (parameters are first N locals)
-    for (i, p) in f.params.iter().enumerate().take(4) {
-        if let Some(idx) = locals.iter().position(|l| l.eq_ignore_ascii_case(p)) {
-            // Calculate offset for this parameter
-            let mut offset = 0;
-            for j in 0..idx {
-                let size = var_info.get(&locals[j])
-                    .map(|(_, s)| *s as i32)
-                    .unwrap_or(2);
-                offset += size;
-            }
-            out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, p));
-        }
+    // Parameters go at: 0,S (param 0), 2,S (param 1), 4,S (param 2), 6,S (param 3)
+    for (i, _p) in f.params.iter().enumerate().take(4) {
+        let offset = i as i32 * 2; // Each parameter is 2 bytes, sequential
+        out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, i));
     }
     let fctx = FuncCtx { 
         locals: locals.clone(), 
@@ -66,7 +58,9 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
             f.name.split('_').next().map(|s| s.to_string())
         } else {
             None
-        }
+        },
+        // Add function parameters for correct stack offset calculation
+        params: f.params.clone(),
     };
     for stmt in &f.body { emit_stmt(stmt, out, &LoopCtx::default(), &fctx, string_map, opts, tracker, 0); }
     if !matches!(f.body.last(), Some(Stmt::Return(_, _))) {
@@ -272,11 +266,11 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         
         // Set intensity and move to start
         out.push_str("    ; ALWAYS set intensity (no optimization)\n");
-        out.push_str("    LDA RESULT+8+1  ; intensity (RESULT+8, byte access)\n");
+        out.push_str("    LDA RESULT+8+1  ; intensity (low byte of 16-bit value)\n");
         out.push_str("    JSR Intensity_a\n");
-        out.push_str("    ; Move to start ONCE (y in A, x in B) - use signed byte values\n");
-        out.push_str("    LDA RESULT+2+1  ; Y start (RESULT+2, byte access)\n");
-        out.push_str("    LDB RESULT+0+1  ; X start (RESULT+0, byte access)\n");
+        out.push_str("    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)\n");
+        out.push_str("    LDA RESULT+2+1  ; Y start (low byte of 16-bit value)\n");
+        out.push_str("    LDB RESULT+0+1  ; X start (low byte of 16-bit value)\n");
         out.push_str("    JSR Moveto_d\n");
         
         // Compute deltas
