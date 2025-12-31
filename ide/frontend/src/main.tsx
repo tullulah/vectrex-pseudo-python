@@ -354,13 +354,20 @@ function App() {
 
   // CRITICAL: Ref to prevent parallel compilations
   const isCompilingRef = useRef(false);
+  const buildDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Función para manejar build y run
   const handleBuild = useCallback(async (autoRun: boolean = false) => {
     // CRITICAL: Prevent parallel compilations - return early if already compiling
     if (isCompilingRef.current) {
-      logger.warn('Build', 'Build already in progress, skipping duplicate request');
+      logger.debug('Build', 'Build already in progress, skipping duplicate request');
       return;
+    }
+    
+    // Clear any pending debounced build to avoid stale calls
+    if (buildDebounceTimerRef.current) {
+      clearTimeout(buildDebounceTimerRef.current);
+      buildDebounceTimerRef.current = null;
     }
     
     isCompilingRef.current = true;
@@ -677,10 +684,26 @@ def loop():
         if (st.active) st.closeDocument(st.active);
         break; }
       case 'build.build':
-        await handleBuild(false); // Solo compilar
+        // Debounce build requests - ignore if one already triggered in last 100ms
+        if (buildDebounceTimerRef.current) {
+          logger.debug('Build', 'Build request debounced (already queued)');
+          clearTimeout(buildDebounceTimerRef.current);
+        }
+        buildDebounceTimerRef.current = setTimeout(() => {
+          handleBuild(false); // Solo compilar
+          buildDebounceTimerRef.current = null;
+        }, 0);
         break;
       case 'build.run':
-        await handleBuild(true); // Compilar y ejecutar
+        // Debounce build requests - ignore if one already triggered in last 100ms
+        if (buildDebounceTimerRef.current) {
+          logger.debug('Build', 'Build&Run request debounced (already queued)');
+          clearTimeout(buildDebounceTimerRef.current);
+        }
+        buildDebounceTimerRef.current = setTimeout(() => {
+          handleBuild(true); // Compilar y ejecutar
+          buildDebounceTimerRef.current = null;
+        }, 0);
         break;
       case 'build.clean':
   logger.debug('App', 'clean build artifacts (pending implementation)');
