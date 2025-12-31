@@ -537,23 +537,18 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
         
-        // Check if we have music/sfx assets that need PSG initialization
-        let has_audio_assets = opts.assets.iter().any(|a| {
-            matches!(a.asset_type, crate::codegen::AssetType::Music | crate::codegen::AssetType::Sfx)
-        });
-        
-        // Check specifically for SFX assets
-        let has_sfx_assets = opts.assets.iter().any(|a| {
-            matches!(a.asset_type, crate::codegen::AssetType::Sfx)
-        });
+        // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
+        let has_music_calls = rt_usage.wrappers_used.contains("PLAY_MUSIC_RUNTIME");
+        let has_sfx_calls = rt_usage.wrappers_used.contains("PLAY_SFX_RUNTIME");
+        let has_audio_calls = has_music_calls || has_sfx_calls;
         
         // BIOS music system: Initialize music buffer to silence
-        if has_audio_assets {
+        if has_music_calls {
             out.push_str("    JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence\n");
         }
         
         // CRITICAL: Initialize SFX system variables to prevent garbage data interference
-        if has_sfx_assets {
+        if has_sfx_calls {
             out.push_str("    ; Initialize SFX variables to prevent random noise on startup\n");
             out.push_str("    CLR sfx_status         ; Mark SFX as inactive (0=off)\n");
             out.push_str("    LDD #$0000\n");
@@ -758,18 +753,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Auto-inject WAIT_RECAL at START of loop for proper frame sync
                     out.push_str("    JSR Wait_Recal ; Auto-injected: sync with vector beam\n");
                     
-                    // Auto-inject AUDIO_UPDATE at START of loop (after WAIT_RECAL, before drawing)
-                    // This ensures consistent 50Hz timing regardless of drawing complexity
-                    // Music timing no longer fluctuates based on number of vectors drawn
-                    if opts.has_audio(module) {
-                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (consistent timing)\n");
-                    }
-                    
                     out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
                     let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
+                    }
+                    
+                    // Auto-inject AUDIO_UPDATE at END of loop (after all game logic)
+                    // This prevents Sound_Byte from changing DP to $D0 during user's button reads
+                    if opts.has_audio(module) {
+                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)\n");
                     }
                     
                     // Free locals before RTS (same as emit_function)

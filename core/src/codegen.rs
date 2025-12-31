@@ -197,14 +197,9 @@ pub struct CodegenOptions {
 }
 
 impl CodegenOptions {
-    /// Check if any music or SFX assets are present or if code uses PLAY_MUSIC/PLAY_SFX
+    /// Check if code actually uses PLAY_MUSIC or PLAY_SFX (unused assets should not trigger audio system)
     pub fn has_audio(&self, module: &Module) -> bool {
-        // Check for audio assets
-        if self.assets.iter().any(|a| a.asset_type == AssetType::Music || a.asset_type == AssetType::Sfx) {
-            return true;
-        }
-        
-        // Check for PLAY_MUSIC or PLAY_SFX calls in the module
+        // ONLY check for PLAY_MUSIC or PLAY_SFX calls in the module
         fn check_expr_for_audio(expr: &Expr) -> bool {
             match expr {
                 Expr::Call(call_info) => {
