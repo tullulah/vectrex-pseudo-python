@@ -236,6 +236,8 @@ def draw_map_screen():
         if location_glow_intensity <= 30:
             location_glow_direction = 0
     
+    PRINT_TEXT(-120, -80, location_names[current_location])
+
     # Draw only the selected location with glow effect
     loc_x = location_x_coords[current_location]
     loc_y = location_y_coords[current_location]
