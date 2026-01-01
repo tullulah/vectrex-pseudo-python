@@ -580,6 +580,24 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         
         eprintln!("✓ Phase 4 SUCCESS: Generated {} bytes of assembly", asm.len());
         
+        // Print diagnostics (warnings/info) if any
+        if !diagnostics.is_empty() {
+            for diag in &diagnostics {
+                let severity = match diag.severity {
+                    codegen::DiagnosticSeverity::Error => "error",
+                    codegen::DiagnosticSeverity::Warning => "info", // Show as "info" for better UX
+                };
+                
+                if let (Some(line), Some(col)) = (diag.line, diag.col) {
+                    eprintln!("   {} {}:{} - {}", severity, line, col, diag.message);
+                } else if let Some(line) = diag.line {
+                    eprintln!("   {} {}:1 - {}", severity, line, diag.message);
+                } else {
+                    eprintln!("   {} - {}", severity, diag.message);
+                }
+            }
+        }
+        
         // Phase 5: Write ASM file
         eprintln!("Phase 5: Writing assembly file...");
         let out_path = out.cloned().unwrap_or_else(|| path.with_extension("asm"));

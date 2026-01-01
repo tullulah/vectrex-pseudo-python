@@ -77,20 +77,18 @@ PSG_DELAY_FRAMES_DP EQU $2B  ; DP-relative
 ; _CONST_DECL_3:  ; const num_locations
 ; VPy_LINE:49
 ; _CONST_DECL_4:  ; const hook_max_y
-; VPy_LINE:50
-; _CONST_DECL_5:  ; const hook_gun_x
 ; VPy_LINE:55
-; _CONST_DECL_6:  ; const player_y
+; _CONST_DECL_5:  ; const player_y
 ; VPy_LINE:62
-; _CONST_DECL_7:  ; const player_anim_speed
+; _CONST_DECL_6:  ; const player_anim_speed
 ; VPy_LINE:66
-; _CONST_DECL_8:  ; const MAX_ENEMIES
+; _CONST_DECL_7:  ; const MAX_ENEMIES
 ; VPy_LINE:75
-; _CONST_DECL_9:  ; const GRAVITY
+; _CONST_DECL_8:  ; const GRAVITY
 ; VPy_LINE:76
-; _CONST_DECL_10:  ; const BOUNCE_DAMPING
+; _CONST_DECL_9:  ; const BOUNCE_DAMPING
 ; VPy_LINE:77
-; _CONST_DECL_11:  ; const GROUND_Y
+; _CONST_DECL_10:  ; const GROUND_Y
 
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
@@ -1259,6 +1257,9 @@ COPY_LOOP_0:
     ; VPy_LINE:48
     LDD #-100
     STD VAR_HOOK_Y
+    ; VPy_LINE:50
+    LDD #0
+    STD VAR_HOOK_GUN_X
     ; VPy_LINE:51
     LDD #0
     STD VAR_HOOK_GUN_Y
@@ -1464,7 +1465,6 @@ STATE_MAP EQU 1
 STATE_GAME EQU 2
 NUM_LOCATIONS EQU 17
 HOOK_MAX_Y EQU 127
-HOOK_GUN_X EQU 0
 PLAYER_Y EQU 65436
 PLAYER_ANIM_SPEED EQU 5
 MAX_ENEMIES EQU 8
@@ -1473,7 +1473,7 @@ BOUNCE_DAMPING EQU 9
 GROUND_Y EQU 65456
     ; VPy_LINE:104
 LOOP_BODY:
-    LEAS -4,S ; allocate locals
+    LEAS -2,S ; allocate locals
     JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)
     JSR Wait_Recal ; Auto-injected: sync with vector beam
     ; DEBUG: Processing 4 statements in loop() body
@@ -2750,7 +2750,9 @@ OR_END_107:
     LDD VAR_PLAYER_X
     STD RESULT
     LDX RESULT
-    STX 2 ,S
+    LDU #VAR_HOOK_GUN_X
+    STU TMPPTR
+    STX ,U
     ; VPy_LINE:202
     LDD VAR_PLAYER_FACING
     STD RESULT
@@ -2788,7 +2790,9 @@ CE_123:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    STX 2 ,S
+    LDU #VAR_HOOK_GUN_X
+    STU TMPPTR
+    STX ,U
     LBRA IF_END_120
 IF_NEXT_121:
     ; VPy_LINE:205
@@ -2807,7 +2811,9 @@ IF_NEXT_121:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    STX 2 ,S
+    LDU #VAR_HOOK_GUN_X
+    STU TMPPTR
+    STX ,U
 IF_END_120:
     ; VPy_LINE:206
     LDD #-100
@@ -2836,7 +2842,7 @@ IF_END_120:
     STU TMPPTR
     STX ,U
     ; VPy_LINE:210
-    LDD 2 ,S
+    LDD VAR_HOOK_GUN_X
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_X
@@ -2936,7 +2942,7 @@ IF_END_88:
 IF_NEXT_85:
 IF_END_84:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)
-    LEAS 4,S ; free locals
+    LEAS 2,S ; free locals
     RTS
 
     ; VPy_LINE:223
@@ -5366,7 +5372,7 @@ CE_304:
     LDD RESULT
     LBEQ IF_NEXT_302
     ; VPy_LINE:396
-    LDD #0
+    LDD VAR_HOOK_GUN_X
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
@@ -7819,22 +7825,23 @@ VAR_JOYSTICK_POLL_COUNTER EQU $CF10+42
 VAR_HOOK_ACTIVE EQU $CF10+44
 VAR_HOOK_X EQU $CF10+46
 VAR_HOOK_Y EQU $CF10+48
-VAR_HOOK_GUN_Y EQU $CF10+50
-VAR_HOOK_INIT_Y EQU $CF10+52
-VAR_PLAYER_X EQU $CF10+54
-VAR_PLAYER_SPEED EQU $CF10+56
-VAR_MOVE_SPEED EQU $CF10+58
-VAR_ABS_JOY EQU $CF10+60
-VAR_SPEED_MULTIPLIER EQU $CF10+62
-VAR_PLAYER_ANIM_FRAME EQU $CF10+64
-VAR_PLAYER_ANIM_COUNTER EQU $CF10+66
-VAR_PLAYER_FACING EQU $CF10+68
-VAR_ENEMY_ACTIVE_DATA EQU $CF10+70  ; Array data (8 elements)
-VAR_ENEMY_X_DATA EQU $CF10+86  ; Array data (8 elements)
-VAR_ENEMY_Y_DATA EQU $CF10+102  ; Array data (8 elements)
-VAR_ENEMY_VX_DATA EQU $CF10+118  ; Array data (8 elements)
-VAR_ENEMY_VY_DATA EQU $CF10+134  ; Array data (8 elements)
-VAR_ENEMY_SIZE_DATA EQU $CF10+150  ; Array data (8 elements)
+VAR_HOOK_GUN_X EQU $CF10+50
+VAR_HOOK_GUN_Y EQU $CF10+52
+VAR_HOOK_INIT_Y EQU $CF10+54
+VAR_PLAYER_X EQU $CF10+56
+VAR_PLAYER_SPEED EQU $CF10+58
+VAR_MOVE_SPEED EQU $CF10+60
+VAR_ABS_JOY EQU $CF10+62
+VAR_SPEED_MULTIPLIER EQU $CF10+64
+VAR_PLAYER_ANIM_FRAME EQU $CF10+66
+VAR_PLAYER_ANIM_COUNTER EQU $CF10+68
+VAR_PLAYER_FACING EQU $CF10+70
+VAR_ENEMY_ACTIVE_DATA EQU $CF10+72  ; Array data (8 elements)
+VAR_ENEMY_X_DATA EQU $CF10+88  ; Array data (8 elements)
+VAR_ENEMY_Y_DATA EQU $CF10+104  ; Array data (8 elements)
+VAR_ENEMY_VX_DATA EQU $CF10+120  ; Array data (8 elements)
+VAR_ENEMY_VY_DATA EQU $CF10+136  ; Array data (8 elements)
+VAR_ENEMY_SIZE_DATA EQU $CF10+152  ; Array data (8 elements)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4

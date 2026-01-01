@@ -923,23 +923,26 @@ fn analyze_statements(stmts: &[Stmt], analysis: &mut UsageAnalysis) {
         match stmt {
             Stmt::Assign { target, value, source_line } => {
                 // Check if this is a write to a variable
-                if let AssignTarget::Ident { name, .. } = target {
-                    if let Some(usage) = analysis.variables.get_mut(name) {
-                        usage.write_count += 1;
-                        usage.last_write_range = Some(line_to_range(*source_line));
-                    }
-                }
-                
-                // Target might be indexed (arr[i] = x) - reads variables in index
                 match target {
+                    AssignTarget::Ident { name, .. } => {
+                        if let Some(usage) = analysis.variables.get_mut(name) {
+                            usage.write_count += 1;
+                            usage.last_write_range = Some(line_to_range(*source_line));
+                        }
+                    },
                     AssignTarget::Index { target: t, index, .. } => {
+                        // array[i] = value - this is a WRITE to the array variable
+                        if let Expr::Ident(IdentInfo { name, .. }) = &**t {
+                            if let Some(usage) = analysis.variables.get_mut(name) {
+                                usage.write_count += 1; // Mark array as modified
+                            }
+                        }
                         analyze_expr(t, analysis);
                         analyze_expr(index, analysis);
                     },
                     AssignTarget::FieldAccess { target: t, .. } => {
                         analyze_expr(t, analysis);
-                    },
-                    _ => {}
+                    }
                 }
                 
                 // Analyze reads in RHS expression
@@ -960,11 +963,25 @@ fn analyze_statements(stmts: &[Stmt], analysis: &mut UsageAnalysis) {
             },
             Stmt::CompoundAssign { target, value, .. } => {
                 // x += y is both a read and write
-                if let AssignTarget::Ident { name, .. } = target {
-                    if let Some(usage) = analysis.variables.get_mut(name) {
-                        usage.read_count += 1; // Read current value
-                        usage.write_count += 1; // Write new value
-                    }
+                match target {
+                    AssignTarget::Ident { name, .. } => {
+                        if let Some(usage) = analysis.variables.get_mut(name) {
+                            usage.read_count += 1; // Read current value
+                            usage.write_count += 1; // Write new value
+                        }
+                    },
+                    AssignTarget::Index { target: t, index, .. } => {
+                        // array[i] += value - READ + WRITE
+                        if let Expr::Ident(IdentInfo { name, .. }) = &**t {
+                            if let Some(usage) = analysis.variables.get_mut(name) {
+                                usage.read_count += 1;
+                                usage.write_count += 1;
+                            }
+                        }
+                        analyze_expr(t, analysis);
+                        analyze_expr(index, analysis);
+                    },
+                    AssignTarget::FieldAccess { .. } => {}
                 }
                 
                 analyze_expr(value, analysis);

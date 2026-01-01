@@ -34,7 +34,6 @@ joy_x = 0
 joy_y = 0
 prev_joy_x = 0
 prev_joy_y = 0
-intensityval = 0
 
 # Game state variables
 countdown_timer = 0      # Countdown from 180 frames (~3 seconds at 60fps)
@@ -47,7 +46,7 @@ hook_active = 0          # 0=inactive, 1=active
 hook_x = 0               # X position of hook (captured at fire time)
 hook_y = -100            # Y position of hook (starts at ground level)
 const hook_max_y = 127          # Maximum Y position (well up the screen, signed value)
-const hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
+hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
 hook_gun_y = 0           # Gun Y position at fire time (stays fixed while hook travels)
 hook_init_y = 0          # Initial Y position of gun (stays fixed for rope start point)
 # Player variables
@@ -506,45 +505,45 @@ def draw_hook_rope(start_x, start_y, end_x, end_y):
 
 def read_joystick1_state():
     
-    joystick1_state [0] = J1_X()
-    joystick1_state [1] = J1_Y()
+    joystick1_state[0] = J1_X()
+    joystick1_state[1] = J1_Y()
     
     # Button 1: Only read when we detect hardware released (J1_BUTTON_1 == 0)
     # If hardware shows button pressed (1) while we have it locked (1), keep it locked
     # If hardware shows released (0), allow new press next time
-    if joystick1_state [2] == 0:
+    if joystick1_state[2] == 0:
         # Our state says not pressed, check hardware
         if J1_BUTTON_1() == 1:
             # Hardware pressed, lock it in
-            joystick1_state [2] = 1
+            joystick1_state[2] = 1
     else:
         # Our state says pressed, wait for hardware release
         if J1_BUTTON_1() == 0:
             # Hardware released, unlock
-            joystick1_state [2] = 0
+            joystick1_state[2] = 0
     
     # Button 2: Same logic
-    if joystick1_state [3] == 0:
+    if joystick1_state[3] == 0:
         if J1_BUTTON_2() == 1:
-            joystick1_state [3] = 1
+            joystick1_state[3] = 1
     else:
         if J1_BUTTON_2() == 0:
-            joystick1_state [3] = 0
+            joystick1_state[3] = 0
     
     # Button 3: Same logic
-    if joystick1_state [4] == 0:
+    if joystick1_state[4] == 0:
         if J1_BUTTON_3() == 1:
-            joystick1_state [4] = 1
+            joystick1_state[4] = 1
     else:
         if J1_BUTTON_3() == 0:
-            joystick1_state [4] = 0
+            joystick1_state[4] = 0
     
     # Button 4: Same logic
-    if joystick1_state [5] == 0:
+    if joystick1_state[5] == 0:
         if J1_BUTTON_4() == 1:
-            joystick1_state [5] = 1
+            joystick1_state[5] = 1
     else:
         if J1_BUTTON_4() == 0:
-            joystick1_state [5] = 0
+            joystick1_state[5] = 0
 
 

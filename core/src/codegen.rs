@@ -313,21 +313,50 @@ fn analyze_statements(stmts: &[Stmt], analysis: &mut UsageAnalysis) {
         match stmt {
             Stmt::Assign { target, value, .. } => {
                 // LHS: write to variable
-                if let AssignTarget::Ident { name, .. } = target {
-                    if let Some(usage) = analysis.variables.get_mut(name) {
-                        usage.write_count += 1;
+                match target {
+                    AssignTarget::Ident { name, .. } => {
+                        if let Some(usage) = analysis.variables.get_mut(name) {
+                            usage.write_count += 1;
+                        }
+                    },
+                    AssignTarget::Index { target, index, .. } => {
+                        // array[i] = value - this is a WRITE to the array variable
+                        if let Expr::Ident(IdentInfo { name, .. }) = &**target {
+                            if let Some(usage) = analysis.variables.get_mut(name) {
+                                usage.write_count += 1; // Mark array as modified
+                            }
+                        }
+                        analyze_expr(&**target, analysis); // Also analyze target expression
+                        analyze_expr(index, analysis); // Analyze index expression
+                    },
+                    AssignTarget::FieldAccess { .. } => {
+                        // Struct field assignment - not relevant for this analysis
                     }
                 }
                 // RHS: reads in expression
                 analyze_expr(value, analysis);
             },
             Stmt::CompoundAssign { target, value, .. } => {
-                // x += y is BOTH read (current value) and write (new value)
-                if let AssignTarget::Ident { name, .. } = target {
-                    if let Some(usage) = analysis.variables.get_mut(name) {
-                        usage.read_count += 1; // Read current value
-                        usage.write_count += 1; // Write new value
-                    }
+                // x += y or array[i] += y is BOTH read and write
+                match target {
+                    AssignTarget::Ident { name, .. } => {
+                        if let Some(usage) = analysis.variables.get_mut(name) {
+                            usage.read_count += 1; // Read current value
+                            usage.write_count += 1; // Write new value
+                        }
+                    },
+                    AssignTarget::Index { target, index, .. } => {
+                        // array[i] += value - this is READ + WRITE to array
+                        if let Expr::Ident(IdentInfo { name, .. }) = &**target {
+                            if let Some(usage) = analysis.variables.get_mut(name) {
+                                usage.read_count += 1; // Read current element
+                                usage.write_count += 1; // Write new element
+                            }
+                        }
+                        analyze_expr(&**target, analysis);
+                        analyze_expr(index, analysis);
+                    },
+                    AssignTarget::FieldAccess { .. } => {}
                 }
                 analyze_expr(value, analysis);
             },
@@ -526,6 +555,11 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
     // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     let type_context = validate_semantics_with_structs(module, &struct_registry, &mut diagnostics);
+    
+    // NEW: Variable usage analysis for IDE (unused variables, const suggestions)
+    let usage_analysis = analyze_variable_usage(module);
+    generate_usage_diagnostics(&usage_analysis, &mut diagnostics);
+    
     let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
     if has_errors {
         return (String::new(), None, diagnostics);
