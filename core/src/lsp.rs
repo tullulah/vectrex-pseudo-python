@@ -32,6 +32,28 @@ pub enum AritySpec {
     Variable(usize),   // At least N arguments required (for POLYGON, etc.)
 }
 
+// ============================================================================
+// Variable Usage Analysis (for LSP diagnostics)
+// ============================================================================
+
+/// Tracks how a variable is used throughout the code
+#[derive(Debug, Default, Clone)]
+struct VariableUsage {
+    declared: bool,
+    initialized: bool,
+    read_count: usize,
+    write_count: usize,
+    declaration_range: Option<Range>,
+    last_write_range: Option<Range>,
+    is_const: bool,
+}
+
+/// Complete analysis of all variables in a module
+#[derive(Debug, Default)]
+struct UsageAnalysis {
+    variables: HashMap<String, VariableUsage>,
+}
+
 fn is_python_keyword_or_builtin(word: &str) -> bool {
     let lower = word.to_ascii_lowercase();
     matches!(lower.as_str(), 
@@ -613,12 +635,23 @@ fn compute_diagnostics(uri: &Url, text: &str, locale: &str) -> Vec<Diagnostic> {
         Ok(tokens) => {
             // Collect user-defined function names
             let mut defined_functions = std::collections::HashSet::new();
+            let mut parsed_module: Option<Module> = None;
+            
             if let Ok(module) = parse_with_filename(&tokens, uri.path()) {
                 for item in &module.items {
                     if let crate::ast::Item::Function(func) = item {
                         defined_functions.insert(func.name.clone());
                     }
                 }
+                
+                // PHASE 1: Perform variable usage analysis
+                eprintln!("[LSP] Analyzing variable usage...");
+                let analysis = analyze_variable_usage(&module);
+                
+                // Generate diagnostics for unused variables and const suggestions
+                generate_usage_diagnostics(&analysis, locale, &mut diags);
+                
+                parsed_module = Some(module);
             }
             
             // If lexing succeeded, try parsing
@@ -827,6 +860,282 @@ impl Backend {
         
         None
     }
+}
+
+// ============================================================================
+// Variable Usage Analysis Implementation
+// ============================================================================
+
+use crate::ast::{Module, Item, Function, Stmt, Expr, AssignTarget, IdentInfo, CallInfo};
+
+/// Analyze variable usage patterns in a module
+fn analyze_variable_usage(module: &Module) -> UsageAnalysis {
+    let mut analysis = UsageAnalysis::default();
+    
+    // Phase 1: Collect declarations from top-level items
+    for item in &module.items {
+        match item {
+            Item::GlobalLet { name, value, source_line } => {
+                let mut usage = VariableUsage {
+                    declared: true,
+                    initialized: value != &Expr::Number(0), // Simplified check
+                    write_count: 1,
+                    declaration_range: Some(line_to_range(*source_line)),
+                    ..Default::default()
+                };
+                analysis.variables.insert(name.clone(), usage);
+                
+                // Analyze reads in initialization expression
+                analyze_expr(value, &mut analysis);
+            },
+            Item::Const { name, value, source_line } => {
+                let usage = VariableUsage {
+                    declared: true,
+                    initialized: true,
+                    write_count: 1,
+                    is_const: true,
+                    declaration_range: Some(line_to_range(*source_line)),
+                    ..Default::default()
+                };
+                analysis.variables.insert(name.clone(), usage);
+                
+                // Const values can reference other variables
+                analyze_expr(value, &mut analysis);
+            },
+            Item::Function(func) => {
+                // Analyze function bodies for reads/writes
+                analyze_statements(&func.body, &mut analysis);
+            },
+            Item::ExprStatement(expr) => {
+                // Top-level expressions can read variables
+                analyze_expr(expr, &mut analysis);
+            },
+            _ => {}
+        }
+    }
+    
+    analysis
+}
+
+/// Analyze statements recursively
+fn analyze_statements(stmts: &[Stmt], analysis: &mut UsageAnalysis) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign { target, value, source_line } => {
+                // Check if this is a write to a variable
+                if let AssignTarget::Ident { name, .. } = target {
+                    if let Some(usage) = analysis.variables.get_mut(name) {
+                        usage.write_count += 1;
+                        usage.last_write_range = Some(line_to_range(*source_line));
+                    }
+                }
+                
+                // Target might be indexed (arr[i] = x) - reads variables in index
+                match target {
+                    AssignTarget::Index { target: t, index, .. } => {
+                        analyze_expr(t, analysis);
+                        analyze_expr(index, analysis);
+                    },
+                    AssignTarget::FieldAccess { target: t, .. } => {
+                        analyze_expr(t, analysis);
+                    },
+                    _ => {}
+                }
+                
+                // Analyze reads in RHS expression
+                analyze_expr(value, analysis);
+            },
+            Stmt::Let { name, value, source_line } => {
+                // Local variable declaration (inside function)
+                let usage = VariableUsage {
+                    declared: true,
+                    initialized: true,
+                    write_count: 1,
+                    declaration_range: Some(line_to_range(*source_line)),
+                    ..Default::default()
+                };
+                analysis.variables.insert(name.clone(), usage);
+                
+                analyze_expr(value, analysis);
+            },
+            Stmt::CompoundAssign { target, value, .. } => {
+                // x += y is both a read and write
+                if let AssignTarget::Ident { name, .. } = target {
+                    if let Some(usage) = analysis.variables.get_mut(name) {
+                        usage.read_count += 1; // Read current value
+                        usage.write_count += 1; // Write new value
+                    }
+                }
+                
+                analyze_expr(value, analysis);
+            },
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                analyze_expr(cond, analysis);
+                analyze_statements(body, analysis);
+                for (elif_cond, elif_body) in elifs {
+                    analyze_expr(elif_cond, analysis);
+                    analyze_statements(elif_body, analysis);
+                }
+                if let Some(else_stmts) = else_body {
+                    analyze_statements(else_stmts, analysis);
+                }
+            },
+            Stmt::While { cond, body, .. } => {
+                analyze_expr(cond, analysis);
+                analyze_statements(body, analysis);
+            },
+            Stmt::For { var, start, end, step, body, .. } => {
+                // Loop variable (treat as local declaration + writes)
+                analyze_expr(start, analysis);
+                analyze_expr(end, analysis);
+                if let Some(step_expr) = step {
+                    analyze_expr(step_expr, analysis);
+                }
+                analyze_statements(body, analysis);
+            },
+            Stmt::ForIn { iterable, body, .. } => {
+                analyze_expr(iterable, analysis);
+                analyze_statements(body, analysis);
+            },
+            Stmt::Switch { expr, cases, default, .. } => {
+                analyze_expr(expr, analysis);
+                for (case_expr, case_body) in cases {
+                    analyze_expr(case_expr, analysis);
+                    analyze_statements(case_body, analysis);
+                }
+                if let Some(default_body) = default {
+                    analyze_statements(default_body, analysis);
+                }
+            },
+            Stmt::Return(Some(expr), _) => {
+                analyze_expr(expr, analysis);
+            },
+            Stmt::Expr(expr, _) => {
+                analyze_expr(expr, analysis);
+            },
+            _ => {} // Break, Continue, Pass, Return(None) don't reference variables
+        }
+    }
+}
+
+/// Analyze expressions recursively for variable reads
+fn analyze_expr(expr: &Expr, analysis: &mut UsageAnalysis) {
+    match expr {
+        Expr::Ident(IdentInfo { name, .. }) => {
+            // This is a read of a variable
+            if let Some(usage) = analysis.variables.get_mut(name) {
+                usage.read_count += 1;
+            }
+        },
+        Expr::Call(CallInfo { args, .. }) => {
+            // Analyze arguments for variable reads
+            for arg in args {
+                analyze_expr(arg, analysis);
+            }
+        },
+        Expr::MethodCall(method_call) => {
+            // Analyze target and arguments
+            analyze_expr(&method_call.target, analysis);
+            for arg in &method_call.args {
+                analyze_expr(arg, analysis);
+            }
+        },
+        Expr::Binary { left, right, .. } |
+        Expr::Compare { left, right, .. } |
+        Expr::Logic { left, right, .. } => {
+            analyze_expr(left, analysis);
+            analyze_expr(right, analysis);
+        },
+        Expr::Not(inner) | Expr::BitNot(inner) => {
+            analyze_expr(inner, analysis);
+        },
+        Expr::List(elements) => {
+            for elem in elements {
+                analyze_expr(elem, analysis);
+            }
+        },
+        Expr::Index { target, index } => {
+            analyze_expr(target, analysis);
+            analyze_expr(index, analysis);
+        },
+        Expr::FieldAccess { target, .. } => {
+            analyze_expr(target, analysis);
+        },
+        Expr::Number(_) | Expr::StringLit(_) | Expr::StructInit { .. } => {
+            // Literals don't reference variables
+        },
+    }
+}
+
+/// Helper to convert line number to LSP Range
+fn line_to_range(line: usize) -> Range {
+    let pos = Position {
+        line: line.saturating_sub(1) as u32, // LSP lines are 0-indexed
+        character: 0,
+    };
+    Range {
+        start: pos,
+        end: Position {
+            line: pos.line,
+            character: 100, // Approximate end of line
+        },
+    }
+}
+
+/// Generate diagnostics for variable usage patterns
+fn generate_usage_diagnostics(analysis: &UsageAnalysis, locale: &str, diags: &mut Vec<Diagnostic>) {
+    for (name, usage) in &analysis.variables {
+        // Skip builtin functions and constants (they're not user variables)
+        if is_builtin_function(name) || usage.is_const {
+            continue;
+        }
+        
+        // Case 1: Variable declared but never read
+        if usage.declared && usage.read_count == 0 && !usage.is_const {
+            if let Some(range) = &usage.declaration_range {
+                let msg = if locale.starts_with("es") {
+                    format!("Variable '{}' se declara pero nunca se usa", name)
+                } else {
+                    format!("Variable '{}' is declared but never used", name)
+                };
+                
+                diags.push(Diagnostic {
+                    range: *range,
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    code: Some(NumberOrString::String("unused-variable".to_string())),
+                    source: Some("vpy".to_string()),
+                    message: msg,
+                    tags: Some(vec![DiagnosticTag::UNNECESSARY]),
+                    ..Default::default()
+                });
+            }
+        }
+        
+        // Case 2: Variable could be const (initialized once, never modified)
+        if usage.initialized && 
+           usage.write_count == 1 && 
+           usage.read_count > 0 && 
+           !usage.is_const {
+            if let Some(range) = &usage.declaration_range {
+                let msg = if locale.starts_with("es") {
+                    format!("Variable '{}' nunca cambia - considera 'const' para ahorrar RAM (2 bytes)", name)
+                } else {
+                    format!("Variable '{}' never changes - consider 'const' to save RAM (2 bytes)", name)
+                };
+                
+                diags.push(Diagnostic {
+                    range: *range,
+                    severity: Some(DiagnosticSeverity::HINT),
+                    code: Some(NumberOrString::String("suggest-const".to_string())),
+                    source: Some("vpy".to_string()),
+                    message: msg,
+                    ..Default::default()
+                });
+            }
+        }
+    }
+    
+    eprintln!("[LSP] Generated {} usage diagnostics", diags.len());
 }
 
 #[tower_lsp::async_trait]
