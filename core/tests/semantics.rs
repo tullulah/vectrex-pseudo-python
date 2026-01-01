@@ -4,7 +4,7 @@ use vectrex_lang::codegen::{DiagnosticCode, emit_asm_with_diagnostics};
 #[test]
 fn semantics_valid_decl_and_use() {
     let module = Module { items: vec![
-        Item::Const { name: "C1".to_string(), value: Expr::Number(5) },
+        Item::Const { name: "C1".to_string(), value: Expr::Number(5), source_line: 0 },
         Item::Function(Function { name: "main".to_string(), line: 0, params: vec!["p".to_string()], body: vec![
             Stmt::Let { name: "x".to_string(), value: Expr::Ident(IdentInfo { name: "p".into(), source_line: 0, col: 0 }), source_line: 0 },
             Stmt::Assign { target: AssignTarget::Ident { name: "x".to_string(), source_line: 0, col: 0 }, value: Expr::Binary { op: BinOp::Add, left: Box::new(Expr::Ident(IdentInfo { name:"x".into(), source_line: 0, col: 0 })), right: Box::new(Expr::Ident(IdentInfo { name:"C1".into(), source_line: 0, col: 0 })) }, source_line: 0 },
@@ -25,6 +25,12 @@ fn semantics_valid_decl_and_use() {
         fast_wait: false,
         source_path: None,
         assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
     });
     // El módulo requiere loop() pero no lo tiene, así que debe contener ERROR
     assert!(asm.contains("ERROR") || asm.contains("MAIN") || asm.to_uppercase().contains("MAIN"));
@@ -38,7 +44,14 @@ fn semantics_undefined_use_reports_error() {
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+    });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UndeclaredVar)), "expected undeclared variable error, got: {:?}", diags);
 }
 
@@ -52,7 +65,14 @@ fn semantics_valid_builtin_arity() {
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
     let _ = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+    });
 }
 
 #[test]
@@ -64,7 +84,14 @@ fn semantics_bad_builtin_arity_reports_error() {
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+    });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::ArityMismatch)), "expected arity error, got: {:?}", diags);
 }
 
@@ -77,6 +104,13 @@ fn semantics_unused_var_warning() {
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
     let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![] });
+        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+    });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UnusedVar)), "expected unused var warning, got: {:?}", diags);
 }

@@ -2,24 +2,21 @@ use vectrex_lang::{lex, parse_with_filename, target::Target};
 
 #[test]
 fn smoke_minimal_compile() {
-    let src = r#"CONST TITLE = "SMOKE"
-
-VECTORLIST demo:
-    INTENSITY(0x40)
-    MOVE(10, 20)
+    let src = r#"META TITLE = "SMOKE"
 
 def main():
-    let init = 0
+    SET_INTENSITY(127)
 
 def loop():
-    let x = 1
-    let y = x + 2
+    WAIT_RECAL()
+    x = 1
+    y = x + 2
     y = y + 3
 "#;
     let tokens = lex(src).expect("lex ok");
     assert!(tokens.len() > 0, "tokens generated");
     let module = parse_with_filename(&tokens, "smoke.vpy").expect("parse ok");
-    assert!(module.items.len() >= 2, "expect at least vectorlist and function");
+    assert!(module.items.len() >= 2, "expect at least 2 functions");
     // Emit 6809 asm
     let opts = vectrex_lang::codegen::CodegenOptions {
         title: "SMOKE".to_string(),
@@ -31,8 +28,15 @@ def loop():
         debug_init_draw: false,
         blink_intensity: false,
         exclude_ram_org: false,
-        fast_wait: false, source_path: None,
+        fast_wait: false, 
+        source_path: None,
         assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
     // The main loop is generated with label "MAIN:" when auto_loop is enabled
