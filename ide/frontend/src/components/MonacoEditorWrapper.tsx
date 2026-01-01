@@ -263,6 +263,88 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         return { range, text: model.getValueInRange(range) } as any;
       }
     });
+    
+    // Code Action Provider (Quick Fixes for diagnostics)
+    monaco.languages.registerCodeActionProvider('vpy', {
+      provideCodeActions: (model, range, context) => {
+        const actions: monaco.languages.CodeAction[] = [];
+        
+        // Process each diagnostic marker in the context
+        for (const marker of context.markers) {
+          const message = marker.message;
+          
+          // Quick Fix 1: Convert to const (for "never changes" hint)
+          if (message.includes('never changes') || message.includes('nunca cambia')) {
+            const line = model.getLineContent(marker.startLineNumber);
+            
+            // Extract variable name from message (format: "Variable 'name' never changes...")
+            const match = message.match(/Variable ['"](.+?)['"]/);
+            if (match) {
+              const varName = match[1];
+              
+              // Replace "varName =" with "const varName ="
+              const newText = line.replace(
+                new RegExp(`(\\s*)${varName}(\\s*)=`),
+                `$1const ${varName}$2=`
+              );
+              
+              actions.push({
+                title: `Convert '${varName}' to const`,
+                diagnostics: [marker],
+                kind: 'quickfix',
+                edit: {
+                  edits: [{
+                    resource: model.uri,
+                    versionId: model.getVersionId(),
+                    textEdit: {
+                      range: new monaco.Range(
+                        marker.startLineNumber, 1,
+                        marker.startLineNumber, line.length + 1
+                      ),
+                      text: newText
+                    }
+                  }]
+                },
+                isPreferred: true
+              });
+            }
+          }
+          
+          // Quick Fix 2: Remove unused variable (for "never used" warning)
+          if (message.includes('never used') || message.includes('nunca se usa')) {
+            const match = message.match(/Variable ['"](.+?)['"]/);
+            if (match) {
+              const varName = match[1];
+              
+              actions.push({
+                title: `Remove unused variable '${varName}'`,
+                diagnostics: [marker],
+                kind: 'quickfix',
+                edit: {
+                  edits: [{
+                    resource: model.uri,
+                    versionId: model.getVersionId(),
+                    textEdit: {
+                      range: new monaco.Range(
+                        marker.startLineNumber, 1,
+                        marker.startLineNumber + 1, 1  // Delete entire line including newline
+                      ),
+                      text: ''
+                    }
+                  }]
+                }
+              });
+            }
+          }
+        }
+        
+        return {
+          actions,
+          dispose: () => {}
+        };
+      }
+    });
+    
     // Signature help provider
     monaco.languages.registerSignatureHelpProvider('vpy', {
       signatureHelpTriggerCharacters: ['(', ','],
