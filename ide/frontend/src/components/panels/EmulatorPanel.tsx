@@ -224,9 +224,14 @@ export const EmulatorPanel: React.FC = () => {
     overlayEnabled, 
     lastRomPath, 
     lastRomName,
+    emulatorWasRunning,
+    lastCompiledBinary,
+    lastCompiledProject,
     setAudioEnabled, 
     setOverlayEnabled, 
-    setLastRom 
+    setLastRom,
+    setEmulatorRunning,
+    setLastCompiledBinary
   } = useEmulatorSettings();
   
   // Estados básicos necesarios
@@ -1433,6 +1438,7 @@ export const EmulatorPanel: React.FC = () => {
       vecx.start();
       setStatus('running');
       useDebugStore.getState().setState('running');
+      setEmulatorRunning(true); // Persist state
       console.log('[EmulatorPanel] JSVecX started, debugStore.state set to running');
     }
   };
@@ -1443,6 +1449,7 @@ export const EmulatorPanel: React.FC = () => {
       vecx.stop();
       setStatus('paused');
       useDebugStore.getState().setState('paused');
+      setEmulatorRunning(false); // Persist state
       console.log('[EmulatorPanel] JSVecX paused, debugStore.state set to paused');
     }
   };
@@ -1453,6 +1460,7 @@ export const EmulatorPanel: React.FC = () => {
       vecx.stop();
       setStatus('stopped');
       useDebugStore.getState().setState('stopped');
+      setEmulatorRunning(false); // Persist state
       console.log('[EmulatorPanel] JSVecX stopped, debugStore.state set to stopped');
     }
   };
@@ -1553,19 +1561,99 @@ export const EmulatorPanel: React.FC = () => {
 
 
 
-  // Cargar overlay de Minestorm al arrancar (default BIOS game) - SOLO UNA VEZ
+  // Cargar ROM al arrancar - última compilada del proyecto O Minestorm por defecto
   useEffect(() => {
-    const loadDefaultOverlay = async () => {
-      if (defaultOverlayLoaded.current) return; // Ya se cargó, no volver a cargar
+    const loadDefaultROM = async () => {
+      if (defaultOverlayLoaded.current) return; // Ya se cargó
       
       // Esperar un poco para que JSVecX esté completamente inicializado
       setTimeout(async () => {
+        const projectState = (window as any).projectStore?.getState?.();
+        const currentProjectPath = projectState?.vpyProject?.rootPath;
+        
+        // Si hay un proyecto abierto Y tenemos una ROM compilada de ESE proyecto, cargarla
+        if (currentProjectPath && 
+            lastCompiledBinary && 
+            lastCompiledProject === currentProjectPath) {
+          
+          console.log('[EmulatorPanel] Found compiled binary for current project:', lastCompiledBinary);
+          
+          try {
+            // Verificar que el binario existe
+            const fileAPI = (window as any).files;
+            if (fileAPI?.readFile) {
+              const result = await fileAPI.readFile(lastCompiledBinary);
+              if (result && !result.error && result.content) {
+                console.log('[EmulatorPanel] Loading last compiled binary from project:', lastCompiledBinary);
+                
+                // Cargar el binario
+                const vecx = (window as any).vecx;
+                const Globals = (window as any).Globals;
+                
+                if (vecx && Globals) {
+                  // Convertir base64 a binary string
+                  const binaryData = atob(result.content);
+                  Globals.cartdata = binaryData;
+                  
+                  // Reset y configurar (pero NO auto-start si estaba parado)
+                  vecx.stop();
+                  vecx.reset();
+                  
+                  // Inicializar joystick a valores neutros
+                  vecx.write8(0xCF00, 128);
+                  vecx.write8(0xCF01, 128);
+                  
+                  const romName = lastCompiledBinary.split(/[/\\\\]/).pop()?.replace(/\\.(bin|BIN)$/, '') || 'compiled';
+                  setLoadedROM(`Compiled - ${romName}`);
+                  
+                  // CRÍTICO: Solo auto-start si el emulador estaba corriendo antes
+                  if (emulatorWasRunning) {
+                    vecx.debugState = 'running';
+                    vecx.start();
+                    setStatus('running');
+                    console.log('[EmulatorPanel] ✓ Compiled binary loaded and auto-started (was running before)');
+                  } else {
+                    setStatus('stopped');
+                    console.log('[EmulatorPanel] ✓ Compiled binary loaded but NOT started (was stopped before)');
+                  }
+                  
+                  // Try to load overlay
+                  await loadOverlay(romName + '.bin');
+                  
+                  defaultOverlayLoaded.current = true;
+                  return; // Exit - no cargar Minestorm
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[EmulatorPanel] Could not load last compiled binary, falling back to Minestorm:', e);
+          }
+        }
+        
+        // Fallback: Cargar Minestorm (solo si no había ROM compilada del proyecto)
+        console.log('[EmulatorPanel] Loading default overlay: Minestorm');
         await loadOverlay('minestorm.bin');
         setLoadedROM('BIOS - Minestorm');
-        defaultOverlayLoaded.current = true; // Marcar como cargado
+        
+        // CRÍTICO: Solo auto-start si el emulador estaba corriendo antes
+        const vecx = (window as any).vecx;
+        if (vecx) {
+          if (emulatorWasRunning) {
+            vecx.debugState = 'running';
+            vecx.start();
+            setStatus('running');
+            console.log('[EmulatorPanel] ✓ Minestorm auto-started (was running before)');
+          } else {
+            vecx.stop();
+            setStatus('stopped');
+            console.log('[EmulatorPanel] ✓ Minestorm loaded but NOT started (was stopped before)');
+          }
+        }
+        
+        defaultOverlayLoaded.current = true;
       }, 1500);
     };
-    loadDefaultOverlay();
+    loadDefaultROM();
   }, []); // Sin dependencias - solo se ejecuta al montar el componente
 
   // Responsive canvas sizing
@@ -1624,6 +1712,14 @@ export const EmulatorPanel: React.FC = () => {
 
     const handleCompiledBin = (payload: { base64: string; size: number; binPath: string; pdbData?: any }) => {
       console.log(`[EmulatorPanel] Loading compiled binary: ${payload.binPath} (${payload.size} bytes)`);
+      
+      // Guardar última ROM compilada con su proyecto
+      const projectState = (window as any).projectStore?.getState?.();
+      const currentProjectPath = projectState?.vpyProject?.rootPath;
+      if (currentProjectPath) {
+        setLastCompiledBinary(payload.binPath, currentProjectPath);
+        console.log('[EmulatorPanel] ✓ Saved last compiled binary for project:', currentProjectPath);
+      }
       
       // Si hay datos de debug (.pdb), cargarlos en el debugStore
       if (payload.pdbData) {
@@ -1942,7 +2038,7 @@ export const EmulatorPanel: React.FC = () => {
         paddingTop: 8,
         borderTop: '1px solid #333'
       }}>
-        {/* Botón Start/Stop unificado */}
+        {/* Botón Play/Pause */}
         <button 
           style={{
             ...btn,
@@ -1958,9 +2054,30 @@ export const EmulatorPanel: React.FC = () => {
             justifyContent: 'center'
           }} 
           onClick={status === 'running' ? onPause : onPlay}
-          title={status === 'running' ? 'Pause emulation' : (status === 'paused' ? 'Resume emulation' : 'Start emulation')}
+          title={status === 'running' ? 'Pause emulation' : 'Start/Resume emulation'}
         >
           {status === 'running' ? '⏸️' : '▶️'}
+        </button>
+        
+        {/* Botón Stop */}
+        <button 
+          style={{
+            ...btn,
+            backgroundColor: status === 'stopped' ? '#4a2a2a' : '#3a3a3a',
+            color: status === 'stopped' ? '#faa' : '#aaa',
+            fontSize: '20px',
+            padding: '10px',
+            minWidth: '50px',
+            minHeight: '50px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }} 
+          onClick={onStop}
+          title="Stop emulation"
+        >
+          ⏹️
         </button>
         
         {/* Botón Reset */}
