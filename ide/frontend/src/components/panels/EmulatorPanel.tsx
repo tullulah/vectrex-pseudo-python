@@ -1286,6 +1286,9 @@ export const EmulatorPanel: React.FC = () => {
       Globals.cartdata = cartDataString;
       console.log(`[EmulatorPanel] ✓ ROM loaded into Globals.cartdata (${romData.length} bytes)`);
       
+      // Dispatch event para notificar a otros paneles
+      window.dispatchEvent(new Event('programLoaded'));
+      
       // Actualizar estado del ROM cargado
       setLoadedROM(`${romName} (${romData.length} bytes)`);
       
@@ -1512,6 +1515,9 @@ export const EmulatorPanel: React.FC = () => {
         Globals.cartdata = cartDataString;
         console.log(`[EmulatorPanel] ✓ ROM loaded into Globals.cartdata (${romData.length} bytes)`);
         
+        // Dispatch event para notificar a otros paneles
+        window.dispatchEvent(new Event('programLoaded'));
+        
         // Actualizar estado del ROM cargado
         setLoadedROM(`${file.name} (${romData.length} bytes)`);
         
@@ -1648,6 +1654,9 @@ export const EmulatorPanel: React.FC = () => {
         if (Globals) {
           Globals.cartdata = binaryData;
           console.log('[EmulatorPanel] ✓ Binary loaded into Globals.cartdata');
+          
+          // Dispatch event para notificar a otros paneles
+          window.dispatchEvent(new Event('programLoaded'));
         }
         
         // CRITICAL: Verificar que JSVecX esté completamente inicializado antes de reset
@@ -1733,6 +1742,16 @@ export const EmulatorPanel: React.FC = () => {
         // Actualizar ROM cargada y buscar overlay
         const romName = payload.binPath.split(/[/\\]/).pop()?.replace(/\.(bin|BIN)$/, '') || 'compiled';
         setLoadedROM(`Compiled - ${romName}`);
+        
+        // Dispatch event para notificar a otros paneles (ej: MemoryPanel recarga PDB)
+        // Si tenemos pdbData, pasarlo en el evento
+        if (payload.pdbData) {
+          window.dispatchEvent(new CustomEvent('programLoaded', { 
+            detail: { pdbData: payload.pdbData } 
+          }));
+        } else {
+          window.dispatchEvent(new Event('programLoaded'));
+        }
         
         // Save the compiled ROM info for persistence
         setLastRom(payload.binPath, `Compiled - ${romName}`);

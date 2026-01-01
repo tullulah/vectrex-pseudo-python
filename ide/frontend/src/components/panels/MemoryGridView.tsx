@@ -33,6 +33,12 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
   const [hoveredByte, setHoveredByte] = useState<number | null>(null);
   const [selectedVar, setSelectedVar] = useState<string | null>(null);
 
+  // Log re-renders for debugging
+  React.useEffect(() => {
+    console.log('[MemoryGridView] Rendered with timestamp:', new Date(timestamp).toLocaleTimeString(), 
+                'vars:', Object.keys(variables).length);
+  }, [timestamp, variables]);
+
   // Build memory map: address -> variable info
   const memoryMap = useMemo(() => {
     const map = new Map<number, { var: VariableInfo; offset: number }>();

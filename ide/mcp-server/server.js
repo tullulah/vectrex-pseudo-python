@@ -551,6 +551,37 @@ class StdioTransport {
           }
         },
         {
+          name: 'memory_dump',
+          description: 'Get memory snapshot from emulator RAM. Returns hex dump of specified region. Useful for debugging and analyzing program state.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              start: { type: 'number', description: 'Start address (hex or decimal, default: 0xC800 = RAM start)' },
+              end: { type: 'number', description: 'End address (hex or decimal, default: 0xCFFF = RAM end)' },
+              format: { type: 'string', description: 'Output format: "hex" (default) or "decimal"', enum: ['hex', 'decimal'] }
+            }
+          }
+        },
+        {
+          name: 'memory_list_variables',
+          description: 'Get all variables from PDB with addresses, sizes, and types. Sorted by size (largest first). Useful for identifying which variables consume most RAM and which ones could be converted to const arrays to save space.',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'memory_read_variable',
+          description: 'Read current value of a specific variable from emulator RAM. Returns value in both hex and decimal formats.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Variable name (without VAR_ prefix, e.g., "player_x")' }
+            },
+            required: ['name']
+          }
+        },
+        {
           name: 'debugger_add_breakpoint',
           description: 'Add a breakpoint at a specific line',
           inputSchema: {

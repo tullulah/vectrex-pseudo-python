@@ -61,7 +61,7 @@ abs_joy = 0              # Helper for absolute value calculation
 speed_multiplier = 0     # Speed multiplier based on joystick position
 player_anim_frame = 1    # Current animation frame (1-5)
 player_anim_counter = 0  # Frame counter for animation timing
-player_anim_speed = 5    # Frames per animation frame
+const player_anim_speed = 5    # Frames per animation frame
 player_facing = 1        # Direction facing: 1=right, -1=left
 
 # Enemy (bubble) system - maximum 8 enemies

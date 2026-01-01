@@ -196,6 +196,41 @@ export class MCPServer {
       },
     });
 
+    // Memory tools
+    this.registerTool('memory/dump', this.memoryDump.bind(this), {
+      name: 'memory/dump',
+      description: 'Get memory snapshot from emulator RAM. Returns hex dump of specified region.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          start: { type: 'number', description: 'Start address (hex or decimal, default: 0xC800 = RAM start)' },
+          end: { type: 'number', description: 'End address (hex or decimal, default: 0xCFFF = RAM end)' },
+          format: { type: 'string', description: 'Output format: "hex" (default) or "decimal"', enum: ['hex', 'decimal'] },
+        },
+      },
+    });
+
+    this.registerTool('memory/list_variables', this.listVariables.bind(this), {
+      name: 'memory/list_variables',
+      description: 'Get all variables from PDB with addresses, sizes, and types. Useful for identifying which variables consume most RAM.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('memory/read_variable', this.readVariable.bind(this), {
+      name: 'memory/read_variable',
+      description: 'Read current value of a specific variable from emulator RAM',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Variable name (without VAR_ prefix, e.g., "player_x")' },
+        },
+        required: ['name'],
+      },
+    });
+
     // Debugger tools
     this.registerTool('debugger/add_breakpoint', this.addBreakpoint.bind(this), {
       name: 'debugger/add_breakpoint',
@@ -1154,6 +1189,227 @@ export class MCPServer {
           return { 
             success: false,
             message: 'stopEmulation function not available'
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async memoryDump(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const start = params.start || 0xC800; // Default: RAM start
+    const end = params.end || 0xCFFF;     // Default: RAM end
+    const format = params.format || 'hex';
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx) throw new Error('Emulator not available');
+          
+          const start = ${start};
+          const end = ${end};
+          const format = '${format}';
+          
+          // Read memory using direct RAM access (fast)
+          const bytes = [];
+          if (vecx.ram && Array.isArray(vecx.ram)) {
+            // RAM is at 0xC800-0xCBFF (1024 bytes)
+            for (let addr = start; addr <= end && addr < 0xD000; addr++) {
+              const ramOffset = addr - 0xC800;
+              if (ramOffset >= 0 && ramOffset < vecx.ram.length) {
+                bytes.push({ addr, value: vecx.ram[ramOffset] & 0xFF });
+              } else {
+                bytes.push({ addr, value: 0 });
+              }
+            }
+          }
+          
+          // Format output
+          let output = '';
+          for (let i = 0; i < bytes.length; i += 16) {
+            const row = bytes.slice(i, i + 16);
+            const addrStr = row[0].addr.toString(16).toUpperCase().padStart(4, '0');
+            const hexBytes = row.map(b => b.value.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            const asciiBytes = row.map(b => {
+              const c = b.value;
+              return (c >= 32 && c <= 126) ? String.fromCharCode(c) : '.';
+            }).join('');
+            
+            output += addrStr + ': ' + hexBytes.padEnd(48, ' ') + ' | ' + asciiBytes + '\\n';
+          }
+          
+          return {
+            success: true,
+            start,
+            end,
+            bytes: bytes.length,
+            format,
+            dump: output
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async listVariables(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const debugStore = window.__debugStore__;
+          if (!debugStore) throw new Error('Debug store not available');
+          
+          const state = debugStore.getState();
+          const pdbData = state.pdbData;
+          
+          if (!pdbData || !pdbData.variables) {
+            return {
+              success: false,
+              message: 'No PDB data available. Compile a program first.',
+              variables: {}
+            };
+          }
+          
+          // Calculate memory usage
+          const variables = pdbData.variables;
+          const usedBytes = Object.values(variables).reduce((sum, v) => sum + (v.size || 0), 0);
+          const totalBytes = 1024; // JSVecx RAM size
+          const freeBytes = totalBytes - usedBytes;
+          
+          // Sort by size (largest first) for optimization recommendations
+          const sortedVars = Object.entries(variables)
+            .map(([name, info]) => ({ name, ...info }))
+            .sort((a, b) => (b.size || 0) - (a.size || 0));
+          
+          return {
+            success: true,
+            count: Object.keys(variables).length,
+            usedBytes,
+            freeBytes,
+            totalBytes,
+            usagePercent: ((usedBytes / totalBytes) * 100).toFixed(1),
+            variables: sortedVars
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async readVariable(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { name } = params;
+    
+    if (!name) {
+      return {
+        success: false,
+        message: 'Variable name is required'
+      };
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const debugStore = window.__debugStore__;
+          const vecx = window.vecx;
+          
+          if (!debugStore) throw new Error('Debug store not available');
+          if (!vecx) throw new Error('Emulator not available');
+          
+          const state = debugStore.getState();
+          const pdbData = state.pdbData;
+          
+          if (!pdbData || !pdbData.variables) {
+            throw new Error('No PDB data available. Compile a program first.');
+          }
+          
+          const varName = '${name}';
+          const varInfo = pdbData.variables[varName];
+          
+          if (!varInfo) {
+            return {
+              success: false,
+              message: 'Variable "' + varName + '" not found in PDB',
+              availableVariables: Object.keys(pdbData.variables).slice(0, 10)
+            };
+          }
+          
+          // Parse address
+          const addr = parseInt(varInfo.address, 16);
+          const size = varInfo.size || 2;
+          
+          // Read value from RAM
+          let value;
+          if (vecx.ram && Array.isArray(vecx.ram) && addr >= 0xC800 && addr < 0xD000) {
+            const ramOffset = addr - 0xC800;
+            
+            if (size === 1) {
+              // 8-bit value
+              value = vecx.ram[ramOffset] & 0xFF;
+            } else if (size === 2) {
+              // 16-bit value (big-endian)
+              const high = vecx.ram[ramOffset] & 0xFF;
+              const low = vecx.ram[ramOffset + 1] & 0xFF;
+              value = (high << 8) | low;
+            } else {
+              // Array: read first few elements
+              const elements = [];
+              const numElements = Math.min(size / 2, 8); // Max 8 elements to display
+              for (let i = 0; i < numElements; i++) {
+                const elemHigh = vecx.ram[ramOffset + i * 2] & 0xFF;
+                const elemLow = vecx.ram[ramOffset + i * 2 + 1] & 0xFF;
+                elements.push((elemHigh << 8) | elemLow);
+              }
+              value = elements;
+            }
+          } else {
+            value = null;
+          }
+          
+          return {
+            success: true,
+            name: varName,
+            address: varInfo.address,
+            size: varInfo.size,
+            type: varInfo.type,
+            value: value,
+            valueHex: Array.isArray(value) 
+              ? value.map(v => '0x' + v.toString(16).toUpperCase().padStart(4, '0')).join(', ')
+              : '0x' + (value || 0).toString(16).toUpperCase().padStart(size === 1 ? 2 : 4, '0'),
+            valueDec: value
           };
         } catch (e) {
           return { __error: true, message: e.message || String(e) };

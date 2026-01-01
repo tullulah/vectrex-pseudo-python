@@ -735,7 +735,7 @@ def loop():
   - **Electron Backend**: `ide/electron/src/mcp/server.ts` - Servidor interno IPC
   - **External Server**: `ide/mcp-server/server.js` - Servidor stdio para AIs externos
 - **Comunicación**: External server → IPC (puerto 9123) → Electron → IDE state
-- **Total de herramientas**: 22 tools (7 editor, 2 compiler, 3 emulator, 2 debugger, 8 project)
+- **Total de herramientas**: 25 tools (7 editor, 2 compiler, 3 emulator, 3 memory, 2 debugger, 8 project)
 
 ### 18.2 Convenciones de Naming
 - **Tool Names en External Server**: snake_case (`editor_write_document`, `project_create_vector`)
@@ -762,6 +762,11 @@ def loop():
 - `emulator/run`: Ejecuta ROM compilada
 - `emulator/get_state`: Estado actual (PC, registros, cycles)
 - `emulator/stop`: Detiene ejecución
+
+#### Memory (3 tools) - **NUEVO 2026-01-01**
+- `memory/dump`: Get memory snapshot (hex dump of RAM region)
+- `memory/list_variables`: Get all variables from PDB with sizes and types (sorted by size, largest first)
+- `memory/read_variable`: Read current value of specific variable from emulator
 
 #### Debugger (2 tools)
 - `debugger/add_breakpoint`: Añade breakpoint en línea

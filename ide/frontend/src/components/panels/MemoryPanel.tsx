@@ -52,20 +52,32 @@ export const MemoryPanel: React.FC = () => {
   const loadPDB = useCallback(async () => {
     try {
       const Globals = (window as any).Globals;
-      if (!Globals?.projectPath) return;
+      console.log('[MemoryPanel] loadPDB - projectPath:', Globals?.projectPath);
+      if (!Globals?.projectPath) {
+        console.warn('[MemoryPanel] No project path available');
+        return;
+      }
       
       // Try to load main.pdb from project
       const pdbPath = `${Globals.projectPath}/src/main.pdb`;
+      console.log('[MemoryPanel] Fetching PDB from:', pdbPath);
       const response = await fetch(pdbPath);
-      if (!response.ok) return;
+      console.log('[MemoryPanel] PDB response:', response.status, response.ok);
+      if (!response.ok) {
+        console.warn('[MemoryPanel] PDB fetch failed:', response.status);
+        return;
+      }
       
       const pdbData = await response.json();
+      console.log('[MemoryPanel] PDB data keys:', Object.keys(pdbData));
       if (pdbData.variables) {
         setVariables(pdbData.variables);
-        console.log('[MemoryPanel] Loaded', Object.keys(pdbData.variables).length, 'variables from PDB');
+        console.log('[MemoryPanel] ✓ Loaded', Object.keys(pdbData.variables).length, 'variables from PDB');
+      } else {
+        console.warn('[MemoryPanel] PDB has no variables field');
       }
     } catch (e) {
-      console.warn('[MemoryPanel] Could not load PDB:', e);
+      console.error('[MemoryPanel] Could not load PDB:', e);
     }
   }, []);
 
@@ -73,65 +85,84 @@ export const MemoryPanel: React.FC = () => {
     loadPDB();
   }, [loadPDB]);
 
+  // Reload PDB when project changes or program is compiled/loaded
+  useEffect(() => {
+    const handleProgramLoaded = (event: Event) => {
+      console.log('[MemoryPanel] Program loaded event - reloading PDB');
+      
+      // Si el evento tiene pdbData, usarlo directamente
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.pdbData?.variables) {
+        console.log('[MemoryPanel] Using PDB data from event');
+        setVariables(customEvent.detail.pdbData.variables);
+        console.log('[MemoryPanel] ✓ Loaded', Object.keys(customEvent.detail.pdbData.variables).length, 'variables from event');
+      } else {
+        // Fallback: intentar cargar desde disco
+        loadPDB();
+      }
+    };
+    
+    window.addEventListener('programLoaded', handleProgramLoaded);
+    return () => window.removeEventListener('programLoaded', handleProgramLoaded);
+  }, [loadPDB]);
+
   const refresh = useCallback(() => {
     const vecx = (window as any).vecx;
     if (!vecx) {
       setText('[memory] JSVecX not available');
+      setMemory(new Uint8Array(65536));
       return;
     }
     
     console.log('[MemoryPanel] Starting memory snapshot...');
     
-    // Pausar emulador temporalmente para evitar conflictos
-    const wasRunning = vecx.isRunning && vecx.isRunning();
-    if (wasRunning) {
-      vecx.stop();
-    }
-    
     try {
-      // Crear snapshot de memoria completa
+      // Crear snapshot de memoria - NUEVO array cada vez para forzar re-render
       const snap = new Uint8Array(65536);
       
-      // Leer regiones importantes
-      const importantRegions = [
-        { start: 0xC800, end: 0xCFFF }, // RAM
-        { start: 0xD000, end: 0xD07F }, // VIA registers
-        { start: 0xE000, end: 0xFFFF }  // BIOS
-      ];
+      // OPTIMIZED: Acceso directo a RAM en lugar de 2048 llamadas a read8()!
+      // JSVecx tiene vecx.ram (Array de 1024 bytes) mapeado a $C800-$CBFF
+      // Esto es ~1000x más rápido que el loop anterior
+      if (vecx.ram && Array.isArray(vecx.ram)) {
+        console.log('[MemoryPanel] Using direct RAM access (fast path)');
+        // JSVecx ram es 1024 bytes, mapeado a $C800-$CBFF
+        // La Vectrex real tiene 2KB ($C800-$CFFF) pero JSVecx emula solo 1KB
+        for (let i = 0; i < Math.min(vecx.ram.length, 0x800); i++) {
+          snap[0xC800 + i] = (vecx.ram[i] & 0xff);
+        }
+      } else {
+        console.error('[MemoryPanel] vecx.ram not available - cannot read memory');
+      }
       
-      for (const region of importantRegions) {
-        for (let addr = region.start; addr <= region.end; addr++) {
-          snap[addr] = vecx.read8(addr);
+      // NO leer VIA registers - son I/O y pueden causar cuelgues
+      // (VIA registers en $D000-$D07F no necesitan visualizarse para debug de variables)
+      
+      // Opcional: leer cartridge ROM directamente si está cargado
+      if (vecx.cart && Array.isArray(vecx.cart) && vecx.cart.length > 0) {
+        console.log('[MemoryPanel] Using direct cart access');
+        const len = Math.min(vecx.cart.length, 0x1000); // Primeros 4KB
+        for (let i = 0; i < len; i++) {
+          snap[i] = (vecx.cart[i] & 0xff);
         }
       }
       
-      // Para cartridge, leer solo las primeras páginas si hay ROM cargada
-      const Globals = (window as any).Globals;
-      if (Globals && Globals.cartdata && Globals.cartdata.length > 0) {
-        const maxCartRead = Math.min(0x2000, Globals.cartdata.length);
-        for (let addr = 0; addr < maxCartRead; addr++) {
-          snap[addr] = vecx.read8(addr);
-        }
-      }
+      const now = Date.now();
       
-      // Update memory state for grid view
-      setMemory(snap);
+      // Update memory state - CREAR NUEVO OBJETO para forzar re-render
+      setMemory(new Uint8Array(snap));
+      setTs(now);
       
       // Generate text view
       const parts: string[] = [];
       REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
       setText(parts.join('\n\n'));
-      setTs(Date.now());
       
-      console.log('[MemoryPanel] ✓ Memory snapshot completed');
+      console.log('[MemoryPanel] ✓ Memory snapshot completed at', new Date(now).toLocaleTimeString());
     } catch (e) {
-      setText('[memory] Failed to read memory from JSVecX: ' + e);
+      const errorMsg = '[memory] Failed to read memory from JSVecX: ' + e;
+      setText(errorMsg);
       console.error('[MemoryPanel] Memory read error:', e);
-    } finally {
-      // Reanudar emulador si estaba corriendo
-      if (wasRunning) {
-        setTimeout(() => vecx.start(), 100);
-      }
+      setMemory(new Uint8Array(65536));
     }
   }, []);
 
@@ -155,28 +186,27 @@ export const MemoryPanel: React.FC = () => {
     
     console.log('[MemoryPanel] Starting binary dump...');
     
-    // Pausar emulador temporalmente
-    const wasRunning = vecx.isRunning && vecx.isRunning();
-    if (wasRunning) {
-      vecx.stop();
-    }
+    // NO pausar emulador - acceso directo es lo suficientemente rápido
     
     try {
       // Crear snapshot de memoria completa para dump binario
       const data = new Uint8Array(65536);
       
-      // Leer en chunks más grandes para mejor performance
-      const chunkSize = 1024;
-      for (let start = 0; start < 65536; start += chunkSize) {
-        const end = Math.min(start + chunkSize, 65536);
-        for (let addr = start; addr < end; addr++) {
-          data[addr] = vecx.read8(addr);
-        }
-        // Pequeña pausa cada chunk para no bloquear UI
-        if (start % (chunkSize * 10) === 0) {
-          await new Promise(resolve => setTimeout(resolve, 1));
+      // Usar acceso directo a arrays internos (rápido, sin bloqueos)
+      if (vecx.ram && Array.isArray(vecx.ram)) {
+        for (let i = 0; i < Math.min(vecx.ram.length, 0x800); i++) {
+          data[0xC800 + i] = (vecx.ram[i] & 0xff);
         }
       }
+      
+      if (vecx.cart && Array.isArray(vecx.cart)) {
+        const len = Math.min(vecx.cart.length, 0xC000); // Hasta $BFFF
+        for (let i = 0; i < len; i++) {
+          data[i] = (vecx.cart[i] & 0xff);
+        }
+      }
+      
+      // NO leer VIA registers - son I/O y pueden causar cuelgues
       
       const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
@@ -190,19 +220,13 @@ export const MemoryPanel: React.FC = () => {
     } catch (e) {
       alert('Failed to read memory from JSVecX: ' + e);
       console.error('[MemoryPanel] Binary dump error:', e);
-    } finally {
-      // Reanudar emulador
-      if (wasRunning) {
-        setTimeout(() => vecx.start(), 100);
-      }
     }
   };
 
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', fontFamily:'monospace'}}>
       <div style={{padding:'4px', borderBottom:'1px solid #444', display:'flex', gap:8, alignItems:'center'}}>
-        <button onClick={refresh}>Refresh</button>
-        <button onClick={saveText}>Save TXT</button>
+        <button onClick={refresh}>Refresh</button>        <button onClick={loadPDB}>Load PDB</button>        <button onClick={saveText}>Save TXT</button>
         <button onClick={saveBin}>Save BIN</button>
         
         {/* View mode toggle */}
@@ -234,8 +258,28 @@ export const MemoryPanel: React.FC = () => {
         </div>
         
         <span style={{marginLeft:'auto', opacity:0.7}}>
-          Snapshot: {new Date(ts).toLocaleTimeString()}
-          {Object.keys(variables).length > 0 && ` • ${Object.keys(variables).length} vars`}
+          {(() => {
+            // Calcular memoria usada sumando tamaños de variables
+            const usedBytes = Object.values(variables).reduce((sum, v) => sum + (v.size || 0), 0);
+            const totalBytes = 1024; // JSVecx RAM size (0x400 bytes)
+            const freeBytes = totalBytes - usedBytes;
+            const usedPercent = ((usedBytes / totalBytes) * 100).toFixed(1);
+            
+            return (
+              <>
+                <span style={{color: usedBytes > 900 ? '#e74c3c' : usedBytes > 700 ? '#f39c12' : '#2ecc71'}}>
+                  {usedBytes}B used
+                </span>
+                {' / '}
+                <span style={{color: '#95a5a6'}}>{freeBytes}B free</span>
+                {' of '}
+                {totalBytes}B
+                {' '}({usedPercent}%)
+                {ts > 0 && ` • ${new Date(ts).toLocaleTimeString()}`}
+                {Object.keys(variables).length > 0 && ` • ${Object.keys(variables).length} vars`}
+              </>
+            );
+          })()}
         </span>
       </div>
       
