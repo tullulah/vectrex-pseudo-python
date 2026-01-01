@@ -21,6 +21,8 @@ pub enum DiagnosticCode {
     ArityMismatch,
     UndefinedStruct,     // Phase 2: Struct not found
     StructRegistryError, // Phase 2: Error building struct registry
+    UnusedVariable,      // Variable declared but never used (IDE)
+    SuggestConst,        // Variable never changes - suggest const (IDE)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +32,22 @@ pub struct Diagnostic {
     pub message: String,
     pub line: Option<usize>,
     pub col: Option<usize>,
+}
+
+// Variable usage tracking for IDE diagnostics
+#[derive(Debug, Default, Clone)]
+struct VariableUsage {
+    declared: bool,
+    initialized: bool,
+    read_count: usize,
+    write_count: usize,
+    declaration_line: Option<usize>,
+    is_const: bool,
+}
+
+#[derive(Debug, Default)]
+struct UsageAnalysis {
+    variables: HashMap<String, VariableUsage>,
 }
 
 thread_local! {
@@ -248,6 +266,218 @@ impl CodegenOptions {
     }
 }
 
+// ============= Variable Usage Analysis for IDE Diagnostics =============
+
+fn analyze_variable_usage(module: &Module) -> UsageAnalysis {
+    let mut analysis = UsageAnalysis::default();
+    
+    // Phase 1: Collect declarations from top-level items
+    for item in &module.items {
+        match item {
+            Item::GlobalLet { name, value, source_line } => {
+                let usage = VariableUsage {
+                    declared: true,
+                    initialized: !matches!(value, Expr::Number(0)),
+                    read_count: 0,
+                    write_count: 1, // Declaration counts as write
+                    declaration_line: Some(*source_line),
+                    ..Default::default()
+                };
+                analysis.variables.insert(name.clone(), usage);
+                analyze_expr(value, &mut analysis); // Check for reads in initialization
+            },
+            Item::Const { name, value, source_line } => {
+                let usage = VariableUsage {
+                    declared: true,
+                    initialized: true,
+                    read_count: 0,
+                    write_count: 1,
+                    declaration_line: Some(*source_line),
+                    is_const: true,
+                };
+                analysis.variables.insert(name.clone(), usage);
+                analyze_expr(value, &mut analysis);
+            },
+            Item::Function(func) => {
+                analyze_statements(&func.body, &mut analysis);
+            },
+            _ => {}
+        }
+    }
+    
+    analysis
+}
+
+fn analyze_statements(stmts: &[Stmt], analysis: &mut UsageAnalysis) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign { target, value, .. } => {
+                // LHS: write to variable
+                if let AssignTarget::Ident { name, .. } = target {
+                    if let Some(usage) = analysis.variables.get_mut(name) {
+                        usage.write_count += 1;
+                    }
+                }
+                // RHS: reads in expression
+                analyze_expr(value, analysis);
+            },
+            Stmt::CompoundAssign { target, value, .. } => {
+                // x += y is BOTH read (current value) and write (new value)
+                if let AssignTarget::Ident { name, .. } = target {
+                    if let Some(usage) = analysis.variables.get_mut(name) {
+                        usage.read_count += 1; // Read current value
+                        usage.write_count += 1; // Write new value
+                    }
+                }
+                analyze_expr(value, analysis);
+            },
+            Stmt::Let { name, value, .. } => {
+                // Local variable declaration
+                if let Some(usage) = analysis.variables.get_mut(name) {
+                    usage.declared = true;
+                    usage.write_count += 1;
+                }
+                analyze_expr(value, analysis);
+            },
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                analyze_expr(cond, analysis);
+                analyze_statements(body, analysis);
+                for (elif_cond, elif_body) in elifs {
+                    analyze_expr(elif_cond, analysis);
+                    analyze_statements(elif_body, analysis);
+                }
+                if let Some(else_stmts) = else_body {
+                    analyze_statements(else_stmts, analysis);
+                }
+            },
+            Stmt::While { cond, body, .. } => {
+                analyze_expr(cond, analysis);
+                analyze_statements(body, analysis);
+            },
+            Stmt::For { var, start, end, step, body, .. } => {
+                // Iterator variable
+                if let Some(usage) = analysis.variables.get_mut(var) {
+                    usage.write_count += 1;
+                }
+                analyze_expr(start, analysis);
+                analyze_expr(end, analysis);
+                if let Some(s) = step {
+                    analyze_expr(s, analysis);
+                }
+                analyze_statements(body, analysis);
+            },
+            Stmt::ForIn { var, iterable, body, .. } => {
+                if let Some(usage) = analysis.variables.get_mut(var) {
+                    usage.write_count += 1;
+                }
+                analyze_expr(iterable, analysis);
+                analyze_statements(body, analysis);
+            },
+            Stmt::Switch { expr, cases, default, .. } => {
+                analyze_expr(expr, analysis);
+                for (case_expr, case_body) in cases {
+                    analyze_expr(case_expr, analysis);
+                    analyze_statements(case_body, analysis);
+                }
+                if let Some(default_body) = default {
+                    analyze_statements(default_body, analysis);
+                }
+            },
+            Stmt::Return(Some(expr), ..) => {
+                analyze_expr(expr, analysis);
+            },
+            Stmt::Expr(expr, ..) => {
+                analyze_expr(expr, analysis);
+            },
+            _ => {}
+        }
+    }
+}
+
+fn analyze_expr(expr: &Expr, analysis: &mut UsageAnalysis) {
+    match expr {
+        Expr::Ident(IdentInfo { name, .. }) => {
+            // This is a READ of the variable
+            if let Some(usage) = analysis.variables.get_mut(name) {
+                usage.read_count += 1;
+            }
+        },
+        Expr::Call(CallInfo { args, .. }) | Expr::MethodCall(MethodCallInfo { args, .. }) => {
+            for arg in args {
+                analyze_expr(arg, analysis);
+            }
+        },
+        Expr::Binary { left, right, .. } => {
+            analyze_expr(left, analysis);
+            analyze_expr(right, analysis);
+        },
+        Expr::Compare { left, right, .. } => {
+            analyze_expr(left, analysis);
+            analyze_expr(right, analysis);
+        },
+        Expr::Logic { left, right, .. } => {
+            analyze_expr(left, analysis);
+            analyze_expr(right, analysis);
+        },
+        Expr::Not(e, ..) | Expr::BitNot(e, ..) => {
+            analyze_expr(e, analysis);
+        },
+        Expr::List(elements) => {
+            for elem in elements {
+                analyze_expr(elem, analysis);
+            }
+        },
+        Expr::Index { target, index, .. } => {
+            analyze_expr(target, analysis);
+            analyze_expr(index, analysis);
+        },
+        Expr::FieldAccess { target, .. } => {
+            analyze_expr(target, analysis);
+        },
+        _ => {}
+    }
+}
+
+fn generate_usage_diagnostics(analysis: &UsageAnalysis, diagnostics: &mut Vec<Diagnostic>) {
+    for (name, usage) in &analysis.variables {
+        // Skip builtin functions and constants
+        if is_builtin_function(name) || usage.is_const {
+            continue;
+        }
+        
+        // DIAGNOSTIC 1: Unused variable
+        if usage.declared && usage.read_count == 0 && !usage.is_const {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Warning,
+                code: DiagnosticCode::UnusedVariable,
+                message: format!("Variable '{}' is declared but never used", name),
+                line: usage.declaration_line,
+                col: None,
+            });
+        }
+        
+        // DIAGNOSTIC 2: Const suggestion
+        if usage.initialized && 
+           usage.write_count == 1 &&  // Only initialization, never modified
+           usage.read_count > 0 &&    // Actually used
+           !usage.is_const {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Warning, // Using Warning for hints in IDE
+                code: DiagnosticCode::SuggestConst,
+                message: format!("Variable '{}' never changes - consider 'const' to save RAM (2 bytes)", name),
+                line: usage.declaration_line,
+                col: None,
+            });
+        }
+    }
+}
+
+fn is_builtin_function(name: &str) -> bool {
+    BUILTIN_ARITIES.iter().any(|(b, _)| b == &name)
+}
+
+// ============= End Variable Usage Analysis =============
+
 // emit_asm: optimize module then dispatch to selected backend.
 pub fn emit_asm(module: &Module, target: Target, opts: &CodegenOptions) -> String {
     let (asm, diags) = emit_asm_with_diagnostics(module, target, opts);
@@ -333,6 +563,11 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     // Paso 1: validación semántica básica (variables / aridad) recolectando warnings.
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     validate_semantics(module, &mut diagnostics);
+    
+    // NEW: Variable usage analysis for IDE (unused variables, const suggestions)
+    let usage_analysis = analyze_variable_usage(module);
+    generate_usage_diagnostics(&usage_analysis, &mut diagnostics);
+    
     let has_errors = diagnostics.iter().any(|d| matches!(d.severity, DiagnosticSeverity::Error));
     if has_errors {
         return (String::new(), diagnostics);
