@@ -6,14 +6,12 @@ META TITLE = "PANG"
 # Game states
 const STATE_TITLE = 0
 const STATE_MAP = 1
-const STATE_GAME = 2
+const  STATE_GAME = 2
 
 screen = STATE_TITLE
 title_intensity = 30
 title_state = 0 # 0 up 1 down
 current_music = -1  # Track which music is playing (-1=none, 0=pang_theme, 1=map_theme)
-delay = 0
-stage = 0
 
 # Location selection system - 17 locations matching the arcade game
 const location_x_coords = [40, 40, -40, -10, 20, 50, 80, -85, -50, -15, 15, 50, 85, -90, -45, 0, 45]
@@ -28,7 +26,7 @@ const level_enemy_speed = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5]
 
 joystick1_state = [0,0,0,0,0,0] # X, Y, BTN1, BTN2, BTN3, BTN4
 
-num_locations = 17
+const num_locations = 17
 current_location = 0
 location_glow_intensity = 60
 location_glow_direction = 0
@@ -48,13 +46,13 @@ joystick_poll_counter = 0  # Counter to poll joystick every N frames
 hook_active = 0          # 0=inactive, 1=active
 hook_x = 0               # X position of hook (captured at fire time)
 hook_y = -100            # Y position of hook (starts at ground level)
-hook_max_y = 127          # Maximum Y position (well up the screen, signed value)
-hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
+const hook_max_y = 127          # Maximum Y position (well up the screen, signed value)
+const hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
 hook_gun_y = 0           # Gun Y position at fire time (stays fixed while hook travels)
 hook_init_y = 0          # Initial Y position of gun (stays fixed for rope start point)
 # Player variables
 player_x = 0             # Player X position
-player_y = -100          # Player Y position (on ground)
+const player_y = -100          # Player Y position (on ground)
 player_speed = 2         # Base movement speed
 move_speed = 0           # Current movement speed (calculated from joystick)
 abs_joy = 0              # Helper for absolute value calculation

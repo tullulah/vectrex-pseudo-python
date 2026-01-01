@@ -999,41 +999,184 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
 ❌ **INVENTING .vec format** (using "vectors", "type": "line", x1/y1/x2/y2) → MUST use exact "paths"/"points" format
 ❌ Using version: 1 (number) in .vec → MUST be "version": "1.0" (string)
 
-### Parameter Requirements:
+### MCP Tools Reference
 
-**editor/write_document:**
-- \`uri\`: string (required) - File path or name (e.g., "main.vpy", "src/game.vpy")
-- \`content\`: string (required) - Complete file content
+**EDITOR TOOLS (7 tools):**
 
-**editor/save_document:**
-- \`uri\`: string (required) - File URI to save (must be open in editor)
+1. **editor/list_documents** - List all open documents
+   - No parameters required
 
-**editor/read_document:**
-- \`uri\`: string (required) - MUST match open document URI exactly
+2. **editor/read_document** - Read content of OPEN document
+   - \`uri\`: string (required) - Document URI (must be currently open in editor)
+   - ⚠️ ONLY works for files already open - for new files use editor/write_document
 
-**compiler/build_and_run:**
-- No parameters required (uses current project)
-- Optional: \`breakOnEntry\`: boolean (pause at first instruction)
+3. **editor/write_document** - Create OR update document (auto-opens if new)
+   - \`uri\`: string (required) - File path/name (e.g., "main.vpy", "src/game.vpy")
+   - \`content\`: string (required) - Complete file content
+   - Auto-detects language (.vpy → VPy, .vec/.vmus/.json → JSON)
 
-**project/create_vector:**
-- \`name\`: string (required) - Filename WITHOUT .vec extension (e.g., "ship" not "ship.vec")
-- \`content\`: string (optional if empty = template) - If provided, MUST be EXACT format from template above
+4. **editor/save_document** - Save to disk and mark clean
+   - \`uri\`: string (required) - File URI to save (must be open)
+   - ⚠️ CRITICAL: Use after editor/write_document BEFORE compilation
 
-**CRITICAL REMINDER - .vec Format Rules:**
-❌ NEVER use: "vectors", "type":"line", x1/y1/x2/y2, version as number
-✅ ALWAYS use: "paths", "points" array, "version":"1.0" (string)
-✅ Copy template exactly, only change: name and points coordinates
+5. **editor/get_diagnostics** - Get compilation/lint errors
+   - \`uri\`: string (optional) - All diagnostics if omitted
 
-**project/create_music:**
-- \`name\`: string (required) - Filename WITHOUT .vmus extension (e.g., "theme" not "theme.vmus")
-- \`content\`: string (optional) - Valid JSON content, leave empty for template
+6. **editor/replace_range** - Replace specific LINES (not offsets)
+   - \`uri\`: string (required) - Document URI (must be open)
+   - \`startLine\`: number (required) - Start line (1-indexed)
+   - \`startColumn\`: number (required) - Start column (1-indexed)
+   - \`endLine\`: number (required) - End line (1-indexed)
+   - \`endColumn\`: number (required) - End column (1-indexed)
+   - \`newText\`: string (required) - Replacement text
 
-**project/read_file:**
-- \`path\`: string (required) - RELATIVE path from project root (e.g., "src/main.vpy" NOT "main.vpy")
+7. **editor/insert_at** - Insert text at position
+   - \`uri\`: string, \`line\`: number, \`column\`: number, \`text\`: string
 
-**project/write_file:**
-- \`path\`: string (required) - RELATIVE path from project root (e.g., "src/game.vpy")
-- \`content\`: string (required) - Complete file content
+8. **editor/delete_range** - Delete text in range
+   - \`uri\`: string, \`startLine\`, \`startColumn\`, \`endLine\`, \`endColumn\`
+
+**COMPILER TOOLS (3 tools):**
+
+1. **compiler/build** - Build current project (F7 equivalent)
+   - No parameters - uses current project config
+
+2. **compiler/get_errors** - Get latest compilation errors
+   - No parameters
+
+3. **compiler/build_and_run** - Build + run in emulator
+   - \`breakOnEntry\`: boolean (optional) - Pause at entry point
+
+**EMULATOR TOOLS (3 tools):**
+
+1. **emulator/run** - Run compiled ROM
+   - \`romPath\`: string (required) - Path to .bin file
+   - \`breakOnEntry\`: boolean (optional)
+
+2. **emulator/get_state** - Get current state
+   - Returns: PC, registers, cycles
+
+3. **emulator/stop** - Stop execution
+   - No parameters
+
+**MEMORY TOOLS (3 tools):**
+
+1. **memory/dump** - Get RAM snapshot (hex dump)
+   - \`start\`: number (optional, default: 0xC800 = RAM start)
+   - \`end\`: number (optional, default: 0xCFFF = RAM end)
+   - \`format\`: "hex" | "decimal" (optional, default: "hex")
+
+2. **memory/list_variables** - Get all variables from PDB
+   - No parameters
+   - Returns: name, address, size, type for each variable
+   - Sorted by size (largest first) for RAM optimization analysis
+
+3. **memory/read_variable** - Read current value
+   - \`name\`: string (required) - Variable name without VAR_ prefix
+   - Example: "player_x" not "VAR_PLAYER_X"
+
+**DEBUGGER TOOLS (2 tools):**
+
+1. **debugger/add_breakpoint** - Add breakpoint
+   - \`uri\`: string (required), \`line\`: number (required, 1-indexed)
+
+2. **debugger/get_callstack** - Get call stack
+   - No parameters
+
+**PROJECT TOOLS (8 tools):**
+
+1. **project/get_structure** - Get complete project structure
+   - No parameters
+
+2. **project/read_file** - Read any project file
+   - \`path\`: string (required) - RELATIVE path from project root
+   - Example: "src/main.vpy" NOT "main.vpy"
+
+3. **project/write_file** - Write/update any file (auto-opens in editor)
+   - \`path\`: string (required) - Relative path (e.g., "src/game.vpy")
+   - \`content\`: string (required) - Complete file content
+
+4. **project/close** - Close current project
+   - No parameters
+
+5. **project/open** - Open existing project
+   - \`path\`: string (required) - Full path to .vpyproj file
+
+6. **project/create** - Create new project
+   - \`name\`: string (required) - Project name
+   - \`path\`: string (optional) - Directory path (shows dialog if omitted)
+
+7. **project/create_vector** - Create .vec file with JSON validation
+   - \`name\`: string (required) - Filename WITHOUT .vec extension
+   - \`content\`: string (optional) - Valid JSON or empty for template
+   - Format: \`{"version":"1.0","name":"shape","canvas":{"width":256,"height":256,"origin":"center"},"layers":[{"name":"default","visible":true,"paths":[{"name":"path1","intensity":127,"closed":false,"points":[{"x":0,"y":0},{"x":10,"y":10}]}]}]}\`
+   - ⚠️ NEVER use: "vectors", "type":"line", x1/y1/x2/y2, version as number
+   - ✅ ALWAYS use: "paths", "points" array, "version":"1.0" (string)
+
+8. **project/create_music** - Create .vmus file with JSON validation
+   - \`name\`: string (required) - Filename WITHOUT .vmus extension
+   - \`content\`: string (optional) - Valid JSON or empty for template
+   - Format: \`{"version":"1.0","name":"Song","author":"Composer","tempo":120,"ticksPerBeat":24,"totalTicks":384,"notes":[{"id":"note1","note":60,"start":0,"duration":48,"velocity":12,"channel":0}],"noise":[{"id":"noise1","start":0,"duration":24,"period":15,"channels":1}],"loopStart":0,"loopEnd":384}\`
+   - Note fields: \`note\` (MIDI 0-127, 60=C4), \`velocity\` (0-15 volume), \`channel\` (0=A, 1=B, 2=C)
+   - Noise fields: \`period\` (0-31, lower=higher pitch), \`channels\` (bitmask: 1=A, 2=B, 4=C, 7=all)
+
+## IDE Diagnostics and Code Actions
+
+The IDE provides real-time code analysis and Quick Fixes:
+
+### Variable Usage Analysis
+
+**Automatic Detection:**
+- **Unused Variables**: Variables declared but never read → WARNING (yellow underline)
+- **Const Suggestions**: Variables initialized once and never modified → HINT (can save 2 bytes RAM)
+
+**Diagnostics appear during compilation:**
+- Yellow underline on variable name
+- Hover to see diagnostic message
+- Lightbulb icon (💡) for Quick Fixes
+
+### Quick Fixes (Code Actions)
+
+**Available Actions:**
+
+1. **Convert to const** (for variables that never change)
+   - Saves 2 bytes RAM per variable
+   - Automatically adds \`const\` keyword
+   - Example: \`player_speed = 3\` → \`const player_speed = 3\`
+
+2. **Remove unused variable** (for variables declared but never used)
+   - Cleans up dead code
+   - Deletes entire line
+   - Example: Removes \`temp_x = 0\` if never read
+
+**How to use:**
+1. Compile your code (diagnostics appear automatically)
+2. Hover over yellow-underlined variable
+3. Click lightbulb icon (💡) or press \`Cmd+.\` (macOS) / \`Ctrl+.\` (Windows/Linux)
+4. Select desired Quick Fix
+5. Changes apply immediately
+
+**Examples:**
+
+\`\`\`vpy
+# Before - Compiler suggests optimizations:
+num_locations = 17        # ⚠️ Never changes → suggest const
+hook_max_y = 40           # ⚠️ Never changes → suggest const
+player_speed = 2          # ⚠️ Never changes → suggest const
+temp_value = 0            # ⚠️ Declared but never used
+
+# After applying Quick Fixes:
+const num_locations = 17  # ✅ Saves 2 bytes RAM
+const hook_max_y = 40     # ✅ Saves 2 bytes RAM
+const player_speed = 2    # ✅ Saves 2 bytes RAM
+# temp_value removed        # ✅ Dead code eliminated
+\`\`\`
+
+**Benefits:**
+- Automatic RAM optimization suggestions
+- Clean code (removes unused variables)
+- Real-time feedback during development
+- One-click fixes (no manual editing)
 `;
 
 export function getVPyContext(): string {

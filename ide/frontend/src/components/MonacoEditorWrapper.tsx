@@ -267,7 +267,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     // Code Action Provider (Quick Fixes for diagnostics)
     monaco.languages.registerCodeActionProvider('vpy', {
       provideCodeActions: (model, range, context) => {
-        const actions: monaco.languages.CodeAction[] = [];
+        const actions: any[] = [];
         
         // Process each diagnostic marker in the context
         for (const marker of context.markers) {
