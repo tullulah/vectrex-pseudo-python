@@ -1138,6 +1138,20 @@ fn generate_usage_diagnostics(analysis: &UsageAnalysis, locale: &str, diags: &mu
     eprintln!("[LSP] Generated {} usage diagnostics", diags.len());
 }
 
+/// Helper function to extract variable name from diagnostic message
+/// Examples:
+///   "Variable 'num_locations' is declared but never used" -> Some("num_locations")
+///   "Variable 'player_speed' nunca cambia - considera 'const'..." -> Some("player_speed")
+fn extract_var_name_from_diagnostic(message: &str) -> Option<String> {
+    // Look for pattern: Variable 'name' ... or Variable "name" ...
+    if let Some(start_idx) = message.find("'") {
+        if let Some(end_idx) = message[start_idx + 1..].find("'") {
+            return Some(message[start_idx + 1..start_idx + 1 + end_idx].to_string());
+        }
+    }
+    None
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
@@ -1392,6 +1406,103 @@ impl LanguageServer for Backend {
         }
         
         Ok(None)
+    }
+
+    async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
+        eprintln!("[vpy_lsp][code_action] request for uri= {}", params.text_document.uri);
+        
+        let uri = params.text_document.uri;
+        let diagnostics = params.context.diagnostics;
+        
+        if diagnostics.is_empty() {
+            return Ok(None);
+        }
+        
+        // Get document text
+        let docs = self.docs.lock().unwrap();
+        let text = match docs.get(&uri) {
+            Some(t) => t.clone(),
+            None => return Ok(None)
+        };
+        drop(docs);
+        
+        let mut actions: Vec<CodeActionOrCommand> = Vec::new();
+        
+        for diagnostic in diagnostics {
+            let code = match &diagnostic.code {
+                Some(NumberOrString::String(s)) => s.clone(),
+                _ => continue
+            };
+            
+            match code.as_str() {
+                "suggest-const" => {
+                    // Extract variable name from diagnostic message
+                    if let Some(var_name) = extract_var_name_from_diagnostic(&diagnostic.message) {
+                        // Get the line text to preserve the value
+                        let line_idx = diagnostic.range.start.line as usize;
+                        if let Some(line) = text.lines().nth(line_idx) {
+                            // Replace "var_name =" with "const var_name ="
+                            let new_text = if line.trim().starts_with(&var_name) {
+                                line.replacen(&format!("{} =", var_name), &format!("const {} =", var_name), 1)
+                            } else {
+                                format!("const {}", line.trim())
+                            };
+                            
+                            let action = CodeAction {
+                                title: format!("Convert '{}' to const", var_name),
+                                kind: Some(CodeActionKind::QUICKFIX),
+                                diagnostics: Some(vec![diagnostic.clone()]),
+                                edit: Some(WorkspaceEdit {
+                                    changes: Some(HashMap::from([
+                                        (uri.clone(), vec![
+                                            TextEdit {
+                                                range: diagnostic.range,
+                                                new_text
+                                            }
+                                        ])
+                                    ])),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            };
+                            
+                            actions.push(CodeActionOrCommand::CodeAction(action));
+                        }
+                    }
+                },
+                "unused-variable" => {
+                    // Extract variable name from diagnostic message
+                    if let Some(var_name) = extract_var_name_from_diagnostic(&diagnostic.message) {
+                        let action = CodeAction {
+                            title: format!("Remove unused variable '{}'", var_name),
+                            kind: Some(CodeActionKind::QUICKFIX),
+                            diagnostics: Some(vec![diagnostic.clone()]),
+                            edit: Some(WorkspaceEdit {
+                                changes: Some(HashMap::from([
+                                    (uri.clone(), vec![
+                                        TextEdit {
+                                            range: diagnostic.range,
+                                            new_text: String::new()  // Delete the line
+                                        }
+                                    ])
+                                ])),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        };
+                        
+                        actions.push(CodeActionOrCommand::CodeAction(action));
+                    }
+                },
+                _ => {}
+            }
+        }
+        
+        if actions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(actions))
+        }
     }
 
     async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
