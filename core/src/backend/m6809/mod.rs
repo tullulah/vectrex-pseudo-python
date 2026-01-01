@@ -746,14 +746,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
                     
-                    // Ensure DP=$C8 at start of loop (BIOS calls may have changed it to $D0)
-                    // This must happen BEFORE any variable access
-                    out.push_str("    JSR $F1AF    ; DP_to_C8 (ensure DP for variable access)\n");
-                    
-                    // Auto-inject WAIT_RECAL at START of loop for proper frame sync
-                    out.push_str("    JSR Wait_Recal ; Auto-injected: sync with vector beam\n");
-                    
-                    out.push_str(&format!("    ; DEBUG: Processing {} statements in loop() body\n", f.body.len()));
+
                     let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
@@ -1028,13 +1021,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             // Check if this variable is an array - if so, allocate space for actual array data
             if let Some(&array_len) = array_sizes.get(&v) {
                 // Arrays need space for the actual data (N elements * 2 bytes each)
-                out.push_str(&format!("VAR_{}_DATA EQU $CF10+{}  ; Array data ({} elements)\n", 
+                out.push_str(&format!("VAR_{}_DATA EQU $C8C0+{}  ; Array data ({} elements)\n", 
                     v.to_uppercase(), var_offset, array_len));
                 var_offset += array_len * 2;  // Reserve space for all elements
                 // Note: We don't create VAR_NAME anymore - code will use VAR_NAME_DATA directly
             } else {
                 // Regular scalar variables - 2 bytes each
-                out.push_str(&format!("VAR_{} EQU $CF10+{}\n", v.to_uppercase(), var_offset));
+                out.push_str(&format!("VAR_{} EQU $C8C0+{}\n", v.to_uppercase(), var_offset));
                 var_offset += 2;
             }
         } else {
@@ -1266,6 +1259,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     // VAR_ARG definitions moved earlier (before assets/strings) to keep all EQUs together
+    
+    // CRITICAL FIX: Reset var_offset to 0 for system internal variables (RESULT+offset)
+    // Global variables use $C8C0+offset, system temps use RESULT+offset (separate spaces)
+    var_offset = 0;
+    
     if opts.diag_freeze { if opts.exclude_ram_org { out.push_str(&format!("DIAG_COUNTER EQU RESULT+{}\n", var_offset)); var_offset += 1; } else { out.push_str("DIAG_COUNTER: FCB 0\n"); } }
     if rt_usage.needs_vcur_vars {
         if opts.exclude_ram_org {
