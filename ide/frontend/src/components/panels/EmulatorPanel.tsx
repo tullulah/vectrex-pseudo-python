@@ -1433,6 +1433,18 @@ export const EmulatorPanel: React.FC = () => {
   const onPlay = () => {
     const vecx = (window as any).vecx;
     if (vecx) {
+      // Si estaba stopped, reiniciar desde el principio
+      if (status === 'stopped') {
+        console.log('[EmulatorPanel] Starting from stopped - resetting first');
+        vecx.stop();
+        console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Start from stopped state');
+        vecx.reset();
+        
+        // Reinicializar joystick a valores neutros
+        vecx.write8(0xCF00, 128); // Joy_1_X neutral
+        vecx.write8(0xCF01, 128); // Joy_1_Y neutral
+      }
+      
       initPsgLogging();
       vecx.debugState = 'running';
       vecx.start();
@@ -1449,7 +1461,7 @@ export const EmulatorPanel: React.FC = () => {
       vecx.stop();
       setStatus('paused');
       useDebugStore.getState().setState('paused');
-      setEmulatorRunning(false); // Persist state
+      // NOTE: No cambiar emulatorWasRunning - pause es temporal, mantener el estado de "estaba corriendo"
       console.log('[EmulatorPanel] JSVecX paused, debugStore.state set to paused');
     }
   };
@@ -1457,11 +1469,14 @@ export const EmulatorPanel: React.FC = () => {
   const onStop = () => {
     const vecx = (window as any).vecx;
     if (vecx) {
+      // CRITICAL: Solo parar, NO resetear aquí
+      // El reset se hará cuando se presione Play después de Stop
       vecx.stop();
+      
       setStatus('stopped');
       useDebugStore.getState().setState('stopped');
       setEmulatorRunning(false); // Persist state
-      console.log('[EmulatorPanel] JSVecX stopped, debugStore.state set to stopped');
+      console.log('[EmulatorPanel] JSVecX stopped (will reset on next Play)');
     }
   };
   
@@ -1566,94 +1581,96 @@ export const EmulatorPanel: React.FC = () => {
     const loadDefaultROM = async () => {
       if (defaultOverlayLoaded.current) return; // Ya se cargó
       
-      // Esperar un poco para que JSVecX esté completamente inicializado
-      setTimeout(async () => {
-        const projectState = (window as any).projectStore?.getState?.();
-        const currentProjectPath = projectState?.vpyProject?.rootPath;
+      // Esperar a que projectStore esté disponible (hasta 3 segundos)
+      const maxWaitTime = 3000;
+      const checkInterval = 500;
+      let waited = 0;
+      
+      while (waited < maxWaitTime) {
+        const projectState = (window as any).__projectStore__?.getState?.();
+        const currentProjectPath = projectState?.vpyProject?.rootDir;
         
-        // Si hay un proyecto abierto Y tenemos una ROM compilada de ESE proyecto, cargarla
-        if (currentProjectPath && 
-            lastCompiledBinary && 
-            lastCompiledProject === currentProjectPath) {
-          
-          console.log('[EmulatorPanel] Found compiled binary for current project:', lastCompiledBinary);
+        // Si tenemos proyecto Y ROM compilada, intentar cargarla
+        if (currentProjectPath && lastCompiledBinary && lastCompiledProject === currentProjectPath) {
+          console.log('[EmulatorPanel] ✓ Found compiled ROM for project, loading:', lastCompiledBinary);
           
           try {
-            // Verificar que el binario existe
             const fileAPI = (window as any).files;
-            if (fileAPI?.readFile) {
-              const result = await fileAPI.readFile(lastCompiledBinary);
-              if (result && !result.error && result.content) {
-                console.log('[EmulatorPanel] Loading last compiled binary from project:', lastCompiledBinary);
-                
-                // Cargar el binario
+            if (fileAPI?.readFileBin) {
+              const result = await fileAPI.readFileBin(lastCompiledBinary);
+              
+              if (result && !result.error && result.base64) {
                 const vecx = (window as any).vecx;
                 const Globals = (window as any).Globals;
                 
                 if (vecx && Globals) {
-                  // Convertir base64 a binary string
-                  const binaryData = atob(result.content);
+                  const binaryData = atob(result.base64);
                   Globals.cartdata = binaryData;
                   
-                  // Reset y configurar (pero NO auto-start si estaba parado)
                   vecx.stop();
                   vecx.reset();
-                  
-                  // Inicializar joystick a valores neutros
                   vecx.write8(0xCF00, 128);
                   vecx.write8(0xCF01, 128);
                   
                   const romName = lastCompiledBinary.split(/[/\\\\]/).pop()?.replace(/\\.(bin|BIN)$/, '') || 'compiled';
                   setLoadedROM(`Compiled - ${romName}`);
                   
-                  // CRÍTICO: Solo auto-start si el emulador estaba corriendo antes
                   if (emulatorWasRunning) {
                     vecx.debugState = 'running';
                     vecx.start();
                     setStatus('running');
-                    console.log('[EmulatorPanel] ✓ Compiled binary loaded and auto-started (was running before)');
                   } else {
                     setStatus('stopped');
-                    console.log('[EmulatorPanel] ✓ Compiled binary loaded but NOT started (was stopped before)');
                   }
                   
-                  // Try to load overlay
                   await loadOverlay(romName + '.bin');
-                  
                   defaultOverlayLoaded.current = true;
-                  return; // Exit - no cargar Minestorm
+                  console.log('[EmulatorPanel] ✓ Compiled ROM loaded successfully');
+                  return; // Éxito - no cargar Minestorm
                 }
               }
             }
           } catch (e) {
-            console.warn('[EmulatorPanel] Could not load last compiled binary, falling back to Minestorm:', e);
+            console.warn('[EmulatorPanel] Failed to load compiled ROM:', e);
           }
+          
+          // Si llegamos aquí, falló la carga - continuar a Minestorm
+          break;
         }
         
-        // Fallback: Cargar Minestorm (solo si no había ROM compilada del proyecto)
-        console.log('[EmulatorPanel] Loading default overlay: Minestorm');
-        await loadOverlay('minestorm.bin');
-        setLoadedROM('BIOS - Minestorm');
-        
-        // CRÍTICO: Solo auto-start si el emulador estaba corriendo antes
-        const vecx = (window as any).vecx;
-        if (vecx) {
-          if (emulatorWasRunning) {
-            vecx.debugState = 'running';
-            vecx.start();
-            setStatus('running');
-            console.log('[EmulatorPanel] ✓ Minestorm auto-started (was running before)');
-          } else {
-            vecx.stop();
-            setStatus('stopped');
-            console.log('[EmulatorPanel] ✓ Minestorm loaded but NOT started (was stopped before)');
-          }
+        // Si no hay proyecto aún, esperar un poco más
+        if (!currentProjectPath && waited < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+          waited += checkInterval;
+          continue;
         }
         
-        defaultOverlayLoaded.current = true;
-      }, 1500);
+        // Si hay proyecto pero no hay ROM compilada, o se acabó el tiempo, ir a Minestorm
+        break;
+      }
+      
+      // Fallback: Cargar Minestorm
+      console.log('[EmulatorPanel] Loading default: Minestorm');
+      await loadOverlay('minestorm.bin');
+      setLoadedROM('BIOS - Minestorm');
+      
+      const vecx = (window as any).vecx;
+      if (vecx) {
+        if (emulatorWasRunning) {
+          vecx.debugState = 'running';
+          vecx.start();
+          setStatus('running');
+        } else {
+          vecx.stop();
+          setStatus('stopped');
+        }
+      }
+      
+      defaultOverlayLoaded.current = true;
     };
-    loadDefaultROM();
+    
+    // Pequeño delay inicial para JSVecX
+    setTimeout(loadDefaultROM, 500);
   }, []); // Sin dependencias - solo se ejecuta al montar el componente
 
   // Responsive canvas sizing
@@ -1714,11 +1731,30 @@ export const EmulatorPanel: React.FC = () => {
       console.log(`[EmulatorPanel] Loading compiled binary: ${payload.binPath} (${payload.size} bytes)`);
       
       // Guardar última ROM compilada con su proyecto
-      const projectState = (window as any).projectStore?.getState?.();
-      const currentProjectPath = projectState?.vpyProject?.rootPath;
+      const projectState = (window as any).__projectStore__?.getState?.();
+      const currentProjectPath = projectState?.vpyProject?.rootDir;
+      console.log('[EmulatorPanel] 💾 SAVE CHECK:', {
+        hasProjectStore: !!(window as any).__projectStore__,
+        hasVpyProject: !!projectState?.vpyProject,
+        currentProjectPath,
+        binPath: payload.binPath
+      });
+      
       if (currentProjectPath) {
         setLastCompiledBinary(payload.binPath, currentProjectPath);
         console.log('[EmulatorPanel] ✓ Saved last compiled binary for project:', currentProjectPath);
+        console.log('[EmulatorPanel] ✓ binPath saved:', payload.binPath);
+        
+        // Verificar que se guardó inmediatamente
+        setTimeout(() => {
+          const settings = useEmulatorSettings.getState();
+          console.log('[EmulatorPanel] 🔍 VERIFY SAVE:', {
+            lastCompiledBinary: settings.lastCompiledBinary,
+            lastCompiledProject: settings.lastCompiledProject
+          });
+        }, 100);
+      } else {
+        console.warn('[EmulatorPanel] ⚠️ NOT SAVING - No current project path!');
       }
       
       // Si hay datos de debug (.pdb), cargarlos en el debugStore
