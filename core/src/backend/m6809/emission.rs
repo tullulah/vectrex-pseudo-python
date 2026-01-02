@@ -102,74 +102,52 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     
-    // Button builtins (commonly used in games)
-    out.push_str("; === BUTTON BUILTIN SUBROUTINES ===\n");
-    out.push_str("; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)\n");
-    out.push_str("; Returns: D = 0 (released), 1 (pressed)\n");
-    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
+    // Button system - Simple read of Vec_Btn_State
+    // Read_Btns (auto-injected at loop start) handles debounce via Vec_Prev_Btns
+    // Multiple reads in same frame return same value - debounce is frame-based, not read-based
+    out.push_str("; === BUTTON SYSTEM ===\n");
+    out.push_str("; J1_BUTTON_1-4() - Read button state from Vec_Btn_State\n");
+    out.push_str("; Read_Btns (auto-injected) handles debounce via Vec_Prev_Btns\n");
+    out.push_str("; Safe to call multiple times per frame - returns consistent value\n");
+    out.push_str("; Returns: D = 0 (not pressed), 1 (pressed)\n\n");
+    
     out.push_str("J1B1_BUILTIN:\n");
-    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
-    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
-    out.push_str("    JSR $F1BA    ; Read_Btns\n");
-    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-    out.push_str("    ANDA #$01\n");
+    out.push_str("    LDA $C80F      ; Read Vec_Btn_State\n");
+    out.push_str("    ANDA #$01      ; Test bit 0 (Button 1)\n");
     out.push_str("    BEQ .J1B1_OFF\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
-    out.push_str("    LDD #1\n");
+    out.push_str("    LDD #1         ; Return pressed\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B1_OFF:\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
-    out.push_str("    LDD #0\n");
+    out.push_str("    LDD #0         ; Return not pressed\n");
     out.push_str("    RTS\n\n");
     
-    out.push_str("; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)\n");
-    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B2_BUILTIN:\n");
-    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
-    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
-    out.push_str("    JSR $F1BA    ; Read_Btns\n");
-    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-    out.push_str("    ANDA #$02\n");
+    out.push_str("    LDA $C80F\n");
+    out.push_str("    ANDA #$02      ; Test bit 1 (Button 2)\n");
     out.push_str("    BEQ .J1B2_OFF\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B2_OFF:\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
-    out.push_str("; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)\n");
-    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B3_BUILTIN:\n");
-    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
-    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
-    out.push_str("    JSR $F1BA    ; Read_Btns\n");
-    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-    out.push_str("    ANDA #$04\n");
+    out.push_str("    LDA $C80F\n");
+    out.push_str("    ANDA #$04      ; Test bit 2 (Button 3)\n");
     out.push_str("    BEQ .J1B3_OFF\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B3_OFF:\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     
-    out.push_str("; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)\n");
-    out.push_str("; NOTE: Leaves DP=$D0 after call (BIOS convention)\n");
     out.push_str("J1B4_BUILTIN:\n");
-    out.push_str("    JSR $F1AA    ; DP_to_D0 (BIOS routine)\n");
-    out.push_str("    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)\n");
-    out.push_str("    JSR $F1BA    ; Read_Btns\n");
-    out.push_str("    LDA $C80F    ; Vec_Btn_State\n");
-    out.push_str("    ANDA #$08\n");
+    out.push_str("    LDA $C80F\n");
+    out.push_str("    ANDA #$08      ; Test bit 3 (Button 4)\n");
     out.push_str("    BEQ .J1B4_OFF\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B4_OFF:\n");
-    out.push_str("    JSR $F1AF    ; DP_to_C8 (restore before return)\n");
     out.push_str("    LDD #0\n");
     out.push_str("    RTS\n\n");
     

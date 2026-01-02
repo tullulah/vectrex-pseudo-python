@@ -69,73 +69,49 @@ J1Y_BUILTIN:
     PULS X       ; Restore X
     RTS
 
-; === BUTTON BUILTIN SUBROUTINES ===
-; J1_BUTTON_1() - Read Joystick 1 button 1 (BIOS)
+; === BUTTON SYSTEM ===
+; J1_BUTTON_1-4() - Read button state from Vec_Btn_State
+; Reads $C80F directly (emulator writes here)
+; Vec_Btn_State: bit set = button pressed
 ; Returns: D = 0 (released), 1 (pressed)
-; NOTE: Leaves DP=$D0 after call (BIOS convention)
+
 J1B1_BUILTIN:
-    JSR $F1AA    ; DP_to_D0 (BIOS routine)
-    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$01
+    LDA $C80F    ; Read Vec_Btn_State directly
+    ANDA #$01    ; Test bit 0
     BEQ .J1B1_OFF
-    JSR $F1AF    ; DP_to_C8 (restore before return)
-    LDD #1
+    LDD #1       ; Bit set = pressed
     RTS
 .J1B1_OFF:
-    JSR $F1AF    ; DP_to_C8 (restore before return)
-    LDD #0
+    LDD #0       ; Bit clear = released
     RTS
 
-; J1_BUTTON_2() - Read Joystick 1 button 2 (BIOS)
-; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B2_BUILTIN:
-    JSR $F1AA    ; DP_to_D0 (BIOS routine)
-    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$02
+    LDA $C80F
+    ANDA #$02    ; Test bit 1
     BEQ .J1B2_OFF
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B2_OFF:
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
-; J1_BUTTON_3() - Read Joystick 1 button 3 (BIOS)
-; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B3_BUILTIN:
-    JSR $F1AA    ; DP_to_D0 (BIOS routine)
-    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$04
+    LDA $C80F
+    ANDA #$04    ; Test bit 2
     BEQ .J1B3_OFF
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B3_OFF:
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
-; J1_BUTTON_4() - Read Joystick 1 button 4 (BIOS)
-; NOTE: Leaves DP=$D0 after call (BIOS convention)
 J1B4_BUILTIN:
-    JSR $F1AA    ; DP_to_D0 (BIOS routine)
-    CLR $C80F    ; Clear Vec_Btn_State before reading (fix stale buttons on hardware)
-    JSR $F1BA    ; Read_Btns
-    LDA $C80F    ; Vec_Btn_State
-    ANDA #$08
+    LDA $C80F
+    ANDA #$08    ; Test bit 3
     BEQ .J1B4_OFF
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #1
     RTS
 .J1B4_OFF:
-    JSR $F1AF    ; DP_to_C8 (restore before return)
     LDD #0
     RTS
 
@@ -797,17 +773,27 @@ START:
     ; VPy_LINE:4
     LDD #0
     STD VAR_RAW_VALUE
-    ; VPy_LINE:7
+    ; VPy_LINE:5
+    ; Copy array 'joystick1_state' from ROM to RAM (6 elements)
+    LDX #ARRAY_0       ; Source: ROM array data
+    LDU #VAR_JOYSTICK1_STATE_DATA ; Dest: RAM array space
+    LDD #6        ; Number of elements
+COPY_LOOP_0:
+    LDY ,X++        ; Load word from ROM, increment source
+    STY ,U++        ; Store word to RAM, increment dest
+    SUBD #1         ; Decrement counter
+    BNE COPY_LOOP_0 ; Loop until done
+    ; VPy_LINE:8
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 8
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-; VPy_LINE:6
+; VPy_LINE:7
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -831,30 +817,138 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:9
+    ; VPy_LINE:10
 LOOP_BODY:
+    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
+    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
+    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(0)
-    ; VPy_LINE:12
-; NATIVE_CALL: J1_X at line 12
+    ; VPy_LINE:13
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_X at line 13
     JSR J1X_BUILTIN
     STD RESULT
-    LDX RESULT
-    LDU #VAR_RAW_VALUE
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 1 - Discriminant(8)
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 1 - Discriminant(0)
+    ; VPy_LINE:14
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_Y at line 14
+    JSR J1Y_BUILTIN
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 2 - Discriminant(0)
     ; VPy_LINE:15
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_BUTTON_1 at line 15
+    JSR J1B1_BUILTIN
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 3 - Discriminant(0)
+    ; VPy_LINE:16
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_BUTTON_2 at line 16
+    JSR J1B2_BUILTIN
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 4 - Discriminant(0)
+    ; VPy_LINE:17
+    LDD #4
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_BUTTON_3 at line 17
+    JSR J1B3_BUILTIN
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 5 - Discriminant(0)
+    ; VPy_LINE:18
+    LDD #5
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+; NATIVE_CALL: J1_BUTTON_4 at line 18
+    JSR J1B4_BUILTIN
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; DEBUG: Statement 6 - Discriminant(8)
+    ; VPy_LINE:21
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 15
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 21
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:16
+    ; DEBUG: Statement 7 - Discriminant(8)
+    ; VPy_LINE:22
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -864,18 +958,29 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_0
+    LDX #STR_4
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 16
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 22
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(9)
-    ; VPy_LINE:18
-    LDD VAR_RAW_VALUE
+    ; DEBUG: Statement 8 - Discriminant(9)
+    ; VPy_LINE:24
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
     STD RESULT
     LDD RESULT
     STD TMPLEFT
@@ -895,7 +1000,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
-    ; VPy_LINE:19
+    ; VPy_LINE:25
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -905,22 +1010,33 @@ CE_3:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_3
+    LDX #STR_8
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 19
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 25
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
     LBRA IF_END_0
 IF_NEXT_1:
-    LDD VAR_RAW_VALUE
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #0
+    LDD #2
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
@@ -936,7 +1052,7 @@ CT_5:
 CE_6:
     LDD RESULT
     LBEQ IF_NEXT_4
-    ; VPy_LINE:21
+    ; VPy_LINE:27
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -946,24 +1062,65 @@ CE_6:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_2
+    LDX #STR_6
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 21
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 27
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
     LBRA IF_END_0
 IF_NEXT_4:
-    ; VPy_LINE:23
+    ; VPy_LINE:29
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
     LDD #40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_5
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 29
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+IF_END_0:
+    ; DEBUG: Statement 9 - Discriminant(8)
+    ; VPy_LINE:33
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_0
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 33
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 10 - Discriminant(8)
+    ; VPy_LINE:34
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-20
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
@@ -971,12 +1128,271 @@ IF_NEXT_4:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 23
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 34
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-IF_END_0:
+    ; DEBUG: Statement 11 - Discriminant(8)
+    ; VPy_LINE:35
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_2
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 35
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 12 - Discriminant(8)
+    ; VPy_LINE:36
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_3
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 36
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 13 - Discriminant(9)
+    ; VPy_LINE:39
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_9
+    LDD #0
+    STD RESULT
+    BRA CE_10
+CT_9:
+    LDD #1
+    STD RESULT
+CE_10:
+    LDD RESULT
+    LBEQ IF_NEXT_8
+    ; VPy_LINE:40
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_7
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 40
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_7
+IF_NEXT_8:
+IF_END_7:
+    ; DEBUG: Statement 14 - Discriminant(9)
+    ; VPy_LINE:41
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_13
+    LDD #0
+    STD RESULT
+    BRA CE_14
+CT_13:
+    LDD #1
+    STD RESULT
+CE_14:
+    LDD RESULT
+    LBEQ IF_NEXT_12
+    ; VPy_LINE:42
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_7
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 42
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_11
+IF_NEXT_12:
+IF_END_11:
+    ; DEBUG: Statement 15 - Discriminant(9)
+    ; VPy_LINE:43
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #4
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_17
+    LDD #0
+    STD RESULT
+    BRA CE_18
+CT_17:
+    LDD #1
+    STD RESULT
+CE_18:
+    LDD RESULT
+    LBEQ IF_NEXT_16
+    ; VPy_LINE:44
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-40
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_7
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 44
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_15
+IF_NEXT_16:
+IF_END_15:
+    ; DEBUG: Statement 16 - Discriminant(9)
+    ; VPy_LINE:45
+    LDD #VAR_JOYSTICK1_STATE_DATA
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR
+    LDD #5
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    ADDD TMPPTR
+    TFR D,X
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_21
+    LDD #0
+    STD RESULT
+    BRA CE_22
+CT_21:
+    LDD #1
+    STD RESULT
+CE_22:
+    LDD RESULT
+    LBEQ IF_NEXT_20
+    ; VPy_LINE:46
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_7
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 46
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    LBRA IF_END_19
+IF_NEXT_20:
+IF_END_19:
     RTS
 
 ;***************************************************************************
@@ -987,22 +1403,47 @@ VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 VAR_RAW_VALUE EQU $C8C0+0
+VAR_JOYSTICK1_STATE_DATA EQU $C8C0+2  ; Array data (6 elements)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
 VAR_ARG2 EQU $C8B6
 VAR_ARG3 EQU $C8B8
+; Array literal for variable 'joystick1_state' (6 elements)
+ARRAY_0:
+    FDB 0   ; Element 0
+    FDB 0   ; Element 1
+    FDB 0   ; Element 2
+    FDB 0   ; Element 3
+    FDB 0   ; Element 4
+    FDB 0   ; Element 5
+
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "J1_X TEST"
+    FCC "B1"
     FCB $80
 STR_1:
-    FCC "NEGATIVE"
+    FCC "B2"
     FCB $80
 STR_2:
-    FCC "POSITIVE"
+    FCC "B3"
     FCB $80
 STR_3:
+    FCC "B4"
+    FCB $80
+STR_4:
+    FCC "J1_X TEST"
+    FCB $80
+STR_5:
+    FCC "NEGATIVE"
+    FCB $80
+STR_6:
+    FCC "POSITIVE"
+    FCB $80
+STR_7:
+    FCC "PULSADO"
+    FCB $80
+STR_8:
     FCC "ZERO"
     FCB $80
 DRAW_VEC_X EQU RESULT+0

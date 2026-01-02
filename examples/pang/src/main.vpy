@@ -150,9 +150,7 @@ def loop():
         prev_joy_x = joy_x
         prev_joy_y = joy_y
         
-        btn1 = joystick1_state[2]
-        
-        if btn1 == 1:
+        if joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1:
             # Start level - transition to game state
             screen = STATE_GAME
             countdown_active = 1
@@ -505,45 +503,18 @@ def draw_hook_rope(start_x, start_y, end_x, end_y):
 
 def read_joystick1_state():
     
+    # UPDATE_BUTTONS is now auto-injected at start of loop() by compiler
+    # No need to call it explicitly - $C80F is already populated
+    
     joystick1_state[0] = J1_X()
     joystick1_state[1] = J1_Y()
-    
-    # Button 1: Only read when we detect hardware released (J1_BUTTON_1 == 0)
-    # If hardware shows button pressed (1) while we have it locked (1), keep it locked
-    # If hardware shows released (0), allow new press next time
-    if joystick1_state[2] == 0:
-        # Our state says not pressed, check hardware
-        if J1_BUTTON_1() == 1:
-            # Hardware pressed, lock it in
-            joystick1_state[2] = 1
-    else:
-        # Our state says pressed, wait for hardware release
-        if J1_BUTTON_1() == 0:
-            # Hardware released, unlock
-            joystick1_state[2] = 0
-    
-    # Button 2: Same logic
-    if joystick1_state[3] == 0:
-        if J1_BUTTON_2() == 1:
-            joystick1_state[3] = 1
-    else:
-        if J1_BUTTON_2() == 0:
-            joystick1_state[3] = 0
-    
-    # Button 3: Same logic
-    if joystick1_state[4] == 0:
-        if J1_BUTTON_3() == 1:
-            joystick1_state[4] = 1
-    else:
-        if J1_BUTTON_3() == 0:
-            joystick1_state[4] = 0
-    
-    # Button 4: Same logic
-    if joystick1_state[5] == 0:
-        if J1_BUTTON_4() == 1:
-            joystick1_state[5] = 1
-    else:
-        if J1_BUTTON_4() == 0:
-            joystick1_state[5] = 0
+        
+    # Read cached button states (fast, no BIOS calls)
+    joystick1_state[2] = J1_BUTTON_1()
+    joystick1_state[3] = J1_BUTTON_2()
+    joystick1_state[4] = J1_BUTTON_3()
+    joystick1_state[5] = J1_BUTTON_4()
 
+
+    
 

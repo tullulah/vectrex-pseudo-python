@@ -31,7 +31,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     let is = matches!(up.as_str(),
         "VECTREX_PRINT_TEXT"|"VECTREX_DEBUG_PRINT"|"VECTREX_DEBUG_PRINT_LABELED"|"VECTREX_POKE"|"VECTREX_PEEK"|"VECTREX_PRINT_NUMBER"|"VECTREX_MOVE_TO"|"VECTREX_DRAW_TO"|"DRAW_LINE_WRAPPER"|"DRAW_LINE_FAST"|"SETUP_DRAW_COMMON"|"VECTREX_DRAW_VL"|"VECTREX_DRAW_VECTORLIST"|"VECTREX_FRAME_BEGIN"|"VECTREX_VECTOR_PHASE_BEGIN"|"VECTREX_SET_ORIGIN"|"VECTREX_SET_INTENSITY"|"VECTREX_WAIT_RECAL"|
     "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"DRAW_VECTOR_EX"|"DRAW_VECTOR_LIST"|"DRAW_LINE"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"AUDIO_UPDATE"|"MUSIC_UPDATE"|"SFX_UPDATE"|"ASM"|
-        "J1_X"|"J1_Y"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
+        "J1_X"|"J1_Y"|"UPDATE_BUTTONS"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
@@ -430,9 +430,18 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         return true;
     }
 
-    // J1_BUTTON_1: Read Joystick 1 button 1 via BIOS Read_Btns
+    // UPDATE_BUTTONS: Read all 4 buttons from BIOS ONCE per frame
+    // Call this at the start of loop() to update button cache
+    // BIOS handles debounce via transition detection
+    if up == "UPDATE_BUTTONS" && args.is_empty() {
+        add_native_call_comment(out, "UPDATE_BUTTONS");
+        out.push_str("    JSR UPDATE_BUTTONS\n");
+        return true;
+    }
+
+    // J1_BUTTON_1: Read cached button 1 state (fast, no BIOS call)
     // Returns 0 if released, 1 if pressed
-    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
+    // NOTE: Call UPDATE_BUTTONS() first in your loop()
     if up == "J1_BUTTON_1" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_1");
         out.push_str("    JSR J1B1_BUILTIN\n");
@@ -440,8 +449,8 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         return true;
     }
     
-    // J1_BUTTON_2: Read Joystick 1 button 2 via BIOS Read_Btns
-    // NOTE: Clears Vec_Btn_State before reading to prevent stale button states on hardware
+    // J1_BUTTON_2: Read cached button 2 state (fast, no BIOS call)
+    // NOTE: Call UPDATE_BUTTONS() first in your loop()
     if up == "J1_BUTTON_2" && args.is_empty() {
         add_native_call_comment(out, "J1_BUTTON_2");
         out.push_str("    JSR J1B2_BUILTIN\n");

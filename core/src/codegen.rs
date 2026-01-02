@@ -114,6 +114,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("J1_Y_DIGITAL", 0),    // Explicit digital version (-1/0/+1)
     ("J1_X_ANALOG", 0),     // Analog version (-127 to +127)
     ("J1_Y_ANALOG", 0),     // Analog version (-127 to +127)
+    ("UPDATE_BUTTONS", 0),  // Update button cache from BIOS (call once per frame)
     ("J1_BUTTON_1", 0),     // Read J1 button 1 (0=released, 1=pressed)
     ("J1_BUTTON_2", 0),     // Read J1 button 2
     ("J1_BUTTON_3", 0),     // Read J1 button 3

@@ -13,7 +13,7 @@ fn is_known_builtin(name: &str) -> bool {
         "PLAY_MUSIC1" | "DBG_STATIC_VL" | "VECTOR_PHASE_BEGIN" |
         // Joystick input builtins (0 args, uppercase - MUST be recognized)
         "J1_X" | "J1_Y" | "J1_X_DIGITAL" | "J1_Y_DIGITAL" |
-        "J1_X_ANALOG" | "J1_Y_ANALOG" | "J1_BUTTON_1" | "J1_BUTTON_2" |
+        "J1_X_ANALOG" | "J1_Y_ANALOG" | "UPDATE_BUTTONS" | "J1_BUTTON_1" | "J1_BUTTON_2" |
         "J1_BUTTON_3" | "J1_BUTTON_4" |
         // Multi-arg builtins (unlikely to be confused but include for completeness)
         "MOVE" | "PRINT_TEXT" | "DRAW_TO" | "DRAW_LINE" | "DEBUG_PRINT" |

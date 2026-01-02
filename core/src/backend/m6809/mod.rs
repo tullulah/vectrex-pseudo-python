@@ -535,7 +535,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
         }
         
-        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
+        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
         let has_music_calls = rt_usage.wrappers_used.contains("PLAY_MUSIC_RUNTIME");
@@ -707,7 +707,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
-    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
+    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    CLR $C80E ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
     let mut global_mutables: Vec<(String,i32)> = Vec::new();
@@ -746,6 +746,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
                     
+                    // Auto-inject UPDATE_BUTTONS at START of loop (before user code)
+                    // This calls Read_Btns once per frame, populating $C80F from PSG register 14
+                    // Works in emulator (frontend pre-writes $C80F) and hardware (Read_Btns reads PSG)
+                    out.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+                    out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+                    out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
 
                     let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
                     for (i, stmt) in f.body.iter().enumerate() {

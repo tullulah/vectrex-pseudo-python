@@ -1123,6 +1123,103 @@ If joystick always reads extreme values (stuck at 1):
 - [ ] Two-player support (J2_X, J2_Y for second joystick)
 - [ ] Reading JSVecx alg_jch0/alg_jch1 directly (skip RAM, avoid collisions)
 
+### 19.10 Button System (J1_BUTTON_1-4) - AUTO-INJECTED (2026-01-02)
+
+**Architecture Overview**:
+- **Problem Solved**: Button auto-fire on real hardware when calling Read_Btns multiple times per frame
+- **Solution**: Compiler auto-injects Read_Btns once at start of loop(), buttons read cached $C80F
+- **Status**: ✅ Fully implemented and tested (emulator + hardware compatible)
+
+**Dual Compatibility Design**:
+```
+EMULATOR:
+  Gamepad manager → write $C80F directly (60Hz)
+                 → write PSG register 14 (shadow hardware)
+  loop() → Read_Btns reads PSG → overwrites $C80F
+         → J1_BUTTON_1-4 read $C80F (always fresh)
+
+HARDWARE:
+  Physical buttons → VIA → PSG register 14
+  loop() → Read_Btns reads PSG → writes $C80F
+         → J1_BUTTON_1-4 read $C80F (single BIOS call per frame)
+```
+
+**Auto-Injection Implementation** (`core/src/backend/m6809/mod.rs` line 748):
+```asm
+LOOP_BODY:
+    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
+    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
+    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
+    ; [user code starts here - $C80F already populated]
+```
+
+**Button Builtin Functions** (`core/src/backend/m6809/emission.rs` lines 105-160):
+```asm
+J1B1_BUILTIN:
+    LDA $C80F    ; Read Vec_Btn_State directly (no BIOS call)
+    ANDA #$01    ; Test bit 0 (Button 1)
+    BEQ .J1B1_OFF
+    LDD #1       ; Bit set = pressed
+    RTS
+.J1B1_OFF:
+    LDD #0       ; Bit clear = released
+    RTS
+```
+
+**Memory Map**:
+- `$C80E` - Vec_Prev_Btns: Previous button state for debounce
+- `$C80F` - Vec_Btn_State: Current button state (0=released, 1=pressed)
+- PSG Register 14: Hardware button input (0=pressed, 1=released - inverted)
+
+**BIOS Read_Btns Behavior** (`$F1BA`):
+1. Requires DP=$D0 (set via `JSR $F1AA`)
+2. Reads PSG register 14
+3. Computes: `~(new_state) OR Vec_Prev_Btns` (transition detection)
+4. Stores result in Vec_Btn_State (`$C80F`)
+5. Updates Vec_Prev_Btns for next call
+6. Returns to DP=$C8 (via `JSR $F1AF`)
+
+**Why One Call Per Frame**:
+- **Problem**: Multiple Read_Btns calls break Vec_Prev_Btns debounce
+  - 1st call: Vec_Prev_Btns = old state → correct transition
+  - 2nd call: Vec_Prev_Btns = 1st call state → false negative
+- **Solution**: Auto-inject once at loop start, all buttons read cached result
+
+**Commercial Game Patterns Analyzed**:
+- **Berzerk**: Reads $C80F directly (no Read_Btns) → works in emulator only
+- **Minestorm II**: Calls Read_Btns multiple times → broken (debounce fails)
+- **Our solution**: Auto-inject Read_Btns once + read cached $C80F → works everywhere
+
+**Example VPy Code** (no explicit UPDATE_BUTTONS needed):
+```python
+def loop():
+    WAIT_RECAL()  # Auto-injected: UPDATE_BUTTONS after this
+    
+    # Read buttons (all read cached $C80F)
+    btn1 = J1_BUTTON_1()  # 0=released, 1=pressed
+    btn2 = J1_BUTTON_2()
+    btn3 = J1_BUTTON_3()
+    btn4 = J1_BUTTON_4()
+    
+    if btn1 == 1:
+        fire_weapon()  # No auto-fire - debounce handled by BIOS
+```
+
+**Testing Checklist**:
+- ✅ Emulator: Buttons work with frontend writing $C80F + PSG
+- ✅ No auto-fire in emulator (Read_Btns + debounce working)
+- ✅ Hardware compatibility verified (Read_Btns reads PSG correctly)
+- ✅ No manual UPDATE_BUTTONS() call needed (auto-injected)
+- ✅ Large projects compile (Pang: 23KB, Jetpac, etc.)
+
+**Breaking Change** (2026-01-02):
+- Old code with explicit `UPDATE_BUTTONS()` calls must remove them
+- Compiler now auto-injects Read_Btns at start of every loop()
+- No action needed if code didn't use UPDATE_BUTTONS
+
+---
+Última actualización: 2026-01-02 - Auto-inyección de Read_Btns implementada
+
 ## 20. Const Arrays - ROM-Only Data (IMPLEMENTED 2025-12-19)
 
 ### 20.1 Architecture Overview

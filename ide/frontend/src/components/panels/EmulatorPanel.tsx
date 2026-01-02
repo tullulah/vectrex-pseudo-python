@@ -547,20 +547,40 @@ export const EmulatorPanel: React.FC = () => {
         vecx.alg_jch0 = unsignedX; // Channel 0 = X axis
         vecx.alg_jch1 = unsignedY; // Channel 1 = Y axis
         
-        // Read button states and build PSG register 14 value
-        let psgReg14 = 0xFF; // Default: all buttons released (bits high)
+        // Read button states and build button state byte
+        // Vectrex buttons are active LOW (0=pressed, 1=released)
+        let buttonState = 0x00; // Default: all buttons released (bits low means not pressed)
         
         buttonMappings.forEach(mapping => {
           const button = gamepad.buttons[mapping.gamepadButton];
           if (button && button.pressed) {
-            // Button pressed: clear bit (Vectrex buttons are active low)
-            const bitMask = ~(1 << (mapping.vectrexButton - 1));
-            psgReg14 &= bitMask;
+            // Button pressed: set bit (in Vec_Btn_State, 1=pressed)
+            buttonState |= (1 << (mapping.vectrexButton - 1));
           }
         });
+        
+        // DEBUG: Log button state if any button is pressed
+        if (buttonState !== 0) {
+          console.log('[GamepadManager] Button state:', {
+            buttonState: buttonState.toString(2).padStart(4, '0'),
+            mappingsCount: buttonMappings.length,
+            psgValue: (~buttonState & 0xFF).toString(16)
+          });
+        }
 
-        // Update button state (JSVecX reads this)
-        vecx.shadow_snd_regs14 = psgReg14;
+        // DUAL WRITE STRATEGY (2026-01-02):
+        // 1. Write to PSG register 14 (for hardware real + Read_Btns on emulator)
+        // 2. Write to $C80F (for emulator shortcut - JSVecx may not fully emulate Read_Btns)
+        // Read_Btns will overwrite $C80F with debounced value, so this is just a fallback
+        
+        // Write to PSG register 14 first (hardware path)
+        // PSG uses inverted logic (0=pressed, 1=released), opposite of Vec_Btn_State
+        const psgReg14 = ~buttonState & 0xFF; // Invert bits for PSG
+        vecx.e8910_write(14, psgReg14); // Write to actual PSG, Read_Btns reads this
+        
+        // Write to Vec_Btn_State ($C80F) as fallback for emulator
+        // (Will be overwritten by Read_Btns if it works, otherwise provides direct value)
+        vecx.write8(0xC80F, buttonState);
 
       } catch (error) {
         console.error('[GamepadManager] Error setting input state:', error);
@@ -1825,7 +1845,8 @@ export const EmulatorPanel: React.FC = () => {
             vecx.rightHeld = false;
             vecx.upHeld = false;
             vecx.downHeld = false;
-            vecx.shadow_snd_regs14 = 0x00; // Todos los botones sueltos
+            vecx.shadow_snd_regs14 = 0xFF; // PSG: 0xFF = all buttons released (active low)
+            vecx.write8(0xC80F, 0x00);     // Vec_Btn_State: 0x00 = all buttons released (active high)
             // console.log('[EmulatorPanel] ✓ Joystick state initialized to neutral');
             
             // console.log('[EmulatorPanel] ✓ JSVecX fully initialized in background');
