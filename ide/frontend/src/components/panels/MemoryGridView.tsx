@@ -516,17 +516,17 @@ function readVariableValue(memory: Uint8Array, varInfo: VariableInfo): string {
   const addr = parseAddr(varInfo.address);
   
   if (varInfo.type === 'array') {
-    // Show first few elements
+    // Show ALL elements (no truncation)
     const elements = [];
-    const maxShow = Math.min(4, varInfo.size / 2);
-    for (let i = 0; i < maxShow; i++) {
+    const numElements = varInfo.size / 2;
+    for (let i = 0; i < numElements; i++) {
       const offset = i * 2;
       const high = memory[addr + offset];
       const low = memory[addr + offset + 1];
       const value = (high << 8) | low;
       elements.push(value.toString());
     }
-    return `[${elements.join(', ')}${varInfo.size / 2 > maxShow ? '...' : ''}]`;
+    return `[${elements.join(', ')}]`;
   } else if (varInfo.size === 1) {
     // 8-bit value
     const value = memory[addr];
