@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 
 interface VariableInfo {
   name: string;
@@ -32,12 +32,82 @@ const parseAddr = (addr: string): number => {
 export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variables, timestamp }) => {
   const [hoveredByte, setHoveredByte] = useState<number | null>(null);
   const [selectedVar, setSelectedVar] = useState<string | null>(null);
+  const [watchList, setWatchList] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState<number>(0);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   // Log re-renders for debugging
   React.useEffect(() => {
     console.log('[MemoryGridView] Rendered with timestamp:', new Date(timestamp).toLocaleTimeString(), 
                 'vars:', Object.keys(variables).length);
   }, [timestamp, variables]);
+
+  // Add variable to watch list
+  const addToWatch = (varName: string) => {
+    if (!watchList.includes(varName)) {
+      setWatchList([...watchList, varName]);
+    }
+  };
+
+  // Remove variable from watch list
+  const removeFromWatch = (varName: string) => {
+    setWatchList(watchList.filter(v => v !== varName));
+  };
+
+  // Search functionality
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setCurrentSearchIndex(0);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results = Object.keys(variables).filter(name => 
+      name.toLowerCase().includes(query)
+    );
+    setSearchResults(results);
+    setCurrentSearchIndex(0);
+  }, [searchQuery, variables]);
+
+  // Scroll to search result
+  const scrollToVariable = (varName: string) => {
+    if (!gridRef.current) return;
+    
+    const varInfo = variables[varName];
+    if (!varInfo) return;
+
+    const addr = parseAddr(varInfo.address);
+    const element = gridRef.current.querySelector(`[data-addr="${addr}"]`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setSelectedVar(varName);
+    }
+  };
+
+  // Navigate search results
+  const goToNextResult = () => {
+    if (searchResults.length === 0) return;
+    const nextIndex = (currentSearchIndex + 1) % searchResults.length;
+    setCurrentSearchIndex(nextIndex);
+    scrollToVariable(searchResults[nextIndex]);
+  };
+
+  const goToPrevResult = () => {
+    if (searchResults.length === 0) return;
+    const prevIndex = currentSearchIndex === 0 ? searchResults.length - 1 : currentSearchIndex - 1;
+    setCurrentSearchIndex(prevIndex);
+    scrollToVariable(searchResults[prevIndex]);
+  };
+
+  // Auto scroll to current result when it changes
+  useEffect(() => {
+    if (searchResults.length > 0 && currentSearchIndex < searchResults.length) {
+      scrollToVariable(searchResults[currentSearchIndex]);
+    }
+  }, [currentSearchIndex, searchResults]);
 
   // Build memory map: address -> variable info
   const memoryMap = useMemo(() => {
@@ -55,8 +125,8 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
 
   // Focus on interesting memory regions (RAM areas)
   const regions = [
-    { name: 'System Vars (RESULT area)', start: 0xC880, end: 0xC8FF, cols: 32 },
-    { name: 'User Variables', start: 0xCF10, end: 0xCFFF, cols: 32 },
+    { name: 'System Vars (RESULT area)', start: 0xC880, end: 0xC8FF, cols: 16 }, // Menos columnas para cuadrados más grandes
+    { name: 'User Variables', start: 0xCF10, end: 0xCFFF, cols: 16 },
   ];
 
   const renderRegion = (region: typeof regions[0]) => {
@@ -113,25 +183,56 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
                 return (
                   <div
                     key={addr}
+                    data-addr={addr}
                     onMouseEnter={() => setHoveredByte(addr)}
                     onMouseLeave={() => setHoveredByte(null)}
-                    onClick={() => varInfo && setSelectedVar(varInfo.var.name)}
+                    onClick={() => {
+                      if (varInfo) {
+                        setSelectedVar(varInfo.var.name);
+                        addToWatch(varInfo.var.name);
+                      }
+                    }}
                     style={{
-                      width: 12,
-                      height: 12,
+                      width: 40,
+                      height: 40,
                       backgroundColor: bgColor,
                       border: `1px solid ${borderColor}`,
                       cursor: varInfo ? 'pointer' : 'default',
                       transition: 'all 0.1s',
-                      transform: isHovered ? 'scale(1.3)' : 'scale(1)',
+                      transform: isHovered ? 'scale(1.15)' : 'scale(1)',
                       zIndex: isHovered ? 10 : 1,
                       position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'column',
+                      fontSize: 9,
+                      color: '#fff',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                     title={varInfo 
-                      ? `${varInfo.var.name} [${varInfo.var.address}+${varInfo.offset}] = 0x${byte.toString(16).padStart(2, '0')}`
-                      : `0x${addr.toString(16).padStart(4, '0')} = 0x${byte.toString(16).padStart(2, '0')}`
+                      ? `${varInfo.var.name} [${varInfo.var.address}+${varInfo.offset}] = 0x${byte.toString(16).padStart(2, '0')} (${byte})`
+                      : `0x${addr.toString(16).padStart(4, '0')} = 0x${byte.toString(16).padStart(2, '0')} (${byte})`
                     }
-                  />
+                  >
+                    {varInfo && varInfo.offset === 0 && (
+                      <>
+                        <span style={{ fontSize: 8, fontWeight: 'bold', marginBottom: 2 }}>
+                          {varInfo.var.name.slice(0, 4)}
+                        </span>
+                        <span style={{ fontSize: 9, opacity: 0.9 }}>
+                          {byte}
+                        </span>
+                      </>
+                    )}
+                    {!varInfo && (
+                      <span style={{ fontSize: 8, opacity: 0.5 }}>
+                        {byte.toString(16).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -148,18 +249,189 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'monospace' }}>
       {/* Grid view */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 16, backgroundColor: '#1e272e' }}>
+      <div ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: 16, backgroundColor: '#1e272e' }}>
         {regions.map(region => renderRegion(region))}
       </div>
       
-      {/* Sidebar - Variable list and details */}
+      {/* Sidebar - Watch list and search */}
       <div style={{ 
-        width: 300, 
+        width: 320, 
         borderLeft: '1px solid #444', 
         display: 'flex', 
         flexDirection: 'column',
         backgroundColor: '#2c3e50'
       }}>
+        {/* Search box */}
+        <div style={{ padding: 12, borderBottom: '1px solid #444' }}>
+          <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ecf0f1', marginBottom: 8 }}>
+            Search Variables
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Type variable name..."
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                fontSize: 11,
+                backgroundColor: '#34495e',
+                border: '1px solid #555',
+                color: '#ecf0f1',
+                borderRadius: 2,
+              }}
+            />
+          </div>
+          {searchResults.length > 0 && (
+            <div style={{ 
+              marginTop: 8, 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 8,
+              fontSize: 11,
+              color: '#bdc3c7'
+            }}>
+              <span>
+                {currentSearchIndex + 1} / {searchResults.length}
+              </span>
+              <button
+                onClick={goToPrevResult}
+                disabled={searchResults.length === 0}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  backgroundColor: '#34495e',
+                  border: '1px solid #555',
+                  color: '#ecf0f1',
+                  cursor: searchResults.length > 0 ? 'pointer' : 'not-allowed',
+                  borderRadius: 2,
+                }}
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={goToNextResult}
+                disabled={searchResults.length === 0}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  backgroundColor: '#34495e',
+                  border: '1px solid #555',
+                  color: '#ecf0f1',
+                  cursor: searchResults.length > 0 ? 'pointer' : 'not-allowed',
+                  borderRadius: 2,
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Watch list */}
+        <div style={{ 
+          borderBottom: '1px solid #444',
+          maxHeight: '40%',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{ 
+            padding: 12,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ecf0f1' }}>
+              Watch List ({watchList.length})
+            </div>
+            {watchList.length > 0 && (
+              <button
+                onClick={() => setWatchList([])}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: 10,
+                  backgroundColor: '#e74c3c',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  borderRadius: 2,
+                }}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px' }}>
+            {watchList.length === 0 ? (
+              <div style={{ 
+                fontSize: 11, 
+                color: '#7f8c8d', 
+                fontStyle: 'italic',
+                textAlign: 'center',
+                paddingTop: 20
+              }}>
+                Click on variables in the grid to add them to watch
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {watchList.map(varName => {
+                  const varInfo = variables[varName];
+                  if (!varInfo) return null;
+                  
+                  const value = readVariableValue(memory, varInfo);
+                  
+                  return (
+                    <div
+                      key={varName}
+                      style={{
+                        padding: 8,
+                        backgroundColor: '#34495e',
+                        borderLeft: `3px solid ${TYPE_COLORS[varInfo.type] || TYPE_COLORS.unknown}`,
+                        borderRadius: 2,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ 
+                          fontSize: 11, 
+                          fontWeight: 'bold', 
+                          color: '#ecf0f1',
+                          marginBottom: 4
+                        }}>
+                          {varName}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#95a5a6' }}>
+                          {value}
+                        </div>
+                        <div style={{ fontSize: 9, color: '#7f8c8d', marginTop: 2 }}>
+                          {varInfo.address} • {varInfo.size}B
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFromWatch(varName)}
+                        style={{
+                          padding: '2px 6px',
+                          fontSize: 10,
+                          backgroundColor: 'transparent',
+                          border: '1px solid #e74c3c',
+                          color: '#e74c3c',
+                          cursor: 'pointer',
+                          borderRadius: 2,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+        
         {/* Selected variable details */}
         {selectedVarInfo && (
           <div style={{ 
@@ -203,7 +475,10 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
               .map(([name, varInfo]) => (
                 <div
                   key={name}
-                  onClick={() => setSelectedVar(name)}
+                  onClick={() => {
+                    setSelectedVar(name);
+                    scrollToVariable(name);
+                  }}
                   style={{
                     padding: 6,
                     fontSize: 11,

@@ -530,15 +530,22 @@ export const EmulatorPanel: React.FC = () => {
 
 
         // Write analog joystick values to JSVecX hardware emulation
-        // JSVecX emulates real Vectrex analog hardware: alg_jch0/alg_jch1
-        // Range: 0-255 with 128=center (matches hardware pot values)
-        const analogX = Math.round((x + 1) * 127.5); // 0-255 (128=center)
-        const analogY = Math.round((y + 1) * 127.5); // 0-255 (128=center)
+        // BIOS Joy_Analog writes SIGNED values to $C81B/$C81C
+        // Range: -128 to +127 with 0=center (signed byte interpretation)
+        const analogX = Math.round(x * 127); // -127 to +127 (0=center)
+        const analogY = Math.round(y * 127); // -127 to +127 (0=center)
         
-        // Write to JSVecX analog channels (emulated hardware pots)
-        // BIOS Joy_Analog ($F1F5) reads these, converts via ADC, writes to $C81B/$C81C
-        vecx.alg_jch0 = analogX; // Channel 0 = X axis
-        vecx.alg_jch1 = analogY; // Channel 1 = Y axis
+        // Write directly to RAM locations that J1_X()/J1_Y() builtins read from
+        // Convert to unsigned byte for write8 (JavaScript doesn't have signed bytes)
+        const unsignedX = analogX < 0 ? 256 + analogX : analogX;
+        const unsignedY = analogY < 0 ? 256 + analogY : analogY;
+        
+        vecx.write8(0xC81B, unsignedX); // Vec_Joy_1_X (signed byte as unsigned write)
+        vecx.write8(0xC81C, unsignedY); // Vec_Joy_1_Y (signed byte as unsigned write)
+        
+        // Also update analog channels for compatibility (some BIOS functions might use these)
+        vecx.alg_jch0 = unsignedX; // Channel 0 = X axis
+        vecx.alg_jch1 = unsignedY; // Channel 1 = Y axis
         
         // Read button states and build PSG register 14 value
         let psgReg14 = 0xFF; // Default: all buttons released (bits high)
@@ -1441,8 +1448,8 @@ export const EmulatorPanel: React.FC = () => {
         vecx.reset();
         
         // Reinicializar joystick a valores neutros
-        vecx.write8(0xCF00, 128); // Joy_1_X neutral
-        vecx.write8(0xCF01, 128); // Joy_1_Y neutral
+        vecx.write8(0xC81B, 0); // Vec_Joy_1_X neutral (signed $00 = center)
+        vecx.write8(0xC81C, 0); // Vec_Joy_1_Y neutral (signed $00 = center)
       }
       
       initPsgLogging();
@@ -1609,8 +1616,8 @@ export const EmulatorPanel: React.FC = () => {
                   
                   vecx.stop();
                   vecx.reset();
-                  vecx.write8(0xCF00, 128);
-                  vecx.write8(0xCF01, 128);
+                  vecx.write8(0xC81B, 0);
+                  vecx.write8(0xC81C, 0);
                   
                   const romName = lastCompiledBinary.split(/[/\\\\]/).pop()?.replace(/\\.(bin|BIN)$/, '') || 'compiled';
                   setLoadedROM(`Compiled - ${romName}`);
@@ -1838,10 +1845,11 @@ export const EmulatorPanel: React.FC = () => {
         console.log('[EmulatorPanel] Emulator reset complete');
         
         // CRITICAL: Initialize joystick RAM to neutral values
-        // $CF00 = X axis (128 = center), $CF01 = Y axis (128 = center)
+        // $C81B = Vec_Joy_1_X (signed: $00 = center)
+        // $C81C = Vec_Joy_1_Y (signed: $00 = center)
         // Without this, RAM contains garbage values interpreted as extreme positions
-        vecx.write8(0xCF00, 128); // Joy_1_X neutral
-        vecx.write8(0xCF01, 128); // Joy_1_Y neutral
+        vecx.write8(0xC81B, 0); // Vec_Joy_1_X neutral
+        vecx.write8(0xC81C, 0); // Vec_Joy_1_Y neutral
         console.log('[EmulatorPanel] ✓ Joystick RAM initialized to neutral (128, 128)');
         
         // Comportamiento de auto-start dependiendo del modo:

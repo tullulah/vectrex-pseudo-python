@@ -83,8 +83,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)\n");
     out.push_str("    JSR $F1F5    ; Joy_Analog (updates $C81B from hardware)\n");
     out.push_str("    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81B)\n");
-    out.push_str("    LDB $C81B    ; Vec_Joy_1_X (now updated by Joy_Analog)\n");
+    out.push_str("    LDB $C81B    ; Vec_Joy_1_X (BIOS writes ~$FE at center)\n");
     out.push_str("    SEX          ; Sign-extend B to D\n");
+    out.push_str("    ADDD #2      ; Calibrate center offset\n");
     out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     
@@ -95,8 +96,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)\n");
     out.push_str("    JSR $F1F5    ; Joy_Analog (updates $C81C from hardware)\n");
     out.push_str("    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81C)\n");
-    out.push_str("    LDB $C81C    ; Vec_Joy_1_Y (now updated by Joy_Analog)\n");
+    out.push_str("    LDB $C81C    ; Vec_Joy_1_Y (BIOS writes ~$FE at center)\n");
     out.push_str("    SEX          ; Sign-extend B to D\n");
+    out.push_str("    ADDD #2      ; Calibrate center offset\n");
     out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     

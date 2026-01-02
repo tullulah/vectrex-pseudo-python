@@ -371,8 +371,9 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    JSR $F1F8    ; Joy_Digital\n");
         out.push_str("    LDA #$C8\n");
         out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
-        out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
-        out.push_str("    SEX\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X (0-255, 128=center)\n");
+        out.push_str("    SUBB #128    ; Center to signed range (-128 to +127)\n");
+        out.push_str("    SEX          ; Sign-extend to 16-bit\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -391,8 +392,9 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    JSR $F1F5    ; Joy_Analog\n");
         out.push_str("    LDA #$C8\n");
         out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
-        out.push_str("    LDB $C81B    ; Vec_Joy_1_X\n");
-        out.push_str("    SEX\n");
+        out.push_str("    LDB $C81B    ; Vec_Joy_1_X (0-255, 128=center)\n");
+        out.push_str("    SUBB #128    ; Center to signed range (-128 to +127)\n");
+        out.push_str("    SEX          ; Sign-extend to 16-bit\n");
         out.push_str("    STD RESULT\n");
         return true;
     }
@@ -421,8 +423,9 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    JSR $F1F5    ; Joy_Analog\n");
         out.push_str("    LDA #$C8\n");
         out.push_str("    TFR A,DP     ; Restore DP=$C8\n");
-        out.push_str("    LDB $C81C    ; Vec_Joy_1_Y\n");
-        out.push_str("    SEX\n");
+        out.push_str("    LDB $C81C    ; Vec_Joy_1_Y (BIOS writes ~$FE at center)\n");
+        out.push_str("    SEX          ; Sign-extend to 16-bit\n");
+        out.push_str("    ADDD #2      ; Calibrate center offset ($FE → $00)\n");
         out.push_str("    STD RESULT\n");
         return true;
     }

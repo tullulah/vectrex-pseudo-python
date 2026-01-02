@@ -47,6 +47,7 @@ export const MemoryPanel: React.FC = () => {
   const [viewMode, setViewMode] = useState<'text' | 'grid'>('grid');
   const [memory, setMemory] = useState<Uint8Array>(new Uint8Array(65536));
   const [variables, setVariables] = useState<Record<string, VariableInfo>>({});
+  const [autoUpdate, setAutoUpdate] = useState<boolean>(false);
 
   // Load PDB file to get variable information
   const loadPDB = useCallback(async () => {
@@ -168,6 +169,17 @@ export const MemoryPanel: React.FC = () => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Auto-update every 200ms when enabled
+  useEffect(() => {
+    if (!autoUpdate) return;
+    
+    const interval = setInterval(() => {
+      refresh();
+    }, 200);
+    
+    return () => clearInterval(interval);
+  }, [autoUpdate, refresh]);
+
   const saveText = () => {
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -226,7 +238,22 @@ export const MemoryPanel: React.FC = () => {
   return (
     <div style={{display:'flex', flexDirection:'column', height:'100%', fontFamily:'monospace'}}>
       <div style={{padding:'4px', borderBottom:'1px solid #444', display:'flex', gap:8, alignItems:'center'}}>
-        <button onClick={refresh}>Refresh</button>        <button onClick={loadPDB}>Load PDB</button>        <button onClick={saveText}>Save TXT</button>
+        <button onClick={refresh}>Refresh</button>        
+        <button 
+          onClick={() => setAutoUpdate(!autoUpdate)}
+          style={{
+            backgroundColor: autoUpdate ? '#2ecc71' : 'transparent',
+            color: autoUpdate ? 'white' : 'inherit',
+            border: '1px solid #555',
+            padding: '4px 12px',
+            cursor: 'pointer',
+            fontWeight: autoUpdate ? 'bold' : 'normal'
+          }}
+        >
+          {autoUpdate ? '⏸ Pause' : '▶ Auto 200ms'}
+        </button>
+        <button onClick={loadPDB}>Load PDB</button>        
+        <button onClick={saveText}>Save TXT</button>
         <button onClick={saveBin}>Save BIN</button>
         
         {/* View mode toggle */}

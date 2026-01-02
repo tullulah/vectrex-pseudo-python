@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<AllProjectProperties>
+	<ProjectProperties>
+		<Class>Project</Class>
+		<Name>pong</Name>
+		<FileVersion>2</FileVersion>
+		<ProjectName>pong</ProjectName>
+		<DirectoryName></DirectoryName>
+		<Path></Path>
+		<MainFile></MainFile>
+		<Description></Description>
+		<Version>1.0</Version>
+		<Author></Author>
+		<Bankswitching>none</Bankswitching>
+		<createBankswitchCode>false</createBankswitchCode>
+		<createGameLoopCode>false</createGameLoopCode>
+		<NumberOfBanks>1</NumberOfBanks>
+		<BankMainFiless>
+			<BankMainFiles></BankMainFiles>
+		</BankMainFiless>
+		<Extras>0</Extras>
+		<ProjectPreScriptClass></ProjectPreScriptClass>
+		<ProjectPreScriptName></ProjectPreScriptName>
+		<ProjectPostScriptClass></ProjectPostScriptClass>
+		<ProjectPostScriptName></ProjectPostScriptName>
+		<BankDefiness>
+			<BankDefines></BankDefines>
+		</BankDefiness>
+		<WheelName></WheelName>
+		<IsCDebugging>false</IsCDebugging>
+		<IsCPeephole>false</IsCPeephole>
+		<IsCKeepEnriched>false</IsCKeepEnriched>
+		<IsCProject>false</IsCProject>
+		<IsPeerCProject>true</IsPeerCProject>
+		<CFLAGS>-quiet -fno-gcse -fverbose-asm -W -Wall -Wextra -Wconversion -Werror -fomit-frame-pointer -fno-toplevel-reorder -mint8 -msoft-reg-count=0 -std=gnu99 -fno-time-report -IC/PeerC/vectrex/include</CFLAGS>
+		<IsCRumInlined>false</IsCRumInlined>
+	</ProjectProperties>
+</AllProjectProperties>
