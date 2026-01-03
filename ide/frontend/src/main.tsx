@@ -19,6 +19,7 @@ import { initLoggerWithRefreshDetection, logger, detectRefresh } from './utils/l
 import { ActivityBar, ActivityBarItem } from './components/ActivityBar.js';
 import { GitPanel } from './components/panels/GitPanel.js';
 import { FileTreePanel } from './components/panels/FileTreePanel.js';
+import { PlaygroundPanel } from './components/panels/PlaygroundPanel.js';
 
 // Initialize store reference for cross-store access
 setEditorStoreRef(useEditorStore);
@@ -1446,42 +1447,51 @@ def loop():
           onItemClick={setActiveSidebarPanel}
         />
         
-        {/* Sidebar Panel (Files or Git) */}
-        {activeSidebarPanel && (
+        {/* Fullscreen Playground mode */}
+        {activeSidebarPanel === 'playground' ? (
+          <div style={{flex: 1, position: 'relative'}}>
+            <PlaygroundPanel />
+          </div>
+        ) : (
           <>
-            <div style={{
-              width: `${sidebarWidth}px`,
-              background: '#252526',
-              display: 'flex',
-              flexDirection: 'column',
-              flexShrink: 0,
-              position: 'relative'
-            }}>
-              {activeSidebarPanel === 'files' && <FileTreePanel />}
-              {activeSidebarPanel === 'git' && <GitPanel />}
+            {/* Sidebar Panel (Files or Git) */}
+            {activeSidebarPanel && (
+              <>
+                <div style={{
+                  width: `${sidebarWidth}px`,
+                  background: '#252526',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexShrink: 0,
+                  position: 'relative'
+                }}>
+                  {activeSidebarPanel === 'files' && <FileTreePanel />}
+                  {activeSidebarPanel === 'git' && <GitPanel />}
+                </div>
+                {/* Resize handle */}
+                <div
+                  onMouseDown={handleMouseDown}
+                  style={{
+                    width: '4px',
+                    cursor: 'col-resize',
+                    background: isResizing ? '#007acc' : '#1e1e1e',
+                    transition: 'background 0.1s',
+                    flexShrink: 0,
+                    position: 'relative',
+                    zIndex: 10
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#007acc'}
+                  onMouseLeave={(e) => !isResizing && (e.currentTarget.style.background = '#1e1e1e')}
+                />
+              </>
+            )}
+            
+            {/* Main workspace area */}
+            <div style={{flex: 1, position: 'relative'}}>
+              <DockWorkspace />
             </div>
-            {/* Resize handle */}
-            <div
-              onMouseDown={handleMouseDown}
-              style={{
-                width: '4px',
-                cursor: 'col-resize',
-                background: isResizing ? '#007acc' : '#1e1e1e',
-                transition: 'background 0.1s',
-                flexShrink: 0,
-                position: 'relative',
-                zIndex: 10
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#007acc'}
-              onMouseLeave={(e) => !isResizing && (e.currentTarget.style.background = '#1e1e1e')}
-            />
           </>
         )}
-        
-        {/* Main workspace area */}
-        <div style={{flex: 1, position: 'relative'}}>
-          <DockWorkspace />
-        </div>
       </div>
       
       {/* New Project Dialog */}
