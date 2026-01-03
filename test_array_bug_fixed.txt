@@ -1,0 +1,9 @@
+=== COMPILATION PIPELINE START ===
+Input file: test_array_bug.vpy
+Target: Vectrex
+Binary generation: enabled
+Assembler: native M6809 (integrated)
+Phase 1: Reading source file...
+❌ PHASE 1 FAILED: Cannot read source file
+   Error: No such file or directory (os error 2)
+Error: No such file or directory (os error 2)

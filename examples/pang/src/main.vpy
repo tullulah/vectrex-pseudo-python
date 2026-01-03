@@ -38,7 +38,6 @@ prev_joy_y = 0
 # Game state variables
 countdown_timer = 0      # Countdown from 180 frames (~3 seconds at 60fps)
 countdown_active = 0     # 0=inactive, 1=active
-max_level_unlocked = 0   # Player progression (0-16)
 joystick_poll_counter = 0  # Counter to poll joystick every N frames
 
 # Hook (disparo) system
@@ -52,10 +51,8 @@ hook_init_y = 0          # Initial Y position of gun (stays fixed for rope start
 # Player variables
 player_x = 0             # Player X position
 const player_y = -100          # Player Y position (on ground)
-player_speed = 2         # Base movement speed
 move_speed = 0           # Current movement speed (calculated from joystick)
 abs_joy = 0              # Helper for absolute value calculation
-speed_multiplier = 0     # Speed multiplier based on joystick position
 player_anim_frame = 1    # Current animation frame (1-5)
 player_anim_counter = 0  # Frame counter for animation timing
 const player_anim_speed = 5    # Frames per animation frame
@@ -90,15 +87,11 @@ def main():
     # Initialize game state variables
     countdown_timer = 0
     countdown_active = 0
-    max_level_unlocked = 0
     
     # Initialize hook system
     hook_active = 0
     hook_x = 0
     hook_y = -100
-    
-    # Initialize enemy system
-    init_enemies()
 
 def loop():
 
@@ -161,16 +154,8 @@ def loop():
     elif screen == STATE_GAME:
         # Countdown "GET READY" phase
         if countdown_active == 1:
-            #Spawn enemies only once when countdown starts
-            if countdown_timer >= 180:
-                spawn_level_enemies()
-            
-            # Draw background and enemies during countdown
+            # Draw background during countdown (no enemies)
             draw_level_background()
-             
-            # Update and draw enemies during countdown
-            #update_enemies()
-            #draw_enemies()
             
             SET_INTENSITY(127)
             PRINT_TEXT(-50, 0, "GET READY")
@@ -182,9 +167,10 @@ def loop():
             # Decrement countdown timer
             countdown_timer = countdown_timer - 1
             
-            # When countdown finishes, start actual game
+            # When countdown finishes, spawn and start game
             if countdown_timer <= 0:
                 countdown_active = 0
+                spawn_enemies()
         else:
             # Actual game after countdown
             
@@ -383,8 +369,8 @@ def draw_game_level():
         DRAW_VECTOR_EX("player_walk_5", player_x, player_y, mirror_mode, 80)
     
     # Update and draw enemies
-    #update_enemies()
-    #draw_enemies()
+    update_enemies()
+    draw_enemies()
     
     # Draw hook rope and hook if active
     if hook_active == 1:
@@ -404,88 +390,63 @@ def draw_game_level():
             active_count = active_count + 1
         i = i + 1
 
-def init_enemies():
-    # Initialize enemy system (called once at startup)
-    i = 0
-    while i < MAX_ENEMIES:
-        enemy_active[i] = 0
-        enemy_x[i] = 0
-        enemy_y[i] = 0
-        enemy_vx[i] = 0
-        enemy_vy[i] = 0
-        enemy_size[i] = 0
-        i = i + 1
+# ===== ENEMY SYSTEM - Simple and Clear =====
 
-def spawn_level_enemies():
-    # Spawn enemies for current level
-    num_enemies = level_enemy_count[current_location]
-    base_speed = level_enemy_speed[current_location]
-  
+def spawn_enemies():
+    #"""Spawn enemies for current level - called ONCE when game starts"""
+    count = level_enemy_count[current_location]
+    speed = level_enemy_speed[current_location]
+    
     i = 0
-    while i < num_enemies and i < MAX_ENEMIES:
+    while i < count:
         enemy_active[i] = 1
-        enemy_x[i] = -60 + (i * 40)  # Spread across screen
-        enemy_y[i] = 0
-        
-        # Initial velocity
-        enemy_vx[i] = base_speed
-        if i % 2 == 0:
-            enemy_vx[i] = -base_speed
-        
-        enemy_vy[i] = 0  # Start falling
-        enemy_size[i] = 4  # Start with huge bubbles
-        
+        enemy_size[i] = 4        # Size 4 (huge bubble, radius 25)
+        enemy_x[i] = -80 + (i * 50)  # Spread horizontally
+        enemy_y[i] = 60          # Start high up
+        enemy_vx[i] = speed      # Horizontal speed
+        if i % 2 == 1:
+            enemy_vx[i] = -speed # Alternate direction
+        enemy_vy[i] = 0          # Start stationary (gravity will pull down)
         i = i + 1
 
 def update_enemies():
-    # Update physics for all active enemies
-    i = 0
-    while i < MAX_ENEMIES:
-        if enemy_active[i] == 1:
-            enemy_vy[i] = enemy_vy[i] - GRAVITY
-            
-            # Update position
-            enemy_x[i] = enemy_x[i] + enemy_vx[i]
-            enemy_y[i] = enemy_y[i] + enemy_vy[i]
-            
-            # Get bubble radius based on size (huge=25, large=20, medium=15, small=10)
-            radius = 10
-            if enemy_size[i] == 4:
-                radius = 25
-            elif enemy_size[i] == 3:
-                radius = 20
-            elif enemy_size[i] == 2:
-                radius = 15
-            
-            # Bounce off walls
-            if enemy_x[i] < -110 + radius:
-                enemy_x[i] = -110 + radius
-                enemy_vx[i] = -enemy_vx[i]
-            elif enemy_x[i] > 110 - radius:
-                enemy_x[i] = 110 - radius
-                enemy_vx[i] = -enemy_vx[i]
-            
-            # Bounce off ground
-            if enemy_y[i] < GROUND_Y + radius:
-                enemy_y[i] = GROUND_Y + radius
-                enemy_vy[i] = -enemy_vy[i]
-                # Apply damping (90% bounce)
-                enemy_vy[i] = (enemy_vy[i] * BOUNCE_DAMPING) / 10
-            
-            # Bounce off ceiling
-            if enemy_y[i] > 110:
-                enemy_y[i] = 110
-                enemy_vy[i] = -enemy_vy[i]
+    #"""Update all active enemies - called every frame during gameplay"""
+    if enemy_active[0] == 1:
+        # Apply gravity directly to array
+        enemy_vy[0] = enemy_vy[0] - GRAVITY
         
-        i = i + 1
+        # Move directly with arrays
+        enemy_x[0] = enemy_x[0] + enemy_vx[0]
+        enemy_y[0] = enemy_y[0] + enemy_vy[0]
+        
+        # Ground bounce
+        if enemy_y[0] <= -55:
+            enemy_y[0] = -55
+            enemy_vy[0] = -enemy_vy[0]
+            enemy_vy[0] = (enemy_vy[0] * 4) / 5
+        
+        # Wall bounce
+        if enemy_x[0] <= -85:
+            enemy_x[0] = -85
+            enemy_vx[0] = -enemy_vx[0]
+        if enemy_x[0] >= 85:
+            enemy_x[0] = 85
+            enemy_vx[0] = -enemy_vx[0]
+        
+        # Debug print (reading from arrays directly)
+        DEBUG_PRINT_LABELED("ENEMY_X", enemy_x[0])
+        DEBUG_PRINT_LABELED("ENEMY_Y", enemy_y[0])
+        DEBUG_PRINT_LABELED("ENEMY_VX", enemy_vx[0])
+        DEBUG_PRINT_LABELED("ENEMY_VY", enemy_vy[0])
+       
+
 
 def draw_enemies():
-    # Draw all active enemies
+    #"""Draw all active enemies - called every frame during gameplay"""
     i = 0
     while i < MAX_ENEMIES:
         if enemy_active[i] == 1:
             SET_INTENSITY(80)
-            # Draw bubble based on size (4=huge, 3=large, 2=medium, 1=small)
             if enemy_size[i] == 4:
                 DRAW_VECTOR("bubble_huge", enemy_x[i], enemy_y[i])
             elif enemy_size[i] == 3:
@@ -494,8 +455,9 @@ def draw_enemies():
                 DRAW_VECTOR("bubble_medium", enemy_x[i], enemy_y[i])
             else:
                 DRAW_VECTOR("bubble_small", enemy_x[i], enemy_y[i])
-        
         i = i + 1
+
+# ===== END ENEMY SYSTEM =====
 
 def draw_hook_rope(start_x, start_y, end_x, end_y):
     # Draw a straight line from gun position to hook position (using direct signed values)
@@ -514,7 +476,3 @@ def read_joystick1_state():
     joystick1_state[3] = J1_BUTTON_2()
     joystick1_state[4] = J1_BUTTON_3()
     joystick1_state[5] = J1_BUTTON_4()
-
-
-    
-

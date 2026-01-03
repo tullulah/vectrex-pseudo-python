@@ -115,8 +115,6 @@ export const MemoryPanel: React.FC = () => {
       return;
     }
     
-    console.log('[MemoryPanel] Starting memory snapshot...');
-    
     try {
       // Crear snapshot de memoria - NUEVO array cada vez para forzar re-render
       const snap = new Uint8Array(65536);
@@ -125,7 +123,6 @@ export const MemoryPanel: React.FC = () => {
       // JSVecx tiene vecx.ram (Array de 1024 bytes) mapeado a $C800-$CBFF
       // Esto es ~1000x más rápido que el loop anterior
       if (vecx.ram && Array.isArray(vecx.ram)) {
-        console.log('[MemoryPanel] Using direct RAM access (fast path)');
         // JSVecx ram es 1024 bytes, mapeado a $C800-$CBFF
         // La Vectrex real tiene 2KB ($C800-$CFFF) pero JSVecx emula solo 1KB
         for (let i = 0; i < Math.min(vecx.ram.length, 0x800); i++) {
@@ -140,7 +137,6 @@ export const MemoryPanel: React.FC = () => {
       
       // Opcional: leer cartridge ROM directamente si está cargado
       if (vecx.cart && Array.isArray(vecx.cart) && vecx.cart.length > 0) {
-        console.log('[MemoryPanel] Using direct cart access');
         const len = Math.min(vecx.cart.length, 0x1000); // Primeros 4KB
         for (let i = 0; i < len; i++) {
           snap[i] = (vecx.cart[i] & 0xff);
@@ -157,8 +153,6 @@ export const MemoryPanel: React.FC = () => {
       const parts: string[] = [];
       REGIONS.forEach(r => parts.push(dumpRegion(snap, r)));
       setText(parts.join('\n\n'));
-      
-      console.log('[MemoryPanel] ✓ Memory snapshot completed at', new Date(now).toLocaleTimeString());
     } catch (e) {
       const errorMsg = '[memory] Failed to read memory from JSVecX: ' + e;
       setText(errorMsg);

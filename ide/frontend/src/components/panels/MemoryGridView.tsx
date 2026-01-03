@@ -38,12 +38,6 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
   const [currentSearchIndex, setCurrentSearchIndex] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Log re-renders for debugging
-  React.useEffect(() => {
-    console.log('[MemoryGridView] Rendered with timestamp:', new Date(timestamp).toLocaleTimeString(), 
-                'vars:', Object.keys(variables).length);
-  }, [timestamp, variables]);
-
   // Add variable to watch list
   const addToWatch = (varName: string) => {
     if (!watchList.includes(varName)) {
@@ -126,7 +120,7 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
   // Focus on interesting memory regions (RAM areas)
   const regions = [
     { name: 'System Vars (RESULT area)', start: 0xC880, end: 0xC8FF, cols: 16 }, // Menos columnas para cuadrados más grandes
-    { name: 'User Variables', start: 0xCF10, end: 0xCFFF, cols: 16 },
+    { name: 'User Variables', start: 0xC900, end: 0xCFFF, cols: 16 }, // FIXED: Start at 0xC900 to include all user vars (enemy arrays, etc.)
   ];
 
   const renderRegion = (region: typeof regions[0]) => {

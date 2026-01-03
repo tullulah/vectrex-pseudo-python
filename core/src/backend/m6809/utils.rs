@@ -29,6 +29,11 @@ pub fn format_expr_ref(e: &Expr) -> String {
         Expr::StringLit(s) => format!("S:{}", s),
         Expr::Call(ci) => format!("C:{}", ci.name),
         Expr::MethodCall(mc) => format!("M:{}.{}", format_expr_ref(&mc.target), mc.method_name),
+        Expr::Index { target, index } => {
+            // CRITICAL: Include both array name and index to distinguish different arrays
+            // e.g., enemy_x[i] vs enemy_vx[i] should be different
+            format!("IDX:{}[{}]", format_expr_ref(target), format_expr_ref(index))
+        }
         _ => "?".to_string(),
     }
 }

@@ -204,7 +204,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     }
     if w.contains("VECTREX_DEBUG_PRINT_LABELED") {
         out.push_str(
-            "VECTREX_DEBUG_PRINT_LABELED:\n    ; Debug print with label - writes to gap area (C000-C7FF)\n    ; Write label string pointer to unmapped gap\n    LDA VAR_ARG0     ; Label string pointer high byte\n    STA $C002        ; Label pointer high in gap\n    LDA VAR_ARG0+1   ; Label string pointer low byte  \n    STA $C003        ; Label pointer low in gap\n    ; Write value to debug output\n    LDA VAR_ARG1+1   ; Load value to debug print\n    STA $C000        ; Debug output value in gap\n    LDA #$FE         ; Labeled debug marker\n    STA $C001        ; Debug marker to indicate labeled output\n    RTS\n"
+            "VECTREX_DEBUG_PRINT_LABELED:\n    ; Debug print with label - writes to gap area (C000-C7FF)\n    ; Write value to debug output (16-bit signed)\n    LDA VAR_ARG1     ; Load value high byte\n    STA $C002        ; Debug output high byte\n    LDA VAR_ARG1+1   ; Load value low byte\n    STA $C000        ; Debug output low byte\n    ; Write label string pointer to C004-C005\n    LDA VAR_ARG0     ; Label string pointer high byte\n    STA $C004        ; Label pointer high in gap\n    LDA VAR_ARG0+1   ; Label string pointer low byte  \n    STA $C005        ; Label pointer low in gap\n    LDA #$FE         ; Labeled debug marker\n    STA $C001        ; Debug marker to indicate labeled output\n    RTS\n"
         );
     }
     if w.contains("VECTREX_POKE") {

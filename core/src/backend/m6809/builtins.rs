@@ -1396,10 +1396,13 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str(&format!("    STD VAR_ARG{}\n", i));
     }
     
-    // Add native call tracking comment before JSR
-    add_native_call_comment(out, &up);
+    // Resolve function name (e.g., DEBUG_PRINT_LABELED -> VECTREX_DEBUG_PRINT_LABELED)
+    let resolved_name = resolve_function_name(&up).unwrap_or(up.clone());
     
-    if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", up)); } else { out.push_str(&format!("    JSR {}\n", up)); }
+    // Add native call tracking comment before JSR
+    add_native_call_comment(out, &resolved_name);
+    
+    if opts.force_extended_jsr { out.push_str(&format!("    JSR >{}\n", resolved_name)); } else { out.push_str(&format!("    JSR {}\n", resolved_name)); }
     // Return 0
     out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
     true

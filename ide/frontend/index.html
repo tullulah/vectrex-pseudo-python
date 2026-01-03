@@ -178,7 +178,8 @@
                                 let label = '';
                                 for (let i = 0; i < 32; i++) {
                                     const ch = vecx.read8(labelPtr + i);
-                                    if (ch === 0) break;
+                                    if (ch === 0) break; // Null terminator
+                                    if (ch >= 0x80) break; // Vectrex string terminator (high bit set)
                                     label += String.fromCharCode(ch);
                                 }
                                 
