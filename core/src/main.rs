@@ -10,6 +10,7 @@ mod library;  // Library system
 mod vecres;   // Vector resources (.vec)
 mod musres;   // Music resources (.vmus)
 mod sfxres;   // Sound effects resources (.vsfx)
+mod levelres; // Level resources (.vplay)
 mod struct_layout; // Struct layout computation
 
 use std::fs;
@@ -110,6 +111,25 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
         }
     }
     
+    // Search for level data (assets/playground/*.vplay)
+    let levels_dir = project_root.join("assets").join("playground");
+    if levels_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&levels_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vplay") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: codegen::AssetType::Level,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
     // Log discovered assets
     if !assets.is_empty() {
         eprintln!("✓ Discovered {} asset(s):", assets.len());
@@ -118,6 +138,7 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
                 codegen::AssetType::Vector => "Vector",
                 codegen::AssetType::Music => "Music",
                 codegen::AssetType::Sfx => "SFX",
+                codegen::AssetType::Level => "Level",
             };
             eprintln!("  - {} ({})", asset.name, type_str);
         }

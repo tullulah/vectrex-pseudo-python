@@ -188,6 +188,7 @@ pub enum AssetType {
     Vector,  // .vec file
     Music,   // .vmus file (background music, loops)
     Sfx,     // .vsfx file (sound effect, parametric SFXR-style)
+    Level,   // .vplay file (level data for games)
 }
 
 // CodegenOptions: options affecting generation (title, etc.).

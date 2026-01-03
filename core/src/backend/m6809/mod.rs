@@ -25,6 +25,7 @@ pub use ram_layout::*;
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
+use crate::levelres::VPlayLevel;
 
 // Original imports
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
@@ -1132,6 +1133,20 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                             Err(e) => {
                                 out.push_str(&format!("; ERROR: Failed to load/generate SFX asset {}: {}\n", asset.path, e));
                             }
+                        }
+                    },
+                    crate::codegen::AssetType::Level => {
+                        // Level data uses .vplay format (JSON level design)
+                        if let Ok(level) = VPlayLevel::load(std::path::Path::new(&asset.path)) {
+                            out.push_str(&format!("; ========================================\n"));
+                            out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
+                            out.push_str(&format!("; ========================================\n"));
+                            
+                            let asm = level.compile_to_asm();
+                            out.push_str(&asm);
+                            out.push_str("\n");
+                        } else {
+                            out.push_str(&format!("; ERROR: Failed to load level asset: {}\n", asset.path));
                         }
                     }
                 }

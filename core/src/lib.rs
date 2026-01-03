@@ -3,7 +3,6 @@ pub mod ast;
 pub mod parser;
 pub mod codegen;
 pub mod target;
-pub mod backend;
 pub mod project;  // VPy project system (.vpyproj)
 pub mod resolver; // Multi-file import resolution
 pub mod unifier;  // AST unification for multi-file projects
@@ -11,7 +10,9 @@ pub mod library;  // VPy library system (.vpylib)
 pub mod vecres;   // Vector resource format (.vec)
 pub mod musres;   // Music resource format (.vmus)
 pub mod sfxres;   // Sound effects resource format (.vsfx)
+pub mod levelres; // Level resource format (.vplay)
 pub mod struct_layout; // Struct layout computation (Phase 2)
+pub mod backend;
 // Legacy emulator module removed; use vectrex_emulator crate instead.
 // pub mod emulator; // intentionally disabled
 #[cfg(not(target_arch = "wasm32"))]

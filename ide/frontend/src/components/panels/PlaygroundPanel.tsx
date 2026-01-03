@@ -304,6 +304,8 @@ export function PlaygroundPanel() {
         // Object-to-object collisions
         const finalObjects = newObjects.map((obj, i) => {
           if (!obj.physicsEnabled) return obj;
+          // Skip if current object is not collidable
+          if (!obj.collidable) return obj;
 
           for (let j = 0; j < newObjects.length; j++) {
             if (i === j) continue;
@@ -427,7 +429,7 @@ export function PlaygroundPanel() {
       console.log('[Playground] Saved scene:', filePath);
       showToast(`Scene "${sceneName}" saved!`, 'success');
       setShowSaveLoadModal(false);
-      setSceneName('');
+      // Keep sceneName so we can quick-save next time
       
       // Refresh scene list
       const result = await (window as any).files.readDirectory(`${projectRoot}/assets/playground`);
@@ -477,6 +479,7 @@ export function PlaygroundPanel() {
       
       setObjects(loadedObjects);
       setSelectedId(null);
+      setSceneName(name); // Remember the scene name for future saves
       console.log('[Playground] Loaded scene:', name, `(${loadedObjects.length} objects)`);
       showToast(`Scene "${name}" loaded!`, 'success');
       setShowSaveLoadModal(false);
@@ -665,7 +668,7 @@ export function PlaygroundPanel() {
             let color = '#00ff0080'; // default cyan (non-collidable)
             if (isSelected) {
               color = '#00ff00'; // bright green when selected
-            } else if (obj.collidable) {
+            } else if (obj.collidable === true) {
               color = '#4080ff80'; // blue for collidable
             }
             
@@ -818,8 +821,14 @@ export function PlaygroundPanel() {
         <div style={{ flex: 1 }} />
         <button
           onClick={() => {
-            setModalMode('save');
-            setShowSaveLoadModal(true);
+            // Quick save: if we already have a name, save directly
+            if (sceneName.trim()) {
+              handleSaveScene();
+            } else {
+              // No name yet, open modal to ask for it
+              setModalMode('save');
+              setShowSaveLoadModal(true);
+            }
           }}
           style={{
             padding: '4px 12px',

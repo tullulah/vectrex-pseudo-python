@@ -2,12 +2,12 @@
   "version": "2.0",
   "type": "level",
   "metadata": {
-    "name": "Mount Fuji - Level 1",
-    "author": "System",
-    "difficulty": "easy",
-    "timeLimit": 120,
-    "targetScore": 3000,
-    "description": "First level - Learn the basics in Japan"
+    "name": "fuji_level1_v2",
+    "author": "",
+    "difficulty": "medium",
+    "timeLimit": 0,
+    "targetScore": 0,
+    "description": "Created in Playground - 2026-01-03"
   },
   "worldBounds": {
     "xMin": -96,
@@ -27,7 +27,13 @@
         "rotation": 0,
         "intensity": 80,
         "layer": "background",
-        "visible": true
+        "visible": true,
+        "collidable": false,
+        "physicsEnabled": false,
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
       }
     ],
     "gameplay": [
@@ -37,7 +43,7 @@
         "vectorName": "bubble_large",
         "x": -40,
         "y": 60,
-        "scale": 1.0,
+        "scale": 1,
         "rotation": 0,
         "intensity": 127,
         "physics": {
@@ -56,8 +62,8 @@
           "destroyOnCollision": false
         },
         "velocity": {
-          "x": 5,
-          "y": 0
+          "x": -1.1052777777777791,
+          "y": -0.6018416170232209
         },
         "properties": {
           "health": 1,
@@ -67,7 +73,9 @@
         },
         "layer": "gameplay",
         "spawnDelay": 0,
-        "destroyOffscreen": false
+        "destroyOffscreen": false,
+        "physicsEnabled": true,
+        "physicsType": "bounce"
       },
       {
         "id": "enemy_2",
@@ -75,7 +83,7 @@
         "vectorName": "bubble_large",
         "x": 40,
         "y": 60,
-        "scale": 1.0,
+        "scale": 1,
         "rotation": 0,
         "intensity": 127,
         "physics": {
@@ -94,8 +102,8 @@
           "destroyOnCollision": false
         },
         "velocity": {
-          "x": -5,
-          "y": 0
+          "x": 1.9391666666666652,
+          "y": -1.5596911509128166
         },
         "properties": {
           "health": 1,
@@ -105,7 +113,28 @@
         },
         "layer": "gameplay",
         "spawnDelay": 60,
-        "destroyOffscreen": false
+        "destroyOffscreen": false,
+        "physicsEnabled": true,
+        "physicsType": "bounce"
+      },
+      {
+        "id": "obj_1767470884207",
+        "type": "enemy",
+        "vectorName": "fuji_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "velocity": {
+          "x": 0,
+          "y": 0
+        },
+        "physicsEnabled": false,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "gravity",
+        "layer": "gameplay"
       }
     ],
     "foreground": []
@@ -114,29 +143,6 @@
     "player": {
       "x": 0,
       "y": -100
-    },
-    "enemies": [
-      {
-        "type": "bubble_large",
-        "x": -40,
-        "y": 60,
-        "delay": 0,
-        "properties": {
-          "velocity_x": 5,
-          "velocity_y": 0
-        }
-      },
-      {
-        "type": "bubble_large",
-        "x": 40,
-        "y": 60,
-        "delay": 1.0,
-        "properties": {
-          "velocity_x": -5,
-          "velocity_y": 0
-        }
-      }
-    ]
-  },
-  "triggers": []
+    }
+  }
 }
