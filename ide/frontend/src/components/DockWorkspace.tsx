@@ -22,6 +22,7 @@ import { TracePanel } from './panels/TracePanel';
 import { PsgLogPanel } from './panels/PsgLogPanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
 import { AiAssistantPanel } from './panels/AiAssistantPanel';
+import { PlaygroundPanel } from './panels/PlaygroundPanel';
 
 // Bumped to v4 to use new Activity Bar layout (Files/Git in sidebar)
 const STORAGE_KEY = 'vpy_dock_model_v4';
@@ -148,6 +149,7 @@ export const DockWorkspace: React.FC = () => {
   case 'build-output': return <BuildOutputPanel key="build-output-panel" />;
   case 'compiler-output': return <CompilerOutputPanel key="compiler-output-panel" />;
   case 'ai-assistant': return <AiAssistantPanel key="ai-assistant-panel-singleton" />;
+  case 'playground': return <PlaygroundPanel key="playground-panel" />;
       default: return <div>Unknown: {comp}</div>;
     }
   }, []);
@@ -291,7 +293,8 @@ export const DockWorkspace: React.FC = () => {
       memory: t('panel.memory', 'Memory'),
       trace: t('panel.trace', 'Trace'),
       bioscalls: t('panel.bioscalls', 'BIOS Calls'),
-      'ai-assistant': t('panel.ai', 'PyPilot')
+      'ai-assistant': t('panel.ai', 'PyPilot'),
+      playground: t('panel.playground', 'Playground')
     };
     if (customName) nameMap[comp] = customName;
 
@@ -322,7 +325,7 @@ export const DockWorkspace: React.FC = () => {
 
     // Decide desired docking relative to editor for each component
     let location: typeof DockLocation.CENTER = DockLocation.CENTER; // default center (same tabset)
-  if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator') location = DockLocation.RIGHT; else if (comp === 'memory' || comp === 'trace' || comp === 'bioscalls') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors' || comp === 'output') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
+  if (comp === 'files') location = DockLocation.LEFT; else if (comp === 'emulator' || comp === 'playground') location = DockLocation.RIGHT; else if (comp === 'memory' || comp === 'trace' || comp === 'bioscalls') location = DockLocation.RIGHT; else if (comp === 'debug' || comp === 'errors' || comp === 'output') location = DockLocation.BOTTOM; else if (comp === 'editor-placeholder') location = DockLocation.CENTER; else if ((comp as string).startsWith('doc:')) location = DockLocation.CENTER;
       // If we have meta specifying parent tabset and it still exists, attempt to restore directly there instead of relative add
       const meta = panelMetaRef.current[comp as DockComponent];
       if (meta?.parentTabsetId) {

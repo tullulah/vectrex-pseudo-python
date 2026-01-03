@@ -259,6 +259,19 @@ function App() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   // Activity Bar state - which sidebar panel is open
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<ActivityBarItem>('files');
+  
+  // Listen for requests to switch to playground
+  useEffect(() => {
+    const handleSwitchToPlayground = () => {
+      setActiveSidebarPanel('playground');
+    };
+    
+    window.addEventListener('activity:switchToPlayground' as any, handleSwitchToPlayground);
+    return () => {
+      window.removeEventListener('activity:switchToPlayground' as any, handleSwitchToPlayground);
+    };
+  }, []);
+  
   // Sidebar width state (persisted in localStorage)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = localStorage.getItem('vpy_sidebar_width');

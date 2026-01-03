@@ -439,6 +439,26 @@ export const FileTreePanel: React.FC = () => {
     if (node.isDir) {
       toggleDir(node.path);
     } else {
+      // Handle .vplay files specially - open playground in Activity Bar
+      if (node.name.endsWith('.vplay')) {
+        const sceneName = node.name.replace('.vplay', '');
+        console.log('[FileTree] Opening playground scene:', sceneName);
+        
+        // Switch to playground view in Activity Bar
+        const switchEvent = new CustomEvent('activity:switchToPlayground');
+        window.dispatchEvent(switchEvent);
+        
+        // Wait a bit for the panel to mount, then dispatch load event
+        setTimeout(() => {
+          const loadEvent = new CustomEvent('playground:loadScene', { 
+            detail: { sceneName } 
+          });
+          window.dispatchEvent(loadEvent);
+        }, 100);
+        
+        return;
+      }
+      
       selectFile(node.path);
       
       // Get the full file path by combining workspace root with relative path
@@ -526,6 +546,7 @@ export const FileTreePanel: React.FC = () => {
       case 'py': return '🐍';
       case 'vec': return '🎨';
       case 'anim': return '🎬';
+      case 'vplay': return '🎮';
       case 'c': case 'cpp': case 'h': case 'hpp': return '⚙️';
       case 'asm': case 's': return '📜';
       case 'js': case 'ts': return '📦';
