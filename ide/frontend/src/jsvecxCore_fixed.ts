@@ -19,7 +19,9 @@ export class JsVecxCore {
       try {
         // Nueva ubicación: bundle generado en src/generated/jsvecx/vecx_full.js (incluido en pipeline de TS/Vite)
         // Usamos import relativo explícito para permitir tree-shaking futuro si se particiona.
-        const bundlePath = './generated/jsvecx/vecx_full.js';
+        // NOTA: Añadimos timestamp para evitar cache de Electron/Vite
+        const timestamp = Date.now();
+        const bundlePath = `./generated/jsvecx/vecx_full.js?t=${timestamp}`;
         bundle = await import(/* @vite-ignore */ bundlePath);
       } catch (e){
         console.warn('[JsVecxCore] no se pudo importar bundle interno generated/jsvecx/vecx_full.js; backend jsvecx inerte', e);

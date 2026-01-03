@@ -1,4 +1,5 @@
 /* jsvecx bundle 2025-09-21T11:04:36.328Z */
+console.log('[JSVecx] ✓ PATCHED VERSION LOADED - Button fix active (2026-01-03)');
 
 /* BEGIN utils.js */
 /*
@@ -4366,11 +4367,27 @@ function VecX()
 
                     /* fall through */
                 case 0xf:
+                    // DEBUG: Log VIA Port A read
+                    if (this.snd_select === 14 && typeof window !== 'undefined' && window.injectedButtonStatePSG !== undefined) {
+                        console.log('[JSVecx VIA Read case 0xf] via_orb:', (this.via_orb & 0x18).toString(16), 'snd_select:', this.snd_select);
+                    }
+                    
                     if( (this.via_orb & 0x18) == 0x08 )
                     {
                         /* the snd chip is driving port a */
-
-                        data = this.snd_regs[this.snd_select];
+                        
+                        // PATCH (2026-01-03): For register 14 (buttons), check if frontend injected value
+                        if (this.snd_select === 14) {
+                            if (typeof window !== 'undefined' && window.injectedButtonStatePSG !== undefined) {
+                                data = window.injectedButtonStatePSG;
+                                console.log('[JSVecx VIA Read] ✓ Using injected PSG reg 14:', data.toString(16).padStart(2, '0'));
+                            } else {
+                                data = this.snd_regs[this.snd_select];
+                                console.log('[JSVecx VIA Read] ✗ No injected value, using snd_regs[14]:', data.toString(16).padStart(2, '0'));
+                            }
+                        } else {
+                            data = this.snd_regs[this.snd_select];
+                        }
                     }
                     else
                     {

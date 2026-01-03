@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "name": "beep",
+  "channels": ["A"],
+  "events": [
+    {"type": "tone", "tick": 0, "duration": 10, "note": 72, "velocity": 15, "channel": "A"}
+  ],
+  "totalTicks": 15
+}

@@ -102,27 +102,28 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    PULS X       ; Restore X\n");
     out.push_str("    RTS\n\n");
     
-    // Button system - Simple read of Vec_Btn_State
-    // Read_Btns (auto-injected at loop start) handles debounce via Vec_Prev_Btns
-    // Multiple reads in same frame return same value - debounce is frame-based, not read-based
-    out.push_str("; === BUTTON SYSTEM ===\n");
-    out.push_str("; J1_BUTTON_1-4() - Read button state from Vec_Btn_State\n");
-    out.push_str("; Read_Btns (auto-injected) handles debounce via Vec_Prev_Btns\n");
-    out.push_str("; Safe to call multiple times per frame - returns consistent value\n");
-    out.push_str("; Returns: D = 0 (not pressed), 1 (pressed)\n\n");
+    // Button system - Read BIOS transition bits ($C811)
+    // Read_Btns (auto-injected) calculates rising edge detection automatically
+    // $C80F = raw state (1 while pressed)
+    // $C811 = transitions (1 only on 0→1, calculated by BIOS via Vec_Prev_Btns)
+    out.push_str("; === BUTTON SYSTEM - BIOS TRANSITIONS ===\n");
+    out.push_str("; J1_BUTTON_1-4() - Read transition bits from $C811\n");
+    out.push_str("; Read_Btns (auto-injected) calculates: ~(new) OR Vec_Prev_Btns\n");
+    out.push_str("; Result: bit=1 ONLY on rising edge (0→1 transition)\n");
+    out.push_str("; Returns: D = 1 (just pressed), 0 (not pressed or still held)\n\n");
     
     out.push_str("J1B1_BUILTIN:\n");
-    out.push_str("    LDA $C80F      ; Read Vec_Btn_State\n");
+    out.push_str("    LDA $C811      ; Read transition bits (Vec_Button_1_1)\n");
     out.push_str("    ANDA #$01      ; Test bit 0 (Button 1)\n");
     out.push_str("    BEQ .J1B1_OFF\n");
-    out.push_str("    LDD #1         ; Return pressed\n");
+    out.push_str("    LDD #1         ; Return pressed (rising edge)\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B1_OFF:\n");
     out.push_str("    LDD #0         ; Return not pressed\n");
     out.push_str("    RTS\n\n");
     
     out.push_str("J1B2_BUILTIN:\n");
-    out.push_str("    LDA $C80F\n");
+    out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$02      ; Test bit 1 (Button 2)\n");
     out.push_str("    BEQ .J1B2_OFF\n");
     out.push_str("    LDD #1\n");
@@ -132,7 +133,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    RTS\n\n");
     
     out.push_str("J1B3_BUILTIN:\n");
-    out.push_str("    LDA $C80F\n");
+    out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$04      ; Test bit 2 (Button 3)\n");
     out.push_str("    BEQ .J1B3_OFF\n");
     out.push_str("    LDD #1\n");
@@ -142,7 +143,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("    RTS\n\n");
     
     out.push_str("J1B4_BUILTIN:\n");
-    out.push_str("    LDA $C80F\n");
+    out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$08      ; Test bit 3 (Button 4)\n");
     out.push_str("    BEQ .J1B4_OFF\n");
     out.push_str("    LDD #1\n");

@@ -481,6 +481,9 @@ export const EmulatorPanel: React.FC = () => {
     // Load joystick configuration on mount
     loadConfig();
 
+    // Persistent state for button debouncing (outside setInterval to persist between frames)
+    let lastButtonState = 0;
+
     const gamepadPollInterval = setInterval(() => {
       const vecx = (window as any).vecx;
       // Allow gamepad to work even when paused (for testing controls during debugging)
@@ -548,40 +551,69 @@ export const EmulatorPanel: React.FC = () => {
         vecx.alg_jch1 = unsignedY; // Channel 1 = Y axis
         
         // Read button states and build button state byte
-        // Vectrex buttons are active LOW (0=pressed, 1=released)
-        let buttonState = 0x00; // Default: all buttons released (bits low means not pressed)
+        // In Vec_Btn_State ($C80F): 1 = pressed, 0 = released
+        let buttonState = 0x00; // Default: all buttons released (all bits 0)
         
         buttonMappings.forEach(mapping => {
           const button = gamepad.buttons[mapping.gamepadButton];
           if (button && button.pressed) {
-            // Button pressed: set bit (in Vec_Btn_State, 1=pressed)
-            buttonState |= (1 << (mapping.vectrexButton - 1));
+            // Button pressed: set bit (1 = pressed in Vec_Btn_State)
+            const bitPosition = mapping.vectrexButton - 1;
+            buttonState |= (1 << bitPosition);
           }
         });
         
+        // Read previous state for debug logging only
+        const prevState = lastButtonState; // Use persistent variable, not RAM
+        
+        // Calculate transitions manually (rising edge detection)
+        // Formula: new & ~prev (bit is 1 only when new=1 AND prev=0)
+        const transitions = buttonState & ~prevState & 0xFF;
+        
+        // Update persistent state for next frame
+        lastButtonState = buttonState;
+        
         // DEBUG: Log button state if any button is pressed
-        if (buttonState !== 0) {
-          console.log('[GamepadManager] Button state:', {
+        if (transitions !== 0) {
+          console.log('[GamepadManager] TRANSITION DETECTED:', {
             buttonState: buttonState.toString(2).padStart(4, '0'),
-            mappingsCount: buttonMappings.length,
-            psgValue: (~buttonState & 0xFF).toString(16)
+            transitions: transitions.toString(2).padStart(4, '0'),
+            c811_written: transitions
           });
         }
 
-        // DUAL WRITE STRATEGY (2026-01-02):
-        // 1. Write to PSG register 14 (for hardware real + Read_Btns on emulator)
-        // 2. Write to $C80F (for emulator shortcut - JSVecx may not fully emulate Read_Btns)
-        // Read_Btns will overwrite $C80F with debounced value, so this is just a fallback
+        // WORKAROUND for JSVecx PSG read issue (2026-01-03):
+        // Root Cause: Read_Btns auto-injects at loop start and reads PSG register 14
+        // The PSG read happens AFTER our $C80F write, so Read_Btns overwrites our value
+        //
+        // Solution: Inject button state into window.injectedButtonStatePSG
+        // JSVecx is patched to check this value when reading PSG register 14
+        //
+        // PSG Register 14 format (inverted: 0=pressed, 1=released)
+        const psgReg14 = ~buttonState & 0xFF;
         
-        // Write to PSG register 14 first (hardware path)
-        // PSG uses inverted logic (0=pressed, 1=released), opposite of Vec_Btn_State
-        const psgReg14 = ~buttonState & 0xFF; // Invert bits for PSG
-        vecx.e8910_write(14, psgReg14); // Write to actual PSG, Read_Btns reads this
+        // Inject into window for JSVecx to read (patched in vecx.js VIA read case 0xf)
+        (window as any).injectedButtonStatePSG = psgReg14;
         
-        // Write to Vec_Btn_State ($C80F) as fallback for emulator
-        // (Will be overwritten by Read_Btns if it works, otherwise provides direct value)
-        vecx.write8(0xC80F, buttonState);
-
+        // Also write to PSG.Regs[14] for hardware compatibility (vecx emulator)
+        if (vecx.e8910 && vecx.e8910.e8910_write) {
+          vecx.e8910.e8910_write(14, psgReg14);
+        }
+        
+        // DEBUG: Verify Read_Btns processes it correctly
+        if (transitions !== 0) {
+          setTimeout(() => {
+            const c811 = vecx.read8(0xC811);
+            const c80f = vecx.read8(0xC80F);
+            const c80e = vecx.read8(0xC80E);
+            console.log('[GamepadManager] After frame, RAM state:', {
+              'C811_transitions': c811.toString(2).padStart(8, '0'),
+              'C80F_state': c80f.toString(2).padStart(8, '0'),
+              'C80E_prev': c80e.toString(2).padStart(8, '0')
+            });
+          }, 20); // Wait 20ms for emulator to process
+        }
+        
       } catch (error) {
         console.error('[GamepadManager] Error setting input state:', error);
       }

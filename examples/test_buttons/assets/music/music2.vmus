@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "name": "music2",
+  "author": "Test",
+  "tempo": 140,
+  "ticksPerBeat": 24,
+  "totalTicks": 192,
+  "notes": [
+    {"id": "n1", "note": 72, "start": 0, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "n2", "note": 69, "start": 48, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "n3", "note": 65, "start": 96, "duration": 48, "velocity": 12, "channel": 0},
+    {"id": "n4", "note": 60, "start": 144, "duration": 48, "velocity": 12, "channel": 0}
+  ],
+  "noise": [],
+  "loopStart": 0,
+  "loopEnd": 192
+}

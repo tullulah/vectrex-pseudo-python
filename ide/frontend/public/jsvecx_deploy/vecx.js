@@ -195,7 +195,16 @@ function VecX()
                 case 0xf:
                     if( (this.via_orb & 0x18) == 0x08 )
                     {
-                        data = this.snd_regs[this.snd_select];
+                        // Button injection for PSG register 14 reads
+                        if (this.snd_select === 14) {
+                            if (typeof window !== 'undefined' && window.injectedButtonStatePSG !== undefined) {
+                                data = window.injectedButtonStatePSG;
+                            } else {
+                                data = this.snd_regs[this.snd_select];
+                            }
+                        } else {
+                            data = this.snd_regs[this.snd_select];
+                        }
                     }
                     else
                     {

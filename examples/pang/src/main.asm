@@ -117,24 +117,24 @@ J1Y_BUILTIN:
     PULS X       ; Restore X
     RTS
 
-; === BUTTON SYSTEM ===
-; J1_BUTTON_1-4() - Read button state from Vec_Btn_State
-; Read_Btns (auto-injected) handles debounce via Vec_Prev_Btns
-; Safe to call multiple times per frame - returns consistent value
-; Returns: D = 0 (not pressed), 1 (pressed)
+; === BUTTON SYSTEM - BIOS TRANSITIONS ===
+; J1_BUTTON_1-4() - Read transition bits from $C811
+; Read_Btns (auto-injected) calculates: ~(new) OR Vec_Prev_Btns
+; Result: bit=1 ONLY on rising edge (0→1 transition)
+; Returns: D = 1 (just pressed), 0 (not pressed or still held)
 
 J1B1_BUILTIN:
-    LDA $C80F      ; Read Vec_Btn_State
+    LDA $C811      ; Read transition bits (Vec_Button_1_1)
     ANDA #$01      ; Test bit 0 (Button 1)
     BEQ .J1B1_OFF
-    LDD #1         ; Return pressed
+    LDD #1         ; Return pressed (rising edge)
     RTS
 .J1B1_OFF:
     LDD #0         ; Return not pressed
     RTS
 
 J1B2_BUILTIN:
-    LDA $C80F
+    LDA $C811
     ANDA #$02      ; Test bit 1 (Button 2)
     BEQ .J1B2_OFF
     LDD #1
@@ -144,7 +144,7 @@ J1B2_BUILTIN:
     RTS
 
 J1B3_BUILTIN:
-    LDA $C80F
+    LDA $C811
     ANDA #$04      ; Test bit 2 (Button 3)
     BEQ .J1B3_OFF
     LDD #1
@@ -154,7 +154,7 @@ J1B3_BUILTIN:
     RTS
 
 J1B4_BUILTIN:
-    LDA $C80F
+    LDA $C811
     ANDA #$08      ; Test bit 3 (Button 4)
     BEQ .J1B4_OFF
     LDD #1

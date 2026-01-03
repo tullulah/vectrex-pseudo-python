@@ -5,137 +5,117 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "START": "0x06C8",
-    "LOOP_BODY": "0x076B",
-    "MAIN": "0x0744"
+    "LOOP_BODY": "0x0726",
+    "START": "0x0698",
+    "MAIN": "0x06FF"
   },
   "lineMap": {
-    "13": "0x0706",
-    "74": "0x0D03",
-    "102": "0x0F30",
-    "35": "0x084E",
-    "122": "0x1109",
-    "66": "0x0C05",
-    "24": "0x0744",
-    "83": "0x0D8D",
-    "120": "0x10B1",
-    "6": "0x06E8",
-    "38": "0x087B",
-    "71": "0x0C8D",
-    "103": "0x0F49",
-    "89": "0x0E24",
-    "54": "0x0A5E",
-    "110": "0x1003",
-    "30": "0x076D",
-    "84": "0x0DC2",
-    "90": "0x0E30",
-    "27": "0x076B",
-    "96": "0x0EC2",
-    "40": "0x08DB",
-    "109": "0x0FCE",
-    "115": "0x1049",
-    "50": "0x09F9",
-    "99": "0x0F0F",
-    "47": "0x0983",
-    "78": "0x0D30",
-    "48": "0x09A6",
-    "63": "0x0B51",
-    "32": "0x07C7",
-    "53": "0x0A29",
-    "20": "0x0724",
-    "43": "0x0959",
-    "87": "0x0E0F",
-    "107": "0x0F8D",
-    "67": "0x0C2F",
-    "25": "0x0730",
-    "39": "0x08AB",
-    "42": "0x092F",
-    "75": "0x0D0F",
-    "12": "0x0700",
-    "97": "0x0ECE",
-    "111": "0x100F",
-    "65": "0x0BDB",
-    "31": "0x079A",
-    "70": "0x0C59",
-    "94": "0x0E59",
-    "60": "0x0B3C",
-    "5": "0x06E2",
-    "64": "0x0BB1",
-    "79": "0x0D49",
-    "85": "0x0DCE",
-    "17": "0x071E",
-    "101": "0x0F24",
-    "91": "0x0E49",
-    "82": "0x0D59",
-    "34": "0x0821",
-    "86": "0x0E03",
-    "72": "0x0CC2",
-    "98": "0x0F03",
-    "121": "0x10DD",
-    "7": "0x06EE",
-    "11": "0x06FA",
-    "55": "0x0A73",
-    "58": "0x0AF2",
-    "73": "0x0CCE",
-    "118": "0x1059",
-    "114": "0x1030",
-    "8": "0x06F4",
-    "56": "0x0AA8",
-    "49": "0x09C9",
-    "108": "0x0FC2",
-    "33": "0x07F4",
-    "16": "0x0718",
-    "113": "0x1024",
-    "59": "0x0B07",
-    "106": "0x0F59",
-    "41": "0x0905",
-    "21": "0x072A",
-    "95": "0x0E8D",
-    "119": "0x1085",
-    "57": "0x0ABD",
-    "77": "0x0D24"
+    "74": "0x0B88",
+    "68": "0x0B03",
+    "73": "0x0B7C",
+    "87": "0x0CC3",
+    "79": "0x0BEA",
+    "72": "0x0B47",
+    "43": "0x08EA",
+    "22": "0x0766",
+    "17": "0x06EB",
+    "12": "0x06D3",
+    "6": "0x06BB",
+    "76": "0x0BC9",
+    "63": "0x0ABD",
+    "50": "0x0988",
+    "47": "0x0913",
+    "16": "0x06FF",
+    "71": "0x0B13",
+    "62": "0x0A88",
+    "66": "0x0ADE",
+    "80": "0x0C03",
+    "52": "0x09C9",
+    "38": "0x0888",
+    "36": "0x0847",
+    "7": "0x06C1",
+    "37": "0x087C",
+    "8": "0x06C7",
+    "32": "0x0808",
+    "39": "0x08BD",
+    "42": "0x08DE",
+    "11": "0x06CD",
+    "49": "0x097C",
+    "30": "0x07F2",
+    "54": "0x09DE",
+    "64": "0x0AC9",
+    "86": "0x0C97",
+    "60": "0x0A47",
+    "44": "0x0903",
+    "5": "0x06B5",
+    "21": "0x0731",
+    "55": "0x09EA",
+    "56": "0x0A03",
+    "78": "0x0BDE",
+    "48": "0x0947",
+    "83": "0x0C13",
+    "51": "0x09BD",
+    "29": "0x07E7",
+    "84": "0x0C3F",
+    "75": "0x0BBD",
+    "61": "0x0A7C",
+    "23": "0x0777",
+    "31": "0x07FD",
+    "19": "0x0726",
+    "13": "0x06D9",
+    "67": "0x0AEA",
+    "85": "0x0C6B",
+    "26": "0x0787",
+    "59": "0x0A13",
+    "35": "0x0813",
+    "40": "0x08C9"
   },
   "functions": {
     "loop": {
       "name": "loop",
-      "address": "0x076B",
+      "address": "0x0726",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "main": {
       "name": "main",
-      "address": "0x0744",
+      "address": "0x06FF",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "25": "VECTREX_SET_INTENSITY",
-    "118": "VECTREX_PRINT_TEXT",
-    "122": "VECTREX_PRINT_TEXT",
-    "33": "J1_BUTTON_2",
-    "31": "J1_Y",
-    "32": "J1_BUTTON_1",
-    "121": "VECTREX_PRINT_TEXT",
-    "119": "VECTREX_PRINT_TEXT",
-    "35": "J1_BUTTON_4",
-    "120": "VECTREX_PRINT_TEXT",
-    "34": "J1_BUTTON_3",
-    "30": "J1_X"
+    "85": "VECTREX_PRINT_TEXT",
+    "83": "VECTREX_PRINT_TEXT",
+    "86": "VECTREX_PRINT_TEXT",
+    "17": "VECTREX_SET_INTENSITY",
+    "32": "J1_BUTTON_4",
+    "87": "VECTREX_PRINT_TEXT",
+    "31": "J1_BUTTON_3",
+    "30": "J1_BUTTON_2",
+    "29": "J1_BUTTON_1",
+    "84": "VECTREX_PRINT_TEXT"
   },
   "asmFunctions": {
     "VECTREX_PRINT_TEXT": {
       "name": "VECTREX_PRINT_TEXT",
       "file": "main.asm",
-      "startLine": 153,
-      "endLine": 167,
+      "startLine": 135,
+      "endLine": 149,
       "type": "native"
     }
   },
   "asmAddressMap": {},
   "variables": {
+    "VL_Y": {
+      "name": "VL_Y",
+      "address": "0xCF82",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
     "VL_PTR": {
       "name": "VL_PTR",
       "address": "0xCF80",
@@ -143,72 +123,23 @@
       "type": "unknown",
       "declLine": null
     },
-    "PSG_FRAME_COUNT_DP": {
-      "name": "PSG_FRAME_COUNT_DP",
-      "address": "0x0020",
-      "size": 2,
+    "PSG_IS_PLAYING": {
+      "name": "PSG_IS_PLAYING",
+      "address": "0xC896",
+      "size": 1,
       "type": "audio",
       "declLine": null
     },
     "DRAW_CIRCLE_YC": {
       "name": "DRAW_CIRCLE_YC",
-      "address": "0x0026",
+      "address": "0x0006",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "DIV_A": {
-      "name": "DIV_A",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "PSG_MUSIC_START": {
-      "name": "PSG_MUSIC_START",
-      "address": "0xC89C",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "SFX_PHASE": {
-      "name": "SFX_PHASE",
-      "address": "0xC8A7",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "PSG_DELAY_FRAMES_DP": {
-      "name": "PSG_DELAY_FRAMES_DP",
-      "address": "0x0021",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "_VECTOR_CENTER_X": {
-      "name": "_VECTOR_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC8B4",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "DIV_R": {
-      "name": "DIV_R",
-      "address": "0xC894",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_VECTOR_CENTER_Y": {
-      "name": "_VECTOR_CENTER_Y",
-      "address": "0x0000",
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0x0003",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -222,86 +153,16 @@
     },
     "PSG_MUSIC_PTR_DP": {
       "name": "PSG_MUSIC_PTR_DP",
-      "address": "0x001A",
+      "address": "0x0012",
       "size": 2,
       "type": "audio",
       "declLine": null
     },
-    "DRAW_CIRCLE_XC": {
-      "name": "DRAW_CIRCLE_XC",
-      "address": "0x0025",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "PSG_FRAME_COUNT": {
-      "name": "PSG_FRAME_COUNT",
+    "SFX_VOL": {
+      "name": "SFX_VOL",
       "address": "0xC8A0",
       "size": 1,
       "type": "audio",
-      "declLine": null
-    },
-    "PSG_MUSIC_PTR": {
-      "name": "PSG_MUSIC_PTR",
-      "address": "0xC89A",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC8A9",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_MUSIC_ACTIVE": {
-      "name": "PSG_MUSIC_ACTIVE",
-      "address": "0xC89F",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "arg2": {
-      "name": "arg2",
-      "address": "0xC8B6",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "SFX_ACTIVE": {
-      "name": "SFX_ACTIVE",
-      "address": "0xC8A6",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_TEMP": {
-      "name": "DRAW_CIRCLE_TEMP",
-      "address": "0x0029",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joy_y": {
-      "name": "joy_y",
-      "address": "0xC8DA",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC899",
-      "size": 2,
-      "type": "unknown",
       "declLine": null
     },
     "sfx_status": {
@@ -311,123 +172,18 @@
       "type": "unknown",
       "declLine": null
     },
-    "VL_X": {
-      "name": "VL_X",
-      "address": "0xCF83",
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0x0002",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC8B8",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "btn2_prev": {
-      "name": "btn2_prev",
-      "address": "0xC8C2",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "SFX_TICK": {
-      "name": "SFX_TICK",
-      "address": "0xC8A4",
+    "PSG_MUSIC_PTR": {
+      "name": "PSG_MUSIC_PTR",
+      "address": "0xC892",
       "size": 2,
       "type": "audio",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC88A",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "arg4": {
-      "name": "arg4",
-      "address": "0xC8BA",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0x0020",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "sfx_pointer": {
-      "name": "sfx_pointer",
-      "address": "0x0020",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joystick1_state": {
-      "name": "joystick1_state",
-      "address": "0xC8CC",
-      "size": 12,
-      "type": "array",
-      "declLine": null
-    },
-    "PSG_DELAY_FRAMES": {
-      "name": "PSG_DELAY_FRAMES",
-      "address": "0xC8A1",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "vector_y": {
-      "name": "vector_y",
-      "address": "0xC8DE",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "DRAW_VEC_INTENSITY": {
-      "name": "DRAW_VEC_INTENSITY",
-      "address": "0x0024",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_VECTOR_WIDTH": {
-      "name": "_VECTOR_WIDTH",
-      "address": "0x001E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "SFX_VOL": {
-      "name": "SFX_VOL",
-      "address": "0xC8A8",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "arg5": {
-      "name": "arg5",
-      "address": "0xC8BC",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "PSG_MUSIC_START_DP": {
-      "name": "PSG_MUSIC_START_DP",
-      "address": "0x001C",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_DIAM": {
-      "name": "DRAW_CIRCLE_DIAM",
-      "address": "0x0027",
-      "size": 2,
-      "type": "unknown",
       "declLine": null
     },
     "TMPRIGHT": {
@@ -437,114 +193,30 @@
       "type": "system",
       "declLine": null
     },
-    "DIV_B": {
-      "name": "DIV_B",
-      "address": "0xC890",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "PSG_IS_PLAYING": {
-      "name": "PSG_IS_PLAYING",
-      "address": "0xC89E",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "TMPLEFT2": {
-      "name": "TMPLEFT2",
-      "address": "0xC884",
-      "size": 2,
-      "type": "system",
+    "joystick1_state": {
+      "name": "joystick1_state",
+      "address": "0xC8CC",
+      "size": 12,
+      "type": "array",
       "declLine": null
     },
     "DRAW_CIRCLE_INTENSITY": {
       "name": "DRAW_CIRCLE_INTENSITY",
-      "address": "0x0028",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0x0021",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joy_x": {
-      "name": "joy_x",
-      "address": "0xC8D8",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "btn1_prev": {
-      "name": "btn1_prev",
-      "address": "0xC8C0",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC898",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "current_music": {
-      "name": "current_music",
-      "address": "0xC8CA",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "VL_Y": {
-      "name": "VL_Y",
-      "address": "0xCF82",
+      "address": "0x0008",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
     "SFX_PTR": {
       "name": "SFX_PTR",
-      "address": "0xC8A2",
+      "address": "0xC89A",
       "size": 2,
       "type": "audio",
       "declLine": null
     },
-    "DIV_Q": {
-      "name": "DIV_Q",
-      "address": "0xC892",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "TMPRIGHT2": {
-      "name": "TMPRIGHT2",
-      "address": "0xC888",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "PSG_IS_PLAYING_DP": {
-      "name": "PSG_IS_PLAYING_DP",
-      "address": "0x001E",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "TMPLEFT": {
-      "name": "TMPLEFT",
-      "address": "0xC882",
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
       "size": 2,
       "type": "system",
       "declLine": null
@@ -556,32 +228,25 @@
       "type": "arg",
       "declLine": null
     },
-    "MIRROR_X": {
-      "name": "MIRROR_X",
-      "address": "0x0022",
+    "music_started": {
+      "name": "music_started",
+      "address": "0xC8C8",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_VECTOR_CENTER_Y": {
+      "name": "_VECTOR_CENTER_Y",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "btn3_prev": {
-      "name": "btn3_prev",
-      "address": "0xC8C4",
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC8B4",
       "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "PSG_MUSIC_ACTIVE_DP": {
-      "name": "PSG_MUSIC_ACTIVE_DP",
-      "address": "0x001F",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "vector_x": {
-      "name": "vector_x",
-      "address": "0xC8DC",
-      "size": 2,
-      "type": "int",
+      "type": "arg",
       "declLine": null
     },
     "VL_SCALE": {
@@ -591,25 +256,277 @@
       "type": "unknown",
       "declLine": null
     },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0x0023",
+    "_VECTOR_CENTER_X": {
+      "name": "_VECTOR_CENTER_X",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "music_started": {
-      "name": "music_started",
-      "address": "0xC8C8",
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0x0004",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_MUSIC_START": {
+      "name": "PSG_MUSIC_START",
+      "address": "0xC894",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "arg4": {
+      "name": "arg4",
+      "address": "0xC8BA",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "PSG_MUSIC_ACTIVE_DP": {
+      "name": "PSG_MUSIC_ACTIVE_DP",
+      "address": "0x0017",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "SFX_PHASE": {
+      "name": "SFX_PHASE",
+      "address": "0xC89F",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_XC": {
+      "name": "DRAW_CIRCLE_XC",
+      "address": "0x0005",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "sfx_pointer": {
+      "name": "sfx_pointer",
+      "address": "0x0020",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8B6",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "arg5": {
+      "name": "arg5",
+      "address": "0xC8BC",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "TMPLEFT": {
+      "name": "TMPLEFT",
+      "address": "0xC882",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "PSG_FRAME_COUNT_DP": {
+      "name": "PSG_FRAME_COUNT_DP",
+      "address": "0x0018",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "SFX_ACTIVE": {
+      "name": "SFX_ACTIVE",
+      "address": "0xC89E",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_DIAM": {
+      "name": "DRAW_CIRCLE_DIAM",
+      "address": "0x0007",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPRIGHT2": {
+      "name": "TMPRIGHT2",
+      "address": "0xC888",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "btn3_prev": {
+      "name": "btn3_prev",
+      "address": "0xC8C4",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC896",
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0x0001",
       "size": 2,
       "type": "unknown",
+      "declLine": null
+    },
+    "TMPLEFT2": {
+      "name": "TMPLEFT2",
+      "address": "0xC884",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8B8",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC88E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "btn2_prev": {
+      "name": "btn2_prev",
+      "address": "0xC8C2",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "PSG_MUSIC_ACTIVE": {
+      "name": "PSG_MUSIC_ACTIVE",
+      "address": "0xC897",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "current_music": {
+      "name": "current_music",
+      "address": "0xC8CA",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "SFX_TICK": {
+      "name": "SFX_TICK",
+      "address": "0xC89C",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC890",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC88A",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "PSG_DELAY_FRAMES_DP": {
+      "name": "PSG_DELAY_FRAMES_DP",
+      "address": "0x0019",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "_VECTOR_WIDTH": {
+      "name": "_VECTOR_WIDTH",
+      "address": "0x001E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC891",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_TEMP": {
+      "name": "DRAW_CIRCLE_TEMP",
+      "address": "0x0009",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC8A1",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC88C",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "PSG_FRAME_COUNT": {
+      "name": "PSG_FRAME_COUNT",
+      "address": "0xC898",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "PSG_IS_PLAYING_DP": {
+      "name": "PSG_IS_PLAYING_DP",
+      "address": "0x0016",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "btn1_prev": {
+      "name": "btn1_prev",
+      "address": "0xC8C0",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "VL_X": {
+      "name": "VL_X",
+      "address": "0xCF83",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_DELAY_FRAMES": {
+      "name": "PSG_DELAY_FRAMES",
+      "address": "0xC899",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "PSG_MUSIC_START_DP": {
+      "name": "PSG_MUSIC_START_DP",
+      "address": "0x0014",
+      "size": 2,
+      "type": "audio",
       "declLine": null
     }
   }

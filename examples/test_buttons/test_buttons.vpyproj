@@ -1,0 +1,11 @@
+[project]
+name = "Button Test"
+version = "1.0.0"
+author = "VPy Test Suite"
+entry = "src/main.vpy"
+
+[build]
+output = "bin/test_buttons.bin"
+
+[compiler]
+optimization_level = 1
