@@ -5,64 +5,62 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "MAIN": "0x068C",
-    "LOOP_BODY": "0x06B3",
-    "START": "0x05A3"
+    "START": "0x05A3",
+    "LOOP_BODY": "0x05EF",
+    "MAIN": "0x05C8"
   },
   "lineMap": {
-    "32": "0x071E",
-    "11": "0x05C8",
-    "15": "0x05D9",
-    "45": "0x0840",
-    "22": "0x0678",
-    "28": "0x06C6",
-    "8": "0x05B4",
-    "16": "0x05F3",
-    "36": "0x0766",
-    "6": "0x068C",
-    "40": "0x07B9",
-    "46": "0x085D",
-    "47": "0x087A",
-    "20": "0x0627",
-    "25": "0x06BE",
-    "17": "0x060D",
-    "29": "0x06F2",
-    "35": "0x0732",
-    "42": "0x0810",
-    "48": "0x0897",
-    "24": "0x06B3",
-    "37": "0x0789",
-    "41": "0x07ED"
+    "13": "0x0602",
+    "17": "0x061F",
+    "33": "0x073A",
+    "22": "0x0673",
+    "29": "0x06E7",
+    "34": "0x076E",
+    "40": "0x07FB",
+    "41": "0x0818",
+    "10": "0x05FA",
+    "30": "0x070A",
+    "28": "0x06B3",
+    "39": "0x07DE",
+    "9": "0x05EF",
+    "18": "0x0633",
+    "35": "0x0791",
+    "16": "0x060B",
+    "7": "0x05B4",
+    "21": "0x0647",
+    "25": "0x069F",
+    "38": "0x07C1",
+    "6": "0x05C8"
   },
   "functions": {
     "loop": {
       "name": "loop",
-      "address": "0x06B3",
+      "address": "0x05EF",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "main": {
       "name": "main",
-      "address": "0x068C",
+      "address": "0x05C8",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "25": "VECTREX_WAIT_RECAL",
-    "15": "GET_OBJECT_COUNT",
-    "37": "VECTREX_PRINT_TEXT",
-    "42": "VECTREX_PRINT_TEXT",
-    "32": "GET_OBJECT_COUNT",
-    "36": "GET_OBJECT_PTR",
-    "29": "VECTREX_PRINT_TEXT",
-    "41": "GET_OBJECT_PTR",
-    "28": "VECTREX_PRINT_TEXT",
-    "22": "VECTREX_SET_INTENSITY",
+    "29": "GET_OBJECT_PTR",
+    "30": "VECTREX_PRINT_TEXT",
     "16": "GET_OBJECT_COUNT",
-    "17": "GET_OBJECT_COUNT"
+    "22": "VECTREX_PRINT_TEXT",
+    "17": "GET_OBJECT_COUNT",
+    "21": "VECTREX_PRINT_TEXT",
+    "25": "GET_OBJECT_COUNT",
+    "34": "GET_OBJECT_PTR",
+    "7": "VECTREX_SET_INTENSITY",
+    "10": "VECTREX_WAIT_RECAL",
+    "35": "VECTREX_PRINT_TEXT",
+    "18": "GET_OBJECT_COUNT"
   },
   "asmFunctions": {
     "VECTREX_PRINT_TEXT": {
@@ -75,16 +73,16 @@
   },
   "asmAddressMap": {},
   "variables": {
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
+    "TMPRIGHT": {
+      "name": "TMPRIGHT",
+      "address": "0xC886",
       "size": 2,
       "type": "system",
       "declLine": null
     },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC891",
+    "LEVEL_BG_PTR": {
+      "name": "LEVEL_BG_PTR",
+      "address": "0xC894",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -96,107 +94,23 @@
       "type": "arg",
       "declLine": null
     },
-    "arg2": {
-      "name": "arg2",
-      "address": "0xC8B6",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_XC": {
-      "name": "DRAW_CIRCLE_XC",
-      "address": "0x0005",
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0x0003",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "LEVEL_GAMEPLAY_PTR": {
-      "name": "LEVEL_GAMEPLAY_PTR",
-      "address": "0xC896",
+    "_MOUNTAIN_WIDTH": {
+      "name": "_MOUNTAIN_WIDTH",
+      "address": "0x003C",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC8B8",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "LEVEL_FG_PTR": {
-      "name": "LEVEL_FG_PTR",
-      "address": "0xC898",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_Y": {
-      "name": "VL_Y",
-      "address": "0xCF82",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_SCALE": {
-      "name": "VL_SCALE",
-      "address": "0xCF84",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_DIAM": {
-      "name": "DRAW_CIRCLE_DIAM",
-      "address": "0x0007",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_YC": {
-      "name": "DRAW_CIRCLE_YC",
-      "address": "0x0006",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_TEMP": {
-      "name": "DRAW_CIRCLE_TEMP",
-      "address": "0x0009",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC88A",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "TMPLEFT2": {
-      "name": "TMPLEFT2",
-      "address": "0xC884",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "LEVEL_PTR": {
-      "name": "LEVEL_PTR",
-      "address": "0xC892",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0x0000",
+    "_MOUNTAIN_CENTER_Y": {
+      "name": "_MOUNTAIN_CENTER_Y",
+      "address": "0x000F",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -208,79 +122,16 @@
       "type": "system",
       "declLine": null
     },
-    "DRAW_CIRCLE_INTENSITY": {
-      "name": "DRAW_CIRCLE_INTENSITY",
-      "address": "0x0008",
+    "_BUBBLE_LARGE_CENTER_X": {
+      "name": "_BUBBLE_LARGE_CENTER_X",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "TMPRIGHT2": {
-      "name": "TMPRIGHT2",
-      "address": "0xC888",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "VL_X": {
-      "name": "VL_X",
-      "address": "0xCF83",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_PTR": {
-      "name": "VL_PTR",
-      "address": "0xCF80",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC89A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_X": {
-      "name": "MIRROR_X",
-      "address": "0x0002",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC8B2",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC890",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_INTENSITY": {
-      "name": "DRAW_VEC_INTENSITY",
-      "address": "0x0004",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_BG_PTR": {
-      "name": "LEVEL_BG_PTR",
-      "address": "0xC894",
+    "LEVEL_FG_PTR": {
+      "name": "LEVEL_FG_PTR",
+      "address": "0xC898",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -292,18 +143,228 @@
       "type": "unknown",
       "declLine": null
     },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0x0003",
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "TMPRIGHT": {
-      "name": "TMPRIGHT",
-      "address": "0xC886",
+    "DRAW_CIRCLE_INTENSITY": {
+      "name": "DRAW_CIRCLE_INTENSITY",
+      "address": "0x0008",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC88E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0x0004",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VL_X": {
+      "name": "VL_X",
+      "address": "0xCF83",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC891",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC88C",
       "size": 2,
       "type": "system",
+      "declLine": null
+    },
+    "LEVEL_PTR": {
+      "name": "LEVEL_PTR",
+      "address": "0xC892",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_YC": {
+      "name": "DRAW_CIRCLE_YC",
+      "address": "0x0006",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_GAMEPLAY_PTR": {
+      "name": "LEVEL_GAMEPLAY_PTR",
+      "address": "0xC896",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_TEMP": {
+      "name": "DRAW_CIRCLE_TEMP",
+      "address": "0x0009",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_XC": {
+      "name": "DRAW_CIRCLE_XC",
+      "address": "0x0005",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_COIN_CENTER_X": {
+      "name": "_COIN_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_CENTER_Y": {
+      "name": "_BUBBLE_LARGE_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8B8",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "_COIN_CENTER_Y": {
+      "name": "_COIN_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0x0002",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC88A",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC8B2",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "VL_Y": {
+      "name": "VL_Y",
+      "address": "0xCF82",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "VL_PTR": {
+      "name": "VL_PTR",
+      "address": "0xCF80",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8B6",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "TMPRIGHT2": {
+      "name": "TMPRIGHT2",
+      "address": "0xC888",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC890",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPLEFT2": {
+      "name": "TMPLEFT2",
+      "address": "0xC884",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_COIN_WIDTH": {
+      "name": "_COIN_WIDTH",
+      "address": "0x0010",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_WIDTH": {
+      "name": "_BUBBLE_LARGE_WIDTH",
+      "address": "0x001E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MOUNTAIN_CENTER_X": {
+      "name": "_MOUNTAIN_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC89A",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_DIAM": {
+      "name": "DRAW_CIRCLE_DIAM",
+      "address": "0x0007",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VL_SCALE": {
+      "name": "VL_SCALE",
+      "address": "0xCF84",
+      "size": 2,
+      "type": "unknown",
       "declLine": null
     }
   }

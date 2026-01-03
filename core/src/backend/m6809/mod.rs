@@ -90,11 +90,47 @@ fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
 
 // analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
 // Returns set of asset names that are actually used in the code
-fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
+fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) -> std::collections::HashSet<String> {
     use std::collections::HashSet;
     let mut used = HashSet::new();
     
-    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, depth: usize) {
+    // Helper: Load level and extract vector references
+    fn extract_level_vectors(level_name: &str, assets: &[crate::codegen::AssetInfo]) -> Vec<String> {
+        // Find the level asset
+        let level_asset = assets.iter().find(|a| {
+            matches!(a.asset_type, crate::codegen::AssetType::Level) && a.name == level_name
+        });
+        
+        if let Some(level_asset) = level_asset {
+            // Load and parse the level JSON
+            if let Ok(json_str) = std::fs::read_to_string(&level_asset.path) {
+                if let Ok(level_data) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                    let mut vectors = Vec::new();
+                    
+                    // Extract vectorName from all layers
+                    if let Some(layers) = level_data.get("layers") {
+                        for layer_name in ["background", "gameplay", "foreground"] {
+                            if let Some(layer) = layers.get(layer_name) {
+                                if let Some(objects) = layer.as_array() {
+                                    for obj in objects {
+                                        if let Some(vector_name) = obj.get("vectorName").and_then(|v| v.as_str()) {
+                                            vectors.push(vector_name.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return vectors;
+                }
+            }
+        }
+        
+        Vec::new()
+    }
+    
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum expression nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
@@ -112,86 +148,96 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
+                        
+                        // If it's a level, also mark its referenced vectors as used
+                        if name_upper == "LOAD_LEVEL" {
+                            let vectors = extract_level_vectors(asset_name, assets);
+                            eprintln!("[DEBUG] Level '{}' references vectors: {:?}", asset_name, vectors);
+                            for vector_name in vectors {
+                                eprintln!("[DEBUG] Marking vector as used: {}", vector_name);
+                                used.insert(vector_name);
+                            }
+                        }
                     }
                 }
                 // Recursively scan arguments
                 for arg in &call_info.args {
-                    scan_expr(arg, used, depth + 1);
+                    scan_expr(arg, used, assets, depth + 1);
                 }
             },
             Expr::MethodCall(mc) => {
                 // Scan target and arguments for nested asset usages
-                scan_expr(&mc.target, used, depth + 1);
+                scan_expr(&mc.target, used, assets, depth + 1);
                 for arg in &mc.args {
-                    scan_expr(arg, used, depth + 1);
+                    scan_expr(arg, used, assets, depth + 1);
                 }
             },
             Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-                scan_expr(left, used, depth + 1);
-                scan_expr(right, used, depth + 1);
+                scan_expr(left, used, assets, depth + 1);
+                scan_expr(right, used, assets, depth + 1);
             },
-            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, depth + 1),
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, assets, depth + 1),
             Expr::List(elements) => {
                 for elem in elements {
-                    scan_expr(elem, used, depth + 1);
+                    scan_expr(elem, used, assets, depth + 1);
                 }
             },
             Expr::Index { target, index } => {
-                scan_expr(target, used, depth + 1);
-                scan_expr(index, used, depth + 1);
+                scan_expr(target, used, assets, depth + 1);
+                scan_expr(index, used, assets, depth + 1);
             },
             _ => {}
         }
     }
     
-    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, depth: usize) {
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum statement nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
         }
         match stmt {
-            Stmt::Assign { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::Let { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::Expr(expr, _line) => scan_expr(expr, used, depth + 1),
+            Stmt::Assign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Let { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used, assets, depth + 1),
             Stmt::If { cond, body, elifs, else_body, .. } => {
-                scan_expr(cond, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
                 for (elif_cond, elif_body) in elifs {
-                    scan_expr(elif_cond, used, depth + 1);
-                    for s in elif_body { scan_stmt(s, used, depth + 1); }
+                    scan_expr(elif_cond, used, assets, depth + 1);
+                    for s in elif_body { scan_stmt(s, used, assets, depth + 1); }
                 }
                 if let Some(els) = else_body {
-                    for s in els { scan_stmt(s, used, depth + 1); }
+                    for s in els { scan_stmt(s, used, assets, depth + 1); }
                 }
             },
             Stmt::While { cond, body, .. } => {
-                scan_expr(cond, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::For { start, end, step, body, .. } => {
-                scan_expr(start, used, depth + 1);
-                scan_expr(end, used, depth + 1);
+                scan_expr(start, used, assets, depth + 1);
+                scan_expr(end, used, assets, depth + 1);
                 if let Some(step_expr) = step {
-                    scan_expr(step_expr, used, depth + 1);
+                    scan_expr(step_expr, used, assets, depth + 1);
                 }
-                for s in body { scan_stmt(s, used, depth + 1); }
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::ForIn { iterable, body, .. } => {
-                scan_expr(iterable, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(iterable, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::Switch { expr, cases, default, .. } => {
-                scan_expr(expr, used, depth + 1);
+                scan_expr(expr, used, assets, depth + 1);
                 for (case_expr, case_body) in cases {
-                    scan_expr(case_expr, used, depth + 1);
-                    for s in case_body { scan_stmt(s, used, depth + 1); }
+                    scan_expr(case_expr, used, assets, depth + 1);
+                    for s in case_body { scan_stmt(s, used, assets, depth + 1); }
                 }
                 if let Some(default_body) = default {
-                    for s in default_body { scan_stmt(s, used, depth + 1); }
+                    for s in default_body { scan_stmt(s, used, assets, depth + 1); }
                 }
             },
-            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, depth + 1),
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, assets, depth + 1),
             _ => {}
         }
     }
@@ -201,14 +247,14 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match item {
             Item::Function(func) => {
                 for stmt in &func.body {
-                    scan_stmt(stmt, &mut used, 0);
+                    scan_stmt(stmt, &mut used, assets, 0);
                 }
             },
             Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
-                scan_expr(value, &mut used, 0);
+                scan_expr(value, &mut used, assets, 0);
             },
             Item::ExprStatement(expr) => {
-                scan_expr(expr, &mut used, 0);
+                scan_expr(expr, &mut used, assets, 0);
             },
             _ => {}
         }
@@ -469,11 +515,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("SFX_VOL", 1, "Current volume level (0-15)");
     }
     
-    // 8. Level system variables (if level assets exist)
-    let has_level_assets = opts.assets.iter().any(|a| {
-        matches!(a.asset_type, crate::codegen::AssetType::Level)
-    });
-    if has_level_assets {
+    // 8. Level system variables (if level builtins are used)
+    // Allocate RAM if ANY level builtin is used, not just if assets exist
+    let needs_level_system = rt_usage.wrappers_used.contains("LOAD_LEVEL_RUNTIME") ||
+                             rt_usage.wrappers_used.contains("GET_OBJECT_COUNT_RUNTIME") ||
+                             rt_usage.wrappers_used.contains("GET_OBJECT_PTR_RUNTIME") ||
+                             rt_usage.wrappers_used.contains("GET_LEVEL_BOUNDS_RUNTIME");
+    if needs_level_system {
         ram.allocate("LEVEL_PTR", 2, "Current level header pointer");
         ram.allocate("LEVEL_BG_PTR", 2, "Background layer objects pointer");
         ram.allocate("LEVEL_GAMEPLAY_PTR", 2, "Gameplay layer objects pointer");
@@ -1086,7 +1134,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
     if !opts.assets.is_empty() {
         // Analyze which assets are actually used in the code
-        let used_assets = analyze_used_assets(module);
+        let used_assets = analyze_used_assets(module, &opts.assets);
         eprintln!("[DEBUG] Used assets: {:?}", used_assets);
         eprintln!("[DEBUG] Available assets: {:?}", opts.assets.iter().map(|a| &a.name).collect::<Vec<_>>());
         

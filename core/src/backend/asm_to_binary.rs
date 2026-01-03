@@ -790,6 +790,20 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.ldd_immediate(val);
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.ldd_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let symbol = e.trim_start_matches("SYMBOL:");
+                emitter.add_symbol_ref(symbol, false, 2);
+                emitter.ldd_extended(0x0000); // Placeholder
+            },
+            Err(e) => return Err(e),
+        }
     } else if operand.contains(',') {
         // Indexed mode - parse postbyte
         let (postbyte, offset) = parse_indexed_mode(operand)?;

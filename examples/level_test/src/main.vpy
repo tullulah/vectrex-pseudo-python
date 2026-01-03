@@ -4,25 +4,18 @@ META AUTHOR = "VPy Team"
 # Test level system builtins
 
 def main():
-    # Load level data from ROM
-    level_ptr = LOAD_LEVEL("test_level")
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
     
-    # Get world bounds
-    bounds = GET_LEVEL_BOUNDS()
-    # bounds contains xMin, xMax, yMin, yMax in RESULT+0/+2/+4/+6
+    # Load level data from ROM (call every frame for now)
+    LOAD_LEVEL("test_level")
     
     # Get object counts
     bg_count = GET_OBJECT_COUNT(0)      # Background layer
     gameplay_count = GET_OBJECT_COUNT(1) # Gameplay layer
     fg_count = GET_OBJECT_COUNT(2)       # Foreground layer
-    
-    # Store counts for display
-    total_objects = bg_count + gameplay_count + fg_count
-    
-    SET_INTENSITY(127)
-
-def loop():
-    WAIT_RECAL()
     
     # Display level info
     PRINT_TEXT(-90, 80, "LEVEL SYSTEM TEST")

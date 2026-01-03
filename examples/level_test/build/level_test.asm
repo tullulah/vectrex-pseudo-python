@@ -1254,74 +1254,8 @@ VAR_ARG3 EQU $C8B8
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 4 of 4 assets (unused assets excluded)
+; Embedded 1 of 4 assets (unused assets excluded)
 ; ========================================
-
-; Vector asset: coin
-; Generated from coin.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-8, max=8, width=16
-; Center: (0, 0)
-
-_COIN_WIDTH EQU 16
-_COIN_CENTER_X EQU 0
-_COIN_CENTER_Y EQU 0
-
-_COIN_VECTORS:  ; Main entry
-_COIN_PATH0:    ; Path 0
-    FCB 120              ; path0: intensity
-    FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
-    FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
-    FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
-    FCB $FF,$FA,$FE          ; line 2: flag=-1, dy=-6, dx=-2
-    FCB $FF,$FE,$FA          ; line 3: flag=-1, dy=-2, dx=-6
-    FCB $FF,$02,$FA          ; line 4: flag=-1, dy=2, dx=-6
-    FCB $FF,$06,$FE          ; line 5: flag=-1, dy=6, dx=-2
-    FCB $FF,$06,$02          ; line 6: flag=-1, dy=6, dx=2
-    FCB $FF,$02,$06          ; closing line: flag=-1, dy=2, dx=6
-    FCB 2                ; End marker (path complete)
-
-; Vector asset: bubble_large
-; Generated from bubble_large.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-15, max=15, width=30
-; Center: (0, 0)
-
-_BUBBLE_LARGE_WIDTH EQU 30
-_BUBBLE_LARGE_CENTER_X EQU 0
-_BUBBLE_LARGE_CENTER_Y EQU 0
-
-_BUBBLE_LARGE_VECTORS:  ; Main entry
-_BUBBLE_LARGE_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
-    FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
-    FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
-    FCB $FF,$F6,$FB          ; line 2: flag=-1, dy=-10, dx=-5
-    FCB $FF,$FB,$F6          ; line 3: flag=-1, dy=-5, dx=-10
-    FCB $FF,$05,$F6          ; line 4: flag=-1, dy=5, dx=-10
-    FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
-    FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
-    FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
-    FCB 2                ; End marker (path complete)
-
-; Vector asset: mountain
-; Generated from mountain.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-30, max=30, width=60
-; Center: (0, 15)
-
-_MOUNTAIN_WIDTH EQU 60
-_MOUNTAIN_CENTER_X EQU 0
-_MOUNTAIN_CENTER_Y EQU 15
-
-_MOUNTAIN_VECTORS:  ; Main entry
-_MOUNTAIN_PATH0:    ; Path 0
-    FCB 100              ; path0: intensity
-    FCB $F1,$E2,0,0        ; path0: header (y=-15, x=-30, relative to center)
-    FCB $FF,$1E,$1E          ; line 0: flag=-1, dy=30, dx=30
-    FCB $FF,$E2,$1E          ; line 1: flag=-1, dy=-30, dx=30
-    FCB 2                ; End marker (path complete)
 
 ; ========================================
 ; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)

@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "name": "mountain",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "name": "default",
+    "visible": true,
+    "paths": [{
+      "name": "base",
+      "intensity": 100,
+      "closed": false,
+      "points": [
+        {"x": -30, "y": 0},
+        {"x": 0, "y": 30},
+        {"x": 30, "y": 0}
+      ]
+    }]
+  }]
+}
