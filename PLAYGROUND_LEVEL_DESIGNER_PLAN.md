@@ -169,6 +169,111 @@ _LEVEL_FUJI_1_OBJECTS:
 - Delta encoding para posiciones cercanas
 - Lookup tables para tipos comunes
 
+#### 2.4 Sistema de Físicas en VPy (PENDIENTE)
+**IMPORTANTE**: Actualmente VPy NO tiene físicas implementadas en el compilador.
+Al integrar niveles necesitaremos implementar:
+
+**Físicas Básicas Necesarias**:
+- ✅ Movimiento linear (ya soportado con variables x, y)
+- ❌ **Gravedad**: Aplicar aceleración vertical constante
+- ❌ **Colisiones**: Detección círculo-círculo, círculo-rectángulo
+- ❌ **Bounce**: Invertir velocidad al colisionar con bounce damping
+- ❌ **Friction**: Reducir velocidad gradualmente
+- ❌ **Velocidad máxima**: Clamp de velocidades
+
+**Opciones de Implementación**:
+
+**Opción A: Helpers VPy** (recomendado para MVP)
+```python
+# Usuario implementa física en su código usando helpers
+def update_physics(obj):
+    # Gravedad
+    obj.vel_y = obj.vel_y - 1
+    
+    # Aplicar velocidad
+    obj.x = obj.x + obj.vel_x
+    obj.y = obj.y + obj.vel_y
+    
+    # Colisión con suelo
+    if obj.y < -100:
+        obj.y = -100
+        obj.vel_y = -obj.vel_y * 85 / 100  # Bounce damping
+```
+
+**Opción B: Builtins de Física** (más complejo, mejor performance)
+```python
+# Builtins en compilador que generan código optimizado
+APPLY_GRAVITY(obj_id, gravity_strength)
+CHECK_COLLISION(obj1_id, obj2_id)  # Retorna 0 o 1
+APPLY_BOUNCE(obj_id, damping)
+```
+
+**Opción C: Sistema de Física Automático** (ideal, más trabajo)
+```python
+# Compilador genera loop de física automáticamente
+# Usuario solo marca objetos con flags
+obj.physics_enabled = 1
+obj.gravity = 1
+obj.bounce = 85
+# Compilador inyecta UPDATE_PHYSICS() en loop
+```
+
+**Decisión para MVP**: Opción A (helpers en VPy) + documentación de patrones comunes.
+Futuro: Migrar a Opción B/C según performance needs.
+
+#### 2.5 Rotaciones (NO SOPORTADO AÚN)
+**LIMITACIÓN CRÍTICA**: El compilador VPy actualmente NO soporta rotaciones de vectores.
+
+**Estado Actual**:
+- ✅ DRAW_VECTOR() - dibuja vector en orientación original
+- ✅ DRAW_VECTOR_EX(name, x, y, mirror) - soporta espejo X/Y/XY
+- ❌ **DRAW_VECTOR_ROTATED() - NO EXISTE**
+
+**Implicaciones para Niveles**:
+- Objetos en .vplay tienen campo `rotation` pero se ignora en compilación
+- Solo se pueden usar orientaciones fijas (0°, 90°, 180°, 270° via mirror)
+- Rotación arbitraria requiere pre-rotar vectores en editor
+
+**Soluciones Temporales**:
+1. **Pre-rotación**: Crear múltiples versiones del mismo vector
+   - `ship_0.vec`, `ship_45.vec`, `ship_90.vec`, etc.
+   - Playground genera versiones automáticamente
+
+2. **Mirror combinations**: Usar espejos para 4 orientaciones básicas
+   ```python
+   # 0° = normal, 90° = mirror_y, 180° = mirror_xy, 270° = mirror_x
+   if rotation == 0:   DRAW_VECTOR_EX("ship", x, y, 0)
+   if rotation == 90:  DRAW_VECTOR_EX("ship", x, y, 2)
+   if rotation == 180: DRAW_VECTOR_EX("ship", x, y, 3)
+   if rotation == 270: DRAW_VECTOR_EX("ship", x, y, 1)
+   ```
+
+3. **Limitación de diseño**: Niveles solo usan objetos sin rotación
+   - Válido para Pang (burbujas son círculos)
+   - Limitante para shooters o platformers
+
+**Implementación Futura de Rotaciones** (fuera de scope de MVP):
+```python
+# API deseada
+DRAW_VECTOR_ROTATED("ship", x, y, angle)  # angle en grados 0-359
+
+# Implementación en BIOS (costosa):
+# - Rotar cada punto del vector
+# - Usar tablas de sin/cos
+# - ~100-200 cycles por vector
+
+# Alternativa: lookup table de vectores pre-rotados
+# - Generar 36 versiones (cada 10°) en compilación
+# - DRAW_VECTOR_ROTATED busca versión más cercana
+# - Trade-off: ROM space vs CPU time
+```
+
+**Decisión para MVP**: 
+- Niveles ignoran campo `rotation` (siempre 0°)
+- Playground muestra rotación visualmente pero no se exporta
+- Documentar limitación en tutorial
+- Implementar rotaciones en fase posterior (Fase 6+)
+
 ### Fase 3: API VPy para Cargar Niveles (2-3 días)
 **Objetivo**: Builtins en VPy para acceder a datos de nivel en runtime
 
@@ -346,15 +451,18 @@ def loop():
 
 ## Timeline Estimado
 
-| Fase | Duración | Prioridad |
-|------|----------|-----------|
-| Fase 1: Extender .vplay | 1-2 días | **CRÍTICO** |
-| Fase 2: Compilador | 2-3 días | **CRÍTICO** |
-| Fase 3: API VPy | 2-3 días | **CRÍTICO** |
-| Fase 4: UI Playground | 3-4 días | **MEDIO** |
-| Fase 5: Ejemplo Pang | 2 días | **ALTO** |
-| Fase 6: Polish | 2-3 días | **BAJO** |
-| **TOTAL** | **12-17 días** | |
+| Fase | Duración | Prioridad | Notas |
+|------|----------|-----------|-------|
+| Fase 1: Extender .vplay | 1-2 días | **CRÍTICO** | Formato v2.0, schema |
+| Fase 2: Compilador | 2-3 días | **CRÍTICO** | Sin físicas/rotaciones |
+| Fase 2.5: Físicas en VPy | 3-4 días | **ALTO** | Gravity, collision, bounce |
+| Fase 3: API VPy | 2-3 días | **CRÍTICO** | Load/read levels |
+| Fase 4: UI Playground | 3-4 días | **MEDIO** | Layers, grid, test |
+| Fase 5: Ejemplo Pang | 2 días | **ALTO** | Demo funcional |
+| Fase 6: Polish | 2-3 días | **BAJO** | Optimizaciones |
+| Fase 7: Rotaciones | 4-5 días | **FUTURO** | Fuera de MVP |
+| **MVP TOTAL** | **15-20 días** | | Sin rotaciones |
+| **FULL TOTAL** | **19-25 días** | | Con rotaciones |
 
 ## Decisiones de Diseño Clave
 
@@ -402,6 +510,8 @@ SPAWN_LEVEL_ENEMIES()  # Hace todo automáticamente
 | Performance de rendering con muchos objetos | Media | Medio | Culling, limit objetos visibles |
 | Formato .vplay cambia mucho | Alta | Bajo | Versionado, migraciones automáticas |
 | API VPy muy verbosa | Baja | Medio | Helpers de alto nivel, macros |
+| **No hay sistema de físicas en VPy** | **Alta** | **Alto** | Opción A: helpers en código usuario, documentar patrones |
+| **Rotaciones no soportadas** | **Alta** | **Medio** | Ignorar rotación en MVP, pre-rotar vectores, mirrors |
 
 ## Próximos Pasos Inmediatos
 
