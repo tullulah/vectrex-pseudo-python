@@ -67,9 +67,10 @@ enemy_vx = [0, 0, 0, 0, 0, 0, 0, 0]            # X velocities
 enemy_vy = [0, 0, 0, 0, 0, 0, 0, 0]            # Y velocities
 enemy_size = [0, 0, 0, 0, 0, 0, 0, 0]          # Size: 4=huge, 3=large, 2=medium, 1=small
 
-# Physics constants
-const GRAVITY = 2         # Downward acceleration (increased from 1 for visible movement)
-const BOUNCE_DAMPING = 9  # Velocity retained after bounce (9/10 = 90%)
+# Physics constants (pompas de jabón - gravedad ligera)
+const GRAVITY = 1         # Gravedad ligera para efecto pompa de jabón
+const BOUNCE_DAMPING = 17 # Velocity retained after bounce (17/20 = 85%) - pompas mantienen energía
+const MIN_BOUNCE_VY = 10  # Velocidad mínima de rebote para evitar vibraciones (debe superar gravedad acumulada)
 const GROUND_Y = -80      # Y position of ground
 
 
@@ -411,33 +412,34 @@ def spawn_enemies():
 
 def update_enemies():
     #"""Update all active enemies - called every frame during gameplay"""
-    if enemy_active[0] == 1:
-        # Apply gravity directly to array
-        enemy_vy[0] = enemy_vy[0] - GRAVITY
+    i = 0
+    while i < MAX_ENEMIES:
+        if enemy_active[i] == 1:
+            # Apply gravity directly to array
+            enemy_vy[i] = enemy_vy[i] - GRAVITY
+            
+            # Move directly with arrays
+            enemy_x[i] = enemy_x[i] + enemy_vx[i]
+            enemy_y[i] = enemy_y[i] + enemy_vy[i]
+            
+            # Ground bounce (pompas de jabón - mantienen rebote)
+            if enemy_y[i] <= GROUND_Y:
+                enemy_y[i] = GROUND_Y
+                enemy_vy[i] = -enemy_vy[i]
+                enemy_vy[i] = (enemy_vy[i] * BOUNCE_DAMPING) / 20
+                # Asegurar velocidad mínima para que no se queden estáticas
+                if enemy_vy[i] < MIN_BOUNCE_VY:
+                    enemy_vy[i] = MIN_BOUNCE_VY
+            
+            # Wall bounce
+            if enemy_x[i] <= -85:
+                enemy_x[i] = -85
+                enemy_vx[i] = -enemy_vx[i]
+            if enemy_x[i] >= 85:
+                enemy_x[i] = 85
+                enemy_vx[i] = -enemy_vx[i]
         
-        # Move directly with arrays
-        enemy_x[0] = enemy_x[0] + enemy_vx[0]
-        enemy_y[0] = enemy_y[0] + enemy_vy[0]
-        
-        # Ground bounce
-        if enemy_y[0] <= -55:
-            enemy_y[0] = -55
-            enemy_vy[0] = -enemy_vy[0]
-            enemy_vy[0] = (enemy_vy[0] * 4) / 5
-        
-        # Wall bounce
-        if enemy_x[0] <= -85:
-            enemy_x[0] = -85
-            enemy_vx[0] = -enemy_vx[0]
-        if enemy_x[0] >= 85:
-            enemy_x[0] = 85
-            enemy_vx[0] = -enemy_vx[0]
-        
-        # Debug print (reading from arrays directly)
-        DEBUG_PRINT_LABELED("ENEMY_X", enemy_x[0])
-        DEBUG_PRINT_LABELED("ENEMY_Y", enemy_y[0])
-        DEBUG_PRINT_LABELED("ENEMY_VX", enemy_vx[0])
-        DEBUG_PRINT_LABELED("ENEMY_VY", enemy_vy[0])
+        i = i + 1
        
 
 
