@@ -116,7 +116,7 @@ def loop():
             current_music = -1  # Reset music tracker to trigger map_theme
             # PLAY_SFX("coin")
 
-    if(screen == STATE_MAP):
+    elif(screen == STATE_MAP):
         if (current_music != 1):
             PLAY_MUSIC("map_theme")
             current_music = 1
@@ -158,7 +158,7 @@ def loop():
 
         draw_map_screen()
     
-    if screen == STATE_GAME:
+    elif screen == STATE_GAME:
         # Countdown "GET READY" phase
         if countdown_active == 1:
             #Spawn enemies only once when countdown starts

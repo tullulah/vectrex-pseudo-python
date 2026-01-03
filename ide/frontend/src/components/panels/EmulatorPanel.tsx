@@ -573,6 +573,12 @@ export const EmulatorPanel: React.FC = () => {
         // Update persistent state for next frame
         lastButtonState = buttonState;
         
+        // CRITICAL FIX (2026-01-03): Write Vec_Prev_Btns FIRST, before PSG write
+        // Problem: Emulator might execute Read_Btns between PSG write and $C80E write
+        // This creates inconsistent state: PSG has new value but $C80E has old value → false edge
+        // Solution: Write $C80E FIRST to ensure Read_Btns sees consistent state
+        vecx.write8(0xC80E, buttonState);
+        
         // DEBUG: Log button state if any button is pressed
         if (transitions !== 0) {
           console.log('[GamepadManager] TRANSITION DETECTED:', {
@@ -600,18 +606,21 @@ export const EmulatorPanel: React.FC = () => {
           vecx.e8910.e8910_write(14, psgReg14);
         }
         
-        // DEBUG: Verify Read_Btns processes it correctly
-        if (transitions !== 0) {
+        // DEBUG: Monitor button state and RAM values
+        if (transitions !== 0 || buttonState !== 0) {
           setTimeout(() => {
             const c811 = vecx.read8(0xC811);
             const c80f = vecx.read8(0xC80F);
             const c80e = vecx.read8(0xC80E);
-            console.log('[GamepadManager] After frame, RAM state:', {
-              'C811_transitions': c811.toString(2).padStart(8, '0'),
-              'C80F_state': c80f.toString(2).padStart(8, '0'),
-              'C80E_prev': c80e.toString(2).padStart(8, '0')
+            
+            console.log('[Button] Frame state:', {
+              'btn': buttonState.toString(2).padStart(4, '0'),
+              'trans': transitions.toString(2).padStart(4, '0'),
+              'C811': c811.toString(2).padStart(4, '0'),
+              'C80F': c80f.toString(2).padStart(4, '0'),
+              'C80E': c80e.toString(2).padStart(4, '0')
             });
-          }, 20); // Wait 20ms for emulator to process
+          }, 5); // Quick check after emulator processes
         }
         
       } catch (error) {
