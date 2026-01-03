@@ -33,6 +33,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"DRAW_VECTOR_EX"|"DRAW_VECTOR_LIST"|"DRAW_LINE"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"AUDIO_UPDATE"|"MUSIC_UPDATE"|"SFX_UPDATE"|"ASM"|
         "J1_X"|"J1_Y"|"UPDATE_BUTTONS"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
+        "LOAD_LEVEL"|"GET_OBJECT_COUNT"|"GET_OBJECT_PTR"|"GET_LEVEL_BOUNDS"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
     "MUL_A"|"DIV_A"|"MOD_A"|
@@ -576,6 +577,68 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    LDD #0\n");
         out.push_str(".j2b4_done:\n");
         out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // LOAD_LEVEL: Load level data from ROM to RAM
+    // Usage: level_ptr = LOAD_LEVEL("fuji_level1_v2")
+    if up == "LOAD_LEVEL" && args.len() == 1 {
+        if let Expr::StringLit(level_name) = &args[0] {
+            // Check if level asset exists
+            let level_exists = opts.assets.iter().any(|a| {
+                a.name == *level_name && matches!(a.asset_type, crate::codegen::AssetType::Level)
+            });
+            
+            if level_exists {
+                let symbol = format!("_{}_LEVEL", level_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                out.push_str(&format!("; LOAD_LEVEL(\"{}\") - load level data\n", level_name));
+                out.push_str(&format!("    LDX #{}\n", symbol));
+                out.push_str("    JSR LOAD_LEVEL_RUNTIME\n");
+                out.push_str("    LDD RESULT  ; Returns level pointer\n");
+                return true;
+            } else {
+                out.push_str(&format!("; ERROR: Level asset '{}' not found\n", level_name));
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            }
+        }
+    }
+    
+    // GET_OBJECT_COUNT: Get number of objects in layer
+    // Usage: count = GET_OBJECT_COUNT(layer)  ; 0=bg, 1=gameplay, 2=fg
+    if up == "GET_OBJECT_COUNT" && args.len() == 1 {
+        add_native_call_comment(out, "GET_OBJECT_COUNT");
+        out.push_str("; GET_OBJECT_COUNT(layer) - get object count\n");
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    JSR GET_OBJECT_COUNT_RUNTIME\n");
+        out.push_str("    LDD RESULT  ; Returns object count\n");
+        return true;
+    }
+    
+    // GET_OBJECT_PTR: Get pointer to object data
+    // Usage: obj_ptr = GET_OBJECT_PTR(layer, index)
+    if up == "GET_OBJECT_PTR" && args.len() == 2 {
+        add_native_call_comment(out, "GET_OBJECT_PTR");
+        out.push_str("; GET_OBJECT_PTR(layer, index) - get object pointer\n");
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD RESULT+0  ; layer\n");
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD RESULT+2  ; index\n");
+        out.push_str("    JSR GET_OBJECT_PTR_RUNTIME\n");
+        out.push_str("    LDD RESULT  ; Returns object pointer\n");
+        return true;
+    }
+    
+    // GET_LEVEL_BOUNDS: Get world bounds
+    // Usage: GET_LEVEL_BOUNDS() -> stores xMin, xMax, yMin, yMax in RESULT
+    if up == "GET_LEVEL_BOUNDS" && args.is_empty() {
+        add_native_call_comment(out, "GET_LEVEL_BOUNDS");
+        out.push_str("; GET_LEVEL_BOUNDS() - get world bounds\n");
+        out.push_str("    JSR GET_LEVEL_BOUNDS_RUNTIME\n");
+        out.push_str("    ; RESULT+0: xMin, RESULT+2: xMax, RESULT+4: yMin, RESULT+6: yMax\n");
         return true;
     }
     

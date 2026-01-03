@@ -432,6 +432,92 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     vectrexAddress: "$F1BA (Read_Btns)",
     notes: "Returns 0 (released) or 1 (pressed). Reads from Vec_Btn_State ($C80F) bit 7."
   },
+
+  // === LEVEL SYSTEM (PLAYGROUND INTEGRATION) ===
+  {
+    name: "LOAD_LEVEL",
+    syntax: "LOAD_LEVEL(level_name)",
+    description: "Loads a level from .vplay asset file into RAM, extracting metadata and layer pointers",
+    parameters: [
+      { name: "level_name", type: "string", description: "Name of the .vplay level file (without extension) from assets/playground/", required: true }
+    ],
+    examples: [
+      "# Load level from assets/playground/test_level.vplay",
+      "level_ptr = LOAD_LEVEL(\"test_level\")",
+      "",
+      "# Access level data after loading",
+      "bg_count = GET_OBJECT_COUNT(0)",
+      "bounds = GET_LEVEL_BOUNDS()"
+    ],
+    category: "level",
+    notes: "Level header copied to RAM. Stores pointers to background, gameplay, and foreground layers. Returns level pointer in RESULT."
+  },
+  {
+    name: "GET_OBJECT_COUNT",
+    syntax: "GET_OBJECT_COUNT(layer)",
+    description: "Returns the number of objects in the specified layer of the loaded level",
+    parameters: [
+      { name: "layer", type: "int", description: "Layer index: 0=background, 1=gameplay, 2=foreground", required: true }
+    ],
+    examples: [
+      "bg_count = GET_OBJECT_COUNT(0)      # Background objects",
+      "gameplay_count = GET_OBJECT_COUNT(1) # Gameplay objects (enemies, collectibles)",
+      "fg_count = GET_OBJECT_COUNT(2)       # Foreground objects",
+      "",
+      "# Iterate through all gameplay objects",
+      "for i = 0 to GET_OBJECT_COUNT(1):",
+      "    obj_ptr = GET_OBJECT_PTR(1, i)",
+      "    # Process object at obj_ptr"
+    ],
+    category: "level",
+    notes: "Returns 8-bit count (0-255). Level must be loaded first with LOAD_LEVEL()."
+  },
+  {
+    name: "GET_OBJECT_PTR",
+    syntax: "GET_OBJECT_PTR(layer, index)",
+    description: "Returns pointer to a specific object in the level. Each object is 22 bytes with type, position, scale, velocity, physics, collision data.",
+    parameters: [
+      { name: "layer", type: "int", description: "Layer index: 0=background, 1=gameplay, 2=foreground", required: true },
+      { name: "index", type: "int", description: "Object index (0-based) within the layer", required: true }
+    ],
+    examples: [
+      "# Get first gameplay object (usually player spawn or first enemy)",
+      "obj_ptr = GET_OBJECT_PTR(1, 0)",
+      "",
+      "# Iterate through all enemies",
+      "enemy_count = GET_OBJECT_COUNT(1)",
+      "for i = 0 to enemy_count:",
+      "    enemy_ptr = GET_OBJECT_PTR(1, i)",
+      "    # Read object data (type at offset 0, x at offset 1-2, y at offset 3-4, etc.)",
+      "    # Object structure: type(1), x(2), y(2), scale(2), rotation(1), intensity(1),",
+      "    #                   velX(2), velY(2), physics_flags(1), collision_flags(1),",
+      "    #                   collision_size(1), spawn_delay(2), vector_ptr(2), properties_ptr(2)"
+    ],
+    category: "level",
+    notes: "Returns 16-bit pointer to object data in ROM. Object size is 22 bytes. Pointer calculation: base + (index * 22). Types: 0=player_start, 1=enemy, 2=obstacle, 3=collectible, 4=background, 5=trigger."
+  },
+  {
+    name: "GET_LEVEL_BOUNDS",
+    syntax: "GET_LEVEL_BOUNDS()",
+    description: "Extracts world bounds from loaded level header. Bounds define the playable area limits.",
+    parameters: [],
+    examples: [
+      "# Load level and get bounds",
+      "LOAD_LEVEL(\"test_level\")",
+      "bounds = GET_LEVEL_BOUNDS()",
+      "",
+      "# Bounds are stored in RESULT:",
+      "# RESULT+0 = xMin (16-bit signed)",
+      "# RESULT+2 = xMax (16-bit signed)",
+      "# RESULT+4 = yMin (16-bit signed)",
+      "# RESULT+6 = yMax (16-bit signed)",
+      "",
+      "# Example: Check if player is out of bounds",
+      "# (Manual extraction from RESULT would be needed in inline ASM)"
+    ],
+    category: "level",
+    notes: "Bounds returned in RESULT+0/+2/+4/+6 (xMin/xMax/yMin/yMax). Typical values: -100 to +100 for each axis. Used for camera limits, collision boundaries, and object spawning."
+  },
   
   // === BUILT-IN LANGUAGE FUNCTIONS (NEW) ===
   {

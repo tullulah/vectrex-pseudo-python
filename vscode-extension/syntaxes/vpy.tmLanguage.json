@@ -47,7 +47,7 @@
         }}
     ] },
       "builtin": { "patterns": [
-        {"name":"support.function.builtin.vpy","match":"\\b(PRINT_TEXT|DRAW_POLYGON|DRAW_CIRCLE_SEG|DRAW_CIRCLE|DRAW_ARC|DRAW_SPIRAL)\\b"}
+        {"name":"support.function.builtin.vpy","match":"\\b(PRINT_TEXT|DRAW_POLYGON|DRAW_CIRCLE_SEG|DRAW_CIRCLE|DRAW_ARC|DRAW_SPIRAL|LOAD_LEVEL|GET_OBJECT_COUNT|GET_OBJECT_PTR|GET_LEVEL_BOUNDS)\\b"}
       ] },
       "constants": { "patterns": [
         {"match":"^\\s*const\\s+([A-Z][A-Z0-9_]+)","captures":{"1":{"name":"variable.other.constant.vpy"}}},

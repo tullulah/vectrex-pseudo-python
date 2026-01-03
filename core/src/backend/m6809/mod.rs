@@ -103,11 +103,12 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
                 // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
-                // PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
+                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), or LOAD_LEVEL("asset_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
                    (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
-                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
+                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
+                   (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
@@ -468,7 +469,18 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("SFX_VOL", 1, "Current volume level (0-15)");
     }
     
-    // 8. PRINT_NUMBER buffer (always allocate if not suppressed)
+    // 8. Level system variables (if level assets exist)
+    let has_level_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Level)
+    });
+    if has_level_assets {
+        ram.allocate("LEVEL_PTR", 2, "Current level header pointer");
+        ram.allocate("LEVEL_BG_PTR", 2, "Background layer objects pointer");
+        ram.allocate("LEVEL_GAMEPLAY_PTR", 2, "Gameplay layer objects pointer");
+        ram.allocate("LEVEL_FG_PTR", 2, "Foreground layer objects pointer");
+    }
+    
+    // 9. PRINT_NUMBER buffer (always allocate if not suppressed)
     if !suppress_runtime {
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
     }
@@ -1137,16 +1149,20 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     },
                     crate::codegen::AssetType::Level => {
                         // Level data uses .vplay format (JSON level design)
-                        if let Ok(level) = VPlayLevel::load(std::path::Path::new(&asset.path)) {
-                            out.push_str(&format!("; ========================================\n"));
-                            out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
-                            out.push_str(&format!("; ========================================\n"));
-                            
-                            let asm = level.compile_to_asm();
-                            out.push_str(&asm);
-                            out.push_str("\n");
-                        } else {
-                            out.push_str(&format!("; ERROR: Failed to load level asset: {}\n", asset.path));
+                        match VPlayLevel::load(std::path::Path::new(&asset.path)) {
+                            Ok(level) => {
+                                out.push_str(&format!("; ========================================\n"));
+                                out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
+                                out.push_str(&format!("; ========================================\n"));
+                                
+                                let asm = level.compile_to_asm();
+                                out.push_str(&asm);
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                eprintln!("[ERROR] Failed to load level asset {}: {}", asset.path, e);
+                                out.push_str(&format!("; ERROR: Failed to load level asset {}: {}\n", asset.path, e));
+                            }
                         }
                     }
                 }

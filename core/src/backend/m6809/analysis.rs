@@ -297,6 +297,19 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             if up == "MUSIC_UPDATE" {
                 usage.wrappers_used.insert("UPDATE_MUSIC_PSG".to_string());
             }
+            // Level system: track level loading helpers
+            if up == "LOAD_LEVEL" {
+                usage.wrappers_used.insert("LOAD_LEVEL_RUNTIME".to_string());
+            }
+            if up == "GET_OBJECT_COUNT" {
+                usage.wrappers_used.insert("GET_OBJECT_COUNT_RUNTIME".to_string());
+            }
+            if up == "GET_OBJECT_PTR" {
+                usage.wrappers_used.insert("GET_OBJECT_PTR_RUNTIME".to_string());
+            }
+            if up == "GET_LEVEL_BOUNDS" {
+                usage.wrappers_used.insert("GET_LEVEL_BOUNDS_RUNTIME".to_string());
+            }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::MethodCall(mc) => {
