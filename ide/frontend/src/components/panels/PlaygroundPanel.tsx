@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../state/projectStore';
+import { VPlayLevel, VPlayObject, VPlayValidator, DEFAULT_LEVEL, VPLAY_VERSION } from '../../types/vplay-schema';
 
 interface VecPath {
   name: string;
@@ -374,14 +375,48 @@ export function PlaygroundPanel() {
         return;
       }
 
-      const sceneData = {
-        version: '1.0',
-        name: sceneName,
-        objects: objects.map(obj => ({
-          ...obj,
-          velocity: obj.velocity || { x: 0, y: 0 },
-        })),
+      const sceneData: VPlayLevel = {
+        version: VPLAY_VERSION,
+        type: 'level',
+        metadata: {
+          name: sceneName,
+          author: '',
+          difficulty: 'medium',
+          timeLimit: 0,
+          targetScore: 0,
+          description: `Created in Playground - ${new Date().toISOString().split('T')[0]}`
+        },
+        worldBounds: {
+          xMin: -96,
+          xMax: 95,
+          yMin: -128,
+          yMax: 127
+        },
+        layers: {
+          background: objects.filter(obj => obj.type === 'background').map(obj => ({
+            ...obj,
+            velocity: obj.velocity || { x: 0, y: 0 },
+            layer: 'background' as const
+          })) as VPlayObject[],
+          gameplay: objects.filter(obj => obj.type !== 'background' && obj.type !== 'projectile').map(obj => ({
+            ...obj,
+            velocity: obj.velocity || { x: 0, y: 0 },
+            layer: 'gameplay' as const
+          })) as VPlayObject[],
+          foreground: []
+        },
+        spawnPoints: {
+          player: { x: 0, y: -100 }
+        }
       };
+
+      // Validate before saving
+      const validation = VPlayValidator.validate(sceneData);
+      if (!validation.valid) {
+        console.error('[Playground] Validation errors:', validation.errors);
+        showToast(`Validation failed: ${validation.errors[0]}`, 'error');
+        return;
+      }
 
       const filePath = `${projectRoot}/assets/playground/${sceneName}.vplay`;
       await (window as any).files.saveFile({
@@ -413,11 +448,36 @@ export function PlaygroundPanel() {
 
       const filePath = `${projectRoot}/assets/playground/${name}.vplay`;
       const result = await (window as any).files.readFile(filePath);
-      const sceneData = JSON.parse(result.content);
+      let sceneData = JSON.parse(result.content);
       
-      setObjects(sceneData.objects || []);
+      // Auto-migrate v1.0 to v2.0
+      if (sceneData.version === '1.0') {
+        console.log('[Playground] Migrating v1.0 level to v2.0');
+        sceneData = VPlayValidator.migrateV1toV2(sceneData);
+        showToast(`Migrated "${name}" from v1.0 to v2.0`, 'success');
+      }
+      
+      // Validate loaded data
+      const validation = VPlayValidator.validate(sceneData);
+      if (!validation.valid) {
+        console.error('[Playground] Validation errors:', validation.errors);
+        showToast(`Invalid level: ${validation.errors[0]}`, 'error');
+        return;
+      }
+      
+      // Extract objects from layers or legacy objects array
+      const loadedObjects: SceneObject[] = [];
+      if (sceneData.layers) {
+        loadedObjects.push(...(sceneData.layers.background || []));
+        loadedObjects.push(...(sceneData.layers.gameplay || []));
+        loadedObjects.push(...(sceneData.layers.foreground || []));
+      } else if (sceneData.objects) {
+        loadedObjects.push(...sceneData.objects);
+      }
+      
+      setObjects(loadedObjects);
       setSelectedId(null);
-      console.log('[Playground] Loaded scene:', name);
+      console.log('[Playground] Loaded scene:', name, `(${loadedObjects.length} objects)`);
       showToast(`Scene "${name}" loaded!`, 'success');
       setShowSaveLoadModal(false);
     } catch (error) {
