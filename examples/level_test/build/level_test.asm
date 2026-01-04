@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 12 bytes
+; Total RAM used: 41 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -33,6 +33,22 @@ TEMP_YX              EQU $C880+$06   ; Temporary y,x storage (2 bytes)
 TEMP_X               EQU $C880+$08   ; Temporary x storage (1 bytes)
 TEMP_Y               EQU $C880+$09   ; Temporary y storage (1 bytes)
 NUM_STR              EQU $C880+$0A   ; String buffer for PRINT_NUMBER (2 bytes)
+DRAW_VEC_X           EQU $C880+$0C   ; X position offset for vector drawing (1 bytes)
+DRAW_VEC_Y           EQU $C880+$0D   ; Y position offset for vector drawing (1 bytes)
+MIRROR_X             EQU $C880+$0E   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
+MIRROR_Y             EQU $C880+$0F   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
+DRAW_VEC_INTENSITY   EQU $C880+$10   ; Intensity override (0=use vector's, >0=override) (1 bytes)
+DRAW_CIRCLE_XC       EQU $C880+$11   ; Circle center X (byte) (1 bytes)
+DRAW_CIRCLE_YC       EQU $C880+$12   ; Circle center Y (byte) (1 bytes)
+DRAW_CIRCLE_DIAM     EQU $C880+$13   ; Circle diameter (byte) (1 bytes)
+DRAW_CIRCLE_INTENSITY EQU $C880+$14   ; Circle intensity (byte) (1 bytes)
+DRAW_CIRCLE_TEMP     EQU $C880+$15   ; Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2) (8 bytes)
+VAR_ARG0             EQU $C880+$1D   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$1F   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$21   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$23   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$25   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$27   ; Function argument 5 (2 bytes)
 
     JMP START
 
@@ -971,11 +987,11 @@ LOOP_BODY:
     ; DEBUG: Statement 2 - Discriminant(8)
     ; VPy_LINE:15
 ; DRAW_VECTOR_EX("coin", x, y, mirror) - 1 path(s), width=16, center_x=0
-    LDD #-40
+    LDD #0
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
     STA DRAW_VEC_X
-    LDD #-40
+    LDD #0
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
     STA DRAW_VEC_Y
@@ -1020,13 +1036,6 @@ VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-; Call argument scratch space
-VAR_ARG0 EQU $C8B2
-VAR_ARG1 EQU $C8B4
-VAR_ARG2 EQU $C8B6
-VAR_ARG3 EQU $C8B8
-VAR_ARG4 EQU $C8BA
-VAR_ARG5 EQU $C8BC
 
 ; ========================================
 ; ASSET DATA SECTION
@@ -1275,13 +1284,3 @@ _TEST_LEVEL_FG_OBJECTS:
 
 
 
-DRAW_VEC_X EQU RESULT+0
-DRAW_VEC_Y EQU RESULT+1
-MIRROR_X EQU RESULT+2
-MIRROR_Y EQU RESULT+3
-DRAW_VEC_INTENSITY EQU RESULT+4
-DRAW_CIRCLE_XC EQU RESULT+5
-DRAW_CIRCLE_YC EQU RESULT+6
-DRAW_CIRCLE_DIAM EQU RESULT+7
-DRAW_CIRCLE_INTENSITY EQU RESULT+8
-DRAW_CIRCLE_TEMP EQU RESULT+9

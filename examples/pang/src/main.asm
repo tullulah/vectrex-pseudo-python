@@ -381,12 +381,9 @@ VECTREX_SET_INTENSITY:
 ;   13:  Envelope shape
 ; ============================================================================
 
-; RAM variables (defined in RAM section above)
-; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)
-; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)
-; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)
-; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG
-; PSG_DELAY_FRAMES EQU RESULT+32  (1 byte) - Frames to wait before reading next data
+; RAM variables (defined via ram.allocate in mod.rs):
+; PSG_MUSIC_PTR, PSG_MUSIC_START, PSG_IS_PLAYING,
+; PSG_MUSIC_ACTIVE, PSG_DELAY_FRAMES
 
 ; PLAY_MUSIC_RUNTIME - Start PSG music playback
 ; Input: X = pointer to PSG music data
