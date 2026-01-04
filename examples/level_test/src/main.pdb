@@ -5,49 +5,42 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "START": "0x0610",
-    "MAIN": "0x063E",
-    "LOOP_BODY": "0x0665"
+    "MAIN": "0x04F8",
+    "LOOP_BODY": "0x051F",
+    "START": "0x04CA"
   },
   "lineMap": {
-    "11": "0x0665",
-    "6": "0x063E",
-    "19": "0x0671",
-    "14": "0x066E",
-    "7": "0x0621",
-    "9": "0x0635"
+    "8": "0x04DB",
+    "17": "0x0530",
+    "20": "0x0539",
+    "13": "0x0528",
+    "7": "0x04F8",
+    "10": "0x04EF",
+    "12": "0x051F"
   },
   "functions": {
     "loop": {
       "name": "loop",
-      "address": "0x0665",
+      "address": "0x051F",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "main": {
       "name": "main",
-      "address": "0x063E",
+      "address": "0x04F8",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "14": "SHOW_LEVEL",
-    "7": "VECTREX_SET_INTENSITY",
-    "19": "UPDATE_LEVEL"
+    "8": "VECTREX_SET_INTENSITY",
+    "13": "VECTREX_WAIT_RECAL"
   },
   "asmFunctions": {},
   "asmAddressMap": {},
   "variables": {
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC884",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
     "VL_SCALE": {
       "name": "VL_SCALE",
       "address": "0xCF84",
@@ -55,30 +48,16 @@
       "type": "unknown",
       "declLine": null
     },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC8B2",
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC8B4",
       "size": 2,
       "type": "arg",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_INTENSITY": {
-      "name": "DRAW_CIRCLE_INTENSITY",
-      "address": "0x0008",
-      "size": 2,
-      "type": "unknown",
       "declLine": null
     },
     "TEMP_YX": {
       "name": "TEMP_YX",
       "address": "0xC886",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_BG_PTR": {
-      "name": "LEVEL_BG_PTR",
-      "address": "0xC88C",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -97,6 +76,132 @@
       "type": "unknown",
       "declLine": null
     },
+    "VL_Y": {
+      "name": "VL_Y",
+      "address": "0xCF82",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MOUNTAIN_CENTER_X": {
+      "name": "_MOUNTAIN_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC88A",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC889",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_WIDTH": {
+      "name": "_FUJI_BG_WIDTH",
+      "address": "0x00FA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_CENTER_X": {
+      "name": "_FUJI_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_CENTER_Y": {
+      "name": "_BUBBLE_LARGE_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MOUNTAIN_WIDTH": {
+      "name": "_MOUNTAIN_WIDTH",
+      "address": "0x0067",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_INTENSITY": {
+      "name": "DRAW_CIRCLE_INTENSITY",
+      "address": "0x0008",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0x0002",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC8B2",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "VL_X": {
+      "name": "VL_X",
+      "address": "0xCF83",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC888",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_CENTER_X": {
+      "name": "_BUBBLE_LARGE_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_WIDTH": {
+      "name": "_BUBBLE_LARGE_WIDTH",
+      "address": "0x001E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_YC": {
+      "name": "DRAW_CIRCLE_YC",
+      "address": "0x0006",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
     "DRAW_CIRCLE_DIAM": {
       "name": "DRAW_CIRCLE_DIAM",
       "address": "0x0007",
@@ -111,27 +216,6 @@
       "type": "unknown",
       "declLine": null
     },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC889",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_MOUNTAIN_CENTER_X": {
-      "name": "_MOUNTAIN_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_MOUNTAIN_WIDTH": {
-      "name": "_MOUNTAIN_WIDTH",
-      "address": "0x0067",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
     "RESULT": {
       "name": "RESULT",
       "address": "0xC880",
@@ -139,9 +223,9 @@
       "type": "system",
       "declLine": null
     },
-    "VL_Y": {
-      "name": "VL_Y",
-      "address": "0xCF82",
+    "_FUJI_BG_CENTER_Y": {
+      "name": "_FUJI_BG_CENTER_Y",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -153,67 +237,11 @@
       "type": "unknown",
       "declLine": null
     },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_TEMP": {
-      "name": "DRAW_CIRCLE_TEMP",
-      "address": "0x0009",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC8B4",
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8B8",
       "size": 2,
       "type": "arg",
-      "declLine": null
-    },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC888",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_Y": {
-      "name": "_BUBBLE_LARGE_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_PTR": {
-      "name": "LEVEL_PTR",
-      "address": "0xC88A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_X": {
-      "name": "VL_X",
-      "address": "0xCF83",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_X": {
-      "name": "MIRROR_X",
-      "address": "0x0002",
-      "size": 2,
-      "type": "unknown",
       "declLine": null
     },
     "TMPPTR": {
@@ -223,51 +251,30 @@
       "type": "system",
       "declLine": null
     },
-    "DRAW_CIRCLE_YC": {
-      "name": "DRAW_CIRCLE_YC",
-      "address": "0x0006",
+    "DRAW_CIRCLE_TEMP": {
+      "name": "DRAW_CIRCLE_TEMP",
+      "address": "0x0009",
       "size": 2,
       "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC884",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8B6",
+      "size": 2,
+      "type": "arg",
       "declLine": null
     },
     "DRAW_CIRCLE_XC": {
       "name": "DRAW_CIRCLE_XC",
       "address": "0x0005",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_WIDTH": {
-      "name": "_BUBBLE_LARGE_WIDTH",
-      "address": "0x001E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_X": {
-      "name": "_BUBBLE_LARGE_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_FG_PTR": {
-      "name": "LEVEL_FG_PTR",
-      "address": "0xC890",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_GAMEPLAY_PTR": {
-      "name": "LEVEL_GAMEPLAY_PTR",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC892",
       "size": 2,
       "type": "unknown",
       "declLine": null

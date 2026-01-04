@@ -1469,6 +1469,26 @@ DCR_DELTA_TABLE:\n\
     //
     // The BIOS calls are inlined directly in emit_builtin_call() for J1_X(), J1_Y(), etc.
     // No helper routines needed - everything goes through official BIOS entry points.
+    
+    // === LEVEL SYSTEM HELPERS ===
+    if w.contains("LOAD_LEVEL_RUNTIME") {
+        out.push_str("; === LOAD_LEVEL_RUNTIME ===\n");
+        out.push_str("; Load level data from ROM\n");
+        out.push_str("; Input: X = pointer to level data in ROM\n");
+        out.push_str("; Output: RESULT = pointer to level data\n");
+        out.push_str("LOAD_LEVEL_RUNTIME:\n");
+        out.push_str("    STX RESULT     ; Store level pointer in RESULT\n");
+        out.push_str("    RTS\n\n");
+    }
+    
+    if w.contains("SHOW_LEVEL_RUNTIME") {
+        out.push_str("; === SHOW_LEVEL_RUNTIME ===\n");
+        out.push_str("; Draw all level objects from loaded level\n");
+        out.push_str("; TODO: Implement level rendering logic\n");
+        out.push_str("SHOW_LEVEL_RUNTIME:\n");
+        out.push_str("    ; Placeholder - no-op for now\n");
+        out.push_str("    RTS\n\n");
+    }
 }
 
 // power_of_two_const: return shift count if expression is a numeric power-of-two (>1).
