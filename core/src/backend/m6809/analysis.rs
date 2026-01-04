@@ -17,6 +17,9 @@ pub struct RuntimeUsage {
     pub uses_div: bool,
     pub uses_music: bool,
     pub uses_draw_vector: bool,
+    pub uses_draw_vector_ex: bool,  // NEW: tracks DRAW_VECTOR_EX usage
+    pub uses_draw_circle: bool,      // NEW: tracks DRAW_CIRCLE usage
+    pub uses_show_level: bool,       // NEW: tracks SHOW_LEVEL usage
     pub needs_mul_helper: bool,
     pub needs_div_helper: bool,
     pub needs_tmp_left: bool,
@@ -313,9 +316,19 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             if up == "SHOW_LEVEL" {
                 eprintln!("[DEBUG] Found SHOW_LEVEL call at analysis");
                 usage.wrappers_used.insert("SHOW_LEVEL_RUNTIME".to_string());
+                usage.uses_show_level = true;  // NEW: Mark for variable allocation
             }
             if up == "UPDATE_LEVEL" {
                 usage.wrappers_used.insert("UPDATE_LEVEL_RUNTIME".to_string());
+            }
+            // DRAW_VECTOR_EX: needs DRAW_VEC_X/Y and MIRROR_X/Y variables
+            if up == "DRAW_VECTOR_EX" {
+                usage.uses_draw_vector_ex = true;
+            }
+            // DRAW_CIRCLE: needs DRAW_CIRCLE_* variables
+            if up == "DRAW_CIRCLE" {
+                usage.uses_draw_circle = true;
+                usage.wrappers_used.insert("DRAW_CIRCLE_RUNTIME".to_string());
             }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }

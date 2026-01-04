@@ -522,8 +522,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
     }
     
-    // 9. DRAW_VECTOR position/mirror variables (always allocate for DRAW_VECTOR_EX and SHOW_LEVEL)
-    if !suppress_runtime {
+    // 9. DRAW_VECTOR position/mirror variables (only if DRAW_VECTOR_EX or SHOW_LEVEL is used)
+    if rt_usage.uses_draw_vector_ex || rt_usage.uses_show_level {
         ram.allocate("DRAW_VEC_X", 1, "X position offset for vector drawing");
         ram.allocate("DRAW_VEC_Y", 1, "Y position offset for vector drawing");
         ram.allocate("MIRROR_X", 1, "X-axis mirror flag (0=normal, 1=flip)");
@@ -543,8 +543,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("VLINE_LIST", 2, "2-byte vector list (Y|endbit, X)");
     }
     
-    // 11. DRAW_CIRCLE variables (if DRAW_CIRCLE is used - TODO: detect usage)
-    if !suppress_runtime {
+    // 11. DRAW_CIRCLE variables (only if DRAW_CIRCLE is used)
+    if rt_usage.uses_draw_circle {
         ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X (byte)");
         ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y (byte)");
         ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter (byte)");
