@@ -469,7 +469,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("TMPRIGHT", 2, "Right operand temp");
         ram.allocate("TMPRIGHT2", 2, "Right operand temp 2 (for nested operations)");
     }
-    if !suppress_runtime && rt_usage.needs_tmp_ptr {
+    // TMPPTR always allocated (used by structs, arrays, level system, etc.)
+    if !suppress_runtime {
         ram.allocate("TMPPTR", 2, "Pointer temp");
         ram.allocate("TMPPTR2", 2, "Pointer temp 2 (for nested array operations)");
     }
@@ -520,7 +521,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let needs_level_system = rt_usage.wrappers_used.contains("LOAD_LEVEL_RUNTIME") ||
                              rt_usage.wrappers_used.contains("GET_OBJECT_COUNT_RUNTIME") ||
                              rt_usage.wrappers_used.contains("GET_OBJECT_PTR_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("GET_LEVEL_BOUNDS_RUNTIME");
+                             rt_usage.wrappers_used.contains("GET_LEVEL_BOUNDS_RUNTIME") ||
+                             rt_usage.wrappers_used.contains("SHOW_LEVEL_RUNTIME") ||
+                             rt_usage.wrappers_used.contains("UPDATE_LEVEL_RUNTIME");
     if needs_level_system {
         ram.allocate("LEVEL_PTR", 2, "Current level header pointer");
         ram.allocate("LEVEL_BG_PTR", 2, "Background layer objects pointer");

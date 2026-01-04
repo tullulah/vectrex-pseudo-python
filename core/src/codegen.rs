@@ -137,6 +137,8 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("GET_OBJECT_COUNT", 1),// Get object count for layer: layer (0=bg, 1=gameplay, 2=fg)
     ("GET_OBJECT_PTR", 2),  // Get pointer to object data: layer, index
     ("GET_LEVEL_BOUNDS", 0),// Get world bounds (returns: xMin, xMax, yMin, yMax in RESULT)
+    ("SHOW_LEVEL", 0),      // Draw all objects from all layers automatically
+    ("UPDATE_LEVEL", 0),    // Update level state (physics, animations) - placeholder
     
     // Compatibilidad hacia atrás (deprecated)
     ("MOVE_TO", 2),         // deprecated: use MOVE

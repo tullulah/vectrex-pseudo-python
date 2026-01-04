@@ -2,12 +2,12 @@
   "version": "2.0",
   "type": "level",
   "metadata": {
-    "name": "Test Level",
+    "name": "test_level",
     "author": "VPy Team",
     "difficulty": "easy",
     "timeLimit": 120,
     "targetScore": 1000,
-    "description": "Simple test level for builtin validation"
+    "description": "Empty level for debugging"
   },
   "worldBounds": {
     "xMin": -100,
@@ -18,11 +18,11 @@
   "layers": {
     "background": [
       {
-        "id": "bg_mountain",
+        "id": "test_bg",
         "type": "background",
         "vectorName": "mountain",
         "x": 0,
-        "y": -50,
+        "y": 0,
         "scale": 1.0,
         "rotation": 0,
         "intensity": 100,
@@ -36,68 +36,7 @@
         "destroyOffscreen": false
       }
     ],
-    "gameplay": [
-      {
-        "id": "enemy1",
-        "type": "enemy",
-        "vectorName": "bubble_large",
-        "x": 30,
-        "y": 0,
-        "scale": 1.0,
-        "rotation": 0,
-        "intensity": 127,
-        "layer": "gameplay",
-        "visible": true,
-        "velocity": {"x": 10.0, "y": 0.0},
-        "physics": {
-          "type": "dynamic",
-          "gravity": 0.5,
-          "friction": 0.1,
-          "bounceDamping": 0.8,
-          "maxSpeed": 100.0
-        },
-        "collision": {
-          "enabled": true,
-          "layer": "enemy",
-          "radius": 10,
-          "width": null,
-          "height": null,
-          "shape": "circle",
-          "bounceWalls": false,
-          "destroyOnCollision": false
-        },
-        "properties": {"health": 1, "speed": 10},
-        "spawnDelay": 0,
-        "destroyOffscreen": true
-      },
-      {
-        "id": "collectible1",
-        "type": "collectible",
-        "vectorName": "coin",
-        "x": -30,
-        "y": 30,
-        "scale": 1.0,
-        "rotation": 0,
-        "intensity": 127,
-        "layer": "gameplay",
-        "visible": true,
-        "velocity": {"x": 0.0, "y": 0.0},
-        "physics": null,
-        "collision": {
-          "enabled": true,
-          "layer": "collectible",
-          "radius": null,
-          "width": 15,
-          "height": 15,
-          "shape": "rectangle",
-          "bounceWalls": false,
-          "destroyOnCollision": true
-        },
-        "properties": {"points": 100},
-        "spawnDelay": 0,
-        "destroyOffscreen": false
-      }
-    ],
+    "gameplay": [],
     "foreground": []
   }
 }

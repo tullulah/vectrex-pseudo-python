@@ -1577,11 +1577,11 @@ DCR_DELTA_TABLE:\n\
             "; GET_OBJECT_PTR_RUNTIME - Get pointer to specific object in layer\n\
             ; Input: RESULT+0 = layer index (0=bg, 1=gameplay, 2=fg)\n\
             ;        RESULT+2 = object index (0-based)\n\
-            ; Output: RESULT = pointer to object data (22 bytes per object)\n\
-            ; Object structure: type(1), x(2), y(2), scale(2), rotation(2), intensity(1),\n\
-            ;                   velX(2), velY(2), physics_flags(1), collision_flags(1),\n\
-            ;                   width(1), height(1), spawn_delay(2), vector_ptr(2), properties_ptr(2)\n\
-            ; Total: 22 bytes per object\n\
+            ; Output: RESULT = pointer to object data (20 bytes per object)\n\
+            ; Object structure: type(1), x(2), y(2), scale(2), rotation(1), intensity(1),\n\
+            ;                   velocity_x(1), velocity_y(1), physics_flags(1), collision_flags(1),\n\
+            ;                   collision_size(1), spawn_delay(2), vector_ptr(2), properties_ptr(2)\n\
+            ; Total: 20 bytes per object\n\
             ; Modifies: D, X, Y\n\
             GET_OBJECT_PTR_RUNTIME:\n\
                 ; Get layer pointer based on layer index\n\
@@ -1607,10 +1607,10 @@ DCR_DELTA_TABLE:\n\
                 \n\
             .GOP_CALC:\n\
                 ; X = layer base pointer\n\
-                ; Calculate offset: index * 22 (object size)\n\
+                ; Calculate offset: index * 20 (object size)\n\
                 LDD RESULT+2            ; Load object index\n\
                 \n\
-                ; Multiply by 22: D = D * 22 = D * 16 + D * 4 + D * 2\n\
+                ; Multiply by 20: D = D * 20 = D * 16 + D * 4\n\
                 ; Save original index\n\
                 PSHS D                  ; Save index\n\
                 \n\
@@ -1627,22 +1627,14 @@ DCR_DELTA_TABLE:\n\
                 \n\
                 ; D * 4 (from original)\n\
                 PULS D                  ; Restore original index\n\
-                PSHS D                  ; Save again\n\
                 ASLA                    ; Shift left 2 times (x4)\n\
                 ROLB\n\
                 ASLA\n\
                 ROLB\n\
                 ADDD TMPPTR             ; Add D*16 (now have D*20)\n\
-                STD TMPPTR              ; Store D*20\n\
-                \n\
-                ; D * 2 (from original)\n\
-                PULS D                  ; Restore original index\n\
-                ASLA                    ; Shift left 1 time (x2)\n\
-                ROLB\n\
-                ADDD TMPPTR             ; Add D*20 (now have D*22)\n\
                 \n\
                 ; Add offset to base pointer\n\
-                LEAX D,X                ; X = base + (index * 22)\n\
+                LEAX D,X                ; X = base + (index * 20)\n\
                 TFR X,D                 ; Move result to D\n\
                 STD RESULT              ; Store final pointer\n\
                 RTS\n\
@@ -1689,6 +1681,142 @@ DCR_DELTA_TABLE:\n\
                 STD RESULT+2\n\
                 STD RESULT+4\n\
                 STD RESULT+6\n\
+                RTS\n\
+            \n"
+        );
+    }
+    
+    if w.contains("SHOW_LEVEL_RUNTIME") {
+        out.push_str(
+            "; SHOW_LEVEL_RUNTIME - Draw all objects from all layers automatically\n\
+            ; Input: None (uses LEVEL_PTR, LEVEL_BG_PTR, LEVEL_GAMEPLAY_PTR, LEVEL_FG_PTR)\n\
+            ; Output: None\n\
+            ; Modifies: D, X, Y, U\n\
+            ; Object structure (20 bytes total):\n\
+            ;   +0: type (1 byte)\n\
+            ;   +1-2: x (2 bytes, signed)\n\
+            ;   +3-4: y (2 bytes, signed)\n\
+            ;   +5-6: scale (2 bytes)\n\
+            ;   +7: rotation (1 byte)\n\
+            ;   +8: intensity (1 byte)\n\
+            ;   +9: velocity_x (1 byte)\n\
+            ;   +10: velocity_y (1 byte)\n\
+            ;   +11: physics_flags (1 byte)\n\
+            ;   +12: collision_flags (1 byte)\n\
+            ;   +13: collision_size (1 byte)\n\
+            ;   +14-15: spawn_delay (2 bytes)\n\
+            ;   +16-17: vector_ptr (2 bytes)\n\
+            ;   +18-19: properties_ptr (2 bytes)\n\
+            SHOW_LEVEL_RUNTIME:\n\
+                LDX >LEVEL_PTR\n\
+                BEQ SL_EXIT            ; Exit if no level loaded\n\
+                \n\
+                ; Get object counts\n\
+                ; Header: 8 bytes bounds (4xFDB) + 4 bytes metadata (2xFDB) = 12 bytes\n\
+                ; Then 3 bytes counts at offset 12-14\n\
+                LEAX 12,X\n\
+                LDB ,X                  ; bg_count\n\
+                STB TMPPTR              ; Save bg_count\n\
+                LDB 1,X                 ; gameplay_count\n\
+                STB TMPPTR+1            ; Save gameplay_count\n\
+                LDB 2,X                 ; fg_count (not used yet, but available)\n\
+                \n\
+                ; === DRAW BACKGROUND LAYER ===\n\
+                LDB TMPPTR              ; Load bg_count\n\
+                BEQ SL_GAMEPLAY        ; Skip if no bg objects\n\
+                LDX >LEVEL_BG_PTR       ; Load bg layer base pointer\n\
+                JSR SL_DRAW_LAYER\n\
+                \n\
+            SL_GAMEPLAY:\n\
+                ; === DRAW GAMEPLAY LAYER ===\n\
+                LDB TMPPTR+1            ; Load gameplay_count\n\
+                BEQ SL_EXIT            ; Skip if no gameplay objects\n\
+                LDX >LEVEL_GAMEPLAY_PTR ; Load gameplay layer base pointer\n\
+                JSR SL_DRAW_LAYER\n\
+                \n\
+            SL_EXIT:\n\
+                JSR $F1AF               ; DP_to_C8 (CRITICAL: restore DP after BIOS calls)\n\
+                RTS\n\
+                \n\
+            ; Helper: Draw all objects in a layer\n\
+            ; Input: B = object count, X = layer base pointer\n\
+            ; Modifies: D, X, Y, U\n\
+            SL_DRAW_LAYER:\n\
+                TSTB                    ; Test if count is zero\n\
+                BEQ SL_LAYER_DONE      ; Skip if no objects\n\
+                PSHS B                  ; Save count\n\
+                \n\
+            SL_LOOP:\n\
+                PULS B                  ; Get count\n\
+                DECB                    ; Decrement count\n\
+                BEQ SL_LAST_OBJECT     ; Last object (don't push back)\n\
+                PSHS B                  ; Save decremented count\n\
+                \n\
+            SL_DRAW_OBJECT:\n\
+                ; X points to current object (20 bytes)\n\
+                ; Setup: read object data, then call Draw_Sync_List_At_With_Mirrors\n\
+                \n\
+                ; Clear mirror flags (objects don't support mirroring yet)\n\
+                CLR MIRROR_X\n\
+                CLR MIRROR_Y\n\
+                \n\
+                ; Read intensity (offset 8) and store as override\n\
+                LDA 8,X\n\
+                STA DRAW_VEC_INTENSITY\n\
+                \n\
+                ; Read x,y position (offset 1-4) and store as offset\n\
+                LDD 3,X                 ; Load y (offset 3-4)\n\
+                STB DRAW_VEC_Y          ; Store low byte (8-bit offset)\n\
+                LDD 1,X                 ; Load x (offset 1-2)\n\
+                STB DRAW_VEC_X          ; Store low byte (8-bit offset)\n\
+                \n\
+                ; Read vector_ptr (offset 16-17)\n\
+                LDU 16,X                ; Load vector pointer\n\
+                PSHS X                  ; Save object pointer\n\
+                TFR U,X                 ; X = vector data\n\
+                \n\
+                ; Call the correct drawing function\n\
+                JSR Draw_Sync_List_At_With_Mirrors\n\
+                \n\
+                PULS X                  ; Restore object pointer\n\
+                \n\
+                ; Move to next object\n\
+                LEAX 20,X\n\
+                BRA SL_LOOP\n\
+                \n\
+            SL_LAST_OBJECT:\n\
+                ; Draw last object - same as SL_DRAW_OBJECT but don't loop\n\
+                CLR MIRROR_X\n\
+                CLR MIRROR_Y\n\
+                LDA 8,X\n\
+                STA DRAW_VEC_INTENSITY\n\
+                LDD 3,X\n\
+                STB DRAW_VEC_Y\n\
+                LDD 1,X\n\
+                STB DRAW_VEC_X\n\
+                LDU 16,X\n\
+                PSHS X\n\
+                TFR U,X\n\
+                JSR Draw_Sync_List_At_With_Mirrors\n\
+                PULS X\n\
+                ; Don't loop - fall through to done\n\
+                \n\
+            SL_LAYER_DONE:\n\
+                ; Layer drawing complete - DP already restored by Draw_Sync_List_At_With_Mirrors\n\
+                RTS\n\
+            \n"
+        );
+    }
+    
+    if w.contains("UPDATE_LEVEL_RUNTIME") {
+        out.push_str(
+            "; UPDATE_LEVEL_RUNTIME - Update level state (placeholder for future physics/animations)\n\
+            ; Input: None\n\
+            ; Output: None\n\
+            ; Modifies: None (currently)\n\
+            UPDATE_LEVEL_RUNTIME:\n\
+                ; TODO: Implement physics updates, animation state changes, etc.\n\
+                ; For now, just return\n\
                 RTS\n\
             \n"
         );

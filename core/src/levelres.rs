@@ -163,10 +163,10 @@ impl VPlayLevel {
 
         // Level header
         out.push_str(&format!("_{}_LEVEL:\n", name));
-        out.push_str(&format!("    FCB {}  ; World bounds: xMin\n", self.world_bounds.x_min as u8));
-        out.push_str(&format!("    FCB {}  ; xMax\n", self.world_bounds.x_max as u8));
-        out.push_str(&format!("    FCB {}  ; yMin\n", self.world_bounds.y_min as u8));
-        out.push_str(&format!("    FCB {}  ; yMax\n", self.world_bounds.y_max as u8));
+        out.push_str(&format!("    FDB {}  ; World bounds: xMin (16-bit signed)\n", self.world_bounds.x_min));
+        out.push_str(&format!("    FDB {}  ; xMax (16-bit signed)\n", self.world_bounds.x_max));
+        out.push_str(&format!("    FDB {}  ; yMin (16-bit signed)\n", self.world_bounds.y_min));
+        out.push_str(&format!("    FDB {}  ; yMax (16-bit signed)\n", self.world_bounds.y_max));
         out.push_str(&format!("    FDB {}  ; Time limit (seconds)\n", self.metadata.time_limit));
         out.push_str(&format!("    FDB {}  ; Target score\n", self.metadata.target_score));
 

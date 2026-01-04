@@ -1,19 +1,56 @@
 {
   "version": "1.0",
   "name": "mountain",
-  "canvas": {"width": 256, "height": 256, "origin": "center"},
-  "layers": [{
-    "name": "default",
-    "visible": true,
-    "paths": [{
-      "name": "base",
-      "intensity": 100,
-      "closed": false,
-      "points": [
-        {"x": -30, "y": 0},
-        {"x": 0, "y": 30},
-        {"x": 30, "y": 0}
+  "canvas": {
+    "width": 256,
+    "height": 256,
+    "origin": "center"
+  },
+  "layers": [
+    {
+      "name": "default",
+      "visible": true,
+      "paths": [
+        {
+          "name": "path_1767485702289",
+          "intensity": 127,
+          "closed": false,
+          "points": [
+            {
+              "x": 1,
+              "y": -1,
+              "z": 0
+            },
+            {
+              "x": 1,
+              "y": 52,
+              "z": 0
+            },
+            {
+              "x": -50,
+              "y": 55,
+              "z": 0
+            },
+            {
+              "x": -48,
+              "y": 0,
+              "z": 0
+            },
+            {
+              "x": 3,
+              "y": -2,
+              "z": 0
+            },
+            {
+              "x": 3,
+              "y": -2,
+              "z": 0
+            }
+          ]
+        }
       ]
-    }]
-  }]
+    }
+  ],
+  "center_x": -23,
+  "center_y": 27
 }

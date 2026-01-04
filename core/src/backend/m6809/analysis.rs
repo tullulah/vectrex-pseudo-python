@@ -310,6 +310,13 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             if up == "GET_LEVEL_BOUNDS" {
                 usage.wrappers_used.insert("GET_LEVEL_BOUNDS_RUNTIME".to_string());
             }
+            if up == "SHOW_LEVEL" {
+                eprintln!("[DEBUG] Found SHOW_LEVEL call at analysis");
+                usage.wrappers_used.insert("SHOW_LEVEL_RUNTIME".to_string());
+            }
+            if up == "UPDATE_LEVEL" {
+                usage.wrappers_used.insert("UPDATE_LEVEL_RUNTIME".to_string());
+            }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::MethodCall(mc) => {

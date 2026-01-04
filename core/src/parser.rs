@@ -15,6 +15,8 @@ fn is_known_builtin(name: &str) -> bool {
         "J1_X" | "J1_Y" | "J1_X_DIGITAL" | "J1_Y_DIGITAL" |
         "J1_X_ANALOG" | "J1_Y_ANALOG" | "UPDATE_BUTTONS" | "J1_BUTTON_1" | "J1_BUTTON_2" |
         "J1_BUTTON_3" | "J1_BUTTON_4" |
+        // Level system builtins (0 args)
+        "SHOW_LEVEL" | "UPDATE_LEVEL" | "GET_LEVEL_BOUNDS" |
         // Multi-arg builtins (unlikely to be confused but include for completeness)
         "MOVE" | "PRINT_TEXT" | "DRAW_TO" | "DRAW_LINE" | "DEBUG_PRINT" |
         "DEBUG_PRINT_LABELED" | "DEBUG_PRINT_STR" | "DRAW_VECTOR" |

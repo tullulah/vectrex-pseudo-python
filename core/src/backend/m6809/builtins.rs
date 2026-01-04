@@ -34,6 +34,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         "J1_X"|"J1_Y"|"UPDATE_BUTTONS"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "LOAD_LEVEL"|"GET_OBJECT_COUNT"|"GET_OBJECT_PTR"|"GET_LEVEL_BOUNDS"|
+        "SHOW_LEVEL"|"UPDATE_LEVEL"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
     "MUL_A"|"DIV_A"|"MOD_A"|
@@ -639,6 +640,25 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("; GET_LEVEL_BOUNDS() - get world bounds\n");
         out.push_str("    JSR GET_LEVEL_BOUNDS_RUNTIME\n");
         out.push_str("    ; RESULT+0: xMin, RESULT+2: xMax, RESULT+4: yMin, RESULT+6: yMax\n");
+        return true;
+    }
+    
+    // SHOW_LEVEL: Draw all objects from all layers automatically
+    // Usage: SHOW_LEVEL() - draws all bg, gameplay, fg objects
+    if up == "SHOW_LEVEL" && args.is_empty() {
+        add_native_call_comment(out, "SHOW_LEVEL");
+        out.push_str("; SHOW_LEVEL() - draw all level objects automatically\n");
+        out.push_str("    JSR SHOW_LEVEL_RUNTIME\n");
+        out.push_str("    ; No return value - draws directly to screen\n");
+        return true;
+    }
+    
+    // UPDATE_LEVEL: Update level state (placeholder)
+    // Usage: UPDATE_LEVEL() - updates physics, animations, etc.
+    if up == "UPDATE_LEVEL" && args.is_empty() {
+        add_native_call_comment(out, "UPDATE_LEVEL");
+        out.push_str("; UPDATE_LEVEL() - update level state (placeholder)\n");
+        out.push_str("    JSR UPDATE_LEVEL_RUNTIME\n");
         return true;
     }
     

@@ -1,41 +1,27 @@
 META TITLE = "Level System Test"
 META AUTHOR = "VPy Team"
 
-# Test level system builtins
+# Test level system builtins - Automatic drawing
 
 def main():
     SET_INTENSITY(127)
+    # Load level once at startup
+    LOAD_LEVEL("test_level")
 
 def loop():
-    WAIT_RECAL()
+    # Display title
+    PRINT_TEXT(-90, 100, "LEVEL SYSTEM TEST")
+    PRINT_TEXT(-90, 80, "AUTO-DRAW MODE")
     
-    # Load level data from ROM (call every frame for now)
-    LOAD_LEVEL("test_level")
+    # Draw world bounds frame FIRST (so we see if SHOW_LEVEL overwrites it)
+    DRAW_LINE(-100, -100, 100, -100, 60)  # Bottom
+    DRAW_LINE(100, -100, 100, 100, 60)    # Right
+    DRAW_LINE(100, 100, -100, 100, 60)    # Top
+    DRAW_LINE(-100, 100, -100, -100, 60)  # Left
     
-    # Get object counts
-    bg_count = GET_OBJECT_COUNT(0)      # Background layer
-    gameplay_count = GET_OBJECT_COUNT(1) # Gameplay layer
-    fg_count = GET_OBJECT_COUNT(2)       # Foreground layer
+    # Draw all level objects automatically
+    # This draws: background (mountain), gameplay (bubble + coin)
+    SHOW_LEVEL()
     
-    # Display level info
-    PRINT_TEXT(-90, 80, "LEVEL SYSTEM TEST")
-    PRINT_TEXT(-90, 60, "BUILTINS WORKING")
-    
-    # Get gameplay objects
-    gameplay_count = GET_OBJECT_COUNT(1)
-    
-    # Access first gameplay object if it exists
-    if gameplay_count > 0:
-        obj_ptr = GET_OBJECT_PTR(1, 0)  # Layer 1 (gameplay), index 0
-        PRINT_TEXT(-90, 30, "FIRST ENEMY PTR OK")
-    
-    # Access second gameplay object if it exists
-    if gameplay_count > 1:
-        obj_ptr2 = GET_OBJECT_PTR(1, 1)  # Layer 1, index 1
-        PRINT_TEXT(-90, 10, "COLLECTIBLE PTR OK")
-    
-    # Draw simple indicator
-    DRAW_LINE(-50, -50, 50, -50, 100)
-    DRAW_LINE(50, -50, 50, 50, 100)
-    DRAW_LINE(50, 50, -50, 50, 100)
-    DRAW_LINE(-50, 50, -50, -50, 100)
+    # Update level state (placeholder for now)
+    UPDATE_LEVEL()

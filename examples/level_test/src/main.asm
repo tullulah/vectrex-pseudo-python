@@ -25,22 +25,18 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 28 bytes
+; Total RAM used: 20 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
-TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
-TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
-TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
-TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
-TMPPTR               EQU $C880+$0A   ; Pointer temp (2 bytes)
-TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
-TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
-LEVEL_PTR            EQU $C880+$12   ; Current level header pointer (2 bytes)
-LEVEL_BG_PTR         EQU $C880+$14   ; Background layer objects pointer (2 bytes)
-LEVEL_GAMEPLAY_PTR   EQU $C880+$16   ; Gameplay layer objects pointer (2 bytes)
-LEVEL_FG_PTR         EQU $C880+$18   ; Foreground layer objects pointer (2 bytes)
-NUM_STR              EQU $C880+$1A   ; String buffer for PRINT_NUMBER (2 bytes)
+TMPPTR               EQU $C880+$02   ; Pointer temp (2 bytes)
+TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$06   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$08   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$09   ; Temporary y storage (1 bytes)
+LEVEL_PTR            EQU $C880+$0A   ; Current level header pointer (2 bytes)
+LEVEL_BG_PTR         EQU $C880+$0C   ; Background layer objects pointer (2 bytes)
+LEVEL_GAMEPLAY_PTR   EQU $C880+$0E   ; Gameplay layer objects pointer (2 bytes)
+LEVEL_FG_PTR         EQU $C880+$10   ; Foreground layer objects pointer (2 bytes)
+NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
 
     JMP START
 
@@ -142,9 +138,6 @@ VECTREX_SET_INTENSITY:
     TFR A,DP       ; Set Direct Page to $D0 for BIOS
     LDA VAR_ARG0+1
     JSR __Intensity_a
-    RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
     RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -797,122 +790,130 @@ LDD >LEVEL_PTR
 STD RESULT              ; Store result
 RTS
 
-; GET_OBJECT_COUNT_RUNTIME - Get number of objects in a layer
-; Input: D = layer index (0=bg, 1=gameplay, 2=fg)
-; Output: RESULT = object count (8-bit)
-; Modifies: D, X
-GET_OBJECT_COUNT_RUNTIME:
-LDX >LEVEL_PTR          ; Load level header pointer
-BEQ .GOC_ERROR          ; Error if level not loaded
+; SHOW_LEVEL_RUNTIME - Draw all objects from all layers automatically
+; Input: None (uses LEVEL_PTR, LEVEL_BG_PTR, LEVEL_GAMEPLAY_PTR, LEVEL_FG_PTR)
+; Output: None
+; Modifies: D, X, Y, U
+; Object structure (20 bytes total):
+;   +0: type (1 byte)
+;   +1-2: x (2 bytes, signed)
+;   +3-4: y (2 bytes, signed)
+;   +5-6: scale (2 bytes)
+;   +7: rotation (1 byte)
+;   +8: intensity (1 byte)
+;   +9: velocity_x (1 byte)
+;   +10: velocity_y (1 byte)
+;   +11: physics_flags (1 byte)
+;   +12: collision_flags (1 byte)
+;   +13: collision_size (1 byte)
+;   +14-15: spawn_delay (2 bytes)
+;   +16-17: vector_ptr (2 bytes)
+;   +18-19: properties_ptr (2 bytes)
+SHOW_LEVEL_RUNTIME:
+LDX >LEVEL_PTR
+BEQ SL_EXIT            ; Exit if no level loaded
 
-; Object counts are at offset 12 (after 8 bytes bounds + 4 bytes metadata)
-LEAX 12,X               ; X now points to bg_count
+; Get object counts
+; Header: 8 bytes bounds (4xFDB) + 4 bytes metadata (2xFDB) = 12 bytes
+; Then 3 bytes counts at offset 12-14
+LEAX 12,X
+LDB ,X                  ; bg_count
+STB TMPPTR              ; Save bg_count
+LDB 1,X                 ; gameplay_count
+STB TMPPTR+1            ; Save gameplay_count
+LDB 2,X                 ; fg_count (not used yet, but available)
 
-; Check layer index in D (low byte = B register)
-CMPB #0                 ; Background?
-BEQ .GOC_BG
-CMPB #1                 ; Gameplay?
-BEQ .GOC_GAMEPLAY
-CMPB #2                 ; Foreground?
-BEQ .GOC_FG
-BRA .GOC_ERROR          ; Invalid layer
+; === DRAW BACKGROUND LAYER ===
+LDB TMPPTR              ; Load bg_count
+BEQ SL_GAMEPLAY        ; Skip if no bg objects
+LDX >LEVEL_BG_PTR       ; Load bg layer base pointer
+JSR SL_DRAW_LAYER
 
-.GOC_BG:
-LDB ,X                  ; Read bg_count (offset 0)
-BRA .GOC_DONE
-
-.GOC_GAMEPLAY:
-LDB 1,X                 ; Read gameplay_count (offset 1)
-BRA .GOC_DONE
-
-.GOC_FG:
-LDB 2,X                 ; Read fg_count (offset 2)
-BRA .GOC_DONE
-
-.GOC_ERROR:
-LDB #0                  ; Return 0 on error
-
-.GOC_DONE:
-CLRA                    ; Zero high byte (count is 8-bit)
-STD RESULT              ; Store result
-RTS
-
-; GET_OBJECT_PTR_RUNTIME - Get pointer to specific object in layer
-; Input: RESULT+0 = layer index (0=bg, 1=gameplay, 2=fg)
-;        RESULT+2 = object index (0-based)
-; Output: RESULT = pointer to object data (22 bytes per object)
-; Object structure: type(1), x(2), y(2), scale(2), rotation(2), intensity(1),
-;                   velX(2), velY(2), physics_flags(1), collision_flags(1),
-;                   width(1), height(1), spawn_delay(2), vector_ptr(2), properties_ptr(2)
-; Total: 22 bytes per object
-; Modifies: D, X, Y
-GET_OBJECT_PTR_RUNTIME:
-; Get layer pointer based on layer index
-LDB RESULT+1            ; Load layer index (low byte)
-CMPB #0                 ; Background?
-BEQ .GOP_BG
-CMPB #1                 ; Gameplay?
-BEQ .GOP_GAMEPLAY
-CMPB #2                 ; Foreground?
-BEQ .GOP_FG
-BRA .GOP_ERROR          ; Invalid layer
-
-.GOP_BG:
-LDX >LEVEL_BG_PTR       ; Load background layer base pointer
-BRA .GOP_CALC
-
-.GOP_GAMEPLAY:
+SL_GAMEPLAY:
+; === DRAW GAMEPLAY LAYER ===
+LDB TMPPTR+1            ; Load gameplay_count
+BEQ SL_EXIT            ; Skip if no gameplay objects
 LDX >LEVEL_GAMEPLAY_PTR ; Load gameplay layer base pointer
-BRA .GOP_CALC
+JSR SL_DRAW_LAYER
 
-.GOP_FG:
-LDX >LEVEL_FG_PTR       ; Load foreground layer base pointer
-
-.GOP_CALC:
-; X = layer base pointer
-; Calculate offset: index * 22 (object size)
-LDD RESULT+2            ; Load object index
-
-; Multiply by 22: D = D * 22 = D * 16 + D * 4 + D * 2
-; Save original index
-PSHS D                  ; Save index
-
-; D * 16
-ASLA                    ; Shift left 4 times (x16)
-ROLB
-ASLA
-ROLB
-ASLA
-ROLB
-ASLA
-ROLB
-STD TMPPTR              ; Store D*16
-
-; D * 4 (from original)
-PULS D                  ; Restore original index
-PSHS D                  ; Save again
-ASLA                    ; Shift left 2 times (x4)
-ROLB
-ASLA
-ROLB
-ADDD TMPPTR             ; Add D*16 (now have D*20)
-STD TMPPTR              ; Store D*20
-
-; D * 2 (from original)
-PULS D                  ; Restore original index
-ASLA                    ; Shift left 1 time (x2)
-ROLB
-ADDD TMPPTR             ; Add D*20 (now have D*22)
-
-; Add offset to base pointer
-LEAX D,X                ; X = base + (index * 22)
-TFR X,D                 ; Move result to D
-STD RESULT              ; Store final pointer
+SL_EXIT:
+JSR $F1AF               ; DP_to_C8 (CRITICAL: restore DP after BIOS calls)
 RTS
 
-.GOP_ERROR:
-LDD #0                  ; Return null pointer on error
-STD RESULT
+; Helper: Draw all objects in a layer
+; Input: B = object count, X = layer base pointer
+; Modifies: D, X, Y, U
+SL_DRAW_LAYER:
+TSTB                    ; Test if count is zero
+BEQ SL_LAYER_DONE      ; Skip if no objects
+PSHS B                  ; Save count
+
+SL_LOOP:
+PULS B                  ; Get count
+DECB                    ; Decrement count
+BEQ SL_LAST_OBJECT     ; Last object (don't push back)
+PSHS B                  ; Save decremented count
+
+SL_DRAW_OBJECT:
+; X points to current object (20 bytes)
+; Setup: read object data, then call Draw_Sync_List_At_With_Mirrors
+
+; Clear mirror flags (objects don't support mirroring yet)
+CLR MIRROR_X
+CLR MIRROR_Y
+
+; Read intensity (offset 8) and store as override
+LDA 8,X
+STA DRAW_VEC_INTENSITY
+
+; Read x,y position (offset 1-4) and store as offset
+LDD 3,X                 ; Load y (offset 3-4)
+STB DRAW_VEC_Y          ; Store low byte (8-bit offset)
+LDD 1,X                 ; Load x (offset 1-2)
+STB DRAW_VEC_X          ; Store low byte (8-bit offset)
+
+; Read vector_ptr (offset 16-17)
+LDU 16,X                ; Load vector pointer
+PSHS X                  ; Save object pointer
+TFR U,X                 ; X = vector data
+
+; Call the correct drawing function
+JSR Draw_Sync_List_At_With_Mirrors
+
+PULS X                  ; Restore object pointer
+
+; Move to next object
+LEAX 20,X
+BRA SL_LOOP
+
+SL_LAST_OBJECT:
+; Draw last object - same as SL_DRAW_OBJECT but don't loop
+CLR MIRROR_X
+CLR MIRROR_Y
+LDA 8,X
+STA DRAW_VEC_INTENSITY
+LDD 3,X
+STB DRAW_VEC_Y
+LDD 1,X
+STB DRAW_VEC_X
+LDU 16,X
+PSHS X
+TFR U,X
+JSR Draw_Sync_List_At_With_Mirrors
+PULS X
+; Don't loop - fall through to done
+
+SL_LAYER_DONE:
+; Layer drawing complete - DP already restored by Draw_Sync_List_At_With_Mirrors
+RTS
+
+; UPDATE_LEVEL_RUNTIME - Update level state (placeholder for future physics/animations)
+; Input: None
+; Output: None
+; Modifies: None (currently)
+UPDATE_LEVEL_RUNTIME:
+; TODO: Implement physics updates, animation state changes, etc.
+; For now, just return
 RTS
 
 START:
@@ -935,6 +936,11 @@ START:
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:9
+; LOAD_LEVEL("test_level") - load level data
+    LDX #_TEST_LEVEL_LEVEL
+    JSR LOAD_LEVEL_RUNTIME
+    LDD RESULT  ; Returns level pointer
 ; VPy_LINE:6
 
 MAIN:
@@ -959,60 +965,33 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:9
+    ; VPy_LINE:11
 LOOP_BODY:
-    LEAS -10,S ; allocate locals
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:10
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 10
-    JSR VECTREX_WAIT_RECAL
+    ; VPy_LINE:13
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_1
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 13
+    JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:13
-; LOAD_LEVEL("test_level") - load level data
-    LDX #_TEST_LEVEL_LEVEL
-    JSR LOAD_LEVEL_RUNTIME
-    LDD RESULT  ; Returns level pointer
-    ; DEBUG: Statement 2 - Discriminant(0)
-    ; VPy_LINE:16
-; NATIVE_CALL: GET_OBJECT_COUNT at line 16
-; GET_OBJECT_COUNT(layer) - get object count
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    JSR GET_OBJECT_COUNT_RUNTIME
-    LDD RESULT  ; Returns object count
-    LDX RESULT
-    STX 0 ,S
-    ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:17
-; NATIVE_CALL: GET_OBJECT_COUNT at line 17
-; GET_OBJECT_COUNT(layer) - get object count
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    JSR GET_OBJECT_COUNT_RUNTIME
-    LDD RESULT  ; Returns object count
-    LDX RESULT
-    STX 4 ,S
-    ; DEBUG: Statement 4 - Discriminant(0)
-    ; VPy_LINE:18
-; NATIVE_CALL: GET_OBJECT_COUNT at line 18
-; GET_OBJECT_COUNT(layer) - get object count
-    LDD #2
-    STD RESULT
-    LDD RESULT
-    JSR GET_OBJECT_COUNT_RUNTIME
-    LDD RESULT  ; Returns object count
-    LDX RESULT
-    STX 2 ,S
-    ; DEBUG: Statement 5 - Discriminant(8)
-    ; VPy_LINE:21
+    ; VPy_LINE:14
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -1022,221 +1001,26 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_3
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 21
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 6 - Discriminant(8)
-    ; VPy_LINE:22
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #60
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
     LDX #STR_0
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 22
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 14
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 7 - Discriminant(0)
-    ; VPy_LINE:25
-; NATIVE_CALL: GET_OBJECT_COUNT at line 25
-; GET_OBJECT_COUNT(layer) - get object count
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    JSR GET_OBJECT_COUNT_RUNTIME
-    LDD RESULT  ; Returns object count
-    LDX RESULT
-    STX 4 ,S
-    ; DEBUG: Statement 8 - Discriminant(9)
-    ; VPy_LINE:28
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_2
-    LDD #0
-    STD RESULT
-    BRA CE_3
-CT_2:
-    LDD #1
-    STD RESULT
-CE_3:
-    LDD RESULT
-    LBEQ IF_NEXT_1
-    ; VPy_LINE:29
-; NATIVE_CALL: GET_OBJECT_PTR at line 29
-; GET_OBJECT_PTR(layer, index) - get object pointer
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD RESULT+0  ; layer
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD RESULT+2  ; index
-    JSR GET_OBJECT_PTR_RUNTIME
-    LDD RESULT  ; Returns object pointer
-    LDX RESULT
-    STX 6 ,S
-    ; VPy_LINE:30
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #30
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_2
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 30
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    LBRA IF_END_0
-IF_NEXT_1:
-IF_END_0:
-    ; DEBUG: Statement 9 - Discriminant(9)
-    ; VPy_LINE:33
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_6
-    LDD #0
-    STD RESULT
-    BRA CE_7
-CT_6:
-    LDD #1
-    STD RESULT
-CE_7:
-    LDD RESULT
-    LBEQ IF_NEXT_5
-    ; VPy_LINE:34
-; NATIVE_CALL: GET_OBJECT_PTR at line 34
-; GET_OBJECT_PTR(layer, index) - get object pointer
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD RESULT+0  ; layer
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD RESULT+2  ; index
-    JSR GET_OBJECT_PTR_RUNTIME
-    LDD RESULT  ; Returns object pointer
-    LDX RESULT
-    STX 8 ,S
-    ; VPy_LINE:35
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_1
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 35
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    LBRA IF_END_4
-IF_NEXT_5:
-IF_END_4:
-    ; DEBUG: Statement 10 - Discriminant(8)
-    ; VPy_LINE:38
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$00
-    LDB #$64
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 11 - Discriminant(8)
-    ; VPy_LINE:39
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$64
-    LDB #$00
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 12 - Discriminant(8)
-    ; VPy_LINE:40
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$00
-    LDB #$9C
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 13 - Discriminant(8)
-    ; VPy_LINE:41
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$9C
-    LDB #$00
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
-    LEAS 10,S ; free locals
+    ; DEBUG: Statement 2 - Discriminant(8)
+    ; VPy_LINE:24
+; NATIVE_CALL: SHOW_LEVEL at line 24
+; SHOW_LEVEL() - draw all level objects automatically
+    JSR SHOW_LEVEL_RUNTIME
+    ; No return value - draws directly to screen
+    ; DEBUG: Statement 3 - Discriminant(8)
+    ; VPy_LINE:27
+; NATIVE_CALL: UPDATE_LEVEL at line 27
+; UPDATE_LEVEL() - update level state (placeholder)
+    JSR UPDATE_LEVEL_RUNTIME
     RTS
 
 ;***************************************************************************
@@ -1254,73 +1038,28 @@ VAR_ARG3 EQU $C8B8
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 4 of 4 assets (unused assets excluded)
+; Embedded 2 of 4 assets (unused assets excluded)
 ; ========================================
-
-; Vector asset: coin
-; Generated from coin.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-8, max=8, width=16
-; Center: (0, 0)
-
-_COIN_WIDTH EQU 16
-_COIN_CENTER_X EQU 0
-_COIN_CENTER_Y EQU 0
-
-_COIN_VECTORS:  ; Main entry
-_COIN_PATH0:    ; Path 0
-    FCB 120              ; path0: intensity
-    FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
-    FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
-    FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
-    FCB $FF,$FA,$FE          ; line 2: flag=-1, dy=-6, dx=-2
-    FCB $FF,$FE,$FA          ; line 3: flag=-1, dy=-2, dx=-6
-    FCB $FF,$02,$FA          ; line 4: flag=-1, dy=2, dx=-6
-    FCB $FF,$06,$FE          ; line 5: flag=-1, dy=6, dx=-2
-    FCB $FF,$06,$02          ; line 6: flag=-1, dy=6, dx=2
-    FCB $FF,$02,$06          ; closing line: flag=-1, dy=2, dx=6
-    FCB 2                ; End marker (path complete)
-
-; Vector asset: bubble_large
-; Generated from bubble_large.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-15, max=15, width=30
-; Center: (0, 0)
-
-_BUBBLE_LARGE_WIDTH EQU 30
-_BUBBLE_LARGE_CENTER_X EQU 0
-_BUBBLE_LARGE_CENTER_Y EQU 0
-
-_BUBBLE_LARGE_VECTORS:  ; Main entry
-_BUBBLE_LARGE_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
-    FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
-    FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
-    FCB $FF,$F6,$FB          ; line 2: flag=-1, dy=-10, dx=-5
-    FCB $FF,$FB,$F6          ; line 3: flag=-1, dy=-5, dx=-10
-    FCB $FF,$05,$F6          ; line 4: flag=-1, dy=5, dx=-10
-    FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
-    FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
-    FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
-    FCB 2                ; End marker (path complete)
 
 ; Vector asset: mountain
 ; Generated from mountain.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-30, max=30, width=60
-; Center: (0, 15)
+; Total paths: 1, points: 6
+; X bounds: min=-50, max=3, width=53
+; Center: (-23, 26)
 
-_MOUNTAIN_WIDTH EQU 60
-_MOUNTAIN_CENTER_X EQU 0
-_MOUNTAIN_CENTER_Y EQU 15
+_MOUNTAIN_WIDTH EQU 53
+_MOUNTAIN_CENTER_X EQU -23
+_MOUNTAIN_CENTER_Y EQU 26
 
 _MOUNTAIN_VECTORS:  ; Main entry
 _MOUNTAIN_PATH0:    ; Path 0
-    FCB 100              ; path0: intensity
-    FCB $F1,$E2,0,0        ; path0: header (y=-15, x=-30, relative to center)
-    FCB $FF,$1E,$1E          ; line 0: flag=-1, dy=30, dx=30
-    FCB $FF,$E2,$1E          ; line 1: flag=-1, dy=-30, dx=30
+    FCB 127              ; path0: intensity
+    FCB $E5,$18,0,0        ; path0: header (y=-27, x=24, relative to center)
+    FCB $FF,$35,$00          ; line 0: flag=-1, dy=53, dx=0
+    FCB $FF,$03,$CD          ; line 1: flag=-1, dy=3, dx=-51
+    FCB $FF,$C9,$02          ; line 2: flag=-1, dy=-55, dx=2
+    FCB $FF,$FE,$33          ; line 3: flag=-1, dy=-2, dx=51
+    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (path complete)
 
 ; ========================================
@@ -1331,24 +1070,24 @@ _MOUNTAIN_PATH0:    ; Path 0
 ; Difficulty: easy
 
 _TEST_LEVEL_LEVEL:
-    FCB 156  ; World bounds: xMin
-    FCB 100  ; xMax
-    FCB 156  ; yMin
-    FCB 100  ; yMax
+    FDB -100  ; World bounds: xMin (16-bit signed)
+    FDB 100  ; xMax (16-bit signed)
+    FDB -100  ; yMin (16-bit signed)
+    FDB 100  ; yMax (16-bit signed)
     FDB 120  ; Time limit (seconds)
     FDB 1000  ; Target score
     FCB 1  ; Background object count
-    FCB 2  ; Gameplay object count
+    FCB 0  ; Gameplay object count
     FCB 0  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
 
 _TEST_LEVEL_BG_OBJECTS:
-; Object: bg_mountain (background)
+; Object: test_bg (background)
     FCB 4  ; type
     FDB 0  ; x
-    FDB -50  ; y
+    FDB 0  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 100  ; intensity
@@ -1363,53 +1102,15 @@ _TEST_LEVEL_BG_OBJECTS:
 
 
 _TEST_LEVEL_GAMEPLAY_OBJECTS:
-; Object: enemy1 (enemy)
-    FCB 1  ; type
-    FDB 30  ; x
-    FDB 0  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 127  ; intensity
-    FCB 10  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 3  ; physics_flags
-    FCB 5  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
-; Object: collectible1 (collectible)
-    FCB 3  ; type
-    FDB -30  ; x
-    FDB 30  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 127  ; intensity
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 1  ; collision_flags
-    FCB 15  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _COIN_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
 
 _TEST_LEVEL_FG_OBJECTS:
 
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "BUILTINS WORKING"
+    FCC "AUTO-DRAW MODE"
     FCB $80
 STR_1:
-    FCC "COLLECTIBLE PTR OK"
-    FCB $80
-STR_2:
-    FCC "FIRST ENEMY PTR OK"
-    FCB $80
-STR_3:
     FCC "LEVEL SYSTEM TEST"
     FCB $80
 DRAW_VEC_X EQU RESULT+0
