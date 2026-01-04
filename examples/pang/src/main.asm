@@ -25,13 +25,13 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 53 bytes
+; Total RAM used: 255 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
 TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
 TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
-TMPPTR               EQU $C880+$0A   ; Pointer temp (2 bytes)
+TMPPTR               EQU $C880+$0A   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
 MUL_A                EQU $C880+$0E   ; Multiplicand A (2 bytes)
 MUL_B                EQU $C880+$10   ; Multiplicand B (2 bytes)
@@ -57,6 +57,63 @@ SFX_ACTIVE           EQU $C880+$30   ; Playback state ($00=stopped, $01=playing)
 SFX_PHASE            EQU $C880+$31   ; Envelope phase (0=A,1=D,2=S,3=R) (1 bytes)
 SFX_VOL              EQU $C880+$32   ; Current volume level (0-15) (1 bytes)
 NUM_STR              EQU $C880+$33   ; String buffer for PRINT_NUMBER (2 bytes)
+DRAW_VEC_X           EQU $C880+$35   ; X position offset for vector drawing (1 bytes)
+DRAW_VEC_Y           EQU $C880+$36   ; Y position offset for vector drawing (1 bytes)
+MIRROR_X             EQU $C880+$37   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
+MIRROR_Y             EQU $C880+$38   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
+DRAW_VEC_INTENSITY   EQU $C880+$39   ; Intensity override (0=use vector's, >0=override) (1 bytes)
+VLINE_DX_16          EQU $C880+$3A   ; x1-x0 (16-bit) for line drawing (2 bytes)
+VLINE_DY_16          EQU $C880+$3C   ; y1-y0 (16-bit) for line drawing (2 bytes)
+VLINE_DX             EQU $C880+$3E   ; Clamped dx (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$3F   ; Clamped dy (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$40   ; Remaining dy for segment 2 (16-bit) (2 bytes)
+VLINE_DX_REMAINING   EQU $C880+$42   ; Remaining dx for segment 2 (16-bit) (2 bytes)
+VLINE_STEPS          EQU $C880+$44   ; Line drawing step counter (1 bytes)
+VLINE_LIST           EQU $C880+$45   ; 2-byte vector list (Y|endbit, X) (2 bytes)
+DRAW_CIRCLE_XC       EQU $C880+$47   ; Circle center X (byte) (1 bytes)
+DRAW_CIRCLE_YC       EQU $C880+$48   ; Circle center Y (byte) (1 bytes)
+DRAW_CIRCLE_DIAM     EQU $C880+$49   ; Circle diameter (byte) (1 bytes)
+DRAW_CIRCLE_INTENSITY EQU $C880+$4A   ; Circle intensity (byte) (1 bytes)
+DRAW_CIRCLE_TEMP     EQU $C880+$4B   ; Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2) (8 bytes)
+VAR_SCREEN           EQU $C880+$53   ; User variable (2 bytes)
+VAR_TITLE_INTENSITY  EQU $C880+$55   ; User variable (2 bytes)
+VAR_TITLE_STATE      EQU $C880+$57   ; User variable (2 bytes)
+VAR_CURRENT_MUSIC    EQU $C880+$59   ; User variable (2 bytes)
+VAR_JOYSTICK1_STATE_DATA EQU $C880+$5B   ; Array data (6 elements) (12 bytes)
+VAR_CURRENT_LOCATION EQU $C880+$67   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_INTENSITY EQU $C880+$69   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_DIRECTION EQU $C880+$6B   ; User variable (2 bytes)
+VAR_JOY_X            EQU $C880+$6D   ; User variable (2 bytes)
+VAR_JOY_Y            EQU $C880+$6F   ; User variable (2 bytes)
+VAR_PREV_JOY_X       EQU $C880+$71   ; User variable (2 bytes)
+VAR_PREV_JOY_Y       EQU $C880+$73   ; User variable (2 bytes)
+VAR_COUNTDOWN_TIMER  EQU $C880+$75   ; User variable (2 bytes)
+VAR_COUNTDOWN_ACTIVE EQU $C880+$77   ; User variable (2 bytes)
+VAR_JOYSTICK_POLL_COUNTER EQU $C880+$79   ; User variable (2 bytes)
+VAR_HOOK_ACTIVE      EQU $C880+$7B   ; User variable (2 bytes)
+VAR_HOOK_X           EQU $C880+$7D   ; User variable (2 bytes)
+VAR_HOOK_Y           EQU $C880+$7F   ; User variable (2 bytes)
+VAR_HOOK_GUN_X       EQU $C880+$81   ; User variable (2 bytes)
+VAR_HOOK_GUN_Y       EQU $C880+$83   ; User variable (2 bytes)
+VAR_HOOK_INIT_Y      EQU $C880+$85   ; User variable (2 bytes)
+VAR_PLAYER_X         EQU $C880+$87   ; User variable (2 bytes)
+VAR_MOVE_SPEED       EQU $C880+$89   ; User variable (2 bytes)
+VAR_ABS_JOY          EQU $C880+$8B   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_FRAME EQU $C880+$8D   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_COUNTER EQU $C880+$8F   ; User variable (2 bytes)
+VAR_PLAYER_FACING    EQU $C880+$91   ; User variable (2 bytes)
+VAR_ENEMY_ACTIVE_DATA EQU $C880+$93   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_X_DATA     EQU $C880+$A3   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_Y_DATA     EQU $C880+$B3   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VX_DATA    EQU $C880+$C3   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VY_DATA    EQU $C880+$D3   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_SIZE_DATA  EQU $C880+$E3   ; Array data (8 elements) (16 bytes)
+VAR_ARG0             EQU $C880+$F3   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$F5   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$F7   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$F9   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$FB   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$FD   ; Function argument 5 (2 bytes)
 PSG_MUSIC_PTR_DP   EQU $24  ; DP-relative
 PSG_MUSIC_START_DP EQU $26  ; DP-relative
 PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
@@ -432,10 +489,7 @@ RTS
 ; Processes both music (channel B) and SFX (channel C) in one pass
 ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems
 ; Sets DP=$D0 once at entry, restores at exit
-
-; RAM variables (always defined, even if SFX not used)
-sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer
-sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)
+; RAM variables: SFX_PTR, SFX_ACTIVE (defined via ram.allocate in mod.rs)
 
 AUDIO_UPDATE:
 PSHS DP                 ; Save current DP
@@ -524,7 +578,7 @@ BRA AU_UPDATE_SFX       ; Skip music, go to SFX
 
 ; UPDATE SFX (channel C: registers 4/5=tone, 6=noise, 10=volume, 7=mixer)
 AU_UPDATE_SFX:
-LDA >sfx_status         ; Check if SFX is active
+LDA >SFX_ACTIVE         ; Check if SFX is active
 BEQ AU_DONE             ; Skip if not active
 
 JSR sfx_doframe         ; Process one SFX frame (uses Sound_Byte internally)
@@ -7075,46 +7129,6 @@ VL_PTR     EQU $CF80      ; Current position in vector list
 VL_Y       EQU $CF82      ; Y position (1 byte)
 VL_X       EQU $CF83      ; X position (1 byte)
 VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
-VAR_SCREEN EQU $C8C0+0
-VAR_TITLE_INTENSITY EQU $C8C0+2
-VAR_TITLE_STATE EQU $C8C0+4
-VAR_CURRENT_MUSIC EQU $C8C0+6
-VAR_JOYSTICK1_STATE_DATA EQU $C8C0+8  ; Array data (6 elements)
-VAR_CURRENT_LOCATION EQU $C8C0+20
-VAR_LOCATION_GLOW_INTENSITY EQU $C8C0+22
-VAR_LOCATION_GLOW_DIRECTION EQU $C8C0+24
-VAR_JOY_X EQU $C8C0+26
-VAR_JOY_Y EQU $C8C0+28
-VAR_PREV_JOY_X EQU $C8C0+30
-VAR_PREV_JOY_Y EQU $C8C0+32
-VAR_COUNTDOWN_TIMER EQU $C8C0+34
-VAR_COUNTDOWN_ACTIVE EQU $C8C0+36
-VAR_JOYSTICK_POLL_COUNTER EQU $C8C0+38
-VAR_HOOK_ACTIVE EQU $C8C0+40
-VAR_HOOK_X EQU $C8C0+42
-VAR_HOOK_Y EQU $C8C0+44
-VAR_HOOK_GUN_X EQU $C8C0+46
-VAR_HOOK_GUN_Y EQU $C8C0+48
-VAR_HOOK_INIT_Y EQU $C8C0+50
-VAR_PLAYER_X EQU $C8C0+52
-VAR_MOVE_SPEED EQU $C8C0+54
-VAR_ABS_JOY EQU $C8C0+56
-VAR_PLAYER_ANIM_FRAME EQU $C8C0+58
-VAR_PLAYER_ANIM_COUNTER EQU $C8C0+60
-VAR_PLAYER_FACING EQU $C8C0+62
-VAR_ENEMY_ACTIVE_DATA EQU $C8C0+64  ; Array data (8 elements)
-VAR_ENEMY_X_DATA EQU $C8C0+80  ; Array data (8 elements)
-VAR_ENEMY_Y_DATA EQU $C8C0+96  ; Array data (8 elements)
-VAR_ENEMY_VX_DATA EQU $C8C0+112  ; Array data (8 elements)
-VAR_ENEMY_VY_DATA EQU $C8C0+128  ; Array data (8 elements)
-VAR_ENEMY_SIZE_DATA EQU $C8C0+144  ; Array data (8 elements)
-; Call argument scratch space
-VAR_ARG0 EQU $C8B2
-VAR_ARG1 EQU $C8B4
-VAR_ARG2 EQU $C8B6
-VAR_ARG3 EQU $C8B8
-VAR_ARG4 EQU $C8BA
-VAR_ARG5 EQU $C8BC
 
 ; ========================================
 ; ASSET DATA SECTION
@@ -10787,21 +10801,3 @@ STR_18:
 STR_19:
     FCC "TO START"
     FCB $80
-VLINE_DX_16 EQU RESULT+10
-VLINE_DY_16 EQU RESULT+12
-VLINE_DX EQU RESULT+14
-VLINE_DY EQU RESULT+15
-VLINE_DY_REMAINING EQU RESULT+16
-VLINE_DX_REMAINING EQU RESULT+18
-VLINE_STEPS EQU RESULT+20
-VLINE_LIST EQU RESULT+21
-DRAW_VEC_X EQU RESULT+23
-DRAW_VEC_Y EQU RESULT+24
-MIRROR_X EQU RESULT+25
-MIRROR_Y EQU RESULT+26
-DRAW_VEC_INTENSITY EQU RESULT+27
-DRAW_CIRCLE_XC EQU RESULT+28
-DRAW_CIRCLE_YC EQU RESULT+29
-DRAW_CIRCLE_DIAM EQU RESULT+30
-DRAW_CIRCLE_INTENSITY EQU RESULT+31
-DRAW_CIRCLE_TEMP EQU RESULT+32

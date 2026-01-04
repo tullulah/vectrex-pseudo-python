@@ -10,13 +10,17 @@ def main():
     LOAD_LEVEL("test_level")  # Disabled - not implemented
 
 def loop():
-    
+    SHOW_LEVEL()
+    DRAW_VECTOR("fuji_bg", 0, -60)
+    DRAW_VECTOR_EX("coin", -40, -40, 0, 0 )
     # Draw all level objects automatically
     # This draws: background (mountain), gameplay (bubble + coin)
-    SHOW_LEVEL()
+ 
+
+    
 
     # Manual drawing fallback
-    DRAW_VECTOR("fuji_bg", 0, 0)
+
     
     # Update level state (placeholder for now)
     # UPDATE_LEVEL()  # TODO: Not implemented yet

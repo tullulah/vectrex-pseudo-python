@@ -5,802 +5,354 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "LOOP_BODY": "0x0902",
-    "START": "0x06CB",
-    "MAIN": "0x08B7"
+    "MAIN": "0x095C",
+    "START": "0x0770",
+    "LOOP_BODY": "0x09A7"
   },
   "lineMap": {
-    "66": "0x07EA",
-    "39": "0x075A",
-    "346": "0x2A22",
-    "48": "0x077E",
-    "162": "0x135F",
-    "226": "0x1A7C",
-    "352": "0x2AB6",
-    "95": "0x08CA",
-    "45": "0x0772",
-    "428": "0x3716",
-    "11": "0x0703",
-    "59": "0x07AE",
-    "9": "0x008F",
-    "201": "0x17AD",
-    "324": "0x27FC",
-    "478": "0x3F3D",
-    "316": "0x276C",
-    "186": "0x1651",
-    "172": "0x1415",
-    "280": "0x22EE",
-    "401": "0x31FB",
-    "132": "0x0E48",
-    "466": "0x3E63",
-    "24": "0x5131",
-    "82": "0x0831",
-    "432": "0x3869",
-    "49": "0x0784",
-    "119": "0x0BF8",
-    "333": "0x28C1",
-    "12": "0x070C",
-    "222": "0x1A13",
-    "120": "0x0C29",
-    "241": "0x1C0D",
-    "404": "0x3268",
-    "290": "0x252C",
-    "67": "0x07FC",
-    "214": "0x1919",
-    "250": "0x1D2B",
-    "361": "0x2B27",
-    "144": "0x10FB",
-    "182": "0x162F",
-    "282": "0x2369",
-    "136": "0x0F62",
-    "264": "0x1F04",
-    "341": "0x294D",
-    "301": "0x25AD",
-    "343": "0x29D3",
-    "35": "0x074E",
-    "104": "0x09A8",
-    "266": "0x1F79",
-    "218": "0x1998",
-    "448": "0x3AB4",
-    "197": "0x1747",
-    "314": "0x2722",
-    "406": "0x3305",
-    "415": "0x3488",
-    "94": "0x08B9",
-    "292": "0x2575",
-    "46": "0x0778",
-    "334": "0x28F6",
-    "442": "0x3A7B",
-    "220": "0x19FE",
-    "210": "0x1830",
-    "108": "0x09C0",
-    "63": "0x07B4",
-    "228": "0x1AA0",
-    "322": "0x27C7",
-    "362": "0x2B5C",
-    "422": "0x3587",
-    "240": "0x1BD8",
-    "127": "0x0CD3",
-    "272": "0x20EA",
-    "145": "0x110C",
-    "134": "0x0EAE",
-    "327": "0x282D",
-    "392": "0x317A",
-    "405": "0x3294",
-    "329": "0x2877",
-    "205": "0x180C",
-    "185": "0x1640",
-    "268": "0x1FEE",
-    "198": "0x177C",
-    "437": "0x391C",
-    "71": "0x00A1",
-    "53": "0x0098",
-    "106": "0x09BD",
-    "457": "0x3D36",
-    "68": "0x080E",
-    "101": "0x0932",
-    "419": "0x351D",
-    "72": "0x00A4",
-    "330": "0x28AC",
-    "27": "0x071E",
-    "364": "0x2C54",
-    "121": "0x0C5E",
-    "54": "0x0796",
-    "55": "0x079C",
-    "216": "0x197F",
-    "17": "0x4EDB",
-    "83": "0x0842",
-    "180": "0x149B",
-    "236": "0x1B6C",
-    "90": "0x0897",
-    "215": "0x194A",
-    "260": "0x1E14",
-    "276": "0x21E6",
-    "109": "0x0B43",
-    "311": "0x26A3",
-    "453": "0x3BB0",
-    "93": "0x08A8",
-    "194": "0x172E",
-    "452": "0x3B5D",
-    "40": "0x0760",
-    "396": "0x31AE",
-    "366": "0x2D4C",
-    "270": "0x2069",
-    "7": "0x0089",
-    "429": "0x3780",
-    "165": "0x138B",
-    "297": "0x257D",
-    "89": "0x0886",
-    "312": "0x26D8",
-    "231": "0x1B01",
-    "446": "0x3AAF",
-    "451": "0x3B49",
-    "416": "0x3493",
-    "174": "0x145B",
-    "99": "0x092F",
-    "8": "0x008C",
-    "141": "0x108D",
-    "81": "0x0820",
-    "294": "0x257A",
-    "129": "0x0D7F",
-    "321": "0x2792",
-    "370": "0x2F07",
-    "411": "0x344F",
-    "439": "0x39DD",
-    "479": "0x3F6A",
-    "18": "0x4EFD",
-    "179": "0x1466",
-    "57": "0x07A8",
-    "102": "0x0967",
-    "413": "0x3483",
-    "403": "0x323C",
-    "426": "0x3697",
-    "284": "0x23E4",
-    "77": "0x08DB",
-    "209": "0x181C",
-    "65": "0x07D8",
-    "246": "0x1CAC",
-    "427": "0x36EA",
-    "243": "0x1C42",
-    "47": "0x0095",
-    "262": "0x1E89",
-    "382": "0x3034",
-    "409": "0x33D4",
-    "33": "0x0742",
-    "30": "0x0730",
-    "130": "0x0DB4",
-    "187": "0x1686",
-    "207": "0x1817",
-    "278": "0x2261",
-    "219": "0x19C9",
-    "189": "0x16BB",
-    "151": "0x12C2",
-    "288": "0x24E6",
-    "389": "0x30C2",
-    "159": "0x1348",
-    "435": "0x389D",
-    "368": "0x2E44",
-    "14": "0x0718",
-    "64": "0x07C6",
-    "147": "0x111D",
-    "133": "0x0E79",
-    "153": "0x12D7",
-    "410": "0x3423",
-    "41": "0x0766",
-    "377": "0x2FCC",
-    "305": "0x2639",
-    "328": "0x2862",
-    "138": "0x0FC8",
-    "387": "0x30AC",
-    "436": "0x38F0",
-    "455": "0x3C73",
-    "115": "0x0BD7",
-    "22": "0x5058",
-    "36": "0x0754",
-    "254": "0x1D44",
-    "356": "0x2AD8",
-    "473": "0x3EB6",
-    "357": "0x2AE3",
-    "345": "0x29EE",
-    "440": "0x3A09",
-    "342": "0x2958",
-    "74": "0x00AA",
-    "398": "0x31B3",
-    "244": "0x1C77",
-    "169": "0x13E4",
-    "353": "0x2AC7",
-    "149": "0x12A0",
-    "349": "0x2A99",
-    "380": "0x3001",
-    "390": "0x30F9",
-    "417": "0x34CA",
-    "73": "0x00A7",
-    "114": "0x0BA2",
-    "50": "0x078A",
-    "286": "0x2465",
-    "348": "0x2A64",
-    "391": "0x314C",
-    "468": "0x3EB3",
-    "202": "0x17E2",
-    "438": "0x398A",
-    "247": "0x1CE1",
-    "399": "0x31D7",
-    "190": "0x16EC",
-    "234": "0x1B18",
-    "402": "0x3206",
-    "306": "0x266E",
-    "103": "0x099C",
-    "373": "0x2FC6",
-    "388": "0x30B7",
-    "464": "0x3E4A",
-    "25": "0x5153",
-    "19": "0x4F1F",
-    "480": "0x3F97",
-    "29": "0x0092",
-    "150": "0x12B1",
-    "173": "0x144A",
-    "238": "0x1BAC",
-    "449": "0x3ABF",
-    "249": "0x1CF6",
-    "116": "0x0BE3",
-    "459": "0x3DA6",
-    "233": "0x1B04",
-    "31": "0x0736",
-    "97": "0x0926",
-    "431": "0x3816",
-    "181": "0x161E",
-    "32": "0x073C",
-    "213": "0x18E4",
-    "258": "0x1D8D",
-    "85": "0x0864",
-    "110": "0x0B54",
-    "203": "0x17F3",
-    "408": "0x335C",
-    "122": "0x0C6F",
-    "52": "0x0790",
-    "56": "0x07A2",
-    "225": "0x1A58",
-    "423": "0x360F",
-    "84": "0x0853",
-    "358": "0x2B18",
-    "460": "0x3E16",
-    "86": "0x0875",
-    "257": "0x1D58",
-    "123": "0x0C9F",
-    "58": "0x009B",
-    "252": "0x1D41",
-    "157": "0x1313",
-    "62": "0x009E",
-    "477": "0x3F10",
-    "44": "0x076C",
-    "318": "0x2781",
-    "13": "0x0712",
-    "140": "0x105C",
-    "161": "0x134B",
-    "347": "0x2A33",
-    "191": "0x171D",
-    "304": "0x2628",
-    "450": "0x3AF6",
-    "137": "0x0F93",
-    "474": "0x3EE3",
-    "142": "0x10C2",
-    "274": "0x216B",
-    "384": "0x3048",
-    "374": "0x2FC9",
-    "166": "0x139F",
-    "336": "0x290B",
-    "34": "0x0748",
-    "237": "0x1B80",
-    "339": "0x291C",
-    "128": "0x0D4E",
-    "407": "0x3331"
+    "423": "0x36B4",
+    "237": "0x1C25",
+    "250": "0x1DD0",
+    "417": "0x356F",
+    "407": "0x33D6",
+    "468": "0x3F58",
+    "330": "0x2951",
+    "427": "0x378F",
+    "238": "0x1C51",
+    "448": "0x3B59",
+    "276": "0x228B",
+    "49": "0x0829",
+    "286": "0x250A",
+    "364": "0x2CF9",
+    "151": "0x1367",
+    "67": "0x08A1",
+    "416": "0x3538",
+    "479": "0x400F",
+    "258": "0x1E32",
+    "240": "0x1C7D",
+    "103": "0x0A41",
+    "429": "0x3825",
+    "450": "0x3B9B",
+    "321": "0x2837",
+    "312": "0x277D",
+    "116": "0x0C88",
+    "406": "0x33AA",
+    "31": "0x07DB",
+    "19": "0x4F4F",
+    "106": "0x0A62",
+    "14": "0x07BD",
+    "44": "0x0811",
+    "384": "0x30ED",
+    "147": "0x11C2",
+    "390": "0x319E",
+    "411": "0x34F4",
+    "480": "0x403C",
+    "169": "0x1489",
+    "233": "0x1BA9",
+    "144": "0x11A0",
+    "346": "0x2AC7",
+    "382": "0x30D9",
+    "284": "0x2489",
+    "437": "0x39C1",
+    "216": "0x1A24",
+    "213": "0x1989",
+    "327": "0x28D2",
+    "81": "0x08C5",
+    "90": "0x093C",
+    "134": "0x0F53",
+    "72": "0x014F",
+    "373": "0x306B",
+    "438": "0x3A2F",
+    "166": "0x1444",
+    "137": "0x1038",
+    "17": "0x4F0B",
+    "115": "0x0C7C",
+    "186": "0x16F6",
+    "48": "0x0823",
+    "396": "0x3253",
+    "435": "0x3942",
+    "304": "0x26CD",
+    "361": "0x2BCC",
+    "32": "0x07E1",
+    "71": "0x014C",
+    "181": "0x16C3",
+    "185": "0x16E5",
+    "27": "0x07C3",
+    "220": "0x1AA3",
+    "342": "0x29FD",
+    "453": "0x3C55",
+    "165": "0x1430",
+    "374": "0x306E",
+    "464": "0x3EEF",
+    "341": "0x29F2",
+    "74": "0x0155",
+    "329": "0x291C",
+    "82": "0x08D6",
+    "29": "0x013D",
+    "305": "0x26DE",
+    "353": "0x2B6C",
+    "452": "0x3C02",
+    "179": "0x150B",
+    "401": "0x32A0",
+    "133": "0x0F1E",
+    "297": "0x2622",
+    "59": "0x0853",
+    "288": "0x258B",
+    "102": "0x0A0C",
+    "270": "0x210E",
+    "46": "0x081D",
+    "343": "0x2A78",
+    "349": "0x2B3E",
+    "362": "0x2C01",
+    "45": "0x0817",
+    "408": "0x3401",
+    "215": "0x19EF",
+    "254": "0x1DE9",
+    "22": "0x5088",
+    "194": "0x17D3",
+    "294": "0x261F",
+    "84": "0x08F8",
+    "380": "0x30A6",
+    "191": "0x17C2",
+    "122": "0x0D14",
+    "404": "0x330D",
+    "53": "0x0143",
+    "219": "0x1A6E",
+    "36": "0x07F9",
+    "66": "0x088F",
+    "77": "0x0980",
+    "231": "0x1BA6",
+    "68": "0x08B3",
+    "268": "0x2093",
+    "422": "0x362C",
+    "336": "0x29B0",
+    "266": "0x201E",
+    "442": "0x3B20",
+    "478": "0x3FE2",
+    "110": "0x0BF9",
+    "260": "0x1EB9",
+    "357": "0x2B88",
+    "205": "0x18B1",
+    "130": "0x0E59",
+    "473": "0x3F5B",
+    "278": "0x2306",
+    "62": "0x0149",
+    "58": "0x0146",
+    "182": "0x16D4",
+    "34": "0x07ED",
+    "209": "0x18C1",
+    "226": "0x1B21",
+    "94": "0x095E",
+    "153": "0x137C",
+    "89": "0x092B",
+    "398": "0x3258",
+    "64": "0x086B",
+    "439": "0x3A82",
+    "121": "0x0D03",
+    "222": "0x1AB8",
+    "63": "0x0859",
+    "457": "0x3DDB",
+    "316": "0x2811",
+    "451": "0x3BEE",
+    "252": "0x1DE6",
+    "413": "0x3528",
+    "39": "0x07FF",
+    "33": "0x07E7",
+    "9": "0x013A",
+    "8": "0x0137",
+    "345": "0x2A93",
+    "272": "0x218F",
+    "409": "0x3479",
+    "207": "0x18BC",
+    "109": "0x0BE8",
+    "318": "0x2826",
+    "347": "0x2AD8",
+    "54": "0x083B",
+    "264": "0x1FA9",
+    "389": "0x3167",
+    "405": "0x3339",
+    "128": "0x0DF3",
+    "149": "0x1345",
+    "50": "0x082F",
+    "180": "0x1540",
+    "391": "0x31F1",
+    "150": "0x1356",
+    "403": "0x32E1",
+    "35": "0x07F3",
+    "218": "0x1A3D",
+    "358": "0x2BBD",
+    "99": "0x09D4",
+    "97": "0x09CB",
+    "25": "0x5183",
+    "86": "0x091A",
+    "104": "0x0A4D",
+    "142": "0x1167",
+    "201": "0x1852",
+    "162": "0x1404",
+    "366": "0x2DF1",
+    "387": "0x3151",
+    "145": "0x11B1",
+    "257": "0x1DFD",
+    "292": "0x261A",
+    "356": "0x2B7D",
+    "388": "0x315C",
+    "415": "0x352D",
+    "243": "0x1CE7",
+    "402": "0x32AB",
+    "436": "0x3995",
+    "370": "0x2FAC",
+    "339": "0x29C1",
+    "459": "0x3E4B",
+    "460": "0x3EBB",
+    "202": "0x1887",
+    "262": "0x1F2E",
+    "234": "0x1BBD",
+    "7": "0x0134",
+    "440": "0x3AAE",
+    "18": "0x4F2D",
+    "314": "0x27C7",
+    "328": "0x2907",
+    "377": "0x3071",
+    "57": "0x084D",
+    "198": "0x1821",
+    "52": "0x0835",
+    "189": "0x1760",
+    "228": "0x1B45",
+    "203": "0x1898",
+    "65": "0x087D",
+    "56": "0x0847",
+    "12": "0x07B1",
+    "241": "0x1CB2",
+    "249": "0x1D9B",
+    "73": "0x0152",
+    "348": "0x2B09",
+    "236": "0x1C11",
+    "410": "0x34C8",
+    "419": "0x35C2",
+    "214": "0x19BE",
+    "449": "0x3B64",
+    "141": "0x1132",
+    "123": "0x0D44",
+    "274": "0x2210",
+    "95": "0x096F",
+    "225": "0x1AFD",
+    "132": "0x0EED",
+    "136": "0x1007",
+    "280": "0x2393",
+    "333": "0x2966",
+    "455": "0x3D18",
+    "129": "0x0E24",
+    "392": "0x321F",
+    "477": "0x3FB5",
+    "324": "0x28A1",
+    "432": "0x390E",
+    "311": "0x2748",
+    "93": "0x094D",
+    "101": "0x09D7",
+    "11": "0x07A8",
+    "446": "0x3B54",
+    "159": "0x13ED",
+    "120": "0x0CCE",
+    "322": "0x286C",
+    "114": "0x0C47",
+    "174": "0x1500",
+    "399": "0x327C",
+    "161": "0x13F0",
+    "282": "0x240E",
+    "119": "0x0C9D",
+    "187": "0x172B",
+    "244": "0x1D1C",
+    "210": "0x18D5",
+    "334": "0x299B",
+    "83": "0x08E7",
+    "41": "0x080B",
+    "55": "0x0841",
+    "172": "0x14BA",
+    "431": "0x38BB",
+    "466": "0x3F08",
+    "85": "0x0909",
+    "138": "0x106D",
+    "301": "0x2652",
+    "173": "0x14EF",
+    "352": "0x2B5B",
+    "30": "0x07D5",
+    "246": "0x1D51",
+    "190": "0x1791",
+    "13": "0x07B7",
+    "368": "0x2EE9",
+    "140": "0x1101",
+    "157": "0x13B8",
+    "108": "0x0A65",
+    "40": "0x0805",
+    "426": "0x373C",
+    "474": "0x3F88",
+    "47": "0x0140",
+    "24": "0x5161",
+    "247": "0x1D86",
+    "197": "0x17EC",
+    "290": "0x25D1",
+    "428": "0x37BB",
+    "306": "0x2713",
+    "127": "0x0D78"
   },
   "functions": {
-    "main": {
-      "name": "main",
-      "address": "0x08B7",
+    "loop": {
+      "name": "loop",
+      "address": "0x09A7",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
-    "loop": {
-      "name": "loop",
-      "address": "0x0902",
+    "main": {
+      "name": "main",
+      "address": "0x095C",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     }
   },
   "nativeCalls": {
-    "209": "VECTREX_SET_INTENSITY",
-    "254": "VECTREX_SET_INTENSITY",
-    "237": "VECTREX_PRINT_TEXT",
-    "161": "VECTREX_SET_INTENSITY",
-    "382": "VECTREX_SET_INTENSITY",
-    "474": "J1_Y",
     "236": "VECTREX_SET_INTENSITY",
-    "162": "VECTREX_PRINT_TEXT",
-    "451": "VECTREX_SET_INTENSITY",
-    "480": "J1_BUTTON_4",
-    "479": "J1_BUTTON_3",
-    "222": "VECTREX_PRINT_TEXT",
-    "166": "VECTREX_PRINT_TEXT",
-    "478": "J1_BUTTON_2",
-    "165": "VECTREX_SET_INTENSITY",
-    "238": "VECTREX_PRINT_TEXT",
+    "254": "VECTREX_SET_INTENSITY",
     "233": "VECTREX_SET_INTENSITY",
+    "166": "VECTREX_PRINT_TEXT",
+    "473": "J1_X",
+    "161": "VECTREX_SET_INTENSITY",
     "477": "J1_BUTTON_1",
-    "473": "J1_X"
+    "451": "VECTREX_SET_INTENSITY",
+    "479": "J1_BUTTON_3",
+    "478": "J1_BUTTON_2",
+    "222": "VECTREX_PRINT_TEXT",
+    "209": "VECTREX_SET_INTENSITY",
+    "382": "VECTREX_SET_INTENSITY",
+    "162": "VECTREX_PRINT_TEXT",
+    "480": "J1_BUTTON_4",
+    "165": "VECTREX_SET_INTENSITY",
+    "474": "J1_Y",
+    "238": "VECTREX_PRINT_TEXT",
+    "237": "VECTREX_PRINT_TEXT"
   },
   "asmFunctions": {
     "VECTREX_PRINT_TEXT": {
       "name": "VECTREX_PRINT_TEXT",
       "file": "main.asm",
-      "startLine": 168,
-      "endLine": 182,
+      "startLine": 225,
+      "endLine": 239,
       "type": "native"
     }
   },
   "asmAddressMap": {},
   "variables": {
-    "move_speed": {
-      "name": "move_speed",
-      "address": "0xC8F6",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_BUBBLE_SMALL_WIDTH": {
-      "name": "_BUBBLE_SMALL_WIDTH",
-      "address": "0x0014",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_KILIMANJARO_BG_CENTER_Y": {
-      "name": "_KILIMANJARO_BG_CENTER_Y",
-      "address": "0x000C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_EASTER_BG_CENTER_X": {
-      "name": "_EASTER_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "SFX_PHASE": {
-      "name": "SFX_PHASE",
-      "address": "0xC8B1",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "VLINE_DY_REMAINING": {
-      "name": "VLINE_DY_REMAINING",
-      "address": "0x0010",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_AYERS_BG_CENTER_X": {
-      "name": "_AYERS_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "current_music": {
-      "name": "current_music",
-      "address": "0xC8C6",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "MUL_A": {
-      "name": "MUL_A",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_NEWYORK_BG_WIDTH": {
-      "name": "_NEWYORK_BG_WIDTH",
-      "address": "0x0032",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PARIS_BG_WIDTH": {
-      "name": "_PARIS_BG_WIDTH",
-      "address": "0x0064",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_KEIRIN_BG_CENTER_Y": {
-      "name": "_KEIRIN_BG_CENTER_Y",
-      "address": "0x000A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy_x": {
-      "name": "enemy_x",
-      "address": "0xC910",
-      "size": 16,
-      "type": "array",
-      "declLine": null
-    },
-    "PSG_FRAME_COUNT": {
-      "name": "PSG_FRAME_COUNT",
-      "address": "0xC8AA",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_BARCELONA_BG_WIDTH": {
-      "name": "_BARCELONA_BG_WIDTH",
-      "address": "0x0064",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_Y": {
-      "name": "VL_Y",
-      "address": "0xCF82",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_AYERS_BG_WIDTH": {
-      "name": "_AYERS_BG_WIDTH",
-      "address": "0x00B4",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PLAYER_Y": {
-      "name": "PLAYER_Y",
-      "address": "0xFF9C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joystick1_state": {
-      "name": "joystick1_state",
-      "address": "0xC8C8",
-      "size": 12,
-      "type": "array",
-      "declLine": null
-    },
-    "MUL_TMP": {
-      "name": "MUL_TMP",
-      "address": "0xC894",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_KEIRIN_BG_CENTER_X": {
-      "name": "_KEIRIN_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_HOOK_CENTER_X": {
-      "name": "_HOOK_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LENINGRAD_BG_WIDTH": {
-      "name": "_LENINGRAD_BG_WIDTH",
-      "address": "0x003C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_AYERS_BG_CENTER_Y": {
-      "name": "_AYERS_BG_CENTER_Y",
-      "address": "0x000A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_3_CENTER_X": {
-      "name": "_PLAYER_WALK_3_CENTER_X",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
     "DRAW_CIRCLE_TEMP": {
       "name": "DRAW_CIRCLE_TEMP",
-      "address": "0x0020",
+      "address": "0xC8CB",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "_PLAYER_WALK_4_CENTER_Y": {
-      "name": "_PLAYER_WALK_4_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy_vx": {
-      "name": "enemy_vx",
-      "address": "0xC930",
-      "size": 16,
-      "type": "array",
-      "declLine": null
-    },
-    "MAX_ENEMIES": {
-      "name": "MAX_ENEMIES",
-      "address": "0x0008",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LOGO_CENTER_X": {
-      "name": "_LOGO_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DIV_Q": {
-      "name": "DIV_Q",
-      "address": "0xC89C",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_X": {
-      "name": "_BUBBLE_LARGE_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "prev_joy_x": {
-      "name": "prev_joy_x",
-      "address": "0xC8DE",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_LONDON_BG_CENTER_Y": {
-      "name": "_LONDON_BG_CENTER_Y",
-      "address": "0x000F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUDDHA_BG_CENTER_Y": {
-      "name": "_BUDDHA_BG_CENTER_Y",
-      "address": "0x0014",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_TAJ_BG_CENTER_Y": {
-      "name": "_TAJ_BG_CENTER_Y",
-      "address": "0x0016",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_5_CENTER_Y": {
-      "name": "_PLAYER_WALK_5_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_MUSIC_ACTIVE": {
-      "name": "PSG_MUSIC_ACTIVE",
-      "address": "0xC8A9",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "_FUJI_BG_CENTER_X": {
-      "name": "_FUJI_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_MUSIC_ACTIVE_DP": {
-      "name": "PSG_MUSIC_ACTIVE_DP",
-      "address": "0x0029",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "TMPRIGHT2": {
-      "name": "TMPRIGHT2",
-      "address": "0xC888",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_BUBBLE_SMALL_CENTER_X": {
-      "name": "_BUBBLE_SMALL_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joystick_poll_counter": {
-      "name": "joystick_poll_counter",
-      "address": "0xC8E6",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_PLAYER_WALK_4_WIDTH": {
-      "name": "_PLAYER_WALK_4_WIDTH",
-      "address": "0x0013",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_3_WIDTH": {
-      "name": "_PLAYER_WALK_3_WIDTH",
-      "address": "0x0014",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DIV_A": {
-      "name": "DIV_A",
-      "address": "0xC898",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_MAP_CENTER_Y": {
-      "name": "_MAP_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0x001A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC8B2",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "_LOGO_WIDTH": {
-      "name": "_LOGO_WIDTH",
-      "address": "0x00A3",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VLINE_DY_16": {
-      "name": "VLINE_DY_16",
-      "address": "0x000C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PYRAMIDS_BG_CENTER_Y": {
-      "name": "_PYRAMIDS_BG_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_ATHENS_BG_CENTER_X": {
-      "name": "_ATHENS_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BARCELONA_BG_CENTER_X": {
-      "name": "_BARCELONA_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_HOOK_CENTER_Y": {
-      "name": "_HOOK_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC8B4",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "_PLAYER_WALK_1_WIDTH": {
-      "name": "_PLAYER_WALK_1_WIDTH",
-      "address": "0x0013",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "hook_x": {
-      "name": "hook_x",
-      "address": "0xC8EA",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "DIV_R": {
-      "name": "DIV_R",
-      "address": "0xC89E",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "PSG_MUSIC_START": {
-      "name": "PSG_MUSIC_START",
-      "address": "0xC8A6",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "GRAVITY": {
-      "name": "GRAVITY",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_ANGKOR_BG_WIDTH": {
-      "name": "_ANGKOR_BG_WIDTH",
-      "address": "0x0078",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_2_CENTER_X": {
-      "name": "_PLAYER_WALK_2_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_MAYAN_BG_CENTER_Y": {
-      "name": "_MAYAN_BG_CENTER_Y",
-      "address": "0x000A",
+    "VLINE_DX": {
+      "name": "VLINE_DX",
+      "address": "0xC8BE",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -812,51 +364,44 @@
       "type": "unknown",
       "declLine": null
     },
-    "_TAJ_BG_WIDTH": {
-      "name": "_TAJ_BG_WIDTH",
-      "address": "0x008C",
+    "_NEWYORK_BG_WIDTH": {
+      "name": "_NEWYORK_BG_WIDTH",
+      "address": "0x0032",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "DRAW_CIRCLE_YC": {
-      "name": "DRAW_CIRCLE_YC",
-      "address": "0x001D",
+    "BOUNCE_DAMPING": {
+      "name": "BOUNCE_DAMPING",
+      "address": "0x0011",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "SFX_TICK": {
-      "name": "SFX_TICK",
-      "address": "0xC8AE",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "_NEWYORK_BG_CENTER_Y": {
-      "name": "_NEWYORK_BG_CENTER_Y",
-      "address": "0x001B",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MUL_CNT": {
-      "name": "MUL_CNT",
-      "address": "0xC896",
+    "MUL_TMP": {
+      "name": "MUL_TMP",
+      "address": "0xC894",
       "size": 2,
       "type": "system",
       "declLine": null
     },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC8A0",
+    "PSG_DELAY_FRAMES_DP": {
+      "name": "PSG_DELAY_FRAMES_DP",
+      "address": "0x002B",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "_ATHENS_BG_WIDTH": {
+      "name": "_ATHENS_BG_WIDTH",
+      "address": "0x00A0",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "TMPRIGHT": {
-      "name": "TMPRIGHT",
-      "address": "0xC886",
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC88C",
       "size": 2,
       "type": "system",
       "declLine": null
@@ -868,29 +413,106 @@
       "type": "system",
       "declLine": null
     },
-    "_BUDDHA_BG_CENTER_X": {
-      "name": "_BUDDHA_BG_CENTER_X",
+    "PSG_MUSIC_PTR": {
+      "name": "PSG_MUSIC_PTR",
+      "address": "0xC8A4",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "MAX_ENEMIES": {
+      "name": "MAX_ENEMIES",
+      "address": "0x0008",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_3_CENTER_X": {
+      "name": "_PLAYER_WALK_3_CENTER_X",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PARIS_BG_CENTER_X": {
+      "name": "_PARIS_BG_CENTER_X",
       "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "PSG_IS_PLAYING": {
-      "name": "PSG_IS_PLAYING",
-      "address": "0xC8A8",
-      "size": 1,
-      "type": "audio",
+    "_MAP_WIDTH": {
+      "name": "_MAP_WIDTH",
+      "address": "0x00F2",
+      "size": 2,
+      "type": "unknown",
       "declLine": null
     },
-    "prev_joy_y": {
-      "name": "prev_joy_y",
-      "address": "0xC8E0",
+    "title_intensity": {
+      "name": "title_intensity",
+      "address": "0xC8D5",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "VLINE_DX_16": {
-      "name": "VLINE_DX_16",
+    "STATE_GAME": {
+      "name": "STATE_GAME",
+      "address": "0x0002",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_CNT": {
+      "name": "MUL_CNT",
+      "address": "0xC896",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0xC8B6",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_KILIMANJARO_BG_CENTER_Y": {
+      "name": "_KILIMANJARO_BG_CENTER_Y",
+      "address": "0x000C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "move_speed": {
+      "name": "move_speed",
+      "address": "0xC909",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "PSG_FRAME_COUNT": {
+      "name": "PSG_FRAME_COUNT",
+      "address": "0xC8AA",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "joy_x": {
+      "name": "joy_x",
+      "address": "0xC8ED",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "VLINE_DY_REMAINING": {
+      "name": "VLINE_DY_REMAINING",
+      "address": "0xC8C0",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_AYERS_BG_CENTER_Y": {
+      "name": "_AYERS_BG_CENTER_Y",
       "address": "0x000A",
       "size": 2,
       "type": "unknown",
@@ -903,212 +525,114 @@
       "type": "unknown",
       "declLine": null
     },
-    "_MAYAN_BG_WIDTH": {
-      "name": "_MAYAN_BG_WIDTH",
-      "address": "0x00A0",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_MAP_WIDTH": {
-      "name": "_MAP_WIDTH",
-      "address": "0x00F2",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_5_CENTER_X": {
-      "name": "_PLAYER_WALK_5_CENTER_X",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VLINE_DY": {
-      "name": "VLINE_DY",
-      "address": "0x000F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC8A3",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "abs_joy": {
-      "name": "abs_joy",
-      "address": "0xC8F8",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "STATE_GAME": {
-      "name": "STATE_GAME",
-      "address": "0x0002",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "sfx_pointer": {
-      "name": "sfx_pointer",
-      "address": "0x0020",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "countdown_active": {
-      "name": "countdown_active",
-      "address": "0xC8E4",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_ATHENS_BG_CENTER_Y": {
-      "name": "_ATHENS_BG_CENTER_Y",
-      "address": "0x0016",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LENINGRAD_BG_CENTER_Y": {
-      "name": "_LENINGRAD_BG_CENTER_Y",
-      "address": "0x001E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MUL_RES": {
-      "name": "MUL_RES",
-      "address": "0xC892",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_BUBBLE_MEDIUM_CENTER_X": {
-      "name": "_BUBBLE_MEDIUM_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LONDON_BG_WIDTH": {
-      "name": "_LONDON_BG_WIDTH",
-      "address": "0x0028",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "hook_init_y": {
-      "name": "hook_init_y",
-      "address": "0xC8F2",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "VLINE_DX": {
-      "name": "VLINE_DX",
-      "address": "0x000E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_HOOK_WIDTH": {
-      "name": "_HOOK_WIDTH",
-      "address": "0x000C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_ATHENS_BG_WIDTH": {
-      "name": "_ATHENS_BG_WIDTH",
-      "address": "0x00A0",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VL_SCALE": {
-      "name": "VL_SCALE",
-      "address": "0xCF84",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "screen": {
-      "name": "screen",
-      "address": "0xC8C0",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_ANTARCTICA_BG_CENTER_X": {
-      "name": "_ANTARCTICA_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_HUGE_WIDTH": {
-      "name": "_BUBBLE_HUGE_WIDTH",
-      "address": "0x0034",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_4_CENTER_X": {
-      "name": "_PLAYER_WALK_4_CENTER_X",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LOCATION_MARKER_CENTER_Y": {
-      "name": "_LOCATION_MARKER_CENTER_Y",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0x0017",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "player_anim_counter": {
-      "name": "player_anim_counter",
-      "address": "0xC8FC",
+    "current_location": {
+      "name": "current_location",
+      "address": "0xC8E7",
       "size": 2,
       "type": "int",
       "declLine": null
     },
     "enemy_size": {
       "name": "enemy_size",
-      "address": "0xC950",
+      "address": "0xC963",
       "size": 16,
       "type": "array",
       "declLine": null
     },
-    "hook_gun_x": {
-      "name": "hook_gun_x",
-      "address": "0xC8EE",
+    "_LOCATION_MARKER_CENTER_X": {
+      "name": "_LOCATION_MARKER_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_B": {
+      "name": "MUL_B",
+      "address": "0xC890",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_KILIMANJARO_BG_CENTER_X": {
+      "name": "_KILIMANJARO_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_NEWYORK_BG_CENTER_Y": {
+      "name": "_NEWYORK_BG_CENTER_Y",
+      "address": "0x001B",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_YC": {
+      "name": "DRAW_CIRCLE_YC",
+      "address": "0xC8C8",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "SFX_PTR": {
+      "name": "SFX_PTR",
+      "address": "0xC8AC",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "countdown_timer": {
+      "name": "countdown_timer",
+      "address": "0xC8F5",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "hook_gun_y": {
-      "name": "hook_gun_y",
-      "address": "0xC8F0",
+    "joy_y": {
+      "name": "joy_y",
+      "address": "0xC8EF",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "HOOK_MAX_Y": {
-      "name": "HOOK_MAX_Y",
-      "address": "0x007F",
+    "_PLAYER_WALK_4_CENTER_Y": {
+      "name": "_PLAYER_WALK_4_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_STEPS": {
+      "name": "VLINE_STEPS",
+      "address": "0xC8C4",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_CENTER_Y": {
+      "name": "_FUJI_BG_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_1_CENTER_Y": {
+      "name": "_PLAYER_WALK_1_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUDDHA_BG_CENTER_Y": {
+      "name": "_BUDDHA_BG_CENTER_Y",
+      "address": "0x0014",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_KEIRIN_BG_CENTER_Y": {
+      "name": "_KEIRIN_BG_CENTER_Y",
+      "address": "0x000A",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1122,182 +646,21 @@
     },
     "arg2": {
       "name": "arg2",
-      "address": "0xC8B6",
+      "address": "0xC977",
       "size": 2,
       "type": "arg",
       "declLine": null
     },
-    "hook_y": {
-      "name": "hook_y",
-      "address": "0xC8EC",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_EASTER_BG_WIDTH": {
-      "name": "_EASTER_BG_WIDTH",
-      "address": "0x0046",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_MAP_CENTER_X": {
-      "name": "_MAP_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "location_glow_intensity": {
-      "name": "location_glow_intensity",
-      "address": "0xC8D6",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "player_anim_frame": {
-      "name": "player_anim_frame",
-      "address": "0xC8FA",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "VL_PTR": {
-      "name": "VL_PTR",
-      "address": "0xCF80",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "title_intensity": {
-      "name": "title_intensity",
-      "address": "0xC8C2",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "MUL_B": {
-      "name": "MUL_B",
-      "address": "0xC890",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0x0018",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_DELAY_FRAMES": {
-      "name": "PSG_DELAY_FRAMES",
-      "address": "0xC8AB",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "title_state": {
-      "name": "title_state",
-      "address": "0xC8C4",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_KILIMANJARO_BG_CENTER_X": {
-      "name": "_KILIMANJARO_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIN_BOUNCE_VY": {
-      "name": "MIN_BOUNCE_VY",
-      "address": "0x000A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joy_x": {
-      "name": "joy_x",
-      "address": "0xC8DA",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_ANGKOR_BG_CENTER_Y": {
-      "name": "_ANGKOR_BG_CENTER_Y",
-      "address": "0x000C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "current_location": {
-      "name": "current_location",
-      "address": "0xC8D4",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "SFX_VOL": {
-      "name": "SFX_VOL",
-      "address": "0xC8B2",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "_ANGKOR_BG_CENTER_X": {
-      "name": "_ANGKOR_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy_vy": {
-      "name": "enemy_vy",
-      "address": "0xC940",
+    "enemy_vx": {
+      "name": "enemy_vx",
+      "address": "0xC943",
       "size": 16,
       "type": "array",
       "declLine": null
     },
-    "TMPLEFT": {
-      "name": "TMPLEFT",
-      "address": "0xC882",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "VL_X": {
-      "name": "VL_X",
-      "address": "0xCF83",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_HUGE_CENTER_X": {
-      "name": "_BUBBLE_HUGE_CENTER_X",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "player_x": {
-      "name": "player_x",
-      "address": "0xC8F4",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_PLAYER_WALK_1_CENTER_Y": {
-      "name": "_PLAYER_WALK_1_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUDDHA_BG_WIDTH": {
-      "name": "_BUDDHA_BG_WIDTH",
-      "address": "0x00A0",
+    "_BUBBLE_HUGE_WIDTH": {
+      "name": "_BUBBLE_HUGE_WIDTH",
+      "address": "0x0034",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1309,6 +672,34 @@
       "type": "unknown",
       "declLine": null
     },
+    "hook_y": {
+      "name": "hook_y",
+      "address": "0xC8FF",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_ANGKOR_BG_WIDTH": {
+      "name": "_ANGKOR_BG_WIDTH",
+      "address": "0x0078",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "hook_gun_y": {
+      "name": "hook_gun_y",
+      "address": "0xC903",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
     "_TAJ_BG_CENTER_X": {
       "name": "_TAJ_BG_CENTER_X",
       "address": "0x0000",
@@ -1316,149 +707,51 @@
       "type": "unknown",
       "declLine": null
     },
-    "_BUBBLE_MEDIUM_CENTER_Y": {
-      "name": "_BUBBLE_MEDIUM_CENTER_Y",
+    "_MAP_CENTER_X": {
+      "name": "_MAP_CENTER_X",
       "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "_PARIS_BG_CENTER_X": {
-      "name": "_PARIS_BG_CENTER_X",
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0xC8B7",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_CENTER_X": {
+      "name": "_FUJI_BG_CENTER_X",
       "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PLAYER_ANIM_SPEED": {
-      "name": "PLAYER_ANIM_SPEED",
-      "address": "0x0005",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "GROUND_Y": {
-      "name": "GROUND_Y",
-      "address": "0xFFB0",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_WALK_2_WIDTH": {
-      "name": "_PLAYER_WALK_2_WIDTH",
-      "address": "0x0015",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
     "player_facing": {
       "name": "player_facing",
-      "address": "0xC8FE",
+      "address": "0xC911",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "DIV_B": {
-      "name": "DIV_B",
-      "address": "0xC89A",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_FUJI_BG_WIDTH": {
-      "name": "_FUJI_BG_WIDTH",
-      "address": "0x00FA",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_FRAME_COUNT_DP": {
-      "name": "PSG_FRAME_COUNT_DP",
-      "address": "0x002A",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "NUM_LOCATIONS": {
-      "name": "NUM_LOCATIONS",
-      "address": "0x0011",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy_y": {
-      "name": "enemy_y",
-      "address": "0xC920",
-      "size": 16,
-      "type": "array",
-      "declLine": null
-    },
-    "MIRROR_X": {
-      "name": "MIRROR_X",
-      "address": "0x0019",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy_active": {
-      "name": "enemy_active",
-      "address": "0xC900",
-      "size": 16,
-      "type": "array",
-      "declLine": null
-    },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC8A2",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg5": {
-      "name": "arg5",
-      "address": "0xC8BC",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "countdown_timer": {
-      "name": "countdown_timer",
-      "address": "0xC8E2",
+    "player_anim_counter": {
+      "name": "player_anim_counter",
+      "address": "0xC90F",
       "size": 2,
       "type": "int",
       "declLine": null
     },
-    "_KEIRIN_BG_WIDTH": {
-      "name": "_KEIRIN_BG_WIDTH",
-      "address": "0x00C8",
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0xC8B9",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "_BUBBLE_HUGE_CENTER_Y": {
-      "name": "_BUBBLE_HUGE_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LENINGRAD_BG_CENTER_X": {
-      "name": "_LENINGRAD_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg4": {
-      "name": "arg4",
-      "address": "0xC8BA",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "_BUBBLE_MEDIUM_WIDTH": {
-      "name": "_BUBBLE_MEDIUM_WIDTH",
-      "address": "0x001E",
+    "VL_X": {
+      "name": "VL_X",
+      "address": "0xCF83",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1470,153 +763,6 @@
       "type": "unknown",
       "declLine": null
     },
-    "_ANTARCTICA_BG_CENTER_Y": {
-      "name": "_ANTARCTICA_BG_CENTER_Y",
-      "address": "0x000F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VLINE_STEPS": {
-      "name": "VLINE_STEPS",
-      "address": "0x0014",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "SFX_ACTIVE": {
-      "name": "SFX_ACTIVE",
-      "address": "0xC8B0",
-      "size": 1,
-      "type": "audio",
-      "declLine": null
-    },
-    "_PLAYER_WALK_2_CENTER_Y": {
-      "name": "_PLAYER_WALK_2_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_EASTER_BG_CENTER_Y": {
-      "name": "_EASTER_BG_CENTER_Y",
-      "address": "0x000F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LOCATION_MARKER_CENTER_X": {
-      "name": "_LOCATION_MARKER_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "VLINE_DX_REMAINING": {
-      "name": "VLINE_DX_REMAINING",
-      "address": "0x0012",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "SFX_PTR": {
-      "name": "SFX_PTR",
-      "address": "0xC8AC",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "STATE_MAP": {
-      "name": "STATE_MAP",
-      "address": "0x0001",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "hook_active": {
-      "name": "hook_active",
-      "address": "0xC8E8",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "PSG_MUSIC_PTR_DP": {
-      "name": "PSG_MUSIC_PTR_DP",
-      "address": "0x0024",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "_KILIMANJARO_BG_WIDTH": {
-      "name": "_KILIMANJARO_BG_WIDTH",
-      "address": "0x00C8",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LONDON_BG_CENTER_X": {
-      "name": "_LONDON_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "BOUNCE_DAMPING": {
-      "name": "BOUNCE_DAMPING",
-      "address": "0x0011",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_INTENSITY": {
-      "name": "DRAW_VEC_INTENSITY",
-      "address": "0x001B",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "joy_y": {
-      "name": "joy_y",
-      "address": "0xC8DC",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC8B8",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "sfx_status": {
-      "name": "sfx_status",
-      "address": "0x0022",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_DIAM": {
-      "name": "DRAW_CIRCLE_DIAM",
-      "address": "0x001E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_XC": {
-      "name": "DRAW_CIRCLE_XC",
-      "address": "0x001C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC88A",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
     "PSG_IS_PLAYING_DP": {
       "name": "PSG_IS_PLAYING_DP",
       "address": "0x0028",
@@ -1624,72 +770,9 @@
       "type": "audio",
       "declLine": null
     },
-    "_LOGO_CENTER_Y": {
-      "name": "_LOGO_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_LOCATION_MARKER_WIDTH": {
-      "name": "_LOCATION_MARKER_WIDTH",
-      "address": "0x0016",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "PSG_MUSIC_START_DP": {
-      "name": "PSG_MUSIC_START_DP",
-      "address": "0x0026",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "_PLAYER_WALK_5_WIDTH": {
-      "name": "_PLAYER_WALK_5_WIDTH",
-      "address": "0x0013",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_Y": {
-      "name": "_BUBBLE_LARGE_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "STATE_TITLE": {
-      "name": "STATE_TITLE",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "location_glow_direction": {
-      "name": "location_glow_direction",
-      "address": "0xC8D8",
-      "size": 2,
-      "type": "int",
-      "declLine": null
-    },
-    "_NEWYORK_BG_CENTER_X": {
-      "name": "_NEWYORK_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BARCELONA_BG_CENTER_Y": {
-      "name": "_BARCELONA_BG_CENTER_Y",
-      "address": "0x0016",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_CIRCLE_INTENSITY": {
-      "name": "DRAW_CIRCLE_INTENSITY",
-      "address": "0x001F",
+    "_BUBBLE_LARGE_WIDTH": {
+      "name": "_BUBBLE_LARGE_WIDTH",
+      "address": "0x0028",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1701,29 +784,694 @@
       "type": "unknown",
       "declLine": null
     },
-    "PSG_MUSIC_PTR": {
-      "name": "PSG_MUSIC_PTR",
-      "address": "0xC8A4",
-      "size": 2,
-      "type": "audio",
-      "declLine": null
-    },
-    "VLINE_LIST": {
-      "name": "VLINE_LIST",
-      "address": "0x0015",
+    "_LOCATION_MARKER_WIDTH": {
+      "name": "_LOCATION_MARKER_WIDTH",
+      "address": "0x0016",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "_BUBBLE_LARGE_WIDTH": {
-      "name": "_BUBBLE_LARGE_WIDTH",
-      "address": "0x0028",
+    "_AYERS_BG_WIDTH": {
+      "name": "_AYERS_BG_WIDTH",
+      "address": "0x00B4",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_CENTER_Y": {
+      "name": "_BUBBLE_LARGE_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPRIGHT2": {
+      "name": "TMPRIGHT2",
+      "address": "0xC888",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg4": {
+      "name": "arg4",
+      "address": "0xC97B",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "_ANGKOR_BG_CENTER_Y": {
+      "name": "_ANGKOR_BG_CENTER_Y",
+      "address": "0x000C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LENINGRAD_BG_CENTER_Y": {
+      "name": "_LENINGRAD_BG_CENTER_Y",
+      "address": "0x001E",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
     "_PLAYER_WALK_3_CENTER_Y": {
       "name": "_PLAYER_WALK_3_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "GROUND_Y": {
+      "name": "GROUND_Y",
+      "address": "0xFFB0",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_SMALL_CENTER_X": {
+      "name": "_BUBBLE_SMALL_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LOCATION_MARKER_CENTER_Y": {
+      "name": "_LOCATION_MARKER_CENTER_Y",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_5_WIDTH": {
+      "name": "_PLAYER_WALK_5_WIDTH",
+      "address": "0x0013",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_HUGE_CENTER_X": {
+      "name": "_BUBBLE_HUGE_CENTER_X",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_LIST": {
+      "name": "VLINE_LIST",
+      "address": "0xC8C5",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "screen": {
+      "name": "screen",
+      "address": "0xC8D3",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_HOOK_CENTER_Y": {
+      "name": "_HOOK_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "prev_joy_y": {
+      "name": "prev_joy_y",
+      "address": "0xC8F3",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC8A3",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC975",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "hook_init_y": {
+      "name": "hook_init_y",
+      "address": "0xC905",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_PLAYER_WALK_2_WIDTH": {
+      "name": "_PLAYER_WALK_2_WIDTH",
+      "address": "0x0015",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "player_anim_frame": {
+      "name": "player_anim_frame",
+      "address": "0xC90D",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "HOOK_MAX_Y": {
+      "name": "HOOK_MAX_Y",
+      "address": "0x007F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DIV_Q": {
+      "name": "DIV_Q",
+      "address": "0xC89C",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "VL_PTR": {
+      "name": "VL_PTR",
+      "address": "0xCF80",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PLAYER_ANIM_SPEED": {
+      "name": "PLAYER_ANIM_SPEED",
+      "address": "0x0005",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DY_16": {
+      "name": "VLINE_DY_16",
+      "address": "0xC8BC",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LENINGRAD_BG_CENTER_X": {
+      "name": "_LENINGRAD_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LOGO_CENTER_Y": {
+      "name": "_LOGO_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_MUSIC_ACTIVE": {
+      "name": "PSG_MUSIC_ACTIVE",
+      "address": "0xC8A9",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "SFX_ACTIVE": {
+      "name": "SFX_ACTIVE",
+      "address": "0xC8B0",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "location_glow_direction": {
+      "name": "location_glow_direction",
+      "address": "0xC8EB",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "prev_joy_x": {
+      "name": "prev_joy_x",
+      "address": "0xC8F1",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_NEWYORK_BG_CENTER_X": {
+      "name": "_NEWYORK_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_KILIMANJARO_BG_WIDTH": {
+      "name": "_KILIMANJARO_BG_WIDTH",
+      "address": "0x00C8",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUDDHA_BG_WIDTH": {
+      "name": "_BUDDHA_BG_WIDTH",
+      "address": "0x00A0",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "hook_gun_x": {
+      "name": "hook_gun_x",
+      "address": "0xC901",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "PSG_MUSIC_ACTIVE_DP": {
+      "name": "PSG_MUSIC_ACTIVE_DP",
+      "address": "0x0029",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "SFX_TICK": {
+      "name": "SFX_TICK",
+      "address": "0xC8AE",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "_PLAYER_WALK_1_WIDTH": {
+      "name": "_PLAYER_WALK_1_WIDTH",
+      "address": "0x0013",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_ATHENS_BG_CENTER_X": {
+      "name": "_ATHENS_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_DIAM": {
+      "name": "DRAW_CIRCLE_DIAM",
+      "address": "0xC8C9",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC8A0",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "SFX_VOL": {
+      "name": "SFX_VOL",
+      "address": "0xC8B2",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "_BARCELONA_BG_WIDTH": {
+      "name": "_BARCELONA_BG_WIDTH",
+      "address": "0x0064",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_EASTER_BG_WIDTH": {
+      "name": "_EASTER_BG_WIDTH",
+      "address": "0x0046",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "joystick_poll_counter": {
+      "name": "joystick_poll_counter",
+      "address": "0xC8F9",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "enemy_y": {
+      "name": "enemy_y",
+      "address": "0xC933",
+      "size": 16,
+      "type": "array",
+      "declLine": null
+    },
+    "_MAYAN_BG_CENTER_Y": {
+      "name": "_MAYAN_BG_CENTER_Y",
+      "address": "0x000A",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "GRAVITY": {
+      "name": "GRAVITY",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUDDHA_BG_CENTER_X": {
+      "name": "_BUDDHA_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_SMALL_WIDTH": {
+      "name": "_BUBBLE_SMALL_WIDTH",
+      "address": "0x0014",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "SFX_PHASE": {
+      "name": "SFX_PHASE",
+      "address": "0xC8B1",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "location_glow_intensity": {
+      "name": "location_glow_intensity",
+      "address": "0xC8E9",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_LONDON_BG_CENTER_X": {
+      "name": "_LONDON_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DX_REMAINING": {
+      "name": "VLINE_DX_REMAINING",
+      "address": "0xC8C2",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_ANTARCTICA_BG_CENTER_Y": {
+      "name": "_ANTARCTICA_BG_CENTER_Y",
+      "address": "0x000F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_WIDTH": {
+      "name": "_FUJI_BG_WIDTH",
+      "address": "0x00FA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "abs_joy": {
+      "name": "abs_joy",
+      "address": "0xC90B",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_LONDON_BG_WIDTH": {
+      "name": "_LONDON_BG_WIDTH",
+      "address": "0x0028",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_KEIRIN_BG_WIDTH": {
+      "name": "_KEIRIN_BG_WIDTH",
+      "address": "0x00C8",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIN_BOUNCE_VY": {
+      "name": "MIN_BOUNCE_VY",
+      "address": "0x000A",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_FRAME_COUNT_DP": {
+      "name": "PSG_FRAME_COUNT_DP",
+      "address": "0x002A",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_INTENSITY": {
+      "name": "DRAW_CIRCLE_INTENSITY",
+      "address": "0xC8CA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DY": {
+      "name": "VLINE_DY",
+      "address": "0xC8BF",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_5_CENTER_X": {
+      "name": "_PLAYER_WALK_5_CENTER_X",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VL_SCALE": {
+      "name": "VL_SCALE",
+      "address": "0xCF84",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DIV_A": {
+      "name": "DIV_A",
+      "address": "0xC898",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_BARCELONA_BG_CENTER_X": {
+      "name": "_BARCELONA_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC8A2",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_KEIRIN_BG_CENTER_X": {
+      "name": "_KEIRIN_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_EASTER_BG_CENTER_X": {
+      "name": "_EASTER_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_MUSIC_START_DP": {
+      "name": "PSG_MUSIC_START_DP",
+      "address": "0x0026",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "_ANGKOR_BG_CENTER_X": {
+      "name": "_ANGKOR_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg5": {
+      "name": "arg5",
+      "address": "0xC97D",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "VLINE_DX_16": {
+      "name": "VLINE_DX_16",
+      "address": "0xC8BA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_RES": {
+      "name": "MUL_RES",
+      "address": "0xC892",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "PSG_IS_PLAYING": {
+      "name": "PSG_IS_PLAYING",
+      "address": "0xC8A8",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "joystick1_state": {
+      "name": "joystick1_state",
+      "address": "0xC8DB",
+      "size": 12,
+      "type": "array",
+      "declLine": null
+    },
+    "DIV_B": {
+      "name": "DIV_B",
+      "address": "0xC89A",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_BUBBLE_MEDIUM_CENTER_X": {
+      "name": "_BUBBLE_MEDIUM_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_5_CENTER_Y": {
+      "name": "_PLAYER_WALK_5_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_DELAY_FRAMES": {
+      "name": "PSG_DELAY_FRAMES",
+      "address": "0xC8AB",
+      "size": 1,
+      "type": "audio",
+      "declLine": null
+    },
+    "_PARIS_BG_WIDTH": {
+      "name": "_PARIS_BG_WIDTH",
+      "address": "0x0064",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0xC8B8",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MAYAN_BG_WIDTH": {
+      "name": "_MAYAN_BG_WIDTH",
+      "address": "0x00A0",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PSG_MUSIC_START": {
+      "name": "PSG_MUSIC_START",
+      "address": "0xC8A6",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "NUM_LOCATIONS": {
+      "name": "NUM_LOCATIONS",
+      "address": "0x0011",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_MEDIUM_WIDTH": {
+      "name": "_BUBBLE_MEDIUM_WIDTH",
+      "address": "0x001E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "PLAYER_Y": {
+      "name": "PLAYER_Y",
+      "address": "0xFF9C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_TAJ_BG_CENTER_Y": {
+      "name": "_TAJ_BG_CENTER_Y",
+      "address": "0x0016",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_4_CENTER_X": {
+      "name": "_PLAYER_WALK_4_CENTER_X",
+      "address": "0x0001",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DIV_R": {
+      "name": "DIV_R",
+      "address": "0xC89E",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "hook_x": {
+      "name": "hook_x",
+      "address": "0xC8FD",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "player_x": {
+      "name": "player_x",
+      "address": "0xC907",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "MUL_A": {
+      "name": "MUL_A",
+      "address": "0xC88E",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC88A",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_BARCELONA_BG_CENTER_Y": {
+      "name": "_BARCELONA_BG_CENTER_Y",
+      "address": "0x0016",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_AYERS_BG_CENTER_X": {
+      "name": "_AYERS_BG_CENTER_X",
       "address": "0x0000",
       "size": 2,
       "type": "unknown",
@@ -1736,11 +1484,39 @@
       "type": "unknown",
       "declLine": null
     },
-    "PSG_DELAY_FRAMES_DP": {
-      "name": "PSG_DELAY_FRAMES_DP",
-      "address": "0x002B",
+    "STATE_MAP": {
+      "name": "STATE_MAP",
+      "address": "0x0001",
       "size": 2,
-      "type": "audio",
+      "type": "unknown",
+      "declLine": null
+    },
+    "_HOOK_WIDTH": {
+      "name": "_HOOK_WIDTH",
+      "address": "0x000C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_3_WIDTH": {
+      "name": "_PLAYER_WALK_3_WIDTH",
+      "address": "0x0014",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_TAJ_BG_WIDTH": {
+      "name": "_TAJ_BG_WIDTH",
+      "address": "0x008C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy_x": {
+      "name": "enemy_x",
+      "address": "0xC923",
+      "size": 16,
+      "type": "array",
       "declLine": null
     },
     "NUM_STR": {
@@ -1750,9 +1526,219 @@
       "type": "unknown",
       "declLine": null
     },
-    "_FUJI_BG_CENTER_Y": {
-      "name": "_FUJI_BG_CENTER_Y",
+    "_ANTARCTICA_BG_CENTER_X": {
+      "name": "_ANTARCTICA_BG_CENTER_X",
       "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MAP_CENTER_Y": {
+      "name": "_MAP_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy_active": {
+      "name": "enemy_active",
+      "address": "0xC913",
+      "size": 16,
+      "type": "array",
+      "declLine": null
+    },
+    "TMPRIGHT": {
+      "name": "TMPRIGHT",
+      "address": "0xC886",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "PSG_MUSIC_PTR_DP": {
+      "name": "PSG_MUSIC_PTR_DP",
+      "address": "0x0024",
+      "size": 2,
+      "type": "audio",
+      "declLine": null
+    },
+    "_BUBBLE_LARGE_CENTER_X": {
+      "name": "_BUBBLE_LARGE_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BUBBLE_MEDIUM_CENTER_Y": {
+      "name": "_BUBBLE_MEDIUM_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PYRAMIDS_BG_CENTER_Y": {
+      "name": "_PYRAMIDS_BG_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_EASTER_BG_CENTER_Y": {
+      "name": "_EASTER_BG_CENTER_Y",
+      "address": "0x000F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy_vy": {
+      "name": "enemy_vy",
+      "address": "0xC953",
+      "size": 16,
+      "type": "array",
+      "declLine": null
+    },
+    "title_state": {
+      "name": "title_state",
+      "address": "0xC8D7",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "TMPLEFT": {
+      "name": "TMPLEFT",
+      "address": "0xC882",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "STATE_TITLE": {
+      "name": "STATE_TITLE",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LOGO_WIDTH": {
+      "name": "_LOGO_WIDTH",
+      "address": "0x00A3",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LENINGRAD_BG_WIDTH": {
+      "name": "_LENINGRAD_BG_WIDTH",
+      "address": "0x003C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0xC8B5",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC973",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "hook_active": {
+      "name": "hook_active",
+      "address": "0xC8FB",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_PLAYER_WALK_4_WIDTH": {
+      "name": "_PLAYER_WALK_4_WIDTH",
+      "address": "0x0013",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_CIRCLE_XC": {
+      "name": "DRAW_CIRCLE_XC",
+      "address": "0xC8C7",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC979",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "VL_Y": {
+      "name": "VL_Y",
+      "address": "0xCF82",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_LONDON_BG_CENTER_Y": {
+      "name": "_LONDON_BG_CENTER_Y",
+      "address": "0x000F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_2_CENTER_X": {
+      "name": "_PLAYER_WALK_2_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_HOOK_CENTER_X": {
+      "name": "_HOOK_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_WALK_2_CENTER_Y": {
+      "name": "_PLAYER_WALK_2_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "countdown_active": {
+      "name": "countdown_active",
+      "address": "0xC8F7",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_LOGO_CENTER_X": {
+      "name": "_LOGO_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "current_music": {
+      "name": "current_music",
+      "address": "0xC8D9",
+      "size": 2,
+      "type": "int",
+      "declLine": null
+    },
+    "_BUBBLE_HUGE_CENTER_Y": {
+      "name": "_BUBBLE_HUGE_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_ATHENS_BG_CENTER_Y": {
+      "name": "_ATHENS_BG_CENTER_Y",
+      "address": "0x0016",
       "size": 2,
       "type": "unknown",
       "declLine": null

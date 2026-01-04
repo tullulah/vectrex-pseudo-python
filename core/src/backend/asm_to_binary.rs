@@ -480,8 +480,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "STD" => emit_std(emitter, operand, equates),
         
         // === CONTROL FLOW ===
-        "JSR" => emit_jsr(emitter, operand),
-        "BSR" => emit_bsr(emitter, operand),
+        "JSR" => emit_jsr(emitter, operand, last_global_label),
+        "BSR" => emit_bsr(emitter, operand, last_global_label),
         "RTS" => { emitter.rts(); Ok(()) },
         "NOP" => { emitter.nop(); Ok(()) },
         "BRA" => emit_bra(emitter, operand, last_global_label),
@@ -947,12 +947,13 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     }
 }
 
-fn emit_jsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_jsr(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
     if operand.starts_with('$') {
         let addr = parse_hex(&operand[1..])?;
         emitter.jsr_extended(addr);
-    } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        emitter.jsr_extended_sym(operand);
+    } else if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
+        emitter.jsr_extended_sym(&full_label);
     } else {
         let addr = parse_address(operand)?;
         emitter.jsr_extended(addr);
@@ -960,9 +961,10 @@ fn emit_jsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_bsr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        emitter.bsr_label(operand);
+fn emit_bsr(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        let full_label = expand_local_label(operand, last_global);
+        emitter.bsr_label(&full_label);
     } else {
         let offset = parse_signed(operand)?;
         emitter.bsr_offset(offset);

@@ -449,6 +449,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
     
+    // Calculate max args needed (for VAR_ARG* allocation)
+    let max_args = compute_max_args_used(module);
+    
     // ========================================================================
     // AUTOMATIC RAM LAYOUT - Calculates all offsets automatically
     // No more hardcoded offsets, no collisions, always compact
@@ -517,6 +520,73 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // 8. PRINT_NUMBER buffer (always allocate if not suppressed)
     if !suppress_runtime {
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
+    }
+    
+    // 9. DRAW_VECTOR position/mirror variables (always allocate for DRAW_VECTOR_EX and SHOW_LEVEL)
+    if !suppress_runtime {
+        ram.allocate("DRAW_VEC_X", 1, "X position offset for vector drawing");
+        ram.allocate("DRAW_VEC_Y", 1, "Y position offset for vector drawing");
+        ram.allocate("MIRROR_X", 1, "X-axis mirror flag (0=normal, 1=flip)");
+        ram.allocate("MIRROR_Y", 1, "Y-axis mirror flag (0=normal, 1=flip)");
+        ram.allocate("DRAW_VEC_INTENSITY", 1, "Intensity override (0=use vector's, >0=override)");
+    }
+    
+    // 10. DRAW_LINE variables (only if DRAW_LINE is used)
+    if rt_usage.needs_line_vars {
+        ram.allocate("VLINE_DX_16", 2, "x1-x0 (16-bit) for line drawing");
+        ram.allocate("VLINE_DY_16", 2, "y1-y0 (16-bit) for line drawing");
+        ram.allocate("VLINE_DX", 1, "Clamped dx (8-bit)");
+        ram.allocate("VLINE_DY", 1, "Clamped dy (8-bit)");
+        ram.allocate("VLINE_DY_REMAINING", 2, "Remaining dy for segment 2 (16-bit)");
+        ram.allocate("VLINE_DX_REMAINING", 2, "Remaining dx for segment 2 (16-bit)");
+        ram.allocate("VLINE_STEPS", 1, "Line drawing step counter");
+        ram.allocate("VLINE_LIST", 2, "2-byte vector list (Y|endbit, X)");
+    }
+    
+    // 11. DRAW_CIRCLE variables (if DRAW_CIRCLE is used - TODO: detect usage)
+    if !suppress_runtime {
+        ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X (byte)");
+        ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y (byte)");
+        ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter (byte)");
+        ram.allocate("DRAW_CIRCLE_INTENSITY", 1, "Circle intensity (byte)");
+        ram.allocate("DRAW_CIRCLE_TEMP", 8, "Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2)");
+    }
+    
+    // 12. Optional feature variables (blink intensity, fast wait)
+    if opts.blink_intensity {
+        ram.allocate("BLINK_STATE", 1, "Blink intensity state (toggles 0/1)");
+    }
+    if opts.fast_wait {
+        ram.allocate("FAST_WAIT_HIT", 1, "Fast wait recalibration flag");
+    }
+    
+    // 13. Global user variables (VAR_*)
+    // Build array size map for proper allocation
+    let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (name, value) in &non_const_vars {
+        if let Expr::List(elements) = value {
+            array_sizes.insert(name.clone(), elements.len());
+        }
+    }
+    
+    for v in syms {
+        if let Some(&array_len) = array_sizes.get(&v) {
+            // Arrays: allocate space for N elements * 2 bytes each
+            let var_name = format!("VAR_{}_DATA", v.to_uppercase());
+            ram.allocate(&var_name, array_len * 2, &format!("Array data ({} elements)", array_len));
+        } else {
+            // Scalar variables: 2 bytes each
+            let var_name = format!("VAR_{}", v.to_uppercase());
+            ram.allocate(&var_name, 2, "User variable");
+        }
+    }
+    
+    // 14. Function argument scratch space (VAR_ARG0-ARGn)
+    if !suppress_runtime && max_args > 0 {
+        for i in 0..max_args {
+            let arg_name = format!("VAR_ARG{}", i);
+            ram.allocate(&arg_name, 2, &format!("Function argument {}", i));
+        }
     }
     
     out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
@@ -1023,9 +1093,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     
-    // Determine max args used (0..5) BEFORE evaluating suppress_runtime
-    let max_args = compute_max_args_used(module);
-    // Re-evaluate suppress_runtime now that we know max_args
+    // Re-evaluate suppress_runtime now that we know max_args (calculated earlier)
     let no_runtime_vars_needed = !rt_usage.needs_tmp_left && !rt_usage.needs_tmp_right && 
                                  !rt_usage.needs_tmp_ptr && 
                                  !rt_usage.needs_mul_helper && !rt_usage.needs_div_helper && 
@@ -1055,69 +1123,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("VL_SCALE:  FCB 0    ; Scale factor\n");
     }
     
-    let mut var_offset = 0; // Variables start at separate base, not after RESULT temps
-    
-    // Build a map of array sizes for proper RAM allocation
-    let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for (name, value) in &non_const_vars {
-        if let Expr::List(elements) = value {
-            array_sizes.insert(name.clone(), elements.len());
-        }
-    }
-    
-    for v in syms {
-        if opts.exclude_ram_org {
-            // FIX: Use separate memory area for global variables, not RESULT+offset
-            // Global variables should persist between function calls, but RESULT is temporary
-            // Use $CF10 to avoid collision with debug RAM at $CF00-$CF03
-            
-            // Check if this variable is an array - if so, allocate space for actual array data
-            if let Some(&array_len) = array_sizes.get(&v) {
-                // Arrays need space for the actual data (N elements * 2 bytes each)
-                out.push_str(&format!("VAR_{}_DATA EQU $C8C0+{}  ; Array data ({} elements)\n", 
-                    v.to_uppercase(), var_offset, array_len));
-                var_offset += array_len * 2;  // Reserve space for all elements
-                // Note: We don't create VAR_NAME anymore - code will use VAR_NAME_DATA directly
-            } else {
-                // Regular scalar variables - 2 bytes each
-                out.push_str(&format!("VAR_{} EQU $C8C0+{}\n", v.to_uppercase(), var_offset));
-                var_offset += 2;
-            }
-        } else {
-            out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
-        }
-    }
-    // Global mutables already allocated via symbol list; (future) could emit non-zero inits via a small startup routine.
-    
-    // ✅ Emit VAR_ARG EQU definitions HERE (before assets/strings)
-    // This ensures ALL EQU definitions are together and don't interrupt FCB/FCC data
-    if !suppress_runtime {
-        out.push_str("; Call argument scratch space\n");
-        if opts.exclude_ram_org {
-            // Function arguments can use RESULT area since they're temporary
-            // RESULT is defined as $C880, calculate absolute addresses
-            // CRITICAL: Must be AFTER all PSG/SFX variables to avoid corruption
-            // PSG vars: +28 to +34 ($C89C-$C8A2), SFX vars: +40 to +48 ($C8A8-$C8B0)
-            let result_base = 0xC880u16;
-            let mut arg_offset = 50; // Start after SFX_ACTIVE at +48 (0xC8B0)
-            for i in 0..max_args { 
-                let abs_addr = result_base + arg_offset;
-                out.push_str(&format!("VAR_ARG{} EQU ${:04X}\n", i, abs_addr)); 
-                arg_offset += 2; 
-            }
-        } else {
-            if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
-            if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
-            if max_args >=3 { out.push_str("VAR_ARG2: FDB 0\n"); }
-            if max_args >=4 { out.push_str("VAR_ARG3: FDB 0\n"); }
-            if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
-            if max_args >=6 { out.push_str("VAR_ARG5: FDB 0\n"); }
-        }
-    }
-    
-    // ✅ CRITICAL FIX: Embed assets HERE (after ALL EQU definitions, before strings)
-    // The native assembler processes ALL lines but EQU doesn't generate bytes
-    // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
+    // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
+    // Always define if any code might use DRAW_VECTOR_LIST
     if !opts.assets.is_empty() {
         // Analyze which assets are actually used in the code
         let used_assets = analyze_used_assets(module, &opts.assets);
@@ -1327,89 +1334,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     // VAR_ARG definitions moved earlier (before assets/strings) to keep all EQUs together
-    
-    // CRITICAL FIX: Reset var_offset to 0 for system internal variables (RESULT+offset)
-    // Global variables use $C8C0+offset, system temps use RESULT+offset (separate spaces)
-    var_offset = 0;
-    
-    if opts.diag_freeze { if opts.exclude_ram_org { out.push_str(&format!("DIAG_COUNTER EQU RESULT+{}\n", var_offset)); var_offset += 1; } else { out.push_str("DIAG_COUNTER: FCB 0\n"); } }
-    if rt_usage.needs_vcur_vars {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("VCUR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-            out.push_str(&format!("VCUR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else { out.push_str("; Current beam position (low byte storage)\nVCUR_X: FCB 0\nVCUR_Y: FCB 0\n"); }
-    }
-    if rt_usage.needs_line_vars {
-        if opts.exclude_ram_org {
-            // CRITICAL: DRAW_LINE_WRAPPER uses RESULT+0-9 for arguments
-            // Temporals must start at RESULT+10 to avoid overwriting arguments
-            out.push_str(&format!("VLINE_DX_16 EQU RESULT+10\n"));      // x1-x0 (16-bit)
-            out.push_str(&format!("VLINE_DY_16 EQU RESULT+12\n"));      // y1-y0 (16-bit)
-            out.push_str(&format!("VLINE_DX EQU RESULT+14\n"));         // clamped dx (8-bit)
-            out.push_str(&format!("VLINE_DY EQU RESULT+15\n"));         // clamped dy (8-bit)
-            out.push_str(&format!("VLINE_DY_REMAINING EQU RESULT+16\n")); // remaining dy segment 2 (16-bit)
-            out.push_str(&format!("VLINE_DX_REMAINING EQU RESULT+18\n")); // remaining dx segment 2 (16-bit)
-            out.push_str(&format!("VLINE_STEPS EQU RESULT+20\n"));
-            out.push_str(&format!("VLINE_LIST EQU RESULT+21\n"));       // 2-byte vector list
-            var_offset = 23;  // Next offset available
-        } else { out.push_str("; Line drawing temps\nVLINE_DX_16: FDB 0  ; 16-bit dx for long lines\nVLINE_DY_16: FDB 0  ; 16-bit dy for long lines\nVLINE_DX: FCB 0  ; clamped dx (8-bit)\nVLINE_DY: FCB 0  ; clamped dy (8-bit)\nVLINE_DY_REMAINING: FDB 0  ; 16-bit remaining dy for segment 2\nVLINE_DX_REMAINING: FDB 0  ; 16-bit remaining dx for segment 2\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
-    }
-    // DRAW_VECTOR offset position storage (always needed for DRAW_VECTOR)
-    if opts.exclude_ram_org {
-        out.push_str(&format!("DRAW_VEC_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_VEC_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("MIRROR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("MIRROR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_VEC_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
-    } else {
-        out.push_str("; DRAW_VECTOR position offset\nDRAW_VEC_X: FCB 0\nDRAW_VEC_Y: FCB 0\n");
-        out.push_str("; Mirror flags for DRAW_VECTOR_EX unified function\nMIRROR_X: FCB 0\nMIRROR_Y: FCB 0\n");
-        out.push_str("; Intensity override (0=use vector's intensity, non-zero=override)\nDRAW_VEC_INTENSITY: FCB 0\n");
-    }
-    
-    // DRAW_CIRCLE runtime variables (changed to bytes to avoid DP issues)
-    if opts.exclude_ram_org {
-        out.push_str(&format!("DRAW_CIRCLE_XC EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_YC EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_DIAM EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_TEMP EQU RESULT+{}\n", var_offset)); var_offset += 8; // TEMP is still 8 bytes (radius=2, xc=2, yc=2, spare=2)
-    } else {
-        out.push_str("; DRAW_CIRCLE runtime variables (bytes, not words - to avoid DP corruption)\n");
-        out.push_str("DRAW_CIRCLE_XC: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_YC: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_DIAM: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_INTENSITY: FCB 0\n");
-        out.push_str("; DRAW_CIRCLE_TEMP still needs 8 bytes for internal calculations\n");
-        out.push_str("DRAW_CIRCLE_TEMP: FDB 0,0,0,0  ; radius(2), xc(2), yc(2), spare(2)\n");
-    }
+    // All runtime variables now allocated via ram.allocate() (sections 1-12 above)
+    // No more RESULT+offset system - everything uses absolute addresses
     
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function
     
-    // Blink state variable (1 byte) must live in RAM, not ROM.
-    if opts.blink_intensity {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("BLINK_STATE EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else {
-            out.push_str("BLINK_STATE: FCB 0\n");
-        }
-    }
-    if opts.fast_wait {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("FAST_WAIT_HIT EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else {
-            out.push_str("FAST_WAIT_HIT: FCB 0\n");
-        }
-    }
     // Shared trig tables (emit only if used)
     if module_uses_trig(module) {
         out.push_str("; Trig tables (shared)\n");
         emit_trig_tables(&mut out, "FDB");
     }
-    // Touch var_offset so compiler sees it used when EQU mode enabled
-    #[allow(unused_variables)]
-    { let _vo = var_offset; }
     
     // Populate debug info with function symbols using REAL addresses from ASM parsing
     // Parse the generated ASM to extract label addresses

@@ -441,12 +441,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             ;   13:  Envelope shape\n\
             ; ============================================================================\n\
             \n\
-            ; RAM variables (defined in RAM section above)\n\
-            ; PSG_MUSIC_PTR    EQU RESULT+26  (2 bytes)\n\
-            ; PSG_MUSIC_START  EQU RESULT+28  (2 bytes)\n\
-            ; PSG_IS_PLAYING   EQU RESULT+30  (1 byte)\n\
-            ; PSG_MUSIC_ACTIVE EQU RESULT+31  (1 byte) - Set=1 during UPDATE_MUSIC_PSG\n\
-            ; PSG_DELAY_FRAMES EQU RESULT+32  (1 byte) - Frames to wait before reading next data\n\
+            ; RAM variables (defined via ram.allocate in mod.rs):\n\
+            ; PSG_MUSIC_PTR, PSG_MUSIC_START, PSG_IS_PLAYING,\n\
+            ; PSG_MUSIC_ACTIVE, PSG_DELAY_FRAMES\n\
             \n\
             ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
             ; Input: X = pointer to PSG music data\n\
@@ -549,10 +546,7 @@ PSG_update_done:\n\
             ; Processes both music (channel B) and SFX (channel C) in one pass\n\
             ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems\n\
             ; Sets DP=$D0 once at entry, restores at exit\n\
-            \n\
-            ; RAM variables (always defined, even if SFX not used)\n\
-            sfx_pointer EQU RESULT+32    ; 2 bytes - Current AYFX frame pointer\n\
-            sfx_status  EQU RESULT+34    ; 1 byte  - Active flag (0=inactive, 1=active)\n\
+            ; RAM variables: SFX_PTR, SFX_ACTIVE (defined via ram.allocate in mod.rs)\n\
             \n\
             AUDIO_UPDATE:\n\
             PSHS DP                 ; Save current DP\n\
@@ -641,7 +635,7 @@ PSG_update_done:\n\
             \n\
             ; UPDATE SFX (channel C: registers 4/5=tone, 6=noise, 10=volume, 7=mixer)\n\
             AU_UPDATE_SFX:\n\
-            LDA >sfx_status         ; Check if SFX is active\n\
+            LDA >SFX_ACTIVE         ; Check if SFX is active\n\
             BEQ AU_DONE             ; Skip if not active\n\
             \n\
             JSR sfx_doframe         ; Process one SFX frame (uses Sound_Byte internally)\n\
@@ -663,7 +657,7 @@ PSG_update_done:\n\
             ; AYFX SOUND EFFECTS PLAYER (Richard Chadd original system)\n\
             ; ============================================================================\n\
             ; Uses channel C (registers 4/5=tone, 6=noise, 10=volume, 7=mixer bit2/bit5)\n\
-            ; RAM variables: sfx_pointer (16-bit), sfx_status (8-bit)\n\
+            ; RAM variables: SFX_PTR (16-bit), SFX_ACTIVE (8-bit)\n\
             ; AYFX format: flag byte + optional data per frame, end marker $D0 $20\n\
             ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,\n\
             ;            6=noise data present, 7=disable noise\n\
@@ -673,14 +667,14 @@ PSG_update_done:\n\
             ; PLAY_SFX_RUNTIME - Start SFX playback\n\
             ; Input: X = pointer to AYFX data\n\
             PLAY_SFX_RUNTIME:\n\
-                STX sfx_pointer        ; Store pointer\n\
+                STX SFX_PTR            ; Store pointer\n\
                 LDA #$01\n\
-                STA sfx_status         ; Mark as active\n\
+                STA SFX_ACTIVE         ; Mark as active\n\
                 RTS\n\
             \n\
             ; SFX_UPDATE - Process one AYFX frame (call once per frame in loop)\n\
             SFX_UPDATE:\n\
-                LDA sfx_status         ; Check if active\n\
+                LDA SFX_ACTIVE         ; Check if active\n\
                 BEQ noay               ; Not active, skip\n\
                 JSR sfx_doframe        ; Process one frame\n\
             noay:\n\
@@ -688,7 +682,7 @@ PSG_update_done:\n\
             \n\
             ; sfx_doframe - AYFX frame parser (Richard Chadd original)\n\
             sfx_doframe:\n\
-                LDU sfx_pointer        ; Get current frame pointer\n\
+                LDU SFX_PTR            ; Get current frame pointer\n\
                 LDB ,U                 ; Read flag byte (NO auto-increment)\n\
                 CMPB #$D0              ; Check end marker (first byte)\n\
                 BNE sfx_checktonefreq  ; Not end, continue\n\
@@ -760,17 +754,17 @@ PSG_update_done:\n\
                 JSR Sound_Byte         ; Write to PSG\n\
             \n\
             sfx_nextframe:\n\
-                STY sfx_pointer        ; Update pointer for next frame\n\
+                STY SFX_PTR            ; Update pointer for next frame\n\
                 RTS\n\
             \n\
             sfx_endofeffect:\n\
                 ; Stop SFX - set volume to 0\n\
-                CLR sfx_status         ; Mark as inactive\n\
+                CLR SFX_ACTIVE         ; Mark as inactive\n\
                 LDA #$0A               ; Register 10 (volume C)\n\
                 LDB #$00               ; Volume = 0\n\
                 JSR Sound_Byte\n\
                 LDD #$0000\n\
-                STD sfx_pointer        ; Clear pointer\n\
+                STD SFX_PTR            ; Clear pointer\n\
                 RTS\n\
             \n"
         );
@@ -1484,10 +1478,133 @@ DCR_DELTA_TABLE:\n\
     if w.contains("SHOW_LEVEL_RUNTIME") {
         out.push_str("; === SHOW_LEVEL_RUNTIME ===\n");
         out.push_str("; Draw all level objects from loaded level\n");
-        out.push_str("; TODO: Implement level rendering logic\n");
+        out.push_str("; Input: RESULT = pointer to level data\n");
+        out.push_str("; Level structure (from levelres.rs):\n");
+        out.push_str(";   +0:  FDB xMin, xMax (world bounds)\n");
+        out.push_str(";   +4:  FDB yMin, yMax\n");
+        out.push_str(";   +8:  FDB timeLimit, targetScore\n");
+        out.push_str(";   +12: FCB bgCount, gameplayCount, fgCount\n");
+        out.push_str(";   +15: FDB bgObjectsPtr, gameplayObjectsPtr, fgObjectsPtr\n");
+        out.push_str("; Object structure (20 bytes each):\n");
+        out.push_str(";   +0:  FCB type\n");
+        out.push_str(";   +1:  FDB x, y (position)\n");
+        out.push_str(";   +5:  FDB scale (8.8 fixed point)\n");
+        out.push_str(";   +7:  FCB rotation, intensity\n");
+        out.push_str(";   +9:  FCB velocity_x, velocity_y\n");
+        out.push_str(";   +11: FCB physics_flags, collision_flags, collision_size\n");
+        out.push_str(";   +14: FDB spawn_delay\n");
+        out.push_str(";   +16: FDB vector_ptr\n");
+        out.push_str(";   +18: FDB properties_ptr\n");
         out.push_str("SHOW_LEVEL_RUNTIME:\n");
-        out.push_str("    ; Placeholder - no-op for now\n");
-        out.push_str("    RTS\n\n");
+        out.push_str("    PSHS D,X,Y,U     ; Preserve registers\n");
+        out.push_str("    JSR $F1AA        ; DP_to_D0 (BIOS needs DP=$D0 for VIA access)\n");
+        out.push_str("    \n");
+        out.push_str("    ; Get level pointer from RESULT\n");
+        out.push_str("    LDX RESULT\n");
+        out.push_str("    CMPX #0\n");
+        out.push_str("    BEQ SLR_DONE     ; No level loaded\n");
+        out.push_str("    \n");
+        out.push_str("    ; Skip world bounds (8 bytes) + time/score (4 bytes)\n");
+        out.push_str("    LEAX 12,X        ; X now points to object counts\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read object counts\n");
+        out.push_str("    LDA ,X+          ; A = bgCount\n");
+        out.push_str("    STA SLR_BG_COUNT+1\n");
+        out.push_str("    LDA ,X+          ; A = gameplayCount\n");
+        out.push_str("    STA SLR_GP_COUNT+1\n");
+        out.push_str("    LDA ,X+          ; A = fgCount\n");
+        out.push_str("    STA SLR_FG_COUNT+1\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read layer pointers\n");
+        out.push_str("    LDD ,X++         ; D = bgObjectsPtr\n");
+        out.push_str("    STD SLR_BG_PTR+1\n");
+        out.push_str("    LDD ,X++         ; D = gameplayObjectsPtr\n");
+        out.push_str("    STD SLR_GP_PTR+1\n");
+        out.push_str("    LDD ,X++         ; D = fgObjectsPtr\n");
+        out.push_str("    STD SLR_FG_PTR+1\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Draw Background Layer ===\n");
+        out.push_str("SLR_BG_COUNT:\n");
+        out.push_str("    LDB #$00         ; Self-modified: bg count\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ SLR_GAMEPLAY\n");
+        out.push_str("SLR_BG_PTR:\n");
+        out.push_str("    LDX #$0000       ; Self-modified: bg objects ptr\n");
+        out.push_str("    JSR SLR_DRAW_OBJECTS\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Draw Gameplay Layer ===\n");
+        out.push_str("SLR_GAMEPLAY:\n");
+        out.push_str("SLR_GP_COUNT:\n");
+        out.push_str("    LDB #$00         ; Self-modified: gameplay count\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ SLR_FOREGROUND\n");
+        out.push_str("SLR_GP_PTR:\n");
+        out.push_str("    LDX #$0000       ; Self-modified: gameplay objects ptr\n");
+        out.push_str("    JSR SLR_DRAW_OBJECTS\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Draw Foreground Layer ===\n");
+        out.push_str("SLR_FOREGROUND:\n");
+        out.push_str("SLR_FG_COUNT:\n");
+        out.push_str("    LDB #$00         ; Self-modified: fg count\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ SLR_DONE\n");
+        out.push_str("SLR_FG_PTR:\n");
+        out.push_str("    LDX #$0000       ; Self-modified: fg objects ptr\n");
+        out.push_str("    JSR SLR_DRAW_OBJECTS\n");
+        out.push_str("    \n");
+        out.push_str("SLR_DONE:\n");
+        out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
+        out.push_str("    PULS D,X,Y,U,PC  ; Restore and return\n");
+        out.push_str("    \n");
+        out.push_str("; === Subroutine: Draw N Objects ===\n");
+        out.push_str("; Input: B = count, X = objects ptr\n");
+        out.push_str("; Each object is 20 bytes\n");
+        out.push_str("SLR_DRAW_OBJECTS:\n");
+        out.push_str("    PSHS B,X         ; Save count and ptr\n");
+        out.push_str("SLR_OBJ_LOOP:\n");
+        out.push_str("    PULS B           ; Get count\n");
+        out.push_str("    DECB             ; Decrement count\n");
+        out.push_str("    BMI SLR_OBJ_DONE ; All done if negative\n");
+        out.push_str("    PSHS B           ; Save decremented count\n");
+        out.push_str("    \n");
+        out.push_str("    ; X points to current object (20 bytes)\n");
+        out.push_str("    ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),\n");
+        out.push_str("    ;           FCB rotation (+7), FCB intensity (+8), ..., FDB vector_ptr (+16)\n");
+        out.push_str("    \n");
+        out.push_str("    ; Clear mirror flags (no mirroring support yet)\n");
+        out.push_str("    CLR MIRROR_X\n");
+        out.push_str("    CLR MIRROR_Y\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read intensity (offset +8) and store as override\n");
+        out.push_str("    LDA 8,X\n");
+        out.push_str("    STA DRAW_VEC_INTENSITY\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read y position (offset +3-4) - store LSB only\n");
+        out.push_str("    LDD 3,X\n");
+        out.push_str("    STB DRAW_VEC_Y\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read x position (offset +1-2) - store LSB only\n");
+        out.push_str("    LDD 1,X\n");
+        out.push_str("    STB DRAW_VEC_X\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read vector_ptr (offset +16-17)\n");
+        out.push_str("    LDU 16,X\n");
+        out.push_str("    PSHS X           ; Save object pointer\n");
+        out.push_str("    TFR U,X          ; X = vector data pointer\n");
+        out.push_str("    \n");
+        out.push_str("    ; Draw vector using DRAW_VECTOR_EX's function\n");
+        out.push_str("    JSR Draw_Sync_List_At_With_Mirrors\n");
+        out.push_str("    \n");
+        out.push_str("    PULS X           ; Restore object pointer\n");
+        out.push_str("    \n");
+        out.push_str("    ; Advance to next object (20 bytes)\n");
+        out.push_str("    LEAX 20,X\n");
+        out.push_str("    STX ,S           ; Update pointer on stack\n");
+        out.push_str("    BRA SLR_OBJ_LOOP\n");
+        out.push_str("    \n");
+        out.push_str("SLR_OBJ_DONE:\n");
+        out.push_str("    PULS B,X,PC      ; Restore and return\n");
+        out.push_str("\n");
     }
 }
 
