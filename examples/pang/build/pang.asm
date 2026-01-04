@@ -23,13 +23,6 @@
 ; CODE SECTION
 ;***************************************************************************
 
-; === FORWARD DECLARATIONS (Level Labels) ===
-; These labels are defined in DATA section but used in CODE section
-; Forward declarations allow single-pass native assembler to resolve symbols
-; Label: _FUJI_LEVEL1_V2_LEVEL (defined later in DATA section)
-; Label: _TEST_LEVEL (defined later in DATA section)
-
-
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
 ; Total RAM used: 53 bytes
@@ -297,23 +290,7 @@ DLW_SEG2_DX_DONE:
     CLR Vec_Misc_Count
     JSR Draw_Line_d ; Beam continues from segment 1 endpoint
 DLW_DONE:
-    ; DON'T call Reset0Ref here - it breaks line continuity!
-    ; The beam position should stay where the line ended
-    ; Full VIA reset (match Draw_Sync_List reset sequence)
-    CLR >$D00A     ; VIA_shift_reg = 0
-    LDA #$CC       ; Standard control mode
-    STA >$D00C     ; VIA_cntl
-    CLR >$D001     ; VIA_port_a = 0
-    LDA #$82
-    STA >$D000     ; VIA_port_b = $82
-    NOP
-    NOP
-    NOP
-    NOP
-    NOP
-    LDA #$83
-    STA >$D000     ; VIA_port_b = $83
-    LDA #$C8       ; Restore DP to $C8 for our code
+    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code
     TFR A,DP
     RTS
 VECTREX_SET_INTENSITY:
@@ -850,11 +827,8 @@ LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
-TFR A,DP                ; Set DP=$D0 for BIOS VIA access
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
-LDA #$C8                ; Restore DP immediately after BIOS
-TFR A,DP
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
@@ -1010,8 +984,6 @@ BEQ DSWM_W3
 CLR VIA_shift_reg
 BRA DSWM_LOOP
 DSWM_DONE:
-LDA #$C8       ; CRITICAL: Restore DP before returning (fixes multi-object drawing)
-TFR A,DP
 RTS
 ; ============================================================================
 ; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters
@@ -7167,13 +7139,13 @@ _PLAYER_WALK_1_PATH0:    ; Path 0
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0C,$F9,0,0        ; path1: header (y=12, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -7182,7 +7154,7 @@ _PLAYER_WALK_1_PATH2:    ; Path 2
     FCB $FF,$02,$00          ; line 1: flag=-1, dy=2, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -7191,13 +7163,13 @@ _PLAYER_WALK_1_PATH3:    ; Path 3
     FCB $FF,$F6,$00          ; line 1: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$F6          ; line 2: flag=-1, dy=0, dx=-10
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $07,$FA,0,0        ; path4: header (y=7, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -7206,7 +7178,7 @@ _PLAYER_WALK_1_PATH5:    ; Path 5
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -7215,13 +7187,13 @@ _PLAYER_WALK_1_PATH6:    ; Path 6
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $07,$04,0,0        ; path7: header (y=7, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -7230,7 +7202,7 @@ _PLAYER_WALK_1_PATH8:    ; Path 8
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -7239,7 +7211,7 @@ _PLAYER_WALK_1_PATH9:    ; Path 9
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -7248,7 +7220,7 @@ _PLAYER_WALK_1_PATH10:    ; Path 10
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$FF          ; line 2: flag=-1, dy=0, dx=-1
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -7257,7 +7229,7 @@ _PLAYER_WALK_1_PATH11:    ; Path 11
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -7266,7 +7238,7 @@ _PLAYER_WALK_1_PATH12:    ; Path 12
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -7275,7 +7247,7 @@ _PLAYER_WALK_1_PATH13:    ; Path 13
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -7284,7 +7256,7 @@ _PLAYER_WALK_1_PATH14:    ; Path 14
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
@@ -7293,7 +7265,7 @@ _PLAYER_WALK_1_PATH15:    ; Path 15
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_1_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
@@ -7302,7 +7274,7 @@ _PLAYER_WALK_1_PATH16:    ; Path 16
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: player_walk_2
 ; Generated from player_walk_2.vec (Malban Draw_Sync_List format)
@@ -7322,13 +7294,13 @@ _PLAYER_WALK_2_PATH0:    ; Path 0
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$FA,0,0        ; path1: header (y=13, x=-6, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -7337,7 +7309,7 @@ _PLAYER_WALK_2_PATH2:    ; Path 2
     FCB $FF,$02,$00          ; line 1: flag=-1, dy=2, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -7346,13 +7318,13 @@ _PLAYER_WALK_2_PATH3:    ; Path 3
     FCB $FF,$F6,$00          ; line 1: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$F6          ; line 2: flag=-1, dy=0, dx=-10
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FB,0,0        ; path4: header (y=8, x=-5, relative to center)
     FCB $FF,$FF,$FE          ; line 0: flag=-1, dy=-1, dx=-2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -7361,7 +7333,7 @@ _PLAYER_WALK_2_PATH5:    ; Path 5
     FCB $FF,$FC,$FF          ; line 1: flag=-1, dy=-4, dx=-1
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$04,$01          ; closing line: flag=-1, dy=4, dx=1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -7370,13 +7342,13 @@ _PLAYER_WALK_2_PATH6:    ; Path 6
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$05,0,0        ; path7: header (y=8, x=5, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -7385,7 +7357,7 @@ _PLAYER_WALK_2_PATH8:    ; Path 8
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -7394,7 +7366,7 @@ _PLAYER_WALK_2_PATH9:    ; Path 9
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -7403,7 +7375,7 @@ _PLAYER_WALK_2_PATH10:    ; Path 10
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$FF          ; line 2: flag=-1, dy=0, dx=-1
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -7412,7 +7384,7 @@ _PLAYER_WALK_2_PATH11:    ; Path 11
     FCB $FF,$FA,$01          ; line 1: flag=-1, dy=-6, dx=1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$FF          ; closing line: flag=-1, dy=6, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -7421,7 +7393,7 @@ _PLAYER_WALK_2_PATH12:    ; Path 12
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -7430,7 +7402,7 @@ _PLAYER_WALK_2_PATH13:    ; Path 13
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -7439,7 +7411,7 @@ _PLAYER_WALK_2_PATH14:    ; Path 14
     FCB $FF,$F9,$01          ; line 1: flag=-1, dy=-7, dx=1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
@@ -7448,7 +7420,7 @@ _PLAYER_WALK_2_PATH15:    ; Path 15
     FCB $FF,$F9,$01          ; line 1: flag=-1, dy=-7, dx=1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_2_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
@@ -7457,7 +7429,7 @@ _PLAYER_WALK_2_PATH16:    ; Path 16
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: bubble_huge
 ; Generated from bubble_huge.vec (Malban Draw_Sync_List format)
@@ -7481,7 +7453,7 @@ _BUBBLE_HUGE_PATH0:    ; Path 0
     FCB $FF,$F8,$12          ; line 5: flag=-1, dy=-8, dx=18
     FCB $FF,$08,$12          ; line 6: flag=-1, dy=8, dx=18
     FCB $FF,$12,$08          ; closing line: flag=-1, dy=18, dx=8
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: player_walk_3
 ; Generated from player_walk_3.vec (Malban Draw_Sync_List format)
@@ -7501,13 +7473,13 @@ _PLAYER_WALK_3_PATH0:    ; Path 0
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$F9,0,0        ; path1: header (y=13, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -7516,7 +7488,7 @@ _PLAYER_WALK_3_PATH2:    ; Path 2
     FCB $FF,$02,$00          ; line 1: flag=-1, dy=2, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -7525,13 +7497,13 @@ _PLAYER_WALK_3_PATH3:    ; Path 3
     FCB $FF,$F6,$00          ; line 1: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$F6          ; line 2: flag=-1, dy=0, dx=-10
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FA,0,0        ; path4: header (y=8, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -7540,7 +7512,7 @@ _PLAYER_WALK_3_PATH5:    ; Path 5
     FCB $FF,$F9,$FF          ; line 1: flag=-1, dy=-7, dx=-1
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$07,$01          ; closing line: flag=-1, dy=7, dx=1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -7549,13 +7521,13 @@ _PLAYER_WALK_3_PATH6:    ; Path 6
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$04,0,0        ; path7: header (y=8, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -7564,7 +7536,7 @@ _PLAYER_WALK_3_PATH8:    ; Path 8
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -7573,7 +7545,7 @@ _PLAYER_WALK_3_PATH9:    ; Path 9
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -7582,7 +7554,7 @@ _PLAYER_WALK_3_PATH10:    ; Path 10
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$FF          ; line 2: flag=-1, dy=0, dx=-1
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -7591,7 +7563,7 @@ _PLAYER_WALK_3_PATH11:    ; Path 11
     FCB $FF,$F9,$FF          ; line 1: flag=-1, dy=-7, dx=-1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$01          ; closing line: flag=-1, dy=7, dx=1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -7600,7 +7572,7 @@ _PLAYER_WALK_3_PATH12:    ; Path 12
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -7609,7 +7581,7 @@ _PLAYER_WALK_3_PATH13:    ; Path 13
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -7618,7 +7590,7 @@ _PLAYER_WALK_3_PATH14:    ; Path 14
     FCB $FF,$F9,$01          ; line 1: flag=-1, dy=-7, dx=1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
@@ -7627,7 +7599,7 @@ _PLAYER_WALK_3_PATH15:    ; Path 15
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_3_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
@@ -7636,7 +7608,7 @@ _PLAYER_WALK_3_PATH16:    ; Path 16
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: player_walk_4
 ; Generated from player_walk_4.vec (Malban Draw_Sync_List format)
@@ -7656,13 +7628,13 @@ _PLAYER_WALK_4_PATH0:    ; Path 0
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0D,$F9,0,0        ; path1: header (y=13, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -7671,7 +7643,7 @@ _PLAYER_WALK_4_PATH2:    ; Path 2
     FCB $FF,$02,$00          ; line 1: flag=-1, dy=2, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -7680,13 +7652,13 @@ _PLAYER_WALK_4_PATH3:    ; Path 3
     FCB $FF,$F6,$00          ; line 1: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$F6          ; line 2: flag=-1, dy=0, dx=-10
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $08,$FA,0,0        ; path4: header (y=8, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -7695,7 +7667,7 @@ _PLAYER_WALK_4_PATH5:    ; Path 5
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -7704,13 +7676,13 @@ _PLAYER_WALK_4_PATH6:    ; Path 6
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $08,$04,0,0        ; path7: header (y=8, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -7719,7 +7691,7 @@ _PLAYER_WALK_4_PATH8:    ; Path 8
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -7728,7 +7700,7 @@ _PLAYER_WALK_4_PATH9:    ; Path 9
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -7737,7 +7709,7 @@ _PLAYER_WALK_4_PATH10:    ; Path 10
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$FF          ; line 2: flag=-1, dy=0, dx=-1
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -7746,7 +7718,7 @@ _PLAYER_WALK_4_PATH11:    ; Path 11
     FCB $FF,$F9,$01          ; line 1: flag=-1, dy=-7, dx=1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$FF          ; closing line: flag=-1, dy=7, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -7755,7 +7727,7 @@ _PLAYER_WALK_4_PATH12:    ; Path 12
     FCB $FF,$F9,$00          ; line 1: flag=-1, dy=-7, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$07,$00          ; closing line: flag=-1, dy=7, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -7764,7 +7736,7 @@ _PLAYER_WALK_4_PATH13:    ; Path 13
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -7773,7 +7745,7 @@ _PLAYER_WALK_4_PATH14:    ; Path 14
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
@@ -7782,7 +7754,7 @@ _PLAYER_WALK_4_PATH15:    ; Path 15
     FCB $FF,$FA,$FF          ; line 1: flag=-1, dy=-6, dx=-1
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$01          ; closing line: flag=-1, dy=6, dx=1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_4_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
@@ -7791,7 +7763,7 @@ _PLAYER_WALK_4_PATH16:    ; Path 16
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: player_walk_5
 ; Generated from player_walk_5.vec (Malban Draw_Sync_List format)
@@ -7811,13 +7783,13 @@ _PLAYER_WALK_5_PATH0:    ; Path 0
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $0C,$F9,0,0        ; path1: header (y=12, x=-7, relative to center)
     FCB $FF,$00,$0C          ; line 0: flag=-1, dy=0, dx=12
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -7826,7 +7798,7 @@ _PLAYER_WALK_5_PATH2:    ; Path 2
     FCB $FF,$02,$00          ; line 1: flag=-1, dy=2, dx=0
     FCB $FF,$00,$F8          ; line 2: flag=-1, dy=0, dx=-8
     FCB $FF,$FE,$00          ; closing line: flag=-1, dy=-2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -7835,13 +7807,13 @@ _PLAYER_WALK_5_PATH3:    ; Path 3
     FCB $FF,$F6,$00          ; line 1: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$F6          ; line 2: flag=-1, dy=0, dx=-10
     FCB $FF,$0A,$00          ; closing line: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
     FCB $07,$FA,0,0        ; path4: header (y=7, x=-6, relative to center)
     FCB $FF,$FF,$FF          ; line 0: flag=-1, dy=-1, dx=-1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -7850,7 +7822,7 @@ _PLAYER_WALK_5_PATH5:    ; Path 5
     FCB $FF,$FB,$00          ; line 1: flag=-1, dy=-5, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$05,$00          ; closing line: flag=-1, dy=5, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -7859,13 +7831,13 @@ _PLAYER_WALK_5_PATH6:    ; Path 6
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$02          ; line 2: flag=-1, dy=0, dx=2
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
     FCB $07,$04,0,0        ; path7: header (y=7, x=4, relative to center)
     FCB $FF,$FF,$02          ; line 0: flag=-1, dy=-1, dx=2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -7874,7 +7846,7 @@ _PLAYER_WALK_5_PATH8:    ; Path 8
     FCB $FF,$FC,$00          ; line 1: flag=-1, dy=-4, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$04,$00          ; closing line: flag=-1, dy=4, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -7883,7 +7855,7 @@ _PLAYER_WALK_5_PATH9:    ; Path 9
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FC          ; line 2: flag=-1, dy=0, dx=-4
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -7892,7 +7864,7 @@ _PLAYER_WALK_5_PATH10:    ; Path 10
     FCB $FF,$FE,$00          ; line 1: flag=-1, dy=-2, dx=0
     FCB $FF,$00,$FF          ; line 2: flag=-1, dy=0, dx=-1
     FCB $FF,$02,$00          ; closing line: flag=-1, dy=2, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -7901,7 +7873,7 @@ _PLAYER_WALK_5_PATH11:    ; Path 11
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -7910,7 +7882,7 @@ _PLAYER_WALK_5_PATH12:    ; Path 12
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -7919,7 +7891,7 @@ _PLAYER_WALK_5_PATH13:    ; Path 13
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -7928,7 +7900,7 @@ _PLAYER_WALK_5_PATH14:    ; Path 14
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH15:    ; Path 15
     FCB 127              ; path15: intensity
@@ -7937,7 +7909,7 @@ _PLAYER_WALK_5_PATH15:    ; Path 15
     FCB $FF,$FA,$00          ; line 1: flag=-1, dy=-6, dx=0
     FCB $FF,$00,$FE          ; line 2: flag=-1, dy=0, dx=-2
     FCB $FF,$06,$00          ; closing line: flag=-1, dy=6, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PLAYER_WALK_5_PATH16:    ; Path 16
     FCB 127              ; path16: intensity
@@ -7946,7 +7918,7 @@ _PLAYER_WALK_5_PATH16:    ; Path 16
     FCB $FF,$FF,$00          ; line 1: flag=-1, dy=-1, dx=0
     FCB $FF,$00,$FD          ; line 2: flag=-1, dy=0, dx=-3
     FCB $FF,$01,$00          ; closing line: flag=-1, dy=1, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: bubble_large
 ; Generated from bubble_large.vec (Malban Draw_Sync_List format)
@@ -7986,7 +7958,7 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
     FCB $FF,$04,$03          ; line 21: flag=-1, dy=4, dx=3
     FCB $FF,$05,$02          ; line 22: flag=-1, dy=5, dx=2
     FCB $FF,$05,$01          ; closing line: flag=-1, dy=5, dx=1
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: newyork_bg
 ; Generated from newyork_bg.vec (Malban Draw_Sync_List format)
@@ -8005,14 +7977,14 @@ _NEWYORK_BG_PATH0:    ; Path 0
     FCB $FF,$05,$00          ; line 0: flag=-1, dy=5, dx=0
     FCB $FF,$00,$0A          ; line 1: flag=-1, dy=0, dx=10
     FCB $FF,$FB,$00          ; line 2: flag=-1, dy=-5, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _NEWYORK_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $0D,$00,0,0        ; path1: header (y=13, x=0, relative to center)
     FCB $FF,$0F,$0A          ; line 0: flag=-1, dy=15, dx=10
     FCB $FF,$05,$F6          ; line 1: flag=-1, dy=5, dx=-10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _NEWYORK_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
@@ -8020,7 +7992,7 @@ _NEWYORK_BG_PATH2:    ; Path 2
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _NEWYORK_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
@@ -8033,13 +8005,13 @@ _NEWYORK_BG_PATH3:    ; Path 3
     FCB $FF,$F9,$05          ; line 5: flag=-1, dy=-7, dx=5
     FCB $FF,$05,$05          ; line 6: flag=-1, dy=5, dx=5
     FCB $FF,$F6,$05          ; line 7: flag=-1, dy=-10, dx=5
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _NEWYORK_BG_PATH4:    ; Path 4
     FCB 100              ; path4: intensity
     FCB $DB,$E7,0,0        ; path4: header (y=-37, x=-25, relative to center)
     FCB $FF,$00,$32          ; line 0: flag=-1, dy=0, dx=50
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: pyramids_bg
 ; Generated from pyramids_bg.vec (Malban Draw_Sync_List format)
@@ -8057,26 +8029,26 @@ _PYRAMIDS_BG_PATH0:    ; Path 0
     FCB $D3,$A6,0,0        ; path0: header (y=-45, x=-90, relative to center)
     FCB $FF,$5A,$50          ; line 0: flag=-1, dy=90, dx=80
     FCB $FF,$A6,$50          ; line 1: flag=-1, dy=-90, dx=80
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PYRAMIDS_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $D3,$A6,0,0        ; path1: header (y=-45, x=-90, relative to center)
     FCB $FF,$5A,$50          ; line 0: flag=-1, dy=90, dx=80
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PYRAMIDS_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $2D,$F6,0,0        ; path2: header (y=45, x=-10, relative to center)
     FCB $FF,$A6,$50          ; line 0: flag=-1, dy=-90, dx=80
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PYRAMIDS_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
     FCB $D3,$1E,0,0        ; path3: header (y=-45, x=30, relative to center)
     FCB $FF,$2D,$1E          ; line 0: flag=-1, dy=45, dx=30
     FCB $FF,$D3,$1E          ; line 1: flag=-1, dy=-45, dx=30
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: easter_bg
 ; Generated from easter_bg.vec (Malban Draw_Sync_List format)
@@ -8097,13 +8069,13 @@ _EASTER_BG_PATH0:    ; Path 0
     FCB $FF,$00,$28          ; line 2: flag=-1, dy=0, dx=40
     FCB $FF,$F6,$05          ; line 3: flag=-1, dy=-10, dx=5
     FCB $FF,$E2,$00          ; line 4: flag=-1, dy=-30, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _EASTER_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $19,$00,0,0        ; path1: header (y=25, x=0, relative to center)
     FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _EASTER_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
@@ -8112,7 +8084,7 @@ _EASTER_BG_PATH2:    ; Path 2
     FCB $FF,$00,$05          ; line 1: flag=-1, dy=0, dx=5
     FCB $FF,$FB,$00          ; line 2: flag=-1, dy=-5, dx=0
     FCB $FF,$00,$FB          ; line 3: flag=-1, dy=0, dx=-5
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _EASTER_BG_PATH3:    ; Path 3
     FCB 110              ; path3: intensity
@@ -8120,13 +8092,13 @@ _EASTER_BG_PATH3:    ; Path 3
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB $FF,$00,$3C          ; line 1: flag=-1, dy=0, dx=60
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _EASTER_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
     FCB $D3,$DD,0,0        ; path4: header (y=-45, x=-35, relative to center)
     FCB $FF,$00,$46          ; line 0: flag=-1, dy=0, dx=70
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: keirin_bg
 ; Generated from keirin_bg.vec (Malban Draw_Sync_List format)
@@ -8146,21 +8118,21 @@ _KEIRIN_BG_PATH0:    ; Path 0
     FCB $FF,$0A,$32          ; line 1: flag=-1, dy=10, dx=50
     FCB $FF,$F6,$32          ; line 2: flag=-1, dy=-10, dx=50
     FCB $FF,$BA,$32          ; line 3: flag=-1, dy=-70, dx=50
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _KEIRIN_BG_PATH1:    ; Path 1
     FCB 80              ; path1: intensity
     FCB $EC,$BA,0,0        ; path1: header (y=-20, x=-70, relative to center)
     FCB $FF,$1E,$1E          ; line 0: flag=-1, dy=30, dx=30
     FCB $FF,$0A,$1E          ; line 1: flag=-1, dy=10, dx=30
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _KEIRIN_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $14,$0A,0,0        ; path2: header (y=20, x=10, relative to center)
     FCB $FF,$F6,$1E          ; line 0: flag=-1, dy=-10, dx=30
     FCB $FF,$E2,$1E          ; line 1: flag=-1, dy=-30, dx=30
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: barcelona_bg
 ; Generated from barcelona_bg.vec (Malban Draw_Sync_List format)
@@ -8180,7 +8152,7 @@ _BARCELONA_BG_PATH0:    ; Path 0
     FCB $FF,$0A,$05          ; line 1: flag=-1, dy=10, dx=5
     FCB $FF,$F6,$05          ; line 2: flag=-1, dy=-10, dx=5
     FCB $FF,$BA,$00          ; line 3: flag=-1, dy=-70, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BARCELONA_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
@@ -8189,7 +8161,7 @@ _BARCELONA_BG_PATH1:    ; Path 1
     FCB $FF,$0A,$05          ; line 1: flag=-1, dy=10, dx=5
     FCB $FF,$F6,$05          ; line 2: flag=-1, dy=-10, dx=5
     FCB $FF,$B5,$00          ; line 3: flag=-1, dy=-75, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BARCELONA_BG_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -8198,7 +8170,7 @@ _BARCELONA_BG_PATH2:    ; Path 2
     FCB $FF,$0A,$05          ; line 1: flag=-1, dy=10, dx=5
     FCB $FF,$F6,$05          ; line 2: flag=-1, dy=-10, dx=5
     FCB $FF,$B5,$00          ; line 3: flag=-1, dy=-75, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BARCELONA_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
@@ -8207,7 +8179,7 @@ _BARCELONA_BG_PATH3:    ; Path 3
     FCB $FF,$0A,$05          ; line 1: flag=-1, dy=10, dx=5
     FCB $FF,$F6,$05          ; line 2: flag=-1, dy=-10, dx=5
     FCB $FF,$BA,$00          ; line 3: flag=-1, dy=-70, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: bubble_small
 ; Generated from bubble_small.vec (Malban Draw_Sync_List format)
@@ -8247,7 +8219,7 @@ _BUBBLE_SMALL_PATH0:    ; Path 0
     FCB $FF,$02,$02          ; line 21: flag=-1, dy=2, dx=2
     FCB $FF,$02,$00          ; line 22: flag=-1, dy=2, dx=0
     FCB $FF,$03,$01          ; closing line: flag=-1, dy=3, dx=1
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: logo
 ; Generated from logo.vec (Malban Draw_Sync_List format)
@@ -8276,7 +8248,7 @@ _LOGO_PATH0:    ; Path 0
     FCB $FF,$FC,$F1          ; line 10: flag=-1, dy=-4, dx=-15
     FCB $FF,$F8,$EA          ; line 11: flag=-1, dy=-8, dx=-22
     FCB $FF,$00,$00          ; line 12: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
@@ -8292,7 +8264,7 @@ _LOGO_PATH1:    ; Path 1
     FCB $FF,$F5,$FF          ; line 8: flag=-1, dy=-11, dx=-1
     FCB $FF,$F5,$F7          ; line 9: flag=-1, dy=-11, dx=-9
     FCB $FF,$00,$00          ; line 10: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -8301,7 +8273,7 @@ _LOGO_PATH2:    ; Path 2
     FCB $FF,$07,$08          ; line 1: flag=-1, dy=7, dx=8
     FCB $FF,$01,$F6          ; line 2: flag=-1, dy=1, dx=-10
     FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -8310,7 +8282,7 @@ _LOGO_PATH3:    ; Path 3
     FCB $FF,$02,$07          ; line 1: flag=-1, dy=2, dx=7
     FCB $FF,$08,$FC          ; line 2: flag=-1, dy=8, dx=-4
     FCB $FF,$FE,$01          ; line 3: flag=-1, dy=-2, dx=1
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
@@ -8326,7 +8298,7 @@ _LOGO_PATH4:    ; Path 4
     FCB $FF,$EE,$FC          ; line 8: flag=-1, dy=-18, dx=-4
     FCB $FF,$FC,$F6          ; line 9: flag=-1, dy=-4, dx=-10
     FCB $FF,$00,$00          ; line 10: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -8342,7 +8314,7 @@ _LOGO_PATH5:    ; Path 5
     FCB $FF,$F9,$EE          ; line 8: flag=-1, dy=-7, dx=-18
     FCB $FF,$04,$F0          ; line 9: flag=-1, dy=4, dx=-16
     FCB $FF,$0B,$F8          ; line 10: flag=-1, dy=11, dx=-8
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LOGO_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -8351,7 +8323,7 @@ _LOGO_PATH6:    ; Path 6
     FCB $FF,$0C,$F8          ; line 1: flag=-1, dy=12, dx=-8
     FCB $FF,$03,$F0          ; line 2: flag=-1, dy=3, dx=-16
     FCB $FF,$FB,$FC          ; line 3: flag=-1, dy=-5, dx=-4
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: angkor_bg
 ; Generated from angkor_bg.vec (Malban Draw_Sync_List format)
@@ -8372,7 +8344,7 @@ _ANGKOR_BG_PATH0:    ; Path 0
     FCB $FF,$00,$14          ; line 2: flag=-1, dy=0, dx=20
     FCB $FF,$F1,$0A          ; line 3: flag=-1, dy=-15, dx=10
     FCB $FF,$BA,$00          ; line 4: flag=-1, dy=-70, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ANGKOR_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
@@ -8381,7 +8353,7 @@ _ANGKOR_BG_PATH1:    ; Path 1
     FCB $FF,$0A,$0A          ; line 1: flag=-1, dy=10, dx=10
     FCB $FF,$F6,$0A          ; line 2: flag=-1, dy=-10, dx=10
     FCB $FF,$CE,$00          ; line 3: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ANGKOR_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
@@ -8390,7 +8362,7 @@ _ANGKOR_BG_PATH2:    ; Path 2
     FCB $FF,$0A,$0A          ; line 1: flag=-1, dy=10, dx=10
     FCB $FF,$F6,$0A          ; line 2: flag=-1, dy=-10, dx=10
     FCB $FF,$CE,$00          ; line 3: flag=-1, dy=-50, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: paris_bg
 ; Generated from paris_bg.vec (Malban Draw_Sync_List format)
@@ -8408,14 +8380,14 @@ _PARIS_BG_PATH0:    ; Path 0
     FCB $D1,$CE,0,0        ; path0: header (y=-47, x=-50, relative to center)
     FCB $FF,$1E,$1E          ; line 0: flag=-1, dy=30, dx=30
     FCB $FF,$1E,$0A          ; line 1: flag=-1, dy=30, dx=10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PARIS_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $D1,$32,0,0        ; path1: header (y=-47, x=50, relative to center)
     FCB $FF,$1E,$E2          ; line 0: flag=-1, dy=30, dx=-30
     FCB $FF,$1E,$F6          ; line 1: flag=-1, dy=30, dx=-10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PARIS_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
@@ -8423,20 +8395,20 @@ _PARIS_BG_PATH2:    ; Path 2
     FCB $FF,$14,$05          ; line 0: flag=-1, dy=20, dx=5
     FCB $FF,$00,$0A          ; line 1: flag=-1, dy=0, dx=10
     FCB $FF,$EC,$05          ; line 2: flag=-1, dy=-20, dx=5
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PARIS_BG_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
     FCB $21,$FB,0,0        ; path3: header (y=33, x=-5, relative to center)
     FCB $FF,$0F,$05          ; line 0: flag=-1, dy=15, dx=5
     FCB $FF,$F1,$05          ; line 1: flag=-1, dy=-15, dx=5
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _PARIS_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
     FCB $EF,$EC,0,0        ; path4: header (y=-17, x=-20, relative to center)
     FCB $FF,$00,$28          ; line 0: flag=-1, dy=0, dx=40
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: buddha_bg
 ; Generated from buddha_bg.vec (Malban Draw_Sync_List format)
@@ -8455,25 +8427,25 @@ _BUDDHA_BG_PATH0:    ; Path 0
     FCB $FF,$14,$14          ; line 0: flag=-1, dy=20, dx=20
     FCB $FF,$00,$78          ; line 1: flag=-1, dy=0, dx=120
     FCB $FF,$EC,$14          ; line 2: flag=-1, dy=-20, dx=20
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BUDDHA_BG_PATH1:    ; Path 1
     FCB 100              ; path1: intensity
     FCB $14,$CE,0,0        ; path1: header (y=20, x=-50, relative to center)
     FCB $FF,$C4,$00          ; line 0: flag=-1, dy=-60, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BUDDHA_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $14,$32,0,0        ; path2: header (y=20, x=50, relative to center)
     FCB $FF,$C4,$00          ; line 0: flag=-1, dy=-60, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _BUDDHA_BG_PATH3:    ; Path 3
     FCB 100              ; path3: intensity
     FCB $D8,$BA,0,0        ; path3: header (y=-40, x=-70, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: taj_bg
 ; Generated from taj_bg.vec (Malban Draw_Sync_List format)
@@ -8493,7 +8465,7 @@ _TAJ_BG_PATH0:    ; Path 0
     FCB $FF,$05,$14          ; line 1: flag=-1, dy=5, dx=20
     FCB $FF,$FB,$14          ; line 2: flag=-1, dy=-5, dx=20
     FCB $FF,$EC,$0A          ; line 3: flag=-1, dy=-20, dx=10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _TAJ_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
@@ -8501,19 +8473,19 @@ _TAJ_BG_PATH1:    ; Path 1
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
     FCB $FF,$00,$50          ; line 1: flag=-1, dy=0, dx=80
     FCB $FF,$32,$00          ; line 2: flag=-1, dy=50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _TAJ_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $D6,$BA,0,0        ; path2: header (y=-42, x=-70, relative to center)
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _TAJ_BG_PATH3:    ; Path 3
     FCB 100              ; path3: intensity
     FCB $D6,$46,0,0        ; path3: header (y=-42, x=70, relative to center)
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: mayan_bg
 ; Generated from mayan_bg.vec (Malban Draw_Sync_List format)
@@ -8530,7 +8502,7 @@ _MAYAN_BG_PATH0:    ; Path 0
     FCB 100              ; path0: intensity
     FCB $D8,$B0,0,0        ; path0: header (y=-40, x=-80, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAYAN_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
@@ -8538,7 +8510,7 @@ _MAYAN_BG_PATH1:    ; Path 1
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
     FCB $FF,$00,$7F          ; line 1: flag=-1, dy=0, dx=127
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAYAN_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
@@ -8546,7 +8518,7 @@ _MAYAN_BG_PATH2:    ; Path 2
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
     FCB $FF,$00,$78          ; line 1: flag=-1, dy=0, dx=120
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAYAN_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
@@ -8554,7 +8526,7 @@ _MAYAN_BG_PATH3:    ; Path 3
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
     FCB $FF,$00,$64          ; line 1: flag=-1, dy=0, dx=100
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAYAN_BG_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
@@ -8564,7 +8536,7 @@ _MAYAN_BG_PATH4:    ; Path 4
     FCB $FF,$00,$3C          ; line 2: flag=-1, dy=0, dx=60
     FCB $FF,$F6,$0A          ; line 3: flag=-1, dy=-10, dx=10
     FCB $FF,$D8,$00          ; line 4: flag=-1, dy=-40, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: hook
 ; Generated from hook.vec (Malban Draw_Sync_List format)
@@ -8589,7 +8561,7 @@ _HOOK_PATH0:    ; Path 0
     FCB $FF,$08,$00          ; line 6: flag=-1, dy=8, dx=0
     FCB $FF,$FC,$FC          ; line 7: flag=-1, dy=-4, dx=-4
     FCB $FF,$00,$FF          ; line 8: flag=-1, dy=0, dx=-1
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: map
 ; Generated from map.vec (Malban Draw_Sync_List format)
@@ -8654,7 +8626,7 @@ _MAP_PATH0:    ; Path 0
     FCB $FF,$FF,$F3          ; line 46: flag=-1, dy=-1, dx=-13
     FCB $FF,$0A,$00          ; line 47: flag=-1, dy=10, dx=0
     FCB $FF,$00,$00          ; line 48: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
@@ -8665,7 +8637,7 @@ _MAP_PATH1:    ; Path 1
     FCB $FF,$00,$FD          ; line 3: flag=-1, dy=0, dx=-3
     FCB $FF,$03,$00          ; line 4: flag=-1, dy=3, dx=0
     FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH2:    ; Path 2
     FCB 127              ; path2: intensity
@@ -8678,7 +8650,7 @@ _MAP_PATH2:    ; Path 2
     FCB $FF,$FF,$F4          ; line 5: flag=-1, dy=-1, dx=-12
     FCB $FF,$02,$FF          ; line 6: flag=-1, dy=2, dx=-1
     FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH3:    ; Path 3
     FCB 127              ; path3: intensity
@@ -8693,7 +8665,7 @@ _MAP_PATH3:    ; Path 3
     FCB $FF,$03,$0C          ; line 7: flag=-1, dy=3, dx=12
     FCB $FF,$F4,$10          ; line 8: flag=-1, dy=-12, dx=16
     FCB $FF,$00,$00          ; line 9: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH4:    ; Path 4
     FCB 127              ; path4: intensity
@@ -8703,7 +8675,7 @@ _MAP_PATH4:    ; Path 4
     FCB $FF,$05,$00          ; line 2: flag=-1, dy=5, dx=0
     FCB $FF,$06,$09          ; line 3: flag=-1, dy=6, dx=9
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH5:    ; Path 5
     FCB 127              ; path5: intensity
@@ -8713,7 +8685,7 @@ _MAP_PATH5:    ; Path 5
     FCB $FF,$05,$FA          ; line 2: flag=-1, dy=5, dx=-6
     FCB $FF,$0A,$02          ; line 3: flag=-1, dy=10, dx=2
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH6:    ; Path 6
     FCB 127              ; path6: intensity
@@ -8723,7 +8695,7 @@ _MAP_PATH6:    ; Path 6
     FCB $FF,$04,$00          ; line 2: flag=-1, dy=4, dx=0
     FCB $FF,$04,$FD          ; line 3: flag=-1, dy=4, dx=-3
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH7:    ; Path 7
     FCB 127              ; path7: intensity
@@ -8733,7 +8705,7 @@ _MAP_PATH7:    ; Path 7
     FCB $FF,$F7,$FA          ; line 2: flag=-1, dy=-9, dx=-6
     FCB $FF,$FE,$05          ; line 3: flag=-1, dy=-2, dx=5
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH8:    ; Path 8
     FCB 127              ; path8: intensity
@@ -8746,7 +8718,7 @@ _MAP_PATH8:    ; Path 8
     FCB $FF,$FF,$F6          ; line 5: flag=-1, dy=-1, dx=-10
     FCB $FF,$FC,$FD          ; line 6: flag=-1, dy=-4, dx=-3
     FCB $FF,$00,$00          ; line 7: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH9:    ; Path 9
     FCB 127              ; path9: intensity
@@ -8769,7 +8741,7 @@ _MAP_PATH9:    ; Path 9
     FCB $FF,$06,$E7          ; line 15: flag=-1, dy=6, dx=-25
     FCB $FF,$DF,$01          ; line 16: flag=-1, dy=-33, dx=1
     FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH10:    ; Path 10
     FCB 127              ; path10: intensity
@@ -8784,7 +8756,7 @@ _MAP_PATH10:    ; Path 10
     FCB $FF,$09,$F8          ; line 7: flag=-1, dy=9, dx=-8
     FCB $FF,$06,$F3          ; line 8: flag=-1, dy=6, dx=-13
     FCB $FF,$01,$00          ; line 9: flag=-1, dy=1, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH11:    ; Path 11
     FCB 127              ; path11: intensity
@@ -8794,7 +8766,7 @@ _MAP_PATH11:    ; Path 11
     FCB $FF,$F9,$08          ; line 2: flag=-1, dy=-7, dx=8
     FCB $FF,$FE,$DF          ; line 3: flag=-1, dy=-2, dx=-33
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH12:    ; Path 12
     FCB 127              ; path12: intensity
@@ -8804,7 +8776,7 @@ _MAP_PATH12:    ; Path 12
     FCB $FF,$02,$03          ; line 2: flag=-1, dy=2, dx=3
     FCB $FF,$F5,$00          ; line 3: flag=-1, dy=-11, dx=0
     FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH13:    ; Path 13
     FCB 127              ; path13: intensity
@@ -8813,7 +8785,7 @@ _MAP_PATH13:    ; Path 13
     FCB $FF,$04,$F9          ; line 1: flag=-1, dy=4, dx=-7
     FCB $FF,$F8,$00          ; line 2: flag=-1, dy=-8, dx=0
     FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _MAP_PATH14:    ; Path 14
     FCB 127              ; path14: intensity
@@ -8825,7 +8797,7 @@ _MAP_PATH14:    ; Path 14
     FCB $FF,$08,$FC          ; line 4: flag=-1, dy=8, dx=-4
     FCB $FF,$00,$FE          ; line 5: flag=-1, dy=0, dx=-2
     FCB $FF,$00,$00          ; line 6: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: london_bg
 ; Generated from london_bg.vec (Malban Draw_Sync_List format)
@@ -8844,7 +8816,7 @@ _LONDON_BG_PATH0:    ; Path 0
     FCB $FF,$46,$00          ; line 0: flag=-1, dy=70, dx=0
     FCB $FF,$00,$28          ; line 1: flag=-1, dy=0, dx=40
     FCB $FF,$BA,$00          ; line 2: flag=-1, dy=-70, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LONDON_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
@@ -8853,14 +8825,14 @@ _LONDON_BG_PATH1:    ; Path 1
     FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
     FCB $FF,$F6,$00          ; line 2: flag=-1, dy=-10, dx=0
     FCB $FF,$00,$E2          ; line 3: flag=-1, dy=0, dx=-30
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LONDON_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $28,$00,0,0        ; path2: header (y=40, x=0, relative to center)
     FCB $FF,$05,$00          ; line 0: flag=-1, dy=5, dx=0
     FCB $FF,$FB,$08          ; line 1: flag=-1, dy=-5, dx=8
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LONDON_BG_PATH3:    ; Path 3
     FCB 120              ; path3: intensity
@@ -8868,7 +8840,7 @@ _LONDON_BG_PATH3:    ; Path 3
     FCB $FF,$0A,$05          ; line 0: flag=-1, dy=10, dx=5
     FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
     FCB $FF,$F6,$05          ; line 2: flag=-1, dy=-10, dx=5
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: leningrad_bg
 ; Generated from leningrad_bg.vec (Malban Draw_Sync_List format)
@@ -8888,13 +8860,13 @@ _LENINGRAD_BG_PATH0:    ; Path 0
     FCB $FF,$05,$0F          ; line 1: flag=-1, dy=5, dx=15
     FCB $FF,$FB,$0F          ; line 2: flag=-1, dy=-5, dx=15
     FCB $FF,$EC,$0A          ; line 3: flag=-1, dy=-20, dx=10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LENINGRAD_BG_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
     FCB $1E,$00,0,0        ; path1: header (y=30, x=0, relative to center)
     FCB $FF,$0A,$00          ; line 0: flag=-1, dy=10, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LENINGRAD_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
@@ -8902,7 +8874,7 @@ _LENINGRAD_BG_PATH2:    ; Path 2
     FCB $FF,$D3,$00          ; line 0: flag=-1, dy=-45, dx=0
     FCB $FF,$00,$3C          ; line 1: flag=-1, dy=0, dx=60
     FCB $FF,$2D,$00          ; line 2: flag=-1, dy=45, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LENINGRAD_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
@@ -8911,7 +8883,7 @@ _LENINGRAD_BG_PATH3:    ; Path 3
     FCB $FF,$00,$0A          ; line 1: flag=-1, dy=0, dx=10
     FCB $FF,$F1,$00          ; line 2: flag=-1, dy=-15, dx=0
     FCB $FF,$00,$F6          ; line 3: flag=-1, dy=0, dx=-10
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _LENINGRAD_BG_PATH4:    ; Path 4
     FCB 90              ; path4: intensity
@@ -8920,7 +8892,7 @@ _LENINGRAD_BG_PATH4:    ; Path 4
     FCB $FF,$00,$0A          ; line 1: flag=-1, dy=0, dx=10
     FCB $FF,$F1,$00          ; line 2: flag=-1, dy=-15, dx=0
     FCB $FF,$00,$F6          ; line 3: flag=-1, dy=0, dx=-10
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: location_marker
 ; Generated from location_marker.vec (Malban Draw_Sync_List format)
@@ -8946,7 +8918,7 @@ _LOCATION_MARKER_PATH0:    ; Path 0
     FCB $FF,$07,$FC          ; line 7: flag=-1, dy=7, dx=-4
     FCB $FF,$00,$07          ; line 8: flag=-1, dy=0, dx=7
     FCB $FF,$08,$04          ; closing line: flag=-1, dy=8, dx=4
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: ayers_bg
 ; Generated from ayers_bg.vec (Malban Draw_Sync_List format)
@@ -8968,21 +8940,21 @@ _AYERS_BG_PATH0:    ; Path 0
     FCB $FF,$FB,$28          ; line 3: flag=-1, dy=-5, dx=40
     FCB $FF,$E7,$1E          ; line 4: flag=-1, dy=-25, dx=30
     FCB $FF,$CE,$14          ; line 5: flag=-1, dy=-50, dx=20
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _AYERS_BG_PATH1:    ; Path 1
     FCB 80              ; path1: intensity
     FCB $00,$CE,0,0        ; path1: header (y=0, x=-50, relative to center)
     FCB $FF,$0F,$14          ; line 0: flag=-1, dy=15, dx=20
     FCB $FF,$05,$1E          ; line 1: flag=-1, dy=5, dx=30
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _AYERS_BG_PATH2:    ; Path 2
     FCB 80              ; path2: intensity
     FCB $14,$00,0,0        ; path2: header (y=20, x=0, relative to center)
     FCB $FF,$FB,$1E          ; line 0: flag=-1, dy=-5, dx=30
     FCB $FF,$F1,$14          ; line 1: flag=-1, dy=-15, dx=20
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: fuji_bg
 ; Generated from fuji_bg.vec (Malban Draw_Sync_List format)
@@ -8998,7 +8970,7 @@ _FUJI_BG_VECTORS:  ; Main entry
 _FUJI_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $CF,$83,0,0        ; path0: header (y=-49, x=-125, relative to center)
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _FUJI_BG_PATH1:    ; Path 1
     FCB 80              ; path1: intensity
@@ -9021,7 +8993,7 @@ _FUJI_BG_PATH1:    ; Path 1
     FCB $FF,$F6,$14          ; line 15: flag=-1, dy=-10, dx=20
     FCB $FF,$F6,$18          ; line 16: flag=-1, dy=-10, dx=24
     FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _FUJI_BG_PATH2:    ; Path 2
     FCB 95              ; path2: intensity
@@ -9032,7 +9004,7 @@ _FUJI_BG_PATH2:    ; Path 2
     FCB $FF,$FC,$FC          ; line 3: flag=-1, dy=-4, dx=-4
     FCB $FF,$FD,$FA          ; line 4: flag=-1, dy=-3, dx=-6
     FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _FUJI_BG_PATH3:    ; Path 3
     FCB 95              ; path3: intensity
@@ -9045,7 +9017,7 @@ _FUJI_BG_PATH3:    ; Path 3
     FCB $FF,$07,$FE          ; line 5: flag=-1, dy=7, dx=-2
     FCB $FF,$06,$01          ; line 6: flag=-1, dy=6, dx=1
     FCB $FF,$02,$FE          ; line 7: flag=-1, dy=2, dx=-2
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _FUJI_BG_PATH4:    ; Path 4
     FCB 95              ; path4: intensity
@@ -9054,7 +9026,7 @@ _FUJI_BG_PATH4:    ; Path 4
     FCB $FF,$F7,$0C          ; line 1: flag=-1, dy=-9, dx=12
     FCB $FF,$0B,$FA          ; line 2: flag=-1, dy=11, dx=-6
     FCB $FF,$07,$F5          ; line 3: flag=-1, dy=7, dx=-11
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _FUJI_BG_PATH5:    ; Path 5
     FCB 100              ; path5: intensity
@@ -9082,7 +9054,7 @@ _FUJI_BG_PATH5:    ; Path 5
     FCB $FF,$F9,$0E          ; line 20: flag=-1, dy=-7, dx=14
     FCB $FF,$04,$02          ; line 21: flag=-1, dy=4, dx=2
     FCB $FF,$FC,$14          ; line 22: flag=-1, dy=-4, dx=20
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: kilimanjaro_bg
 ; Generated from kilimanjaro_bg.vec (Malban Draw_Sync_List format)
@@ -9102,27 +9074,27 @@ _KILIMANJARO_BG_PATH0:    ; Path 0
     FCB $FF,$19,$32          ; line 1: flag=-1, dy=25, dx=50
     FCB $FF,$E7,$32          ; line 2: flag=-1, dy=-25, dx=50
     FCB $FF,$C4,$32          ; line 3: flag=-1, dy=-60, dx=50
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _KILIMANJARO_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $1C,$E2,0,0        ; path1: header (y=28, x=-30, relative to center)
     FCB $FF,$0F,$1E          ; line 0: flag=-1, dy=15, dx=30
     FCB $FF,$F1,$00          ; line 1: flag=-1, dy=-15, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _KILIMANJARO_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $1C,$00,0,0        ; path2: header (y=28, x=0, relative to center)
     FCB $FF,$0F,$00          ; line 0: flag=-1, dy=15, dx=0
     FCB $FF,$F1,$1E          ; line 1: flag=-1, dy=-15, dx=30
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _KILIMANJARO_BG_PATH3:    ; Path 3
     FCB 90              ; path3: intensity
     FCB $F4,$BA,0,0        ; path3: header (y=-12, x=-70, relative to center)
     FCB $FF,$14,$1E          ; line 0: flag=-1, dy=20, dx=30
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: athens_bg
 ; Generated from athens_bg.vec (Malban Draw_Sync_List format)
@@ -9140,43 +9112,43 @@ _ATHENS_BG_PATH0:    ; Path 0
     FCB $12,$B0,0,0        ; path0: header (y=18, x=-80, relative to center)
     FCB $FF,$0F,$50          ; line 0: flag=-1, dy=15, dx=80
     FCB $FF,$F1,$50          ; line 1: flag=-1, dy=-15, dx=80
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
     FCB $12,$BA,0,0        ; path1: header (y=18, x=-70, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH2:    ; Path 2
     FCB 110              ; path2: intensity
     FCB $12,$D8,0,0        ; path2: header (y=18, x=-40, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH3:    ; Path 3
     FCB 110              ; path3: intensity
     FCB $12,$F6,0,0        ; path3: header (y=18, x=-10, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH4:    ; Path 4
     FCB 110              ; path4: intensity
     FCB $12,$14,0,0        ; path4: header (y=18, x=20, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH5:    ; Path 5
     FCB 110              ; path5: intensity
     FCB $12,$32,0,0        ; path5: header (y=18, x=50, relative to center)
     FCB $FF,$CE,$00          ; line 0: flag=-1, dy=-50, dx=0
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ATHENS_BG_PATH6:    ; Path 6
     FCB 100              ; path6: intensity
     FCB $E0,$B0,0,0        ; path6: header (y=-32, x=-80, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: antarctica_bg
 ; Generated from antarctica_bg.vec (Malban Draw_Sync_List format)
@@ -9194,7 +9166,7 @@ _ANTARCTICA_BG_PATH0:    ; Path 0
     FCB $DD,$B0,0,0        ; path0: header (y=-35, x=-80, relative to center)
     FCB $FF,$3C,$14          ; line 0: flag=-1, dy=60, dx=20
     FCB $FF,$C4,$14          ; line 1: flag=-1, dy=-60, dx=20
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ANTARCTICA_BG_PATH1:    ; Path 1
     FCB 110              ; path1: intensity
@@ -9202,20 +9174,20 @@ _ANTARCTICA_BG_PATH1:    ; Path 1
     FCB $FF,$46,$14          ; line 0: flag=-1, dy=70, dx=20
     FCB $FF,$00,$14          ; line 1: flag=-1, dy=0, dx=20
     FCB $FF,$BA,$14          ; line 2: flag=-1, dy=-70, dx=20
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ANTARCTICA_BG_PATH2:    ; Path 2
     FCB 100              ; path2: intensity
     FCB $DD,$28,0,0        ; path2: header (y=-35, x=40, relative to center)
     FCB $FF,$37,$14          ; line 0: flag=-1, dy=55, dx=20
     FCB $FF,$C9,$14          ; line 1: flag=-1, dy=-55, dx=20
-    FCB 1                ; Next path marker
+    FCB 2                ; End marker (path complete)
 
 _ANTARCTICA_BG_PATH3:    ; Path 3
     FCB 80              ; path3: intensity
     FCB $DD,$88,0,0        ; path3: header (y=-35, x=-120, relative to center)
     FCB $FF,$00,$7F          ; line 0: flag=-1, dy=0, dx=127
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Vector asset: bubble_medium
 ; Generated from bubble_medium.vec (Malban Draw_Sync_List format)
@@ -9255,7 +9227,7 @@ _BUBBLE_MEDIUM_PATH0:    ; Path 0
     FCB $FF,$03,$02          ; line 21: flag=-1, dy=3, dx=2
     FCB $FF,$04,$01          ; line 22: flag=-1, dy=4, dx=1
     FCB $FF,$04,$01          ; closing line: flag=-1, dy=4, dx=1
-    FCB 2                ; End marker (last path complete)
+    FCB 2                ; End marker (path complete)
 
 ; Generated from pang_theme.vmus (internal name: pang_theme)
 ; Tempo: 120 BPM, Total events: 34 (PSG Direct format)

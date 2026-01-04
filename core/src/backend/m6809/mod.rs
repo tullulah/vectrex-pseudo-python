@@ -25,7 +25,6 @@ pub use ram_layout::*;
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
-use crate::levelres::VPlayLevel;
 
 // Original imports
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
@@ -90,47 +89,11 @@ fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
 
 // analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
 // Returns set of asset names that are actually used in the code
-fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) -> std::collections::HashSet<String> {
+fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
     use std::collections::HashSet;
     let mut used = HashSet::new();
     
-    // Helper: Load level and extract vector references
-    fn extract_level_vectors(level_name: &str, assets: &[crate::codegen::AssetInfo]) -> Vec<String> {
-        // Find the level asset
-        let level_asset = assets.iter().find(|a| {
-            matches!(a.asset_type, crate::codegen::AssetType::Level) && a.name == level_name
-        });
-        
-        if let Some(level_asset) = level_asset {
-            // Load and parse the level JSON
-            if let Ok(json_str) = std::fs::read_to_string(&level_asset.path) {
-                if let Ok(level_data) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                    let mut vectors = Vec::new();
-                    
-                    // Extract vectorName from all layers
-                    if let Some(layers) = level_data.get("layers") {
-                        for layer_name in ["background", "gameplay", "foreground"] {
-                            if let Some(layer) = layers.get(layer_name) {
-                                if let Some(objects) = layer.as_array() {
-                                    for obj in objects {
-                                        if let Some(vector_name) = obj.get("vectorName").and_then(|v| v.as_str()) {
-                                            vectors.push(vector_name.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    return vectors;
-                }
-            }
-        }
-        
-        Vec::new()
-    }
-    
-    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum expression nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
@@ -139,105 +102,94 @@ fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) ->
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
                 // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
-                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), or LOAD_LEVEL("asset_name")
+                // PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
                    (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
-                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
-                   (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
+                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
-                        
-                        // If it's a level, also mark its referenced vectors as used
-                        if name_upper == "LOAD_LEVEL" {
-                            let vectors = extract_level_vectors(asset_name, assets);
-                            eprintln!("[DEBUG] Level '{}' references vectors: {:?}", asset_name, vectors);
-                            for vector_name in vectors {
-                                eprintln!("[DEBUG] Marking vector as used: {}", vector_name);
-                                used.insert(vector_name);
-                            }
-                        }
                     }
                 }
                 // Recursively scan arguments
                 for arg in &call_info.args {
-                    scan_expr(arg, used, assets, depth + 1);
+                    scan_expr(arg, used, depth + 1);
                 }
             },
             Expr::MethodCall(mc) => {
                 // Scan target and arguments for nested asset usages
-                scan_expr(&mc.target, used, assets, depth + 1);
+                scan_expr(&mc.target, used, depth + 1);
                 for arg in &mc.args {
-                    scan_expr(arg, used, assets, depth + 1);
+                    scan_expr(arg, used, depth + 1);
                 }
             },
             Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-                scan_expr(left, used, assets, depth + 1);
-                scan_expr(right, used, assets, depth + 1);
+                scan_expr(left, used, depth + 1);
+                scan_expr(right, used, depth + 1);
             },
-            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, assets, depth + 1),
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, depth + 1),
             Expr::List(elements) => {
                 for elem in elements {
-                    scan_expr(elem, used, assets, depth + 1);
+                    scan_expr(elem, used, depth + 1);
                 }
             },
             Expr::Index { target, index } => {
-                scan_expr(target, used, assets, depth + 1);
-                scan_expr(index, used, assets, depth + 1);
+                scan_expr(target, used, depth + 1);
+                scan_expr(index, used, depth + 1);
             },
             _ => {}
         }
     }
     
-    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum statement nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
         }
         match stmt {
-            Stmt::Assign { value, .. } => scan_expr(value, used, assets, depth + 1),
-            Stmt::Let { value, .. } => scan_expr(value, used, assets, depth + 1),
-            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, assets, depth + 1),
-            Stmt::Expr(expr, _line) => scan_expr(expr, used, assets, depth + 1),
+            Stmt::Assign { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::Let { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, depth + 1),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used, depth + 1),
             Stmt::If { cond, body, elifs, else_body, .. } => {
-                scan_expr(cond, used, assets, depth + 1);
-                for s in body { scan_stmt(s, used, assets, depth + 1); }
+                scan_expr(cond, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
                 for (elif_cond, elif_body) in elifs {
-                    scan_expr(elif_cond, used, assets, depth + 1);
-                    for s in elif_body { scan_stmt(s, used, assets, depth + 1); }
+                    scan_expr(elif_cond, used, depth + 1);
+                    for s in elif_body { scan_stmt(s, used, depth + 1); }
                 }
                 if let Some(els) = else_body {
-                    for s in els { scan_stmt(s, used, assets, depth + 1); }
+                    for s in els { scan_stmt(s, used, depth + 1); }
                 }
             },
             Stmt::While { cond, body, .. } => {
-                scan_expr(cond, used, assets, depth + 1);
-                for s in body { scan_stmt(s, used, assets, depth + 1); }
+                scan_expr(cond, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
             },
             Stmt::For { start, end, step, body, .. } => {
-                scan_expr(start, used, assets, depth + 1);
-                scan_expr(end, used, assets, depth + 1);
+                scan_expr(start, used, depth + 1);
+                scan_expr(end, used, depth + 1);
                 if let Some(step_expr) = step {
-                    scan_expr(step_expr, used, assets, depth + 1);
+                    scan_expr(step_expr, used, depth + 1);
                 }
-                for s in body { scan_stmt(s, used, assets, depth + 1); }
+                for s in body { scan_stmt(s, used, depth + 1); }
             },
             Stmt::ForIn { iterable, body, .. } => {
-                scan_expr(iterable, used, assets, depth + 1);
-                for s in body { scan_stmt(s, used, assets, depth + 1); }
+                scan_expr(iterable, used, depth + 1);
+                for s in body { scan_stmt(s, used, depth + 1); }
             },
             Stmt::Switch { expr, cases, default, .. } => {
-                scan_expr(expr, used, assets, depth + 1);
+                scan_expr(expr, used, depth + 1);
                 for (case_expr, case_body) in cases {
-                    scan_expr(case_expr, used, assets, depth + 1);
-                    for s in case_body { scan_stmt(s, used, assets, depth + 1); }
+                    scan_expr(case_expr, used, depth + 1);
+                    for s in case_body { scan_stmt(s, used, depth + 1); }
                 }
                 if let Some(default_body) = default {
-                    for s in default_body { scan_stmt(s, used, assets, depth + 1); }
+                    for s in default_body { scan_stmt(s, used, depth + 1); }
                 }
             },
-            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, assets, depth + 1),
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, depth + 1),
             _ => {}
         }
     }
@@ -247,14 +199,14 @@ fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) ->
         match item {
             Item::Function(func) => {
                 for stmt in &func.body {
-                    scan_stmt(stmt, &mut used, assets, 0);
+                    scan_stmt(stmt, &mut used, 0);
                 }
             },
             Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
-                scan_expr(value, &mut used, assets, 0);
+                scan_expr(value, &mut used, 0);
             },
             Item::ExprStatement(expr) => {
-                scan_expr(expr, &mut used, assets, 0);
+                scan_expr(expr, &mut used, 0);
             },
             _ => {}
         }
@@ -443,22 +395,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
-    // Forward declare level labels (needed for native assembler single-pass resolution)
-    // Levels are emitted in DATA section but referenced in CODE section
-    let level_assets: Vec<_> = opts.assets.iter()
-        .filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Level))
-        .collect();
-    if !level_assets.is_empty() {
-        out.push_str("\n; === FORWARD DECLARATIONS (Level Labels) ===\n");
-        out.push_str("; These labels are defined in DATA section but used in CODE section\n");
-        out.push_str("; Forward declarations allow single-pass native assembler to resolve symbols\n");
-        for asset in &level_assets {
-            let level_name_upper = asset.name.to_uppercase();
-            out.push_str(&format!("; Label: _{}_LEVEL (defined later in DATA section)\n", level_name_upper));
-        }
-        out.push_str("\n");
-    }
-    
     // Check for music/sfx assets (needed for RAM allocation)
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
@@ -485,8 +421,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("TMPRIGHT", 2, "Right operand temp");
         ram.allocate("TMPRIGHT2", 2, "Right operand temp 2 (for nested operations)");
     }
-    // TMPPTR always allocated (used by structs, arrays, level system, etc.)
-    if !suppress_runtime {
+    if !suppress_runtime && rt_usage.needs_tmp_ptr {
         ram.allocate("TMPPTR", 2, "Pointer temp");
         ram.allocate("TMPPTR2", 2, "Pointer temp 2 (for nested array operations)");
     }
@@ -532,22 +467,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("SFX_VOL", 1, "Current volume level (0-15)");
     }
     
-    // 8. Level system variables (if level builtins are used)
-    // Allocate RAM if ANY level builtin is used, not just if assets exist
-    let needs_level_system = rt_usage.wrappers_used.contains("LOAD_LEVEL_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("GET_OBJECT_COUNT_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("GET_OBJECT_PTR_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("GET_LEVEL_BOUNDS_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("SHOW_LEVEL_RUNTIME") ||
-                             rt_usage.wrappers_used.contains("UPDATE_LEVEL_RUNTIME");
-    if needs_level_system {
-        ram.allocate("LEVEL_PTR", 2, "Current level header pointer");
-        ram.allocate("LEVEL_BG_PTR", 2, "Background layer objects pointer");
-        ram.allocate("LEVEL_GAMEPLAY_PTR", 2, "Gameplay layer objects pointer");
-        ram.allocate("LEVEL_FG_PTR", 2, "Foreground layer objects pointer");
-    }
-    
-    // 9. PRINT_NUMBER buffer (always allocate if not suppressed)
+    // 8. PRINT_NUMBER buffer (always allocate if not suppressed)
     if !suppress_runtime {
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
     }
@@ -589,10 +509,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         false
     };
     
-    // ✅ Analyze which assets are used (BEFORE any embedding blocks for proper scope)
-    // This needs to be accessible by BOTH level embedding (early) and non-level embedding (late)
-    let used_assets = analyze_used_assets(module, &opts.assets);
-    
     if main_has_content {
         // main() has real content - use START structure
         out.push_str("    JMP START\n\n");
@@ -617,45 +533,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
         if !suppress_runtime {
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
-        }
-        
-        // ✅ TODO(forward-declaration): Implement two-pass assembler (industry standard)
-        // Current workaround: Emit level assets BEFORE main() code to fix single-pass resolution
-        // Long-term: Implement proper two-pass assembler like lwasm/gas/nasm
-        // - Pass 1: Collect ALL symbols and addresses into HashMap
-        // - Pass 2: Resolve references using symbol table
-        // - Estimated effort: 400-500 lines, 2-3 days
-        
-        // NOTE: used_assets already analyzed earlier (before main_has_content block)
-        
-        if !opts.assets.is_empty() {
-            let level_assets: Vec<_> = opts.assets.iter()
-                .filter(|asset| matches!(asset.asset_type, crate::codegen::AssetType::Level))
-                .filter(|asset| used_assets.contains(&asset.name)) // Only embed used levels
-                .collect();
-            
-            if !level_assets.is_empty() {
-                out.push_str("\n; ========================================\n");
-                out.push_str("; LEVEL ASSETS (emitted early for single-pass assembler)\n");
-                out.push_str(&format!("; Embedded {} of {} level assets (unused levels excluded)\n", 
-                    level_assets.len(), opts.assets.iter().filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Level)).count()));
-                out.push_str("; ========================================\n\n");
-                
-                for asset in level_assets {
-                    match VPlayLevel::load(std::path::Path::new(&asset.path)) {
-                        Ok(level) => {
-                            out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
-                            let asm = level.compile_to_asm();
-                            out.push_str(&asm);
-                            out.push_str("\n");
-                        },
-                        Err(e) => {
-                            eprintln!("[ERROR] Failed to load level asset {}: {}", asset.path, e);
-                            out.push_str(&format!("; ERROR: Failed to load level asset {}: {}\n", asset.path, e));
-                        }
-                    }
-                }
-            }
         }
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
@@ -1195,14 +1072,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // The native assembler processes ALL lines but EQU doesn't generate bytes
     // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
     if !opts.assets.is_empty() {
-        // NOTE: used_assets already analyzed earlier (before level embedding)
+        // Analyze which assets are actually used in the code
+        let used_assets = analyze_used_assets(module);
+        eprintln!("[DEBUG] Used assets: {:?}", used_assets);
+        eprintln!("[DEBUG] Available assets: {:?}", opts.assets.iter().map(|a| &a.name).collect::<Vec<_>>());
         
         // Filter assets to only include used ones
         let assets_to_embed: Vec<_> = opts.assets.iter()
             .filter(|asset| used_assets.contains(&asset.name))
-            .filter(|asset| !matches!(asset.asset_type, crate::codegen::AssetType::Level)) // Levels already emitted early
             .collect();
-        eprintln!("[DEBUG] Assets to embed (non-level): {}", assets_to_embed.len());
+        eprintln!("[DEBUG] Assets to embed: {}", assets_to_embed.len());
         
         if !assets_to_embed.is_empty() {
             out.push_str("\n; ========================================\n");
@@ -1237,6 +1116,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                             }
                         }
                     },
+                    crate::codegen::AssetType::Level => {
+                        // Level assets not supported in master - skip silently
+                    },
                     crate::codegen::AssetType::Sfx => {
                         // SFX uses new .vsfx format with parametric sound design
                         match crate::sfxres::SfxResource::load(std::path::Path::new(&asset.path)) {
@@ -1254,11 +1136,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                                 out.push_str(&format!("; ERROR: Failed to load/generate SFX asset {}: {}\n", asset.path, e));
                             }
                         }
-                    },
-                    // Level assets already emitted early (before START) for single-pass assembler
-                    crate::codegen::AssetType::Level => {
-                        // This case should never be reached due to filter above
-                        unreachable!("Level assets should be filtered out - emitted early before START");
                     }
                 }
             }
