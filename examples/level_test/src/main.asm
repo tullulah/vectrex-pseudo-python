@@ -23,6 +23,12 @@
 ; CODE SECTION
 ;***************************************************************************
 
+; === FORWARD DECLARATIONS (Level Labels) ===
+; These labels are defined in DATA section but used in CODE section
+; Forward declarations allow single-pass native assembler to resolve symbols
+; Label: _TEST_LEVEL_LEVEL (defined later in DATA section)
+
+
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
 ; Total RAM used: 20 bytes
@@ -115,150 +121,6 @@ J1B4_BUILTIN:
     LDD #0
     RTS
 
-VECTREX_PRINT_TEXT:
-    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)
-    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)
-    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)
-    STA >$D00C     ; VIA_cntl
-    LDA #$D0
-    TFR A,DP       ; Set Direct Page to $D0 for BIOS
-    LDU VAR_ARG2   ; string pointer (ARG2 = third param)
-    LDA VAR_ARG1+1 ; Y (ARG1 = second param)
-    LDB VAR_ARG0+1 ; X (ARG0 = first param)
-    JSR Print_Str_d
-    JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)
-    RTS
-; DRAW_LINE unified wrapper - handles 16-bit signed coordinates
-; Args: (x0,y0,x1,y1,intensity) as 16-bit words
-; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).
-DRAW_LINE_WRAPPER:
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)
-    STA >$D00C     ; VIA_cntl
-    ; Set DP to hardware registers
-    LDA #$D0
-    TFR A,DP
-    ; ALWAYS set intensity (no optimization)
-    LDA RESULT+8+1  ; intensity (low byte of 16-bit value)
-    JSR Intensity_a
-    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)
-    LDA RESULT+2+1  ; Y start (low byte of 16-bit value)
-    LDB RESULT+0+1  ; X start (low byte of 16-bit value)
-    JSR Moveto_d
-    ; Compute deltas using 16-bit arithmetic
-    ; dx = x1 - x0 (treating as signed 16-bit)
-    LDD RESULT+4    ; x1 (RESULT+4, 16-bit)
-    SUBD RESULT+0   ; subtract x0 (RESULT+0, 16-bit)
-    STD VLINE_DX_16 ; Store full 16-bit dx
-    ; dy = y1 - y0 (treating as signed 16-bit)
-    LDD RESULT+6    ; y1 (RESULT+6, 16-bit)
-    SUBD RESULT+2   ; subtract y0 (RESULT+2, 16-bit)
-    STD VLINE_DY_16 ; Store full 16-bit dy
-    ; SEGMENT 1: Clamp dy to ±127 and draw
-    LDD VLINE_DY_16 ; Load full dy
-    CMPD #127
-    BLE DLW_SEG1_DY_LO
-    LDA #127        ; dy > 127: use 127
-    BRA DLW_SEG1_DY_READY
-DLW_SEG1_DY_LO:
-    CMPD #-128
-    BGE DLW_SEG1_DY_NO_CLAMP  ; -128 <= dy <= 127: use original (sign-extended)
-    LDA #$80        ; dy < -128: use -128
-    BRA DLW_SEG1_DY_READY
-DLW_SEG1_DY_NO_CLAMP:
-    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)
-DLW_SEG1_DY_READY:
-    STA VLINE_DY    ; Save clamped dy for segment 1
-    ; Clamp dx to ±127
-    LDD VLINE_DX_16
-    CMPD #127
-    BLE DLW_SEG1_DX_LO
-    LDB #127        ; dx > 127: use 127
-    BRA DLW_SEG1_DX_READY
-DLW_SEG1_DX_LO:
-    CMPD #-128
-    BGE DLW_SEG1_DX_NO_CLAMP  ; -128 <= dx <= 127: use original (sign-extended)
-    LDB #$80        ; dx < -128: use -128
-    BRA DLW_SEG1_DX_READY
-DLW_SEG1_DX_NO_CLAMP:
-    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)
-DLW_SEG1_DX_READY:
-    STB VLINE_DX    ; Save clamped dx for segment 1
-    ; Draw segment 1
-    CLR Vec_Misc_Count
-    LDA VLINE_DY
-    LDB VLINE_DX
-    JSR Draw_Line_d ; Beam moves automatically
-    ; Check if we need SEGMENT 2 (dy outside ±127 range)
-    LDD VLINE_DY_16 ; Reload original dy
-    CMPD #127
-    BGT DLW_NEED_SEG2  ; dy > 127: needs segment 2
-    CMPD #-128
-    BLT DLW_NEED_SEG2  ; dy < -128: needs segment 2
-    BRA DLW_DONE       ; dy in range ±127: no segment 2
-DLW_NEED_SEG2:
-    ; SEGMENT 2: Draw remaining dy and dx
-    ; Calculate remaining dy
-    LDD VLINE_DY_16 ; Load original full dy
-    CMPD #127
-    BGT DLW_SEG2_DY_POS  ; dy > 127
-    ; dy < -128, so we drew -128 in segment 1
-    ; remaining = dy - (-128) = dy + 128
-    ADDD #128       ; Add back the -128 we already drew
-    BRA DLW_SEG2_DY_DONE
-DLW_SEG2_DY_POS:
-    ; dy > 127, so we drew 127 in segment 1
-    ; remaining = dy - 127
-    SUBD #127       ; Subtract 127 we already drew
-DLW_SEG2_DY_DONE:
-    STD VLINE_DY_REMAINING  ; Store remaining dy (16-bit)
-    ; Calculate remaining dx
-    LDD VLINE_DX_16 ; Load original full dx
-    CMPD #127
-    BLE DLW_SEG2_DX_CHECK_NEG
-    ; dx > 127, so we drew 127 in segment 1
-    ; remaining = dx - 127
-    SUBD #127
-    BRA DLW_SEG2_DX_DONE
-DLW_SEG2_DX_CHECK_NEG:
-    CMPD #-128
-    BGE DLW_SEG2_DX_NO_REMAIN  ; -128 <= dx <= 127: no remaining dx
-    ; dx < -128, so we drew -128 in segment 1
-    ; remaining = dx - (-128) = dx + 128
-    ADDD #128
-    BRA DLW_SEG2_DX_DONE
-DLW_SEG2_DX_NO_REMAIN:
-    LDD #0          ; No remaining dx
-DLW_SEG2_DX_DONE:
-    STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit) in VLINE_DX_REMAINING
-    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)
-    ; Load remaining dy from VLINE_DY_REMAINING (already saved)
-    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy
-    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx
-    CLR Vec_Misc_Count
-    JSR Draw_Line_d ; Beam continues from segment 1 endpoint
-DLW_DONE:
-    ; DON'T call Reset0Ref here - it breaks line continuity!
-    ; The beam position should stay where the line ended
-    ; Full VIA reset (match Draw_Sync_List reset sequence)
-    CLR >$D00A     ; VIA_shift_reg = 0
-    LDA #$CC       ; Standard control mode
-    STA >$D00C     ; VIA_cntl
-    CLR >$D001     ; VIA_port_a = 0
-    LDA #$82
-    STA >$D000     ; VIA_port_b = $82
-    NOP
-    NOP
-    NOP
-    NOP
-    NOP
-    LDA #$83
-    STA >$D000     ; VIA_port_b = $83
-    LDA #$C8       ; Restore DP to $C8 for our code
-    TFR A,DP
-    RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
     LDA #$98       ; VIA_cntl = $98 (DAC mode)
@@ -951,27 +813,42 @@ BEQ SL_EXIT            ; Exit if no level loaded
 ; Header: 8 bytes bounds (4xFDB) + 4 bytes metadata (2xFDB) = 12 bytes
 ; Then 3 bytes counts at offset 12-14
 LEAX 12,X
-LDB ,X                  ; bg_count
-STB TMPPTR              ; Save bg_count
+LDB 2,X                 ; fg_count
+PSHS B                  ; Push fg_count (will be at S+2 after next push)
 LDB 1,X                 ; gameplay_count
-STB TMPPTR+1            ; Save gameplay_count
-LDB 2,X                 ; fg_count (not used yet, but available)
+PSHS B                  ; Push gameplay_count (will be at S+1 after next push)
+LDB ,X                  ; bg_count
+PSHS B                  ; Push bg_count (now at S+0)
 
 ; === DRAW BACKGROUND LAYER ===
-LDB TMPPTR              ; Load bg_count
+PULS B                  ; Get bg_count from stack
 BEQ SL_GAMEPLAY        ; Skip if no bg objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
 LDX >LEVEL_BG_PTR       ; Load bg layer base pointer
-JSR SL_DRAW_LAYER
+BSR SL_DRAW_LAYER      ; Call layer drawer
 
 SL_GAMEPLAY:
 ; === DRAW GAMEPLAY LAYER ===
-LDB TMPPTR+1            ; Load gameplay_count
-BEQ SL_EXIT            ; Skip if no gameplay objects
+PULS B                  ; Get gameplay_count from stack
+BEQ SL_FOREGROUND      ; Skip if no gameplay objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
 LDX >LEVEL_GAMEPLAY_PTR ; Load gameplay layer base pointer
-JSR SL_DRAW_LAYER
+BSR SL_DRAW_LAYER      ; Call layer drawer
+
+SL_FOREGROUND:
+; === DRAW FOREGROUND LAYER ===
+PULS B                  ; Get fg_count from stack
+BEQ SL_EXIT            ; Skip if no fg objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
+LDX >LEVEL_FG_PTR      ; Load foreground layer base pointer
+BSR SL_DRAW_LAYER      ; Call layer drawer
 
 SL_EXIT:
-JSR $F1AF               ; DP_to_C8 (CRITICAL: restore DP after BIOS calls)
+LDA #$C8                ; Final DP restore
+TFR A,DP
 RTS
 
 ; Helper: Draw all objects in a layer
@@ -1038,17 +915,146 @@ PULS X
 ; Don't loop - fall through to done
 
 SL_LAYER_DONE:
-; Layer drawing complete - DP already restored by Draw_Sync_List_At_With_Mirrors
 RTS
 
-; UPDATE_LEVEL_RUNTIME - Update level state (placeholder for future physics/animations)
-; Input: None
+; UPDATE_LEVEL_RUNTIME - Update level physics and state
+; Input: None (uses LEVEL_PTR)
 ; Output: None
-; Modifies: None (currently)
+; Modifies: Object velocity fields based on physics_flags
 UPDATE_LEVEL_RUNTIME:
-; TODO: Implement physics updates, animation state changes, etc.
-; For now, just return
+; Load current level pointer
+LDX >LEVEL_PTR
+BEQ UL_EXIT             ; Exit if no level loaded
+
+; Get gameplay object count (offset 8)
+LDB 8,X                 ; gameplay_count
+BEQ UL_EXIT             ; Skip if no gameplay objects
+
+; Load gameplay layer pointer (offset 11-12)
+LDX 11,X                ; X = gameplay objects base pointer
+STB TMPPTR              ; Save count
+
+UL_LOOP:
+; Each object is 20 bytes
+; Offset 11: physics_flags
+; Offset 9-10: velocity_x, velocity_y
+; Offset 1-2: x position
+; Offset 3-4: y position
+
+; Check physics_flags (offset 11)
+LDA 11,X
+BEQ UL_NEXT_OBJECT      ; Skip if no physics
+
+; Read current position
+LDD 1,X                 ; Load x position
+STD TMPPTR+1            ; Save x temporarily
+LDD 3,X                 ; Load y position
+STD TMPPTR+3            ; Save y temporarily
+
+; Apply velocity to position
+; x += velocity_x
+LDD TMPPTR+1            ; Load saved x
+LDB 9,X                 ; Load velocity_x (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+1           ; Add to x
+STD 1,X                 ; Store new x
+
+; y += velocity_y
+LDD TMPPTR+3            ; Load saved y
+LDB 10,X                ; Load velocity_y (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+3           ; Add to y
+STD 3,X                 ; Store new y
+
+UL_NEXT_OBJECT:
+; Move to next object (20 bytes)
+LEAX 20,X
+DEC TMPPTR              ; Decrement count
+BNE UL_LOOP            ; Continue if more objects
+
+UL_EXIT:
 RTS
+
+
+; ========================================
+; LEVEL ASSETS (emitted early for single-pass assembler)
+; NOTE: All level assets emitted (unused ones will be optimized by linker)
+; TODO: Replace with two-pass assembler (see copilot-instructions.md)
+; ========================================
+
+; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
+; ==== Level: TEST_LEVEL ====
+; Author: 
+; Difficulty: medium
+
+_TEST_LEVEL_LEVEL:
+    FDB -96  ; World bounds: xMin (16-bit signed)
+    FDB 95  ; xMax (16-bit signed)
+    FDB -128  ; yMin (16-bit signed)
+    FDB 127  ; yMax (16-bit signed)
+    FDB 0  ; Time limit (seconds)
+    FDB 0  ; Target score
+    FCB 1  ; Background object count
+    FCB 1  ; Gameplay object count
+    FCB 1  ; Foreground object count
+    FDB _TEST_LEVEL_BG_OBJECTS
+    FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
+    FDB _TEST_LEVEL_FG_OBJECTS
+
+_TEST_LEVEL_BG_OBJECTS:
+; Object: obj_1767517249927 (enemy)
+    FCB 1  ; type
+    FDB 0  ; x
+    FDB 0  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 0  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 0  ; physics_flags
+    FCB 0  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _MOUNTAIN_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
+
+_TEST_LEVEL_GAMEPLAY_OBJECTS:
+; Object: obj_1767518126194 (enemy)
+    FCB 1  ; type
+    FDB -50  ; x
+    FDB 72  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 0  ; velocity_x
+    FCB 255  ; velocity_y
+    FCB 0  ; physics_flags
+    FCB 0  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
+
+_TEST_LEVEL_FG_OBJECTS:
+; Object: obj_1767518128341 (enemy)
+    FCB 1  ; type
+    FDB 40  ; x
+    FDB 76  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 0  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 0  ; physics_flags
+    FCB 0  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
+
 
 START:
     LDA #$D0
@@ -1105,154 +1111,14 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:13
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_1
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 13
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
     ; VPy_LINE:14
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_0
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 14
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:17
-    LDD #65436
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(8)
-    ; VPy_LINE:18
-    LDD #100
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:19
-    LDD #100
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 5 - Discriminant(8)
-    ; VPy_LINE:20
-    LDD #65436
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 6 - Discriminant(8)
-    ; VPy_LINE:24
-; NATIVE_CALL: SHOW_LEVEL at line 24
+; NATIVE_CALL: SHOW_LEVEL at line 14
 ; SHOW_LEVEL() - draw all level objects automatically
     JSR SHOW_LEVEL_RUNTIME
     ; No return value - draws directly to screen
-    ; DEBUG: Statement 7 - Discriminant(8)
-    ; VPy_LINE:27
-; NATIVE_CALL: UPDATE_LEVEL at line 27
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:17
+; NATIVE_CALL: UPDATE_LEVEL at line 17
 ; UPDATE_LEVEL() - update level state (placeholder)
     JSR UPDATE_LEVEL_RUNTIME
     RTS
@@ -1267,101 +1133,63 @@ VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
-VAR_ARG2 EQU $C8B6
-VAR_ARG3 EQU $C8B8
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 2 of 4 assets (unused assets excluded)
+; Embedded 2 of 7 assets (unused assets excluded)
 ; ========================================
+
+; Vector asset: bubble_large
+; Generated from bubble_large.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 8
+; X bounds: min=-15, max=15, width=30
+; Center: (0, 0)
+
+_BUBBLE_LARGE_WIDTH EQU 30
+_BUBBLE_LARGE_CENTER_X EQU 0
+_BUBBLE_LARGE_CENTER_Y EQU 0
+
+_BUBBLE_LARGE_VECTORS:  ; Main entry
+_BUBBLE_LARGE_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
+    FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
+    FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
+    FCB $FF,$F6,$FB          ; line 2: flag=-1, dy=-10, dx=-5
+    FCB $FF,$FB,$F6          ; line 3: flag=-1, dy=-5, dx=-10
+    FCB $FF,$05,$F6          ; line 4: flag=-1, dy=5, dx=-10
+    FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
+    FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
+    FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
+    FCB 2                ; End marker (last path complete)
 
 ; Vector asset: mountain
 ; Generated from mountain.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 6
-; X bounds: min=-50, max=3, width=53
-; Center: (-23, 26)
+; Total paths: 1, points: 5
+; X bounds: min=-38, max=38, width=76
+; Center: (0, 13)
 
-_MOUNTAIN_WIDTH EQU 53
-_MOUNTAIN_CENTER_X EQU -23
-_MOUNTAIN_CENTER_Y EQU 26
+_MOUNTAIN_WIDTH EQU 76
+_MOUNTAIN_CENTER_X EQU 0
+_MOUNTAIN_CENTER_Y EQU 13
 
 _MOUNTAIN_VECTORS:  ; Main entry
 _MOUNTAIN_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $E5,$18,0,0        ; path0: header (y=-27, x=24, relative to center)
-    FCB $FF,$35,$00          ; line 0: flag=-1, dy=53, dx=0
-    FCB $FF,$03,$CD          ; line 1: flag=-1, dy=3, dx=-51
-    FCB $FF,$C9,$02          ; line 2: flag=-1, dy=-55, dx=2
-    FCB $FF,$FE,$33          ; line 3: flag=-1, dy=-2, dx=51
-    FCB $FF,$00,$00          ; line 4: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (path complete)
+    FCB $F3,$DA,0,0        ; path0: header (y=-13, x=-38, relative to center)
+    FCB $FF,$1A,$0D          ; line 0: flag=-1, dy=26, dx=13
+    FCB $FF,$01,$33          ; line 1: flag=-1, dy=1, dx=51
+    FCB $FF,$E4,$0C          ; line 2: flag=-1, dy=-28, dx=12
+    FCB $FF,$00,$00          ; line 3: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (last path complete)
 
-; ========================================
-; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
-; ========================================
-; ==== Level: TEST_LEVEL ====
-; Author: VPy Team
-; Difficulty: easy
-
-_TEST_LEVEL_LEVEL:
-    FDB -100  ; World bounds: xMin (16-bit signed)
-    FDB 100  ; xMax (16-bit signed)
-    FDB -100  ; yMin (16-bit signed)
-    FDB 100  ; yMax (16-bit signed)
-    FDB 120  ; Time limit (seconds)
-    FDB 1000  ; Target score
-    FCB 1  ; Background object count
-    FCB 0  ; Gameplay object count
-    FCB 0  ; Foreground object count
-    FDB _TEST_LEVEL_BG_OBJECTS
-    FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
-    FDB _TEST_LEVEL_FG_OBJECTS
-
-_TEST_LEVEL_BG_OBJECTS:
-; Object: test_bg (background)
-    FCB 4  ; type
-    FDB 0  ; x
-    FDB 0  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 100  ; intensity
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 0  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _MOUNTAIN_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
-
-_TEST_LEVEL_GAMEPLAY_OBJECTS:
-
-_TEST_LEVEL_FG_OBJECTS:
-
-
-; String literals (classic FCC + $80 terminator)
-STR_0:
-    FCC "AUTO-DRAW MODE"
-    FCB $80
-STR_1:
-    FCC "LEVEL SYSTEM TEST"
-    FCB $80
-VLINE_DX_16 EQU RESULT+10
-VLINE_DY_16 EQU RESULT+12
-VLINE_DX EQU RESULT+14
-VLINE_DY EQU RESULT+15
-VLINE_DY_REMAINING EQU RESULT+16
-VLINE_DX_REMAINING EQU RESULT+18
-VLINE_STEPS EQU RESULT+20
-VLINE_LIST EQU RESULT+21
-DRAW_VEC_X EQU RESULT+23
-DRAW_VEC_Y EQU RESULT+24
-MIRROR_X EQU RESULT+25
-MIRROR_Y EQU RESULT+26
-DRAW_VEC_INTENSITY EQU RESULT+27
-DRAW_CIRCLE_XC EQU RESULT+28
-DRAW_CIRCLE_YC EQU RESULT+29
-DRAW_CIRCLE_DIAM EQU RESULT+30
-DRAW_CIRCLE_INTENSITY EQU RESULT+31
-DRAW_CIRCLE_TEMP EQU RESULT+32
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+1
+MIRROR_X EQU RESULT+2
+MIRROR_Y EQU RESULT+3
+DRAW_VEC_INTENSITY EQU RESULT+4
+DRAW_CIRCLE_XC EQU RESULT+5
+DRAW_CIRCLE_YC EQU RESULT+6
+DRAW_CIRCLE_DIAM EQU RESULT+7
+DRAW_CIRCLE_INTENSITY EQU RESULT+8
+DRAW_CIRCLE_TEMP EQU RESULT+9

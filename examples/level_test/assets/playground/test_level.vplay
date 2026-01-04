@@ -3,40 +3,87 @@
   "type": "level",
   "metadata": {
     "name": "test_level",
-    "author": "VPy Team",
-    "difficulty": "easy",
-    "timeLimit": 120,
-    "targetScore": 1000,
-    "description": "Empty level for debugging"
+    "author": "",
+    "difficulty": "medium",
+    "timeLimit": 0,
+    "targetScore": 0,
+    "description": "Created in Playground - 2026-01-04"
   },
   "worldBounds": {
-    "xMin": -100,
-    "xMax": 100,
-    "yMin": -100,
-    "yMax": 100
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
   },
   "layers": {
     "background": [
       {
-        "id": "test_bg",
-        "type": "background",
+        "id": "obj_1767517249927",
+        "type": "enemy",
         "vectorName": "mountain",
+        "layer": "background",
         "x": 0,
         "y": 0,
-        "scale": 1.0,
         "rotation": 0,
-        "intensity": 100,
-        "layer": "background",
-        "visible": true,
-        "velocity": {"x": 0.0, "y": 0.0},
-        "physics": null,
-        "collision": null,
-        "properties": null,
-        "spawnDelay": 0,
-        "destroyOffscreen": false
+        "scale": 1,
+        "velocity": {
+          "x": 0,
+          "y": 0
+        },
+        "physicsEnabled": false,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "gravity"
       }
     ],
-    "gameplay": [],
-    "foreground": []
+    "gameplay": [
+      {
+        "id": "obj_1767518126194",
+        "type": "enemy",
+        "vectorName": "bubble_large",
+        "layer": "gameplay",
+        "x": -50,
+        "y": 72,
+        "rotation": 0,
+        "scale": 1,
+        "velocity": {
+          "x": -0.5308333333333337,
+          "y": -1.0897266594280193
+        },
+        "physicsEnabled": true,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "gravity"
+      }
+    ],
+    "foreground": [
+      {
+        "id": "obj_1767518128341",
+        "type": "enemy",
+        "vectorName": "bubble_large",
+        "layer": "foreground",
+        "x": 40,
+        "y": 76,
+        "rotation": 0,
+        "scale": 1,
+        "velocity": {
+          "x": 0.9841666666666716,
+          "y": -0.7202163769576136
+        },
+        "physicsEnabled": false,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "gravity"
+      }
+    ]
+  },
+  "spawnPoints": {
+    "player": {
+      "x": 0,
+      "y": -100
+    }
   }
 }

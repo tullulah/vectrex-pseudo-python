@@ -25,6 +25,7 @@ interface SceneObject {
   id: string;
   type: 'background' | 'enemy' | 'player' | 'projectile';
   vectorName: string;
+  layer?: 'background' | 'gameplay' | 'foreground'; // NUEVO: Layer del nivel
   x: number;
   y: number;
   rotation: number;
@@ -395,17 +396,21 @@ export function PlaygroundPanel() {
           yMax: 127
         },
         layers: {
-          background: objects.filter(obj => obj.type === 'background').map(obj => ({
+          background: objects.filter(obj => obj.layer === 'background').map(obj => ({
             ...obj,
             velocity: obj.velocity || { x: 0, y: 0 },
             layer: 'background' as const
           })) as VPlayObject[],
-          gameplay: objects.filter(obj => obj.type !== 'background' && obj.type !== 'projectile').map(obj => ({
+          gameplay: objects.filter(obj => !obj.layer || obj.layer === 'gameplay').map(obj => ({
             ...obj,
             velocity: obj.velocity || { x: 0, y: 0 },
             layer: 'gameplay' as const
           })) as VPlayObject[],
-          foreground: []
+          foreground: objects.filter(obj => obj.layer === 'foreground').map(obj => ({
+            ...obj,
+            velocity: obj.velocity || { x: 0, y: 0 },
+            layer: 'foreground' as const
+          })) as VPlayObject[]
         },
         spawnPoints: {
           player: { x: 0, y: -100 }
@@ -530,6 +535,7 @@ export function PlaygroundPanel() {
       id: `obj_${Date.now()}`,
       type: 'enemy',
       vectorName: draggedVector,
+      layer: 'gameplay', // Por defecto gameplay
       x: vecX,
       y: vecY,
       rotation: 0,
@@ -1012,6 +1018,37 @@ export function PlaygroundPanel() {
                       </label>
                       <div style={{ color: '#d4d4d4', fontFamily: 'monospace' }}>
                         {obj.vectorName}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
+                        Layer
+                      </label>
+                      <select
+                        value={obj.layer || 'gameplay'}
+                        onChange={(e) => {
+                          const newObjects = objects.map(o =>
+                            o.id === selectedId ? { ...o, layer: e.target.value as any } : o
+                          );
+                          setObjects(newObjects);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '4px',
+                          backgroundColor: '#2d2d2d',
+                          border: '1px solid #444',
+                          color: '#d4d4d4',
+                          borderRadius: '2px',
+                        }}
+                      >
+                        <option value="background">🏔️ Background (fondo, detrás)</option>
+                        <option value="gameplay">⚡ Gameplay (jugable, medio)</option>
+                        <option value="foreground">🌟 Foreground (frente, adelante)</option>
+                      </select>
+                      <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                        {obj.layer === 'background' && '🏔️ Dibuja primero - fondo del nivel'}
+                        {obj.layer === 'foreground' && '🌟 Dibuja último - frente del nivel'}
+                        {(!obj.layer || obj.layer === 'gameplay') && '⚡ Capa principal - objetos jugables'}
                       </div>
                     </div>
                     <div>

@@ -443,6 +443,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("    FCB $80\n    FCB 0\n\n");
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
+    // Forward declare level labels (needed for native assembler single-pass resolution)
+    // Levels are emitted in DATA section but referenced in CODE section
+    let level_assets: Vec<_> = opts.assets.iter()
+        .filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Level))
+        .collect();
+    if !level_assets.is_empty() {
+        out.push_str("\n; === FORWARD DECLARATIONS (Level Labels) ===\n");
+        out.push_str("; These labels are defined in DATA section but used in CODE section\n");
+        out.push_str("; Forward declarations allow single-pass native assembler to resolve symbols\n");
+        for asset in &level_assets {
+            let level_name_upper = asset.name.to_uppercase();
+            out.push_str(&format!("; Label: _{}_LEVEL (defined later in DATA section)\n", level_name_upper));
+        }
+        out.push_str("\n");
+    }
+    
     // Check for music/sfx assets (needed for RAM allocation)
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
@@ -597,6 +613,41 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
         if !suppress_runtime {
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
+        }
+        
+        // ✅ TODO(forward-declaration): Implement two-pass assembler (industry standard)
+        // Current workaround: Emit level assets BEFORE main() code to fix single-pass resolution
+        // Long-term: Implement proper two-pass assembler like lwasm/gas/nasm
+        // - Pass 1: Collect ALL symbols and addresses into HashMap
+        // - Pass 2: Resolve references using symbol table
+        // - Estimated effort: 400-500 lines, 2-3 days
+        if !opts.assets.is_empty() {
+            let level_assets: Vec<_> = opts.assets.iter()
+                .filter(|asset| matches!(asset.asset_type, crate::codegen::AssetType::Level))
+                .collect();
+            
+            if !level_assets.is_empty() {
+                out.push_str("\n; ========================================\n");
+                out.push_str("; LEVEL ASSETS (emitted early for single-pass assembler)\n");
+                out.push_str("; NOTE: All level assets emitted (unused ones will be optimized by linker)\n");
+                out.push_str("; TODO: Replace with two-pass assembler (see copilot-instructions.md)\n");
+                out.push_str("; ========================================\n\n");
+                
+                for asset in level_assets {
+                    match VPlayLevel::load(std::path::Path::new(&asset.path)) {
+                        Ok(level) => {
+                            out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
+                            let asm = level.compile_to_asm();
+                            out.push_str(&asm);
+                            out.push_str("\n");
+                        },
+                        Err(e) => {
+                            eprintln!("[ERROR] Failed to load level asset {}: {}", asset.path, e);
+                            out.push_str(&format!("; ERROR: Failed to load level asset {}: {}\n", asset.path, e));
+                        }
+                    }
+                }
+            }
         }
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
@@ -1144,8 +1195,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Filter assets to only include used ones
         let assets_to_embed: Vec<_> = opts.assets.iter()
             .filter(|asset| used_assets.contains(&asset.name))
+            .filter(|asset| !matches!(asset.asset_type, crate::codegen::AssetType::Level)) // Levels already emitted early
             .collect();
-        eprintln!("[DEBUG] Assets to embed: {}", assets_to_embed.len());
+        eprintln!("[DEBUG] Assets to embed (non-level): {}", assets_to_embed.len());
         
         if !assets_to_embed.is_empty() {
             out.push_str("\n; ========================================\n");
@@ -1198,23 +1250,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                             }
                         }
                     },
+                    // Level assets already emitted early (before START) for single-pass assembler
                     crate::codegen::AssetType::Level => {
-                        // Level data uses .vplay format (JSON level design)
-                        match VPlayLevel::load(std::path::Path::new(&asset.path)) {
-                            Ok(level) => {
-                                out.push_str(&format!("; ========================================\n"));
-                                out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
-                                out.push_str(&format!("; ========================================\n"));
-                                
-                                let asm = level.compile_to_asm();
-                                out.push_str(&asm);
-                                out.push_str("\n");
-                            },
-                            Err(e) => {
-                                eprintln!("[ERROR] Failed to load level asset {}: {}", asset.path, e);
-                                out.push_str(&format!("; ERROR: Failed to load level asset {}: {}\n", asset.path, e));
-                            }
-                        }
+                        // This case should never be reached due to filter above
+                        unreachable!("Level assets should be filtered out - emitted early before START");
                     }
                 }
             }

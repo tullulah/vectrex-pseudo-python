@@ -1736,27 +1736,42 @@ DCR_DELTA_TABLE:\n\
                 ; Header: 8 bytes bounds (4xFDB) + 4 bytes metadata (2xFDB) = 12 bytes\n\
                 ; Then 3 bytes counts at offset 12-14\n\
                 LEAX 12,X\n\
-                LDB ,X                  ; bg_count\n\
-                STB TMPPTR              ; Save bg_count\n\
+                LDB 2,X                 ; fg_count\n\
+                PSHS B                  ; Push fg_count (will be at S+2 after next push)\n\
                 LDB 1,X                 ; gameplay_count\n\
-                STB TMPPTR+1            ; Save gameplay_count\n\
-                LDB 2,X                 ; fg_count (not used yet, but available)\n\
+                PSHS B                  ; Push gameplay_count (will be at S+1 after next push)\n\
+                LDB ,X                  ; bg_count\n\
+                PSHS B                  ; Push bg_count (now at S+0)\n\
                 \n\
                 ; === DRAW BACKGROUND LAYER ===\n\
-                LDB TMPPTR              ; Load bg_count\n\
+                PULS B                  ; Get bg_count from stack\n\
                 BEQ SL_GAMEPLAY        ; Skip if no bg objects\n\
+                LDA #$C8                ; Ensure DP=$C8 before drawing\n\
+                TFR A,DP\n\
                 LDX >LEVEL_BG_PTR       ; Load bg layer base pointer\n\
-                JSR SL_DRAW_LAYER\n\
+                BSR SL_DRAW_LAYER      ; Call layer drawer\n\
                 \n\
             SL_GAMEPLAY:\n\
                 ; === DRAW GAMEPLAY LAYER ===\n\
-                LDB TMPPTR+1            ; Load gameplay_count\n\
-                BEQ SL_EXIT            ; Skip if no gameplay objects\n\
+                PULS B                  ; Get gameplay_count from stack\n\
+                BEQ SL_FOREGROUND      ; Skip if no gameplay objects\n\
+                LDA #$C8                ; Ensure DP=$C8 before drawing\n\
+                TFR A,DP\n\
                 LDX >LEVEL_GAMEPLAY_PTR ; Load gameplay layer base pointer\n\
-                JSR SL_DRAW_LAYER\n\
+                BSR SL_DRAW_LAYER      ; Call layer drawer\n\
+                \n\
+            SL_FOREGROUND:\n\
+                ; === DRAW FOREGROUND LAYER ===\n\
+                PULS B                  ; Get fg_count from stack\n\
+                BEQ SL_EXIT            ; Skip if no fg objects\n\
+                LDA #$C8                ; Ensure DP=$C8 before drawing\n\
+                TFR A,DP\n\
+                LDX >LEVEL_FG_PTR      ; Load foreground layer base pointer\n\
+                BSR SL_DRAW_LAYER      ; Call layer drawer\n\
                 \n\
             SL_EXIT:\n\
-                JSR $F1AF               ; DP_to_C8 (CRITICAL: restore DP after BIOS calls)\n\
+                LDA #$C8                ; Final DP restore\n\
+                TFR A,DP\n\
                 RTS\n\
                 \n\
             ; Helper: Draw all objects in a layer\n\
@@ -1823,7 +1838,6 @@ DCR_DELTA_TABLE:\n\
                 ; Don't loop - fall through to done\n\
                 \n\
             SL_LAYER_DONE:\n\
-                ; Layer drawing complete - DP already restored by Draw_Sync_List_At_With_Mirrors\n\
                 RTS\n\
             \n"
         );
@@ -1831,13 +1845,62 @@ DCR_DELTA_TABLE:\n\
     
     if w.contains("UPDATE_LEVEL_RUNTIME") {
         out.push_str(
-            "; UPDATE_LEVEL_RUNTIME - Update level state (placeholder for future physics/animations)\n\
-            ; Input: None\n\
+            "; UPDATE_LEVEL_RUNTIME - Update level physics and state\n\
+            ; Input: None (uses LEVEL_PTR)\n\
             ; Output: None\n\
-            ; Modifies: None (currently)\n\
+            ; Modifies: Object velocity fields based on physics_flags\n\
             UPDATE_LEVEL_RUNTIME:\n\
-                ; TODO: Implement physics updates, animation state changes, etc.\n\
-                ; For now, just return\n\
+                ; Load current level pointer\n\
+                LDX >LEVEL_PTR\n\
+                BEQ UL_EXIT             ; Exit if no level loaded\n\
+                \n\
+                ; Get gameplay object count (offset 8)\n\
+                LDB 8,X                 ; gameplay_count\n\
+                BEQ UL_EXIT             ; Skip if no gameplay objects\n\
+                \n\
+                ; Load gameplay layer pointer (offset 11-12)\n\
+                LDX 11,X                ; X = gameplay objects base pointer\n\
+                STB TMPPTR              ; Save count\n\
+                \n\
+            UL_LOOP:\n\
+                ; Each object is 20 bytes\n\
+                ; Offset 11: physics_flags\n\
+                ; Offset 9-10: velocity_x, velocity_y\n\
+                ; Offset 1-2: x position\n\
+                ; Offset 3-4: y position\n\
+                \n\
+                ; Check physics_flags (offset 11)\n\
+                LDA 11,X\n\
+                BEQ UL_NEXT_OBJECT      ; Skip if no physics\n\
+                \n\
+                ; Read current position\n\
+                LDD 1,X                 ; Load x position\n\
+                STD TMPPTR+1            ; Save x temporarily\n\
+                LDD 3,X                 ; Load y position\n\
+                STD TMPPTR+3            ; Save y temporarily\n\
+                \n\
+                ; Apply velocity to position\n\
+                ; x += velocity_x\n\
+                LDD TMPPTR+1            ; Load saved x\n\
+                LDB 9,X                 ; Load velocity_x (signed byte)\n\
+                SEX                     ; Extend B to 16-bit D\n\
+                ADDD TMPPTR+1           ; Add to x\n\
+                STD 1,X                 ; Store new x\n\
+                \n\
+                ; y += velocity_y\n\
+                LDD TMPPTR+3            ; Load saved y\n\
+                LDB 10,X                ; Load velocity_y (signed byte)\n\
+                SEX                     ; Extend B to 16-bit D\n\
+                ADDD TMPPTR+3           ; Add to y\n\
+                STD 3,X                 ; Store new y\n\
+                \n\
+            UL_NEXT_OBJECT:\n\
+                ; Move to next object (20 bytes)\n\
+                LEAX 20,X\n\
+                DEC TMPPTR              ; Decrement count\n\
+                BNE UL_LOOP            ; Continue if more objects\n\
+                \n\
+            UL_EXIT:\n\
                 RTS\n\
             \n"
         );

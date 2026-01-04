@@ -75,7 +75,8 @@ pub struct VPlayObject {
     pub y: i16,
     pub scale: f32,
     pub rotation: i16,
-    pub intensity: u8,
+    #[serde(default)]
+    pub intensity: Option<u8>,
     #[serde(default)]
     pub layer: String,
     #[serde(default)]
@@ -238,8 +239,9 @@ impl VPlayLevel {
         // Rotation (degrees as signed byte)
         out.push_str(&format!("    FCB {}  ; rotation\n", (obj.rotation % 360) as u8));
         
-        // Intensity
-        out.push_str(&format!("    FCB {}  ; intensity\n", obj.intensity));
+        // Intensity (0 = use vector's intensity, >0 = override)
+        let intensity_value = obj.intensity.unwrap_or(0);
+        out.push_str(&format!("    FCB {}  ; intensity (0=use vec, >0=override)\n", intensity_value));
         
         // Velocity (convert f32 to signed 8-bit)
         let vel_x = obj.velocity.x.clamp(-127.0, 127.0) as i8;
