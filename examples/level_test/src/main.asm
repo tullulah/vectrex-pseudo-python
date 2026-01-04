@@ -240,9 +240,8 @@ DLW_SEG2_DX_DONE:
     CLR Vec_Misc_Count
     JSR Draw_Line_d ; Beam continues from segment 1 endpoint
 DLW_DONE:
-    ; CRITICAL: Reset beam origin BEFORE restoring DP
-    ; DP is still $D0 from BIOS calls - safe to call Reset0Ref
-    JSR Reset0Ref  ; Reset integrator to (0,0) - fixes SHOW_LEVEL interference
+    ; DON'T call Reset0Ref here - it breaks line continuity!
+    ; The beam position should stay where the line ended
     ; Full VIA reset (match Draw_Sync_List reset sequence)
     CLR >$D00A     ; VIA_shift_reg = 0
     LDA #$CC       ; Standard control mode
@@ -257,7 +256,7 @@ DLW_DONE:
     NOP
     LDA #$83
     STA >$D000     ; VIA_port_b = $83
-    LDA #$C8       ; Now restore DP to $C8 for our code
+    LDA #$C8       ; Restore DP to $C8 for our code
     TFR A,DP
     RTS
 VECTREX_SET_INTENSITY:

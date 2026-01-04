@@ -364,9 +364,8 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         
         // Cleanup
         out.push_str("DLW_DONE:\n");
-        out.push_str("    ; CRITICAL: Reset beam origin BEFORE restoring DP\n");
-        out.push_str("    ; DP is still $D0 from BIOS calls - safe to call Reset0Ref\n");
-        out.push_str("    JSR Reset0Ref  ; Reset integrator to (0,0) - fixes SHOW_LEVEL interference\n");
+        out.push_str("    ; DON'T call Reset0Ref here - it breaks line continuity!\n");
+        out.push_str("    ; The beam position should stay where the line ended\n");
         out.push_str("    ; Full VIA reset (match Draw_Sync_List reset sequence)\n");
         out.push_str("    CLR >$D00A     ; VIA_shift_reg = 0\n");
         out.push_str("    LDA #$CC       ; Standard control mode\n");
@@ -381,7 +380,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         out.push_str("    NOP\n");
         out.push_str("    LDA #$83\n");
         out.push_str("    STA >$D000     ; VIA_port_b = $83\n");
-        out.push_str("    LDA #$C8       ; Now restore DP to $C8 for our code\n");
+        out.push_str("    LDA #$C8       ; Restore DP to $C8 for our code\n");
         out.push_str("    TFR A,DP\n");
         out.push_str("    RTS\n");
     }
