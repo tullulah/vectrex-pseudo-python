@@ -325,6 +325,10 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
             if up == "DRAW_VECTOR_EX" {
                 usage.uses_draw_vector_ex = true;
             }
+            // DRAW_VECTOR: basic vector drawing (needs Draw_Sync_List)
+            if up == "DRAW_VECTOR" {
+                usage.uses_draw_vector = true;
+            }
             // DRAW_CIRCLE: needs DRAW_CIRCLE_* variables
             if up == "DRAW_CIRCLE" {
                 usage.uses_draw_circle = true;

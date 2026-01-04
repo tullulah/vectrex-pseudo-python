@@ -560,6 +560,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("FAST_WAIT_HIT", 1, "Fast wait recalibration flag");
     }
     
+    // 13. VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
+    if rt_usage.needs_vectorlist_runtime {
+        ram.allocate("VL_PTR", 2, "Current position in vector list");
+        ram.allocate("VL_Y", 1, "Y position (byte)");
+        ram.allocate("VL_X", 1, "X position (byte)");
+        ram.allocate("VL_SCALE", 1, "Scale factor (byte)");
+    }
+    
     // 13. Global user variables (VAR_*)
     // Build array size map for proper allocation
     let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
@@ -1109,22 +1117,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str(&ram.emit_storage_allocations());
     }
     
-    // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
-    // Always define if any code might use DRAW_VECTOR_LIST
-    if opts.exclude_ram_org {
-        out.push_str("VL_PTR     EQU $CF80      ; Current position in vector list\n");
-        out.push_str("VL_Y       EQU $CF82      ; Y position (1 byte)\n");
-        out.push_str("VL_X       EQU $CF83      ; X position (1 byte)\n");
-        out.push_str("VL_SCALE   EQU $CF84      ; Scale factor (1 byte)\n");
-    } else {
-        out.push_str("VL_PTR:    FDB 0    ; Current position in vector list\n");
-        out.push_str("VL_Y:      FCB 0    ; Y position\n");
-        out.push_str("VL_X:      FCB 0    ; X position\n");
-        out.push_str("VL_SCALE:  FCB 0    ; Scale factor\n");
-    }
-    
-    // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
-    // Always define if any code might use DRAW_VECTOR_LIST
+    // Assets: Only embed if code uses them
     if !opts.assets.is_empty() {
         // Analyze which assets are actually used in the code
         let used_assets = analyze_used_assets(module, &opts.assets);

@@ -824,13 +824,15 @@ sfx_doframe:
     );
 
     // Draw_Sync_List - EXACT translation of Malban's draw_synced_list_c
-    // Data format: intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
-    out.push_str(
-        "; ============================================================================\n\
-        ; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c\n\
-        ; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2\n\
-        ; ============================================================================\n\
-        Draw_Sync_List:\n\
+    // Only emit if DRAW_VECTOR is used (detected via uses_draw_vector flag)
+    if usage.uses_draw_vector || usage.uses_draw_vector_ex || usage.uses_show_level {
+        // Data format: intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
+        out.push_str(
+            "; ============================================================================\n\
+            ; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c\n\
+            ; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2\n\
+            ; ============================================================================\n\
+            Draw_Sync_List:\n\
         ; ITERACIÓN 11: Loop completo dentro (bug assembler arreglado, datos embebidos OK)\n\
         LDA ,X+                 ; intensity\n\
         JSR $F2AB               ; BIOS Intensity_a (expects value in A)\n\
@@ -957,7 +959,13 @@ sfx_doframe:
         CLR VIA_shift_reg       ; Clear before continuing\n\
         BRA DSL_LOOP            ; Continue drawing\n\
         DSL_DONE:\n\
-        RTS\n\n\
+        RTS\n"
+        );
+    }
+
+    // Draw_Sync_List_At - Only emit if DRAW_VECTOR with offset is used
+    if usage.uses_draw_vector_ex || usage.uses_show_level {
+        out.push_str("\n\
         ; ============================================================================\n\
         ; Draw_Sync_List_At - Draw vector at offset position (DRAW_VEC_X, DRAW_VEC_Y)\n\
         ; Same as Draw_Sync_List but adds offset to y_start, x_start coordinates\n\
@@ -1091,16 +1099,19 @@ sfx_doframe:
         BRA DSLA_LOOP\n\
         DSLA_DONE:\n\
         RTS\n"
-    );
+        );
+    }
     
-    // Draw_Sync_List_At_With_Mirrors: Unified mirror support (X, Y, or both)
-    // Reads MIRROR_X and MIRROR_Y flags (set by DRAW_VECTOR_EX) and conditionally negates
-    // Much more efficient than 4 separate functions - one unified runtime logic with conditional branches
-    // MIRROR_X: 0=normal, 1=negate X (horizontal flip)
-    // MIRROR_Y: 0=normal, 1=negate Y (vertical flip)
-    // Can combine: both flags set = flip both axes
-    out.push_str(
-        "Draw_Sync_List_At_With_Mirrors:\n\
+    // Draw_Sync_List_At_With_Mirrors - Only emit if DRAW_VECTOR_EX or SHOW_LEVEL is used
+    if usage.uses_draw_vector_ex || usage.uses_show_level {
+        // Draw_Sync_List_At_With_Mirrors: Unified mirror support (X, Y, or both)
+        // Reads MIRROR_X and MIRROR_Y flags (set by DRAW_VECTOR_EX) and conditionally negates
+        // Much more efficient than 4 separate functions - one unified runtime logic with conditional branches
+        // MIRROR_X: 0=normal, 1=negate X (horizontal flip)
+        // MIRROR_Y: 0=normal, 1=negate Y (vertical flip)
+        // Can combine: both flags set = flip both axes
+        out.push_str(
+            "Draw_Sync_List_At_With_Mirrors:\n\
         ; Unified mirror support using flags: MIRROR_X and MIRROR_Y\n\
             ; Conditionally negates X and/or Y coordinates and deltas\n\
             LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set\n\
@@ -1270,13 +1281,15 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             BRA DSWM_LOOP\n\
             DSWM_DONE:\n\
             RTS\n"
-    );
+        );
+    }
     
-    // ========== DRAW_CIRCLE_RUNTIME - Always emit for runtime circle drawing ==========
-    out.push_str(
-        "; ============================================================================\n\
-        ; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters\n\
-        ; ============================================================================\n\
+    // ========== DRAW_CIRCLE_RUNTIME - Only emit if DRAW_CIRCLE is used ==========
+    if usage.uses_draw_circle {
+        out.push_str(
+            "; ============================================================================\n\
+            ; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters\n\
+            ; ============================================================================\n\
         ; Follows Draw_Sync_List_At pattern: read params BEFORE DP change\n\
         ; Inputs: DRAW_CIRCLE_XC, DRAW_CIRCLE_YC, DRAW_CIRCLE_DIAM, DRAW_CIRCLE_INTENSITY (bytes in RAM)\n\
         ; Uses 8 segments (octagon) with lookup table for efficiency\n\
@@ -1448,7 +1461,8 @@ DCR_DELTA_TABLE:\n\
         FCB 2,$FE    ; Seg 7: dx=r/2, dy=-r/2 (right-down)\n\
         FCB 1,0      ; Seg 8: dx=r, dy=0 (right)\n\
         \n"
-    );
+        );
+    }
     
     // ========== JOYSTICK SUPPORT ==========
     // VPy programs now use REAL BIOS routines just like commercial ROMs:

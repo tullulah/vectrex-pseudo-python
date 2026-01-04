@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 255 bytes
+; Total RAM used: 243 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
@@ -70,50 +70,45 @@ VLINE_DY_REMAINING   EQU $C880+$40   ; Remaining dy for segment 2 (16-bit) (2 by
 VLINE_DX_REMAINING   EQU $C880+$42   ; Remaining dx for segment 2 (16-bit) (2 bytes)
 VLINE_STEPS          EQU $C880+$44   ; Line drawing step counter (1 bytes)
 VLINE_LIST           EQU $C880+$45   ; 2-byte vector list (Y|endbit, X) (2 bytes)
-DRAW_CIRCLE_XC       EQU $C880+$47   ; Circle center X (byte) (1 bytes)
-DRAW_CIRCLE_YC       EQU $C880+$48   ; Circle center Y (byte) (1 bytes)
-DRAW_CIRCLE_DIAM     EQU $C880+$49   ; Circle diameter (byte) (1 bytes)
-DRAW_CIRCLE_INTENSITY EQU $C880+$4A   ; Circle intensity (byte) (1 bytes)
-DRAW_CIRCLE_TEMP     EQU $C880+$4B   ; Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2) (8 bytes)
-VAR_SCREEN           EQU $C880+$53   ; User variable (2 bytes)
-VAR_TITLE_INTENSITY  EQU $C880+$55   ; User variable (2 bytes)
-VAR_TITLE_STATE      EQU $C880+$57   ; User variable (2 bytes)
-VAR_CURRENT_MUSIC    EQU $C880+$59   ; User variable (2 bytes)
-VAR_JOYSTICK1_STATE_DATA EQU $C880+$5B   ; Array data (6 elements) (12 bytes)
-VAR_CURRENT_LOCATION EQU $C880+$67   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_INTENSITY EQU $C880+$69   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_DIRECTION EQU $C880+$6B   ; User variable (2 bytes)
-VAR_JOY_X            EQU $C880+$6D   ; User variable (2 bytes)
-VAR_JOY_Y            EQU $C880+$6F   ; User variable (2 bytes)
-VAR_PREV_JOY_X       EQU $C880+$71   ; User variable (2 bytes)
-VAR_PREV_JOY_Y       EQU $C880+$73   ; User variable (2 bytes)
-VAR_COUNTDOWN_TIMER  EQU $C880+$75   ; User variable (2 bytes)
-VAR_COUNTDOWN_ACTIVE EQU $C880+$77   ; User variable (2 bytes)
-VAR_JOYSTICK_POLL_COUNTER EQU $C880+$79   ; User variable (2 bytes)
-VAR_HOOK_ACTIVE      EQU $C880+$7B   ; User variable (2 bytes)
-VAR_HOOK_X           EQU $C880+$7D   ; User variable (2 bytes)
-VAR_HOOK_Y           EQU $C880+$7F   ; User variable (2 bytes)
-VAR_HOOK_GUN_X       EQU $C880+$81   ; User variable (2 bytes)
-VAR_HOOK_GUN_Y       EQU $C880+$83   ; User variable (2 bytes)
-VAR_HOOK_INIT_Y      EQU $C880+$85   ; User variable (2 bytes)
-VAR_PLAYER_X         EQU $C880+$87   ; User variable (2 bytes)
-VAR_MOVE_SPEED       EQU $C880+$89   ; User variable (2 bytes)
-VAR_ABS_JOY          EQU $C880+$8B   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_FRAME EQU $C880+$8D   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_COUNTER EQU $C880+$8F   ; User variable (2 bytes)
-VAR_PLAYER_FACING    EQU $C880+$91   ; User variable (2 bytes)
-VAR_ENEMY_ACTIVE_DATA EQU $C880+$93   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_X_DATA     EQU $C880+$A3   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_Y_DATA     EQU $C880+$B3   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VX_DATA    EQU $C880+$C3   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VY_DATA    EQU $C880+$D3   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_SIZE_DATA  EQU $C880+$E3   ; Array data (8 elements) (16 bytes)
-VAR_ARG0             EQU $C880+$F3   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$F5   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$F7   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$F9   ; Function argument 3 (2 bytes)
-VAR_ARG4             EQU $C880+$FB   ; Function argument 4 (2 bytes)
-VAR_ARG5             EQU $C880+$FD   ; Function argument 5 (2 bytes)
+VAR_SCREEN           EQU $C880+$47   ; User variable (2 bytes)
+VAR_TITLE_INTENSITY  EQU $C880+$49   ; User variable (2 bytes)
+VAR_TITLE_STATE      EQU $C880+$4B   ; User variable (2 bytes)
+VAR_CURRENT_MUSIC    EQU $C880+$4D   ; User variable (2 bytes)
+VAR_JOYSTICK1_STATE_DATA EQU $C880+$4F   ; Array data (6 elements) (12 bytes)
+VAR_CURRENT_LOCATION EQU $C880+$5B   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_INTENSITY EQU $C880+$5D   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_DIRECTION EQU $C880+$5F   ; User variable (2 bytes)
+VAR_JOY_X            EQU $C880+$61   ; User variable (2 bytes)
+VAR_JOY_Y            EQU $C880+$63   ; User variable (2 bytes)
+VAR_PREV_JOY_X       EQU $C880+$65   ; User variable (2 bytes)
+VAR_PREV_JOY_Y       EQU $C880+$67   ; User variable (2 bytes)
+VAR_COUNTDOWN_TIMER  EQU $C880+$69   ; User variable (2 bytes)
+VAR_COUNTDOWN_ACTIVE EQU $C880+$6B   ; User variable (2 bytes)
+VAR_JOYSTICK_POLL_COUNTER EQU $C880+$6D   ; User variable (2 bytes)
+VAR_HOOK_ACTIVE      EQU $C880+$6F   ; User variable (2 bytes)
+VAR_HOOK_X           EQU $C880+$71   ; User variable (2 bytes)
+VAR_HOOK_Y           EQU $C880+$73   ; User variable (2 bytes)
+VAR_HOOK_GUN_X       EQU $C880+$75   ; User variable (2 bytes)
+VAR_HOOK_GUN_Y       EQU $C880+$77   ; User variable (2 bytes)
+VAR_HOOK_INIT_Y      EQU $C880+$79   ; User variable (2 bytes)
+VAR_PLAYER_X         EQU $C880+$7B   ; User variable (2 bytes)
+VAR_MOVE_SPEED       EQU $C880+$7D   ; User variable (2 bytes)
+VAR_ABS_JOY          EQU $C880+$7F   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_FRAME EQU $C880+$81   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_COUNTER EQU $C880+$83   ; User variable (2 bytes)
+VAR_PLAYER_FACING    EQU $C880+$85   ; User variable (2 bytes)
+VAR_ENEMY_ACTIVE_DATA EQU $C880+$87   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_X_DATA     EQU $C880+$97   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_Y_DATA     EQU $C880+$A7   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VX_DATA    EQU $C880+$B7   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VY_DATA    EQU $C880+$C7   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_SIZE_DATA  EQU $C880+$D7   ; Array data (8 elements) (16 bytes)
+VAR_ARG0             EQU $C880+$E7   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$E9   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$EB   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$ED   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$EF   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$F1   ; Function argument 5 (2 bytes)
 PSG_MUSIC_PTR_DP   EQU $24  ; DP-relative
 PSG_MUSIC_START_DP EQU $26  ; DP-relative
 PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
@@ -1036,180 +1031,6 @@ CLR VIA_shift_reg
 BRA DSWM_LOOP
 DSWM_DONE:
 RTS
-; ============================================================================
-; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters
-; ============================================================================
-; Follows Draw_Sync_List_At pattern: read params BEFORE DP change
-; Inputs: DRAW_CIRCLE_XC, DRAW_CIRCLE_YC, DRAW_CIRCLE_DIAM, DRAW_CIRCLE_INTENSITY (bytes in RAM)
-; Uses 8 segments (octagon) with lookup table for efficiency
-DRAW_CIRCLE_RUNTIME:
-; Read ALL parameters into registers/stack BEFORE changing DP (critical!)
-; (These are byte variables, use LDB not LDD)
-LDB DRAW_CIRCLE_INTENSITY
-PSHS B                 ; Save intensity on stack
-
-LDB DRAW_CIRCLE_DIAM
-SEX                    ; Sign-extend to 16-bit (diameter is unsigned 0..255)
-LSRA                   ; Divide by 2 to get radius
-RORB
-STD DRAW_CIRCLE_TEMP   ; DRAW_CIRCLE_TEMP = radius (16-bit)
-
-LDB DRAW_CIRCLE_XC     ; xc (signed -128..127)
-SEX
-STD DRAW_CIRCLE_TEMP+2 ; Save xc
-
-LDB DRAW_CIRCLE_YC     ; yc (signed -128..127)
-SEX
-STD DRAW_CIRCLE_TEMP+4 ; Save yc
-
-; NOW safe to setup BIOS (all params are in DRAW_CIRCLE_TEMP+stack)
-LDA #$D0
-TFR A,DP
-JSR Reset0Ref
-
-; Set intensity (from stack)
-PULS A                 ; Get intensity from stack
-CMPA #$5F
-BEQ DCR_intensity_5F
-JSR Intensity_a
-BRA DCR_after_intensity
-DCR_intensity_5F:
-JSR Intensity_5F
-DCR_after_intensity:
-
-; Move to start position: (xc + radius, yc)
-; radius = DRAW_CIRCLE_TEMP, xc = DRAW_CIRCLE_TEMP+2, yc = DRAW_CIRCLE_TEMP+4
-LDD DRAW_CIRCLE_TEMP   ; D = radius
-ADDD DRAW_CIRCLE_TEMP+2 ; D = xc + radius
-TFR B,B                ; Keep X in B (low byte)
-PSHS B                 ; Save X on stack
-LDD DRAW_CIRCLE_TEMP+4 ; Load yc
-TFR B,A                ; Y to A
-PULS B                 ; X to B
-JSR Moveto_d
-
-; Loop through 8 segments using lookup table
-LDX #DCR_DELTA_TABLE   ; Point to delta table
-LDB #8                 ; 8 segments
-PSHS B                 ; Save counter on stack
-
-DCR_LOOP:
-CLR Vec_Misc_Count     ; Relative drawing
-
-; Load delta multipliers from table
-LDA ,X+                ; dx multiplier (-1, 0, 1, or 2 for half)
-LDB ,X+                ; dy multiplier
-PSHS A,B               ; Save multipliers
-
-; Calculate dy = (dy_mult * radius) / 2 if needed
-LDD DRAW_CIRCLE_TEMP   ; Load radius
-PULS A,B               ; Get multipliers (A=dx_mult, B=dy_mult)
-PSHS A                 ; Save dx_mult
-
-; Process dy_mult
-TSTB
-BEQ DCR_dy_zero        ; dy = 0
-CMPB #2
-BEQ DCR_dy_half        ; dy = r/2
-CMPB #$FE              ; -2 (half negative)
-BEQ DCR_dy_neg_half
-CMPB #1
-BEQ DCR_dy_pos         ; dy = r
-; dy = -r
-LDD DRAW_CIRCLE_TEMP
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dy_done
-DCR_dy_zero:
-LDD #0                 ; Clear both A and B
-BRA DCR_dy_done
-DCR_dy_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-BRA DCR_dy_done
-DCR_dy_neg_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dy_done
-DCR_dy_pos:
-LDD DRAW_CIRCLE_TEMP
-DCR_dy_done:
-TFR B,A                ; Move dy result to A (we only need 8-bit for Vectrex coordinates)
-PSHS A                 ; Save dy on stack
-
-; Process dx_mult (same logic)
-LDB 1,S                ; Get dx_mult from stack
-TSTB
-BEQ DCR_dx_zero
-CMPB #2
-BEQ DCR_dx_half
-CMPB #$FE
-BEQ DCR_dx_neg_half
-CMPB #1
-BEQ DCR_dx_pos
-; dx = -r
-LDD DRAW_CIRCLE_TEMP
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dx_done
-DCR_dx_zero:
-LDD #0                 ; Clear both A and B
-BRA DCR_dx_done
-DCR_dx_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-BRA DCR_dx_done
-DCR_dx_neg_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dx_done
-DCR_dx_pos:
-LDD DRAW_CIRCLE_TEMP
-DCR_dx_done:
-TFR B,B                ; dx in B
-PULS A                 ; dy in A
-LEAS 1,S               ; Drop dx_mult
-
-; Draw line with calculated deltas (preserve X - it points to table)
-PSHS X                 ; Save table pointer
-JSR Draw_Line_d
-PULS X                 ; Restore table pointer
-
-; Loop control
-DEC ,S                 ; Decrement counter
-BNE DCR_LOOP
-
-LEAS 1,S               ; Clean counter from stack
-
-; DP is ALREADY $D0 from BIOS, no need to restore (Draw_Sync_List_At doesn't restore either)
-RTS
-
-RTS
-
-; Delta multiplier table: 8 segments (dx_mult, dy_mult)
-; 0=zero, 1=r, -1=$FF=-r, 2=r/2, -2=$FE=-r/2
-DCR_DELTA_TABLE:
-FCB 2,2      ; Seg 1: dx=r/2, dy=r/2 (right-up)
-FCB 0,1      ; Seg 2: dx=0, dy=r (up)
-FCB $FE,2    ; Seg 3: dx=-r/2, dy=r/2 (left-up)
-FCB $FF,0    ; Seg 4: dx=-r, dy=0 (left)
-FCB $FE,$FE  ; Seg 5: dx=-r/2, dy=-r/2 (left-down)
-FCB 0,$FF    ; Seg 6: dx=0, dy=-r (down)
-FCB 2,$FE    ; Seg 7: dx=r/2, dy=-r/2 (right-down)
-FCB 1,0      ; Seg 8: dx=r, dy=0 (right)
-
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -7122,10 +6943,6 @@ DIV16_DONE:
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-VL_PTR     EQU $CF80      ; Current position in vector list
-VL_Y       EQU $CF82      ; Y position (1 byte)
-VL_X       EQU $CF83      ; X position (1 byte)
-VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 
 ; ========================================
 ; ASSET DATA SECTION
