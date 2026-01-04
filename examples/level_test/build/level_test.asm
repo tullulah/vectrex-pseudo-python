@@ -31,14 +31,18 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 12 bytes
+; Total RAM used: 20 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
 TEMP_YX              EQU $C880+$06   ; Temporary y,x storage (2 bytes)
 TEMP_X               EQU $C880+$08   ; Temporary x storage (1 bytes)
 TEMP_Y               EQU $C880+$09   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$0A   ; String buffer for PRINT_NUMBER (2 bytes)
+LEVEL_PTR            EQU $C880+$0A   ; Current level header pointer (2 bytes)
+LEVEL_BG_PTR         EQU $C880+$0C   ; Background layer objects pointer (2 bytes)
+LEVEL_GAMEPLAY_PTR   EQU $C880+$0E   ; Gameplay layer objects pointer (2 bytes)
+LEVEL_FG_PTR         EQU $C880+$10   ; Foreground layer objects pointer (2 bytes)
+NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
 
     JMP START
 
@@ -280,6 +284,7 @@ Draw_Sync_List_At:
 LDA ,X+                 ; intensity
 PSHS A                  ; Save intensity
 LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
 LDB ,X+                 ; y_start from .vec
@@ -362,6 +367,10 @@ LDA ,X+                 ; x_start
 ADDA DRAW_VEC_X         ; Add X offset to new path
 STD TEMP_YX
 PULS A                  ; Get intensity back
+PSHS A                  ; Save intensity again
+LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)
+PULS A                  ; Restore intensity
 JSR $F2AB
 PULS D
 ADDD #3
@@ -403,6 +412,8 @@ BEQ DSLA_W3
 CLR VIA_shift_reg
 BRA DSLA_LOOP
 DSLA_DONE:
+LDA #$C8                ; Restore DP=$C8 before returning
+TFR A,DP
 RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
@@ -416,11 +427,9 @@ LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
-TFR A,DP                ; Set DP=$D0 for BIOS VIA access
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
-LDA #$C8                ; Restore DP immediately after BIOS
-TFR A,DP
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
@@ -535,6 +544,10 @@ DSWM_NEXT_NO_NEGATE_X:
 ADDA DRAW_VEC_X         ; Add X offset
 STD TEMP_YX
 PULS A                  ; Get intensity back
+PSHS A                  ; Save intensity again
+LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)
+PULS A                  ; Restore intensity
 JSR $F2AB
 PULS D
 ADDD #3
@@ -753,11 +766,228 @@ FCB 0,$FF    ; Seg 6: dx=0, dy=-r (down)
 FCB 2,$FE    ; Seg 7: dx=r/2, dy=-r/2 (right-down)
 FCB 1,0      ; Seg 8: dx=r, dy=0 (right)
 
+; LOAD_LEVEL_RUNTIME - Load level from ROM into RAM working variables
+; Input: X = pointer to level ROM data (_LEVELNAME_LEVEL)
+; Output: Level header copied to RAM, layer pointers extracted
+; Modifies: D, X
+LOAD_LEVEL_RUNTIME:
+STX >LEVEL_PTR          ; Store level header pointer
+
+; Extract layer pointers from header
+; Header structure: 8 bytes bounds + 4 bytes metadata + 3 bytes counts = 15 bytes
+; Then: 2-byte BG ptr, 2-byte gameplay ptr, 2-byte FG ptr
+LEAX 15,X               ; Skip to layer pointers section
+
+; Read background layer pointer
+LDD ,X++                ; Load BG pointer (auto-increment by 2)
+STD >LEVEL_BG_PTR       ; Store in RAM
+
+; Read gameplay layer pointer
+LDD ,X++                ; Load gameplay pointer
+STD >LEVEL_GAMEPLAY_PTR ; Store in RAM
+
+; Read foreground layer pointer
+LDD ,X                  ; Load FG pointer (no increment needed)
+STD >LEVEL_FG_PTR       ; Store in RAM
+
+; Return level pointer in D for convenience
+LDD >LEVEL_PTR
+STD RESULT              ; Store result
+RTS
+
+; SHOW_LEVEL_RUNTIME - Draw all objects from all layers automatically
+; Input: None (uses LEVEL_PTR, LEVEL_BG_PTR, LEVEL_GAMEPLAY_PTR, LEVEL_FG_PTR)
+; Output: None
+; Modifies: D, X, Y, U
+; Object structure (20 bytes total):
+;   +0: type (1 byte)
+;   +1-2: x (2 bytes, signed)
+;   +3-4: y (2 bytes, signed)
+;   +5-6: scale (2 bytes)
+;   +7: rotation (1 byte)
+;   +8: intensity (1 byte)
+;   +9: velocity_x (1 byte)
+;   +10: velocity_y (1 byte)
+;   +11: physics_flags (1 byte)
+;   +12: collision_flags (1 byte)
+;   +13: collision_size (1 byte)
+;   +14-15: spawn_delay (2 bytes)
+;   +16-17: vector_ptr (2 bytes)
+;   +18-19: properties_ptr (2 bytes)
+SHOW_LEVEL_RUNTIME:
+LDX >LEVEL_PTR
+BEQ SL_EXIT            ; Exit if no level loaded
+
+; Get object counts
+; Header: 8 bytes bounds (4xFDB) + 4 bytes metadata (2xFDB) = 12 bytes
+; Then 3 bytes counts at offset 12-14
+LEAX 12,X
+LDB 2,X                 ; fg_count
+PSHS B                  ; Push fg_count (will be at S+2 after next push)
+LDB 1,X                 ; gameplay_count
+PSHS B                  ; Push gameplay_count (will be at S+1 after next push)
+LDB ,X                  ; bg_count
+PSHS B                  ; Push bg_count (now at S+0)
+
+; === DRAW BACKGROUND LAYER ===
+PULS B                  ; Get bg_count from stack
+BEQ SL_GAMEPLAY        ; Skip if no bg objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
+LDX >LEVEL_BG_PTR       ; Load bg layer base pointer
+BSR SL_DRAW_LAYER      ; Call layer drawer
+
+SL_GAMEPLAY:
+; === DRAW GAMEPLAY LAYER ===
+PULS B                  ; Get gameplay_count from stack
+BEQ SL_FOREGROUND      ; Skip if no gameplay objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
+LDX >LEVEL_GAMEPLAY_PTR ; Load gameplay layer base pointer
+BSR SL_DRAW_LAYER      ; Call layer drawer
+
+SL_FOREGROUND:
+; === DRAW FOREGROUND LAYER ===
+PULS B                  ; Get fg_count from stack
+BEQ SL_EXIT            ; Skip if no fg objects
+LDA #$C8                ; Ensure DP=$C8 before drawing
+TFR A,DP
+LDX >LEVEL_FG_PTR      ; Load foreground layer base pointer
+BSR SL_DRAW_LAYER      ; Call layer drawer
+
+SL_EXIT:
+LDA #$C8                ; Final DP restore
+TFR A,DP
+RTS
+
+; Helper: Draw all objects in a layer
+; Input: B = object count, X = layer base pointer
+; Modifies: D, X, Y, U
+SL_DRAW_LAYER:
+TSTB                    ; Test if count is zero
+BEQ SL_LAYER_DONE      ; Skip if no objects
+PSHS B                  ; Save count
+
+SL_LOOP:
+PULS B                  ; Get count
+DECB                    ; Decrement count
+BEQ SL_LAST_OBJECT     ; Last object (don't push back)
+PSHS B                  ; Save decremented count
+
+SL_DRAW_OBJECT:
+; X points to current object (20 bytes)
+; Setup: read object data, then call Draw_Sync_List_At_With_Mirrors
+
+; Clear mirror flags (objects don't support mirroring yet)
+CLR MIRROR_X
+CLR MIRROR_Y
+
+; Read intensity (offset 8) and store as override
+LDA 8,X
+STA DRAW_VEC_INTENSITY
+
+; Read x,y position (offset 1-4) and store as offset
+LDD 3,X                 ; Load y (offset 3-4)
+STB DRAW_VEC_Y          ; Store low byte (8-bit offset)
+LDD 1,X                 ; Load x (offset 1-2)
+STB DRAW_VEC_X          ; Store low byte (8-bit offset)
+
+; Read vector_ptr (offset 16-17)
+LDU 16,X                ; Load vector pointer
+PSHS X                  ; Save object pointer
+TFR U,X                 ; X = vector data
+
+; Call the correct drawing function
+JSR Draw_Sync_List_At_With_Mirrors
+
+PULS X                  ; Restore object pointer
+
+; Move to next object
+LEAX 20,X
+BRA SL_LOOP
+
+SL_LAST_OBJECT:
+; Draw last object - same as SL_DRAW_OBJECT but don't loop
+CLR MIRROR_X
+CLR MIRROR_Y
+LDA 8,X
+STA DRAW_VEC_INTENSITY
+LDD 3,X
+STB DRAW_VEC_Y
+LDD 1,X
+STB DRAW_VEC_X
+LDU 16,X
+PSHS X
+TFR U,X
+JSR Draw_Sync_List_At_With_Mirrors
+PULS X
+; Don't loop - fall through to done
+
+SL_LAYER_DONE:
+RTS
+
+; UPDATE_LEVEL_RUNTIME - Update level physics and state
+; Input: None (uses LEVEL_PTR)
+; Output: None
+; Modifies: Object velocity fields based on physics_flags
+UPDATE_LEVEL_RUNTIME:
+; Load current level pointer
+LDX >LEVEL_PTR
+BEQ UL_EXIT             ; Exit if no level loaded
+
+; Get gameplay object count (offset 8)
+LDB 8,X                 ; gameplay_count
+BEQ UL_EXIT             ; Skip if no gameplay objects
+
+; Load gameplay layer pointer (offset 11-12)
+LDX 11,X                ; X = gameplay objects base pointer
+STB TMPPTR              ; Save count
+
+UL_LOOP:
+; Each object is 20 bytes
+; Offset 11: physics_flags
+; Offset 9-10: velocity_x, velocity_y
+; Offset 1-2: x position
+; Offset 3-4: y position
+
+; Check physics_flags (offset 11)
+LDA 11,X
+BEQ UL_NEXT_OBJECT      ; Skip if no physics
+
+; Read current position
+LDD 1,X                 ; Load x position
+STD TMPPTR+1            ; Save x temporarily
+LDD 3,X                 ; Load y position
+STD TMPPTR+3            ; Save y temporarily
+
+; Apply velocity to position
+; x += velocity_x
+LDD TMPPTR+1            ; Load saved x
+LDB 9,X                 ; Load velocity_x (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+1           ; Add to x
+STD 1,X                 ; Store new x
+
+; y += velocity_y
+LDD TMPPTR+3            ; Load saved y
+LDB 10,X                ; Load velocity_y (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+3           ; Add to y
+STD 3,X                 ; Store new y
+
+UL_NEXT_OBJECT:
+; Move to next object (20 bytes)
+LEAX 20,X
+DEC TMPPTR              ; Decrement count
+BNE UL_LOOP            ; Continue if more objects
+
+UL_EXIT:
+RTS
+
 
 ; ========================================
 ; LEVEL ASSETS (emitted early for single-pass assembler)
-; NOTE: All level assets emitted (unused ones will be optimized by linker)
-; TODO: Replace with two-pass assembler (see copilot-instructions.md)
+; Embedded 1 of 1 level assets (unused levels excluded)
 ; ========================================
 
 ; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
@@ -854,6 +1084,11 @@ START:
     CLRA
     CLRB
     STD RESULT
+    ; VPy_LINE:9
+; LOAD_LEVEL("test_level") - load level data
+    LDX #_TEST_LEVEL_LEVEL
+    JSR LOAD_LEVEL_RUNTIME
+    LDD RESULT  ; Returns level pointer
 ; VPy_LINE:6
 
 MAIN:
@@ -884,26 +1119,16 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:15
-; DRAW_VECTOR("mountain", x, y) - 2 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    LDX #_MOUNTAIN_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
-    LDX #_MOUNTAIN_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
-    LDD #0
-    STD RESULT
+    ; VPy_LINE:14
+; NATIVE_CALL: SHOW_LEVEL at line 14
+; SHOW_LEVEL() - draw all level objects automatically
+    JSR SHOW_LEVEL_RUNTIME
+    ; No return value - draws directly to screen
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:19
+; NATIVE_CALL: UPDATE_LEVEL at line 19
+; UPDATE_LEVEL() - update level state (placeholder)
+    JSR UPDATE_LEVEL_RUNTIME
     RTS
 
 ;***************************************************************************
@@ -916,28 +1141,50 @@ VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 ; Call argument scratch space
 VAR_ARG0 EQU $C8B2
 VAR_ARG1 EQU $C8B4
-VAR_ARG2 EQU $C8B6
-VAR_ARG3 EQU $C8B8
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 1 of 7 assets (unused assets excluded)
+; Embedded 2 of 7 assets (unused assets excluded)
 ; ========================================
+
+; Vector asset: bubble_large
+; Generated from bubble_large.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 8
+; X bounds: min=-15, max=15, width=30
+; Center: (0, 0)
+
+_BUBBLE_LARGE_WIDTH EQU 30
+_BUBBLE_LARGE_CENTER_X EQU 0
+_BUBBLE_LARGE_CENTER_Y EQU 0
+
+_BUBBLE_LARGE_VECTORS:  ; Main entry
+_BUBBLE_LARGE_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
+    FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
+    FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
+    FCB $FF,$F6,$FB          ; line 2: flag=-1, dy=-10, dx=-5
+    FCB $FF,$FB,$F6          ; line 3: flag=-1, dy=-5, dx=-10
+    FCB $FF,$05,$F6          ; line 4: flag=-1, dy=5, dx=-10
+    FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
+    FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
+    FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
+    FCB 2                ; End marker (last path complete)
 
 ; Vector asset: mountain
 ; Generated from mountain.vec (Malban Draw_Sync_List format)
 ; Total paths: 2, points: 8
-; X bounds: min=-57, max=38, width=95
-; Center: (-9, 30)
+; X bounds: min=-65, max=38, width=103
+; Center: (-13, 37)
 
-_MOUNTAIN_WIDTH EQU 95
-_MOUNTAIN_CENTER_X EQU -9
-_MOUNTAIN_CENTER_Y EQU 30
+_MOUNTAIN_WIDTH EQU 103
+_MOUNTAIN_CENTER_X EQU -13
+_MOUNTAIN_CENTER_Y EQU 37
 
 _MOUNTAIN_VECTORS:  ; Main entry
 _MOUNTAIN_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $E2,$E3,0,0        ; path0: header (y=-30, x=-29, relative to center)
+    FCB $DB,$E7,0,0        ; path0: header (y=-37, x=-25, relative to center)
     FCB $FF,$1A,$0D          ; line 0: flag=-1, dy=26, dx=13
     FCB $FF,$01,$33          ; line 1: flag=-1, dy=1, dx=51
     FCB $FF,$E4,$0C          ; line 2: flag=-1, dy=-28, dx=12
@@ -946,8 +1193,8 @@ _MOUNTAIN_PATH0:    ; Path 0
 
 _MOUNTAIN_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
-    FCB $0A,$D0,0,0        ; path1: header (y=10, x=-48, relative to center)
-    FCB $FF,$15,$1E          ; line 0: flag=-1, dy=21, dx=30
+    FCB $21,$CC,0,0        ; path1: header (y=33, x=-52, relative to center)
+    FCB $FF,$05,$24          ; line 0: flag=-1, dy=5, dx=36
     FCB $FF,$00,$00          ; line 1: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (last path complete)
 

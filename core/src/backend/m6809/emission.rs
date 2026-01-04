@@ -989,6 +989,7 @@ sfx_doframe:
         LDA ,X+                 ; intensity\n\
         PSHS A                  ; Save intensity\n\
         LDA #$D0\n\
+        TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)\n\
         PULS A                  ; Restore intensity\n\
         JSR $F2AB               ; BIOS Intensity_a\n\
         LDB ,X+                 ; y_start from .vec\n\
@@ -1071,6 +1072,10 @@ sfx_doframe:
         ADDA DRAW_VEC_X         ; Add X offset to new path\n\
         STD TEMP_YX\n\
         PULS A                  ; Get intensity back\n\
+        PSHS A                  ; Save intensity again\n\
+        LDA #$D0\n\
+        TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)\n\
+        PULS A                  ; Restore intensity\n\
         JSR $F2AB\n\
         PULS D\n\
         ADDD #3\n\
@@ -1112,6 +1117,8 @@ sfx_doframe:
         CLR VIA_shift_reg\n\
         BRA DSLA_LOOP\n\
         DSLA_DONE:\n\
+        LDA #$C8                ; Restore DP=$C8 before returning\n\
+        TFR A,DP\n\
         RTS\n"
     );
     
@@ -1134,11 +1141,9 @@ DSWM_USE_OVERRIDE:\n\
 DSWM_SET_INTENSITY:\n\
             PSHS A                  ; Save intensity\n\
             LDA #$D0\n\
-            TFR A,DP                ; Set DP=$D0 for BIOS VIA access\n\
+            TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)\n\
             PULS A                  ; Restore intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
-            LDA #$C8                ; Restore DP immediately after BIOS\n\
-            TFR A,DP\n\
             LDB ,X+                 ; y_start from .vec (already relative to center)\n\
             ; Check if Y mirroring is enabled\n\
             TST MIRROR_Y\n\
@@ -1253,6 +1258,10 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             ADDA DRAW_VEC_X         ; Add X offset\n\
             STD TEMP_YX\n\
             PULS A                  ; Get intensity back\n\
+            PSHS A                  ; Save intensity again\n\
+            LDA #$D0\n\
+            TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)\n\
+            PULS A                  ; Restore intensity\n\
             JSR $F2AB\n\
             PULS D\n\
             ADDD #3\n\

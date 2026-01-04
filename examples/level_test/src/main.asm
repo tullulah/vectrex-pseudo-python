@@ -284,6 +284,7 @@ Draw_Sync_List_At:
 LDA ,X+                 ; intensity
 PSHS A                  ; Save intensity
 LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
 LDB ,X+                 ; y_start from .vec
@@ -366,6 +367,10 @@ LDA ,X+                 ; x_start
 ADDA DRAW_VEC_X         ; Add X offset to new path
 STD TEMP_YX
 PULS A                  ; Get intensity back
+PSHS A                  ; Save intensity again
+LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)
+PULS A                  ; Restore intensity
 JSR $F2AB
 PULS D
 ADDD #3
@@ -407,6 +412,8 @@ BEQ DSLA_W3
 CLR VIA_shift_reg
 BRA DSLA_LOOP
 DSLA_DONE:
+LDA #$C8                ; Restore DP=$C8 before returning
+TFR A,DP
 RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
@@ -420,11 +427,9 @@ LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
-TFR A,DP                ; Set DP=$D0 for BIOS VIA access
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (KEEP for entire function)
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
-LDA #$C8                ; Restore DP immediately after BIOS
-TFR A,DP
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
@@ -539,6 +544,10 @@ DSWM_NEXT_NO_NEGATE_X:
 ADDA DRAW_VEC_X         ; Add X offset
 STD TEMP_YX
 PULS A                  ; Get intensity back
+PSHS A                  ; Save intensity again
+LDA #$D0
+TFR A,DP                ; Set DP=$D0 for BIOS VIA access (already set, but ensure)
+PULS A                  ; Restore intensity
 JSR $F2AB
 PULS D
 ADDD #3
@@ -917,6 +926,64 @@ PULS X
 SL_LAYER_DONE:
 RTS
 
+; UPDATE_LEVEL_RUNTIME - Update level physics and state
+; Input: None (uses LEVEL_PTR)
+; Output: None
+; Modifies: Object velocity fields based on physics_flags
+UPDATE_LEVEL_RUNTIME:
+; Load current level pointer
+LDX >LEVEL_PTR
+BEQ UL_EXIT             ; Exit if no level loaded
+
+; Get gameplay object count (offset 8)
+LDB 8,X                 ; gameplay_count
+BEQ UL_EXIT             ; Skip if no gameplay objects
+
+; Load gameplay layer pointer (offset 11-12)
+LDX 11,X                ; X = gameplay objects base pointer
+STB TMPPTR              ; Save count
+
+UL_LOOP:
+; Each object is 20 bytes
+; Offset 11: physics_flags
+; Offset 9-10: velocity_x, velocity_y
+; Offset 1-2: x position
+; Offset 3-4: y position
+
+; Check physics_flags (offset 11)
+LDA 11,X
+BEQ UL_NEXT_OBJECT      ; Skip if no physics
+
+; Read current position
+LDD 1,X                 ; Load x position
+STD TMPPTR+1            ; Save x temporarily
+LDD 3,X                 ; Load y position
+STD TMPPTR+3            ; Save y temporarily
+
+; Apply velocity to position
+; x += velocity_x
+LDD TMPPTR+1            ; Load saved x
+LDB 9,X                 ; Load velocity_x (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+1           ; Add to x
+STD 1,X                 ; Store new x
+
+; y += velocity_y
+LDD TMPPTR+3            ; Load saved y
+LDB 10,X                ; Load velocity_y (signed byte)
+SEX                     ; Extend B to 16-bit D
+ADDD TMPPTR+3           ; Add to y
+STD 3,X                 ; Store new y
+
+UL_NEXT_OBJECT:
+; Move to next object (20 bytes)
+LEAX 20,X
+DEC TMPPTR              ; Decrement count
+BNE UL_LOOP            ; Continue if more objects
+
+UL_EXIT:
+RTS
+
 
 ; ========================================
 ; LEVEL ASSETS (emitted early for single-pass assembler)
@@ -1057,6 +1124,11 @@ LOOP_BODY:
 ; SHOW_LEVEL() - draw all level objects automatically
     JSR SHOW_LEVEL_RUNTIME
     ; No return value - draws directly to screen
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:19
+; NATIVE_CALL: UPDATE_LEVEL at line 19
+; UPDATE_LEVEL() - update level state (placeholder)
+    JSR UPDATE_LEVEL_RUNTIME
     RTS
 
 ;***************************************************************************
@@ -1102,17 +1174,17 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
 ; Vector asset: mountain
 ; Generated from mountain.vec (Malban Draw_Sync_List format)
 ; Total paths: 2, points: 8
-; X bounds: min=-57, max=38, width=95
-; Center: (-9, 30)
+; X bounds: min=-65, max=38, width=103
+; Center: (-13, 37)
 
-_MOUNTAIN_WIDTH EQU 95
-_MOUNTAIN_CENTER_X EQU -9
-_MOUNTAIN_CENTER_Y EQU 30
+_MOUNTAIN_WIDTH EQU 103
+_MOUNTAIN_CENTER_X EQU -13
+_MOUNTAIN_CENTER_Y EQU 37
 
 _MOUNTAIN_VECTORS:  ; Main entry
 _MOUNTAIN_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
-    FCB $E2,$E3,0,0        ; path0: header (y=-30, x=-29, relative to center)
+    FCB $DB,$E7,0,0        ; path0: header (y=-37, x=-25, relative to center)
     FCB $FF,$1A,$0D          ; line 0: flag=-1, dy=26, dx=13
     FCB $FF,$01,$33          ; line 1: flag=-1, dy=1, dx=51
     FCB $FF,$E4,$0C          ; line 2: flag=-1, dy=-28, dx=12
@@ -1121,8 +1193,8 @@ _MOUNTAIN_PATH0:    ; Path 0
 
 _MOUNTAIN_PATH1:    ; Path 1
     FCB 127              ; path1: intensity
-    FCB $0A,$D0,0,0        ; path1: header (y=10, x=-48, relative to center)
-    FCB $FF,$15,$1E          ; line 0: flag=-1, dy=21, dx=30
+    FCB $21,$CC,0,0        ; path1: header (y=33, x=-52, relative to center)
+    FCB $FF,$05,$24          ; line 0: flag=-1, dy=5, dx=36
     FCB $FF,$00,$00          ; line 1: flag=-1, dy=0, dx=0
     FCB 2                ; End marker (last path complete)
 
