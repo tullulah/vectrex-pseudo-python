@@ -14,4 +14,4 @@ def loop():
     SHOW_LEVEL()
     
     # Update level state (placeholder for now)
-    UPDATE_LEVEL()
+    #UPDATE_LEVEL()

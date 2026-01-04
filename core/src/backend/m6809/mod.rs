@@ -589,6 +589,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         false
     };
     
+    // ✅ Analyze which assets are used (BEFORE any embedding blocks for proper scope)
+    // This needs to be accessible by BOTH level embedding (early) and non-level embedding (late)
+    let used_assets = analyze_used_assets(module, &opts.assets);
+    
     if main_has_content {
         // main() has real content - use START structure
         out.push_str("    JMP START\n\n");
@@ -621,16 +625,20 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // - Pass 1: Collect ALL symbols and addresses into HashMap
         // - Pass 2: Resolve references using symbol table
         // - Estimated effort: 400-500 lines, 2-3 days
+        
+        // NOTE: used_assets already analyzed earlier (before main_has_content block)
+        
         if !opts.assets.is_empty() {
             let level_assets: Vec<_> = opts.assets.iter()
                 .filter(|asset| matches!(asset.asset_type, crate::codegen::AssetType::Level))
+                .filter(|asset| used_assets.contains(&asset.name)) // Only embed used levels
                 .collect();
             
             if !level_assets.is_empty() {
                 out.push_str("\n; ========================================\n");
                 out.push_str("; LEVEL ASSETS (emitted early for single-pass assembler)\n");
-                out.push_str("; NOTE: All level assets emitted (unused ones will be optimized by linker)\n");
-                out.push_str("; TODO: Replace with two-pass assembler (see copilot-instructions.md)\n");
+                out.push_str(&format!("; Embedded {} of {} level assets (unused levels excluded)\n", 
+                    level_assets.len(), opts.assets.iter().filter(|a| matches!(a.asset_type, crate::codegen::AssetType::Level)).count()));
                 out.push_str("; ========================================\n\n");
                 
                 for asset in level_assets {
@@ -1187,10 +1195,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // The native assembler processes ALL lines but EQU doesn't generate bytes
     // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
     if !opts.assets.is_empty() {
-        // Analyze which assets are actually used in the code
-        let used_assets = analyze_used_assets(module, &opts.assets);
-        eprintln!("[DEBUG] Used assets: {:?}", used_assets);
-        eprintln!("[DEBUG] Available assets: {:?}", opts.assets.iter().map(|a| &a.name).collect::<Vec<_>>());
+        // NOTE: used_assets already analyzed earlier (before level embedding)
         
         // Filter assets to only include used ones
         let assets_to_embed: Vec<_> = opts.assets.iter()

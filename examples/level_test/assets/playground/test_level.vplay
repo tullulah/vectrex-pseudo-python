@@ -18,7 +18,7 @@
   "layers": {
     "background": [
       {
-        "id": "obj_1767517249927",
+        "id": "obj_1767521476231",
         "type": "enemy",
         "vectorName": "mountain",
         "layer": "background",
