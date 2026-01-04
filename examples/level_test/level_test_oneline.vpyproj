@@ -1,0 +1,26 @@
+[project]
+name = "level_test_oneline"
+version = "0.1.0"
+entry = "src/main_oneline.vpy"
+description = "Level System Test - ONE DRAW_LINE only"
+
+[build]
+output = "build/level_test_oneline.bin"
+optimization = 2
+debug_symbols = true
+
+[sources]
+vpy = ["src/**/*.vpy"]
+
+[resources]
+vectors = ["assets/vectors/*.vec"]
+animations = ["assets/animations/*.anim"]
+music = ["assets/music/*.mus"]
+sfx = ["assets/sfx/*.sfx"]
+voices = ["assets/voices/*.vox"]
+levels = ["assets/playground/*.vplay"]
+
+[metadata]
+author = "VPy Team"
+category = "Test/Demo"
+tags = ["level-system", "test", "one-draw-line"]

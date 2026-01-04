@@ -364,7 +364,24 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         
         // Cleanup
         out.push_str("DLW_DONE:\n");
-        out.push_str("    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n");
+        out.push_str("    ; CRITICAL: Reset beam origin BEFORE restoring DP\n");
+        out.push_str("    ; DP is still $D0 from BIOS calls - safe to call Reset0Ref\n");
+        out.push_str("    JSR Reset0Ref  ; Reset integrator to (0,0) - fixes SHOW_LEVEL interference\n");
+        out.push_str("    ; Full VIA reset (match Draw_Sync_List reset sequence)\n");
+        out.push_str("    CLR >$D00A     ; VIA_shift_reg = 0\n");
+        out.push_str("    LDA #$CC       ; Standard control mode\n");
+        out.push_str("    STA >$D00C     ; VIA_cntl\n");
+        out.push_str("    CLR >$D001     ; VIA_port_a = 0\n");
+        out.push_str("    LDA #$82\n");
+        out.push_str("    STA >$D000     ; VIA_port_b = $82\n");
+        out.push_str("    NOP\n");
+        out.push_str("    NOP\n");
+        out.push_str("    NOP\n");
+        out.push_str("    NOP\n");
+        out.push_str("    NOP\n");
+        out.push_str("    LDA #$83\n");
+        out.push_str("    STA >$D000     ; VIA_port_b = $83\n");
+        out.push_str("    LDA #$C8       ; Now restore DP to $C8 for our code\n");
         out.push_str("    TFR A,DP\n");
         out.push_str("    RTS\n");
     }
@@ -1118,8 +1135,11 @@ DSWM_USE_OVERRIDE:\n\
 DSWM_SET_INTENSITY:\n\
             PSHS A                  ; Save intensity\n\
             LDA #$D0\n\
+            TFR A,DP                ; Set DP=$D0 for BIOS VIA access\n\
             PULS A                  ; Restore intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
+            LDA #$C8                ; Restore DP immediately after BIOS\n\
+            TFR A,DP\n\
             LDB ,X+                 ; y_start from .vec (already relative to center)\n\
             ; Check if Y mirroring is enabled\n\
             TST MIRROR_Y\n\
@@ -1275,6 +1295,8 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             CLR VIA_shift_reg\n\
             BRA DSWM_LOOP\n\
             DSWM_DONE:\n\
+            LDA #$C8       ; CRITICAL: Restore DP before returning (fixes multi-object drawing)\n\
+            TFR A,DP\n\
             RTS\n"
     );
     

@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Level System Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='LINE' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "LEVEL SYSTEM TEST"
+    FCC "LINE"
     FCB $80
     FCB 0
 
@@ -243,10 +243,6 @@ DLW_DONE:
     ; CRITICAL: Reset beam origin BEFORE restoring DP
     ; DP is still $D0 from BIOS calls - safe to call Reset0Ref
     JSR Reset0Ref  ; Reset integrator to (0,0) - fixes SHOW_LEVEL interference
-    ; Reset VIA to standard state (BIOS leaves it in unknown mode)
-    CLR >$D00A     ; VIA_shift_reg = 0
-    LDA #$CC       ; Standard control mode
-    STA >$D00C     ; VIA_cntl
     LDA #$C8       ; Now restore DP to $C8 for our code
     TFR A,DP
     RTS
@@ -1061,7 +1057,7 @@ START:
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:9
+    ; VPy_LINE:8
 ; LOAD_LEVEL("test_level") - load level data
     LDX #_TEST_LEVEL_LEVEL
     JSR LOAD_LEVEL_RUNTIME
@@ -1090,39 +1086,19 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:11
+    ; VPy_LINE:10
 LOOP_BODY:
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:13
+    ; VPy_LINE:11
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
     LDD #100
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_1
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 13
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:14
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
@@ -1130,120 +1106,45 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 14
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 11
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:14
+    LDD #65436
+    STD TMPPTR+0
+    LDD #65436
+    STD TMPPTR+2
+    LDD #100
+    STD TMPPTR+4
+    LDD #65436
+    STD TMPPTR+6
+    LDD #60
+    STD TMPPTR+8
+    LDD TMPPTR+0
+    STD RESULT+0
+    LDD TMPPTR+2
+    STD RESULT+2
+    LDD TMPPTR+4
+    STD RESULT+4
+    LDD TMPPTR+6
+    STD RESULT+6
+    LDD TMPPTR+8
+    STD RESULT+8
+    JSR DRAW_LINE_WRAPPER
+    LDD #0
+    STD RESULT
     ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:17
-    LDD #65436
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(8)
-    ; VPy_LINE:18
-    LDD #100
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:19
-    LDD #100
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 5 - Discriminant(8)
-    ; VPy_LINE:20
-    LDD #65436
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 6 - Discriminant(8)
-    ; VPy_LINE:24
-; NATIVE_CALL: SHOW_LEVEL at line 24
+    ; VPy_LINE:16
+; NATIVE_CALL: SHOW_LEVEL at line 16
 ; SHOW_LEVEL() - draw all level objects automatically
     JSR SHOW_LEVEL_RUNTIME
     ; No return value - draws directly to screen
-    ; DEBUG: Statement 7 - Discriminant(8)
-    ; VPy_LINE:27
-; NATIVE_CALL: UPDATE_LEVEL at line 27
+    ; DEBUG: Statement 3 - Discriminant(8)
+    ; VPy_LINE:17
+; NATIVE_CALL: UPDATE_LEVEL at line 17
 ; UPDATE_LEVEL() - update level state (placeholder)
     JSR UPDATE_LEVEL_RUNTIME
     RTS
@@ -1333,10 +1234,7 @@ _TEST_LEVEL_FG_OBJECTS:
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "AUTO-DRAW MODE"
-    FCB $80
-STR_1:
-    FCC "LEVEL SYSTEM TEST"
+    FCC "ONE DRAW_LINE TEST"
     FCB $80
 VLINE_DX_16 EQU RESULT+10
 VLINE_DY_16 EQU RESULT+12

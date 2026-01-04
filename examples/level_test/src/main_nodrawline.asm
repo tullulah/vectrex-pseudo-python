@@ -130,126 +130,6 @@ VECTREX_PRINT_TEXT:
     JSR Print_Str_d
     JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)
     RTS
-; DRAW_LINE unified wrapper - handles 16-bit signed coordinates
-; Args: (x0,y0,x1,y1,intensity) as 16-bit words
-; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).
-DRAW_LINE_WRAPPER:
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)
-    STA >$D00C     ; VIA_cntl
-    ; Set DP to hardware registers
-    LDA #$D0
-    TFR A,DP
-    ; ALWAYS set intensity (no optimization)
-    LDA RESULT+8+1  ; intensity (low byte of 16-bit value)
-    JSR Intensity_a
-    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)
-    LDA RESULT+2+1  ; Y start (low byte of 16-bit value)
-    LDB RESULT+0+1  ; X start (low byte of 16-bit value)
-    JSR Moveto_d
-    ; Compute deltas using 16-bit arithmetic
-    ; dx = x1 - x0 (treating as signed 16-bit)
-    LDD RESULT+4    ; x1 (RESULT+4, 16-bit)
-    SUBD RESULT+0   ; subtract x0 (RESULT+0, 16-bit)
-    STD VLINE_DX_16 ; Store full 16-bit dx
-    ; dy = y1 - y0 (treating as signed 16-bit)
-    LDD RESULT+6    ; y1 (RESULT+6, 16-bit)
-    SUBD RESULT+2   ; subtract y0 (RESULT+2, 16-bit)
-    STD VLINE_DY_16 ; Store full 16-bit dy
-    ; SEGMENT 1: Clamp dy to ±127 and draw
-    LDD VLINE_DY_16 ; Load full dy
-    CMPD #127
-    BLE DLW_SEG1_DY_LO
-    LDA #127        ; dy > 127: use 127
-    BRA DLW_SEG1_DY_READY
-DLW_SEG1_DY_LO:
-    CMPD #-128
-    BGE DLW_SEG1_DY_NO_CLAMP  ; -128 <= dy <= 127: use original (sign-extended)
-    LDA #$80        ; dy < -128: use -128
-    BRA DLW_SEG1_DY_READY
-DLW_SEG1_DY_NO_CLAMP:
-    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)
-DLW_SEG1_DY_READY:
-    STA VLINE_DY    ; Save clamped dy for segment 1
-    ; Clamp dx to ±127
-    LDD VLINE_DX_16
-    CMPD #127
-    BLE DLW_SEG1_DX_LO
-    LDB #127        ; dx > 127: use 127
-    BRA DLW_SEG1_DX_READY
-DLW_SEG1_DX_LO:
-    CMPD #-128
-    BGE DLW_SEG1_DX_NO_CLAMP  ; -128 <= dx <= 127: use original (sign-extended)
-    LDB #$80        ; dx < -128: use -128
-    BRA DLW_SEG1_DX_READY
-DLW_SEG1_DX_NO_CLAMP:
-    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)
-DLW_SEG1_DX_READY:
-    STB VLINE_DX    ; Save clamped dx for segment 1
-    ; Draw segment 1
-    CLR Vec_Misc_Count
-    LDA VLINE_DY
-    LDB VLINE_DX
-    JSR Draw_Line_d ; Beam moves automatically
-    ; Check if we need SEGMENT 2 (dy outside ±127 range)
-    LDD VLINE_DY_16 ; Reload original dy
-    CMPD #127
-    BGT DLW_NEED_SEG2  ; dy > 127: needs segment 2
-    CMPD #-128
-    BLT DLW_NEED_SEG2  ; dy < -128: needs segment 2
-    BRA DLW_DONE       ; dy in range ±127: no segment 2
-DLW_NEED_SEG2:
-    ; SEGMENT 2: Draw remaining dy and dx
-    ; Calculate remaining dy
-    LDD VLINE_DY_16 ; Load original full dy
-    CMPD #127
-    BGT DLW_SEG2_DY_POS  ; dy > 127
-    ; dy < -128, so we drew -128 in segment 1
-    ; remaining = dy - (-128) = dy + 128
-    ADDD #128       ; Add back the -128 we already drew
-    BRA DLW_SEG2_DY_DONE
-DLW_SEG2_DY_POS:
-    ; dy > 127, so we drew 127 in segment 1
-    ; remaining = dy - 127
-    SUBD #127       ; Subtract 127 we already drew
-DLW_SEG2_DY_DONE:
-    STD VLINE_DY_REMAINING  ; Store remaining dy (16-bit)
-    ; Calculate remaining dx
-    LDD VLINE_DX_16 ; Load original full dx
-    CMPD #127
-    BLE DLW_SEG2_DX_CHECK_NEG
-    ; dx > 127, so we drew 127 in segment 1
-    ; remaining = dx - 127
-    SUBD #127
-    BRA DLW_SEG2_DX_DONE
-DLW_SEG2_DX_CHECK_NEG:
-    CMPD #-128
-    BGE DLW_SEG2_DX_NO_REMAIN  ; -128 <= dx <= 127: no remaining dx
-    ; dx < -128, so we drew -128 in segment 1
-    ; remaining = dx - (-128) = dx + 128
-    ADDD #128
-    BRA DLW_SEG2_DX_DONE
-DLW_SEG2_DX_NO_REMAIN:
-    LDD #0          ; No remaining dx
-DLW_SEG2_DX_DONE:
-    STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit) in VLINE_DX_REMAINING
-    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)
-    ; Load remaining dy from VLINE_DY_REMAINING (already saved)
-    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy
-    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx
-    CLR Vec_Misc_Count
-    JSR Draw_Line_d ; Beam continues from segment 1 endpoint
-DLW_DONE:
-    ; CRITICAL: Reset beam origin BEFORE restoring DP
-    ; DP is still $D0 from BIOS calls - safe to call Reset0Ref
-    JSR Reset0Ref  ; Reset integrator to (0,0) - fixes SHOW_LEVEL interference
-    ; Reset VIA to standard state (BIOS leaves it in unknown mode)
-    CLR >$D00A     ; VIA_shift_reg = 0
-    LDA #$CC       ; Standard control mode
-    STA >$D00C     ; VIA_cntl
-    LDA #$C8       ; Now restore DP to $C8 for our code
-    TFR A,DP
-    RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
     LDA #$98       ; VIA_cntl = $98 (DAC mode)
@@ -549,11 +429,8 @@ LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
 PSHS A                  ; Save intensity
 LDA #$D0
-TFR A,DP                ; Set DP=$D0 for BIOS VIA access
 PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
-LDA #$C8                ; Restore DP immediately after BIOS
-TFR A,DP
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
@@ -1106,7 +983,7 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_1
+    LDX #STR_0
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1126,7 +1003,7 @@ LOOP_BODY:
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_0
+    LDX #STR_1
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1136,114 +1013,14 @@ LOOP_BODY:
     CLRB
     STD RESULT
     ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:17
-    LDD #65436
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(8)
     ; VPy_LINE:18
-    LDD #100
-    STD TMPPTR+0
-    LDD #65436
-    STD TMPPTR+2
-    LDD #100
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 4 - Discriminant(8)
-    ; VPy_LINE:19
-    LDD #100
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #100
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 5 - Discriminant(8)
-    ; VPy_LINE:20
-    LDD #65436
-    STD TMPPTR+0
-    LDD #100
-    STD TMPPTR+2
-    LDD #65436
-    STD TMPPTR+4
-    LDD #65436
-    STD TMPPTR+6
-    LDD #60
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 6 - Discriminant(8)
-    ; VPy_LINE:24
-; NATIVE_CALL: SHOW_LEVEL at line 24
+; NATIVE_CALL: SHOW_LEVEL at line 18
 ; SHOW_LEVEL() - draw all level objects automatically
     JSR SHOW_LEVEL_RUNTIME
     ; No return value - draws directly to screen
-    ; DEBUG: Statement 7 - Discriminant(8)
-    ; VPy_LINE:27
-; NATIVE_CALL: UPDATE_LEVEL at line 27
+    ; DEBUG: Statement 3 - Discriminant(8)
+    ; VPy_LINE:21
+; NATIVE_CALL: UPDATE_LEVEL at line 21
 ; UPDATE_LEVEL() - update level state (placeholder)
     JSR UPDATE_LEVEL_RUNTIME
     RTS
@@ -1333,26 +1110,18 @@ _TEST_LEVEL_FG_OBJECTS:
 
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "AUTO-DRAW MODE"
-    FCB $80
-STR_1:
     FCC "LEVEL SYSTEM TEST"
     FCB $80
-VLINE_DX_16 EQU RESULT+10
-VLINE_DY_16 EQU RESULT+12
-VLINE_DX EQU RESULT+14
-VLINE_DY EQU RESULT+15
-VLINE_DY_REMAINING EQU RESULT+16
-VLINE_DX_REMAINING EQU RESULT+18
-VLINE_STEPS EQU RESULT+20
-VLINE_LIST EQU RESULT+21
-DRAW_VEC_X EQU RESULT+23
-DRAW_VEC_Y EQU RESULT+24
-MIRROR_X EQU RESULT+25
-MIRROR_Y EQU RESULT+26
-DRAW_VEC_INTENSITY EQU RESULT+27
-DRAW_CIRCLE_XC EQU RESULT+28
-DRAW_CIRCLE_YC EQU RESULT+29
-DRAW_CIRCLE_DIAM EQU RESULT+30
-DRAW_CIRCLE_INTENSITY EQU RESULT+31
-DRAW_CIRCLE_TEMP EQU RESULT+32
+STR_1:
+    FCC "NO DRAW_LINE"
+    FCB $80
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+1
+MIRROR_X EQU RESULT+2
+MIRROR_Y EQU RESULT+3
+DRAW_VEC_INTENSITY EQU RESULT+4
+DRAW_CIRCLE_XC EQU RESULT+5
+DRAW_CIRCLE_YC EQU RESULT+6
+DRAW_CIRCLE_DIAM EQU RESULT+7
+DRAW_CIRCLE_INTENSITY EQU RESULT+8
+DRAW_CIRCLE_TEMP EQU RESULT+9
