@@ -503,6 +503,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("MIRROR_Y", 1, "Y-axis mirror flag (0=normal, 1=flip)");
         ram.allocate("DRAW_VEC_INTENSITY", 1, "Intensity override (0=use vector's, >0=override)");
     }
+
+    // 9.1 LEVEL system persistent pointer
+    // NOTE: Can't use RESULT for this because RESULT is clobbered by almost every builtin call.
+    if rt_usage.wrappers_used.contains("LOAD_LEVEL_RUNTIME") || rt_usage.wrappers_used.contains("SHOW_LEVEL_RUNTIME") {
+        ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
+
+        // NOTE: SHOW_LEVEL_RUNTIME originally used self-modifying code (patching immediates like
+        // `STA SLR_BG_COUNT+1`). Our native assembler does not reliably support label arithmetic,
+        // which can produce corrupted machine code. Use RAM-backed fields instead.
+        ram.allocate("LEVEL_BG_COUNT", 1, "SHOW_LEVEL: background object count");
+        ram.allocate("LEVEL_GP_COUNT", 1, "SHOW_LEVEL: gameplay object count");
+        ram.allocate("LEVEL_FG_COUNT", 1, "SHOW_LEVEL: foreground object count");
+        ram.allocate("LEVEL_BG_PTR", 2, "SHOW_LEVEL: background objects pointer");
+        ram.allocate("LEVEL_GP_PTR", 2, "SHOW_LEVEL: gameplay objects pointer");
+        ram.allocate("LEVEL_FG_PTR", 2, "SHOW_LEVEL: foreground objects pointer");
+    }
     
     // 10. DRAW_LINE variables (only if DRAW_LINE is used)
     if rt_usage.needs_line_vars {

@@ -605,9 +605,19 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
     if let Some(pos) = expr.rfind('+') {
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
-        let base = evaluate_expression(left, equates)?;  // Recursivo para left
         let offset = evaluate_expression(right, equates)?; // Recursivo para right
-        return Ok(base.wrapping_add(offset));
+        return match evaluate_expression(left, equates) {
+            Ok(base) => Ok(base.wrapping_add(offset)),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                // Preservar addend cuando el símbolo base aún no está resuelto (pass 2)
+                if offset > i16::MAX as u16 {
+                    return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, offset));
+                }
+                let sym = e.trim_start_matches("SYMBOL:");
+                Err(format!("SYMBOL:{}+{}", sym, offset))
+            }
+            Err(e) => Err(e),
+        };
     }
     
     if let Some(pos) = expr.rfind('-') {
@@ -615,9 +625,18 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
         if pos > 0 {
             let left = expr[..pos].trim();
             let right = expr[pos+1..].trim();
-            let base = evaluate_expression(left, equates)?; // Recursivo para left
             let offset = evaluate_expression(right, equates)?; // Recursivo para right
-            return Ok(base.wrapping_sub(offset));
+            return match evaluate_expression(left, equates) {
+                Ok(base) => Ok(base.wrapping_sub(offset)),
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    if offset > i16::MAX as u16 {
+                        return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, offset));
+                    }
+                    let sym = e.trim_start_matches("SYMBOL:");
+                    Err(format!("SYMBOL:{}-{}", sym, offset))
+                }
+                Err(e) => Err(e),
+            };
         }
     }
     
@@ -669,6 +688,40 @@ fn parse_number(s: &str) -> Result<u16, String> {
 fn resolve_address(operand: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
     // Intentar evaluar como expresión primero
     evaluate_expression(operand, equates)
+}
+
+/// Extrae (symbol, addend) de un error "SYMBOL:...".
+/// Soporta "SYMBOL:LABEL", "SYMBOL:LABEL+1", "SYMBOL:LABEL-2".
+fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
+    if !sym_err.starts_with("SYMBOL:") {
+        return Err(format!("Error interno: se esperaba SYMBOL:, got: {}", sym_err));
+    }
+
+    let rest = sym_err.trim_start_matches("SYMBOL:").trim();
+
+    if let Some(pos) = rest.rfind('+') {
+        let sym = rest[..pos].trim();
+        let n = rest[pos + 1..].trim();
+        let off = parse_number(n)?;
+        if off > i16::MAX as u16 {
+            return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, off));
+        }
+        return Ok((sym.to_string(), off as i16));
+    }
+
+    if let Some(pos) = rest.rfind('-') {
+        if pos > 0 {
+            let sym = rest[..pos].trim();
+            let n = rest[pos + 1..].trim();
+            let off = parse_number(n)?;
+            if off > i16::MAX as u16 {
+                return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, off));
+            }
+            return Ok((sym.to_string(), -(off as i16)));
+        }
+    }
+
+    Ok((rest.to_string(), 0))
 }
 
 /// Helper: Expande labels locales (empiezan con .) con el prefijo del último label global
@@ -774,9 +827,8 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             Err(msg) => {
                 // Si el error es "SYMBOL:xxx", agregar referencia para resolver en pass 2
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2); // 2-byte address
-                    emitter.ldb_extended(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xF6, &symbol, addend); // LDB extended
                 } else {
                     return Err(msg);
                 }
@@ -798,9 +850,8 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 emitter.ldd_extended(addr);
             },
             Err(e) if e.starts_with("SYMBOL:") => {
-                let symbol = e.trim_start_matches("SYMBOL:");
-                emitter.add_symbol_ref(symbol, false, 2);
-                emitter.ldd_extended(0x0000); // Placeholder
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xFC, &symbol, addend); // LDD extended
             },
             Err(e) => return Err(e),
         }
@@ -817,9 +868,8 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 emitter.ldd_extended(addr);
             },
             Err(e) if e.starts_with("SYMBOL:") => {
-                let symbol = e.trim_start_matches("SYMBOL:");
-                emitter.add_symbol_ref(symbol, false, 2);
-                emitter.ldd_extended(0x0000); // Placeholder
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xFC, &symbol, addend); // LDD extended
             },
             Err(e) => return Err(e),
         }
@@ -858,9 +908,8 @@ fn emit_sta(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             }
         },
         Err(e) if e.starts_with("SYMBOL:") => {
-            let symbol = e.trim_start_matches("SYMBOL:");
-            emitter.add_symbol_ref(symbol, false, 2);
-            emitter.sta_extended(0x0000); // Placeholder
+            let (symbol, addend) = parse_symbol_and_addend(&e)?;
+            emitter.emit_extended_symbol_ref(0xB7, &symbol, addend); // STA extended
         },
         Err(e) => return Err(e),
     }
@@ -898,9 +947,8 @@ fn emit_stb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             }
         },
         Err(e) if e.starts_with("SYMBOL:") => {
-            let symbol = e.trim_start_matches("SYMBOL:");
-            emitter.add_symbol_ref(symbol, false, 2);
-            emitter.stb_extended(0x0000);
+            let (symbol, addend) = parse_symbol_and_addend(&e)?;
+            emitter.emit_extended_symbol_ref(0xF7, &symbol, addend); // STB extended
         },
         Err(e) => return Err(e),
     }
@@ -924,9 +972,8 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 emitter.std_extended(addr);
             },
             Err(e) if e.starts_with("SYMBOL:") => {
-                let symbol = e.trim_start_matches("SYMBOL:");
-                emitter.add_symbol_ref(symbol, false, 2);
-                emitter.std_extended(0x0000); // Placeholder
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xFD, &symbol, addend); // STD extended
             },
             Err(e) => return Err(e),
         }
@@ -937,9 +984,8 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 emitter.std_extended(addr);
             },
             Err(e) if e.starts_with("SYMBOL:") => {
-                let symbol = e.trim_start_matches("SYMBOL:");
-                emitter.add_symbol_ref(symbol, false, 2);
-                emitter.std_extended(0x0000); // Placeholder
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xFD, &symbol, addend); // STD extended
             },
             Err(e) => return Err(e),
         }
@@ -1384,9 +1430,8 @@ fn emit_adda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.adda_extended(0);
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xBB, &symbol, addend); // ADDA extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1410,10 +1455,8 @@ fn emit_addb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xFB);
-                    emitter.emit_word(0);
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xFB, &symbol, addend); // ADDB extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1438,10 +1481,8 @@ fn emit_suba(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xB0); // SUBA extended opcode
-                    emitter.emit_word(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xB0, &symbol, addend); // SUBA extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1466,10 +1507,8 @@ fn emit_sbca(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xB2); // SBCA extended opcode
-                    emitter.emit_word(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xB2, &symbol, addend); // SBCA extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1494,10 +1533,8 @@ fn emit_sbcb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xF2); // SBCB extended opcode
-                    emitter.emit_word(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xF2, &symbol, addend); // SBCB extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1521,10 +1558,8 @@ fn emit_subb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xF0); // SUBB extended opcode
-                    emitter.emit_word(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xF0, &symbol, addend); // SUBB extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1548,9 +1583,8 @@ fn emit_addd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.addd_extended(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xF3, &symbol, addend); // ADDD extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -1582,9 +1616,8 @@ fn emit_subd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             }
             Err(msg) => {
                 if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.subd_extended(0); // Placeholder
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xB3, &symbol, addend); // SUBD extended
                     Ok(())
                 } else {
                     Err(msg)
@@ -2251,12 +2284,18 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
             emitter.ldx_immediate(value);
-        } else if value_part.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            // Symbol reference in immediate mode: LDX #SYMBOL
-            emitter.ldx_immediate_sym(value_part);
         } else {
-            let value = parse_immediate_16(value_part)?;
-            emitter.ldx_immediate(value);
+            match evaluate_expression(value_part, equates) {
+                Ok(value) => emitter.ldx_immediate(value),
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    emitter.emit_immediate16_symbol_ref(&[0x8E], &symbol, addend);
+                }
+                Err(_) => {
+                    let value = parse_immediate_16(value_part)?;
+                    emitter.ldx_immediate(value);
+                }
+            }
         }
     } else if operand.starts_with('>') {
         // Force extended addressing (lwasm compatibility) - LDX has no DP mode anyway
@@ -2290,12 +2329,18 @@ fn emit_ldy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
             emitter.ldy_immediate(value);
-        } else if value_part.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            // Symbol reference: LDY #SYMBOL
-            emitter.ldy_immediate_sym(value_part);
         } else {
-            let value = parse_immediate_16(value_part)?;
-            emitter.ldy_immediate(value);
+            match evaluate_expression(value_part, equates) {
+                Ok(value) => emitter.ldy_immediate(value),
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    emitter.emit_immediate16_symbol_ref(&[0x10, 0x8E], &symbol, addend);
+                }
+                Err(_) => {
+                    let value = parse_immediate_16(value_part)?;
+                    emitter.ldy_immediate(value);
+                }
+            }
         }
     } else if operand.contains(',') {
         // Modo indexado
@@ -2361,14 +2406,22 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         // Immediate mode
         let value_part = &operand[1..];
-        
-        // Try to resolve as numeric value or symbol from equates
-        match parse_immediate_16_with_symbols(value_part, equates) {
-            Ok(value) => emitter.ldu_immediate(value),
-            Err(_) => {
-                // If it fails, treat it as a forward reference symbol
-                // (will be resolved in second pass)
-                emitter.ldu_immediate_sym(value_part);
+
+        // Try equates first (fast path)
+        let upper = value_part.to_uppercase();
+        if let Some(&value) = equates.get(&upper) {
+            emitter.ldu_immediate(value);
+        } else {
+            match evaluate_expression(value_part, equates) {
+                Ok(value) => emitter.ldu_immediate(value),
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    emitter.emit_immediate16_symbol_ref(&[0xCE], &symbol, addend);
+                }
+                Err(_) => {
+                    let value = parse_immediate_16(value_part)?;
+                    emitter.ldu_immediate(value);
+                }
             }
         }
     } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {

@@ -10,6 +10,7 @@ struct SymbolRef {
     symbol: String,     // Nombre del símbolo referenciado
     is_relative: bool,  // true para branches relativos, false para absolute
     ref_size: u8,       // 1 para offset de 8 bits, 2 para dirección de 16 bits
+    addend: i16,        // Add/sub offset applied to the resolved symbol address
 }
 
 /// Emisor de código binario M6809 con tracking de direcciones y símbolos
@@ -73,12 +74,42 @@ impl BinaryEmitter {
 
     /// Registra referencia a símbolo para resolver en segunda pasada
     pub fn add_symbol_ref(&mut self, symbol: &str, is_relative: bool, ref_size: u8) {
+        self.add_symbol_ref_with_addend(symbol, is_relative, ref_size, 0);
+    }
+
+    /// Registra referencia a símbolo con addend (e.g. LABEL+1)
+    pub fn add_symbol_ref_with_addend(&mut self, symbol: &str, is_relative: bool, ref_size: u8, addend: i16) {
         self.symbol_refs.push(SymbolRef {
             offset: self.current_offset(),
             symbol: symbol.to_string(),
             is_relative,
             ref_size,
+            addend,
         });
+    }
+
+    /// Emite un opcode de direccionamiento extendido y deja un placeholder para una
+    /// dirección de 16 bits que se resolverá en segunda pasada.
+    ///
+    /// Esto evita el patrón incorrecto de: add_symbol_ref(); <instr>_extended(0x0000)
+    /// donde el SymbolRef quedaba apuntando al opcode en vez del operando.
+    pub fn emit_extended_symbol_ref(&mut self, opcode: u8, symbol: &str, addend: i16) {
+        self.record_line_mapping();
+        self.emit(opcode);
+        self.add_symbol_ref_with_addend(symbol, false, 2, addend);
+        self.emit_word(0x0000);
+    }
+
+    /// Emite uno o más bytes de opcode (e.g. [0x10, 0x8E]) seguidos de un
+    /// operando inmediato de 16 bits (word) que referencia a un símbolo a
+    /// resolver en segunda pasada.
+    pub fn emit_immediate16_symbol_ref(&mut self, opcode: &[u8], symbol: &str, addend: i16) {
+        self.record_line_mapping();
+        for &b in opcode {
+            self.emit(b);
+        }
+        self.add_symbol_ref_with_addend(symbol, false, 2, addend);
+        self.emit_word(0x0000);
     }
 
     // ========== INSTRUCCIONES DE CARGA/ALMACENAMIENTO ==========
@@ -1036,10 +1067,12 @@ impl BinaryEmitter {
                     .ok_or_else(|| format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol))?
             };
 
+            let effective_target = target_addr.wrapping_add(sym_ref.addend as u16);
+
             if sym_ref.is_relative {
                 // Branch relativo: calcular offset desde la siguiente instrucción
                 let next_addr = self.current_address - (self.code.len() - sym_ref.offset - sym_ref.ref_size as usize) as u16;
-                let offset_i32 = target_addr as i32 - next_addr as i32;
+                let offset_i32 = effective_target as i32 - next_addr as i32;
                 
                 // 🔍 TRACE: Resolución de branches importantes
                 if sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
@@ -1062,14 +1095,19 @@ impl BinaryEmitter {
                 if sym_ref.ref_size == 2 {
                     // 🔍 DEBUG: Log ALL symbol resolutions (temporary debug)
                     if sym_ref.symbol.starts_with('_') {
-                        eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X}", 
-                            sym_ref.symbol, sym_ref.offset, target_addr);
+                        if sym_ref.addend != 0 {
+                            eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X} (addend {:+}) => 0x{:04X}", 
+                                sym_ref.symbol, sym_ref.offset, target_addr, sym_ref.addend, effective_target);
+                        } else {
+                            eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X}", 
+                                sym_ref.symbol, sym_ref.offset, target_addr);
+                        }
                     }
-                    self.code[sym_ref.offset] = (target_addr >> 8) as u8;
-                    self.code[sym_ref.offset + 1] = target_addr as u8;
+                    self.code[sym_ref.offset] = (effective_target >> 8) as u8;
+                    self.code[sym_ref.offset + 1] = effective_target as u8;
                 } else {
                     // Dirección de 8 bits (direct page)
-                    self.code[sym_ref.offset] = target_addr as u8;
+                    self.code[sym_ref.offset] = effective_target as u8;
                 }
             }
         }
