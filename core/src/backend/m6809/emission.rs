@@ -1122,7 +1122,6 @@ sfx_doframe:
 DSWM_USE_OVERRIDE:\n\
             LEAX 1,X                ; Skip intensity byte in vector data\n\
 DSWM_SET_INTENSITY:\n\
-            PSHS A                  ; Save intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
             LDB ,X+                 ; y_start from .vec (already relative to center)\n\
             ; Check if Y mirroring is enabled\n\
