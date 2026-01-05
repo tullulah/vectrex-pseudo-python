@@ -47,33 +47,6 @@ macro_rules! check_depth {
     };
 }
 
-// Helper function to map legacy function names to their modern counterparts
-fn resolve_function_name(name: &str) -> Option<String> {
-    match name {
-        "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT".to_string()),
-        "DEBUG_PRINT" => Some("VECTREX_DEBUG_PRINT".to_string()),
-        "DEBUG_PRINT_LABELED" => Some("VECTREX_DEBUG_PRINT_LABELED".to_string()),
-        "MOVE" => Some("VECTREX_MOVE_TO".to_string()),        // Unificado: MOVE -> VECTREX_MOVE_TO
-        "MOVE_TO" => Some("VECTREX_MOVE_TO".to_string()),     // Compatibilidad hacia atrás
-        "DRAW_TO" => Some("VECTREX_DRAW_TO".to_string()),
-        "POKE" => Some("VECTREX_POKE".to_string()),
-        "PEEK" => Some("VECTREX_PEEK".to_string()),
-        "PRINT_NUMBER" => Some("VECTREX_PRINT_NUMBER".to_string()),
-        // DRAW_LINE -> removed from auto-mapping, handled by inline optimization or explicit wrapper call
-        "DRAW_POLYGON" => Some("DRAW_POLYGON".to_string()),   // already handled if constants; allow pass-through if dynamic (future)
-        "DRAW_VL" => Some("VECTREX_DRAW_VL".to_string()),
-        "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN".to_string()),
-        "VECTOR_PHASE_BEGIN" => Some("VECTREX_VECTOR_PHASE_BEGIN".to_string()),
-        "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN".to_string()),
-        "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY".to_string()),
-        "WAIT_RECAL" => Some("VECTREX_WAIT_RECAL".to_string()),
-        "PLAY_MUSIC1" => Some("VECTREX_PLAY_MUSIC1".to_string()),
-        "DBG_STATIC_VL" => Some("VECTREX_DBG_STATIC_VL".to_string()),
-        name if name.starts_with("VECTREX_") => Some(name.to_string()),
-        _ => None
-    }
-}
-
 // Helper function to calculate the correct include path based on source file location
 fn calculate_include_path(_opts: &CodegenOptions) -> String {
     // For lwasm compatibility: use "VECTREX.I" and pass -Iinclude to lwasm
@@ -522,8 +495,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
     }
     
-    // 9. DRAW_VECTOR position/mirror variables (only if DRAW_VECTOR_EX or SHOW_LEVEL is used)
-    if rt_usage.uses_draw_vector_ex || rt_usage.uses_show_level {
+    // 9. DRAW_VECTOR position/mirror variables (used by DRAW_VECTOR, DRAW_VECTOR_EX, and SHOW_LEVEL)
+    if rt_usage.uses_draw_vector || rt_usage.uses_draw_vector_ex || rt_usage.uses_show_level {
         ram.allocate("DRAW_VEC_X", 1, "X position offset for vector drawing");
         ram.allocate("DRAW_VEC_Y", 1, "Y position offset for vector drawing");
         ram.allocate("MIRROR_X", 1, "X-axis mirror flag (0=normal, 1=flip)");

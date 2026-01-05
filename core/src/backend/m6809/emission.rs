@@ -1114,6 +1114,7 @@ sfx_doframe:
             "Draw_Sync_List_At_With_Mirrors:\n\
         ; Unified mirror support using flags: MIRROR_X and MIRROR_Y\n\
             ; Conditionally negates X and/or Y coordinates and deltas\n\
+            ; NOTE: Caller must ensure DP=$D0 for VIA access\n\
             LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set\n\
             BNE DSWM_USE_OVERRIDE   ; If non-zero, use override\n\
             LDA ,X+                 ; Otherwise, read intensity from vector data\n\
@@ -1122,8 +1123,6 @@ DSWM_USE_OVERRIDE:\n\
             LEAX 1,X                ; Skip intensity byte in vector data\n\
 DSWM_SET_INTENSITY:\n\
             PSHS A                  ; Save intensity\n\
-            LDA #$D0\n\
-            PULS A                  ; Restore intensity\n\
             JSR $F2AB               ; BIOS Intensity_a\n\
             LDB ,X+                 ; y_start from .vec (already relative to center)\n\
             ; Check if Y mirroring is enabled\n\
@@ -1511,7 +1510,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str(";   +18: FDB properties_ptr\n");
         out.push_str("SHOW_LEVEL_RUNTIME:\n");
         out.push_str("    PSHS D,X,Y,U     ; Preserve registers\n");
-        out.push_str("    JSR $F1AA        ; DP_to_D0 (BIOS needs DP=$D0 for VIA access)\n");
+        out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)\n");
         out.push_str("    \n");
         out.push_str("    ; Get level pointer from RESULT\n");
         out.push_str("    LDX RESULT\n");
@@ -1567,7 +1566,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    JSR SLR_DRAW_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("SLR_DONE:\n");
-        out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
+        out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access - ONCE at end)\n");
         out.push_str("    PULS D,X,Y,U,PC  ; Restore and return\n");
         out.push_str("    \n");
         out.push_str("; === Subroutine: Draw N Objects ===\n");

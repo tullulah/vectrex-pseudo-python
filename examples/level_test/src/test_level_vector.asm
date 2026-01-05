@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 39 bytes
+; Total RAM used: 25 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -38,16 +38,10 @@ DRAW_VEC_Y           EQU $C880+$0D   ; Y position offset for vector drawing (1 b
 MIRROR_X             EQU $C880+$0E   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
 MIRROR_Y             EQU $C880+$0F   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
 DRAW_VEC_INTENSITY   EQU $C880+$10   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-DRAW_CIRCLE_XC       EQU $C880+$11   ; Circle center X (byte) (1 bytes)
-DRAW_CIRCLE_YC       EQU $C880+$12   ; Circle center Y (byte) (1 bytes)
-DRAW_CIRCLE_DIAM     EQU $C880+$13   ; Circle diameter (byte) (1 bytes)
-DRAW_CIRCLE_INTENSITY EQU $C880+$14   ; Circle intensity (byte) (1 bytes)
-DRAW_CIRCLE_TEMP     EQU $C880+$15   ; Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2) (8 bytes)
-LEVEL_PTR            EQU $C880+$1D   ; Persistent pointer to loaded level data (2 bytes)
-VAR_ARG0             EQU $C880+$1F   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$21   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$23   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$25   ; Function argument 3 (2 bytes)
+VAR_ARG0             EQU $C880+$11   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$13   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$15   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$17   ; Function argument 3 (2 bytes)
 
     JMP START
 
@@ -431,44 +425,31 @@ RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
 ; Conditionally negates X and/or Y coordinates and deltas
-; CRITICAL: Read ALL RAM variables BEFORE changing DP to $D0!
-; Store on stack with direct access (native assembler now supports offsets)
-LDD MIRROR_X            ; Read both mirror flags (A=MIRROR_X, B=MIRROR_Y)
-PSHS D                  ; Save on stack [mirror_x, mirror_y]
-LDD DRAW_VEC_X          ; Read both draw_vec (A=DRAW_VEC_X, B=DRAW_VEC_Y)
-PSHS D                  ; Save on stack [draw_vec_x, draw_vec_y, mirror_x, mirror_y]
-LDB DRAW_VEC_INTENSITY  ; Read intensity
-PSHS B                  ; Stack: [intensity, draw_vec_x, draw_vec_y, mirror_x, mirror_y]
-; Check intensity override
-TSTB                    ; Test intensity
+; NOTE: Caller must ensure DP=$D0 for VIA access
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
 BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
-LDB ,X+                 ; Otherwise, read intensity from vector data
-STB ,S                  ; Update on stack
+LDA ,X+                 ; Otherwise, read intensity from vector data
 BRA DSWM_SET_INTENSITY
 DSWM_USE_OVERRIDE:
 LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
-LDB ,S                  ; Get intensity from stack
-PSHS B                  ; Save for BIOS
-LDA #$D0                ; NOW safe to change DP
-TFR A,DP
-PULS A                  ; Get intensity
+PSHS A                  ; Save intensity
 JSR $F2AB               ; BIOS Intensity_a
-LDB ,X+                 ; y_start from .vec
-TST 4,S                 ; Test mirror_y
+LDB ,X+                 ; y_start from .vec (already relative to center)
+; Check if Y mirroring is enabled
+TST MIRROR_Y
 BEQ DSWM_NO_NEGATE_Y
-NEGB
+NEGB                    ; ← Negate Y if flag set
 DSWM_NO_NEGATE_Y:
-ADDB 2,S                ; Add draw_vec_y
-LDA ,X+                 ; x_start from .vec
-PSHS B                  ; Save Y
-TST 5,S                 ; Test mirror_x (shifted +1)
+ADDB DRAW_VEC_Y         ; Add Y offset
+LDA ,X+                 ; x_start from .vec (already relative to center)
+; Check if X mirroring is enabled
+TST MIRROR_X
 BEQ DSWM_NO_NEGATE_X
-NEGA
+NEGA                    ; ← Negate X if flag set
 DSWM_NO_NEGATE_X:
-ADDA 3,S                ; Add draw_vec_x (shifted +1)
-PULS B                  ; Restore Y
-STD TEMP_YX
+ADDA DRAW_VEC_X         ; Add X offset
+STD TEMP_YX             ; Save adjusted position
 ; Reset completo
 CLR VIA_shift_reg
 LDA #$CC
@@ -504,7 +485,7 @@ DSWM_W1:
 LDA VIA_int_flags
 ANDA #$40
 BEQ DSWM_W1
-; Loop de dibujo (conditional mirrors - read from stack!)
+; Loop de dibujo (conditional mirrors)
 DSWM_LOOP:
 LDA ,X+                 ; Read flag
 CMPA #2                 ; Check end marker
@@ -513,17 +494,17 @@ CMPA #1                 ; Check next path marker
 LBEQ DSWM_NEXT_PATH
 ; Draw line with conditional negations
 LDB ,X+                 ; dy
-TST 4,S                 ; Test mirror_y
+; Check if Y mirroring is enabled
+TST MIRROR_Y
 BEQ DSWM_NO_NEGATE_DY
-NEGB
+NEGB                    ; ← Negate dy if flag set
 DSWM_NO_NEGATE_DY:
 LDA ,X+                 ; dx
-PSHS B                  ; Save dy
-TST 5,S                 ; Test mirror_x (shifted +1)
+; Check if X mirroring is enabled
+TST MIRROR_X
 BEQ DSWM_NO_NEGATE_DX
-NEGA
+NEGA                    ; ← Negate dx if flag set
 DSWM_NO_NEGATE_DX:
-PULS B                  ; Restore dy
 PSHS A                  ; Save final dx
 STB VIA_port_a          ; dy (possibly negated) to DAC
 CLR VIA_port_b
@@ -541,36 +522,35 @@ ANDA #$40
 BEQ DSWM_W2
 CLR VIA_shift_reg
 BRA DSWM_LOOP
-; Next path: repeat mirror logic
+; Next path: repeat mirror logic for new path header
 DSWM_NEXT_PATH:
 TFR X,D
-PSHS D                  ; Save X
-LDB ,X+                 ; intensity from .vec
-TSTB
-BEQ DSWM_NEXT_KEEP_INTENSITY
-; Set new intensity
-PSHS B
-LDA #$D0
-TFR A,DP
-PULS A
-JSR $F2AB
-DSWM_NEXT_KEEP_INTENSITY:
+PSHS D
+; Check intensity override (same logic as start)
+LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
+BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
+LDA ,X+                 ; Otherwise, read intensity from vector data
+BRA DSWM_NEXT_SET_INTENSITY
+DSWM_NEXT_USE_OVERRIDE:
+LEAX 1,X                ; Skip intensity byte in vector data
+DSWM_NEXT_SET_INTENSITY:
+PSHS A
 LDB ,X+                 ; y_start
-TST 6,S                 ; Test mirror_y (shifted +2)
+TST MIRROR_Y
 BEQ DSWM_NEXT_NO_NEGATE_Y
 NEGB
 DSWM_NEXT_NO_NEGATE_Y:
-ADDB 4,S                ; Add draw_vec_y (shifted +2)
+ADDB DRAW_VEC_Y         ; Add Y offset
 LDA ,X+                 ; x_start
-PSHS B                  ; Save Y
-TST 8,S                 ; Test mirror_x (shifted +3)
+TST MIRROR_X
 BEQ DSWM_NEXT_NO_NEGATE_X
 NEGA
 DSWM_NEXT_NO_NEGATE_X:
-ADDA 6,S                ; Add draw_vec_x (shifted +3)
-PULS B                  ; Restore Y
+ADDA DRAW_VEC_X         ; Add X offset
 STD TEMP_YX
-PULS D                  ; Restore X pointer
+PULS A                  ; Get intensity back
+JSR $F2AB
+PULS D
 ADDD #3
 TFR D,X
 ; Reset to zero
@@ -610,194 +590,18 @@ BEQ DSWM_W3
 CLR VIA_shift_reg
 BRA DSWM_LOOP
 DSWM_DONE:
-LEAS 5,S                ; Clean up stack (5 bytes)
 RTS
-; ============================================================================
-; DRAW_CIRCLE_RUNTIME - Draw circle with runtime parameters
-; ============================================================================
-; Follows Draw_Sync_List_At pattern: read params BEFORE DP change
-; Inputs: DRAW_CIRCLE_XC, DRAW_CIRCLE_YC, DRAW_CIRCLE_DIAM, DRAW_CIRCLE_INTENSITY (bytes in RAM)
-; Uses 8 segments (octagon) with lookup table for efficiency
-DRAW_CIRCLE_RUNTIME:
-; Read ALL parameters into registers/stack BEFORE changing DP (critical!)
-; (These are byte variables, use LDB not LDD)
-LDB DRAW_CIRCLE_INTENSITY
-PSHS B                 ; Save intensity on stack
-
-LDB DRAW_CIRCLE_DIAM
-SEX                    ; Sign-extend to 16-bit (diameter is unsigned 0..255)
-LSRA                   ; Divide by 2 to get radius
-RORB
-STD DRAW_CIRCLE_TEMP   ; DRAW_CIRCLE_TEMP = radius (16-bit)
-
-LDB DRAW_CIRCLE_XC     ; xc (signed -128..127)
-SEX
-STD DRAW_CIRCLE_TEMP+2 ; Save xc
-
-LDB DRAW_CIRCLE_YC     ; yc (signed -128..127)
-SEX
-STD DRAW_CIRCLE_TEMP+4 ; Save yc
-
-; NOW safe to setup BIOS (all params are in DRAW_CIRCLE_TEMP+stack)
-LDA #$D0
-TFR A,DP
-JSR Reset0Ref
-
-; Set intensity (from stack)
-PULS A                 ; Get intensity from stack
-CMPA #$5F
-BEQ DCR_intensity_5F
-JSR Intensity_a
-BRA DCR_after_intensity
-DCR_intensity_5F:
-JSR Intensity_5F
-DCR_after_intensity:
-
-; Move to start position: (xc + radius, yc)
-; radius = DRAW_CIRCLE_TEMP, xc = DRAW_CIRCLE_TEMP+2, yc = DRAW_CIRCLE_TEMP+4
-LDD DRAW_CIRCLE_TEMP   ; D = radius
-ADDD DRAW_CIRCLE_TEMP+2 ; D = xc + radius
-TFR B,B                ; Keep X in B (low byte)
-PSHS B                 ; Save X on stack
-LDD DRAW_CIRCLE_TEMP+4 ; Load yc
-TFR B,A                ; Y to A
-PULS B                 ; X to B
-JSR Moveto_d
-
-; Loop through 8 segments using lookup table
-LDX #DCR_DELTA_TABLE   ; Point to delta table
-LDB #8                 ; 8 segments
-PSHS B                 ; Save counter on stack
-
-DCR_LOOP:
-CLR Vec_Misc_Count     ; Relative drawing
-
-; Load delta multipliers from table
-LDA ,X+                ; dx multiplier (-1, 0, 1, or 2 for half)
-LDB ,X+                ; dy multiplier
-PSHS A,B               ; Save multipliers
-
-; Calculate dy = (dy_mult * radius) / 2 if needed
-LDD DRAW_CIRCLE_TEMP   ; Load radius
-PULS A,B               ; Get multipliers (A=dx_mult, B=dy_mult)
-PSHS A                 ; Save dx_mult
-
-; Process dy_mult
-TSTB
-BEQ DCR_dy_zero        ; dy = 0
-CMPB #2
-BEQ DCR_dy_half        ; dy = r/2
-CMPB #$FE              ; -2 (half negative)
-BEQ DCR_dy_neg_half
-CMPB #1
-BEQ DCR_dy_pos         ; dy = r
-; dy = -r
-LDD DRAW_CIRCLE_TEMP
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dy_done
-DCR_dy_zero:
-LDD #0                 ; Clear both A and B
-BRA DCR_dy_done
-DCR_dy_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-BRA DCR_dy_done
-DCR_dy_neg_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dy_done
-DCR_dy_pos:
-LDD DRAW_CIRCLE_TEMP
-DCR_dy_done:
-TFR B,A                ; Move dy result to A (we only need 8-bit for Vectrex coordinates)
-PSHS A                 ; Save dy on stack
-
-; Process dx_mult (same logic)
-LDB 1,S                ; Get dx_mult from stack
-TSTB
-BEQ DCR_dx_zero
-CMPB #2
-BEQ DCR_dx_half
-CMPB #$FE
-BEQ DCR_dx_neg_half
-CMPB #1
-BEQ DCR_dx_pos
-; dx = -r
-LDD DRAW_CIRCLE_TEMP
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dx_done
-DCR_dx_zero:
-LDD #0                 ; Clear both A and B
-BRA DCR_dx_done
-DCR_dx_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-BRA DCR_dx_done
-DCR_dx_neg_half:
-LDD DRAW_CIRCLE_TEMP
-LSRA
-RORB
-NEGA
-NEGB
-SBCA #0
-BRA DCR_dx_done
-DCR_dx_pos:
-LDD DRAW_CIRCLE_TEMP
-DCR_dx_done:
-TFR B,B                ; dx in B
-PULS A                 ; dy in A
-LEAS 1,S               ; Drop dx_mult
-
-; Draw line with calculated deltas (preserve X - it points to table)
-PSHS X                 ; Save table pointer
-JSR Draw_Line_d
-PULS X                 ; Restore table pointer
-
-; Loop control
-DEC ,S                 ; Decrement counter
-BNE DCR_LOOP
-
-LEAS 1,S               ; Clean counter from stack
-
-; DP is ALREADY $D0 from BIOS, no need to restore (Draw_Sync_List_At doesn't restore either)
-RTS
-
-RTS
-
-; Delta multiplier table: 8 segments (dx_mult, dy_mult)
-; 0=zero, 1=r, -1=$FF=-r, 2=r/2, -2=$FE=-r/2
-DCR_DELTA_TABLE:
-FCB 2,2      ; Seg 1: dx=r/2, dy=r/2 (right-up)
-FCB 0,1      ; Seg 2: dx=0, dy=r (up)
-FCB $FE,2    ; Seg 3: dx=-r/2, dy=r/2 (left-up)
-FCB $FF,0    ; Seg 4: dx=-r, dy=0 (left)
-FCB $FE,$FE  ; Seg 5: dx=-r/2, dy=-r/2 (left-down)
-FCB 0,$FF    ; Seg 6: dx=0, dy=-r (down)
-FCB 2,$FE    ; Seg 7: dx=r/2, dy=-r/2 (right-down)
-FCB 1,0      ; Seg 8: dx=r, dy=0 (right)
-
 ; === LOAD_LEVEL_RUNTIME ===
 ; Load level data from ROM
 ; Input: X = pointer to level data in ROM
-; Output: LEVEL_PTR = pointer to level data (persistent)
+; Output: RESULT = pointer to level data
 LOAD_LEVEL_RUNTIME:
-    STX LEVEL_PTR  ; Store level pointer in persistent RAM
-    STX RESULT     ; Also return in RESULT for compatibility
+    STX RESULT     ; Store level pointer in RESULT
     RTS
 
 ; === SHOW_LEVEL_RUNTIME ===
 ; Draw all level objects from loaded level
-; Input: LEVEL_PTR = pointer to level data (persistent RAM)
+; Input: RESULT = pointer to level data
 ; Level structure (from levelres.rs):
 ;   +0:  FDB xMin, xMax (world bounds)
 ;   +4:  FDB yMin, yMax
@@ -816,13 +620,12 @@ LOAD_LEVEL_RUNTIME:
 ;   +18: FDB properties_ptr
 SHOW_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)
     
-    ; Get level pointer from persistent RAM (BEFORE changing DP!)
-    LDX LEVEL_PTR
+    ; Get level pointer from RESULT
+    LDX RESULT
     CMPX #0
     BEQ SLR_DONE     ; No level loaded
-    
-    JSR $F1AA        ; DP_to_D0 (BIOS needs DP=$D0 for VIA access)
     
     ; Skip world bounds (8 bytes) + time/score (4 bytes)
     LEAX 12,X        ; X now points to object counts
@@ -873,23 +676,23 @@ SLR_FG_PTR:
     JSR SLR_DRAW_OBJECTS
     
 SLR_DONE:
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access - ONCE at end)
     PULS D,X,Y,U,PC  ; Restore and return
     
 ; === Subroutine: Draw N Objects ===
 ; Input: B = count, X = objects ptr
 ; Each object is 20 bytes
 SLR_DRAW_OBJECTS:
-    PSHS X           ; Save object pointer
+    PSHS B,X         ; Save count and ptr
 SLR_OBJ_LOOP:
+    PULS B           ; Get count
     DECB             ; Decrement count
     BMI SLR_OBJ_DONE ; All done if negative
+    PSHS B           ; Save decremented count
     
     ; X points to current object (20 bytes)
     ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
     ;           FCB rotation (+7), FCB intensity (+8), ..., FDB vector_ptr (+16)
-    
-    JSR $F1AF        ; DP_to_C8 (need RAM access for DRAW_VEC_*)
     
     ; Clear mirror flags (no mirroring support yet)
     CLR MIRROR_X
@@ -915,18 +718,15 @@ SLR_OBJ_LOOP:
     ; Draw vector using DRAW_VECTOR_EX's function
     JSR Draw_Sync_List_At_With_Mirrors
     
-    CLR DRAW_VEC_INTENSITY  ; Clear override for next draw
-    
-    JSR $F1AA        ; DP_to_D0 (restore for BIOS calls)
-    
     PULS X           ; Restore object pointer
     
     ; Advance to next object (20 bytes)
     LEAX 20,X
+    STX ,S           ; Update pointer on stack
     BRA SLR_OBJ_LOOP
     
 SLR_OBJ_DONE:
-    PULS X,PC        ; Restore saved X and return
+    PULS B,X,PC      ; Restore and return
 
 START:
     LDA #$D0
@@ -1013,10 +813,6 @@ LOOP_BODY:
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-VL_PTR     EQU $CF80      ; Current position in vector list
-VL_Y       EQU $CF82      ; Y position (1 byte)
-VL_X       EQU $CF83      ; X position (1 byte)
-VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 
 ; ========================================
 ; ASSET DATA SECTION
@@ -1079,9 +875,9 @@ _TEST_LEVEL_LEVEL:
     FDB 127  ; yMax (16-bit signed)
     FDB 0  ; Time limit (seconds)
     FDB 0  ; Target score
-    FCB 3  ; Background object count
-    FCB 0  ; Gameplay object count
-    FCB 0  ; Foreground object count
+    FCB 1  ; Background object count
+    FCB 1  ; Gameplay object count
+    FCB 1  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
@@ -1089,8 +885,8 @@ _TEST_LEVEL_LEVEL:
 _TEST_LEVEL_BG_OBJECTS:
 ; Object: obj_1767521476231 (enemy)
     FCB 1  ; type
-    FDB -1  ; x
-    FDB 76  ; y
+    FDB 0  ; x
+    FDB 47  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
@@ -1103,9 +899,11 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB _MOUNTAIN_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
+
+_TEST_LEVEL_GAMEPLAY_OBJECTS:
 ; Object: obj_1767518126194 (enemy)
     FCB 1  ; type
-    FDB -49  ; x
+    FDB -50  ; x
     FDB 72  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
@@ -1119,6 +917,8 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
+
+_TEST_LEVEL_FG_OBJECTS:
 ; Object: obj_1767518128341 (enemy)
     FCB 1  ; type
     FDB 40  ; x
@@ -1135,10 +935,6 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
-
-_TEST_LEVEL_GAMEPLAY_OBJECTS:
-
-_TEST_LEVEL_FG_OBJECTS:
 
 
 ; String literals (classic FCC + $80 terminator)

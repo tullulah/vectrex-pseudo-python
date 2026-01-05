@@ -92,10 +92,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA DRAW_VEC_Y\n");
                 
                 // Generate code to draw each path at offset position
+                out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
                     out.push_str("    JSR Draw_Sync_List_At\n");
                 }
+                out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
                 out.push_str("    LDD #0\n    STD RESULT\n");
                 return true;
@@ -208,10 +210,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)\n");
                 
                 // Generate code to draw each path using unified mirrored function
+                out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
                     out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY\n");
                 }
+                out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
                 out.push_str("    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw\n");
                 out.push_str("    LDD #0\n    STD RESULT\n");
