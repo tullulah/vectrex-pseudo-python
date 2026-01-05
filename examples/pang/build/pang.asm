@@ -115,6 +115,11 @@ PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
 PSG_MUSIC_ACTIVE_DP EQU $29  ; DP-relative
 PSG_FRAME_COUNT_DP EQU $2A  ; DP-relative
 PSG_DELAY_FRAMES_DP EQU $2B  ; DP-relative
+SFX_PTR_DP         EQU $2C  ; DP-relative
+SFX_TICK_DP        EQU $2E  ; DP-relative
+SFX_ACTIVE_DP      EQU $30  ; DP-relative
+SFX_PHASE_DP       EQU $31  ; DP-relative
+SFX_VOL_DP         EQU $32  ; DP-relative
 
     JMP START
 
@@ -579,9 +584,119 @@ AU_DONE:
 PULS DP                 ; Restore original DP
 RTS
 
-; sfx_doframe stub (SFX not used in this project)
+; ============================================================================
+; AYFX SOUND EFFECTS PLAYER (Richard Chadd original system)
+; ============================================================================
+; Uses channel C (registers 4/5=tone, 6=noise, 10=volume, 7=mixer bit2/bit5)
+; RAM variables: SFX_PTR (16-bit), SFX_ACTIVE (8-bit)
+; AYFX format: flag byte + optional data per frame, end marker $D0 $20
+; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,
+;            6=noise data present, 7=disable noise
+; ============================================================================
+; (RAM variables defined in AUDIO_UPDATE section above)
+
+; PLAY_SFX_RUNTIME - Start SFX playback
+; Input: X = pointer to AYFX data
+PLAY_SFX_RUNTIME:
+STX SFX_PTR            ; Store pointer
+LDA #$01
+STA SFX_ACTIVE         ; Mark as active
+RTS
+
+; SFX_UPDATE - Process one AYFX frame (call once per frame in loop)
+SFX_UPDATE:
+LDA SFX_ACTIVE         ; Check if active
+BEQ noay               ; Not active, skip
+JSR sfx_doframe        ; Process one frame
+noay:
+RTS
+
+; sfx_doframe - AYFX frame parser (Richard Chadd original)
 sfx_doframe:
-	RTS
+LDU SFX_PTR            ; Get current frame pointer
+LDB ,U                 ; Read flag byte (NO auto-increment)
+CMPB #$D0              ; Check end marker (first byte)
+BNE sfx_checktonefreq  ; Not end, continue
+LDB 1,U                ; Check second byte at offset 1
+CMPB #$20              ; End marker $D0 $20?
+BEQ sfx_endofeffect    ; Yes, stop
+
+sfx_checktonefreq:
+LEAY 1,U               ; Y = pointer to tone/noise data
+LDB ,U                 ; Reload flag byte (Sound_Byte corrupts B)
+BITB #$20              ; Bit 5: tone data present?
+BEQ sfx_checknoisefreq ; No, skip tone
+; Set tone frequency (channel C = reg 4/5)
+LDB 2,U                ; Get LOW byte (fine tune)
+LDA #$04               ; Register 4
+JSR Sound_Byte         ; Write to PSG
+LDB 1,U                ; Get HIGH byte (coarse tune)
+LDA #$05               ; Register 5
+JSR Sound_Byte         ; Write to PSG
+LEAY 2,Y               ; Skip 2 tone bytes
+
+sfx_checknoisefreq:
+LDB ,U                 ; Reload flag byte
+BITB #$40              ; Bit 6: noise data present?
+BEQ sfx_checkvolume    ; No, skip noise
+LDB ,Y                 ; Get noise period
+LDA #$06               ; Register 6
+JSR Sound_Byte         ; Write to PSG
+LEAY 1,Y               ; Skip 1 noise byte
+
+sfx_checkvolume:
+LDB ,U                 ; Reload flag byte
+ANDB #$0F              ; Get volume from bits 0-3
+LDA #$0A               ; Register 10 (volume C)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checktonedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$10              ; Bit 4: disable tone?
+BEQ sfx_enabletone
+sfx_disabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$04               ; Set bit 2 (disable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_checknoisedisable  ; Continue to noise check
+
+sfx_enabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$FB              ; Clear bit 2 (enable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checknoisedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$80              ; Bit 7: disable noise?
+BEQ sfx_enablenoise
+sfx_disablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$20               ; Set bit 5 (disable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_nextframe      ; Done, update pointer
+
+sfx_enablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$DF              ; Clear bit 5 (enable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_nextframe:
+STY SFX_PTR            ; Update pointer for next frame
+RTS
+
+sfx_endofeffect:
+; Stop SFX - set volume to 0
+CLR SFX_ACTIVE         ; Mark as inactive
+LDA #$0A               ; Register 10 (volume C)
+LDB #$00               ; Volume = 0
+JSR Sound_Byte
+LDD #$0000
+STD SFX_PTR            ; Clear pointer
+RTS
 
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -1040,6 +1155,10 @@ START:
     LDX #Vec_Default_Stk
     TFR X,S
     JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence
+    ; Initialize SFX variables to prevent random noise on startup
+    CLR SFX_ACTIVE         ; Mark SFX as inactive (0=off)
+    LDD #$0000
+    STD SFX_PTR            ; Clear SFX pointer
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:11
@@ -1539,6 +1658,12 @@ OR_END_11:
     LDU #VAR_CURRENT_MUSIC
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:111
+; PLAY_SFX("laser") - play sound effect (one-shot)
+    LDX #_LASER_SFX
+    JSR PLAY_SFX_RUNTIME
+    LDD #0
+    STD RESULT
     LBRA IF_END_8
 IF_NEXT_9:
 IF_END_8:
@@ -2283,20 +2408,26 @@ OR_END_82:
     LDD RESULT
     LBEQ IF_NEXT_80
     ; VPy_LINE:149
+; PLAY_SFX("laser") - play sound effect (one-shot)
+    LDX #_LASER_SFX
+    JSR PLAY_SFX_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:150
     LDD #2
     STD RESULT
     LDX RESULT
     LDU #VAR_SCREEN
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:150
+    ; VPy_LINE:151
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_COUNTDOWN_ACTIVE
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:151
+    ; VPy_LINE:152
     LDD #180
     STD RESULT
     LDX RESULT
@@ -2306,7 +2437,7 @@ OR_END_82:
     LBRA IF_END_79
 IF_NEXT_80:
 IF_END_79:
-    ; VPy_LINE:153
+    ; VPy_LINE:154
     JSR DRAW_MAP_SCREEN
     LBRA IF_END_0
 IF_NEXT_24:
@@ -2330,7 +2461,7 @@ CT_95:
 CE_96:
     LDD RESULT
     LBEQ IF_END_0
-    ; VPy_LINE:157
+    ; VPy_LINE:158
     LDD VAR_COUNTDOWN_ACTIVE
     STD RESULT
     LDD RESULT
@@ -2351,19 +2482,19 @@ CT_99:
 CE_100:
     LDD RESULT
     LBEQ IF_NEXT_98
-    ; VPy_LINE:159
+    ; VPy_LINE:160
     JSR DRAW_LEVEL_BACKGROUND
-    ; VPy_LINE:161
+    ; VPy_LINE:162
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 161
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 162
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:162
+    ; VPy_LINE:163
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-50
     STD RESULT
@@ -2377,22 +2508,22 @@ CE_100:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 162
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 163
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:165
+    ; VPy_LINE:166
     LDD #100
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 165
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 166
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:166
+    ; VPy_LINE:167
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-85
     STD RESULT
@@ -2417,12 +2548,12 @@ CE_100:
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 166
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 167
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:169
+    ; VPy_LINE:170
     LDD VAR_COUNTDOWN_TIMER
     STD RESULT
     LDD RESULT
@@ -2441,7 +2572,7 @@ CE_100:
     LDU #VAR_COUNTDOWN_TIMER
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:172
+    ; VPy_LINE:173
     LDD VAR_COUNTDOWN_TIMER
     STD RESULT
     LDD RESULT
@@ -2462,21 +2593,21 @@ CT_103:
 CE_104:
     LDD RESULT
     LBEQ IF_NEXT_102
-    ; VPy_LINE:173
+    ; VPy_LINE:174
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_COUNTDOWN_ACTIVE
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:174
+    ; VPy_LINE:175
     JSR SPAWN_ENEMIES
     LBRA IF_END_101
 IF_NEXT_102:
 IF_END_101:
     LBRA IF_END_97
 IF_NEXT_98:
-    ; VPy_LINE:179
+    ; VPy_LINE:180
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -2497,7 +2628,7 @@ CT_107:
 CE_108:
     LDD RESULT
     LBEQ IF_NEXT_106
-    ; VPy_LINE:180
+    ; VPy_LINE:181
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -2649,28 +2780,34 @@ OR_TRUE_111:
 OR_END_112:
     LDD RESULT
     LBEQ IF_NEXT_110
-    ; VPy_LINE:181
+    ; VPy_LINE:182
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_ACTIVE
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:182
+    ; VPy_LINE:183
     LDD #-100
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:185
+    ; VPy_LINE:184
+; PLAY_SFX("hit") - play sound effect (one-shot)
+    LDX #_HIT_SFX
+    JSR PLAY_SFX_RUNTIME
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:187
     LDD VAR_PLAYER_X
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_GUN_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:186
+    ; VPy_LINE:188
     LDD VAR_PLAYER_FACING
     STD RESULT
     LDD RESULT
@@ -2691,7 +2828,7 @@ CT_127:
 CE_128:
     LDD RESULT
     LBEQ IF_NEXT_126
-    ; VPy_LINE:187
+    ; VPy_LINE:189
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -2712,7 +2849,7 @@ CE_128:
     STX ,U
     LBRA IF_END_125
 IF_NEXT_126:
-    ; VPy_LINE:189
+    ; VPy_LINE:191
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -2732,7 +2869,7 @@ IF_NEXT_126:
     STU TMPPTR
     STX ,U
 IF_END_125:
-    ; VPy_LINE:190
+    ; VPy_LINE:192
     LDD #-100
     STD RESULT
     LDD RESULT
@@ -2751,14 +2888,14 @@ IF_END_125:
     LDU #VAR_HOOK_GUN_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:191
+    ; VPy_LINE:193
     LDD VAR_HOOK_GUN_Y
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_INIT_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:194
+    ; VPy_LINE:196
     LDD VAR_HOOK_GUN_X
     STD RESULT
     LDX RESULT
@@ -2771,7 +2908,7 @@ IF_END_109:
     LBRA IF_END_105
 IF_NEXT_106:
 IF_END_105:
-    ; VPy_LINE:197
+    ; VPy_LINE:199
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -2792,7 +2929,7 @@ CT_131:
 CE_132:
     LDD RESULT
     LBEQ IF_NEXT_130
-    ; VPy_LINE:198
+    ; VPy_LINE:200
     LDD VAR_HOOK_Y
     STD RESULT
     LDD RESULT
@@ -2811,7 +2948,7 @@ CE_132:
     LDU #VAR_HOOK_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:201
+    ; VPy_LINE:203
     LDD VAR_HOOK_Y
     STD RESULT
     LDD RESULT
@@ -2832,14 +2969,14 @@ CT_135:
 CE_136:
     LDD RESULT
     LBEQ IF_NEXT_134
-    ; VPy_LINE:202
+    ; VPy_LINE:204
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_HOOK_ACTIVE
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:203
+    ; VPy_LINE:205
     LDD #-100
     STD RESULT
     LDX RESULT
@@ -2852,7 +2989,7 @@ IF_END_133:
     LBRA IF_END_129
 IF_NEXT_130:
 IF_END_129:
-    ; VPy_LINE:205
+    ; VPy_LINE:207
     JSR DRAW_GAME_LEVEL
 IF_END_97:
     LBRA IF_END_0
@@ -2860,21 +2997,21 @@ IF_END_0:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)
     RTS
 
-    ; VPy_LINE:207
+    ; VPy_LINE:209
 DRAW_MAP_SCREEN: ; function
 ; --- function draw_map_screen ---
     LEAS -4,S ; allocate locals
-    ; VPy_LINE:209
+    ; VPy_LINE:211
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 209
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 211
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:210
+    ; VPy_LINE:212
 ; DRAW_VECTOR_EX("map", x, y, mirror) - 15 path(s), width=242, center_x=-6
     LDD #0
     STD RESULT
@@ -2944,7 +3081,7 @@ DSVEX_CALL_139:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    ; VPy_LINE:213
+    ; VPy_LINE:215
     LDD VAR_LOCATION_GLOW_DIRECTION
     STD RESULT
     LDD RESULT
@@ -2965,7 +3102,7 @@ CT_142:
 CE_143:
     LDD RESULT
     LBEQ IF_NEXT_141
-    ; VPy_LINE:214
+    ; VPy_LINE:216
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -2984,7 +3121,7 @@ CE_143:
     LDU #VAR_LOCATION_GLOW_INTENSITY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:215
+    ; VPy_LINE:217
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3005,7 +3142,7 @@ CT_146:
 CE_147:
     LDD RESULT
     LBEQ IF_NEXT_145
-    ; VPy_LINE:216
+    ; VPy_LINE:218
     LDD #1
     STD RESULT
     LDX RESULT
@@ -3017,7 +3154,7 @@ IF_NEXT_145:
 IF_END_144:
     LBRA IF_END_140
 IF_NEXT_141:
-    ; VPy_LINE:218
+    ; VPy_LINE:220
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3036,7 +3173,7 @@ IF_NEXT_141:
     LDU #VAR_LOCATION_GLOW_INTENSITY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:219
+    ; VPy_LINE:221
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3057,7 +3194,7 @@ CT_150:
 CE_151:
     LDD RESULT
     LBEQ IF_NEXT_149
-    ; VPy_LINE:220
+    ; VPy_LINE:222
     LDD #0
     STD RESULT
     LDX RESULT
@@ -3068,7 +3205,7 @@ CE_151:
 IF_NEXT_149:
 IF_END_148:
 IF_END_140:
-    ; VPy_LINE:222
+    ; VPy_LINE:224
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-120
     STD RESULT
@@ -3093,12 +3230,12 @@ IF_END_140:
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 222
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 224
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:225
+    ; VPy_LINE:227
     ; ===== Const array indexing: location_x_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -3113,7 +3250,7 @@ IF_END_140:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:226
+    ; VPy_LINE:228
     ; ===== Const array indexing: location_y_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -3128,7 +3265,7 @@ IF_END_140:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:228
+    ; VPy_LINE:230
 ; DRAW_VECTOR_EX("location_marker", x, y, mirror) - 1 path(s), width=22, center_x=0
     LDD 2 ,S
     STD RESULT
@@ -3173,20 +3310,20 @@ DSVEX_CALL_154:
     LEAS 4,S ; free locals
     RTS
 
-    ; VPy_LINE:231
+    ; VPy_LINE:233
 DRAW_TITLE_SCREEN: ; function
 ; --- function draw_title_screen ---
-    ; VPy_LINE:233
+    ; VPy_LINE:235
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 233
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 235
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:234
+    ; VPy_LINE:236
 ; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
     LDD #0
     STD RESULT
@@ -3216,17 +3353,17 @@ DRAW_TITLE_SCREEN: ; function
     JSR Draw_Sync_List_At
     LDD #0
     STD RESULT
-    ; VPy_LINE:236
+    ; VPy_LINE:238
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 236
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 238
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:237
+    ; VPy_LINE:239
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -3240,12 +3377,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 237
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 239
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:238
+    ; VPy_LINE:240
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-50
     STD RESULT
@@ -3259,12 +3396,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 238
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 240
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:240
+    ; VPy_LINE:242
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -3285,7 +3422,7 @@ CT_157:
 CE_158:
     LDD RESULT
     LBEQ IF_NEXT_156
-    ; VPy_LINE:241
+    ; VPy_LINE:243
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3307,7 +3444,7 @@ CE_158:
     LBRA IF_END_155
 IF_NEXT_156:
 IF_END_155:
-    ; VPy_LINE:243
+    ; VPy_LINE:245
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -3328,7 +3465,7 @@ CT_161:
 CE_162:
     LDD RESULT
     LBEQ IF_NEXT_160
-    ; VPy_LINE:244
+    ; VPy_LINE:246
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3350,7 +3487,7 @@ CE_162:
     LBRA IF_END_159
 IF_NEXT_160:
 IF_END_159:
-    ; VPy_LINE:246
+    ; VPy_LINE:248
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3371,7 +3508,7 @@ CT_165:
 CE_166:
     LDD RESULT
     LBEQ IF_NEXT_164
-    ; VPy_LINE:247
+    ; VPy_LINE:249
     LDD #1
     STD RESULT
     LDX RESULT
@@ -3381,7 +3518,7 @@ CE_166:
     LBRA IF_END_163
 IF_NEXT_164:
 IF_END_163:
-    ; VPy_LINE:249
+    ; VPy_LINE:251
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3402,7 +3539,7 @@ CT_169:
 CE_170:
     LDD RESULT
     LBEQ IF_NEXT_168
-    ; VPy_LINE:250
+    ; VPy_LINE:252
     LDD #0
     STD RESULT
     LDX RESULT
@@ -3414,20 +3551,20 @@ IF_NEXT_168:
 IF_END_167:
     RTS
 
-    ; VPy_LINE:252
+    ; VPy_LINE:254
 DRAW_LEVEL_BACKGROUND: ; function
 ; --- function draw_level_background ---
-    ; VPy_LINE:254
+    ; VPy_LINE:256
     LDD #60
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 254
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 256
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:257
+    ; VPy_LINE:259
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -3448,7 +3585,7 @@ CT_173:
 CE_174:
     LDD RESULT
     LBEQ IF_NEXT_172
-    ; VPy_LINE:258
+    ; VPy_LINE:260
 ; DRAW_VECTOR("fuji_bg", x, y) - 6 path(s) at position
     LDD #0
     STD RESULT
@@ -3498,7 +3635,7 @@ CT_176:
 CE_177:
     LDD RESULT
     LBEQ IF_NEXT_175
-    ; VPy_LINE:260
+    ; VPy_LINE:262
 ; DRAW_VECTOR("keirin_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
@@ -3542,7 +3679,7 @@ CT_179:
 CE_180:
     LDD RESULT
     LBEQ IF_NEXT_178
-    ; VPy_LINE:262
+    ; VPy_LINE:264
 ; DRAW_VECTOR("buddha_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -3588,7 +3725,7 @@ CT_182:
 CE_183:
     LDD RESULT
     LBEQ IF_NEXT_181
-    ; VPy_LINE:264
+    ; VPy_LINE:266
 ; DRAW_VECTOR("angkor_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
@@ -3632,7 +3769,7 @@ CT_185:
 CE_186:
     LDD RESULT
     LBEQ IF_NEXT_184
-    ; VPy_LINE:266
+    ; VPy_LINE:268
 ; DRAW_VECTOR("ayers_bg", x, y) - 3 path(s) at position
     LDD #0
     STD RESULT
@@ -3676,7 +3813,7 @@ CT_188:
 CE_189:
     LDD RESULT
     LBEQ IF_NEXT_187
-    ; VPy_LINE:268
+    ; VPy_LINE:270
 ; DRAW_VECTOR("taj_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -3722,7 +3859,7 @@ CT_191:
 CE_192:
     LDD RESULT
     LBEQ IF_NEXT_190
-    ; VPy_LINE:270
+    ; VPy_LINE:272
 ; DRAW_VECTOR("leningrad_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
@@ -3770,7 +3907,7 @@ CT_194:
 CE_195:
     LDD RESULT
     LBEQ IF_NEXT_193
-    ; VPy_LINE:272
+    ; VPy_LINE:274
 ; DRAW_VECTOR("paris_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
@@ -3818,7 +3955,7 @@ CT_197:
 CE_198:
     LDD RESULT
     LBEQ IF_NEXT_196
-    ; VPy_LINE:274
+    ; VPy_LINE:276
 ; DRAW_VECTOR("london_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -3864,7 +4001,7 @@ CT_200:
 CE_201:
     LDD RESULT
     LBEQ IF_NEXT_199
-    ; VPy_LINE:276
+    ; VPy_LINE:278
 ; DRAW_VECTOR("barcelona_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -3910,7 +4047,7 @@ CT_203:
 CE_204:
     LDD RESULT
     LBEQ IF_NEXT_202
-    ; VPy_LINE:278
+    ; VPy_LINE:280
 ; DRAW_VECTOR("athens_bg", x, y) - 7 path(s) at position
     LDD #0
     STD RESULT
@@ -3962,7 +4099,7 @@ CT_206:
 CE_207:
     LDD RESULT
     LBEQ IF_NEXT_205
-    ; VPy_LINE:280
+    ; VPy_LINE:282
 ; DRAW_VECTOR("pyramids_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -4008,7 +4145,7 @@ CT_209:
 CE_210:
     LDD RESULT
     LBEQ IF_NEXT_208
-    ; VPy_LINE:282
+    ; VPy_LINE:284
 ; DRAW_VECTOR("kilimanjaro_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -4054,7 +4191,7 @@ CT_212:
 CE_213:
     LDD RESULT
     LBEQ IF_NEXT_211
-    ; VPy_LINE:284
+    ; VPy_LINE:286
 ; DRAW_VECTOR("newyork_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
@@ -4102,7 +4239,7 @@ CT_215:
 CE_216:
     LDD RESULT
     LBEQ IF_NEXT_214
-    ; VPy_LINE:286
+    ; VPy_LINE:288
 ; DRAW_VECTOR("mayan_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
@@ -4150,7 +4287,7 @@ CT_218:
 CE_219:
     LDD RESULT
     LBEQ IF_NEXT_217
-    ; VPy_LINE:288
+    ; VPy_LINE:290
 ; DRAW_VECTOR("antarctica_bg", x, y) - 4 path(s) at position
     LDD #0
     STD RESULT
@@ -4176,7 +4313,7 @@ CE_219:
     STD RESULT
     LBRA IF_END_171
 IF_NEXT_217:
-    ; VPy_LINE:290
+    ; VPy_LINE:292
 ; DRAW_VECTOR("easter_bg", x, y) - 5 path(s) at position
     LDD #0
     STD RESULT
@@ -4205,13 +4342,13 @@ IF_NEXT_217:
 IF_END_171:
     RTS
 
-    ; VPy_LINE:292
+    ; VPy_LINE:294
 DRAW_GAME_LEVEL: ; function
 ; --- function draw_game_level ---
     LEAS -8,S ; allocate locals
-    ; VPy_LINE:294
+    ; VPy_LINE:296
     JSR DRAW_LEVEL_BACKGROUND
-    ; VPy_LINE:297
+    ; VPy_LINE:299
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -4229,7 +4366,7 @@ DRAW_GAME_LEVEL: ; function
     LDU #VAR_JOY_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:301
+    ; VPy_LINE:303
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4279,14 +4416,14 @@ OR_TRUE_222:
 OR_END_223:
     LDD RESULT
     LBEQ IF_NEXT_221
-    ; VPy_LINE:304
+    ; VPy_LINE:306
     LDD VAR_JOY_X
     STD RESULT
     LDX RESULT
     LDU #VAR_ABS_JOY
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:305
+    ; VPy_LINE:307
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4307,7 +4444,7 @@ CT_230:
 CE_231:
     LDD RESULT
     LBEQ IF_NEXT_229
-    ; VPy_LINE:306
+    ; VPy_LINE:308
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4329,7 +4466,7 @@ CE_231:
     LBRA IF_END_228
 IF_NEXT_229:
 IF_END_228:
-    ; VPy_LINE:311
+    ; VPy_LINE:313
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4350,7 +4487,7 @@ CT_234:
 CE_235:
     LDD RESULT
     LBEQ IF_NEXT_233
-    ; VPy_LINE:312
+    ; VPy_LINE:314
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4379,7 +4516,7 @@ CT_237:
 CE_238:
     LDD RESULT
     LBEQ IF_NEXT_236
-    ; VPy_LINE:314
+    ; VPy_LINE:316
     LDD #2
     STD RESULT
     LDX RESULT
@@ -4408,7 +4545,7 @@ CT_240:
 CE_241:
     LDD RESULT
     LBEQ IF_NEXT_239
-    ; VPy_LINE:316
+    ; VPy_LINE:318
     LDD #3
     STD RESULT
     LDX RESULT
@@ -4417,7 +4554,7 @@ CE_241:
     STX ,U
     LBRA IF_END_232
 IF_NEXT_239:
-    ; VPy_LINE:318
+    ; VPy_LINE:320
     LDD #4
     STD RESULT
     LDX RESULT
@@ -4425,7 +4562,7 @@ IF_NEXT_239:
     STU TMPPTR
     STX ,U
 IF_END_232:
-    ; VPy_LINE:321
+    ; VPy_LINE:323
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4446,7 +4583,7 @@ CT_244:
 CE_245:
     LDD RESULT
     LBEQ IF_NEXT_243
-    ; VPy_LINE:322
+    ; VPy_LINE:324
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4468,7 +4605,7 @@ CE_245:
     LBRA IF_END_242
 IF_NEXT_243:
 IF_END_242:
-    ; VPy_LINE:324
+    ; VPy_LINE:326
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4487,7 +4624,7 @@ IF_END_242:
     LDU #VAR_PLAYER_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:327
+    ; VPy_LINE:329
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4508,7 +4645,7 @@ CT_248:
 CE_249:
     LDD RESULT
     LBEQ IF_NEXT_247
-    ; VPy_LINE:328
+    ; VPy_LINE:330
     LDD #-110
     STD RESULT
     LDX RESULT
@@ -4518,7 +4655,7 @@ CE_249:
     LBRA IF_END_246
 IF_NEXT_247:
 IF_END_246:
-    ; VPy_LINE:329
+    ; VPy_LINE:331
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4539,7 +4676,7 @@ CT_252:
 CE_253:
     LDD RESULT
     LBEQ IF_NEXT_251
-    ; VPy_LINE:330
+    ; VPy_LINE:332
     LDD #110
     STD RESULT
     LDX RESULT
@@ -4549,7 +4686,7 @@ CE_253:
     LBRA IF_END_250
 IF_NEXT_251:
 IF_END_250:
-    ; VPy_LINE:333
+    ; VPy_LINE:335
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4570,7 +4707,7 @@ CT_256:
 CE_257:
     LDD RESULT
     LBEQ IF_NEXT_255
-    ; VPy_LINE:334
+    ; VPy_LINE:336
     LDD #-1
     STD RESULT
     LDX RESULT
@@ -4579,7 +4716,7 @@ CE_257:
     STX ,U
     LBRA IF_END_254
 IF_NEXT_255:
-    ; VPy_LINE:336
+    ; VPy_LINE:338
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4587,7 +4724,7 @@ IF_NEXT_255:
     STU TMPPTR
     STX ,U
 IF_END_254:
-    ; VPy_LINE:339
+    ; VPy_LINE:341
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
     LDD RESULT
@@ -4606,12 +4743,12 @@ IF_END_254:
     LDU #VAR_PLAYER_ANIM_COUNTER
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:341
+    ; VPy_LINE:343
     LDD #5
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:342
+    ; VPy_LINE:344
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4661,7 +4798,7 @@ OR_TRUE_260:
 OR_END_261:
     LDD RESULT
     LBEQ IF_NEXT_259
-    ; VPy_LINE:343
+    ; VPy_LINE:345
     LDD #5
     STD RESULT
     LDD RESULT
@@ -4673,7 +4810,7 @@ OR_END_261:
     LBRA IF_END_258
 IF_NEXT_259:
 IF_END_258:
-    ; VPy_LINE:345
+    ; VPy_LINE:347
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
     LDD RESULT
@@ -4694,14 +4831,14 @@ CT_268:
 CE_269:
     LDD RESULT
     LBEQ IF_NEXT_267
-    ; VPy_LINE:346
+    ; VPy_LINE:348
     LDD #0
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_ANIM_COUNTER
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:347
+    ; VPy_LINE:349
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4720,7 +4857,7 @@ CE_269:
     LDU #VAR_PLAYER_ANIM_FRAME
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:348
+    ; VPy_LINE:350
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4741,7 +4878,7 @@ CT_272:
 CE_273:
     LDD RESULT
     LBEQ IF_NEXT_271
-    ; VPy_LINE:349
+    ; VPy_LINE:351
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4756,14 +4893,14 @@ IF_NEXT_267:
 IF_END_266:
     LBRA IF_END_220
 IF_NEXT_221:
-    ; VPy_LINE:352
+    ; VPy_LINE:354
     LDD #1
     STD RESULT
     LDX RESULT
     LDU #VAR_PLAYER_ANIM_FRAME
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:353
+    ; VPy_LINE:355
     LDD #0
     STD RESULT
     LDX RESULT
@@ -4771,12 +4908,12 @@ IF_NEXT_221:
     STU TMPPTR
     STX ,U
 IF_END_220:
-    ; VPy_LINE:356
+    ; VPy_LINE:358
     LDD #0
     STD RESULT
     LDX RESULT
     STX 6 ,S
-    ; VPy_LINE:357
+    ; VPy_LINE:359
     LDD VAR_PLAYER_FACING
     STD RESULT
     LDD RESULT
@@ -4797,7 +4934,7 @@ CT_276:
 CE_277:
     LDD RESULT
     LBEQ IF_NEXT_275
-    ; VPy_LINE:358
+    ; VPy_LINE:360
     LDD #1
     STD RESULT
     LDX RESULT
@@ -4805,7 +4942,7 @@ CE_277:
     LBRA IF_END_274
 IF_NEXT_275:
 IF_END_274:
-    ; VPy_LINE:361
+    ; VPy_LINE:363
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -4826,7 +4963,7 @@ CT_280:
 CE_281:
     LDD RESULT
     LBEQ IF_NEXT_279
-    ; VPy_LINE:362
+    ; VPy_LINE:364
 ; DRAW_VECTOR_EX("player_walk_1", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -4922,7 +5059,7 @@ CT_286:
 CE_287:
     LDD RESULT
     LBEQ IF_NEXT_285
-    ; VPy_LINE:364
+    ; VPy_LINE:366
 ; DRAW_VECTOR_EX("player_walk_2", x, y, mirror) - 17 path(s), width=21, center_x=0
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5018,7 +5155,7 @@ CT_292:
 CE_293:
     LDD RESULT
     LBEQ IF_NEXT_291
-    ; VPy_LINE:366
+    ; VPy_LINE:368
 ; DRAW_VECTOR_EX("player_walk_3", x, y, mirror) - 17 path(s), width=20, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5114,7 +5251,7 @@ CT_298:
 CE_299:
     LDD RESULT
     LBEQ IF_NEXT_297
-    ; VPy_LINE:368
+    ; VPy_LINE:370
 ; DRAW_VECTOR_EX("player_walk_4", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5190,7 +5327,7 @@ DSVEX_CALL_302:
     STD RESULT
     LBRA IF_END_278
 IF_NEXT_297:
-    ; VPy_LINE:370
+    ; VPy_LINE:372
 ; DRAW_VECTOR_EX("player_walk_5", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
     STD RESULT
@@ -5265,11 +5402,11 @@ DSVEX_CALL_305:
     LDD #0
     STD RESULT
 IF_END_278:
-    ; VPy_LINE:373
+    ; VPy_LINE:375
     JSR UPDATE_ENEMIES
-    ; VPy_LINE:374
+    ; VPy_LINE:376
     JSR DRAW_ENEMIES
-    ; VPy_LINE:377
+    ; VPy_LINE:379
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -5290,7 +5427,7 @@ CT_308:
 CE_309:
     LDD RESULT
     LBEQ IF_NEXT_307
-    ; VPy_LINE:380
+    ; VPy_LINE:382
     LDD VAR_HOOK_GUN_X
     STD RESULT
     LDD RESULT
@@ -5308,17 +5445,17 @@ CE_309:
     LDD RESULT
     STD VAR_ARG3
     JSR DRAW_HOOK_ROPE
-    ; VPy_LINE:382
+    ; VPy_LINE:384
     LDD #100
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 382
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 384
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:384
+    ; VPy_LINE:386
 ; DRAW_VECTOR_EX("hook", x, y, mirror) - 1 path(s), width=12, center_x=0
     LDD VAR_HOOK_X
     STD RESULT
@@ -5363,17 +5500,17 @@ DSVEX_CALL_312:
     LBRA IF_END_306
 IF_NEXT_307:
 IF_END_306:
-    ; VPy_LINE:387
+    ; VPy_LINE:389
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:388
+    ; VPy_LINE:390
     LDD #0
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:389
+    ; VPy_LINE:391
 WH_313: ; while start
     LDD 4 ,S
     STD RESULT
@@ -5395,7 +5532,7 @@ CT_315:
 CE_316:
     LDD RESULT
     LBEQ WH_END_314
-    ; VPy_LINE:390
+    ; VPy_LINE:392
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -5427,7 +5564,7 @@ CT_319:
 CE_320:
     LDD RESULT
     LBEQ IF_NEXT_318
-    ; VPy_LINE:391
+    ; VPy_LINE:393
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5447,7 +5584,7 @@ CE_320:
     LBRA IF_END_317
 IF_NEXT_318:
 IF_END_317:
-    ; VPy_LINE:392
+    ; VPy_LINE:394
     LDD 4 ,S
     STD RESULT
     LDD RESULT
@@ -5469,11 +5606,11 @@ WH_END_314: ; while end
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:396
+    ; VPy_LINE:398
 SPAWN_ENEMIES: ; function
 ; --- function spawn_enemies ---
     LEAS -6,S ; allocate locals
-    ; VPy_LINE:398
+    ; VPy_LINE:400
     ; ===== Const array indexing: level_enemy_count =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -5488,7 +5625,7 @@ SPAWN_ENEMIES: ; function
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:399
+    ; VPy_LINE:401
     ; ===== Const array indexing: level_enemy_speed =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -5503,12 +5640,12 @@ SPAWN_ENEMIES: ; function
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:401
+    ; VPy_LINE:403
     LDD #0
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:402
+    ; VPy_LINE:404
 WH_321: ; while start
     LDD 2 ,S
     STD RESULT
@@ -5530,7 +5667,7 @@ CT_323:
 CE_324:
     LDD RESULT
     LBEQ WH_END_322
-    ; VPy_LINE:403
+    ; VPy_LINE:405
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5547,7 +5684,7 @@ CE_324:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:404
+    ; VPy_LINE:406
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5564,7 +5701,7 @@ CE_324:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:405
+    ; VPy_LINE:407
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5607,7 +5744,7 @@ CE_324:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:406
+    ; VPy_LINE:408
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5624,7 +5761,7 @@ CE_324:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:407
+    ; VPy_LINE:409
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5641,7 +5778,7 @@ CE_324:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:408
+    ; VPy_LINE:410
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5688,7 +5825,7 @@ CT_327:
 CE_328:
     LDD RESULT
     LBEQ IF_NEXT_326
-    ; VPy_LINE:409
+    ; VPy_LINE:411
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5720,7 +5857,7 @@ CE_328:
     LBRA IF_END_325
 IF_NEXT_326:
 IF_END_325:
-    ; VPy_LINE:410
+    ; VPy_LINE:412
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5737,7 +5874,7 @@ IF_END_325:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:411
+    ; VPy_LINE:413
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5759,16 +5896,16 @@ WH_END_322: ; while end
     LEAS 6,S ; free locals
     RTS
 
-    ; VPy_LINE:413
+    ; VPy_LINE:415
 UPDATE_ENEMIES: ; function
 ; --- function update_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:415
+    ; VPy_LINE:417
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:416
+    ; VPy_LINE:418
 WH_329: ; while start
     LDD 0 ,S
     STD RESULT
@@ -5790,7 +5927,7 @@ CT_331:
 CE_332:
     LDD RESULT
     LBEQ WH_END_330
-    ; VPy_LINE:417
+    ; VPy_LINE:419
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -5822,7 +5959,7 @@ CT_335:
 CE_336:
     LDD RESULT
     LBEQ IF_NEXT_334
-    ; VPy_LINE:419
+    ; VPy_LINE:421
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5862,7 +5999,7 @@ CE_336:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:422
+    ; VPy_LINE:424
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5913,7 +6050,7 @@ CE_336:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:423
+    ; VPy_LINE:425
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5964,7 +6101,7 @@ CE_336:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:426
+    ; VPy_LINE:428
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -5996,7 +6133,7 @@ CT_339:
 CE_340:
     LDD RESULT
     LBEQ IF_NEXT_338
-    ; VPy_LINE:427
+    ; VPy_LINE:429
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6013,7 +6150,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:428
+    ; VPy_LINE:430
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6053,7 +6190,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:429
+    ; VPy_LINE:431
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6109,7 +6246,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:431
+    ; VPy_LINE:433
     LDD #VAR_ENEMY_VY_DATA
     STD RESULT
     LDD RESULT
@@ -6141,7 +6278,7 @@ CT_343:
 CE_344:
     LDD RESULT
     LBEQ IF_NEXT_342
-    ; VPy_LINE:432
+    ; VPy_LINE:434
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6164,7 +6301,7 @@ IF_END_341:
     LBRA IF_END_337
 IF_NEXT_338:
 IF_END_337:
-    ; VPy_LINE:435
+    ; VPy_LINE:437
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
     LDD RESULT
@@ -6196,7 +6333,7 @@ CT_347:
 CE_348:
     LDD RESULT
     LBEQ IF_NEXT_346
-    ; VPy_LINE:436
+    ; VPy_LINE:438
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6213,7 +6350,7 @@ CE_348:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:437
+    ; VPy_LINE:439
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6256,7 +6393,7 @@ CE_348:
     LBRA IF_END_345
 IF_NEXT_346:
 IF_END_345:
-    ; VPy_LINE:438
+    ; VPy_LINE:440
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
     LDD RESULT
@@ -6288,7 +6425,7 @@ CT_351:
 CE_352:
     LDD RESULT
     LBEQ IF_NEXT_350
-    ; VPy_LINE:439
+    ; VPy_LINE:441
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6305,7 +6442,7 @@ CE_352:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:440
+    ; VPy_LINE:442
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6351,7 +6488,7 @@ IF_END_349:
     LBRA IF_END_333
 IF_NEXT_334:
 IF_END_333:
-    ; VPy_LINE:442
+    ; VPy_LINE:444
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6373,16 +6510,16 @@ WH_END_330: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:446
+    ; VPy_LINE:448
 DRAW_ENEMIES: ; function
 ; --- function draw_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:448
+    ; VPy_LINE:450
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:449
+    ; VPy_LINE:451
 WH_353: ; while start
     LDD 0 ,S
     STD RESULT
@@ -6404,7 +6541,7 @@ CT_355:
 CE_356:
     LDD RESULT
     LBEQ WH_END_354
-    ; VPy_LINE:450
+    ; VPy_LINE:452
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -6436,17 +6573,17 @@ CT_359:
 CE_360:
     LDD RESULT
     LBEQ IF_NEXT_358
-    ; VPy_LINE:451
+    ; VPy_LINE:453
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 451
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 453
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:452
+    ; VPy_LINE:454
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6478,7 +6615,7 @@ CT_363:
 CE_364:
     LDD RESULT
     LBEQ IF_NEXT_362
-    ; VPy_LINE:453
+    ; VPy_LINE:455
 ; DRAW_VECTOR("bubble_huge", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6551,7 +6688,7 @@ CT_366:
 CE_367:
     LDD RESULT
     LBEQ IF_NEXT_365
-    ; VPy_LINE:455
+    ; VPy_LINE:457
 ; DRAW_VECTOR("bubble_large", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6624,7 +6761,7 @@ CT_369:
 CE_370:
     LDD RESULT
     LBEQ IF_NEXT_368
-    ; VPy_LINE:457
+    ; VPy_LINE:459
 ; DRAW_VECTOR("bubble_medium", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6666,7 +6803,7 @@ CE_370:
     STD RESULT
     LBRA IF_END_361
 IF_NEXT_368:
-    ; VPy_LINE:459
+    ; VPy_LINE:461
 ; DRAW_VECTOR("bubble_small", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6710,7 +6847,7 @@ IF_END_361:
     LBRA IF_END_357
 IF_NEXT_358:
 IF_END_357:
-    ; VPy_LINE:460
+    ; VPy_LINE:462
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6732,7 +6869,7 @@ WH_END_354: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:464
+    ; VPy_LINE:466
 DRAW_HOOK_ROPE: ; function
 ; --- function draw_hook_rope ---
     LEAS -8,S ; allocate locals
@@ -6744,7 +6881,7 @@ DRAW_HOOK_ROPE: ; function
     STD 4,S ; param 2
     LDD VAR_ARG3
     STD 6,S ; param 3
-    ; VPy_LINE:466
+    ; VPy_LINE:468
     LDD 0 ,S
     STD RESULT
     STD TMPPTR+0
@@ -6775,10 +6912,10 @@ DRAW_HOOK_ROPE: ; function
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:468
+    ; VPy_LINE:470
 READ_JOYSTICK1_STATE: ; function
 ; --- function read_joystick1_state ---
-    ; VPy_LINE:473
+    ; VPy_LINE:475
     LDD #0
     STD RESULT
     LDD RESULT
@@ -6790,13 +6927,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_X at line 473
+; NATIVE_CALL: J1_X at line 475
     JSR J1X_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:474
+    ; VPy_LINE:476
     LDD #1
     STD RESULT
     LDD RESULT
@@ -6808,13 +6945,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_Y at line 474
+; NATIVE_CALL: J1_Y at line 476
     JSR J1Y_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:477
+    ; VPy_LINE:479
     LDD #2
     STD RESULT
     LDD RESULT
@@ -6826,13 +6963,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_1 at line 477
+; NATIVE_CALL: J1_BUTTON_1 at line 479
     JSR J1B1_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:478
+    ; VPy_LINE:480
     LDD #3
     STD RESULT
     LDD RESULT
@@ -6844,13 +6981,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_2 at line 478
+; NATIVE_CALL: J1_BUTTON_2 at line 480
     JSR J1B2_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:479
+    ; VPy_LINE:481
     LDD #4
     STD RESULT
     LDD RESULT
@@ -6862,13 +6999,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_3 at line 479
+; NATIVE_CALL: J1_BUTTON_3 at line 481
     JSR J1B3_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:480
+    ; VPy_LINE:482
     LDD #5
     STD RESULT
     LDD RESULT
@@ -6880,7 +7017,7 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_4 at line 480
+; NATIVE_CALL: J1_BUTTON_4 at line 482
     JSR J1B4_BUILTIN
     STD RESULT
     LDX TMPPTR2
@@ -6943,14 +7080,10 @@ DIV16_DONE:
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
-VL_PTR     EQU $CF80      ; Current position in vector list
-VL_Y       EQU $CF82      ; Y position (1 byte)
-VL_X       EQU $CF83      ; X position (1 byte)
-VL_SCALE   EQU $CF84      ; Scale factor (1 byte)
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 32 of 45 assets (unused assets excluded)
+; Embedded 34 of 52 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: player_walk_1
@@ -10253,6 +10386,119 @@ _MAP_THEME_MUSIC:
     FCB     8              ; Delay 8 frames before loop
     FCB     $FF             ; Loop command ($FF never valid as count)
     FDB     _MAP_THEME_MUSIC       ; Jump to start (absolute address)
+
+
+; ========================================
+; SFX Asset: hit (from /Users/daniel/projects/vectrex-pseudo-python/examples/pang/assets/sfx/hit.vsfx)
+; ========================================
+_HIT_SFX:
+    ; SFX: hit (hit)
+    ; Duration: 300ms (15fr), Freq: 200Hz, Channel: 0
+    FCB $60         ; Frame 0 - flags (vol=0, tone=Y, noise=Y)
+    FCB $00, $8C  ; Tone period = 140 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6F         ; Frame 1 - flags (vol=15, tone=Y, noise=Y)
+    FCB $00, $AA  ; Tone period = 170 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6F         ; Frame 2 - flags (vol=15, tone=Y, noise=Y)
+    FCB $00, $C8  ; Tone period = 200 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6E         ; Frame 3 - flags (vol=14, tone=Y, noise=Y)
+    FCB $00, $E6  ; Tone period = 230 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6D         ; Frame 4 - flags (vol=13, tone=Y, noise=Y)
+    FCB $01, $04  ; Tone period = 260 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 5 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $22  ; Tone period = 290 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 6 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $40  ; Tone period = 320 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 7 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $5E  ; Tone period = 350 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 8 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $7C  ; Tone period = 380 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 9 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $9A  ; Tone period = 410 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 10 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $B8  ; Tone period = 440 (big-endian)
+    FCB $08         ; Noise period
+    FCB $6C         ; Frame 11 - flags (vol=12, tone=Y, noise=Y)
+    FCB $01, $D6  ; Tone period = 470 (big-endian)
+    FCB $08         ; Noise period
+    FCB $69         ; Frame 12 - flags (vol=9, tone=Y, noise=Y)
+    FCB $01, $F4  ; Tone period = 500 (big-endian)
+    FCB $08         ; Noise period
+    FCB $66         ; Frame 13 - flags (vol=6, tone=Y, noise=Y)
+    FCB $02, $12  ; Tone period = 530 (big-endian)
+    FCB $08         ; Noise period
+    FCB $63         ; Frame 14 - flags (vol=3, tone=Y, noise=Y)
+    FCB $02, $30  ; Tone period = 560 (big-endian)
+    FCB $08         ; Noise period
+    FCB $D0, $20    ; End of effect marker
+
+
+; ========================================
+; SFX Asset: laser (from /Users/daniel/projects/vectrex-pseudo-python/examples/pang/assets/sfx/laser.vsfx)
+; ========================================
+_LASER_SFX:
+    ; SFX: laser (laser)
+    ; Duration: 500ms (25fr), Freq: 880Hz, Channel: 0
+    FCB $A0         ; Frame 0 - flags (vol=0, tone=Y, noise=N)
+    FCB $00, $34  ; Tone period = 52 (big-endian)
+    FCB $AF         ; Frame 1 - flags (vol=15, tone=Y, noise=N)
+    FCB $00, $3A  ; Tone period = 58 (big-endian)
+    FCB $AC         ; Frame 2 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $42  ; Tone period = 66 (big-endian)
+    FCB $AC         ; Frame 3 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $48  ; Tone period = 72 (big-endian)
+    FCB $AC         ; Frame 4 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $4E  ; Tone period = 78 (big-endian)
+    FCB $AC         ; Frame 5 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $56  ; Tone period = 86 (big-endian)
+    FCB $AC         ; Frame 6 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $5C  ; Tone period = 92 (big-endian)
+    FCB $AC         ; Frame 7 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $62  ; Tone period = 98 (big-endian)
+    FCB $AC         ; Frame 8 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $6A  ; Tone period = 106 (big-endian)
+    FCB $AC         ; Frame 9 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $70  ; Tone period = 112 (big-endian)
+    FCB $AC         ; Frame 10 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $76  ; Tone period = 118 (big-endian)
+    FCB $AC         ; Frame 11 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $7C  ; Tone period = 124 (big-endian)
+    FCB $AC         ; Frame 12 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $84  ; Tone period = 132 (big-endian)
+    FCB $AC         ; Frame 13 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $8A  ; Tone period = 138 (big-endian)
+    FCB $AC         ; Frame 14 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $90  ; Tone period = 144 (big-endian)
+    FCB $AC         ; Frame 15 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $98  ; Tone period = 152 (big-endian)
+    FCB $AC         ; Frame 16 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $9E  ; Tone period = 158 (big-endian)
+    FCB $AC         ; Frame 17 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $A4  ; Tone period = 164 (big-endian)
+    FCB $AC         ; Frame 18 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $AC  ; Tone period = 172 (big-endian)
+    FCB $AC         ; Frame 19 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $B2  ; Tone period = 178 (big-endian)
+    FCB $AC         ; Frame 20 - flags (vol=12, tone=Y, noise=N)
+    FCB $00, $B8  ; Tone period = 184 (big-endian)
+    FCB $A9         ; Frame 21 - flags (vol=9, tone=Y, noise=N)
+    FCB $00, $C0  ; Tone period = 192 (big-endian)
+    FCB $A7         ; Frame 22 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $C6  ; Tone period = 198 (big-endian)
+    FCB $A4         ; Frame 23 - flags (vol=4, tone=Y, noise=N)
+    FCB $00, $CC  ; Tone period = 204 (big-endian)
+    FCB $A2         ; Frame 24 - flags (vol=2, tone=Y, noise=N)
+    FCB $00, $D4  ; Tone period = 212 (big-endian)
+    FCB $D0, $20    ; End of effect marker
 
 
 ; Array literal for variable 'joystick1_state' (6 elements)

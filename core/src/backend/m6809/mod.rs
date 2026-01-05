@@ -623,6 +623,25 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str(&format!("PSG_DELAY_FRAMES_DP EQU ${:02X}  ; DP-relative\n", offset));
         }
     }
+    
+    // DP-relative offsets for SFX (lwasm compatibility)
+    if has_sfx_assets {
+        if let Some(offset) = ram.get_offset("SFX_PTR") {
+            out.push_str(&format!("SFX_PTR_DP         EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_TICK") {
+            out.push_str(&format!("SFX_TICK_DP        EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_ACTIVE") {
+            out.push_str(&format!("SFX_ACTIVE_DP      EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_PHASE") {
+            out.push_str(&format!("SFX_PHASE_DP       EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_VOL") {
+            out.push_str(&format!("SFX_VOL_DP         EQU ${:02X}  ; DP-relative\n", offset));
+        }
+    }
     out.push_str("\n");
     
     // Check if main() has real content (not just return)
@@ -675,9 +694,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // CRITICAL: Initialize SFX system variables to prevent garbage data interference
         if has_sfx_calls {
             out.push_str("    ; Initialize SFX variables to prevent random noise on startup\n");
-            out.push_str("    CLR sfx_status         ; Mark SFX as inactive (0=off)\n");
+            out.push_str("    CLR SFX_ACTIVE         ; Mark SFX as inactive (0=off)\n");
             out.push_str("    LDD #$0000\n");
-            out.push_str("    STD sfx_pointer        ; Clear SFX pointer\n");
+            out.push_str("    STD SFX_PTR            ; Clear SFX pointer\n");
         }
         
         out.push_str("\n");

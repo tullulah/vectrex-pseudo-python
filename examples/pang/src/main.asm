@@ -115,6 +115,11 @@ PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
 PSG_MUSIC_ACTIVE_DP EQU $29  ; DP-relative
 PSG_FRAME_COUNT_DP EQU $2A  ; DP-relative
 PSG_DELAY_FRAMES_DP EQU $2B  ; DP-relative
+SFX_PTR_DP         EQU $2C  ; DP-relative
+SFX_TICK_DP        EQU $2E  ; DP-relative
+SFX_ACTIVE_DP      EQU $30  ; DP-relative
+SFX_PHASE_DP       EQU $31  ; DP-relative
+SFX_VOL_DP         EQU $32  ; DP-relative
 
     JMP START
 
@@ -579,9 +584,119 @@ AU_DONE:
 PULS DP                 ; Restore original DP
 RTS
 
-; sfx_doframe stub (SFX not used in this project)
+; ============================================================================
+; AYFX SOUND EFFECTS PLAYER (Richard Chadd original system)
+; ============================================================================
+; Uses channel C (registers 4/5=tone, 6=noise, 10=volume, 7=mixer bit2/bit5)
+; RAM variables: SFX_PTR (16-bit), SFX_ACTIVE (8-bit)
+; AYFX format: flag byte + optional data per frame, end marker $D0 $20
+; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,
+;            6=noise data present, 7=disable noise
+; ============================================================================
+; (RAM variables defined in AUDIO_UPDATE section above)
+
+; PLAY_SFX_RUNTIME - Start SFX playback
+; Input: X = pointer to AYFX data
+PLAY_SFX_RUNTIME:
+STX SFX_PTR            ; Store pointer
+LDA #$01
+STA SFX_ACTIVE         ; Mark as active
+RTS
+
+; SFX_UPDATE - Process one AYFX frame (call once per frame in loop)
+SFX_UPDATE:
+LDA SFX_ACTIVE         ; Check if active
+BEQ noay               ; Not active, skip
+JSR sfx_doframe        ; Process one frame
+noay:
+RTS
+
+; sfx_doframe - AYFX frame parser (Richard Chadd original)
 sfx_doframe:
-	RTS
+LDU SFX_PTR            ; Get current frame pointer
+LDB ,U                 ; Read flag byte (NO auto-increment)
+CMPB #$D0              ; Check end marker (first byte)
+BNE sfx_checktonefreq  ; Not end, continue
+LDB 1,U                ; Check second byte at offset 1
+CMPB #$20              ; End marker $D0 $20?
+BEQ sfx_endofeffect    ; Yes, stop
+
+sfx_checktonefreq:
+LEAY 1,U               ; Y = pointer to tone/noise data
+LDB ,U                 ; Reload flag byte (Sound_Byte corrupts B)
+BITB #$20              ; Bit 5: tone data present?
+BEQ sfx_checknoisefreq ; No, skip tone
+; Set tone frequency (channel C = reg 4/5)
+LDB 2,U                ; Get LOW byte (fine tune)
+LDA #$04               ; Register 4
+JSR Sound_Byte         ; Write to PSG
+LDB 1,U                ; Get HIGH byte (coarse tune)
+LDA #$05               ; Register 5
+JSR Sound_Byte         ; Write to PSG
+LEAY 2,Y               ; Skip 2 tone bytes
+
+sfx_checknoisefreq:
+LDB ,U                 ; Reload flag byte
+BITB #$40              ; Bit 6: noise data present?
+BEQ sfx_checkvolume    ; No, skip noise
+LDB ,Y                 ; Get noise period
+LDA #$06               ; Register 6
+JSR Sound_Byte         ; Write to PSG
+LEAY 1,Y               ; Skip 1 noise byte
+
+sfx_checkvolume:
+LDB ,U                 ; Reload flag byte
+ANDB #$0F              ; Get volume from bits 0-3
+LDA #$0A               ; Register 10 (volume C)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checktonedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$10              ; Bit 4: disable tone?
+BEQ sfx_enabletone
+sfx_disabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$04               ; Set bit 2 (disable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_checknoisedisable  ; Continue to noise check
+
+sfx_enabletone:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$FB              ; Clear bit 2 (enable tone C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_checknoisedisable:
+LDB ,U                 ; Reload flag byte
+BITB #$80              ; Bit 7: disable noise?
+BEQ sfx_enablenoise
+sfx_disablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ORB #$20               ; Set bit 5 (disable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+BRA sfx_nextframe      ; Done, update pointer
+
+sfx_enablenoise:
+LDB $C807              ; Read mixer shadow (MUST be B register)
+ANDB #$DF              ; Clear bit 5 (enable noise C)
+LDA #$07               ; Register 7 (mixer)
+JSR Sound_Byte         ; Write to PSG
+
+sfx_nextframe:
+STY SFX_PTR            ; Update pointer for next frame
+RTS
+
+sfx_endofeffect:
+; Stop SFX - set volume to 0
+CLR SFX_ACTIVE         ; Mark as inactive
+LDA #$0A               ; Register 10 (volume C)
+LDB #$00               ; Volume = 0
+JSR Sound_Byte
+LDD #$0000
+STD SFX_PTR            ; Clear pointer
+RTS
 
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
@@ -1040,6 +1155,10 @@ START:
     LDX #Vec_Default_Stk
     TFR X,S
     JSR $F533       ; Init_Music_Buf - Initialize BIOS music system to silence
+    ; Initialize SFX variables to prevent random noise on startup
+    CLR SFX_ACTIVE         ; Mark SFX as inactive (0=off)
+    LDD #$0000
+    STD SFX_PTR            ; Clear SFX pointer
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:11
@@ -1539,6 +1658,12 @@ OR_END_11:
     LDU #VAR_CURRENT_MUSIC
     STU TMPPTR
     STX ,U
+    ; VPy_LINE:111
+; PLAY_SFX("coin") - play sound effect (one-shot)
+    LDX #_COIN_SFX
+    JSR PLAY_SFX_RUNTIME
+    LDD #0
+    STD RESULT
     LBRA IF_END_8
 IF_NEXT_9:
 IF_END_8:
@@ -6946,7 +7071,7 @@ DIV16_DONE:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 32 of 45 assets (unused assets excluded)
+; Embedded 33 of 45 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: player_walk_1
@@ -10249,6 +10374,73 @@ _MAP_THEME_MUSIC:
     FCB     8              ; Delay 8 frames before loop
     FCB     $FF             ; Loop command ($FF never valid as count)
     FDB     _MAP_THEME_MUSIC       ; Jump to start (absolute address)
+
+
+; ========================================
+; SFX Asset: coin (from /Users/daniel/projects/vectrex-pseudo-python/examples/pang/assets/sfx/coin.vsfx)
+; ========================================
+_COIN_SFX:
+    ; SFX: coin (custom)
+    ; Duration: 590ms (29fr), Freq: 855Hz, Channel: 0
+    FCB $A0         ; Frame 0 - flags (vol=0, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A7         ; Frame 1 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $AF         ; Frame 2 - flags (vol=15, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $AD         ; Frame 3 - flags (vol=13, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $AB         ; Frame 4 - flags (vol=11, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A9         ; Frame 5 - flags (vol=9, tone=Y, noise=N)
+    FCB $00, $55  ; Tone period = 85 (big-endian)
+    FCB $A7         ; Frame 6 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $55  ; Tone period = 85 (big-endian)
+    FCB $A7         ; Frame 7 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $55  ; Tone period = 85 (big-endian)
+    FCB $A7         ; Frame 8 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $55  ; Tone period = 85 (big-endian)
+    FCB $A7         ; Frame 9 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A7         ; Frame 10 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A7         ; Frame 11 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A7         ; Frame 12 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A7         ; Frame 13 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $65  ; Tone period = 101 (big-endian)
+    FCB $A7         ; Frame 14 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $65  ; Tone period = 101 (big-endian)
+    FCB $A7         ; Frame 15 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $65  ; Tone period = 101 (big-endian)
+    FCB $A7         ; Frame 16 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $65  ; Tone period = 101 (big-endian)
+    FCB $A7         ; Frame 17 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $65  ; Tone period = 101 (big-endian)
+    FCB $A7         ; Frame 18 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $47  ; Tone period = 71 (big-endian)
+    FCB $A7         ; Frame 19 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $47  ; Tone period = 71 (big-endian)
+    FCB $A7         ; Frame 20 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $47  ; Tone period = 71 (big-endian)
+    FCB $A7         ; Frame 21 - flags (vol=7, tone=Y, noise=N)
+    FCB $00, $47  ; Tone period = 71 (big-endian)
+    FCB $A6         ; Frame 22 - flags (vol=6, tone=Y, noise=N)
+    FCB $00, $4B  ; Tone period = 75 (big-endian)
+    FCB $A5         ; Frame 23 - flags (vol=5, tone=Y, noise=N)
+    FCB $00, $4B  ; Tone period = 75 (big-endian)
+    FCB $A4         ; Frame 24 - flags (vol=4, tone=Y, noise=N)
+    FCB $00, $4B  ; Tone period = 75 (big-endian)
+    FCB $A3         ; Frame 25 - flags (vol=3, tone=Y, noise=N)
+    FCB $00, $4B  ; Tone period = 75 (big-endian)
+    FCB $A2         ; Frame 26 - flags (vol=2, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A1         ; Frame 27 - flags (vol=1, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $A0         ; Frame 28 - flags (vol=0, tone=Y, noise=N)
+    FCB $00, $5F  ; Tone period = 95 (big-endian)
+    FCB $D0, $20    ; End of effect marker
 
 
 ; Array literal for variable 'joystick1_state' (6 elements)

@@ -108,7 +108,7 @@ def loop():
         if (joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1):
             screen = STATE_MAP 
             current_music = -1  # Reset music tracker to trigger map_theme
-            # PLAY_SFX("coin")
+            PLAY_SFX("laser")
 
     elif(screen == STATE_MAP):
         if (current_music != 1):
@@ -146,6 +146,7 @@ def loop():
         
         if joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1:
             # Start level - transition to game state
+            PLAY_SFX("laser")
             screen = STATE_GAME
             countdown_active = 1
             countdown_timer = 180  # 3 seconds at 60fps
@@ -180,6 +181,7 @@ def loop():
                 if (joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1):
                     hook_active = 1
                     hook_y = -100  # Start from ground level (direct signed value)
+                    PLAY_SFX("hit")
                     
                     # Capture gun position at fire time
                     hook_gun_x = player_x
