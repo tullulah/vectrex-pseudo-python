@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('files', {
   openFilePath: (path: string) => ipcRenderer.invoke('file:openPath', path) as Promise<{ path: string; content: string; mtime: number; size: number; name: string } | { error: string } | null>,
   saveFile: (args: { path: string; content: string; expectedMTime?: number }) => ipcRenderer.invoke('file:save', args) as Promise<{ path: string; mtime: number; size: number } | { conflict: true; currentMTime: number } | { error: string }>,
 
+  appendFile: (args: { path: string; content: string }) => ipcRenderer.invoke('file:append', args) as Promise<{ ok: boolean; path: string; size?: number } | { error: string }>,
+
+  appendFileBin: (args: { path: string; data: Uint8Array }) => ipcRenderer.invoke('file:appendBin', args) as Promise<{ ok: boolean; path: string; size?: number } | { error: string }>,
+
   saveFileAs: (args: { suggestedName?: string; content: string }) => ipcRenderer.invoke('file:saveAs', args) as Promise<{ path: string; mtime: number; size: number; name: string } | { canceled: true } | { error: string }>,
 
   openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ path: string } | null>,

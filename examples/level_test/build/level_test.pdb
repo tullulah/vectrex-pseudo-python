@@ -5,29 +5,30 @@
   "binary": "main.bin",
   "entryPoint": "0x0000",
   "symbols": {
-    "MAIN": "0x049A",
-    "LOOP_BODY": "0x04C1",
-    "START": "0x046C"
+    "LOOP_BODY": "0x04DE",
+    "MAIN": "0x04B7",
+    "START": "0x0489"
   },
   "lineMap": {
-    "8": "0x047D",
-    "14": "0x04CA",
-    "18": "0x0518",
-    "12": "0x04C1",
-    "10": "0x0491",
-    "7": "0x049A"
+    "8": "0x049A",
+    "12": "0x04DE",
+    "14": "0x04E7",
+    "18": "0x05A1",
+    "10": "0x04AE",
+    "7": "0x04B7",
+    "15": "0x053B"
   },
   "functions": {
     "main": {
       "name": "main",
-      "address": "0x049A",
+      "address": "0x04B7",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
     },
     "loop": {
       "name": "loop",
-      "address": "0x04C1",
+      "address": "0x04DE",
       "startLine": 0,
       "endLine": 0,
       "type": "vpy"
@@ -39,9 +40,128 @@
   "asmFunctions": {},
   "asmAddressMap": {},
   "variables": {
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0xC88F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_COIN_WIDTH": {
+      "name": "_COIN_WIDTH",
+      "address": "0x0010",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC889",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MOUNTAIN_WIDTH": {
+      "name": "_MOUNTAIN_WIDTH",
+      "address": "0x004C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8A0",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "_COIN_CENTER_X": {
+      "name": "_COIN_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC888",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg4": {
+      "name": "arg4",
+      "address": "0xC8A4",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC882",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg5": {
+      "name": "arg5",
+      "address": "0xC8A6",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "LEVEL_PTR": {
+      "name": "LEVEL_PTR",
+      "address": "0xC891",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_GP_PTR": {
+      "name": "LEVEL_GP_PTR",
+      "address": "0xC898",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_MOUNTAIN_CENTER_Y": {
+      "name": "_MOUNTAIN_CENTER_Y",
+      "address": "0x000D",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
     "MIRROR_X": {
       "name": "MIRROR_X",
       "address": "0xC88E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_FUJI_BG_CENTER_X": {
+      "name": "_FUJI_BG_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_COIN_CENTER_Y": {
+      "name": "_COIN_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_FG_PTR": {
+      "name": "LEVEL_FG_PTR",
+      "address": "0xC89A",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -67,32 +187,18 @@
       "type": "unknown",
       "declLine": null
     },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC897",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "arg2": {
-      "name": "arg2",
-      "address": "0xC895",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC882",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_MOUNTAIN_CENTER_Y": {
-      "name": "_MOUNTAIN_CENTER_Y",
-      "address": "0x000D",
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC88A",
       "size": 2,
       "type": "unknown",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC89E",
+      "size": 2,
+      "type": "arg",
       "declLine": null
     },
     "TEMP_YX": {
@@ -102,9 +208,37 @@
       "type": "unknown",
       "declLine": null
     },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8A2",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "_FUJI_BG_WIDTH": {
+      "name": "_FUJI_BG_WIDTH",
+      "address": "0x00FA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_FG_COUNT": {
+      "name": "LEVEL_FG_COUNT",
+      "address": "0xC895",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_BG_COUNT": {
+      "name": "LEVEL_BG_COUNT",
+      "address": "0xC893",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
     "arg0": {
       "name": "arg0",
-      "address": "0xC891",
+      "address": "0xC89C",
       "size": 2,
       "type": "arg",
       "declLine": null
@@ -123,65 +257,9 @@
       "type": "unknown",
       "declLine": null
     },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0xC88D",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "_FUJI_BG_CENTER_X": {
-      "name": "_FUJI_BG_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC889",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0xC88F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_FUJI_BG_WIDTH": {
-      "name": "_FUJI_BG_WIDTH",
-      "address": "0x00FA",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_X": {
-      "name": "_BUBBLE_LARGE_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC88A",
+    "LEVEL_GP_COUNT": {
+      "name": "LEVEL_GP_COUNT",
+      "address": "0xC894",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -193,25 +271,32 @@
       "type": "unknown",
       "declLine": null
     },
-    "_MOUNTAIN_WIDTH": {
-      "name": "_MOUNTAIN_WIDTH",
-      "address": "0x004C",
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0xC88C",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC888",
+    "_BUBBLE_LARGE_CENTER_X": {
+      "name": "_BUBBLE_LARGE_CENTER_X",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC893",
+    "LEVEL_BG_PTR": {
+      "name": "LEVEL_BG_PTR",
+      "address": "0xC896",
       "size": 2,
-      "type": "arg",
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0xC88D",
+      "size": 2,
+      "type": "unknown",
       "declLine": null
     }
   }

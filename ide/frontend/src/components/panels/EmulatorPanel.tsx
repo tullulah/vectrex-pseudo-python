@@ -1557,6 +1557,40 @@ export const EmulatorPanel: React.FC = () => {
       win.PSG_WRITE_LOG.length = 0;
       console.log('[EmulatorPanel] JSVecX reset, PSG log cleared (length=' + win.PSG_WRITE_LOG.length + ')');
       
+      // Clear opcode trace on reset
+      if (win.clearOpcodeTrace) {
+        win.clearOpcodeTrace();
+        win.OPCODE_TRACE_MAX = 5000;
+        win.OPCODE_TRACE_FULL = true;
+        console.log('[EmulatorPanel] 🧹 Opcode trace cleared on reset');
+      }
+
+      // Delete previous .stack on reset (if we know where the .bin is)
+      try {
+        const romPath = win.CURRENT_ROM_PATH;
+        const stackPath = (typeof romPath === 'string') ? romPath.replace(/\.(bin|BIN)$/, '.stack') : null;
+        const fileAPI = (window as any).files;
+        if (stackPath && fileAPI?.deleteFile) {
+          fileAPI.deleteFile(stackPath).catch(() => {});
+          console.log('[EmulatorPanel] 🧽 Requested delete of .stack on reset:', stackPath);
+        }
+      } catch (e) {
+        // Ignore
+      }
+
+      // Delete previous .tracebin on reset (if we know where the .bin is)
+      try {
+        const romPath = win.CURRENT_ROM_PATH;
+        const tracePath = (typeof romPath === 'string') ? romPath.replace(/\.(bin|BIN)$/, '.tracebin') : null;
+        const fileAPI = (window as any).files;
+        if (tracePath && fileAPI?.deleteFile) {
+          fileAPI.deleteFile(tracePath).catch(() => {});
+          console.log('[EmulatorPanel] 🧽 Requested delete of .trace on reset:', tracePath);
+        }
+      } catch (e) {
+        // Ignore
+      }
+      
       console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Reset button clicked');
       console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
       vecx.reset();
@@ -1682,6 +1716,40 @@ export const EmulatorPanel: React.FC = () => {
                   
                   const romName = lastCompiledBinary.split(/[/\\\\]/).pop()?.replace(/\\.(bin|BIN)$/, '') || 'compiled';
                   setLoadedROM(`Compiled - ${romName}`);
+                  
+                  // Clear opcode trace and set ROM name for .stack file generation
+                  if ((window as any).clearOpcodeTrace) {
+                    (window as any).clearOpcodeTrace();
+                    // Bigger trace to capture the real jump into RAM/garbage
+                    (window as any).OPCODE_TRACE_MAX = 5000;
+                    // Full trace streaming to disk (.trace next to .bin)
+                    (window as any).OPCODE_TRACE_FULL = true;
+                    (window as any).CURRENT_ROM_NAME = romName + '.bin';
+                    (window as any).CURRENT_ROM_PATH = lastCompiledBinary;
+                    console.log('[EmulatorPanel] 🧹 Opcode trace cleared for:', romName + '.bin');
+                  }
+
+                  // Delete previous .stack for this ROM (if any)
+                  try {
+                    const stackPath = lastCompiledBinary.replace(/\.(bin|BIN)$/, '.stack');
+                    if (fileAPI?.deleteFile) {
+                      await fileAPI.deleteFile(stackPath);
+                      console.log('[EmulatorPanel] 🧽 Deleted previous .stack:', stackPath);
+                    }
+                  } catch (e) {
+                    // Ignore if file does not exist
+                  }
+
+                  // Delete previous .tracebin for this ROM (if any)
+                  try {
+                    const tracePath = lastCompiledBinary.replace(/\.(bin|BIN)$/, '.tracebin');
+                    if (fileAPI?.deleteFile) {
+                      await fileAPI.deleteFile(tracePath);
+                      console.log('[EmulatorPanel] 🧽 Deleted previous .trace:', tracePath);
+                    }
+                  } catch (e) {
+                    // Ignore if file does not exist
+                  }
                   
                   if (emulatorWasRunning) {
                     vecx.debugState = 'running';

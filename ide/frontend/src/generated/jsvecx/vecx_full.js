@@ -749,7 +749,18 @@ const EADIRECT = () => (((this.reg_dp<<8)|this.vecx.read8(this.reg_pc++)));
                 break;
             default:
                 //printf ("undefined post-byte\n");
-                console.log("undefined post-byte");
+                console.log("⚠️ UNDEFINED POST-BYTE ERROR:");
+                console.log("  PC: 0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("  Post-byte: 0x" + pb.toString(16).toUpperCase().padStart(2, '0') + " (" + pb + ")");
+                console.log("  Registers:");
+                console.log("    A: 0x" + this.reg_a.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    B: 0x" + this.reg_b.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    X: 0x" + this.reg_x.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    Y: 0x" + this.reg_y.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    U: 0x" + this.reg_u.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
                 break;
         }
 
@@ -3189,7 +3200,19 @@ const EADIRECT = () => (((this.reg_dp<<8)|this.vecx.read8(this.reg_pc++)));
 
             default:
                 //printf ("unknown page-0 op code: %.2x\n", op);
-                utils.showError("unknown page-0 op code: " + op);
+                console.log("⚠️ UNKNOWN PAGE-0 OPCODE ERROR:");
+                console.log("  PC: 0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("  Opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " (" + op + ")");
+                console.log("  Registers:");
+                console.log("    A: 0x" + this.reg_a.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    B: 0x" + this.reg_b.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    X: 0x" + this.reg_x.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    Y: 0x" + this.reg_y.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    U: 0x" + this.reg_u.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
+                utils.showError("Unknown page-0 opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
                 break;
         }
 

@@ -1301,6 +1301,37 @@ ipcMain.handle('file:save', async (_e, args: { path: string; content: string; ex
   }
 });
 
+// Append text content to a file (used for large streaming traces)
+ipcMain.handle('file:append', async (_e, args: { path: string; content: string }) => {
+  const { path, content } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  try {
+    const parentDir = dirname(path);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+    await fs.appendFile(path, content ?? '', 'utf8');
+    const statAfter = await fs.stat(path).catch(() => null);
+    return { ok: true, path, size: statAfter?.size };
+  } catch (e: any) {
+    return { error: e?.message || 'append_failed' };
+  }
+});
+
+// Append binary content to a file (used for high-throughput emulator traces)
+ipcMain.handle('file:appendBin', async (_e, args: { path: string; data: Uint8Array }) => {
+  const { path, data } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  try {
+    const parentDir = dirname(path);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+    const buf = Buffer.from(data || new Uint8Array());
+    await fs.appendFile(path, buf);
+    const statAfter = await fs.stat(path).catch(() => null);
+    return { ok: true, path, size: statAfter?.size };
+  } catch (e: any) {
+    return { error: e?.message || 'append_failed' };
+  }
+});
+
 ipcMain.handle('file:saveAs', async (_e, args: { suggestedName?: string; content: string }) => {
   const win = BrowserWindow.getFocusedWindow() || mainWindow;
   if (!win) return { error: 'no_window' };

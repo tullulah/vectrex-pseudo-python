@@ -7,7 +7,7 @@
     "difficulty": "medium",
     "timeLimit": 0,
     "targetScore": 0,
-    "description": "Created in Playground - 2026-01-04"
+    "description": "Created in Playground - 2026-01-05"
   },
   "worldBounds": {
     "xMin": -96,
@@ -23,7 +23,7 @@
         "vectorName": "mountain",
         "layer": "background",
         "x": 0,
-        "y": 47,
+        "y": 55,
         "rotation": 0,
         "scale": 1,
         "velocity": {
@@ -43,8 +43,8 @@
         "type": "enemy",
         "vectorName": "bubble_large",
         "layer": "gameplay",
-        "x": -50,
-        "y": 72,
+        "x": -62,
+        "y": 19,
         "rotation": 0,
         "scale": 1,
         "velocity": {
@@ -64,8 +64,8 @@
         "type": "enemy",
         "vectorName": "bubble_large",
         "layer": "foreground",
-        "x": 40,
-        "y": 76,
+        "x": 69,
+        "y": 16,
         "rotation": 0,
         "scale": 1,
         "velocity": {
