@@ -15,6 +15,7 @@ mod struct_layout; // Struct layout computation
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
 use clap::{Parser, Subcommand};
 use toml;
 
@@ -213,7 +214,7 @@ fn main() -> Result<()> {
             if project || input.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
                 build_project_cmd(&input, bin, use_lwasm, dual, include_dir.as_ref())
             } else {
-                build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual, include_dir.as_ref())
+                build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual, include_dir.as_ref(), None)
             }
         },
         Commands::Lex { input } => lex_cmd(&input),
@@ -424,12 +425,18 @@ fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: b
         eprintln!("✓ Output: {}", out.display());
     }
     
-    // Call regular build_cmd with project-resolved paths
-    build_cmd(&entry_file, output_path.as_ref(), target, title, bin, use_lwasm, dual, include_dir)
+    // Extract output base name (without extension) for PDB generation
+    let output_name = output_relative.and_then(|o| {
+        let path = PathBuf::from(o);
+        path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+    });
+    
+    // Call regular build_cmd with project-resolved paths and output name
+    build_cmd(&entry_file, output_path.as_ref(), target, title, bin, use_lwasm, dual, include_dir, output_name.as_deref())
 }
 
 // build_cmd: run full pipeline (lex/parse/opt/codegen) and write assembly.
-fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>) -> Result<()> {
+fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>, output_name: Option<&str>) -> Result<()> {
     eprintln!("=== COMPILATION PIPELINE START ===");
     eprintln!("Input file: {}", path.display());
     eprintln!("Target: {:?}", tgt);
@@ -531,6 +538,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 exclude_ram_org: true,
                 fast_wait: false,
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
+                output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
                 assets: vec![], // TODO: Implement asset discovery
                 const_values: std::collections::BTreeMap::new(), // Will be populated by backend
                 const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
@@ -569,6 +577,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             exclude_ram_org: true,
             fast_wait: false,
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
+            output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
             assets,
             const_values: std::collections::BTreeMap::new(), // Will be populated by backend
             const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
@@ -670,19 +679,186 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     e
                 })?;
             } else {
-                assemble_bin(&out_path, use_lwasm, include_dir).map_err(|e| {
+                // CRITICAL: Store symbol_table from binary for accurate header offset calculation
+                let (binary_symbol_table, line_map, org) = assemble_bin(&out_path, use_lwasm, include_dir).map_err(|e| {
                     eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
                     eprintln!("   Error: {}", e);
                     e
                 })?;
+                
+                // Store binary_symbol_table in debug_info for Phase 6.6
+                if let Some(ref mut dbg) = debug_info_mut {
+                    // Add ALL symbols from binary_symbol_table (single source of truth)
+                    for (symbol_name, &address) in &binary_symbol_table {
+                        dbg.add_symbol(symbol_name.clone(), address);
+                    }
+                    
+                    // Set entryPoint to START address from binary (real address)
+                    if let Some(&start_addr) = binary_symbol_table.get("START") {
+                        dbg.set_entry_point(start_addr);
+                        eprintln!("✓ Using START from binary symbol table: 0x{:04X}", start_addr);
+                    } else {
+                        eprintln!("⚠ Warning: START symbol not found in binary symbol table");
+                    }
+                }
             }
+                
             eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
             
-            // Phase 6.5: Write PDB with BinaryEmitter addresses (no re-estimation needed)
+            // Phase 6.5: Generate ASM address mapping
             if let Some(ref mut dbg) = debug_info_mut {
-                eprintln!("Phase 6.5: Writing debug symbols with binary addresses...");
+                eprintln!("Phase 6.5: Generating ASM address mapping...");
                 
-                // Write PDB with addresses from BinaryEmitter (already populated during Phase 6)
+                // Get header offset from START symbol (already set from binary in Phase 6)
+                let header_offset = if let Some(start_str) = dbg.symbols.get("START") {
+                    u16::from_str_radix(&start_str[2..], 16)
+                        .unwrap_or_else(|_| {
+                            eprintln!("⚠ Warning: Could not parse START address, using 0");
+                            0
+                        })
+                } else {
+                    eprintln!("⚠ Warning: START symbol not found in binary, using 0");
+                    0
+                };
+                
+                // Generate ASM address mapping (maps ASM lines to binary addresses)
+                let asm_path = out_path.clone();
+                let bin_path = out_path.with_extension("bin");
+                if bin_path.exists() {
+                    // Reconstruct binary_symbol_table from debug_info.symbols
+                    let binary_symbol_table: HashMap<String, u16> = dbg.symbols.iter()
+                        .filter_map(|(name, addr_str)| {
+                            u16::from_str_radix(&addr_str[2..], 16)
+                                .ok()
+                                .map(|addr| (name.clone(), addr))
+                        })
+                        .collect();
+                    
+                    backend::asm_address_mapper::generate_asm_address_map(&asm_path, &bin_path, header_offset, &binary_symbol_table, dbg)
+                        .map_err(|e| {
+                            eprintln!("⚠ Warning: Failed to generate ASM address map: {}", e);
+                            e
+                        })?;
+                }
+                eprintln!("✓ Phase 6.5 SUCCESS: ASM address mapping complete");
+            }
+            
+            // Phase 6.6: Generate lineMap from VPy_LINE markers using REAL addresses
+            if let Some(ref mut dbg) = debug_info_mut {
+                eprintln!("Phase 6.6: Generating lineMap with REAL addresses from binary...");
+                
+                // Get header offset from START symbol (already set from binary in Phase 6)
+                let header_offset = if let Some(start_str) = dbg.symbols.get("START") {
+                    u16::from_str_radix(&start_str[2..], 16)
+                        .unwrap_or_else(|_| {
+                            eprintln!("⚠ Warning: Could not parse START address, using 0");
+                            0
+                        })
+                } else {
+                    eprintln!("⚠ Warning: START symbol not found, using header_offset=0");
+                    0
+                };
+                eprintln!("✓ Header offset from binary START symbol: 0x{:04X}", header_offset);
+                
+                // Read ASM file for VPy_LINE marker processing
+                let asm_content = fs::read_to_string(&out_path)
+                    .map_err(|e| {
+                        eprintln!("⚠ Warning: Could not read ASM file for line mapping: {}", e);
+                        anyhow::anyhow!("Failed to read ASM file")
+                    })?;
+                let asm_lines: Vec<&str> = asm_content.lines().collect();
+                
+                // Get ASM and VPy file names
+                let asm_filename = out_path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("main.asm")
+                    .to_string();
+                let vpy_filename = dbg.source.clone();
+                
+                // Clone asm_address_map before iterating (to avoid borrow conflicts)
+                let asm_address_map_clone = dbg.asm_address_map.clone();
+                
+                // CRITICAL: Generate lineMap ONLY from ASM markers + asmAddressMap (NO estimations)
+                // Parse ASM file looking for "; VPy_LINE:N" markers
+                // For each marker, find next significant instruction and get its address from asmAddressMap
+                dbg.line_map.clear(); // Start fresh - no estimated addresses
+                let mut pending_vpy_line: Option<String> = None;
+                
+                for (asm_line_idx, asm_line_text) in asm_lines.iter().enumerate() {
+                    let asm_line_num = asm_line_idx + 1; // 1-based line numbers
+                    let trimmed = asm_line_text.trim();
+                    
+                    // Check for VPy_LINE marker
+                    if trimmed.starts_with("; VPy_LINE:") {
+                        if let Some(vpy_line_str) = trimmed.strip_prefix("; VPy_LINE:") {
+                            pending_vpy_line = Some(vpy_line_str.trim().to_string());
+                        }
+                        continue;
+                    }
+                    
+                    // If we have a pending VPy line and hit a significant line (label or instruction)
+                    if let Some(vpy_line) = pending_vpy_line.take() {
+                        // Skip empty lines and pure comments
+                        if trimmed.is_empty() || (trimmed.starts_with(';') && !trimmed.starts_with("; _")) {
+                            // Put it back and continue
+                            pending_vpy_line = Some(vpy_line);
+                            continue;
+                        }
+                        
+                        // This is the first significant line after VPy_LINE marker
+                        // Look up its address in asmAddressMap
+                        if let Some(addr_str) = asm_address_map_clone.get(&asm_line_num.to_string()) {
+                            dbg.line_map.insert(vpy_line.clone(), addr_str.clone());
+                            
+                            // Also add to NEW vpyLineMap with file info
+                            if let Ok(addr) = u16::from_str_radix(&addr_str[2..], 16) {
+                                if let Ok(line_num) = vpy_line.parse::<usize>() {
+                                    dbg.add_vpy_line(line_num, addr, &vpy_filename);
+                                }
+                            }
+                            
+                            eprintln!("  VPy line {} → ASM line {} → {}", vpy_line, asm_line_num, addr_str);
+                        } else {
+                            eprintln!("  ⚠ VPy line {} → ASM line {} (no address in map)", vpy_line, asm_line_num);
+                        }
+                    }
+                }
+                
+                // Populate asmLineMap with ALL ASM lines (now includes comments/empty)
+                for (asm_line_str, addr_str) in &asm_address_map_clone {
+                    if let Ok(line_num) = asm_line_str.parse::<usize>() {
+                        if let Ok(addr) = u16::from_str_radix(&addr_str[2..], 16) {
+                            dbg.add_asm_line(line_num, addr, &asm_filename);
+                        }
+                    }
+                }
+                
+                eprintln!("✓ Generated lineMap: {} VPy lines mapped", dbg.line_map.len());
+                eprintln!("✓ Generated vpyLineMap: {} entries", dbg.vpy_line_map.len());
+                eprintln!("✓ Generated asmLineMap: {} entries (ALL lines)", dbg.asm_line_map.len());
+                
+                // Update ALL VPy function addresses with header_offset
+                let mut corrected_functions = std::collections::HashMap::new();
+                for (func_name, func_info) in &dbg.functions {
+                    // Parse existing address (hex string like "0x00E1")
+                    if let Some(hex_str) = func_info.address.strip_prefix("0x") {
+                        if let Ok(old_addr) = u16::from_str_radix(hex_str, 16) {
+                            // Add header_offset to get real runtime address
+                            let new_addr = old_addr + header_offset;
+                            let mut corrected_info = func_info.clone();
+                            corrected_info.address = format!("0x{:04X}", new_addr);
+                            corrected_functions.insert(func_name.clone(), corrected_info);
+                            eprintln!("  Function '{}': 0x{:04X} -> 0x{:04X} (+ header offset)", func_name, old_addr, new_addr);
+                        }
+                    }
+                }
+                // Replace entire functions map with corrected entries
+                dbg.functions = corrected_functions;
+                
+                eprintln!("✓ Updated functions: {} functions", dbg.functions.len());
+                eprintln!("✓ Phase 6.6 SUCCESS: LineMap generation complete");
+                
+                // Write PDB with complete address mappings
                 let pdb_path = out_path.with_extension("pdb");
                 match dbg.to_json() {
                     Ok(json) => {
@@ -692,14 +868,14 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                             eprintln!("   Error: {}", e);
                             e
                         })?;
-                        eprintln!("✓ Phase 6.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                        eprintln!("✓ Debug symbols written to {}", pdb_path.display());
                     },
                     Err(e) => {
                         eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
                     }
                 }
             } else {
-                eprintln!("Phase 6.5: Debug symbols write skipped (no debug info available)");
+                eprintln!("Phase 6.5/6.6: Debug symbols generation skipped (no debug info available)");
             }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");
@@ -710,7 +886,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     }
 }
 
-fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>) -> Result<()> {
+fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
     let bin_path = asm_path.with_extension("bin");
     eprintln!("=== BINARY ASSEMBLY PHASE ===");
     eprintln!("ASM input: {}", asm_path.display());
@@ -788,7 +964,7 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
         // Clean up temp file
         let _ = fs::remove_file(&temp_bin);
         
-        bin_data
+        (bin_data, HashMap::new(), HashMap::new(), 0)  // lwasm doesn't provide symbol table or line map
     } else {
         // Option 2: Native M6809 assembler (default)
         eprintln!("Using native M6809 assembler (integrated)...");
@@ -801,7 +977,7 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
         backend::asm_to_binary::set_include_dir(include_dir.map(|p| p.to_path_buf()));
         
         // Assemble with native assembler
-        let (binary, _line_map) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+        let (binary, line_map, symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
             .map_err(|e| {
                 eprintln!("❌ Native assembler failed: {}", e);
                 eprintln!("\nPlease fix the assembly errors above.");
@@ -811,21 +987,26 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
             })?;
         
         eprintln!("✓ Native assembler successful");
-        binary
+        eprintln!("✓ Symbol table: {} symbols", symbol_table.len());
+        eprintln!("✓ Line map: {} line mappings", line_map.len());
+        (binary, symbol_table, line_map, org)
     };
     
     // Validate binary is not empty
-    if binary.is_empty() {
+    if binary.0.is_empty() {
         eprintln!("❌ CRITICAL ERROR: Binary is EMPTY (0 bytes)");
         eprintln!("   This usually indicates ASM syntax errors or missing ORG directive");
         return Err(anyhow::anyhow!("Empty binary generated"));
     }
     
-    let original_size = binary.len();
+    let original_size = binary.0.len();
     eprintln!("✓ Assembler generated: {} bytes", original_size);
     
     // Pad to 32KB cartridge size
-    let mut data = binary;
+    let mut data = binary.0;
+    let symbol_table = binary.1;
+    let line_map = binary.2;
+    let org = binary.3;
     if original_size <= 0x8000 { 
         data.resize(0x8000, 0); 
         let remaining = 0x8000 - original_size;
@@ -847,7 +1028,7 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
     eprintln!("✓ NATIVE ASSEMBLER SUCCESS: {} -> {}", 
         bin_path.display(), data.len());
     eprintln!("=== BINARY ASSEMBLY COMPLETE ===");
-    Ok(())
+    Ok((symbol_table, line_map, org))
 }
 
 fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()> {
@@ -873,7 +1054,7 @@ fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()
     let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
     eprintln!("    Detected ORG: 0x{:04X}", org);
     
-    let (native_binary, _line_map) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+    let (native_binary, _line_map, _symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
         .map_err(|e| {
             eprintln!("❌ Native assembler failed: {}", e);
             anyhow::anyhow!("Native assembler failed: {}", e)

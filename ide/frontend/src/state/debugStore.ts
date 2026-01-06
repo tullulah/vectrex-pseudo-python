@@ -232,10 +232,11 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
       return;
     }
     
-    const address = pdbData.lineMap[line.toString()];
+    const addressHex = pdbData.lineMap[line.toString()];
     
-    if (address) {
-      console.log(`[DebugStore] ➕ Breakpoint added and synced to emulator: line ${line} → ${address}`);
+    if (addressHex) {
+      const address = parseInt(addressHex, 16); // Parse hex string to decimal
+      console.log(`[DebugStore] ➕ Breakpoint added and synced to emulator: line ${line} → ${addressHex} (${address})`);
       window.postMessage({
         type: 'debug-add-breakpoint',
         address,
@@ -251,10 +252,11 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
     
     if (!pdbData) return;
     
-    const address = pdbData.lineMap[line.toString()];
+    const addressHex = pdbData.lineMap[line.toString()];
     
-    if (address) {
-      console.log(`[DebugStore] ➖ Breakpoint removed: line ${line} → ${address}`);
+    if (addressHex) {
+      const address = parseInt(addressHex, 16); // Parse hex string to decimal
+      console.log(`[DebugStore] ➖ Breakpoint removed: line ${line} → ${addressHex} (${address})`);
       window.postMessage({
         type: 'debug-remove-breakpoint',
         address,

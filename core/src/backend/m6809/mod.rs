@@ -11,6 +11,7 @@ mod analysis;
 mod emission;
 mod collectors;
 mod ram_layout;
+mod address_tracker;
 
 // Re-export for backward compatibility
 pub use utils::*;
@@ -22,6 +23,7 @@ pub use analysis::*;
 pub use emission::*;
 pub use collectors::*;
 pub use ram_layout::*;
+pub use address_tracker::*;
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
@@ -29,7 +31,7 @@ use emission::{emit_function, emit_builtin_helpers};
 // Original imports
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::{DebugInfo, LineTracker, parse_asm_addresses, parse_native_call_comments, parse_asm_variables};
+use super::debug_info::{DebugInfo, LineTracker, parse_native_call_comments, parse_asm_variables};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -250,7 +252,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         .unwrap_or("unknown.vpy")
         .to_string();
     
-    let binary_name = source_name.replace(".vpy", ".bin");
+    // Use output_name if provided (for projects), otherwise derive from source
+    let binary_name = if let Some(ref output_name) = opts.output_name {
+        format!("{}.bin", output_name)
+    } else {
+        source_name.replace(".vpy", ".bin")
+    };
+    
     let mut debug_info = DebugInfo::new(source_name.clone(), binary_name.clone());
     
     // Create LineTracker to populate lineMap during code generation  
@@ -258,6 +266,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let start_address = u16::from_str_radix(ti.origin.trim_start_matches("0x").trim_start_matches("$"), 16)
         .unwrap_or(0xC800);
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
+    
+    // Initialize address tracker for ASM listing generation
+    AddressTracker::init_global(start_address);
     
     let mut out = String::new();
     // CORREGIDO: Usar solo variables GLOBALES, no todas (que incluye locales)
@@ -707,6 +718,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if main_has_content {
             out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
             
+            // ✅ Register main() definition line in .pdb BEFORE main() code executes
+            if let Some(main_func) = user_main {
+                tracker.set_line(main_func.line);
+                out.push_str(&format!("    ; VPy_LINE:{}\n", main_func.line));
+            }
+            
             // Initialize global variables with their initial values (ONCE at startup)
             // Use global_vars_with_line to emit line markers for PDB coverage
             let mut array_counter = 0;
@@ -766,11 +783,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Choose label based on whether we have START or not
         let main_label = if main_has_content { "MAIN" } else { "main" };
         
-        // ✅ Register main() definition line in .pdb
-        if let Some(main_func) = user_main {
-            tracker.set_line(main_func.line);
-            out.push_str(&format!("; VPy_LINE:{}\n", main_func.line));
-        }
+        // NOTE: main() definition line already registered above (before main() code)
+        // This label (MAIN:) is the FRAME LOOP, not the main() function
         
         out.push_str(&format!("\n{}:\n", main_label));
         
@@ -1347,92 +1361,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         emit_trig_tables(&mut out, "FDB");
     }
     
-    // Populate debug info with function symbols using REAL addresses from ASM parsing
-    // Parse the generated ASM to extract label addresses
-    let label_addresses = parse_asm_addresses(&out, 0x0000);
-    
-    // ✅ Parse variables from ASM EQU directives
+    // ✅ Parse variables from ASM EQU directives (NO estimations - just reads EQU values)
     let parsed_variables = parse_asm_variables(&out);
     for (name, var_info) in parsed_variables {
         debug_info.variables.insert(name, var_info);
     }
     
-    // Entry point is either START (if main has content) or main label
-    debug_info.set_entry_point(0x0000); // Vectrex cartridges start at 0x0000
-    
-    // Add symbols for main() and loop() functions with REAL addresses
-    if user_main.is_some() {
-        if main_has_content {
-            if let Some(&addr) = label_addresses.get("START") {
-                debug_info.add_symbol("START".to_string(), addr);
-            }
-            if let Some(&addr) = label_addresses.get("MAIN") {
-                debug_info.add_symbol("MAIN".to_string(), addr);
-            }
-        } else {
-            if let Some(&addr) = label_addresses.get("main") {
-                debug_info.add_symbol("main".to_string(), addr);
-            }
-        }
-    }
-    
-    if user_loop.is_some() {
-        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
-            debug_info.add_symbol("LOOP_BODY".to_string(), addr);
-        }
-    }
-    
-    // Add symbols for all other functions with REAL addresses
-    for item in &module.items {
-        if let Item::Function(f) = item {
-            if f.name != "main" && f.name != "loop" {
-                let label_name = f.name.to_uppercase();
-                if let Some(&addr) = label_addresses.get(&label_name) {
-                    debug_info.add_symbol(label_name.clone(), addr);
-                    
-                    // Add function metadata
-                    // Note: Line numbers will be 0 until AST is extended with line tracking
-                    let start_line = 0; // TODO: f.line when available
-                    let end_line = 0;   // TODO: Calculate from body when available
-                    debug_info.add_function(
-                        f.name.clone(),
-                        addr,
-                        start_line,
-                        end_line,
-                        "vpy"
-                    );
-                }
-            }
-        }
-    }
-    
-    // Add function metadata for main() if present
-    if let Some(_) = user_main {
-        if main_has_content {
-            if let Some(&addr) = label_addresses.get("MAIN") {
-                debug_info.add_function(
-                    "main".to_string(),
-                    addr,
-                    0, // TODO: Get from AST when available
-                    0, // TODO: Calculate when available
-                    "vpy"
-                );
-            }
-        }
-    }
-    
-    // Add function metadata for loop() if present
-    if let Some(_) = user_loop {
-        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
-            debug_info.add_function(
-                "loop".to_string(),
-                addr,
-                0, // TODO: Get from AST when available
-                0, // TODO: Calculate when available
-                "vpy"
-            );
-        }
-    }
+    // DO NOT populate symbols here with estimated addresses
+    // Symbols (START, MAIN, LOOP_BODY, user functions) will be set in Phase 6 from real binary symbol table
+    // entryPoint will be set in Phase 6 from real binary START address
     
     // Phase 4: Parse native call comments from ASM
     let native_calls = parse_native_call_comments(&out);
@@ -1440,11 +1377,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         debug_info.add_native_call(line_num, function_name);
     }
     
-    // ✅ CRITICAL: Parse VPy_LINE markers from generated ASM to get REAL addresses
-    // This replaces the tracker lineMap (which has incorrect addresses due to no advance() calls)
-    // We parse the entire ASM to calculate actual addresses based on instruction sizes
-    use super::debug_info::parse_vpy_line_markers;
-    debug_info.line_map = parse_vpy_line_markers(&out, start_address);
+    // ✅ CRITICAL: Do NOT generate estimated lineMap here
+    // The lineMap will be populated in main.rs with REAL addresses from binary
+    // Estimated addresses (based on ORG without header offset) cause bugs
+    // use super::debug_info::parse_vpy_line_markers;
+    // debug_info.line_map = parse_vpy_line_markers(&out, start_address);
+    debug_info.line_map.clear(); // Ensure empty - main.rs will populate with real addresses
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)

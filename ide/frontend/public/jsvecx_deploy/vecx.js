@@ -607,11 +607,33 @@ function VecX()
                 window.g_currentPC = currentPC;
             }
             
+            // TEMP DEBUG: Log PC every 10000 instructions to see execution range
+            if (this.instructionCount % 10000 === 0 && this.breakpoints.size > 0) {
+                console.log('[JSVecx Debug] 📊 PC sample at instruction ' + this.instructionCount + ': 0x' + currentPC.toString(16).toUpperCase() + 
+                           ' (breakpoints: ' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(',') + ')');
+            }
+            
+            // TEMP DEBUG: Log when PC is in cartridge range (0x0000-0x7FFF) - CHECK EVERY INSTRUCTION
+            if (currentPC < 0x1000) {
+                console.log('[JSVecx Debug] 🎮 CARTRIDGE CODE executing at PC=0x' + currentPC.toString(16).toUpperCase() + 
+                           ' (instruction #' + this.instructionCount + ')' +
+                           ', debugState=' + this.debugState +
+                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
+            }
+            
+            // TEMP DEBUG: Log when PC is near our breakpoint addresses (0x400-0x500 range)
+            if (currentPC >= 0x400 && currentPC <= 0x500 && this.instructionCount % 100 === 0) {
+                console.log('[JSVecx Debug] 🔍 PC in target range: 0x' + currentPC.toString(16).toUpperCase() + 
+                           ' (looking for 0x48E, 0x4A2, 0x4DB)');
+            }
+            
             // TEMP DEBUG: Log when PC passes through breakpoint addresses
-            if (this.breakpoints.size > 0 && (currentPC === 0x3638 || currentPC === 0x2e67 || currentPC === 0x2b5b || currentPC === 0x29e8)) {
+            if (this.breakpoints.size > 0 && (currentPC === 0x193 || currentPC === 0x1d3 || currentPC === 0x48e || currentPC === 0x4a2 || currentPC === 0x4db || currentPC === 0x3638 || currentPC === 0x2e67 || currentPC === 0x2b5b || currentPC === 0x29e8)) {
                 console.log('[JSVecx Debug] 🎯 PC at breakpoint address: 0x' + currentPC.toString(16).toUpperCase() + 
                            ', debugState=' + this.debugState + 
                            ', stepMode=' + this.stepMode + 
+                           ', breakpoints.size=' + this.breakpoints.size +
+                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(',') +
                            ', hasBreakpoint=' + this.breakpoints.has(currentPC));
             }
             
@@ -643,13 +665,9 @@ function VecX()
                         // console.log('[JSVecx Debug] Not JSR yet, continuing to next instruction');
                         // Don't pause - keep stepping until we find the JSR
                     }
-                } else {
-                    // Normal step into - pause immediately
-                    // console.log('[JSVecx Debug] Normal step into - pausing at PC=0x' + currentPC.toString(16));
-                    this.pauseDebugger('step', currentPC);
-                    this.stepMode = null;
-                    return;
                 }
+                // CRITICAL: Don't pause before executing - let instruction execute first
+                // The check AFTER instruction execution (line ~710) will pause at the new PC
             }
             
             if (this.stepMode === 'out' && this.callStackDepth === 0) {
@@ -666,17 +684,17 @@ function VecX()
             // CRITICAL: Check breakpoint AFTER instruction execution (PC may have changed)
             var newPC = e6809.reg_pc;
             
-            // TEMP DEBUG: Log when passing through target addresses (DISABLED - too verbose)
-            // if (newPC === 0x006E || newPC === 0x005A) {
-            //     console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
-            //                ', debugState=' + this.debugState + 
-            //                ', hasBreakpoint=' + this.breakpoints.has(newPC) +
-            //                ', stepMode=' + this.stepMode +
-            //                ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
-            // }
+            // TEMP DEBUG: Log when passing through target addresses
+            if (newPC === 0x04DB || newPC === 0x4DB) {
+                console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
+                           ', debugState=' + this.debugState + 
+                           ', hasBreakpoint=' + this.breakpoints.has(newPC) +
+                           ', stepMode=' + this.stepMode +
+                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
+            }
             
-            // Check breakpoint ONLY if not in step mode (step modes handle pause themselves)
-            if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(newPC)) {
+            // CRITICAL: Check breakpoints ALWAYS (never disable them)
+            if (this.debugState === 'running' && this.breakpoints.has(newPC)) {
                 console.log('[JSVecx Debug] 🔴 Breakpoint hit at PC: 0x' + newPC.toString(16).toUpperCase());
                 this.pauseDebugger('breakpoint', newPC);
                 return; // Stop execution immediately
@@ -1252,7 +1270,9 @@ function VecX()
     this.debugContinue = function() {
         if (this.debugState === 'paused') {
             this.debugState = 'running';
-            console.log('[JSVecx Debug] Continuing execution');
+            this.stepMode = null; // CRITICAL: Clear step mode to re-enable breakpoints
+            this.stepTargetAddress = null; // Clear step target
+            console.log('[JSVecx Debug] Continuing execution (stepMode cleared)');
             // Reiniciar el loop de emulación
             if (!this.running) {
                 this.vecx_emuloop();
@@ -1277,7 +1297,7 @@ function VecX()
         console.log('[JSVecx Debug] Execution stopped');
     }
     
-    // Step Over (F10) - ejecutar hasta la siguiente línea
+    // Step Over (F10) - ejecutar instrucción por instrucción hasta la siguiente línea
     this.debugStepOver = function(targetAddress) {
         if (typeof targetAddress === 'string') {
             targetAddress = parseInt(targetAddress, 16);
@@ -1285,14 +1305,140 @@ function VecX()
         
         this.stepMode = 'over';
         this.stepTargetAddress = targetAddress;
-        this.debugState = 'running';
+        var initialCallDepth = 0; // Track JSR/RTS to detect when we exit current function
+        var initialPC = this.e6809.reg_pc;
+        // CRITICAL: Stay in 'paused' state, execute instruction-by-instruction
+        // Do NOT set debugState='running' - this would disable breakpoint checking
         
-        console.log('[JSVecx Debug] Step Over to 0x' + targetAddress.toString(16));
+        console.log('[JSVecx Debug] Step Over to 0x' + targetAddress.toString(16) + ' (instruction-by-instruction)');
         
-        // Ejecutar hasta el target
-        if (!this.running) {
-            this.vecx_emuloop();
-        }
+        // Execute instructions one at a time until we reach target
+        var vecx = this;
+        var firstStep = true; // Skip breakpoint check on first instruction (we're already stopped there)
+        var stepCount = 0; // Debug counter
+        var maxSteps = 1000; // Safety limit to prevent infinite loops
+        
+        var stepLoop = function() {
+            if (vecx.stepMode !== 'over') return; // Stopped or target reached
+            
+            stepCount++;
+            if (stepCount > maxSteps) {
+                console.error('[JSVecx Debug] ❌ Step Over exceeded max steps (' + maxSteps + '), aborting at PC=0x' + vecx.e6809.reg_pc.toString(16));
+                vecx.pauseDebugger('step', vecx.e6809.reg_pc);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // HEURISTIC: If we've stepped many times without reaching target, convert to Continue
+            // This handles cases where target is unreachable (e.g., inside main() which already finished)
+            // Note: Removed PC >= 0xE000 check because BIOS code can be in low addresses (0x312, 0x315, etc.)
+            if (stepCount > 200) {
+                console.log('[JSVecx Debug] ⚠️ Step Over taking too long (' + stepCount + ' steps), converting to Continue');
+                console.log('[JSVecx Debug]    Target 0x' + vecx.stepTargetAddress.toString(16) + ' unreachable or inside finished function');
+                console.log('[JSVecx Debug]    Will run freely until next breakpoint');
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                vecx.debugState = 'running';
+                if (!vecx.running) {
+                    vecx.vecx_emuloop();
+                }
+                return;
+            }
+            
+            var currentPC = vecx.e6809.reg_pc;
+            
+            // Check if we've reached the target BEFORE executing
+            if (currentPC === vecx.stepTargetAddress) {
+                console.log('[JSVecx Debug] ✅ Step Over reached target: 0x' + currentPC.toString(16).toUpperCase() + ' after ' + stepCount + ' steps');
+                vecx.pauseDebugger('step', currentPC);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // CRITICAL: Don't check breakpoint at starting position (we're already paused there)
+            // Only check breakpoints AFTER we've moved from the initial position
+            if (!firstStep && vecx.breakpoints.has(currentPC)) {
+                console.log('[JSVecx Debug] 🔴 Breakpoint hit during Step Over at PC: 0x' + currentPC.toString(16).toUpperCase());
+                vecx.pauseDebugger('breakpoint', currentPC);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // Track JSR/RTS to detect when we've exited the function
+            var opcode = vecx.read8(currentPC);
+            if (opcode === 0xBD || opcode === 0x17 || opcode === 0x9D || opcode === 0xAD) { // JSR variants
+                initialCallDepth++;
+            } else if (opcode === 0x39) { // RTS
+                initialCallDepth--;
+            }
+            
+            // Debug logging every 10 steps
+            if (stepCount % 10 === 0 || stepCount <= 5) {
+                console.log('[JSVecx Debug] Step ' + stepCount + ': PC=0x' + currentPC.toString(16) + ', target=0x' + vecx.stepTargetAddress.toString(16) + ', depth=' + initialCallDepth);
+            }
+            
+            // Execute ONE instruction
+            var icycles = vecx.e6809.e6809_sstep(vecx.via_ifr & 0x80, 0);
+            vecx.instructionCount++;
+            vecx.totalCycles += icycles;
+            
+            // CRITICAL: Process VIA/hardware cycles manually (without executing more CPU)
+            // This simulates VIA timers so WAIT_RECAL doesn't hang forever
+            for (var c = 0; c < icycles; c++) {
+                // VIA Timer 1 countdown
+                if (vecx.via_t1on) {
+                    vecx.via_t1c = (vecx.via_t1c > 0 ? vecx.via_t1c - 1 : 0xffff);
+                    if ((vecx.via_t1c & 0xffff) == 0xffff) {
+                        if (vecx.via_acr & 0x40) {
+                            vecx.via_ifr |= 0x40;
+                            vecx.via_t1pb7 = 0x80 - vecx.via_t1pb7;
+                            vecx.via_t1c = (vecx.via_t1lh << 8) | vecx.via_t1ll;
+                        }
+                    }
+                }
+            }
+            
+            firstStep = false; // After first instruction, enable breakpoint checking
+            
+            var newPC = vecx.e6809.reg_pc;
+            
+            // CRITICAL: Check if we exited the function AFTER executing RTS
+            // newPC is now back in user code (< 0xE000) and we've returned from initial function
+            if (initialCallDepth < 0 && newPC < 0xE000) {
+                console.log('[JSVecx Debug] ✅ Step Over exited function, returned to PC: 0x' + newPC.toString(16).toUpperCase() + ' after ' + stepCount + ' steps');
+                vecx.pauseDebugger('step', newPC);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // Check if we've reached the target AFTER executing
+            if (newPC === vecx.stepTargetAddress) {
+                console.log('[JSVecx Debug] ✅ Step Over reached target: 0x' + newPC.toString(16).toUpperCase() + ' after ' + stepCount + ' steps');
+                vecx.pauseDebugger('step', newPC);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // Check for breakpoints at new PC (always check after execution)
+            if (vecx.breakpoints.has(newPC)) {
+                console.log('[JSVecx Debug] 🔴 Breakpoint hit during Step Over at PC: 0x' + newPC.toString(16).toUpperCase());
+                vecx.pauseDebugger('breakpoint', newPC);
+                vecx.stepMode = null;
+                vecx.stepTargetAddress = null;
+                return;
+            }
+            
+            // Continue stepping (schedule next instruction)
+            setTimeout(stepLoop, 0);
+        };
+        
+        // Start stepping
+        stepLoop();
     }
     
     // Step Into (F11) - entrar en funciones
@@ -1310,10 +1456,10 @@ function VecX()
             console.log('[JSVecx Debug] Native call detected - will step through JSR');
         }
         
-        // Ejecutar UNA instrucción y pausar
-        if (!this.running) {
-            this.vecx_emuloop();
-        }
+        // CRITICAL FIX: Call vecx_emu directly to execute one instruction
+        // Don't use vecx_emuloop() because it returns if this.running is true
+        var cycles_per_instruction = 10; // Average M6809 instruction cycles
+        this.vecx_emu(cycles_per_instruction, 0);
     }
     
     // Step Out (Shift+F11) - salir de función actual
@@ -1324,10 +1470,10 @@ function VecX()
         
         console.log('[JSVecx Debug] Step Out');
         
-        // Ejecutar hasta RTS que nos saque del nivel actual
-        if (!this.running) {
-            this.vecx_emuloop();
-        }
+        // CRITICAL FIX: Call vecx_emu directly to execute instructions
+        // Execute enough cycles to potentially reach RTS (100 instructions max)
+        var max_cycles = 1000; // ~100 instructions worth of cycles
+        this.vecx_emu(max_cycles, 0);
     }
     
     // Setup de listeners para postMessage desde el IDE

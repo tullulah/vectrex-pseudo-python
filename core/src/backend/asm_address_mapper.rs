@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use anyhow::Result;
 use crate::backend::debug_info::DebugInfo;
+use crate::backend::m6809_opcodes;
 
 /// Represents the address mapping of one line of ASM code
 #[derive(Debug, Clone)]
@@ -14,9 +15,13 @@ pub struct AsmLineAddress {
 }
 
 /// Generate address mapping by disassembling the binary and correlating with ASM
+/// header_offset: START address from binary symbol table (single source of truth)
+/// symbol_table: All labels from binary with their absolute addresses
 pub fn generate_asm_address_map(
     asm_path: &PathBuf, 
     bin_path: &PathBuf,
+    header_offset: u16,
+    symbol_table: &HashMap<String, u16>,
     debug_info: &mut DebugInfo
 ) -> Result<()> {
     eprintln!("Phase 6.5: Generating ASM address map...");
@@ -30,76 +35,145 @@ pub fn generate_asm_address_map(
     let bin_data = fs::read(bin_path)?;
     eprintln!("✓ Read {} bytes from binary file", bin_data.len());
     
-    // Parse ASM to find significant lines (labels, instructions)
+    // Use header_offset from binary symbol table (already passed as parameter)
+    // DO NOT calculate here - single source of truth is BinaryEmitter
+    eprintln!("✓ Using header offset from binary START symbol: 0x{:04X} bytes", header_offset);
+    
+    // Parse ASM to find ALL lines (including comments and empty lines)
     let mut asm_line_map = HashMap::new();
     let mut current_address = 0u16; // Will be set by ORG directive
+    let mut bin_offset = 0usize; // Offset into binary data
+    let mut last_valid_address = 0u16; // Track last address for non-code lines
     
     for (line_idx, line) in asm_lines.iter().enumerate() {
         let line_number = (line_idx + 1) as u32;
         let trimmed = line.trim();
         
-        // Skip empty lines and comments
-        if trimmed.is_empty() || trimmed.starts_with(';') {
-            continue;
-        }
-        
         // Handle ORG directive
         if let Some(org_addr) = parse_org_directive(trimmed) {
             current_address = org_addr;
-            eprintln!("Found ORG directive at line {}: ${:04X}", line_number, current_address);
+            // CRITICAL FIX: bin_offset must start at header_offset, not org_addr
+            // The binary file has header at 0x00-0xBD, code starts at header_offset
+            bin_offset = header_offset as usize; // Physical offset in binary file
+            last_valid_address = current_address.wrapping_add(header_offset);
+            eprintln!("Found ORG directive at line {}: ${:04X} (bin_offset: 0x{:X})", line_number, current_address, bin_offset);
+            // Map ORG line itself
+            asm_line_map.insert(line_number, AsmLineAddress {
+                line_number,
+                address: last_valid_address,
+                instruction: trimmed.to_string(),
+            });
             continue;
         }
         
         // Handle labels (e.g., "VECTREX_PRINT_TEXT:")
         if trimmed.ends_with(':') {
             let label = &trimmed[..trimmed.len()-1];
-            asm_line_map.insert(line_number, AsmLineAddress {
-                line_number,
-                address: current_address,
-                instruction: format!("{}:", label),
-            });
-            eprintln!("Found label '{}' at line {} → ${:04X}", label, line_number, current_address);
+            
+            // DEBUG: Check if label in symbol table
+            if label == "START" || label == "MAIN" || label == "LOOP_BODY" {
+                eprintln!("DEBUG: Looking up label '{}' in symbol_table... exists={}", label, symbol_table.contains_key(label));
+            }
+            
+            // CRITICAL: Synchronize current_address with binary symbol table
+            // If this label exists in symbol_table, use its address as truth
+            let runtime_address = if let Some(&symbol_addr) = symbol_table.get(label) {
+                eprintln!("✓ Syncing label '{}' with symbol table: 0x{:04X} (was current_addr=0x{:04X})", 
+                    label, symbol_addr, current_address);
+                // Update current_address to match symbol table (remove header offset to get logical address)
+                current_address = symbol_addr.wrapping_sub(header_offset);
+                // CRITICAL FIX: bin_offset must be the ABSOLUTE address in binary, NOT relative
+                bin_offset = symbol_addr as usize; // Physical offset in binary file
+                symbol_addr // Use absolute address from symbol table
+            } else {
+                // Label not in symbol table - use calculated address
+                current_address.wrapping_add(header_offset)
+            };
+            
+            last_valid_address = runtime_address;
+            // FIX (2026-01-06): Labels should NOT be in asmAddressMap
+            // They mark addresses but don't consume bytes themselves
+            // The NEXT instruction after the label will have this address
+            eprintln!("Found label '{}' at line {} → ${:04X} (runtime: ${:04X}) - NOT added to map", 
+                label, line_number, current_address, runtime_address);
+            continue; // Labels don't advance PC and are not in the map
+        }
+        
+        // Skip comment lines - they don't have addresses
+        if trimmed.starts_with(';') {
             continue;
         }
         
-        // Handle instructions (simple heuristic - starts with uppercase letter or tab)
+        // Handle instructions - use REAL disassembly from binary
         if trimmed.chars().next().map_or(false, |c| c.is_uppercase()) || trimmed.starts_with('\t') {
-            // Estimate instruction size (simplified)
-            let instruction_size = estimate_instruction_size(trimmed);
+            // Add header offset to match emulator's reported PC
+            let runtime_address = current_address.wrapping_add(header_offset);
+            last_valid_address = runtime_address;
             
+            // Calculate actual instruction size by reading from binary
+            let instruction_size = if bin_offset < bin_data.len() {
+                disassemble_instruction_size(&bin_data, bin_offset)
+            } else {
+                estimate_instruction_size(trimmed) // Fallback if beyond binary
+            };
+            
+            // DEBUG: Log first 20 instructions to see progression
+            if line_number <= 175 {
+                eprintln!("  ASM line {}: current_addr=0x{:04X} runtime=0x{:04X} bin_offset=0x{:04X} size={} | {}", 
+                    line_number, current_address, runtime_address, bin_offset, instruction_size, trimmed);
+            }
+            
+            // Map this line to current address
             asm_line_map.insert(line_number, AsmLineAddress {
                 line_number,
-                address: current_address,
+                address: runtime_address,
                 instruction: trimmed.to_string(),
             });
             
             current_address = current_address.wrapping_add(instruction_size);
+            bin_offset += instruction_size as usize;
+            continue; // Already mapped, continue to next line
         }
+        
+        // Skip comments and empty lines - they should NOT be in the map
+        // Breakpoints can only be set on executable code (labels and instructions)
     }
     
-    eprintln!("✓ Mapped {} significant ASM lines to addresses", asm_line_map.len());
+    eprintln!("✓ Mapped {} ASM lines (labels + instructions only, comments ignored)", asm_line_map.len());
     
     // Update debug info with address mappings
     for (_line_num, line_addr) in asm_line_map {
         // Add to asmFunctions if it's a function start (label ending with :)
-        if line_addr.instruction.ends_with(':') && line_addr.instruction.starts_with("VECTREX_") {
+        // Classify labels into functions vs data
+        if line_addr.instruction.ends_with(':') {
             let function_name = &line_addr.instruction[..line_addr.instruction.len()-1];
             
-            // Extract ASM filename from the path
-            let asm_filename = asm_path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("main.asm")
-                .to_string();
-                
-            debug_info.add_asm_function(
-                function_name.to_string(),
-                asm_filename,
-                line_addr.line_number as usize,
-                (line_addr.line_number + 10) as usize, // Estimate end line (will be improved)
-                "native"
-            );
-            eprintln!("Added ASM function '{}' at line {} → ${:04X}", 
-                function_name, line_addr.line_number, line_addr.address);
+            // Skip data labels (typically start with underscore or are all caps constants)
+            let is_data_label = function_name.starts_with('_') || 
+                                function_name.starts_with("CONST_") ||
+                                function_name.starts_with("ARRAY_") ||
+                                function_name.starts_with("STRING_") ||
+                                function_name == "START" ||
+                                function_name == "MAIN" ||
+                                function_name == "LOOP_BODY";
+            
+            if !is_data_label {
+                // Extract ASM filename from the path
+                let asm_filename = asm_path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("main.asm")
+                    .to_string();
+                    
+                debug_info.add_asm_function(
+                    function_name.to_string(),
+                    asm_filename,
+                    line_addr.line_number as usize,
+                    (line_addr.line_number + 10) as usize, // Estimate end line (will be improved)
+                    "native"
+                );
+                eprintln!("Added ASM function '{}' at line {} → ${:04X}", 
+                    function_name, line_addr.line_number, line_addr.address);
+            }
         }
         
         // Also add to address mapping
@@ -110,6 +184,40 @@ pub fn generate_asm_address_map(
     Ok(())
 }
 
+/// Calculate the header offset by finding where code execution starts
+/// The Vectrex header includes copyright string, title, and metadata.
+/// Code starts at the first executable label (typically "START")
+/// 
+/// DEPRECATED: This function is no longer used. Header offset is now obtained
+/// directly from the binary's START symbol in the symbol table.
+/// Keeping for reference only.
+#[allow(dead_code)]
+fn calculate_header_offset_deprecated(asm_lines: &[&str]) -> u16 {
+    // This function made ESTIMATIONS of instruction sizes which were often wrong.
+    // The correct approach is to use the START symbol from the binary's symbol table.
+    // See Phase 6 in main.rs where binary_symbol_table is used.
+    0
+}
+
+/// Disassemble one instruction from binary and return its size
+fn disassemble_instruction_size(bin_data: &[u8], offset: usize) -> u16 {
+    if offset >= bin_data.len() {
+        return 1;
+    }
+    
+    let opcode = bin_data[offset];
+    let next_byte = if offset + 1 < bin_data.len() {
+        Some(bin_data[offset + 1])
+    } else {
+        None
+    };
+    
+    // Use the REAL opcode table from m6809_opcodes module (accurate sizes)
+    m6809_opcodes::get_instruction_size(opcode, next_byte)
+}
+
+/// Get instruction size based on M6809 opcode
+/// Simplified version - covers most common cases
 /// Parse ORG directive and return the address
 fn parse_org_directive(line: &str) -> Option<u16> {
     let trimmed = line.trim().to_uppercase();

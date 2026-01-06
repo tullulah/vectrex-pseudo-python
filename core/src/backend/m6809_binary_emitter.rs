@@ -69,6 +69,10 @@ impl BinaryEmitter {
 
     /// Define una etiqueta en la posición actual
     pub fn define_label(&mut self, label: &str) {
+        if label == "START" || label == "MAIN" || label == "LOOP_BODY" {
+            eprintln!("🏷️  Defining label '{}' at current_address=0x{:04X} (offset=0x{:04X})", 
+                label, self.current_address, self.code.len());
+        }
         self.symbols.insert(label.to_string(), self.current_address);
     }
 
@@ -1094,7 +1098,8 @@ impl BinaryEmitter {
                 // Dirección absoluta de 16 bits
                 if sym_ref.ref_size == 2 {
                     // 🔍 DEBUG: Log ALL symbol resolutions (temporary debug)
-                    if sym_ref.symbol.starts_with('_') {
+                    let should_log = sym_ref.symbol.starts_with('_') || sym_ref.symbol == "START" || sym_ref.symbol == "MAIN" || sym_ref.symbol == "LOOP_BODY";
+                    if should_log {
                         if sym_ref.addend != 0 {
                             eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X} (addend {:+}) => 0x{:04X}", 
                                 sym_ref.symbol, sym_ref.offset, target_addr, sym_ref.addend, effective_target);
@@ -1144,6 +1149,11 @@ impl BinaryEmitter {
     #[allow(dead_code)]
     pub fn get_org(&self) -> u16 {
         self.current_address - self.code.len() as u16
+    }
+    
+    /// Obtiene la tabla de símbolos (labels -> addresses reales)
+    pub fn get_symbol_table(&self) -> &HashMap<String, u16> {
+        &self.symbols
     }
 }
 

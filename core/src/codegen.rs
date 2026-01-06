@@ -214,6 +214,7 @@ pub struct CodegenOptions {
     pub exclude_ram_org: bool,       // emit RAM variables as EQU instead of ORG-ing into RAM (keeps ROM size small)
     pub fast_wait: bool,             // replace BIOS Wait_Recal with simulated wrapper
     pub source_path: Option<String>, // ruta del archivo fuente para calcular includes relativos
+    pub output_name: Option<String>, // nombre base del output (ej: "test_bp_min") para PDB correcto
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
     pub const_arrays: std::collections::BTreeMap<String, usize>, // Maps const array name -> CONST_ARRAY_N index for ROM-only data
@@ -585,6 +586,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
+        output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
     };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
@@ -620,7 +622,10 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     let optimized = optimize_module(module);
     let ti = info(target);
     // If source defines CONST TITLE = "..." let it override CLI title.
-    let mut effective = CodegenOptions { ..opts.clone() };
+    let mut effective = CodegenOptions { 
+        output_name: opts.output_name.clone(), // Propagate project name for PDB
+        ..opts.clone() 
+    };
     if let Some(t) = optimized.meta.title_override.clone() { effective.title = t; }
     // Pass music/copyright through metas hashmap for backend (reuse existing fields via metas)
     if optimized.meta.music_override.is_some() { /* backend reads module.meta.music_override */ }

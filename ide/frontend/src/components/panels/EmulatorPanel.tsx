@@ -4,6 +4,7 @@ import { useEditorStore } from '../../state/editorStore';
 import { useEmulatorSettings } from '../../state/emulatorSettings';
 import { useDebugStore } from '../../state/debugStore';
 import { useJoystickStore } from '../../state/joystickStore';
+import { useProjectStore } from '../../state/projectStore';
 import { JoystickConfigDialog } from '../dialogs/JoystickConfigDialog';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
@@ -247,6 +248,7 @@ export const EmulatorPanel: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
   const defaultOverlayLoaded = useRef<boolean>(false); // Flag para evitar recargar overlay por defecto
+  const jsVecxInitialized = useRef<boolean>(false); // Track if JSVecx already initialized (avoid reset on resize)
   
   // Phase 3: Breakpoint system
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
@@ -262,7 +264,7 @@ export const EmulatorPanel: React.FC = () => {
   // Log component mount/remount
   useEffect(() => {
     console.log('🔄 [EmulatorPanel] COMPONENT MOUNTED/REMOUNTED');
-    console.log('📍 [EmulatorPanel] Mount stack trace:', new Error().stack);
+    // console.log('📍 [EmulatorPanel] Mount stack trace:', new Error().stack); // Debug only
     return () => {
       console.log('💀 [EmulatorPanel] COMPONENT UNMOUNTING');
     };
@@ -340,9 +342,16 @@ export const EmulatorPanel: React.FC = () => {
         return;
       }
       
+      // CRITICAL: Don't re-initialize if already initialized (avoid reset on resize)
+      if (jsVecxInitialized.current) {
+        console.log('[EmulatorPanel] 🛑 Skipping re-initialization - JSVecx already initialized');
+        return;
+      }
+      
       // CRITICAL: Don't re-initialize if emulator is already running/debugging
       if (vecx.running) {
         console.log('[EmulatorPanel] 🛑 Skipping re-initialization - emulator already running');
+        jsVecxInitialized.current = true; // Mark as initialized
         return;
       }
       
@@ -350,17 +359,19 @@ export const EmulatorPanel: React.FC = () => {
       
       try {
       console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: JSVecX initialization');
-      console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
+      // console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack); // Debug only
       vecx.reset();
-      console.log('[EmulatorPanel] ✓ vecx.reset() successful');        vecx.main();
-        console.log('[EmulatorPanel] ✓ vecx.main() called successfully');
+      console.log('[EmulatorPanel] ✓ vecx.reset() successful');
         
-        // CRITICAL: Set debugState to 'running' so breakpoints are detected
-        vecx.debugState = 'running';
-        console.log('[EmulatorPanel] ✓ JSVecx debugState set to running (auto-start)');
+        // DO NOT auto-start - user controls when to start manually
+        // vecx.main() would start emulator immediately
+        // vecx.debugState = 'stopped'; // Don't set running yet
+        console.log('[EmulatorPanel] ✓ JSVecx initialized (stopped, ready for manual start)');
+        
+        jsVecxInitialized.current = true; // Mark as initialized
         
         if (!cancelled) {
-          setStatus('running');
+          setStatus('stopped');
         }
       } catch (e) {
         console.error('[EmulatorPanel] JSVecX initialization failed:', e);
@@ -378,11 +389,11 @@ export const EmulatorPanel: React.FC = () => {
     };
   }, [setStatus, canvasSize.width, canvasSize.height]); // Use individual values instead of object reference
 
-  // LOG: Detectar cambios en canvasSize
-  useEffect(() => {
-    console.log(`[EmulatorPanel] 🔍 canvasSize changed to:`, canvasSize);
-    console.log(`[EmulatorPanel] 🔍 Stack trace:`, new Error().stack);
-  }, [canvasSize]);
+  // LOG: Detectar cambios en canvasSize (debug only - commented to reduce console noise)
+  // useEffect(() => {
+  //   console.log(`[EmulatorPanel] 🔍 canvasSize changed to:`, canvasSize);
+  //   console.log(`[EmulatorPanel] 🔍 Stack trace:`, new Error().stack);
+  // }, [canvasSize]);
 
   // Actualizar dimensiones del canvas sin re-inicializar JSVecX
   useEffect(() => {
@@ -468,7 +479,15 @@ export const EmulatorPanel: React.FC = () => {
       removeBreakpoint,
       toggleBreakpoint,
       clearAllBreakpoints,
-      getBreakpoints: () => Array.from(breakpoints)
+      getBreakpoints: () => Array.from(breakpoints),
+      start: () => {
+        const vecx = (window as any).vecx;
+        if (vecx && vecx.debugState === 'paused') {
+          console.log('[EmulatorPanel] 🚀 emulatorDebug.start() called - starting emulator');
+          vecx.debugState = 'running';
+          vecx.start();
+        }
+      }
     };
     
     return () => {
@@ -821,6 +840,12 @@ export const EmulatorPanel: React.FC = () => {
           debugStoreForContinue.setCurrentVpyLine(null);
           debugStoreForContinue.setState('running');
           
+          // CRITICAL: Set debugState to 'running' BEFORE resuming
+          vecx.debugState = 'running';
+          vecx.stepMode = null; // Clear any step mode
+          vecx.stepTargetAddress = null;
+          console.log('[EmulatorPanel] ✓ JSVecx debugState set to running, step mode cleared');
+          
           // Resume from breakpoint if paused by one
           if (vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint()) {
             console.log('[EmulatorPanel] 🔓 Resuming from breakpoint');
@@ -828,9 +853,6 @@ export const EmulatorPanel: React.FC = () => {
               vecx.resumeFromBreakpoint();
             }
           }
-          // CRITICAL: Set debugState to 'running' when continuing
-          vecx.debugState = 'running';
-          console.log('[EmulatorPanel] ✓ JSVecx debugState set to running');
           
           if (!vecx.running) {
             initPsgLogging();
@@ -863,66 +885,52 @@ export const EmulatorPanel: React.FC = () => {
           // Check if we're in ASM debugging mode
           const asmDebuggingMode = (window as any).asmDebuggingMode;
           if (asmDebuggingMode) {
-            console.log('[EmulatorPanel] 🔧 ASM debugging mode - calculating next instruction address for step over');
+            console.log('[EmulatorPanel] 🔧 ASM debugging mode - executing one instruction');
             
-            // In ASM mode, calculate the next instruction address based on current PC
-            const currentDebugState = useDebugStore.getState();
-            const currentPCString = currentDebugState.currentAsmAddress;
-            const currentPdbData = currentDebugState.pdbData;
-            
-            if (currentPCString && currentPdbData?.asmAddressMap) {
-              const currentPC = parseInt(currentPCString, 16);
-              
-              // Find next address in the mapping
-              let nextAddress = null;
-              const sortedAddresses = Object.entries(currentPdbData.asmAddressMap)
-                .map(([line, addr]) => ({ line: parseInt(line, 10), addr: parseInt(addr, 16) }))
-                .sort((a, b) => a.addr - b.addr);
-              
-              for (let i = 0; i < sortedAddresses.length - 1; i++) {
-                if (sortedAddresses[i].addr === currentPC) {
-                  nextAddress = sortedAddresses[i + 1].addr;
-                  console.log(`[EmulatorPanel] 🎯 Next instruction address: 0x${nextAddress.toString(16).padStart(4, '0').toUpperCase()}`);
-                  break;
-                }
-              }
-              
-              if (nextAddress) {
-                debugStoreForStepOver.setState('running');
-                if (vecx.debugStepOver) {
-                  vecx.debugStepOver(nextAddress); // Use real step over with calculated target
-                }
-                return;
-              } else {
-                console.log('[EmulatorPanel] ⚠️ Could not calculate next address, falling back to step into');
-              }
-            }
-            
-            // Fallback to step into if we can't calculate next address
-            console.log('[EmulatorPanel] 🔧 ASM debugging mode - fallback to step into');
+            // In ASM mode, simply execute one instruction and let the emulator tell us the new PC
+            // No need to guess instruction sizes or calculate addresses
             debugStoreForStepOver.setState('running');
             if (vecx.debugStepInto) {
-              vecx.debugStepInto(false); // Step one instruction
+              vecx.debugStepInto(false); // Step one instruction, emulator will report new PC
             }
             return; // Skip normal step over logic
           }
           
           // Clear current line highlight before stepping
           debugStoreForStepOver.setCurrentVpyLine(null);
-          debugStoreForStepOver.setState('running');
+          // NOTE: Do NOT set state to 'running' - Step Over executes instruction-by-instruction in 'paused' mode
           
           if (vecx.debugStepOver) {
             // Calculate target address (next line after current)
             const currentPC = vecx.e6809?.reg_pc;
             const stepOverPdbData = useDebugStore.getState().pdbData;
             if (currentPC && stepOverPdbData) {
-              // Find current line
+              // Find current line by exact match or closest previous address
               let currentLine: number | null = null;
-              const currentPCHex = '0x' + currentPC.toString(16).padStart(4, '0').toLowerCase();
+              const currentPCHex = '0x' + currentPC.toString(16).padStart(4, '0').toUpperCase();
+              
+              // First try exact match
               for (const [line, addr] of Object.entries(stepOverPdbData.lineMap)) {
-                if (addr.toLowerCase() === currentPCHex) {
+                if (addr.toUpperCase() === currentPCHex) {
                   currentLine = parseInt(line, 10);
                   break;
+                }
+              }
+              
+              // If no exact match, find the line with the closest address <= currentPC
+              if (currentLine === null) {
+                let closestLine: number | null = null;
+                let closestAddr = 0;
+                for (const [line, addr] of Object.entries(stepOverPdbData.lineMap)) {
+                  const lineAddr = parseInt(addr, 16);
+                  if (lineAddr <= currentPC && lineAddr > closestAddr) {
+                    closestAddr = lineAddr;
+                    closestLine = parseInt(line, 10);
+                  }
+                }
+                currentLine = closestLine;
+                if (currentLine !== null) {
+                  console.log(`[EmulatorPanel] Step Over: PC 0x${currentPC.toString(16)} mapped to closest line ${currentLine} (addr: 0x${closestAddr.toString(16)})`);
                 }
               }
               
@@ -942,6 +950,8 @@ export const EmulatorPanel: React.FC = () => {
                     vecx.stop();
                   }
                 }
+              } else {
+                console.log(`[EmulatorPanel] ⚠️ Step Over: Could not map PC 0x${currentPC.toString(16)} to any line`);
               }
             }
           }
@@ -950,43 +960,65 @@ export const EmulatorPanel: React.FC = () => {
         case 'debug-step-into':
           console.log('[EmulatorPanel] 🔽 Debug: Step into');
           
-          // Get debug store and current line first
+          // This is only called when in ASM debugging mode
+          // (main.tsx sends debug-switch-to-asm when in VPy mode)
           const debugStoreForStepInto = useDebugStore.getState();
-          const currentVpyLine = debugStoreForStepInto.currentVpyLine;
-          
-          // Check if we're in ASM debugging mode
-          const asmDebuggingModeStepInto = (window as any).asmDebuggingMode;
-          if (asmDebuggingModeStepInto) {
-            console.log('[EmulatorPanel] 🔧 ASM debugging mode - continuing with instruction step');
-            debugStoreForStepInto.setState('running');
-            if (vecx.debugStepInto) {
-              vecx.debugStepInto(false); // Step one instruction
-            }
-            return; // Skip normal step into logic
-          }
-          
-          // Clear current line highlight before stepping
-          debugStoreForStepInto.setCurrentVpyLine(null);
+          console.log('[EmulatorPanel] 🔧 ASM debugging mode - executing instruction step');
           debugStoreForStepInto.setState('running');
-          
           if (vecx.debugStepInto) {
-            // Check if current line has a native call
-            let isNativeCall = false;
-            const stepIntoPdbData = useDebugStore.getState().pdbData;
-            if (currentVpyLine && stepIntoPdbData?.nativeCalls) {
-              const nativeCallName = stepIntoPdbData.nativeCalls[currentVpyLine.toString()];
-              if (nativeCallName) {
-                console.log(`[EmulatorPanel] 🔧 Step Into on native call: ${nativeCallName} at line ${currentVpyLine}`);
-                isNativeCall = true;
-                
-                // Store the native function name temporarily as a window property
-                (window as any).lastStepIntoNativeFunction = nativeCallName;
+            vecx.debugStepInto(false); // Step one instruction
+          }
+          break;
+          
+        case 'debug-switch-to-asm':
+          console.log('[EmulatorPanel] 🔧 Switching to ASM view WITHOUT executing');
+          
+          const debugStoreForAsmSwitch = useDebugStore.getState();
+          
+          // Activate ASM debugging mode (this switches the view)
+          (window as any).asmDebuggingMode = true;
+          
+          // Get current PC and find ASM file path
+          const currentPCForSwitch = vecx.e6809?.reg_pc;
+          if (currentPCForSwitch !== undefined) {
+            const formattedPCSwitch = formatAddress(currentPCForSwitch);
+            debugStoreForAsmSwitch.setCurrentAsmAddress(formattedPCSwitch);
+            
+            // Get ASM file path from lastCompiledBinary
+            if (lastCompiledBinary) {
+              // Ensure ASM file has proper URI format (file://)
+              let asmFile = lastCompiledBinary.replace('.bin', '.asm');
+              if (!asmFile.startsWith('file://')) {
+                asmFile = 'file://' + asmFile;
+              }
+              (window as any).asmDebuggingFile = asmFile;
+              console.log(`[EmulatorPanel] 📁 ASM file URI: ${asmFile}`);
+              
+              // Find ASM line for current PC using asmAddressMap
+              const currentPdbData = debugStoreForAsmSwitch.pdbData;
+              if (currentPdbData?.asmAddressMap) {
+                for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
+                  if (addr.toLowerCase() === formattedPCSwitch.toLowerCase()) {
+                    const targetLine = parseInt(lineNum, 10);
+                    console.log(`[EmulatorPanel] 📍 Found ASM line ${targetLine} for PC ${formattedPCSwitch}`);
+                    
+                    // Navigate to this line using editorStore
+                    const editorStore = useEditorStore.getState();
+                    editorStore.gotoLocation(asmFile, targetLine, 1);
+                    
+                    // Set current line in debug store for highlighting
+                    debugStoreForAsmSwitch.setCurrentVpyLine(targetLine);
+                    
+                    console.log(`[EmulatorPanel] ✓ Navigated to ASM line ${targetLine}`);
+                    break;
+                  }
+                }
               }
             }
-            
-            vecx.debugStepInto(isNativeCall);
-            console.log('[EmulatorPanel] ✓ Step into executed (native=' + isNativeCall + ')');
           }
+          
+          // Keep state as 'paused' - don't execute anything
+          console.log('[EmulatorPanel] ✓ ASM view switch complete - execution paused at first line');
           break;
           
         case 'debug-step-out':
@@ -1027,16 +1059,20 @@ export const EmulatorPanel: React.FC = () => {
                   
                   // CRITICAL: Switch back to VPy file automatically
                   const editorStore = useEditorStore.getState();
-                  const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
                   
-                  if (activeDoc) {
-                    // Extract VPy file path from current PDB data
-                    const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
-                    const vpyFileName = currentPdbData.source;
-                    const vpyPath = `file:///${dirPath}/${vpyFileName}`.replace(/\/+/g, '/');
+                  // Get the VPy source file URI from lastCompiledBinary
+                  // (replace .bin with .vpy and go to src/ instead of build/)
+                  let vpyUri: string | null = null;
+                  if (lastCompiledBinary) {
+                    // From: /path/to/project/build/test_bp_min.bin
+                    // To:   /path/to/project/src/main.vpy
+                    const projectRoot = lastCompiledBinary.substring(0, lastCompiledBinary.lastIndexOf('/build/'));
+                    vpyUri = `file://${projectRoot}/src/${currentPdbData.source}`;
                     
-                    console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyPath}`);
-                    editorStore.gotoLocation(vpyPath, vpyLine, 1);
+                    console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyUri}`);
+                    editorStore.gotoLocation(vpyUri, vpyLine, 1);
+                  } else {
+                    console.error(`[EmulatorPanel] ❌ Cannot switch to VPy - no lastCompiledBinary`);
                   }
                   break;
                 }
@@ -1061,29 +1097,19 @@ export const EmulatorPanel: React.FC = () => {
                     }
                   }
                   
-                  // If no exact match, find the closest previous address (for multi-byte instructions)
+                  // If no exact match, DON'T navigate (keep current line)
+                  // This prevents jumping to far away lines when stepping through unmapped instructions
                   if (!foundAsmLine) {
-                    let closestLine = null;
-                    let closestAddr = -1;
-                    
-                    for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
-                      const mappedAddr = parseInt(addr, 16);
-                      if (mappedAddr <= currentPC && mappedAddr > closestAddr) {
-                        closestAddr = mappedAddr;
-                        closestLine = parseInt(lineNum, 10);
-                      }
-                    }
-                    
-                    if (closestLine) {
-                      foundAsmLine = closestLine;
-                      console.log(`[EmulatorPanel] 📍 Found closest ASM line ${foundAsmLine} for address ${event.data.pc} (closest mapped: 0x${closestAddr.toString(16).padStart(4, '0').toUpperCase()})`);
-                    }
+                    console.log(`[EmulatorPanel] ⚠️ No exact match for ${event.data.pc} - keeping current line to avoid jumping`);
+                    // Don't set foundAsmLine - this will skip navigation below
                   }
                   
-                  // If we found the ASM line, navigate to it
+                  // If we found the ASM line, navigate to it and highlight
                   if (foundAsmLine && (window as any).asmDebuggingFile) {
                     const editorStore = useEditorStore.getState();
+                    const debugStore = useDebugStore.getState();
                     editorStore.gotoLocation((window as any).asmDebuggingFile, foundAsmLine, 1);
+                    debugStore.setCurrentVpyLine(foundAsmLine); // Highlight ASM line
                     console.log(`[EmulatorPanel] ✅ Navigated to ASM line ${foundAsmLine} in ${(window as any).asmDebuggingFile}`);
                   } else {
                     console.log(`[EmulatorPanel] ⚠ Could not find ASM line for address ${event.data.pc} - no mapping available`);
@@ -1143,31 +1169,44 @@ export const EmulatorPanel: React.FC = () => {
               
               // Get the native function we're stepping into (stored temporarily during step-into)
               const targetNativeFunction = (window as any).lastStepIntoNativeFunction;
+              const skipAutoNavigation = (window as any).skipAutoNavigation; // Flag to skip re-navigation
               if (targetNativeFunction) {
                 console.log(`[EmulatorPanel] 🎯 Stepping into native function: ${targetNativeFunction}`);
                 // Clear the temporary storage
                 (window as any).lastStepIntoNativeFunction = null;
               }
               
+              // If we already navigated manually (Step Into to native), skip automatic navigation
+              if (skipAutoNavigation) {
+                console.log(`[EmulatorPanel] ⏭️  Skipping automatic navigation - already at target line from Step Into`);
+                (window as any).skipAutoNavigation = false; // Clear flag
+                return;
+              }
+              
               // Open ASM file in new editor and highlight the line
               if (currentPdbData.asm) {
                 const asmFileName = currentPdbData.asm;
                 
-                // Get directory of current VPy file
+                // Get directory from the binary path (which is in build/)
                 const editorStore = useEditorStore.getState();
-                const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
                 
-                if (activeDoc) {
-                  const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
-                  const asmPath = `${dirPath}/${asmFileName}`.replace(/^file:\/\/\//, '');
-                  
-                  console.log(`[EmulatorPanel] 📂 Opening ASM file: ${asmPath}`);
-                  
-                  // Check if Electron API is available
-                  if (!(window as any).files?.readFile) {
-                    console.warn(`[EmulatorPanel] ⚠️ Electron file API not available - cannot open ASM file`);
-                    return;
-                  }
+                let asmPath: string;
+                if (lastCompiledBinary) {
+                  // Get build directory from binary path
+                  const binPath = lastCompiledBinary;
+                  const buildDir = binPath.substring(0, binPath.lastIndexOf('/'));
+                  asmPath = `${buildDir}/${asmFileName}`;
+                  console.log(`[EmulatorPanel] 📂 Opening ASM file from build dir: ${asmPath}`);
+                } else {
+                  console.error(`[EmulatorPanel] ❌ No lastCompiledBinary available`);
+                  return;
+                }
+                
+                // Check if Electron API is available
+                if (!(window as any).files?.readFile) {
+                  console.warn(`[EmulatorPanel] ⚠️ Electron file API not available - cannot open ASM file`);
+                  return;
+                }
                   
                   // Read ASM file
                   (window as any).files.readFile(asmPath).then((result: {content?: string; error?: string}) => {
@@ -1185,10 +1224,8 @@ export const EmulatorPanel: React.FC = () => {
                     const pcHexUpper = event.data.pc.replace('0x', '').padStart(4, '0').toUpperCase();
                     
                     // Strategy 1: Use asmAddressMap for precise line mapping (PREFERRED)
+                    // Strategy 1: Try exact match in asmAddressMap
                     if (currentPdbData.asmAddressMap) {
-                      const currentPC = parseInt(event.data.pc, 16);
-                      
-                      // Try exact match first
                       for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
                         if (addr.toLowerCase() === event.data.pc.toLowerCase()) {
                           targetLine = parseInt(lineNum, 10);
@@ -1196,29 +1233,15 @@ export const EmulatorPanel: React.FC = () => {
                           break;
                         }
                       }
-                      
-                      // If no exact match, find the closest previous address (for multi-byte instructions)
-                      if (targetLine === 0) {
-                        let closestLine = 0;
-                        let closestAddr = -1;
-                        
-                        for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
-                          const mappedAddr = parseInt(addr, 16);
-                          if (mappedAddr <= currentPC && mappedAddr > closestAddr) {
-                            closestAddr = mappedAddr;
-                            closestLine = parseInt(lineNum, 10);
-                          }
-                        }
-                        
-                        if (closestLine > 0) {
-                          targetLine = closestLine;
-                          console.log(`[EmulatorPanel] ✅ Found closest ASM line ${targetLine} for address ${event.data.pc} (closest mapped: 0x${closestAddr.toString(16).padStart(4, '0').toUpperCase()})`);
-                        }
-                      }
                     }
                     
-                    // Strategy 2: If we know the native function name, find first executable line in function
-                    if (targetNativeFunction && currentPdbData.asmFunctions) {
+                    // Strategy 2: If still not found, show warning - PDB may be incomplete
+                    if (targetLine === 0) {
+                      console.log(`[EmulatorPanel] ⚠️ No exact match for PC ${event.data.pc} in asmAddressMap - PDB may need regeneration`);
+                    }
+                    
+                    // Strategy 3: If we know the native function name, fallback to first executable line
+                    if (targetLine === 0 && targetNativeFunction && currentPdbData.asmFunctions) {
                       const asmFunction = currentPdbData.asmFunctions[targetNativeFunction];
                       if (asmFunction) {
                         // Look for the first executable line after the function label
@@ -1266,7 +1289,7 @@ export const EmulatorPanel: React.FC = () => {
                     }
                     
                     // Open ASM file in editor
-                    const asmUri = `file:///${asmPath}`;
+                    const asmUri = `file://${asmPath}`;
                     editorStore.openDocument({
                       uri: asmUri,
                       content: content,
@@ -1281,14 +1304,18 @@ export const EmulatorPanel: React.FC = () => {
                     console.log(`[EmulatorPanel] 🔍 Navigating to line ${targetLine} in ${asmUri}`);
                     editorStore.gotoLocation(asmUri, targetLine, 1);
                     
+                    // Set flag to skip automatic navigation on next debugger-paused event
+                    // (prevents re-navigation to closest PC address after Step Into)
+                    (window as any).skipAutoNavigation = true;
+                    
                     // Verify navigation worked
                     setTimeout(() => {
                       const currentActive = useEditorStore.getState().active;
                       console.log(`[EmulatorPanel] 📍 After navigation - active: ${currentActive}`);
                     }, 200);
                     
-                    // Update debug store to indicate we're now debugging ASM
-                    debugStore.setCurrentVpyLine(null); // Clear VPy line
+                    // Update debug store to highlight the current ASM line
+                    debugStore.setCurrentVpyLine(targetLine); // Set ASM line for highlighting
                     debugStore.setState('paused'); // Keep debugger paused, but ready for ASM stepping
                     
                     // Set a flag to indicate we're in ASM debugging mode
@@ -1309,7 +1336,6 @@ export const EmulatorPanel: React.FC = () => {
                   }).catch((err: any) => {
                     console.error(`[EmulatorPanel] ❌ Failed to read ASM file: ${err}`);
                   });
-                }
               }
             }
           }
@@ -1400,7 +1426,8 @@ export const EmulatorPanel: React.FC = () => {
     }
   }, [status, loadOverlay, applyAudioState]); // dependencias: status, loadOverlay, applyAudioState
 
-  // Auto-load last ROM on emulator start - only trigger when availableROMs is populated
+  // Auto-load last ROM on emulator start - DISABLED (user loads manually)
+  /*
   useEffect(() => {
     console.log('[EmulatorPanel] Auto-load ROM check:', {
       lastRomName,
@@ -1425,6 +1452,7 @@ export const EmulatorPanel: React.FC = () => {
       }
     }
   }, [lastRomName, availableROMs]); // Fixed: removed loadedROM to prevent reset loop when ROM display changes
+  */
 
   // Apply initial audio state when emulator starts
   useEffect(() => {
@@ -1561,7 +1589,8 @@ export const EmulatorPanel: React.FC = () => {
       if (win.clearOpcodeTrace) {
         win.clearOpcodeTrace();
         win.OPCODE_TRACE_MAX = 5000;
-        win.OPCODE_TRACE_FULL = true;
+        // Only enable full trace if explicitly requested (not by default)
+        // win.OPCODE_TRACE_FULL = true;
         console.log('[EmulatorPanel] 🧹 Opcode trace cleared on reset');
       }
 
@@ -1594,6 +1623,12 @@ export const EmulatorPanel: React.FC = () => {
       console.log('🔄 [EmulatorPanel] CALLING vecx.reset() - Reason: Reset button clicked');
       console.log('📍 [EmulatorPanel] Reset stack trace:', new Error().stack);
       vecx.reset();
+      
+      // CRITICAL: Initialize debugState to 'running' after reset
+      vecx.debugState = 'running';
+      vecx.stepMode = null;
+      vecx.stepTargetAddress = null;
+      console.log('[EmulatorPanel] ✓ JSVecx debugState initialized to running after reset');
       if (status === 'running') {
         initPsgLogging();
         vecx.debugState = 'running';
@@ -1679,10 +1714,14 @@ export const EmulatorPanel: React.FC = () => {
 
 
   // Cargar ROM al arrancar - última compilada del proyecto O Minestorm por defecto
+  // Auto-load compiled ROM on startup DISABLED - user manually controls when to load/start
+  // Previous behavior: detected project, auto-loaded last compiled binary, auto-started emulator
   useEffect(() => {
     const loadDefaultROM = async () => {
       if (defaultOverlayLoaded.current) return; // Ya se cargó
       
+      // Skip auto-loading compiled ROM - commented out to give user manual control
+      /* DISABLED AUTO-LOAD
       // Esperar a que projectStore esté disponible (hasta 3 segundos)
       const maxWaitTime = 3000;
       const checkInterval = 500;
@@ -1723,10 +1762,19 @@ export const EmulatorPanel: React.FC = () => {
                     // Bigger trace to capture the real jump into RAM/garbage
                     (window as any).OPCODE_TRACE_MAX = 5000;
                     // Full trace streaming to disk (.trace next to .bin)
-                    (window as any).OPCODE_TRACE_FULL = true;
+                    // Only enable if explicitly set via --enable-tracebin flag
+                    // (window as any).OPCODE_TRACE_FULL = true;
                     (window as any).CURRENT_ROM_NAME = romName + '.bin';
                     (window as any).CURRENT_ROM_PATH = lastCompiledBinary;
                     console.log('[EmulatorPanel] 🧹 Opcode trace cleared for:', romName + '.bin');
+                  }
+                  
+                  // CRITICAL: Initialize debugState to 'running' when loading binary
+                  if (vecx) {
+                    vecx.debugState = 'running';
+                    vecx.stepMode = null;
+                    vecx.stepTargetAddress = null;
+                    console.log('[EmulatorPanel] ✓ JSVecx debugState initialized to running for new binary');
                   }
 
                   // Delete previous .stack for this ROM (if any)
@@ -1771,19 +1819,13 @@ export const EmulatorPanel: React.FC = () => {
           }
           
           // Si llegamos aquí, falló la carga - continuar a Minestorm
-          break;
+          // continue;
         }
-        
-        // Si no hay proyecto aún, esperar un poco más
-        if (!currentProjectPath && waited < maxWaitTime) {
-          await new Promise(resolve => setTimeout(resolve, checkInterval));
-          waited += checkInterval;
-          continue;
-        }
-        
-        // Si hay proyecto pero no hay ROM compilada, o se acabó el tiempo, ir a Minestorm
         break;
       }
+      END DISABLED AUTO-LOAD */
+      
+      // Skip loading compiled ROM - go straight to default Minestorm
       
       // Fallback: Cargar Minestorm
       console.log('[EmulatorPanel] Loading default: Minestorm');
@@ -1983,30 +2025,29 @@ export const EmulatorPanel: React.FC = () => {
         console.log('[EmulatorPanel] ✓ Joystick RAM initialized to neutral (128, 128)');
         
         // Comportamiento de auto-start dependiendo del modo:
-        // - Normal compilation (F7): auto-start
-        // - Debug session (Ctrl+F5): ALWAYS auto-start in 'running' mode
+        // - Normal compilation (F7): NO auto-start (user must press Play)
+        // - Debug session (Ctrl+F5): wait for breakpoints, then start
         console.log(`[EmulatorPanel] Binary load - loadingForDebug=${loadingForDebug}`);
         
         if (!loadingForDebug) {
-          // Compilación normal → siempre auto-start
-          vecx.debugState = 'running';
-          vecx.start();
-          console.log('[EmulatorPanel] ✓ Emulator started (normal mode)');
+          // Compilación normal → NO auto-start, user loads manually
+          vecx.debugState = 'stopped';
+          console.log('[EmulatorPanel] ✓ Binary loaded (normal mode) - ready to start');
         } else {
-          // Modo debug → SETEAR estado a 'running' e iniciar
+          // Modo debug → NO auto-start, esperar a que breakpoints se sincronicen
           const debugStore = useDebugStore.getState();
-          debugStore.setState('running');
-          console.log('[EmulatorPanel] ✓ Debug mode: state set to running');
+          debugStore.setState('paused'); // Start in paused state
+          console.log('[EmulatorPanel] ✓ Debug mode: state set to paused (waiting for breakpoints)');
           
-          // CRITICAL: Sync debugState to JSVecx
-          vecx.debugState = 'running';
-          console.log('[EmulatorPanel] ✓ JSVecx debugState set to running');
+          // CRITICAL: Sync debugState to JSVecx as 'paused'
+          vecx.debugState = 'paused';
+          console.log('[EmulatorPanel] ✓ JSVecx debugState set to paused');
           
-          vecx.start();
-          console.log('[EmulatorPanel] ✓ Emulator started in debug mode (running until breakpoint)');
+          // DO NOT call vecx.start() yet - MonacoEditorWrapper will start after adding breakpoints
+          console.log('[EmulatorPanel] ⏸️ Emulator ready in debug mode (waiting for breakpoint sync)');
           
-          // Limpiar flag
-          debugStore.setLoadingForDebug(false);
+          // NO resetear el flag aquí - mantenerlo activo durante toda la sesión de debug
+          // Se reseteará cuando el usuario haga Stop (debug.stop en main.tsx)
         }
         
         // Actualizar ROM cargada y buscar overlay

@@ -926,6 +926,37 @@ export class MCPServer {
     }
 
     try {
+      // Check if there are active breakpoints - if so, enable debug mode
+      const hasBreakpoints = await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__editorStore__;
+          if (!store) return false;
+          const state = store.getState();
+          const breakpoints = state.breakpoints || {};
+          // Check if ANY file has breakpoints
+          for (const uri in breakpoints) {
+            if (breakpoints[uri] && breakpoints[uri].length > 0) {
+              return true;
+            }
+          }
+          return false;
+        })()
+      `);
+
+      // If there are breakpoints, set loadingForDebug flag
+      if (hasBreakpoints) {
+        console.log('[MCP Server] Breakpoints detected - enabling debug mode');
+        await this.mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const debugStore = window.__debugStore__;
+            if (debugStore) {
+              debugStore.getState().setLoadingForDebug(true);
+              console.log('[MCP Server] ✓ loadingForDebug set to true');
+            }
+          })()
+        `);
+      }
+
       // Get current project and call executeCompilation directly
       const { getCurrentProject, executeCompilation } = await import('../main.js');
       const project = getCurrentProject();

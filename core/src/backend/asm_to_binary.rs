@@ -16,8 +16,8 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
 }
 
 /// Convierte código M6809 assembly a formato binario
-/// Retorna (bytes_binarios, linea_vpy -> offset_binario)
-pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<usize, usize>), String> {
+/// Retorna (bytes_binarios, linea_vpy -> offset_binario, symbol_table)
+pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>), String> {
     let mut emitter = BinaryEmitter::new(org);
     let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
     
@@ -174,11 +174,12 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
     // Segunda pasada: resolver símbolos (incluyendo símbolos externos de BIOS)
     emitter.resolve_symbols_with_equates(&equates)?;
     
-    // Obtener mapeo ANTES de finalizar (finalize consume emitter)
+    // Obtener mapeo y symbols ANTES de finalizar (finalize consume emitter)
     let line_map = emitter.get_line_to_offset_map().clone();
+    let symbol_table = emitter.get_symbol_table().clone();
     let binary = emitter.finalize();
     
-    Ok((binary, line_map))
+    Ok((binary, line_map, symbol_table))
 }
 
 /// Extrae número de línea VPy desde comentario marcador

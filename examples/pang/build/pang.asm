@@ -979,6 +979,7 @@ RTS
 Draw_Sync_List_At_With_Mirrors:
 ; Unified mirror support using flags: MIRROR_X and MIRROR_Y
 ; Conditionally negates X and/or Y coordinates and deltas
+; NOTE: Caller must ensure DP=$D0 for VIA access
 LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
 BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
 LDA ,X+                 ; Otherwise, read intensity from vector data
@@ -986,9 +987,6 @@ BRA DSWM_SET_INTENSITY
 DSWM_USE_OVERRIDE:
 LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
-PSHS A                  ; Save intensity
-LDA #$D0
-PULS A                  ; Restore intensity
 JSR $F2AB               ; BIOS Intensity_a
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
@@ -1161,6 +1159,7 @@ START:
     STD SFX_PTR            ; Clear SFX pointer
 
     ; *** DEBUG *** main() function code inline (initialization)
+    ; VPy_LINE:77
     ; VPy_LINE:11
     LDD #0
     STD RESULT
@@ -1387,7 +1386,6 @@ COPY_LOOP_6:
     LDU #VAR_HOOK_Y
     STU TMPPTR
     STX ,U
-; VPy_LINE:77
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -3048,6 +3046,7 @@ DSVEX_CALL_139:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_MAP_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_MAP_PATH1  ; Path 1
@@ -3078,6 +3077,7 @@ DSVEX_CALL_139:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_MAP_PATH14  ; Path 14
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -3302,8 +3302,10 @@ DSVEX_CALL_154:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LOCATION_MARKER_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -3337,6 +3339,7 @@ DRAW_TITLE_SCREEN: ; function
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LOGO_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_LOGO_PATH1  ; Path 1
@@ -3351,6 +3354,7 @@ DRAW_TITLE_SCREEN: ; function
     JSR Draw_Sync_List_At
     LDX #_LOGO_PATH6  ; Path 6
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     ; VPy_LINE:238
@@ -3599,6 +3603,7 @@ CE_174:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_FUJI_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_FUJI_BG_PATH1  ; Path 1
@@ -3611,6 +3616,7 @@ CE_174:
     JSR Draw_Sync_List_At
     LDX #_FUJI_BG_PATH5  ; Path 5
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3649,12 +3655,14 @@ CE_177:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_KEIRIN_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_KEIRIN_BG_PATH1  ; Path 1
     JSR Draw_Sync_List_At
     LDX #_KEIRIN_BG_PATH2  ; Path 2
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3693,6 +3701,7 @@ CE_180:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUDDHA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_BUDDHA_BG_PATH1  ; Path 1
@@ -3701,6 +3710,7 @@ CE_180:
     JSR Draw_Sync_List_At
     LDX #_BUDDHA_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3739,12 +3749,14 @@ CE_183:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ANGKOR_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_ANGKOR_BG_PATH1  ; Path 1
     JSR Draw_Sync_List_At
     LDX #_ANGKOR_BG_PATH2  ; Path 2
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3783,12 +3795,14 @@ CE_186:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_AYERS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_AYERS_BG_PATH1  ; Path 1
     JSR Draw_Sync_List_At
     LDX #_AYERS_BG_PATH2  ; Path 2
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3827,6 +3841,7 @@ CE_189:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_TAJ_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_TAJ_BG_PATH1  ; Path 1
@@ -3835,6 +3850,7 @@ CE_189:
     JSR Draw_Sync_List_At
     LDX #_TAJ_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3873,6 +3889,7 @@ CE_192:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LENINGRAD_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_LENINGRAD_BG_PATH1  ; Path 1
@@ -3883,6 +3900,7 @@ CE_192:
     JSR Draw_Sync_List_At
     LDX #_LENINGRAD_BG_PATH4  ; Path 4
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3921,6 +3939,7 @@ CE_195:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PARIS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_PARIS_BG_PATH1  ; Path 1
@@ -3931,6 +3950,7 @@ CE_195:
     JSR Draw_Sync_List_At
     LDX #_PARIS_BG_PATH4  ; Path 4
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -3969,6 +3989,7 @@ CE_198:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LONDON_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_LONDON_BG_PATH1  ; Path 1
@@ -3977,6 +3998,7 @@ CE_198:
     JSR Draw_Sync_List_At
     LDX #_LONDON_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4015,6 +4037,7 @@ CE_201:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BARCELONA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_BARCELONA_BG_PATH1  ; Path 1
@@ -4023,6 +4046,7 @@ CE_201:
     JSR Draw_Sync_List_At
     LDX #_BARCELONA_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4061,6 +4085,7 @@ CE_204:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ATHENS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_ATHENS_BG_PATH1  ; Path 1
@@ -4075,6 +4100,7 @@ CE_204:
     JSR Draw_Sync_List_At
     LDX #_ATHENS_BG_PATH6  ; Path 6
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4113,6 +4139,7 @@ CE_207:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PYRAMIDS_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_PYRAMIDS_BG_PATH1  ; Path 1
@@ -4121,6 +4148,7 @@ CE_207:
     JSR Draw_Sync_List_At
     LDX #_PYRAMIDS_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4159,6 +4187,7 @@ CE_210:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_KILIMANJARO_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_KILIMANJARO_BG_PATH1  ; Path 1
@@ -4167,6 +4196,7 @@ CE_210:
     JSR Draw_Sync_List_At
     LDX #_KILIMANJARO_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4205,6 +4235,7 @@ CE_213:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_NEWYORK_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_NEWYORK_BG_PATH1  ; Path 1
@@ -4215,6 +4246,7 @@ CE_213:
     JSR Draw_Sync_List_At
     LDX #_NEWYORK_BG_PATH4  ; Path 4
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4253,6 +4285,7 @@ CE_216:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_MAYAN_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_MAYAN_BG_PATH1  ; Path 1
@@ -4263,6 +4296,7 @@ CE_216:
     JSR Draw_Sync_List_At
     LDX #_MAYAN_BG_PATH4  ; Path 4
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4301,6 +4335,7 @@ CE_219:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ANTARCTICA_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_ANTARCTICA_BG_PATH1  ; Path 1
@@ -4309,6 +4344,7 @@ CE_219:
     JSR Draw_Sync_List_At
     LDX #_ANTARCTICA_BG_PATH3  ; Path 3
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_171
@@ -4327,6 +4363,7 @@ IF_NEXT_217:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_EASTER_BG_PATH0  ; Path 0
     JSR Draw_Sync_List_At
     LDX #_EASTER_BG_PATH1  ; Path 1
@@ -4337,6 +4374,7 @@ IF_NEXT_217:
     JSR Draw_Sync_List_At
     LDX #_EASTER_BG_PATH4  ; Path 4
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
 IF_END_171:
@@ -5000,6 +5038,7 @@ DSVEX_CALL_284:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_WALK_1_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_1_PATH1  ; Path 1
@@ -5034,6 +5073,7 @@ DSVEX_CALL_284:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_1_PATH16  ; Path 16
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -5096,6 +5136,7 @@ DSVEX_CALL_290:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_WALK_2_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_2_PATH1  ; Path 1
@@ -5130,6 +5171,7 @@ DSVEX_CALL_290:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_2_PATH16  ; Path 16
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -5192,6 +5234,7 @@ DSVEX_CALL_296:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_WALK_3_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_3_PATH1  ; Path 1
@@ -5226,6 +5269,7 @@ DSVEX_CALL_296:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_3_PATH16  ; Path 16
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -5288,6 +5332,7 @@ DSVEX_CALL_302:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_WALK_4_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_4_PATH1  ; Path 1
@@ -5322,6 +5367,7 @@ DSVEX_CALL_302:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_4_PATH16  ; Path 16
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -5364,6 +5410,7 @@ DSVEX_CALL_305:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_WALK_5_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_5_PATH1  ; Path 1
@@ -5398,6 +5445,7 @@ DSVEX_CALL_305:
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
     LDX #_PLAYER_WALK_5_PATH16  ; Path 16
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -5492,8 +5540,10 @@ DSVEX_CALL_312:
     STD RESULT
     LDA RESULT+1  ; Intensity (0-127)
     STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_HOOK_PATH0  ; Path 0
     JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
@@ -6651,8 +6701,10 @@ CE_364:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_HUGE_PATH0  ; Path 0
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_361
@@ -6724,8 +6776,10 @@ CE_367:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_LARGE_PATH0  ; Path 0
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_361
@@ -6797,8 +6851,10 @@ CE_370:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_MEDIUM_PATH0  ; Path 0
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     LBRA IF_END_361
@@ -6839,8 +6895,10 @@ IF_NEXT_368:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_SMALL_PATH0  ; Path 0
     JSR Draw_Sync_List_At
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
 IF_END_361:
