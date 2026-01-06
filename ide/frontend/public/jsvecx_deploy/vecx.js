@@ -613,13 +613,7 @@ function VecX()
                            ' (breakpoints: ' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(',') + ')');
             }
             
-            // TEMP DEBUG: Log when PC is in cartridge range (0x0000-0x7FFF) - CHECK EVERY INSTRUCTION
-            if (currentPC < 0x1000) {
-                console.log('[JSVecx Debug] 🎮 CARTRIDGE CODE executing at PC=0x' + currentPC.toString(16).toUpperCase() + 
-                           ' (instruction #' + this.instructionCount + ')' +
-                           ', debugState=' + this.debugState +
-                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
-            }
+            // TEMP DEBUG logs removed - they were flooding the console
             
             // TEMP DEBUG: Log when PC is near our breakpoint addresses (0x400-0x500 range)
             if (currentPC >= 0x400 && currentPC <= 0x500 && this.instructionCount % 100 === 0) {
