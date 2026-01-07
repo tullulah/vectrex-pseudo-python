@@ -353,6 +353,50 @@ export class MCPServer {
       },
     });
 
+    // Observability tools
+    this.registerTool('debugger/get_registers', this.getRegisters.bind(this), {
+      name: 'debugger/get_registers',
+      description: 'Get current CPU register values (A, B, X, Y, U, S, PC, DP, CC)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('memory/dump', this.memoryDump.bind(this), {
+      name: 'memory/dump',
+      description: 'Get memory snapshot (hex dump of RAM region)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          address: { type: 'number', description: 'Start address (decimal or 0xHEX)' },
+          size: { type: 'number', description: 'Number of bytes to read (default: 256, max: 4096)' },
+        },
+        required: ['address'],
+      },
+    });
+
+    this.registerTool('memory/list_variables', this.listVariables.bind(this), {
+      name: 'memory/list_variables',
+      description: 'Get all variables from PDB with sizes and types (sorted by size, largest first)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('memory/read_variable', this.readVariable.bind(this), {
+      name: 'memory/read_variable',
+      description: 'Read current value of specific variable from emulator',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Variable name (e.g., "LEVEL_GP_COUNT", "player_x")' },
+        },
+        required: ['name'],
+      },
+    });
+
     // Project tools
     this.registerTool('project/get_structure', this.getProjectStructure.bind(this), {
       name: 'project/get_structure',
@@ -1655,6 +1699,249 @@ export class MCPServer {
     `);
 
     return { success: true, message: 'Debug session started' };
+  }
+
+  private async getRegisters(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx || !vecx.cpu) {
+            return { __error: true, message: 'Emulator not running or CPU not available' };
+          }
+
+          const cpu = vecx.cpu;
+          
+          // Read all registers
+          const a = cpu.a & 0xFF;
+          const b = cpu.b & 0xFF;
+          const d = (a << 8) | b;
+          const x = cpu.x & 0xFFFF;
+          const y = cpu.y & 0xFFFF;
+          const u = cpu.u & 0xFFFF;
+          const s = cpu.s & 0xFFFF;
+          const pc = cpu.pc & 0xFFFF;
+          const dp = cpu.dp & 0xFF;
+          const cc = cpu.cc & 0xFF;
+          
+          return {
+            A: { value: a, hex: '0x' + a.toString(16).toUpperCase().padStart(2, '0'), decimal: a },
+            B: { value: b, hex: '0x' + b.toString(16).toUpperCase().padStart(2, '0'), decimal: b },
+            D: { value: d, hex: '0x' + d.toString(16).toUpperCase().padStart(4, '0'), decimal: d },
+            X: { value: x, hex: '0x' + x.toString(16).toUpperCase().padStart(4, '0'), decimal: x },
+            Y: { value: y, hex: '0x' + y.toString(16).toUpperCase().padStart(4, '0'), decimal: y },
+            U: { value: u, hex: '0x' + u.toString(16).toUpperCase().padStart(4, '0'), decimal: u },
+            S: { value: s, hex: '0x' + s.toString(16).toUpperCase().padStart(4, '0'), decimal: s },
+            PC: { value: pc, hex: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'), decimal: pc },
+            DP: { value: dp, hex: '0x' + dp.toString(16).toUpperCase().padStart(2, '0'), decimal: dp },
+            CC: { 
+              value: cc, 
+              hex: '0x' + cc.toString(16).toUpperCase().padStart(2, '0'), 
+              decimal: cc,
+              flags: {
+                C: (cc & 0x01) ? 1 : 0, // Carry
+                V: (cc & 0x02) ? 1 : 0, // Overflow
+                Z: (cc & 0x04) ? 1 : 0, // Zero
+                N: (cc & 0x08) ? 1 : 0, // Negative
+                I: (cc & 0x10) ? 1 : 0, // IRQ mask
+                H: (cc & 0x20) ? 1 : 0, // Half-carry
+                F: (cc & 0x40) ? 1 : 0, // FIRQ mask
+                E: (cc & 0x80) ? 1 : 0  // Entire flag
+              }
+            }
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async memoryDump(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { address, size = 256 } = params;
+    const maxSize = 4096;
+    const actualSize = Math.min(size, maxSize);
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+
+          const startAddr = ${address};
+          const numBytes = ${actualSize};
+          const bytes = [];
+          
+          for (let i = 0; i < numBytes; i++) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const byte = vecx.read8(addr) & 0xFF;
+            bytes.push(byte);
+          }
+
+          // Format as hex dump (16 bytes per line)
+          const lines = [];
+          for (let i = 0; i < bytes.length; i += 16) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const addrHex = '0x' + addr.toString(16).toUpperCase().padStart(4, '0');
+            const chunk = bytes.slice(i, i + 16);
+            const hexBytes = chunk.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            const ascii = chunk.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+            lines.push(addrHex + ': ' + hexBytes.padEnd(48, ' ') + ' | ' + ascii);
+          }
+
+          return {
+            address: startAddr,
+            size: numBytes,
+            bytes: bytes,
+            dump: lines.join('\\n')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async listVariables(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const compilerState = window.__compilerState__;
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const variables = [];
+
+          // Extract variables from PDB symbols
+          if (pdb.symbols) {
+            for (const [name, info] of Object.entries(pdb.symbols)) {
+              const addr = typeof info === 'number' ? info : (info.address || 0);
+              const size = (info.size || 2); // Default 2 bytes (16-bit)
+              const type = info.type || 'unknown';
+              
+              variables.push({
+                name: name,
+                address: addr,
+                addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+                size: size,
+                type: type
+              });
+            }
+          }
+
+          // Sort by size (largest first)
+          variables.sort((a, b) => b.size - a.size);
+
+          return {
+            count: variables.length,
+            variables: variables
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async readVariable(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { name } = params;
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          const compilerState = window.__compilerState__;
+          
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+          
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const varName = '${name}';
+          
+          // Find variable in PDB
+          if (!pdb.symbols || !pdb.symbols[varName]) {
+            return { __error: true, message: 'Variable "' + varName + '" not found in PDB' };
+          }
+
+          const info = pdb.symbols[varName];
+          const addr = typeof info === 'number' ? info : (info.address || 0);
+          const size = (info.size || 2); // Default 2 bytes
+          
+          // Read value from memory
+          let value;
+          if (size === 1) {
+            value = vecx.read8(addr) & 0xFF;
+          } else {
+            // 16-bit big-endian
+            const high = vecx.read8(addr) & 0xFF;
+            const low = vecx.read8(addr + 1) & 0xFF;
+            value = (high << 8) | low;
+          }
+
+          return {
+            name: varName,
+            address: addr,
+            addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+            size: size,
+            value: value,
+            valueHex: '0x' + value.toString(16).toUpperCase().padStart(size * 2, '0'),
+            valueDec: value,
+            valueBin: '0b' + value.toString(2).padStart(size * 8, '0')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
   }
 
   private async addBreakpoint(params: any): Promise<any> {

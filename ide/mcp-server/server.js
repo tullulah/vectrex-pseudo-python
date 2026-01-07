@@ -785,6 +785,45 @@ class StdioTransport {
           }
         },
         {
+          name: 'debugger_get_registers',
+          description: 'Get current CPU register values (A, B, X, Y, U, S, PC, DP, CC)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'memory_dump',
+          description: 'Get memory snapshot (hex dump of RAM region)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              address: { type: 'number', description: 'Start address (decimal or 0xHEX)' },
+              size: { type: 'number', description: 'Number of bytes to read (default: 256, max: 4096)' }
+            },
+            required: ['address']
+          }
+        },
+        {
+          name: 'memory_list_variables',
+          description: 'Get all variables from PDB with sizes and types (sorted by size, largest first)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'memory_read_variable',
+          description: 'Read current value of specific variable from emulator',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Variable name (e.g., "LEVEL_GP_COUNT", "player_x")' }
+            },
+            required: ['name']
+          }
+        },
+        {
           name: 'memory_write',
           description: 'Write value to memory address for testing/debugging',
           inputSchema: {
