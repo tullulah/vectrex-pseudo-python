@@ -607,20 +607,6 @@ function VecX()
                 window.g_currentPC = currentPC;
             }
             
-            // TEMP DEBUG: Log PC every 10000 instructions to see execution range
-            if (this.instructionCount % 10000 === 0 && this.breakpoints.size > 0) {
-                console.log('[JSVecx Debug] 📊 PC sample at instruction ' + this.instructionCount + ': 0x' + currentPC.toString(16).toUpperCase() + 
-                           ' (breakpoints: ' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(',') + ')');
-            }
-            
-            // TEMP DEBUG logs removed - they were flooding the console
-            
-            // TEMP DEBUG: Log when PC is near our breakpoint addresses (0x400-0x500 range)
-            if (currentPC >= 0x400 && currentPC <= 0x500 && this.instructionCount % 100 === 0) {
-                console.log('[JSVecx Debug] 🔍 PC in target range: 0x' + currentPC.toString(16).toUpperCase() + 
-                           ' (looking for 0x48E, 0x4A2, 0x4DB)');
-            }
-            
             // TEMP DEBUG: Log when PC passes through breakpoint addresses
             if (this.breakpoints.size > 0 && (currentPC === 0x193 || currentPC === 0x1d3 || currentPC === 0x48e || currentPC === 0x4a2 || currentPC === 0x4db || currentPC === 0x3638 || currentPC === 0x2e67 || currentPC === 0x2b5b || currentPC === 0x29e8)) {
                 console.log('[JSVecx Debug] 🎯 PC at breakpoint address: 0x' + currentPC.toString(16).toUpperCase() + 
