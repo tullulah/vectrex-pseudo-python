@@ -363,9 +363,10 @@ async function createWindow() {
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const ctrl = input.control || input.meta; // Ctrl on Windows/Linux, Cmd on macOS
     
-    // Block F5 (normal refresh)
+    // F5 triggers debug-continue (not reload)
     if (input.type === 'keyDown' && input.key === 'F5' && !ctrl && !input.shift) {
-      console.log('[IDE] ⚠️ Blocked F5 reload - use IDE build commands instead');
+      console.log('[IDE] 🟢 F5 pressed - sending debug-continue to frontend');
+      mainWindow.webContents.send('debug-continue-hotkey');
       event.preventDefault();
       return;
     }

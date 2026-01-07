@@ -35,6 +35,7 @@ function VecX()
     this.stepTargetAddress = null; // Dirección objetivo para step over
     this.callStackDepth = 0; // Profundidad de la pila de llamadas (para step out)
     this.isNativeCallStepInto = false; // Flag para saltar JSR en step into de native calls
+    this.skipNextBreakpoint = false; // Flag para saltarse breakpoint una vez (step desde breakpoint)
     this.via_ora = 0;
     this.via_orb = 0;
     this.via_ddra = 0;
@@ -617,10 +618,16 @@ function VecX()
                            ', hasBreakpoint=' + this.breakpoints.has(currentPC));
             }
             
-            if (this.debugState === 'running' && !this.stepMode && this.breakpoints.has(currentPC)) {
-                console.log('[JSVecx Debug] 🔴 BEFORE EXECUTION - Breakpoint hit at PC: 0x' + currentPC.toString(16).toUpperCase());
-                this.pauseDebugger('breakpoint', currentPC);
-                return; // Detener ejecución inmediatamente
+            if (this.debugState === 'running' && this.breakpoints.has(currentPC)) {
+                // Skip breakpoint if flag is set (stepping from breakpoint)
+                if (this.skipNextBreakpoint) {
+                    console.log('[JSVecx Debug] ⏭️ Skipping breakpoint at PC: 0x' + currentPC.toString(16).toUpperCase() + ' (step from breakpoint)');
+                    this.skipNextBreakpoint = false; // Clear flag after skipping once
+                } else {
+                    console.log('[JSVecx Debug] 🔴 BEFORE EXECUTION - Breakpoint hit at PC: 0x' + currentPC.toString(16).toUpperCase());
+                    this.pauseDebugger('breakpoint', currentPC);
+                    return; // Detener ejecución inmediatamente
+                }
             }
             
             // Debug: Check step over/into/out
@@ -1038,6 +1045,19 @@ function VecX()
     {
         if( !this.running )
         {
+            // CRITICAL: Activate debug mode if breakpoints exist
+            if (this.breakpoints.size > 0) {
+                this.debugState = 'running';
+                console.log('[JSVecx] ✓ Debug mode activated (breakpoints detected)');
+                
+                // Notify debug store to sync state
+                if (typeof window !== 'undefined') {
+                    window.postMessage({ 
+                        type: 'debug-state-changed',
+                        state: 'running'
+                    }, '*');
+                }
+            }
             this.e8910.start();
             this.vecx_emuloop();
         }
@@ -1228,6 +1248,12 @@ function VecX()
             address = parseInt(address, 16);
         }
         this.breakpoints.add(address);
+        // CRITICAL: Activate debug mode when adding breakpoint
+        // This ensures breakpoint checks happen in vecx_emu loop
+        if (this.running && this.debugState !== 'paused') {
+            this.debugState = 'running';
+            console.log('[JSVecx Debug] Debug mode activated (breakpoint added while running)');
+        }
         console.log('[JSVecx Debug] Breakpoint added at 0x' + address.toString(16));
     }
     
@@ -1252,12 +1278,24 @@ function VecX()
             this.debugState = 'running';
             this.stepMode = null; // CRITICAL: Clear step mode to re-enable breakpoints
             this.stepTargetAddress = null; // Clear step target
-            console.log('[JSVecx Debug] Continuing execution (stepMode cleared)');
-            // Reiniciar el loop de emulación
-            if (!this.running) {
-                this.vecx_emuloop();
-            }
+            // DON'T set running=true here - vecx_emuloop() checks this and returns early if already true
+            // Let vecx_emuloop() set running=true itself (line 983)
+            this.skipNextBreakpoint = true; // Skip breakpoint at current position
+            console.log('[JSVecx Debug] Continuing execution (stepMode cleared, skipNextBreakpoint=true, running will be set by vecx_emuloop)');
+            // Continue the emulation loop
+            this.vecx_emuloop();
         }
+    }
+    
+    // Alias for compatibility with EmulatorPanel
+    this.resumeFromBreakpoint = function() {
+        console.log('[JSVecx Debug] resumeFromBreakpoint() called - delegating to debugContinue()');
+        this.debugContinue();
+    }
+    
+    // Check if currently paused by a breakpoint
+    this.isPausedByBreakpoint = function() {
+        return this.debugState === 'paused' && !this.running;
     }
     
     // Pausar ejecución manualmente
@@ -1425,9 +1463,11 @@ function VecX()
     this.debugStepInto = function(isNativeCall) {
         this.stepMode = 'into';
         this.debugState = 'running';
+        this.running = true; // CRITICAL: Resume emulation for stepping
+        this.skipNextBreakpoint = true; // Skip breakpoint at current position
         this.isNativeCallStepInto = isNativeCall;
         
-        console.log('[JSVecx Debug] Step Into (native=' + isNativeCall + ')');
+        console.log('[JSVecx Debug] Step Into (native=' + isNativeCall + ', running=true, skipNextBreakpoint=true)');
         
         // If native call, we need to step TWICE:
         // 1st step: Execute JSR instruction (jumps to native)
@@ -1514,6 +1554,10 @@ function VecX()
                     
                 case 'debugger-paused':
                     // Internal message sent by JSVecx itself when paused - handled elsewhere
+                    break;
+                    
+                case 'debug-state-changed':
+                    // Internal message for EmulatorPanel → debugStore sync - no action needed here
                     break;
                     
                 default:

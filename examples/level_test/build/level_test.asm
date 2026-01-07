@@ -621,14 +621,13 @@ SHOW_LEVEL_RUNTIME:
     ; Skip world bounds (8 bytes) + time/score (4 bytes)
     LEAX 12,X        ; X now points to object counts
     
-    ; Read object counts (CRITICAL: CLRB first to avoid garbage in high byte)
-    CLRB             ; Clear B register to ensure clean 8-bit loads
-    LDA ,X+          ; A = bgCount
-    STA >LEVEL_BG_COUNT
-    LDA ,X+          ; A = gameplayCount
-    STA >LEVEL_GP_COUNT
-    LDA ,X+          ; A = fgCount
-    STA >LEVEL_FG_COUNT
+    ; Read object counts (use LDB+STB to ensure 1-byte operations)
+    LDB ,X+          ; B = bgCount
+    STB >LEVEL_BG_COUNT
+    LDB ,X+          ; B = gameplayCount
+    STB >LEVEL_GP_COUNT
+    LDB ,X+          ; B = fgCount
+    STB >LEVEL_FG_COUNT
     
     ; Read layer pointers
     LDD ,X++         ; D = bgObjectsPtr
@@ -678,9 +677,8 @@ SLR_DRAW_OBJECTS:
     ; NOTE: Use register-based loop (no stack juggling).
     ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
 SLR_OBJ_LOOP:
-    TSTB             ; Test if count is zero
-    BEQ SLR_OBJ_DONE ; Exit if zero (no more objects)
     DECB             ; Decrement count
+    BMI SLR_OBJ_DONE ; All done if negative
     
     ; X points to current object (20 bytes)
     ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),

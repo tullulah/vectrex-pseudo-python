@@ -840,25 +840,39 @@ export const EmulatorPanel: React.FC = () => {
           debugStoreForContinue.setCurrentVpyLine(null);
           debugStoreForContinue.setState('running');
           
-          // CRITICAL: Set debugState to 'running' BEFORE resuming
+          // CRITICAL: Check if paused by breakpoint BEFORE changing state
+          const wasPausedByBreakpoint = vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint();
+          
+          // Now set debugState to 'running' AFTER checking pause state
           vecx.debugState = 'running';
           vecx.stepMode = null; // Clear any step mode
           vecx.stepTargetAddress = null;
           console.log('[EmulatorPanel] ✓ JSVecx debugState set to running, step mode cleared');
           
-          // Resume from breakpoint if paused by one
-          if (vecx.isPausedByBreakpoint && vecx.isPausedByBreakpoint()) {
+          // Resume from breakpoint if it was paused by one
+          if (wasPausedByBreakpoint) {
             console.log('[EmulatorPanel] 🔓 Resuming from breakpoint');
             if (vecx.resumeFromBreakpoint) {
               vecx.resumeFromBreakpoint();
             }
-          }
-          
-          if (!vecx.running) {
+          } else if (!vecx.running) {
+            // Only call start() if emulator is NOT paused by breakpoint
             initPsgLogging();
             vecx.start();
             console.log('[EmulatorPanel] ✓ Emulator started');
+          } else {
+            // Already running, just ensure it continues
+            vecx.running = true;
+            console.log('[EmulatorPanel] ✓ Emulator already running, continuing');
           }
+          break;
+          
+        case 'debug-state-changed':
+          // Sync JSVecx debug state to debug store
+          const debugStoreForSync = useDebugStore.getState();
+          const newState = event.data.state;
+          debugStoreForSync.setState(newState);
+          console.log('[EmulatorPanel] 🔄 Debug state synced:', newState);
           break;
           
         case 'debug-pause':
@@ -1346,6 +1360,20 @@ export const EmulatorPanel: React.FC = () => {
     window.addEventListener('message', handleDebugMessage);
     return () => window.removeEventListener('message', handleDebugMessage);
   }, [addBreakpoint, removeBreakpoint, pdbData]);
+
+  // Listen for F5 hotkey from Electron (continue debugging)
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.ipcRenderer) return;
+    
+    const handleF5Continue = () => {
+      console.log('[EmulatorPanel] 🎮 F5 pressed - triggering debug continue');
+      window.postMessage({ type: 'debug-continue' }, '*');
+    };
+    
+    electronAPI.ipcRenderer.on('debug-continue-hotkey', handleF5Continue);
+    return () => electronAPI.ipcRenderer.removeListener('debug-continue-hotkey', handleF5Continue);
+  }, []);
 
   // Función para cargar ROM desde dropdown (definida antes de useEffects que la usan)
   const loadROMFromDropdown = useCallback(async (romName: string) => {

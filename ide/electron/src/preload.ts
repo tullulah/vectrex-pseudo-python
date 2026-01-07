@@ -24,6 +24,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCompiledBin: (cb: (payload: { base64: string; size: number; binPath: string }) => void) => ipcRenderer.on('emu://compiledBin', (_e: IpcRendererEvent, data) => cb(data)),
   // setVectorMode legacy removed
   listSources: (args?: { limit?: number }) => ipcRenderer.invoke('list:sources', args) as Promise<{ ok?:boolean; sources?: Array<{ path:string; kind:'vpy'|'asm'; size:number; mtime:number }> }> ,
+  // Expose ipcRenderer for generic channel listening
+  ipcRenderer: {
+    on: (channel: string, callback: (...args: any[]) => void) => {
+      const handler = (_e: IpcRendererEvent, ...args: any[]) => callback(...args);
+      ipcRenderer.on(channel, handler);
+      return handler;
+    },
+    removeListener: (channel: string, handler: any) => {
+      ipcRenderer.removeListener(channel, handler);
+    }
+  }
 });
 
 contextBridge.exposeInMainWorld('files', {
