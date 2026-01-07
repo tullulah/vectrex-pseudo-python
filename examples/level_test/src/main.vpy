@@ -16,7 +16,7 @@ def loop():
     #DRAW_VECTOR_EX("coin", 0, 0, 0, 0 )
     # Draw all level objects automatically
     # This draws: background (mountain), gameplay (bubble + coin)
-    #SHOW_LEVEL()
+    SHOW_LEVEL()
 
     
 
