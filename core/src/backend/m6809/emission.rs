@@ -1539,6 +1539,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    \n");
         out.push_str("    ; === Draw Background Layer ===\n");
         out.push_str("SLR_BG_COUNT:\n");
+        out.push_str("    CLRB             ; Clear high byte to prevent corruption\n");
         out.push_str("    LDB >LEVEL_BG_COUNT\n");
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_GAMEPLAY\n");
@@ -1549,6 +1550,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    ; === Draw Gameplay Layer ===\n");
         out.push_str("SLR_GAMEPLAY:\n");
         out.push_str("SLR_GP_COUNT:\n");
+        out.push_str("    CLRB             ; Clear high byte to prevent corruption\n");
         out.push_str("    LDB >LEVEL_GP_COUNT\n");
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_FOREGROUND\n");
@@ -1559,6 +1561,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    ; === Draw Foreground Layer ===\n");
         out.push_str("SLR_FOREGROUND:\n");
         out.push_str("SLR_FG_COUNT:\n");
+        out.push_str("    CLRB             ; Clear high byte to prevent corruption\n");
         out.push_str("    LDB >LEVEL_FG_COUNT\n");
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_DONE\n");
@@ -1577,8 +1580,10 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    ; NOTE: Use register-based loop (no stack juggling).\n");
         out.push_str("    ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.\n");
         out.push_str("SLR_OBJ_LOOP:\n");
-        out.push_str("    DECB             ; Decrement count\n");
-        out.push_str("    BMI SLR_OBJ_DONE ; All done if negative\n");
+        out.push_str("    TSTB             ; Test if count is zero\n");
+        out.push_str("    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)\n");
+        out.push_str("    \n");
+        out.push_str("    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)\n");
         out.push_str("    \n");
         out.push_str("    ; X points to current object (20 bytes)\n");
         out.push_str("    ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),\n");
@@ -1593,11 +1598,11 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    STA DRAW_VEC_INTENSITY\n");
         out.push_str("    \n");
         out.push_str("    ; Read y position (offset +3-4) - store LSB only\n");
-        out.push_str("    LDD 3,X\n");
+        out.push_str("    LDD 3,X          ; WARNING: This modifies B!\n");
         out.push_str("    STB DRAW_VEC_Y\n");
         out.push_str("    \n");
         out.push_str("    ; Read x position (offset +1-2) - store LSB only\n");
-        out.push_str("    LDD 1,X\n");
+        out.push_str("    LDD 1,X          ; WARNING: This modifies B!\n");
         out.push_str("    STB DRAW_VEC_X\n");
         out.push_str("    \n");
         out.push_str("    ; Read vector_ptr (offset +16-17)\n");
@@ -1612,6 +1617,9 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    \n");
         out.push_str("    ; Advance to next object (20 bytes)\n");
         out.push_str("    LEAX 20,X\n");
+        out.push_str("    \n");
+        out.push_str("    PULS B           ; Restore counter\n");
+        out.push_str("    DECB             ; Decrement count AFTER drawing\n");
         out.push_str("    BRA SLR_OBJ_LOOP\n");
         out.push_str("    \n");
         out.push_str("SLR_OBJ_DONE:\n");

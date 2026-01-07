@@ -639,6 +639,7 @@ SHOW_LEVEL_RUNTIME:
     
     ; === Draw Background Layer ===
 SLR_BG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_BG_COUNT
     CMPB #0
     BEQ SLR_GAMEPLAY
@@ -649,6 +650,7 @@ SLR_BG_PTR:
     ; === Draw Gameplay Layer ===
 SLR_GAMEPLAY:
 SLR_GP_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_GP_COUNT
     CMPB #0
     BEQ SLR_FOREGROUND
@@ -659,6 +661,7 @@ SLR_GP_PTR:
     ; === Draw Foreground Layer ===
 SLR_FOREGROUND:
 SLR_FG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_FG_COUNT
     CMPB #0
     BEQ SLR_DONE
@@ -677,8 +680,10 @@ SLR_DRAW_OBJECTS:
     ; NOTE: Use register-based loop (no stack juggling).
     ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
 SLR_OBJ_LOOP:
-    DECB             ; Decrement count
-    BMI SLR_OBJ_DONE ; All done if negative
+    TSTB             ; Test if count is zero
+    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)
+    
+    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
     
     ; X points to current object (20 bytes)
     ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
@@ -693,11 +698,11 @@ SLR_OBJ_LOOP:
     STA DRAW_VEC_INTENSITY
     
     ; Read y position (offset +3-4) - store LSB only
-    LDD 3,X
+    LDD 3,X          ; WARNING: This modifies B!
     STB DRAW_VEC_Y
     
     ; Read x position (offset +1-2) - store LSB only
-    LDD 1,X
+    LDD 1,X          ; WARNING: This modifies B!
     STB DRAW_VEC_X
     
     ; Read vector_ptr (offset +16-17)
@@ -712,6 +717,9 @@ SLR_OBJ_LOOP:
     
     ; Advance to next object (20 bytes)
     LEAX 20,X
+    
+    PULS B           ; Restore counter
+    DECB             ; Decrement count AFTER drawing
     BRA SLR_OBJ_LOOP
     
 SLR_OBJ_DONE:
