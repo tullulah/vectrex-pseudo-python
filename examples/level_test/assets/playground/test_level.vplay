@@ -7,7 +7,7 @@
     "difficulty": "medium",
     "timeLimit": 0,
     "targetScore": 0,
-    "description": "Created in Playground - 2026-01-05"
+    "description": "Created in Playground - 2026-01-07"
   },
   "worldBounds": {
     "xMin": -96,
@@ -19,31 +19,12 @@
     "background": [],
     "gameplay": [
       {
-        "id": "obj_1767518126194",
-        "type": "enemy",
-        "vectorName": "bubble_large",
-        "layer": "gameplay",
-        "x": -62,
-        "y": 19,
-        "rotation": 0,
-        "scale": 1,
-        "velocity": {
-          "x": -0.5308333333333337,
-          "y": -1.0897266594280193
-        },
-        "physicsEnabled": true,
-        "collidable": true,
-        "gravity": 1,
-        "bounceDamping": 0.85,
-        "physicsType": "gravity"
-      },
-      {
-        "id": "obj_1767622837565",
+        "id": "obj_1767823597230",
         "type": "enemy",
         "vectorName": "coin",
         "layer": "gameplay",
-        "x": -46,
-        "y": -49,
+        "x": -40,
+        "y": 47,
         "rotation": 0,
         "scale": 1,
         "velocity": {
@@ -57,12 +38,12 @@
         "physicsType": "gravity"
       },
       {
-        "id": "obj_1767622852070",
+        "id": "obj_1767823651769",
         "type": "enemy",
-        "vectorName": "bubble_huge",
+        "vectorName": "fuji_bg",
         "layer": "gameplay",
-        "x": 30,
-        "y": -59,
+        "x": 0,
+        "y": 0,
         "rotation": 0,
         "scale": 1,
         "velocity": {
@@ -76,27 +57,7 @@
         "physicsType": "gravity"
       }
     ],
-    "foreground": [
-      {
-        "id": "obj_1767518128341",
-        "type": "enemy",
-        "vectorName": "bubble_large",
-        "layer": "foreground",
-        "x": 69,
-        "y": 16,
-        "rotation": 0,
-        "scale": 1,
-        "velocity": {
-          "x": 0.9841666666666716,
-          "y": -0.7202163769576136
-        },
-        "physicsEnabled": false,
-        "collidable": true,
-        "gravity": 1,
-        "bounceDamping": 0.85,
-        "physicsType": "gravity"
-      }
-    ]
+    "foreground": []
   },
   "spawnPoints": {
     "player": {

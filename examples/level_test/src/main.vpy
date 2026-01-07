@@ -13,7 +13,7 @@ def loop():
 
 
     #DRAW_VECTOR("fuji_bg", 0, -60)
-    #DRAW_VECTOR_EX("coin", 0, 0, 0, 0 )
+    #DRAW_VECTOR_EX("fuji_bg", 0, 0, 0, 0 )
     # Draw all level objects automatically
     # This draws: background (mountain), gameplay (bubble + coin)
     SHOW_LEVEL()

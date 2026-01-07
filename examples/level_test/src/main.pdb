@@ -3,1311 +3,4100 @@
   "source": "main.vpy",
   "asm": "main.asm",
   "binary": "main.bin",
-  "entryPoint": "0x0000",
+  "entryPoint": "0x0470",
   "symbols": {
-    "MAIN": "0x04AB",
-    "START": "0x047D",
-    "LOOP_BODY": "0x04D2"
+    "DSLA_W2": "0x0235",
+    "J1B4_BUILTIN": "0x007E",
+    "DSL_LOOP": "0x0100",
+    "DSLA_W3": "0x02A0",
+    "DSWM_SET_INTENSITY": "0x02B8",
+    "_TEST_LEVEL_FG_OBJECTS": "0x064E",
+    "SLR_GP_COUNT": "0x0420",
+    "J1B3_BUILTIN.J1B3_OFF": "0x007A",
+    "VECTREX_SET_INTENSITY": "0x008D",
+    "DSWM_NEXT_NO_NEGATE_Y": "0x0376",
+    "SLR_FG_COUNT": "0x042E",
+    "SLR_DRAW_OBJECTS": "0x0441",
+    "J1B2_BUILTIN": "0x0060",
+    "DSVEX_CHK_Y_0": "0x04FE",
+    "__Reset0Ref": "0x00A2",
+    "SLR_BG_COUNT": "0x0412",
+    "J1B2_BUILTIN.J1B2_OFF": "0x006B",
+    "J1B1_BUILTIN": "0x0051",
+    "J1B1_BUILTIN.J1B1_OFF": "0x005C",
+    "SLR_GAMEPLAY": "0x0420",
+    "DSWM_NEXT_NO_NEGATE_X": "0x0381",
+    "DSWM_NO_NEGATE_Y": "0x02C3",
+    "DSLA_NEXT_PATH": "0x0241",
+    "SHOW_LEVEL_RUNTIME": "0x03E5",
+    "_FUJI_BG_PATH4": "0x05DA",
+    "SLR_BG_PTR": "0x041A",
+    "J1B4_BUILTIN.J1B4_OFF": "0x0089",
+    "_TEST_LEVEL_BG_OBJECTS": "0x063A",
+    "DSVEX_CHK_XY_1": "0x0507",
+    "Draw_Sync_List_At_With_Mirrors": "0x02AD",
+    "DSL_W2": "0x012F",
+    "__Draw_Line_d": "0x00AA",
+    "DSVEX_CALL_2": "0x0513",
+    "_FUJI_BG_PATH3": "0x05C8",
+    "DSWM_W3": "0x03D1",
+    "_FUJI_BG_VECTORS": "0x0556",
+    "DSWM_W1": "0x0312",
+    "DSWM_NO_NEGATE_X": "0x02CE",
+    "SLR_FG_PTR": "0x0436",
+    "_FUJI_BG_PATH2": "0x05AA",
+    "DSWM_W2": "0x0351",
+    "DSWM_LOOP": "0x0319",
+    "DSLA_DONE": "0x02AC",
+    "DSL_W1": "0x00F9",
+    "DSL_W3": "0x019C",
+    "Draw_Sync_List_At": "0x01A9",
+    "Draw_Sync_List": "0x00AF",
+    "START": "0x0470",
+    "LOOP_BODY": "0x04C5",
+    "DSWM_NEXT_SET_INTENSITY": "0x036C",
+    "DSL_NEXT_PATH": "0x013B",
+    "DSL_DONE": "0x01A8",
+    "MAIN": "0x049E",
+    "DSLA_LOOP": "0x0206",
+    "DSWM_NEXT_USE_OVERRIDE": "0x036A",
+    "_FUJI_BG_PATH0": "0x0556",
+    "_TEST_LEVEL_LEVEL": "0x0625",
+    "DSWM_NEXT_PATH": "0x035D",
+    "J1X_BUILTIN": "0x0027",
+    "LOAD_LEVEL_RUNTIME": "0x03DE",
+    "J1Y_BUILTIN": "0x003C",
+    "SLR_OBJ_LOOP": "0x0441",
+    "_TEST_LEVEL_GAMEPLAY_OBJECTS": "0x063A",
+    "__Moveto_d": "0x00A5",
+    "DSWM_USE_OVERRIDE": "0x02B6",
+    "DSWM_NO_NEGATE_DY": "0x032F",
+    "DSWM_NO_NEGATE_DX": "0x0337",
+    "SLR_DONE": "0x043C",
+    "_FUJI_BG_PATH1": "0x0592",
+    "DSLA_W1": "0x01FF",
+    "SLR_FOREGROUND": "0x042E",
+    "J1B3_BUILTIN": "0x006F",
+    "__Intensity_a": "0x009D",
+    "SLR_GP_PTR": "0x0428",
+    "SLR_OBJ_DONE": "0x046F",
+    "DSWM_DONE": "0x03DD"
   },
   "lineMap": {
-    "8": "0x048E",
-    "12": "0x04D2",
-    "10": "0x04A2",
-    "18": "0x04DB"
+    "8": "0x0481",
+    "16": "0x04CE",
+    "19": "0x054C",
+    "10": "0x0495"
   },
-  "functions": {
-    "loop": {
-      "name": "loop",
-      "address": "0x04D2",
-      "startLine": 0,
-      "endLine": 0,
-      "type": "vpy"
+  "vpyLineMap": {
+    "0x0495": {
+      "file": "main.vpy",
+      "address": "0x0495",
+      "line": 10
     },
-    "main": {
-      "name": "main",
-      "address": "0x04AB",
-      "startLine": 0,
-      "endLine": 0,
-      "type": "vpy"
+    "0x04CE": {
+      "file": "main.vpy",
+      "address": "0x04CE",
+      "line": 16
+    },
+    "0x054C": {
+      "file": "main.vpy",
+      "address": "0x054C",
+      "line": 19
+    },
+    "0x0481": {
+      "file": "main.vpy",
+      "address": "0x0481",
+      "line": 8
     }
   },
+  "asmLineMap": {
+    "0x02B2": {
+      "file": "main.asm",
+      "address": "0x02B2",
+      "line": 425
+    },
+    "0x038E": {
+      "file": "main.asm",
+      "address": "0x038E",
+      "line": 550
+    },
+    "0x017B": {
+      "file": "main.asm",
+      "address": "0x017B",
+      "line": 265
+    },
+    "0x013B": {
+      "file": "main.asm",
+      "address": "0x013B",
+      "line": 230
+    },
+    "0x0058": {
+      "file": "main.asm",
+      "address": "0x0058",
+      "line": 97
+    },
+    "0x039E": {
+      "file": "main.asm",
+      "address": "0x039E",
+      "line": 558
+    },
+    "0x009C": {
+      "file": "main.asm",
+      "address": "0x009C",
+      "line": 140
+    },
+    "0x0519": {
+      "file": "main.asm",
+      "address": "0x0519",
+      "line": 822
+    },
+    "0x026A": {
+      "file": "main.asm",
+      "address": "0x026A",
+      "line": 390
+    },
+    "0x0498": {
+      "file": "main.asm",
+      "address": "0x0498",
+      "line": 756
+    },
+    "0x004B": {
+      "file": "main.asm",
+      "address": "0x004B",
+      "line": 82
+    },
+    "0x0032": {
+      "file": "main.asm",
+      "address": "0x0032",
+      "line": 67
+    },
+    "0x02D7": {
+      "file": "main.asm",
+      "address": "0x02D7",
+      "line": 451
+    },
+    "0x0383": {
+      "file": "main.asm",
+      "address": "0x0383",
+      "line": 544
+    },
+    "0x02E7": {
+      "file": "main.asm",
+      "address": "0x02E7",
+      "line": 459
+    },
+    "0x05A9": {
+      "file": "main.asm",
+      "address": "0x05A9",
+      "line": 905
+    },
+    "0x012F": {
+      "file": "main.asm",
+      "address": "0x012F",
+      "line": 222
+    },
+    "0x057C": {
+      "file": "main.asm",
+      "address": "0x057C",
+      "line": 883
+    },
+    "0x036E": {
+      "file": "main.asm",
+      "address": "0x036E",
+      "line": 531
+    },
+    "0x02C4": {
+      "file": "main.asm",
+      "address": "0x02C4",
+      "line": 438
+    },
+    "0x00EA": {
+      "file": "main.asm",
+      "address": "0x00EA",
+      "line": 187
+    },
+    "0x0470": {
+      "file": "main.asm",
+      "address": "0x0470",
+      "line": 2
+    },
+    "0x00E2": {
+      "file": "main.asm",
+      "address": "0x00E2",
+      "line": 184
+    },
+    "0x04DD": {
+      "file": "main.asm",
+      "address": "0x04DD",
+      "line": 794
+    },
+    "0x0100": {
+      "file": "main.asm",
+      "address": "0x0100",
+      "line": 201
+    },
+    "0x024D": {
+      "file": "main.asm",
+      "address": "0x024D",
+      "line": 374
+    },
+    "0x0157": {
+      "file": "main.asm",
+      "address": "0x0157",
+      "line": 244
+    },
+    "0x0273": {
+      "file": "main.asm",
+      "address": "0x0273",
+      "line": 394
+    },
+    "0x03BA": {
+      "file": "main.asm",
+      "address": "0x03BA",
+      "line": 573
+    },
+    "0x036A": {
+      "file": "main.asm",
+      "address": "0x036A",
+      "line": 528
+    },
+    "0x0398": {
+      "file": "main.asm",
+      "address": "0x0398",
+      "line": 556
+    },
+    "0x0260": {
+      "file": "main.asm",
+      "address": "0x0260",
+      "line": 386
+    },
+    "0x01A0": {
+      "file": "main.asm",
+      "address": "0x01A0",
+      "line": 280
+    },
+    "0x0368": {
+      "file": "main.asm",
+      "address": "0x0368",
+      "line": 526
+    },
+    "0x0332": {
+      "file": "main.asm",
+      "address": "0x0332",
+      "line": 498
+    },
+    "0x00F9": {
+      "file": "main.asm",
+      "address": "0x00F9",
+      "line": 196
+    },
+    "0x063A": {
+      "file": "main.asm",
+      "address": "0x063A",
+      "line": 974
+    },
+    "0x0166": {
+      "file": "main.asm",
+      "address": "0x0166",
+      "line": 253
+    },
+    "0x007E": {
+      "file": "main.asm",
+      "address": "0x007E",
+      "line": 123
+    },
+    "0x0209": {
+      "file": "main.asm",
+      "address": "0x0209",
+      "line": 341
+    },
+    "0x01CE": {
+      "file": "main.asm",
+      "address": "0x01CE",
+      "line": 312
+    },
+    "0x011A": {
+      "file": "main.asm",
+      "address": "0x011A",
+      "line": 216
+    },
+    "0x00A2": {
+      "file": "main.asm",
+      "address": "0x00A2",
+      "line": 146
+    },
+    "0x03EA": {
+      "file": "main.asm",
+      "address": "0x03EA",
+      "line": 621
+    },
+    "0x00CB": {
+      "file": "main.asm",
+      "address": "0x00CB",
+      "line": 171
+    },
+    "0x048D": {
+      "file": "main.asm",
+      "address": "0x048D",
+      "line": 749
+    },
+    "0x0370": {
+      "file": "main.asm",
+      "address": "0x0370",
+      "line": 532
+    },
+    "0x0073": {
+      "file": "main.asm",
+      "address": "0x0073",
+      "line": 115
+    },
+    "0x00AF": {
+      "file": "main.asm",
+      "address": "0x00AF",
+      "line": 159
+    },
+    "0x05F4": {
+      "file": "main.asm",
+      "address": "0x05F4",
+      "line": 945
+    },
+    "0x020D": {
+      "file": "main.asm",
+      "address": "0x020D",
+      "line": 343
+    },
+    "0x0522": {
+      "file": "main.asm",
+      "address": "0x0522",
+      "line": 825
+    },
+    "0x04B0": {
+      "file": "main.asm",
+      "address": "0x04B0",
+      "line": 43
+    },
+    "0x0103": {
+      "file": "main.asm",
+      "address": "0x0103",
+      "line": 203
+    },
+    "0x015B": {
+      "file": "main.asm",
+      "address": "0x015B",
+      "line": 248
+    },
+    "0x0282": {
+      "file": "main.asm",
+      "address": "0x0282",
+      "line": 403
+    },
+    "0x05DE": {
+      "file": "main.asm",
+      "address": "0x05DE",
+      "line": 937
+    },
+    "0x0552": {
+      "file": "main.asm",
+      "address": "0x0552",
+      "line": 844
+    },
+    "0x0262": {
+      "file": "main.asm",
+      "address": "0x0262",
+      "line": 387
+    },
+    "0x01F2": {
+      "file": "main.asm",
+      "address": "0x01F2",
+      "line": 331
+    },
+    "0x05DA": {
+      "file": "main.asm",
+      "address": "0x05DA",
+      "line": 934
+    },
+    "0x037C": {
+      "file": "main.asm",
+      "address": "0x037C",
+      "line": 540
+    },
+    "0x0376": {
+      "file": "main.asm",
+      "address": "0x0376",
+      "line": 536
+    },
+    "0x0453": {
+      "file": "main.asm",
+      "address": "0x0453",
+      "line": 706
+    },
+    "0x02CF": {
+      "file": "main.asm",
+      "address": "0x02CF",
+      "line": 445
+    },
+    "0x02CE": {
+      "file": "main.asm",
+      "address": "0x02CE",
+      "line": 444
+    },
+    "0x02D5": {
+      "file": "main.asm",
+      "address": "0x02D5",
+      "line": 449
+    },
+    "0x046F": {
+      "file": "main.asm",
+      "address": "0x046F",
+      "line": 730
+    },
+    "0x0640": {
+      "file": "main.asm",
+      "address": "0x0640",
+      "line": 978
+    },
+    "0x0525": {
+      "file": "main.asm",
+      "address": "0x0525",
+      "line": 826
+    },
+    "0x04E3": {
+      "file": "main.asm",
+      "address": "0x04E3",
+      "line": 796
+    },
+    "0x01DB": {
+      "file": "main.asm",
+      "address": "0x01DB",
+      "line": 321
+    },
+    "0x0037": {
+      "file": "main.asm",
+      "address": "0x0037",
+      "line": 70
+    },
+    "0x05BE": {
+      "file": "main.asm",
+      "address": "0x05BE",
+      "line": 918
+    },
+    "0x056D": {
+      "file": "main.asm",
+      "address": "0x056D",
+      "line": 878
+    },
+    "0x063B": {
+      "file": "main.asm",
+      "address": "0x063B",
+      "line": 975
+    },
+    "0x01D1": {
+      "file": "main.asm",
+      "address": "0x01D1",
+      "line": 313
+    },
+    "0x0279": {
+      "file": "main.asm",
+      "address": "0x0279",
+      "line": 400
+    },
+    "0x00EC": {
+      "file": "main.asm",
+      "address": "0x00EC",
+      "line": 188
+    },
+    "0x05B8": {
+      "file": "main.asm",
+      "address": "0x05B8",
+      "line": 916
+    },
+    "0x0417": {
+      "file": "main.asm",
+      "address": "0x0417",
+      "line": 649
+    },
+    "0x0413": {
+      "file": "main.asm",
+      "address": "0x0413",
+      "line": 647
+    },
+    "0x0491": {
+      "file": "main.asm",
+      "address": "0x0491",
+      "line": 751
+    },
+    "0x04EC": {
+      "file": "main.asm",
+      "address": "0x04EC",
+      "line": 799
+    },
+    "0x0276": {
+      "file": "main.asm",
+      "address": "0x0276",
+      "line": 398
+    },
+    "0x05CB": {
+      "file": "main.asm",
+      "address": "0x05CB",
+      "line": 927
+    },
+    "0x0216": {
+      "file": "main.asm",
+      "address": "0x0216",
+      "line": 348
+    },
+    "0x043C": {
+      "file": "main.asm",
+      "address": "0x043C",
+      "line": 677
+    },
+    "0x04E6": {
+      "file": "main.asm",
+      "address": "0x04E6",
+      "line": 797
+    },
+    "0x0509": {
+      "file": "main.asm",
+      "address": "0x0509",
+      "line": 815
+    },
+    "0x00C0": {
+      "file": "main.asm",
+      "address": "0x00C0",
+      "line": 167
+    },
+    "0x02E6": {
+      "file": "main.asm",
+      "address": "0x02E6",
+      "line": 458
+    },
+    "0x0439": {
+      "file": "main.asm",
+      "address": "0x0439",
+      "line": 674
+    },
+    "0x035F": {
+      "file": "main.asm",
+      "address": "0x035F",
+      "line": 521
+    },
+    "0x0035": {
+      "file": "main.asm",
+      "address": "0x0035",
+      "line": 68
+    },
+    "0x05C7": {
+      "file": "main.asm",
+      "address": "0x05C7",
+      "line": 921
+    },
+    "0x009F": {
+      "file": "main.asm",
+      "address": "0x009F",
+      "line": 144
+    },
+    "0x0441": {
+      "file": "main.asm",
+      "address": "0x0441",
+      "line": 687
+    },
+    "0x0286": {
+      "file": "main.asm",
+      "address": "0x0286",
+      "line": 405
+    },
+    "0x0171": {
+      "file": "main.asm",
+      "address": "0x0171",
+      "line": 259
+    },
+    "0x027C": {
+      "file": "main.asm",
+      "address": "0x027C",
+      "line": 401
+    },
+    "0x053D": {
+      "file": "main.asm",
+      "address": "0x053D",
+      "line": 834
+    },
+    "0x0206": {
+      "file": "main.asm",
+      "address": "0x0206",
+      "line": 339
+    },
+    "0x02A5": {
+      "file": "main.asm",
+      "address": "0x02A5",
+      "line": 415
+    },
+    "0x0458": {
+      "file": "main.asm",
+      "address": "0x0458",
+      "line": 710
+    },
+    "0x0051": {
+      "file": "main.asm",
+      "address": "0x0051",
+      "line": 93
+    },
+    "0x0649": {
+      "file": "main.asm",
+      "address": "0x0649",
+      "line": 987
+    },
+    "0x0169": {
+      "file": "main.asm",
+      "address": "0x0169",
+      "line": 254
+    },
+    "0x021D": {
+      "file": "main.asm",
+      "address": "0x021D",
+      "line": 352
+    },
+    "0x0257": {
+      "file": "main.asm",
+      "address": "0x0257",
+      "line": 379
+    },
+    "0x0390": {
+      "file": "main.asm",
+      "address": "0x0390",
+      "line": 552
+    },
+    "0x036C": {
+      "file": "main.asm",
+      "address": "0x036C",
+      "line": 530
+    },
+    "0x04BB": {
+      "file": "main.asm",
+      "address": "0x04BB",
+      "line": 47
+    },
+    "0x059D": {
+      "file": "main.asm",
+      "address": "0x059D",
+      "line": 899
+    },
+    "0x04C3": {
+      "file": "main.asm",
+      "address": "0x04C3",
+      "line": 50
+    },
+    "0x05AE": {
+      "file": "main.asm",
+      "address": "0x05AE",
+      "line": 910
+    },
+    "0x04EF": {
+      "file": "main.asm",
+      "address": "0x04EF",
+      "line": 801
+    },
+    "0x00E5": {
+      "file": "main.asm",
+      "address": "0x00E5",
+      "line": 185
+    },
+    "0x0364": {
+      "file": "main.asm",
+      "address": "0x0364",
+      "line": 524
+    },
+    "0x0481": {
+      "file": "main.asm",
+      "address": "0x0481",
+      "line": 17
+    },
+    "0x03C4": {
+      "file": "main.asm",
+      "address": "0x03C4",
+      "line": 577
+    },
+    "0x0274": {
+      "file": "main.asm",
+      "address": "0x0274",
+      "line": 396
+    },
+    "0x0147": {
+      "file": "main.asm",
+      "address": "0x0147",
+      "line": 236
+    },
+    "0x0333": {
+      "file": "main.asm",
+      "address": "0x0333",
+      "line": 499
+    },
+    "0x0064": {
+      "file": "main.asm",
+      "address": "0x0064",
+      "line": 105
+    },
+    "0x0386": {
+      "file": "main.asm",
+      "address": "0x0386",
+      "line": 545
+    },
+    "0x0341": {
+      "file": "main.asm",
+      "address": "0x0341",
+      "line": 505
+    },
+    "0x0633": {
+      "file": "main.asm",
+      "address": "0x0633",
+      "line": 965
+    },
+    "0x0495": {
+      "file": "main.asm",
+      "address": "0x0495",
+      "line": 33
+    },
+    "0x0092": {
+      "file": "main.asm",
+      "address": "0x0092",
+      "line": 136
+    },
+    "0x0645": {
+      "file": "main.asm",
+      "address": "0x0645",
+      "line": 983
+    },
+    "0x05A0": {
+      "file": "main.asm",
+      "address": "0x05A0",
+      "line": 902
+    },
+    "0x05F7": {
+      "file": "main.asm",
+      "address": "0x05F7",
+      "line": 946
+    },
+    "0x031D": {
+      "file": "main.asm",
+      "address": "0x031D",
+      "line": 486
+    },
+    "0x02B8": {
+      "file": "main.asm",
+      "address": "0x02B8",
+      "line": 430
+    },
+    "0x0161": {
+      "file": "main.asm",
+      "address": "0x0161",
+      "line": 251
+    },
+    "0x02D3": {
+      "file": "main.asm",
+      "address": "0x02D3",
+      "line": 448
+    },
+    "0x058E": {
+      "file": "main.asm",
+      "address": "0x058E",
+      "line": 891
+    },
+    "0x01BD": {
+      "file": "main.asm",
+      "address": "0x01BD",
+      "line": 304
+    },
+    "0x0567": {
+      "file": "main.asm",
+      "address": "0x0567",
+      "line": 876
+    },
+    "0x05BB": {
+      "file": "main.asm",
+      "address": "0x05BB",
+      "line": 917
+    },
+    "0x03DD": {
+      "file": "main.asm",
+      "address": "0x03DD",
+      "line": 586
+    },
+    "0x011F": {
+      "file": "main.asm",
+      "address": "0x011F",
+      "line": 218
+    },
+    "0x03D6": {
+      "file": "main.asm",
+      "address": "0x03D6",
+      "line": 583
+    },
+    "0x0243": {
+      "file": "main.asm",
+      "address": "0x0243",
+      "line": 368
+    },
+    "0x0372": {
+      "file": "main.asm",
+      "address": "0x0372",
+      "line": 534
+    },
+    "0x0159": {
+      "file": "main.asm",
+      "address": "0x0159",
+      "line": 245
+    },
+    "0x0316": {
+      "file": "main.asm",
+      "address": "0x0316",
+      "line": 480
+    },
+    "0x04C8": {
+      "file": "main.asm",
+      "address": "0x04C8",
+      "line": 784
+    },
+    "0x04D1": {
+      "file": "main.asm",
+      "address": "0x04D1",
+      "line": 790
+    },
+    "0x04A9": {
+      "file": "main.asm",
+      "address": "0x04A9",
+      "line": 765
+    },
+    "0x049E": {
+      "file": "main.asm",
+      "address": "0x049E",
+      "line": 36
+    },
+    "0x01C2": {
+      "file": "main.asm",
+      "address": "0x01C2",
+      "line": 306
+    },
+    "0x03F4": {
+      "file": "main.asm",
+      "address": "0x03F4",
+      "line": 630
+    },
+    "0x0534": {
+      "file": "main.asm",
+      "address": "0x0534",
+      "line": 831
+    },
+    "0x053A": {
+      "file": "main.asm",
+      "address": "0x053A",
+      "line": 833
+    },
+    "0x0252": {
+      "file": "main.asm",
+      "address": "0x0252",
+      "line": 377
+    },
+    "0x05DD": {
+      "file": "main.asm",
+      "address": "0x05DD",
+      "line": 936
+    },
+    "0x01D5": {
+      "file": "main.asm",
+      "address": "0x01D5",
+      "line": 318
+    },
+    "0x0067": {
+      "file": "main.asm",
+      "address": "0x0067",
+      "line": 107
+    },
+    "0x02B6": {
+      "file": "main.asm",
+      "address": "0x02B6",
+      "line": 428
+    },
+    "0x05B5": {
+      "file": "main.asm",
+      "address": "0x05B5",
+      "line": 915
+    },
+    "0x04BD": {
+      "file": "main.asm",
+      "address": "0x04BD",
+      "line": 776
+    },
+    "0x01A3": {
+      "file": "main.asm",
+      "address": "0x01A3",
+      "line": 282
+    },
+    "0x0220": {
+      "file": "main.asm",
+      "address": "0x0220",
+      "line": 353
+    },
+    "0x016E": {
+      "file": "main.asm",
+      "address": "0x016E",
+      "line": 256
+    },
+    "0x04AE": {
+      "file": "main.asm",
+      "address": "0x04AE",
+      "line": 42
+    },
+    "0x055E": {
+      "file": "main.asm",
+      "address": "0x055E",
+      "line": 873
+    },
+    "0x0249": {
+      "file": "main.asm",
+      "address": "0x0249",
+      "line": 371
+    },
+    "0x023C": {
+      "file": "main.asm",
+      "address": "0x023C",
+      "line": 364
+    },
+    "0x05DF": {
+      "file": "main.asm",
+      "address": "0x05DF",
+      "line": 938
+    },
+    "0x002F": {
+      "file": "main.asm",
+      "address": "0x002F",
+      "line": 66
+    },
+    "0x063D": {
+      "file": "main.asm",
+      "address": "0x063D",
+      "line": 977
+    },
+    "0x01AF": {
+      "file": "main.asm",
+      "address": "0x01AF",
+      "line": 295
+    },
+    "0x01C9": {
+      "file": "main.asm",
+      "address": "0x01C9",
+      "line": 310
+    },
+    "0x0194": {
+      "file": "main.asm",
+      "address": "0x0194",
+      "line": 275
+    },
+    "0x0277": {
+      "file": "main.asm",
+      "address": "0x0277",
+      "line": 399
+    },
+    "0x0460": {
+      "file": "main.asm",
+      "address": "0x0460",
+      "line": 715
+    },
+    "0x0403": {
+      "file": "main.asm",
+      "address": "0x0403",
+      "line": 638
+    },
+    "0x020A": {
+      "file": "main.asm",
+      "address": "0x020A",
+      "line": 342
+    },
+    "0x0215": {
+      "file": "main.asm",
+      "address": "0x0215",
+      "line": 347
+    },
+    "0x015C": {
+      "file": "main.asm",
+      "address": "0x015C",
+      "line": 249
+    },
+    "0x027F": {
+      "file": "main.asm",
+      "address": "0x027F",
+      "line": 402
+    },
+    "0x0593": {
+      "file": "main.asm",
+      "address": "0x0593",
+      "line": 894
+    },
+    "0x018A": {
+      "file": "main.asm",
+      "address": "0x018A",
+      "line": 271
+    },
+    "0x006B": {
+      "file": "main.asm",
+      "address": "0x006B",
+      "line": 110
+    },
+    "0x033F": {
+      "file": "main.asm",
+      "address": "0x033F",
+      "line": 504
+    },
+    "0x022A": {
+      "file": "main.asm",
+      "address": "0x022A",
+      "line": 357
+    },
+    "0x04F7": {
+      "file": "main.asm",
+      "address": "0x04F7",
+      "line": 805
+    },
+    "0x0647": {
+      "file": "main.asm",
+      "address": "0x0647",
+      "line": 985
+    },
+    "0x01D3": {
+      "file": "main.asm",
+      "address": "0x01D3",
+      "line": 315
+    },
+    "0x055B": {
+      "file": "main.asm",
+      "address": "0x055B",
+      "line": 872
+    },
+    "0x031B": {
+      "file": "main.asm",
+      "address": "0x031B",
+      "line": 484
+    },
+    "0x0202": {
+      "file": "main.asm",
+      "address": "0x0202",
+      "line": 335
+    },
+    "0x0203": {
+      "file": "main.asm",
+      "address": "0x0203",
+      "line": 336
+    },
+    "0x00CF": {
+      "file": "main.asm",
+      "address": "0x00CF",
+      "line": 175
+    },
+    "0x0251": {
+      "file": "main.asm",
+      "address": "0x0251",
+      "line": 376
+    },
+    "0x006F": {
+      "file": "main.asm",
+      "address": "0x006F",
+      "line": 113
+    },
+    "0x02AC": {
+      "file": "main.asm",
+      "address": "0x02AC",
+      "line": 418
+    },
+    "0x0420": {
+      "file": "main.asm",
+      "address": "0x0420",
+      "line": 657
+    },
+    "0x0630": {
+      "file": "main.asm",
+      "address": "0x0630",
+      "line": 962
+    },
+    "0x049B": {
+      "file": "main.asm",
+      "address": "0x049B",
+      "line": 35
+    },
+    "0x00D0": {
+      "file": "main.asm",
+      "address": "0x00D0",
+      "line": 176
+    },
+    "0x0172": {
+      "file": "main.asm",
+      "address": "0x0172",
+      "line": 260
+    },
+    "0x03E5": {
+      "file": "main.asm",
+      "address": "0x03E5",
+      "line": 617
+    },
+    "0x0546": {
+      "file": "main.asm",
+      "address": "0x0546",
+      "line": 837
+    },
+    "0x05AB": {
+      "file": "main.asm",
+      "address": "0x05AB",
+      "line": 907
+    },
+    "0x03D1": {
+      "file": "main.asm",
+      "address": "0x03D1",
+      "line": 580
+    },
+    "0x016B": {
+      "file": "main.asm",
+      "address": "0x016B",
+      "line": 255
+    },
+    "0x0444": {
+      "file": "main.asm",
+      "address": "0x0444",
+      "line": 690
+    },
+    "0x0644": {
+      "file": "main.asm",
+      "address": "0x0644",
+      "line": 982
+    },
+    "0x0300": {
+      "file": "main.asm",
+      "address": "0x0300",
+      "line": 472
+    },
+    "0x0245": {
+      "file": "main.asm",
+      "address": "0x0245",
+      "line": 369
+    },
+    "0x0469": {
+      "file": "main.asm",
+      "address": "0x0469",
+      "line": 726
+    },
+    "0x02F8": {
+      "file": "main.asm",
+      "address": "0x02F8",
+      "line": 468
+    },
+    "0x0315": {
+      "file": "main.asm",
+      "address": "0x0315",
+      "line": 479
+    },
+    "0x05EE": {
+      "file": "main.asm",
+      "address": "0x05EE",
+      "line": 943
+    },
+    "0x03A0": {
+      "file": "main.asm",
+      "address": "0x03A0",
+      "line": 559
+    },
+    "0x0134": {
+      "file": "main.asm",
+      "address": "0x0134",
+      "line": 225
+    },
+    "0x05D0": {
+      "file": "main.asm",
+      "address": "0x05D0",
+      "line": 930
+    },
+    "0x0056": {
+      "file": "main.asm",
+      "address": "0x0056",
+      "line": 96
+    },
+    "0x04D7": {
+      "file": "main.asm",
+      "address": "0x04D7",
+      "line": 792
+    },
+    "0x03F9": {
+      "file": "main.asm",
+      "address": "0x03F9",
+      "line": 632
+    },
+    "0x00C6": {
+      "file": "main.asm",
+      "address": "0x00C6",
+      "line": 169
+    },
+    "0x003E": {
+      "file": "main.asm",
+      "address": "0x003E",
+      "line": 77
+    },
+    "0x01A1": {
+      "file": "main.asm",
+      "address": "0x01A1",
+      "line": 281
+    },
+    "0x04FF": {
+      "file": "main.asm",
+      "address": "0x04FF",
+      "line": 809
+    },
+    "0x013F": {
+      "file": "main.asm",
+      "address": "0x013F",
+      "line": 232
+    },
+    "0x0456": {
+      "file": "main.asm",
+      "address": "0x0456",
+      "line": 709
+    },
+    "0x032F": {
+      "file": "main.asm",
+      "address": "0x032F",
+      "line": 495
+    },
+    "0x0208": {
+      "file": "main.asm",
+      "address": "0x0208",
+      "line": 340
+    },
+    "0x0585": {
+      "file": "main.asm",
+      "address": "0x0585",
+      "line": 886
+    },
+    "0x062F": {
+      "file": "main.asm",
+      "address": "0x062F",
+      "line": 961
+    },
+    "0x00EF": {
+      "file": "main.asm",
+      "address": "0x00EF",
+      "line": 190
+    },
+    "0x0446": {
+      "file": "main.asm",
+      "address": "0x0446",
+      "line": 697
+    },
+    "0x02BE": {
+      "file": "main.asm",
+      "address": "0x02BE",
+      "line": 434
+    },
+    "0x0104": {
+      "file": "main.asm",
+      "address": "0x0104",
+      "line": 204
+    },
+    "0x0107": {
+      "file": "main.asm",
+      "address": "0x0107",
+      "line": 205
+    },
+    "0x03E4": {
+      "file": "main.asm",
+      "address": "0x03E4",
+      "line": 595
+    },
+    "0x04DA": {
+      "file": "main.asm",
+      "address": "0x04DA",
+      "line": 793
+    },
+    "0x0632": {
+      "file": "main.asm",
+      "address": "0x0632",
+      "line": 964
+    },
+    "0x00CD": {
+      "file": "main.asm",
+      "address": "0x00CD",
+      "line": 173
+    },
+    "0x047F": {
+      "file": "main.asm",
+      "address": "0x047F",
+      "line": 739
+    },
+    "0x010A": {
+      "file": "main.asm",
+      "address": "0x010A",
+      "line": 208
+    },
+    "0x044C": {
+      "file": "main.asm",
+      "address": "0x044C",
+      "line": 701
+    },
+    "0x04A1": {
+      "file": "main.asm",
+      "address": "0x04A1",
+      "line": 762
+    },
+    "0x05FA": {
+      "file": "main.asm",
+      "address": "0x05FA",
+      "line": 947
+    },
+    "0x0631": {
+      "file": "main.asm",
+      "address": "0x0631",
+      "line": 963
+    },
+    "0x0358": {
+      "file": "main.asm",
+      "address": "0x0358",
+      "line": 517
+    },
+    "0x01B8": {
+      "file": "main.asm",
+      "address": "0x01B8",
+      "line": 300
+    },
+    "0x0570": {
+      "file": "main.asm",
+      "address": "0x0570",
+      "line": 879
+    },
+    "0x0474": {
+      "file": "main.asm",
+      "address": "0x0474",
+      "line": 12
+    },
+    "0x00D5": {
+      "file": "main.asm",
+      "address": "0x00D5",
+      "line": 179
+    },
+    "0x016F": {
+      "file": "main.asm",
+      "address": "0x016F",
+      "line": 257
+    },
+    "0x010F": {
+      "file": "main.asm",
+      "address": "0x010F",
+      "line": 210
+    },
+    "0x0543": {
+      "file": "main.asm",
+      "address": "0x0543",
+      "line": 836
+    },
+    "0x018D": {
+      "file": "main.asm",
+      "address": "0x018D",
+      "line": 272
+    },
+    "0x02BB": {
+      "file": "main.asm",
+      "address": "0x02BB",
+      "line": 431
+    },
+    "0x042F": {
+      "file": "main.asm",
+      "address": "0x042F",
+      "line": 669
+    },
+    "0x0185": {
+      "file": "main.asm",
+      "address": "0x0185",
+      "line": 269
+    },
+    "0x050B": {
+      "file": "main.asm",
+      "address": "0x050B",
+      "line": 816
+    },
+    "0x0462": {
+      "file": "main.asm",
+      "address": "0x0462",
+      "line": 718
+    },
+    "0x0322": {
+      "file": "main.asm",
+      "address": "0x0322",
+      "line": 491
+    },
+    "0x05FD": {
+      "file": "main.asm",
+      "address": "0x05FD",
+      "line": 948
+    },
+    "0x0136": {
+      "file": "main.asm",
+      "address": "0x0136",
+      "line": 226
+    },
+    "0x0072": {
+      "file": "main.asm",
+      "address": "0x0072",
+      "line": 114
+    },
+    "0x03B5": {
+      "file": "main.asm",
+      "address": "0x03B5",
+      "line": 571
+    },
+    "0x0143": {
+      "file": "main.asm",
+      "address": "0x0143",
+      "line": 234
+    },
+    "0x01F0": {
+      "file": "main.asm",
+      "address": "0x01F0",
+      "line": 330
+    },
+    "0x0337": {
+      "file": "main.asm",
+      "address": "0x0337",
+      "line": 501
+    },
+    "0x0540": {
+      "file": "main.asm",
+      "address": "0x0540",
+      "line": 835
+    },
+    "0x02E4": {
+      "file": "main.asm",
+      "address": "0x02E4",
+      "line": 456
+    },
+    "0x04A4": {
+      "file": "main.asm",
+      "address": "0x04A4",
+      "line": 763
+    },
+    "0x0428": {
+      "file": "main.asm",
+      "address": "0x0428",
+      "line": 662
+    },
+    "0x0425": {
+      "file": "main.asm",
+      "address": "0x0425",
+      "line": 660
+    },
+    "0x04F5": {
+      "file": "main.asm",
+      "address": "0x04F5",
+      "line": 803
+    },
+    "0x02DF": {
+      "file": "main.asm",
+      "address": "0x02DF",
+      "line": 454
+    },
+    "0x0272": {
+      "file": "main.asm",
+      "address": "0x0272",
+      "line": 393
+    },
+    "0x00BE": {
+      "file": "main.asm",
+      "address": "0x00BE",
+      "line": 166
+    },
+    "0x04B5": {
+      "file": "main.asm",
+      "address": "0x04B5",
+      "line": 770
+    },
+    "0x0549": {
+      "file": "main.asm",
+      "address": "0x0549",
+      "line": 838
+    },
+    "0x006A": {
+      "file": "main.asm",
+      "address": "0x006A",
+      "line": 109
+    },
+    "0x02C3": {
+      "file": "main.asm",
+      "address": "0x02C3",
+      "line": 437
+    },
+    "0x0133": {
+      "file": "main.asm",
+      "address": "0x0133",
+      "line": 224
+    },
+    "0x034E": {
+      "file": "main.asm",
+      "address": "0x034E",
+      "line": 510
+    },
+    "0x02FE": {
+      "file": "main.asm",
+      "address": "0x02FE",
+      "line": 470
+    },
+    "0x051C": {
+      "file": "main.asm",
+      "address": "0x051C",
+      "line": 823
+    },
+    "0x02B0": {
+      "file": "main.asm",
+      "address": "0x02B0",
+      "line": 424
+    },
+    "0x05DC": {
+      "file": "main.asm",
+      "address": "0x05DC",
+      "line": 935
+    },
+    "0x05E8": {
+      "file": "main.asm",
+      "address": "0x05E8",
+      "line": 941
+    },
+    "0x04F9": {
+      "file": "main.asm",
+      "address": "0x04F9",
+      "line": 806
+    },
+    "0x00B1": {
+      "file": "main.asm",
+      "address": "0x00B1",
+      "line": 160
+    },
+    "0x0239": {
+      "file": "main.asm",
+      "address": "0x0239",
+      "line": 362
+    },
+    "0x0081": {
+      "file": "main.asm",
+      "address": "0x0081",
+      "line": 124
+    },
+    "0x0500": {
+      "file": "main.asm",
+      "address": "0x0500",
+      "line": 810
+    },
+    "0x04B8": {
+      "file": "main.asm",
+      "address": "0x04B8",
+      "line": 46
+    },
+    "0x0502": {
+      "file": "main.asm",
+      "address": "0x0502",
+      "line": 811
+    },
+    "0x01B4": {
+      "file": "main.asm",
+      "address": "0x01B4",
+      "line": 297
+    },
+    "0x025B": {
+      "file": "main.asm",
+      "address": "0x025B",
+      "line": 382
+    },
+    "0x0378": {
+      "file": "main.asm",
+      "address": "0x0378",
+      "line": 538
+    },
+    "0x007A": {
+      "file": "main.asm",
+      "address": "0x007A",
+      "line": 120
+    },
+    "0x0089": {
+      "file": "main.asm",
+      "address": "0x0089",
+      "line": 130
+    },
+    "0x0038": {
+      "file": "main.asm",
+      "address": "0x0038",
+      "line": 71
+    },
+    "0x0076": {
+      "file": "main.asm",
+      "address": "0x0076",
+      "line": 117
+    },
+    "0x01AD": {
+      "file": "main.asm",
+      "address": "0x01AD",
+      "line": 294
+    },
+    "0x011D": {
+      "file": "main.asm",
+      "address": "0x011D",
+      "line": 217
+    },
+    "0x051F": {
+      "file": "main.asm",
+      "address": "0x051F",
+      "line": 824
+    },
+    "0x0465": {
+      "file": "main.asm",
+      "address": "0x0465",
+      "line": 720
+    },
+    "0x040D": {
+      "file": "main.asm",
+      "address": "0x040D",
+      "line": 642
+    },
+    "0x0339": {
+      "file": "main.asm",
+      "address": "0x0339",
+      "line": 502
+    },
+    "0x02F6": {
+      "file": "main.asm",
+      "address": "0x02F6",
+      "line": 467
+    },
+    "0x03F2": {
+      "file": "main.asm",
+      "address": "0x03F2",
+      "line": 626
+    },
+    "0x0416": {
+      "file": "main.asm",
+      "address": "0x0416",
+      "line": 648
+    },
+    "0x0393": {
+      "file": "main.asm",
+      "address": "0x0393",
+      "line": 554
+    },
+    "0x039B": {
+      "file": "main.asm",
+      "address": "0x039B",
+      "line": 557
+    },
+    "0x03A7": {
+      "file": "main.asm",
+      "address": "0x03A7",
+      "line": 565
+    },
+    "0x02A7": {
+      "file": "main.asm",
+      "address": "0x02A7",
+      "line": 416
+    },
+    "0x05E5": {
+      "file": "main.asm",
+      "address": "0x05E5",
+      "line": 940
+    },
+    "0x0595": {
+      "file": "main.asm",
+      "address": "0x0595",
+      "line": 895
+    },
+    "0x02BD": {
+      "file": "main.asm",
+      "address": "0x02BD",
+      "line": 433
+    },
+    "0x0557": {
+      "file": "main.asm",
+      "address": "0x0557",
+      "line": 869
+    },
+    "0x05CD": {
+      "file": "main.asm",
+      "address": "0x05CD",
+      "line": 929
+    },
+    "0x05C1": {
+      "file": "main.asm",
+      "address": "0x05C1",
+      "line": 919
+    },
+    "0x0648": {
+      "file": "main.asm",
+      "address": "0x0648",
+      "line": 986
+    },
+    "0x052B": {
+      "file": "main.asm",
+      "address": "0x052B",
+      "line": 828
+    },
+    "0x0289": {
+      "file": "main.asm",
+      "address": "0x0289",
+      "line": 406
+    },
+    "0x05C8": {
+      "file": "main.asm",
+      "address": "0x05C8",
+      "line": 924
+    },
+    "0x02E1": {
+      "file": "main.asm",
+      "address": "0x02E1",
+      "line": 455
+    },
+    "0x00D8": {
+      "file": "main.asm",
+      "address": "0x00D8",
+      "line": 180
+    },
+    "0x043F": {
+      "file": "main.asm",
+      "address": "0x043F",
+      "line": 678
+    },
+    "0x00FD": {
+      "file": "main.asm",
+      "address": "0x00FD",
+      "line": 198
+    },
+    "0x04AB": {
+      "file": "main.asm",
+      "address": "0x04AB",
+      "line": 41
+    },
+    "0x00A5": {
+      "file": "main.asm",
+      "address": "0x00A5",
+      "line": 148
+    },
+    "0x0267": {
+      "file": "main.asm",
+      "address": "0x0267",
+      "line": 389
+    },
+    "0x034C": {
+      "file": "main.asm",
+      "address": "0x034C",
+      "line": 509
+    },
+    "0x0354": {
+      "file": "main.asm",
+      "address": "0x0354",
+      "line": 514
+    },
+    "0x044E": {
+      "file": "main.asm",
+      "address": "0x044E",
+      "line": 702
+    },
+    "0x04C0": {
+      "file": "main.asm",
+      "address": "0x04C0",
+      "line": 778
+    },
+    "0x01B7": {
+      "file": "main.asm",
+      "address": "0x01B7",
+      "line": 299
+    },
+    "0x05CC": {
+      "file": "main.asm",
+      "address": "0x05CC",
+      "line": 928
+    },
+    "0x00E7": {
+      "file": "main.asm",
+      "address": "0x00E7",
+      "line": 186
+    },
+    "0x026D": {
+      "file": "main.asm",
+      "address": "0x026D",
+      "line": 391
+    },
+    "0x01DE": {
+      "file": "main.asm",
+      "address": "0x01DE",
+      "line": 322
+    },
+    "0x0400": {
+      "file": "main.asm",
+      "address": "0x0400",
+      "line": 637
+    },
+    "0x02F1": {
+      "file": "main.asm",
+      "address": "0x02F1",
+      "line": 465
+    },
+    "0x0182": {
+      "file": "main.asm",
+      "address": "0x0182",
+      "line": 268
+    },
+    "0x02EB": {
+      "file": "main.asm",
+      "address": "0x02EB",
+      "line": 463
+    },
+    "0x0323": {
+      "file": "main.asm",
+      "address": "0x0323",
+      "line": 492
+    },
+    "0x04CE": {
+      "file": "main.asm",
+      "address": "0x04CE",
+      "line": 789
+    },
+    "0x0326": {
+      "file": "main.asm",
+      "address": "0x0326",
+      "line": 493
+    },
+    "0x0275": {
+      "file": "main.asm",
+      "address": "0x0275",
+      "line": 397
+    },
+    "0x05A6": {
+      "file": "main.asm",
+      "address": "0x05A6",
+      "line": 904
+    },
+    "0x05A3": {
+      "file": "main.asm",
+      "address": "0x05A3",
+      "line": 903
+    },
+    "0x050D": {
+      "file": "main.asm",
+      "address": "0x050D",
+      "line": 817
+    },
+    "0x0320": {
+      "file": "main.asm",
+      "address": "0x0320",
+      "line": 487
+    },
+    "0x0321": {
+      "file": "main.asm",
+      "address": "0x0321",
+      "line": 489
+    },
+    "0x02A3": {
+      "file": "main.asm",
+      "address": "0x02A3",
+      "line": 413
+    },
+    "0x05D3": {
+      "file": "main.asm",
+      "address": "0x05D3",
+      "line": 931
+    },
+    "0x0109": {
+      "file": "main.asm",
+      "address": "0x0109",
+      "line": 207
+    },
+    "0x0433": {
+      "file": "main.asm",
+      "address": "0x0433",
+      "line": 671
+    },
+    "0x0255": {
+      "file": "main.asm",
+      "address": "0x0255",
+      "line": 378
+    },
+    "0x0082": {
+      "file": "main.asm",
+      "address": "0x0082",
+      "line": 125
+    },
+    "0x03B3": {
+      "file": "main.asm",
+      "address": "0x03B3",
+      "line": 570
+    },
+    "0x0642": {
+      "file": "main.asm",
+      "address": "0x0642",
+      "line": 980
+    },
+    "0x003C": {
+      "file": "main.asm",
+      "address": "0x003C",
+      "line": 76
+    },
+    "0x0096": {
+      "file": "main.asm",
+      "address": "0x0096",
+      "line": 138
+    },
+    "0x0219": {
+      "file": "main.asm",
+      "address": "0x0219",
+      "line": 350
+    },
+    "0x024B": {
+      "file": "main.asm",
+      "address": "0x024B",
+      "line": 372
+    },
+    "0x0085": {
+      "file": "main.asm",
+      "address": "0x0085",
+      "line": 127
+    },
+    "0x01A9": {
+      "file": "main.asm",
+      "address": "0x01A9",
+      "line": 292
+    },
+    "0x0490": {
+      "file": "main.asm",
+      "address": "0x0490",
+      "line": 30
+    },
+    "0x0180": {
+      "file": "main.asm",
+      "address": "0x0180",
+      "line": 267
+    },
+    "0x00F7": {
+      "file": "main.asm",
+      "address": "0x00F7",
+      "line": 193
+    },
+    "0x0366": {
+      "file": "main.asm",
+      "address": "0x0366",
+      "line": 525
+    },
+    "0x0079": {
+      "file": "main.asm",
+      "address": "0x0079",
+      "line": 119
+    },
+    "0x005B": {
+      "file": "main.asm",
+      "address": "0x005B",
+      "line": 99
+    },
+    "0x062C": {
+      "file": "main.asm",
+      "address": "0x062C",
+      "line": 960
+    },
+    "0x01D4": {
+      "file": "main.asm",
+      "address": "0x01D4",
+      "line": 317
+    },
+    "0x01C0": {
+      "file": "main.asm",
+      "address": "0x01C0",
+      "line": 305
+    },
+    "0x0344": {
+      "file": "main.asm",
+      "address": "0x0344",
+      "line": 506
+    },
+    "0x0065": {
+      "file": "main.asm",
+      "address": "0x0065",
+      "line": 106
+    },
+    "0x00FC": {
+      "file": "main.asm",
+      "address": "0x00FC",
+      "line": 197
+    },
+    "0x04A6": {
+      "file": "main.asm",
+      "address": "0x04A6",
+      "line": 764
+    },
+    "0x00BB": {
+      "file": "main.asm",
+      "address": "0x00BB",
+      "line": 165
+    },
+    "0x03AD": {
+      "file": "main.asm",
+      "address": "0x03AD",
+      "line": 568
+    },
+    "0x00C8": {
+      "file": "main.asm",
+      "address": "0x00C8",
+      "line": 170
+    },
+    "0x0556": {
+      "file": "main.asm",
+      "address": "0x0556",
+      "line": 868
+    },
+    "0x00DD": {
+      "file": "main.asm",
+      "address": "0x00DD",
+      "line": 182
+    },
+    "0x0223": {
+      "file": "main.asm",
+      "address": "0x0223",
+      "line": 354
+    },
+    "0x02E5": {
+      "file": "main.asm",
+      "address": "0x02E5",
+      "line": 457
+    },
+    "0x0507": {
+      "file": "main.asm",
+      "address": "0x0507",
+      "line": 813
+    },
+    "0x03A5": {
+      "file": "main.asm",
+      "address": "0x03A5",
+      "line": 562
+    },
+    "0x0099": {
+      "file": "main.asm",
+      "address": "0x0099",
+      "line": 139
+    },
+    "0x0238": {
+      "file": "main.asm",
+      "address": "0x0238",
+      "line": 361
+    },
+    "0x0412": {
+      "file": "main.asm",
+      "address": "0x0412",
+      "line": 646
+    },
+    "0x045D": {
+      "file": "main.asm",
+      "address": "0x045D",
+      "line": 714
+    },
+    "0x056A": {
+      "file": "main.asm",
+      "address": "0x056A",
+      "line": 877
+    },
+    "0x0479": {
+      "file": "main.asm",
+      "address": "0x0479",
+      "line": 737
+    },
+    "0x0331": {
+      "file": "main.asm",
+      "address": "0x0331",
+      "line": 497
+    },
+    "0x005C": {
+      "file": "main.asm",
+      "address": "0x005C",
+      "line": 100
+    },
+    "0x025F": {
+      "file": "main.asm",
+      "address": "0x025F",
+      "line": 385
+    },
+    "0x03D4": {
+      "file": "main.asm",
+      "address": "0x03D4",
+      "line": 581
+    },
+    "0x01B1": {
+      "file": "main.asm",
+      "address": "0x01B1",
+      "line": 296
+    },
+    "0x0641": {
+      "file": "main.asm",
+      "address": "0x0641",
+      "line": 979
+    },
+    "0x01A8": {
+      "file": "main.asm",
+      "address": "0x01A8",
+      "line": 284
+    },
+    "0x02AD": {
+      "file": "main.asm",
+      "address": "0x02AD",
+      "line": 423
+    },
+    "0x0561": {
+      "file": "main.asm",
+      "address": "0x0561",
+      "line": 874
+    },
+    "0x03B7": {
+      "file": "main.asm",
+      "address": "0x03B7",
+      "line": 572
+    },
+    "0x01C6": {
+      "file": "main.asm",
+      "address": "0x01C6",
+      "line": 309
+    },
+    "0x009D": {
+      "file": "main.asm",
+      "address": "0x009D",
+      "line": 143
+    },
+    "0x05E2": {
+      "file": "main.asm",
+      "address": "0x05E2",
+      "line": 939
+    },
+    "0x01E1": {
+      "file": "main.asm",
+      "address": "0x01E1",
+      "line": 323
+    },
+    "0x03F3": {
+      "file": "main.asm",
+      "address": "0x03F3",
+      "line": 629
+    },
+    "0x0408": {
+      "file": "main.asm",
+      "address": "0x0408",
+      "line": 640
+    },
+    "0x059A": {
+      "file": "main.asm",
+      "address": "0x059A",
+      "line": 898
+    },
+    "0x04F6": {
+      "file": "main.asm",
+      "address": "0x04F6",
+      "line": 804
+    },
+    "0x02E8": {
+      "file": "main.asm",
+      "address": "0x02E8",
+      "line": 461
+    },
+    "0x0247": {
+      "file": "main.asm",
+      "address": "0x0247",
+      "line": 370
+    },
+    "0x03A3": {
+      "file": "main.asm",
+      "address": "0x03A3",
+      "line": 560
+    },
+    "0x013D": {
+      "file": "main.asm",
+      "address": "0x013D",
+      "line": 231
+    },
+    "0x00F1": {
+      "file": "main.asm",
+      "address": "0x00F1",
+      "line": 191
+    },
+    "0x0235": {
+      "file": "main.asm",
+      "address": "0x0235",
+      "line": 360
+    },
+    "0x03BF": {
+      "file": "main.asm",
+      "address": "0x03BF",
+      "line": 575
+    },
+    "0x01FF": {
+      "file": "main.asm",
+      "address": "0x01FF",
+      "line": 334
+    },
+    "0x01D2": {
+      "file": "main.asm",
+      "address": "0x01D2",
+      "line": 314
+    },
+    "0x048A": {
+      "file": "main.asm",
+      "address": "0x048A",
+      "line": 747
+    },
+    "0x0047": {
+      "file": "main.asm",
+      "address": "0x0047",
+      "line": 80
+    },
+    "0x0389": {
+      "file": "main.asm",
+      "address": "0x0389",
+      "line": 547
+    },
+    "0x01C3": {
+      "file": "main.asm",
+      "address": "0x01C3",
+      "line": 307
+    },
+    "0x0531": {
+      "file": "main.asm",
+      "address": "0x0531",
+      "line": 830
+    },
+    "0x04E0": {
+      "file": "main.asm",
+      "address": "0x04E0",
+      "line": 795
+    },
+    "0x02F4": {
+      "file": "main.asm",
+      "address": "0x02F4",
+      "line": 466
+    },
+    "0x0041": {
+      "file": "main.asm",
+      "address": "0x0041",
+      "line": 78
+    },
+    "0x0210": {
+      "file": "main.asm",
+      "address": "0x0210",
+      "line": 345
+    },
+    "0x00AC": {
+      "file": "main.asm",
+      "address": "0x00AC",
+      "line": 152
+    },
+    "0x0027": {
+      "file": "main.asm",
+      "address": "0x0027",
+      "line": 63
+    },
+    "0x01D8": {
+      "file": "main.asm",
+      "address": "0x01D8",
+      "line": 320
+    },
+    "0x042E": {
+      "file": "main.asm",
+      "address": "0x042E",
+      "line": 668
+    },
+    "0x04B3": {
+      "file": "main.asm",
+      "address": "0x04B3",
+      "line": 769
+    },
+    "0x00B8": {
+      "file": "main.asm",
+      "address": "0x00B8",
+      "line": 163
+    },
+    "0x017E": {
+      "file": "main.asm",
+      "address": "0x017E",
+      "line": 266
+    },
+    "0x0308": {
+      "file": "main.asm",
+      "address": "0x0308",
+      "line": 475
+    },
+    "0x01C4": {
+      "file": "main.asm",
+      "address": "0x01C4",
+      "line": 308
+    },
+    "0x05AF": {
+      "file": "main.asm",
+      "address": "0x05AF",
+      "line": 911
+    },
+    "0x0113": {
+      "file": "main.asm",
+      "address": "0x0113",
+      "line": 213
+    },
+    "0x014C": {
+      "file": "main.asm",
+      "address": "0x014C",
+      "line": 238
+    },
+    "0x0468": {
+      "file": "main.asm",
+      "address": "0x0468",
+      "line": 725
+    },
+    "0x05C9": {
+      "file": "main.asm",
+      "address": "0x05C9",
+      "line": 925
+    },
+    "0x0449": {
+      "file": "main.asm",
+      "address": "0x0449",
+      "line": 698
+    },
+    "0x0132": {
+      "file": "main.asm",
+      "address": "0x0132",
+      "line": 223
+    },
+    "0x004D": {
+      "file": "main.asm",
+      "address": "0x004D",
+      "line": 84
+    },
+    "0x047C": {
+      "file": "main.asm",
+      "address": "0x047C",
+      "line": 738
+    },
+    "0x03E1": {
+      "file": "main.asm",
+      "address": "0x03E1",
+      "line": 594
+    },
+    "0x01D6": {
+      "file": "main.asm",
+      "address": "0x01D6",
+      "line": 319
+    },
+    "0x0122": {
+      "file": "main.asm",
+      "address": "0x0122",
+      "line": 219
+    },
+    "0x03E7": {
+      "file": "main.asm",
+      "address": "0x03E7",
+      "line": 618
+    },
+    "0x041A": {
+      "file": "main.asm",
+      "address": "0x041A",
+      "line": 651
+    },
+    "0x010D": {
+      "file": "main.asm",
+      "address": "0x010D",
+      "line": 209
+    },
+    "0x0154": {
+      "file": "main.asm",
+      "address": "0x0154",
+      "line": 242
+    },
+    "0x0351": {
+      "file": "main.asm",
+      "address": "0x0351",
+      "line": 513
+    },
+    "0x02E9": {
+      "file": "main.asm",
+      "address": "0x02E9",
+      "line": 462
+    },
+    "0x04D4": {
+      "file": "main.asm",
+      "address": "0x04D4",
+      "line": 791
+    },
+    "0x002C": {
+      "file": "main.asm",
+      "address": "0x002C",
+      "line": 65
+    },
+    "0x01E8": {
+      "file": "main.asm",
+      "address": "0x01E8",
+      "line": 326
+    },
+    "0x0592": {
+      "file": "main.asm",
+      "address": "0x0592",
+      "line": 893
+    },
+    "0x055A": {
+      "file": "main.asm",
+      "address": "0x055A",
+      "line": 871
+    },
+    "0x0371": {
+      "file": "main.asm",
+      "address": "0x0371",
+      "line": 533
+    },
+    "0x0405": {
+      "file": "main.asm",
+      "address": "0x0405",
+      "line": 639
+    },
+    "0x008D": {
+      "file": "main.asm",
+      "address": "0x008D",
+      "line": 134
+    },
+    "0x01CC": {
+      "file": "main.asm",
+      "address": "0x01CC",
+      "line": 311
+    },
+    "0x015E": {
+      "file": "main.asm",
+      "address": "0x015E",
+      "line": 250
+    },
+    "0x0559": {
+      "file": "main.asm",
+      "address": "0x0559",
+      "line": 870
+    },
+    "0x037B": {
+      "file": "main.asm",
+      "address": "0x037B",
+      "line": 539
+    },
+    "0x0625": {
+      "file": "main.asm",
+      "address": "0x0625",
+      "line": 957
+    },
+    "0x0265": {
+      "file": "main.asm",
+      "address": "0x0265",
+      "line": 388
+    },
+    "0x00CC": {
+      "file": "main.asm",
+      "address": "0x00CC",
+      "line": 172
+    },
+    "0x0442": {
+      "file": "main.asm",
+      "address": "0x0442",
+      "line": 688
+    },
+    "0x00CE": {
+      "file": "main.asm",
+      "address": "0x00CE",
+      "line": 174
+    },
+    "0x0382": {
+      "file": "main.asm",
+      "address": "0x0382",
+      "line": 543
+    },
+    "0x0355": {
+      "file": "main.asm",
+      "address": "0x0355",
+      "line": 515
+    },
+    "0x03A4": {
+      "file": "main.asm",
+      "address": "0x03A4",
+      "line": 561
+    },
+    "0x0391": {
+      "file": "main.asm",
+      "address": "0x0391",
+      "line": 553
+    },
+    "0x02DC": {
+      "file": "main.asm",
+      "address": "0x02DC",
+      "line": 453
+    },
+    "0x05EB": {
+      "file": "main.asm",
+      "address": "0x05EB",
+      "line": 942
+    },
+    "0x02C5": {
+      "file": "main.asm",
+      "address": "0x02C5",
+      "line": 440
+    },
+    "0x03FB": {
+      "file": "main.asm",
+      "address": "0x03FB",
+      "line": 633
+    },
+    "0x02A0": {
+      "file": "main.asm",
+      "address": "0x02A0",
+      "line": 412
+    },
+    "0x015A": {
+      "file": "main.asm",
+      "address": "0x015A",
+      "line": 246
+    },
+    "0x05D9": {
+      "file": "main.asm",
+      "address": "0x05D9",
+      "line": 933
+    },
+    "0x00B6": {
+      "file": "main.asm",
+      "address": "0x00B6",
+      "line": 162
+    },
+    "0x0192": {
+      "file": "main.asm",
+      "address": "0x0192",
+      "line": 274
+    },
+    "0x0063": {
+      "file": "main.asm",
+      "address": "0x0063",
+      "line": 104
+    },
+    "0x04C5": {
+      "file": "main.asm",
+      "address": "0x04C5",
+      "line": 51
+    },
+    "0x0170": {
+      "file": "main.asm",
+      "address": "0x0170",
+      "line": 258
+    },
+    "0x0643": {
+      "file": "main.asm",
+      "address": "0x0643",
+      "line": 981
+    },
+    "0x063C": {
+      "file": "main.asm",
+      "address": "0x063C",
+      "line": 976
+    },
+    "0x00D2": {
+      "file": "main.asm",
+      "address": "0x00D2",
+      "line": 177
+    },
+    "0x0036": {
+      "file": "main.asm",
+      "address": "0x0036",
+      "line": 69
+    },
+    "0x0576": {
+      "file": "main.asm",
+      "address": "0x0576",
+      "line": 881
+    },
+    "0x02A4": {
+      "file": "main.asm",
+      "address": "0x02A4",
+      "line": 414
+    },
+    "0x019C": {
+      "file": "main.asm",
+      "address": "0x019C",
+      "line": 278
+    },
+    "0x01BC": {
+      "file": "main.asm",
+      "address": "0x01BC",
+      "line": 303
+    },
+    "0x0250": {
+      "file": "main.asm",
+      "address": "0x0250",
+      "line": 375
+    },
+    "0x0349": {
+      "file": "main.asm",
+      "address": "0x0349",
+      "line": 508
+    },
+    "0x024C": {
+      "file": "main.asm",
+      "address": "0x024C",
+      "line": 373
+    },
+    "0x05AA": {
+      "file": "main.asm",
+      "address": "0x05AA",
+      "line": 906
+    },
+    "0x02C8": {
+      "file": "main.asm",
+      "address": "0x02C8",
+      "line": 441
+    },
+    "0x046A": {
+      "file": "main.asm",
+      "address": "0x046A",
+      "line": 727
+    },
+    "0x03A6": {
+      "file": "main.asm",
+      "address": "0x03A6",
+      "line": 564
+    },
+    "0x0588": {
+      "file": "main.asm",
+      "address": "0x0588",
+      "line": 887
+    },
+    "0x0225": {
+      "file": "main.asm",
+      "address": "0x0225",
+      "line": 355
+    },
+    "0x05AD": {
+      "file": "main.asm",
+      "address": "0x05AD",
+      "line": 909
+    },
+    "0x0564": {
+      "file": "main.asm",
+      "address": "0x0564",
+      "line": 875
+    },
+    "0x038C": {
+      "file": "main.asm",
+      "address": "0x038C",
+      "line": 548
+    },
+    "0x0451": {
+      "file": "main.asm",
+      "address": "0x0451",
+      "line": 705
+    },
+    "0x0492": {
+      "file": "main.asm",
+      "address": "0x0492",
+      "line": 32
+    },
+    "0x02D9": {
+      "file": "main.asm",
+      "address": "0x02D9",
+      "line": 452
+    },
+    "0x0635": {
+      "file": "main.asm",
+      "address": "0x0635",
+      "line": 967
+    },
+    "0x02FB": {
+      "file": "main.asm",
+      "address": "0x02FB",
+      "line": 469
+    },
+    "0x03FE": {
+      "file": "main.asm",
+      "address": "0x03FE",
+      "line": 634
+    },
+    "0x03D8": {
+      "file": "main.asm",
+      "address": "0x03D8",
+      "line": 584
+    },
+    "0x0188": {
+      "file": "main.asm",
+      "address": "0x0188",
+      "line": 270
+    },
+    "0x0175": {
+      "file": "main.asm",
+      "address": "0x0175",
+      "line": 263
+    },
+    "0x0117": {
+      "file": "main.asm",
+      "address": "0x0117",
+      "line": 215
+    },
+    "0x04FE": {
+      "file": "main.asm",
+      "address": "0x04FE",
+      "line": 808
+    },
+    "0x04F2": {
+      "file": "main.asm",
+      "address": "0x04F2",
+      "line": 802
+    },
+    "0x03F6": {
+      "file": "main.asm",
+      "address": "0x03F6",
+      "line": 631
+    },
+    "0x00A7": {
+      "file": "main.asm",
+      "address": "0x00A7",
+      "line": 149
+    },
+    "0x0110": {
+      "file": "main.asm",
+      "address": "0x0110",
+      "line": 211
+    },
+    "0x0636": {
+      "file": "main.asm",
+      "address": "0x0636",
+      "line": 968
+    },
+    "0x0472": {
+      "file": "main.asm",
+      "address": "0x0472",
+      "line": 734
+    },
+    "0x02D6": {
+      "file": "main.asm",
+      "address": "0x02D6",
+      "line": 450
+    },
+    "0x01B6": {
+      "file": "main.asm",
+      "address": "0x01B6",
+      "line": 298
+    },
+    "0x01E5": {
+      "file": "main.asm",
+      "address": "0x01E5",
+      "line": 325
+    },
+    "0x0396": {
+      "file": "main.asm",
+      "address": "0x0396",
+      "line": 555
+    },
+    "0x0381": {
+      "file": "main.asm",
+      "address": "0x0381",
+      "line": 542
+    },
+    "0x0346": {
+      "file": "main.asm",
+      "address": "0x0346",
+      "line": 507
+    },
+    "0x0628": {
+      "file": "main.asm",
+      "address": "0x0628",
+      "line": 958
+    },
+    "0x0579": {
+      "file": "main.asm",
+      "address": "0x0579",
+      "line": 882
+    },
+    "0x0597": {
+      "file": "main.asm",
+      "address": "0x0597",
+      "line": 897
+    },
+    "0x0060": {
+      "file": "main.asm",
+      "address": "0x0060",
+      "line": 103
+    },
+    "0x0178": {
+      "file": "main.asm",
+      "address": "0x0178",
+      "line": 264
+    },
+    "0x0596": {
+      "file": "main.asm",
+      "address": "0x0596",
+      "line": 896
+    },
+    "0x00F4": {
+      "file": "main.asm",
+      "address": "0x00F4",
+      "line": 192
+    },
+    "0x0088": {
+      "file": "main.asm",
+      "address": "0x0088",
+      "line": 129
+    },
+    "0x01BB": {
+      "file": "main.asm",
+      "address": "0x01BB",
+      "line": 301
+    },
+    "0x01AB": {
+      "file": "main.asm",
+      "address": "0x01AB",
+      "line": 293
+    },
+    "0x0421": {
+      "file": "main.asm",
+      "address": "0x0421",
+      "line": 658
+    },
+    "0x045B": {
+      "file": "main.asm",
+      "address": "0x045B",
+      "line": 713
+    },
+    "0x03DE": {
+      "file": "main.asm",
+      "address": "0x03DE",
+      "line": 593
+    },
+    "0x03F0": {
+      "file": "main.asm",
+      "address": "0x03F0",
+      "line": 623
+    },
+    "0x033C": {
+      "file": "main.asm",
+      "address": "0x033C",
+      "line": 503
+    },
+    "0x0029": {
+      "file": "main.asm",
+      "address": "0x0029",
+      "line": 64
+    },
+    "0x042B": {
+      "file": "main.asm",
+      "address": "0x042B",
+      "line": 663
+    },
+    "0x05D6": {
+      "file": "main.asm",
+      "address": "0x05D6",
+      "line": 932
+    },
+    "0x008F": {
+      "file": "main.asm",
+      "address": "0x008F",
+      "line": 135
+    },
+    "0x018F": {
+      "file": "main.asm",
+      "address": "0x018F",
+      "line": 273
+    },
+    "0x0516": {
+      "file": "main.asm",
+      "address": "0x0516",
+      "line": 821
+    },
+    "0x00B4": {
+      "file": "main.asm",
+      "address": "0x00B4",
+      "line": 161
+    },
+    "0x0312": {
+      "file": "main.asm",
+      "address": "0x0312",
+      "line": 478
+    },
+    "0x00DB": {
+      "file": "main.asm",
+      "address": "0x00DB",
+      "line": 181
+    },
+    "0x0600": {
+      "file": "main.asm",
+      "address": "0x0600",
+      "line": 949
+    },
+    "0x0150": {
+      "file": "main.asm",
+      "address": "0x0150",
+      "line": 240
+    },
+    "0x058B": {
+      "file": "main.asm",
+      "address": "0x058B",
+      "line": 888
+    },
+    "0x0634": {
+      "file": "main.asm",
+      "address": "0x0634",
+      "line": 966
+    },
+    "0x031C": {
+      "file": "main.asm",
+      "address": "0x031C",
+      "line": 485
+    },
+    "0x0528": {
+      "file": "main.asm",
+      "address": "0x0528",
+      "line": 827
+    },
+    "0x00C3": {
+      "file": "main.asm",
+      "address": "0x00C3",
+      "line": 168
+    },
+    "0x0102": {
+      "file": "main.asm",
+      "address": "0x0102",
+      "line": 202
+    },
+    "0x0213": {
+      "file": "main.asm",
+      "address": "0x0213",
+      "line": 346
+    },
+    "0x0163": {
+      "file": "main.asm",
+      "address": "0x0163",
+      "line": 252
+    },
+    "0x0083": {
+      "file": "main.asm",
+      "address": "0x0083",
+      "line": 126
+    },
+    "0x03B0": {
+      "file": "main.asm",
+      "address": "0x03B0",
+      "line": 569
+    },
+    "0x025D": {
+      "file": "main.asm",
+      "address": "0x025D",
+      "line": 383
+    },
+    "0x0467": {
+      "file": "main.asm",
+      "address": "0x0467",
+      "line": 723
+    },
+    "0x0477": {
+      "file": "main.asm",
+      "address": "0x0477",
+      "line": 13
+    },
+    "0x0044": {
+      "file": "main.asm",
+      "address": "0x0044",
+      "line": 79
+    },
+    "0x05F1": {
+      "file": "main.asm",
+      "address": "0x05F1",
+      "line": 944
+    },
+    "0x0582": {
+      "file": "main.asm",
+      "address": "0x0582",
+      "line": 885
+    },
+    "0x0484": {
+      "file": "main.asm",
+      "address": "0x0484",
+      "line": 18
+    },
+    "0x0241": {
+      "file": "main.asm",
+      "address": "0x0241",
+      "line": 367
+    },
+    "0x0218": {
+      "file": "main.asm",
+      "address": "0x0218",
+      "line": 349
+    },
+    "0x0629": {
+      "file": "main.asm",
+      "address": "0x0629",
+      "line": 959
+    },
+    "0x0115": {
+      "file": "main.asm",
+      "address": "0x0115",
+      "line": 214
+    },
+    "0x0094": {
+      "file": "main.asm",
+      "address": "0x0094",
+      "line": 137
+    },
+    "0x0508": {
+      "file": "main.asm",
+      "address": "0x0508",
+      "line": 814
+    },
+    "0x041D": {
+      "file": "main.asm",
+      "address": "0x041D",
+      "line": 652
+    },
+    "0x035D": {
+      "file": "main.asm",
+      "address": "0x035D",
+      "line": 520
+    },
+    "0x021B": {
+      "file": "main.asm",
+      "address": "0x021B",
+      "line": 351
+    },
+    "0x052E": {
+      "file": "main.asm",
+      "address": "0x052E",
+      "line": 829
+    },
+    "0x03A8": {
+      "file": "main.asm",
+      "address": "0x03A8",
+      "line": 566
+    },
+    "0x02BF": {
+      "file": "main.asm",
+      "address": "0x02BF",
+      "line": 435
+    },
+    "0x004C": {
+      "file": "main.asm",
+      "address": "0x004C",
+      "line": 83
+    },
+    "0x026F": {
+      "file": "main.asm",
+      "address": "0x026F",
+      "line": 392
+    },
+    "0x03AA": {
+      "file": "main.asm",
+      "address": "0x03AA",
+      "line": 567
+    },
+    "0x014E": {
+      "file": "main.asm",
+      "address": "0x014E",
+      "line": 239
+    },
+    "0x0141": {
+      "file": "main.asm",
+      "address": "0x0141",
+      "line": 233
+    },
+    "0x0074": {
+      "file": "main.asm",
+      "address": "0x0074",
+      "line": 116
+    },
+    "0x05AC": {
+      "file": "main.asm",
+      "address": "0x05AC",
+      "line": 908
+    },
+    "0x0424": {
+      "file": "main.asm",
+      "address": "0x0424",
+      "line": 659
+    },
+    "0x03BD": {
+      "file": "main.asm",
+      "address": "0x03BD",
+      "line": 574
+    },
+    "0x01E3": {
+      "file": "main.asm",
+      "address": "0x01E3",
+      "line": 324
+    },
+    "0x00AA": {
+      "file": "main.asm",
+      "address": "0x00AA",
+      "line": 151
+    },
+    "0x02D0": {
+      "file": "main.asm",
+      "address": "0x02D0",
+      "line": 447
+    },
+    "0x054F": {
+      "file": "main.asm",
+      "address": "0x054F",
+      "line": 843
+    },
+    "0x0537": {
+      "file": "main.asm",
+      "address": "0x0537",
+      "line": 832
+    },
+    "0x00DF": {
+      "file": "main.asm",
+      "address": "0x00DF",
+      "line": 183
+    },
+    "0x02C9": {
+      "file": "main.asm",
+      "address": "0x02C9",
+      "line": 442
+    },
+    "0x0361": {
+      "file": "main.asm",
+      "address": "0x0361",
+      "line": 523
+    },
+    "0x05C4": {
+      "file": "main.asm",
+      "address": "0x05C4",
+      "line": 920
+    },
+    "0x01EB": {
+      "file": "main.asm",
+      "address": "0x01EB",
+      "line": 328
+    },
+    "0x01ED": {
+      "file": "main.asm",
+      "address": "0x01ED",
+      "line": 329
+    },
+    "0x0303": {
+      "file": "main.asm",
+      "address": "0x0303",
+      "line": 473
+    },
+    "0x0152": {
+      "file": "main.asm",
+      "address": "0x0152",
+      "line": 241
+    },
+    "0x0573": {
+      "file": "main.asm",
+      "address": "0x0573",
+      "line": 880
+    },
+    "0x0591": {
+      "file": "main.asm",
+      "address": "0x0591",
+      "line": 892
+    },
+    "0x05CA": {
+      "file": "main.asm",
+      "address": "0x05CA",
+      "line": 926
+    },
+    "0x0305": {
+      "file": "main.asm",
+      "address": "0x0305",
+      "line": 474
+    },
+    "0x019F": {
+      "file": "main.asm",
+      "address": "0x019F",
+      "line": 279
+    },
+    "0x04E9": {
+      "file": "main.asm",
+      "address": "0x04E9",
+      "line": 798
+    },
+    "0x0173": {
+      "file": "main.asm",
+      "address": "0x0173",
+      "line": 262
+    },
+    "0x03C2": {
+      "file": "main.asm",
+      "address": "0x03C2",
+      "line": 576
+    },
+    "0x0377": {
+      "file": "main.asm",
+      "address": "0x0377",
+      "line": 537
+    },
+    "0x0388": {
+      "file": "main.asm",
+      "address": "0x0388",
+      "line": 546
+    },
+    "0x0436": {
+      "file": "main.asm",
+      "address": "0x0436",
+      "line": 673
+    },
+    "0x04CB": {
+      "file": "main.asm",
+      "address": "0x04CB",
+      "line": 785
+    },
+    "0x028C": {
+      "file": "main.asm",
+      "address": "0x028C",
+      "line": 407
+    },
+    "0x0432": {
+      "file": "main.asm",
+      "address": "0x0432",
+      "line": 670
+    },
+    "0x0112": {
+      "file": "main.asm",
+      "address": "0x0112",
+      "line": 212
+    },
+    "0x004A": {
+      "file": "main.asm",
+      "address": "0x004A",
+      "line": 81
+    },
+    "0x038F": {
+      "file": "main.asm",
+      "address": "0x038F",
+      "line": 551
+    },
+    "0x05B2": {
+      "file": "main.asm",
+      "address": "0x05B2",
+      "line": 912
+    },
+    "0x0054": {
+      "file": "main.asm",
+      "address": "0x0054",
+      "line": 94
+    },
+    "0x0291": {
+      "file": "main.asm",
+      "address": "0x0291",
+      "line": 409
+    },
+    "0x02B4": {
+      "file": "main.asm",
+      "address": "0x02B4",
+      "line": 426
+    },
+    "0x0258": {
+      "file": "main.asm",
+      "address": "0x0258",
+      "line": 380
+    },
+    "0x0228": {
+      "file": "main.asm",
+      "address": "0x0228",
+      "line": 356
+    },
+    "0x0284": {
+      "file": "main.asm",
+      "address": "0x0284",
+      "line": 404
+    },
+    "0x0356": {
+      "file": "main.asm",
+      "address": "0x0356",
+      "line": 516
+    },
+    "0x0145": {
+      "file": "main.asm",
+      "address": "0x0145",
+      "line": 235
+    },
+    "0x0555": {
+      "file": "main.asm",
+      "address": "0x0555",
+      "line": 845
+    },
+    "0x0319": {
+      "file": "main.asm",
+      "address": "0x0319",
+      "line": 483
+    },
+    "0x03D5": {
+      "file": "main.asm",
+      "address": "0x03D5",
+      "line": 582
+    },
+    "0x023A": {
+      "file": "main.asm",
+      "address": "0x023A",
+      "line": 363
+    },
+    "0x040A": {
+      "file": "main.asm",
+      "address": "0x040A",
+      "line": 641
+    },
+    "0x02EE": {
+      "file": "main.asm",
+      "address": "0x02EE",
+      "line": 464
+    },
+    "0x0646": {
+      "file": "main.asm",
+      "address": "0x0646",
+      "line": 984
+    },
+    "0x054C": {
+      "file": "main.asm",
+      "address": "0x054C",
+      "line": 842
+    },
+    "0x028E": {
+      "file": "main.asm",
+      "address": "0x028E",
+      "line": 408
+    },
+    "0x03ED": {
+      "file": "main.asm",
+      "address": "0x03ED",
+      "line": 622
+    },
+    "0x0055": {
+      "file": "main.asm",
+      "address": "0x0055",
+      "line": 95
+    },
+    "0x0487": {
+      "file": "main.asm",
+      "address": "0x0487",
+      "line": 746
+    },
+    "0x014A": {
+      "file": "main.asm",
+      "address": "0x014A",
+      "line": 237
+    },
+    "0x025E": {
+      "file": "main.asm",
+      "address": "0x025E",
+      "line": 384
+    },
+    "0x0513": {
+      "file": "main.asm",
+      "address": "0x0513",
+      "line": 820
+    },
+    "0x057F": {
+      "file": "main.asm",
+      "address": "0x057F",
+      "line": 884
+    }
+  },
+  "functions": {},
   "nativeCalls": {
     "8": "VECTREX_SET_INTENSITY"
   },
-  "asmFunctions": {
-    "VECTREX_SET_INTENSITY": {
-      "name": "VECTREX_SET_INTENSITY",
-      "file": "main.asm",
-      "startLine": 128,
-      "endLine": 138,
-      "type": "native"
-    },
-    "DSWM_LOOP": {
-      "name": "DSWM_LOOP",
-      "file": "main.asm",
-      "startLine": 478,
-      "endLine": 488,
-      "type": "native"
-    },
-    "SLR_FG_COUNT": {
-      "name": "SLR_FG_COUNT",
-      "file": "main.asm",
-      "startLine": 661,
-      "endLine": 671,
-      "type": "native"
-    },
-    "DSWM_NO_NEGATE_Y": {
-      "name": "DSWM_NO_NEGATE_Y",
-      "file": "main.asm",
-      "startLine": 432,
-      "endLine": 442,
-      "type": "native"
-    },
-    "DSLA_NEXT_PATH": {
-      "name": "DSLA_NEXT_PATH",
-      "file": "main.asm",
-      "startLine": 362,
-      "endLine": 372,
-      "type": "native"
-    },
-    "SLR_DONE": {
-      "name": "SLR_DONE",
-      "file": "main.asm",
-      "startLine": 669,
-      "endLine": 679,
-      "type": "native"
-    },
-    "Draw_Sync_List": {
-      "name": "Draw_Sync_List",
-      "file": "main.asm",
-      "startLine": 153,
-      "endLine": 163,
-      "type": "native"
-    },
-    "SLR_OBJ_DONE": {
-      "name": "SLR_OBJ_DONE",
-      "file": "main.asm",
-      "startLine": 717,
-      "endLine": 727,
-      "type": "native"
-    },
-    "J1B1_BUILTIN": {
-      "name": "J1B1_BUILTIN",
-      "file": "main.asm",
-      "startLine": 88,
-      "endLine": 98,
-      "type": "native"
-    },
-    "J1B4_BUILTIN": {
-      "name": "J1B4_BUILTIN",
-      "file": "main.asm",
-      "startLine": 118,
-      "endLine": 128,
-      "type": "native"
-    },
-    "J1X_BUILTIN": {
-      "name": "J1X_BUILTIN",
-      "file": "main.asm",
-      "startLine": 58,
-      "endLine": 68,
-      "type": "native"
-    },
-    "DSLA_W1": {
-      "name": "DSLA_W1",
-      "file": "main.asm",
-      "startLine": 329,
-      "endLine": 339,
-      "type": "native"
-    },
-    ".J1B3_OFF": {
-      "name": ".J1B3_OFF",
-      "file": "main.asm",
-      "startLine": 114,
-      "endLine": 124,
-      "type": "native"
-    },
-    "Draw_Sync_List_At": {
-      "name": "Draw_Sync_List_At",
-      "file": "main.asm",
-      "startLine": 287,
-      "endLine": 297,
-      "type": "native"
-    },
-    "SLR_FG_PTR": {
-      "name": "SLR_FG_PTR",
-      "file": "main.asm",
-      "startLine": 665,
-      "endLine": 675,
-      "type": "native"
-    },
-    "J1B2_BUILTIN": {
-      "name": "J1B2_BUILTIN",
-      "file": "main.asm",
-      "startLine": 98,
-      "endLine": 108,
-      "type": "native"
-    },
-    "Draw_Sync_List_At_With_Mirrors": {
-      "name": "Draw_Sync_List_At_With_Mirrors",
-      "file": "main.asm",
-      "startLine": 415,
-      "endLine": 425,
-      "type": "native"
-    },
-    "DSWM_W1": {
-      "name": "DSWM_W1",
-      "file": "main.asm",
-      "startLine": 473,
-      "endLine": 483,
-      "type": "native"
-    },
-    "DSLA_DONE": {
-      "name": "DSLA_DONE",
-      "file": "main.asm",
-      "startLine": 413,
-      "endLine": 423,
-      "type": "native"
-    },
-    "J1B3_BUILTIN": {
-      "name": "J1B3_BUILTIN",
-      "file": "main.asm",
-      "startLine": 108,
-      "endLine": 118,
-      "type": "native"
-    },
-    ".J1B4_OFF": {
-      "name": ".J1B4_OFF",
-      "file": "main.asm",
-      "startLine": 124,
-      "endLine": 134,
-      "type": "native"
-    },
-    "DSL_W1": {
-      "name": "DSL_W1",
-      "file": "main.asm",
-      "startLine": 191,
-      "endLine": 201,
-      "type": "native"
-    },
-    "SLR_GP_COUNT": {
-      "name": "SLR_GP_COUNT",
-      "file": "main.asm",
-      "startLine": 651,
-      "endLine": 661,
-      "type": "native"
-    },
-    ".J1B1_OFF": {
-      "name": ".J1B1_OFF",
-      "file": "main.asm",
-      "startLine": 94,
-      "endLine": 104,
-      "type": "native"
-    },
-    "DSL_DONE": {
-      "name": "DSL_DONE",
-      "file": "main.asm",
-      "startLine": 279,
-      "endLine": 289,
-      "type": "native"
-    },
-    "DSWM_W3": {
-      "name": "DSWM_W3",
-      "file": "main.asm",
-      "startLine": 575,
-      "endLine": 585,
-      "type": "native"
-    },
-    "DSL_NEXT_PATH": {
-      "name": "DSL_NEXT_PATH",
-      "file": "main.asm",
-      "startLine": 224,
-      "endLine": 234,
-      "type": "native"
-    },
-    "DSWM_NO_NEGATE_X": {
-      "name": "DSWM_NO_NEGATE_X",
-      "file": "main.asm",
-      "startLine": 439,
-      "endLine": 449,
-      "type": "native"
-    },
-    "DSWM_NO_NEGATE_DY": {
-      "name": "DSWM_NO_NEGATE_DY",
-      "file": "main.asm",
-      "startLine": 490,
-      "endLine": 500,
-      "type": "native"
-    },
-    "SLR_GAMEPLAY": {
-      "name": "SLR_GAMEPLAY",
-      "file": "main.asm",
-      "startLine": 650,
-      "endLine": 660,
-      "type": "native"
-    },
-    "DSWM_NEXT_SET_INTENSITY": {
-      "name": "DSWM_NEXT_SET_INTENSITY",
-      "file": "main.asm",
-      "startLine": 525,
-      "endLine": 535,
-      "type": "native"
-    },
-    "SLR_BG_PTR": {
-      "name": "SLR_BG_PTR",
-      "file": "main.asm",
-      "startLine": 645,
-      "endLine": 655,
-      "type": "native"
-    },
-    "DSWM_USE_OVERRIDE": {
-      "name": "DSWM_USE_OVERRIDE",
-      "file": "main.asm",
-      "startLine": 423,
-      "endLine": 433,
-      "type": "native"
-    },
-    "DSWM_NEXT_USE_OVERRIDE": {
-      "name": "DSWM_NEXT_USE_OVERRIDE",
-      "file": "main.asm",
-      "startLine": 523,
-      "endLine": 533,
-      "type": "native"
-    },
-    "DSWM_SET_INTENSITY": {
-      "name": "DSWM_SET_INTENSITY",
-      "file": "main.asm",
-      "startLine": 425,
-      "endLine": 435,
-      "type": "native"
-    },
-    "DSL_W3": {
-      "name": "DSL_W3",
-      "file": "main.asm",
-      "startLine": 273,
-      "endLine": 283,
-      "type": "native"
-    },
-    "DSL_LOOP": {
-      "name": "DSL_LOOP",
-      "file": "main.asm",
-      "startLine": 196,
-      "endLine": 206,
-      "type": "native"
-    },
-    "J1Y_BUILTIN": {
-      "name": "J1Y_BUILTIN",
-      "file": "main.asm",
-      "startLine": 71,
-      "endLine": 81,
-      "type": "native"
-    },
-    "LOAD_LEVEL_RUNTIME": {
-      "name": "LOAD_LEVEL_RUNTIME",
-      "file": "main.asm",
-      "startLine": 588,
-      "endLine": 598,
-      "type": "native"
-    },
-    "SLR_OBJ_LOOP": {
-      "name": "SLR_OBJ_LOOP",
-      "file": "main.asm",
-      "startLine": 679,
-      "endLine": 689,
-      "type": "native"
-    },
-    "SLR_FOREGROUND": {
-      "name": "SLR_FOREGROUND",
-      "file": "main.asm",
-      "startLine": 660,
-      "endLine": 670,
-      "type": "native"
-    },
-    "DSWM_DONE": {
-      "name": "DSWM_DONE",
-      "file": "main.asm",
-      "startLine": 581,
-      "endLine": 591,
-      "type": "native"
-    },
-    "DSWM_W2": {
-      "name": "DSWM_W2",
-      "file": "main.asm",
-      "startLine": 508,
-      "endLine": 518,
-      "type": "native"
-    },
-    "DSWM_NEXT_PATH": {
-      "name": "DSWM_NEXT_PATH",
-      "file": "main.asm",
-      "startLine": 515,
-      "endLine": 525,
-      "type": "native"
-    },
-    "SLR_BG_COUNT": {
-      "name": "SLR_BG_COUNT",
-      "file": "main.asm",
-      "startLine": 641,
-      "endLine": 651,
-      "type": "native"
-    },
-    "DSL_W2": {
-      "name": "DSL_W2",
-      "file": "main.asm",
-      "startLine": 217,
-      "endLine": 227,
-      "type": "native"
-    },
-    "SLR_DRAW_OBJECTS": {
-      "name": "SLR_DRAW_OBJECTS",
-      "file": "main.asm",
-      "startLine": 676,
-      "endLine": 686,
-      "type": "native"
-    },
-    "DSWM_NO_NEGATE_DX": {
-      "name": "DSWM_NO_NEGATE_DX",
-      "file": "main.asm",
-      "startLine": 496,
-      "endLine": 506,
-      "type": "native"
-    },
-    "SHOW_LEVEL_RUNTIME": {
-      "name": "SHOW_LEVEL_RUNTIME",
-      "file": "main.asm",
-      "startLine": 612,
-      "endLine": 622,
-      "type": "native"
-    },
-    "DSWM_NEXT_NO_NEGATE_X": {
-      "name": "DSWM_NEXT_NO_NEGATE_X",
-      "file": "main.asm",
-      "startLine": 537,
-      "endLine": 547,
-      "type": "native"
-    },
-    ".J1B2_OFF": {
-      "name": ".J1B2_OFF",
-      "file": "main.asm",
-      "startLine": 104,
-      "endLine": 114,
-      "type": "native"
-    },
-    "DSLA_W2": {
-      "name": "DSLA_W2",
-      "file": "main.asm",
-      "startLine": 355,
-      "endLine": 365,
-      "type": "native"
-    },
-    "DSLA_W3": {
-      "name": "DSLA_W3",
-      "file": "main.asm",
-      "startLine": 407,
-      "endLine": 417,
-      "type": "native"
-    },
-    "DSLA_LOOP": {
-      "name": "DSLA_LOOP",
-      "file": "main.asm",
-      "startLine": 334,
-      "endLine": 344,
-      "type": "native"
-    },
-    "SLR_GP_PTR": {
-      "name": "SLR_GP_PTR",
-      "file": "main.asm",
-      "startLine": 655,
-      "endLine": 665,
-      "type": "native"
-    },
-    "DSWM_NEXT_NO_NEGATE_Y": {
-      "name": "DSWM_NEXT_NO_NEGATE_Y",
-      "file": "main.asm",
-      "startLine": 531,
-      "endLine": 541,
-      "type": "native"
-    }
-  },
+  "asmFunctions": {},
   "asmAddressMap": {
-    "337": "0x01EF",
-    "258": "0x0173",
-    "832": "0x046F",
-    "42": "0x0030",
-    "51": "0x0040",
-    "102": "0x007F",
-    "903": "0x04C7",
-    "750": "0x0420",
-    "415": "0x0277",
-    "79": "0x0068",
-    "364": "0x021B",
-    "363": "0x0219",
-    "737": "0x040C",
-    "689": "0x03D6",
-    "459": "0x02B8",
-    "921": "0x04E7",
-    "447": "0x02A2",
-    "430": "0x0288",
-    "362": "0x0219",
-    "717": "0x03F3",
-    "392": "0x0250",
-    "201": "0x0112",
-    "358": "0x0213",
-    "157": "0x00C8",
-    "876": "0x049F",
-    "523": "0x031A",
-    "740": "0x0413",
-    "224": "0x0138",
-    "184": "0x00FA",
-    "948": "0x0515",
-    "875": "0x049D",
-    "771": "0x043D",
-    "778": "0x0449",
-    "641": "0x03AA",
-    "566": "0x0365",
-    "95": "0x0075",
-    "334": "0x01EB",
-    "114": "0x0091",
-    "353": "0x020D",
-    "912": "0x04D9",
-    "497": "0x02F0",
-    "556": "0x0353",
-    "526": "0x031C",
-    "734": "0x0408",
-    "164": "0x00D4",
-    "679": "0x03D0",
-    "538": "0x0330",
-    "888": "0x04AD",
-    "109": "0x0087",
-    "496": "0x02F0",
-    "911": "0x04D7",
-    "39": "0x002A",
-    "305": "0x01BB",
-    "207": "0x011C",
-    "565": "0x0363",
-    "168": "0x00DC",
-    "540": "0x0334",
-    "203": "0x0114",
-    "721": "0x03F4",
-    "504": "0x02FE",
-    "238": "0x0150",
-    "897": "0x04BF",
-    "30": "0x0018",
-    "744": "0x0418",
-    "94": "0x0075",
-    "349": "0x0205",
-    "462": "0x02BE",
-    "810": "0x045D",
-    "457": "0x02B4",
-    "380": "0x023A",
-    "475": "0x02D2",
-    "833": "0x0471",
-    "99": "0x0079",
-    "183": "0x00F8",
-    "398": "0x025C",
-    "939": "0x0503",
-    "498": "0x02F2",
-    "622": "0x0390",
-    "166": "0x00D8",
-    "134": "0x00AB",
-    "937": "0x04FF",
-    "929": "0x04F7",
-    "630": "0x039C",
-    "652": "0x03B5",
-    "759": "0x0432",
-    "735": "0x040A",
-    "13": "0x0006",
-    "834": "0x0473",
-    "573": "0x0373",
-    "140": "0x00B3",
-    "71": "0x0057",
-    "287": "0x019A",
-    "221": "0x0134",
-    "930": "0x04F9",
-    "549": "0x0345",
-    "317": "0x01D1",
-    "571": "0x036F",
-    "179": "0x00F0",
-    "100": "0x007B",
-    "405": "0x026A",
-    "853": "0x047F",
-    "654": "0x03B9",
-    "454": "0x02B0",
-    "612": "0x0385",
-    "311": "0x01C7",
-    "572": "0x0371",
-    "293": "0x01A5",
-    "591": "0x0384",
-    "650": "0x03B5",
-    "222": "0x0136",
-    "291": "0x01A0",
-    "643": "0x03AC",
-    "942": "0x0509",
-    "618": "0x038C",
-    "634": "0x03A0",
-    "647": "0x03B2",
-    "773": "0x0443",
-    "65": "0x0052",
-    "315": "0x01CD",
-    "156": "0x00C5",
-    "394": "0x0254",
-    "382": "0x023E",
-    "450": "0x02A8",
-    "347": "0x0201",
-    "411": "0x0272",
-    "758": "0x0430",
-    "766": "0x0438",
-    "368": "0x0223",
-    "370": "0x0227",
-    "218": "0x012E",
-    "770": "0x043D",
-    "351": "0x0209",
-    "868": "0x0491",
-    "902": "0x04C5",
-    "465": "0x02C4",
-    "503": "0x02FC",
-    "922": "0x04E9",
-    "235": "0x014A",
-    "651": "0x03B5",
-    "88": "0x006B",
-    "614": "0x0387",
-    "230": "0x0140",
-    "212": "0x0126",
-    "61": "0x0048",
-    "387": "0x0248",
-    "19": "0x0012",
-    "513": "0x030C",
-    "567": "0x0367",
-    "437": "0x0292",
-    "209": "0x0120",
-    "324": "0x01DD",
-    "534": "0x032A",
-    "300": "0x01B1",
-    "228": "0x013C",
-    "73": "0x0059",
-    "576": "0x0375",
-    "269": "0x0189",
-    "357": "0x0211",
-    "18": "0x0010",
-    "143": "0x00B9",
-    "711": "0x03ED",
-    "920": "0x04E5",
-    "544": "0x033D",
-    "110": "0x0089",
-    "35": "0x0022",
-    "259": "0x0175",
-    "48": "0x003C",
-    "40": "0x002C",
-    "877": "0x04A1",
-    "266": "0x0183",
-    "301": "0x01B3",
-    "170": "0x00E0",
-    "204": "0x0116",
-    "98": "0x0079",
-    "676": "0x03D0",
-    "206": "0x011A",
-    "77": "0x0064",
-    "424": "0x027F",
-    "561": "0x035B",
-    "451": "0x02AA",
-    "141": "0x00B6",
-    "91": "0x006F",
-    "313": "0x01C9",
-    "557": "0x0355",
-    "882": "0x04A9",
-    "188": "0x0100",
-    "330": "0x01E5",
-    "289": "0x019C",
-    "128": "0x00A3",
-    "532": "0x0326",
-    "613": "0x0385",
-    "162": "0x00D0",
-    "681": "0x03D2",
-    "763": "0x0434",
-    "200": "0x0110",
-    "401": "0x0262",
-    "460": "0x02BA",
-    "47": "0x003A",
-    "727": "0x0401",
-    "870": "0x0493",
-    "420": "0x0279",
-    "811": "0x045F",
-    "310": "0x01C5",
-    "928": "0x04F5",
-    "237": "0x014E",
-    "341": "0x01F5",
-    "548": "0x0343",
-    "869": "0x0491",
-    "468": "0x02C8",
-    "390": "0x024E",
-    "161": "0x00CE",
-    "233": "0x0146",
-    "242": "0x0157",
-    "463": "0x02C0",
-    "805": "0x0453",
-    "546": "0x033F",
-    "412": "0x0274",
-    "37": "0x0026",
-    "49": "0x003E",
-    "165": "0x00D6",
-    "812": "0x0461",
-    "408": "0x026C",
-    "106": "0x0086",
-    "490": "0x02E8",
-    "461": "0x02BC",
-    "705": "0x03E6",
-    "748": "0x041D",
-    "314": "0x01CB",
-    "473": "0x02D0",
-    "133": "0x00A9",
-    "854": "0x0481",
-    "482": "0x02DC",
-    "756": "0x042C",
-    "131": "0x00A5",
-    "219": "0x0130",
-    "706": "0x03E8",
-    "680": "0x03D0",
-    "941": "0x0507",
-    "59": "0x0043",
-    "64": "0x0050",
-    "738": "0x040F",
-    "553": "0x034D",
-    "501": "0x02F8",
-    "352": "0x020B",
-    "807": "0x0457",
-    "120": "0x0097",
-    "425": "0x0281",
-    "172": "0x00E4",
-    "193": "0x0106",
-    "884": "0x04A9",
-    "169": "0x00DE",
-    "479": "0x02D6",
-    "72": "0x0057",
-    "267": "0x0185",
-    "543": "0x033B",
-    "665": "0x03C6",
-    "275": "0x0191",
-    "443": "0x029A",
-    "159": "0x00CC",
-    "745": "0x041B",
-    "232": "0x0144",
-    "580": "0x037D",
-    "836": "0x0477",
-    "579": "0x037B",
-    "688": "0x03D4",
-    "336": "0x01ED",
-    "254": "0x016D",
-    "575": "0x0375",
-    "307": "0x01BF",
-    "381": "0x023C",
-    "493": "0x02EA",
-    "754": "0x0428",
-    "375": "0x0232",
-    "346": "0x01FF",
-    "915": "0x04DF",
-    "636": "0x03A4",
-    "663": "0x03C2",
-    "171": "0x00E2",
-    "248": "0x0161",
-    "400": "0x0260",
-    "873": "0x0499",
-    "655": "0x03BB",
-    "522": "0x0318",
-    "297": "0x01AD",
-    "177": "0x00EC",
-    "397": "0x025A",
-    "671": "0x03CE",
-    "704": "0x03E4",
-    "33": "0x001E",
-    "560": "0x0359",
-    "500": "0x02F6",
-    "226": "0x0138",
-    "803": "0x044F",
-    "116": "0x0094",
-    "629": "0x039A",
-    "931": "0x04FB",
-    "476": "0x02D4",
-    "446": "0x02A0",
-    "516": "0x030E",
-    "191": "0x0104",
-    "478": "0x02D6",
-    "828": "0x0467",
-    "926": "0x04F1",
-    "829": "0x0469",
-    "471": "0x02CE",
-    "422": "0x027D",
-    "250": "0x0165",
-    "577": "0x0377",
-    "255": "0x016F",
-    "645": "0x03B0",
-    "669": "0x03CB",
-    "940": "0x0505",
-    "506": "0x0302",
-    "261": "0x0179",
-    "943": "0x050B",
-    "570": "0x036D",
-    "20": "0x0014",
-    "236": "0x014C",
-    "923": "0x04EB",
-    "511": "0x0308",
-    "139": "0x00B1",
-    "178": "0x00EE",
-    "528": "0x0320",
-    "277": "0x0195",
-    "432": "0x028C",
-    "896": "0x04BD",
-    "181": "0x00F4",
-    "856": "0x0485",
-    "393": "0x0252",
-    "722": "0x03F6",
-    "163": "0x00D2",
-    "635": "0x03A2",
-    "541": "0x0336",
-    "453": "0x02AE",
-    "321": "0x01D9",
-    "208": "0x011E",
-    "348": "0x0203",
-    "12": "0x0004",
-    "41": "0x002E",
-    "186": "0x00FC",
-    "262": "0x017B",
-    "414": "0x0276",
-    "119": "0x0095",
-    "92": "0x0071",
-    "644": "0x03AE",
-    "104": "0x0083",
-    "860": "0x048D",
-    "122": "0x009B",
-    "662": "0x03C0",
-    "17": "0x000E",
-    "339": "0x01F3",
-    "413": "0x0276",
-    "726": "0x03FE",
-    "74": "0x005C",
-    "529": "0x0322",
-    "904": "0x04C9",
-    "407": "0x026C",
-    "167": "0x00DA",
-    "176": "0x00EA",
-    "383": "0x0240",
-    "130": "0x00A3",
-    "578": "0x0379",
-    "628": "0x0398",
-    "626": "0x0394",
-    "891": "0x04B3",
-    "58": "0x0043",
-    "36": "0x0024",
-    "374": "0x0230",
-    "633": "0x039E",
-    "874": "0x049B",
-    "670": "0x03CB",
-    "779": "0x044C",
-    "466": "0x02C6",
-    "701": "0x03E2",
-    "385": "0x0244",
-    "256": "0x0171",
+    "392": "0x026F",
+    "553": "0x0391",
+    "339": "0x0206",
+    "832": "0x0537",
     "273": "0x018F",
-    "294": "0x01A7",
-    "103": "0x0082",
-    "231": "0x0142",
-    "582": "0x037F",
-    "389": "0x024C",
-    "852": "0x047D",
-    "480": "0x02D8",
-    "96": "0x0078",
-    "752": "0x0424",
-    "123": "0x009E",
-    "299": "0x01AF",
-    "495": "0x02EE",
-    "908": "0x04D1",
-    "491": "0x02E8",
-    "646": "0x03B0",
-    "345": "0x01FD",
-    "215": "0x012C",
-    "637": "0x03A6",
-    "241": "0x0155",
-    "619": "0x038E",
-    "303": "0x01B7",
-    "11": "0x0002",
-    "521": "0x0316",
-    "879": "0x04A5",
-    "464": "0x02C2",
-    "441": "0x0298",
-    "76": "0x0062",
-    "520": "0x0314",
-    "938": "0x0501",
-    "14": "0x0008",
-    "434": "0x028E",
-    "115": "0x0091",
-    "487": "0x02E2",
-    "527": "0x031E",
-    "369": "0x0225",
-    "158": "0x00CA",
-    "265": "0x0181",
-    "949": "0x0517",
-    "804": "0x0451",
-    "355": "0x020F",
-    "308": "0x01C1",
-    "403": "0x0266",
-    "458": "0x02B6",
-    "366": "0x021F",
-    "148": "0x00C0",
-    "144": "0x00B9",
-    "469": "0x02CA",
-    "89": "0x006B",
-    "889": "0x04AF",
-    "426": "0x0281",
-    "132": "0x00A7",
-    "440": "0x0296",
-    "409": "0x026E",
-    "895": "0x04BB",
-    "732": "0x0403",
-    "274": "0x018F",
-    "388": "0x024A",
-    "423": "0x027F",
-    "547": "0x0341",
-    "517": "0x0310",
-    "700": "0x03E0",
-    "880": "0x04A7",
-    "625": "0x0392",
-    "510": "0x0306",
-    "906": "0x04CD",
-    "410": "0x0270",
-    "562": "0x035D",
-    "205": "0x0118",
-    "483": "0x02DE",
-    "692": "0x03D8",
-    "276": "0x0193",
-    "210": "0x0122",
-    "537": "0x0330",
-    "335": "0x01EB",
-    "878": "0x04A3",
-    "326": "0x01E1",
-    "535": "0x032C",
-    "118": "0x0095",
-    "90": "0x006D",
-    "530": "0x0324",
-    "142": "0x00B6",
-    "438": "0x0294",
-    "433": "0x028C",
-    "365": "0x021D",
-    "502": "0x02FA",
-    "452": "0x02AC",
-    "835": "0x0475",
-    "554": "0x034F",
-    "376": "0x0234",
-    "404": "0x0268",
-    "304": "0x01B9",
-    "855": "0x0483",
-    "642": "0x03AA",
-    "552": "0x034B",
-    "919": "0x04E3",
-    "295": "0x01A9",
-    "656": "0x03BB",
-    "253": "0x016B",
-    "316": "0x01CF",
-    "693": "0x03DA",
-    "551": "0x0349",
-    "16": "0x000C",
-    "755": "0x042A",
-    "753": "0x0426",
-    "563": "0x035F",
-    "927": "0x04F3",
-    "851": "0x047B",
-    "199": "0x010E",
-    "524": "0x031A",
-    "244": "0x0159",
-    "488": "0x02E4",
-    "485": "0x02E0",
-    "947": "0x0513",
-    "386": "0x0246",
-    "747": "0x041D",
-    "859": "0x048B",
-    "350": "0x0207",
-    "342": "0x01F7",
-    "872": "0x0497",
-    "270": "0x018B",
-    "136": "0x00B0",
-    "121": "0x0099",
-    "395": "0x0256",
-    "220": "0x0132",
-    "945": "0x050F",
-    "661": "0x03C0",
-    "147": "0x00BE",
-    "378": "0x0236",
-    "329": "0x01E5",
-    "246": "0x015D",
-    "125": "0x009F",
-    "367": "0x0221",
-    "332": "0x01E9",
-    "46": "0x0038",
-    "245": "0x015B",
-    "153": "0x00C3",
-    "494": "0x02EC",
-    "724": "0x03FA",
-    "196": "0x010A",
-    "198": "0x010C",
-    "62": "0x004B",
-    "187": "0x00FE",
-    "657": "0x03BD",
-    "780": "0x044E",
-    "279": "0x0199",
-    "617": "0x038A",
-    "772": "0x0440",
-    "234": "0x0148",
-    "214": "0x012A",
-    "515": "0x030E",
-    "356": "0x020F",
-    "108": "0x0087",
-    "569": "0x036B",
-    "325": "0x01DF",
-    "302": "0x01B5",
-    "925": "0x04EF",
-    "474": "0x02D0",
-    "173": "0x00E6",
-    "944": "0x050D",
-    "213": "0x0128",
-    "331": "0x01E7",
-    "399": "0x025E",
-    "525": "0x031C",
-    "589": "0x0380",
-    "660": "0x03C0",
-    "439": "0x0296",
-    "907": "0x04CF",
-    "723": "0x03F8",
-    "436": "0x0290",
-    "696": "0x03DC",
-    "155": "0x00C3",
-    "44": "0x0034",
-    "338": "0x01F1",
-    "263": "0x017D",
-    "344": "0x01FB",
-    "905": "0x04CB",
-    "808": "0x0459",
-    "542": "0x0339",
-    "697": "0x03DE",
-    "638": "0x03A8",
-    "379": "0x0238",
-    "135": "0x00AD",
-    "489": "0x02E6",
-    "31": "0x001A",
-    "861": "0x048F",
-    "444": "0x029C",
-    "946": "0x0511",
-    "260": "0x0177",
-    "481": "0x02DA",
-    "720": "0x03F4",
-    "80": "0x006A",
-    "512": "0x030A",
-    "924": "0x04ED",
-    "113": "0x0090",
-    "837": "0x0479",
-    "550": "0x0347",
-    "936": "0x04FD",
-    "396": "0x0258",
-    "45": "0x0036",
-    "499": "0x02F4",
-    "229": "0x013E",
-    "421": "0x027B",
-    "271": "0x018D",
-    "536": "0x032E",
-    "43": "0x0032",
-    "914": "0x04DD",
-    "858": "0x0489",
-    "664": "0x03C4",
-    "427": "0x0284",
-    "112": "0x008D",
-    "857": "0x0487",
-    "138": "0x00B1",
-    "627": "0x0396",
-    "667": "0x03C8",
-    "893": "0x04B7",
-    "715": "0x03F1",
-    "182": "0x00F6",
-    "429": "0x0286",
-    "280": "0x0199",
-    "322": "0x01DB",
-    "29": "0x0016",
-    "419": "0x0277",
-    "290": "0x019E",
-    "431": "0x028A",
-    "175": "0x00E8",
-    "34": "0x0020",
-    "909": "0x04D3",
-    "531": "0x0326",
-    "718": "0x03F3",
-    "590": "0x0382",
-    "892": "0x04B5",
-    "372": "0x022B",
-    "189": "0x0102",
-    "384": "0x0242",
-    "809": "0x045B",
-    "75": "0x005F",
-    "319": "0x01D5",
-    "666": "0x03C6",
-    "93": "0x0074",
-    "249": "0x0163",
-    "899": "0x04C3",
-    "252": "0x0169",
-    "360": "0x0217",
-    "505": "0x0300",
-    "309": "0x01C3",
-    "913": "0x04DB",
-    "725": "0x03FC",
-    "581": "0x037F",
-    "806": "0x0455",
-    "194": "0x0108",
-    "192": "0x0104",
-    "105": "0x0083",
-    "714": "0x03EF",
-    "830": "0x046B",
-    "739": "0x0411",
-    "278": "0x0197",
-    "827": "0x0465",
-    "359": "0x0215",
-    "217": "0x012E",
-    "101": "0x007D",
-    "371": "0x0229",
-    "247": "0x015F",
-    "227": "0x013A",
-    "743": "0x0415",
-    "146": "0x00BE",
-    "66": "0x0054",
-    "124": "0x009F",
-    "264": "0x017F",
-    "268": "0x0187",
-    "318": "0x01D3",
-    "757": "0x042E",
-    "709": "0x03EA",
-    "470": "0x02CC",
-    "63": "0x004E",
-    "402": "0x0264",
-    "831": "0x046D",
-    "887": "0x04AB",
-    "910": "0x04D5",
-    "197": "0x010A",
-    "918": "0x04E1",
-    "508": "0x0304",
-    "539": "0x0332",
-    "448": "0x02A4",
-    "813": "0x0463",
-    "767": "0x043B",
-    "898": "0x04C1",
-    "777": "0x0446",
-    "588": "0x0380",
-    "733": "0x0406",
-    "32": "0x001C",
-    "445": "0x029E",
-    "449": "0x02A6",
-    "890": "0x04B1",
-    "306": "0x01BD",
-    "519": "0x0312",
-    "373": "0x022D",
-    "343": "0x01F9",
-    "886": "0x04A9",
-    "533": "0x0328",
-    "211": "0x0124",
-    "327": "0x01E3",
-    "558": "0x0357",
-    "509": "0x0304",
-    "251": "0x0167",
-    "568": "0x0369",
-    "564": "0x0361",
-    "871": "0x0495",
-    "6": "0x0000",
-    "320": "0x01D7",
-    "288": "0x019A",
-    "240": "0x0153",
-    "60": "0x0045",
-    "67": "0x0056",
-    "455": "0x02B2",
-    "292": "0x01A2",
-    "111": "0x008B",
-    "555": "0x0351",
-    "180": "0x00F2",
-    "934": "0x04FD",
-    "78": "0x0066",
-    "751": "0x0422",
-    "894": "0x04B9",
-    "15": "0x000A",
-    "764": "0x0436",
-    "38": "0x0028",
-    "126": "0x00A2",
-    "653": "0x03B7",
-    "296": "0x01AB",
-    "145": "0x00BB"
+    "833": "0x053A",
+    "441": "0x02C8",
+    "521": "0x035F",
+    "843": "0x054F",
+    "723": "0x0467",
+    "55": "0x04CE",
+    "239": "0x014E",
+    "204": "0x0104",
+    "916": "0x05B8",
+    "37": "0x04A1",
+    "380": "0x0258",
+    "479": "0x0315",
+    "249": "0x015C",
+    "355": "0x0225",
+    "755": "0x0495",
+    "103": "0x0060",
+    "706": "0x0453",
+    "29": "0x048D",
+    "822": "0x0519",
+    "905": "0x05A9",
+    "331": "0x01F2",
+    "669": "0x042F",
+    "403": "0x0282",
+    "270": "0x0188",
+    "292": "0x01A9",
+    "374": "0x024D",
+    "196": "0x00F9",
+    "944": "0x05F1",
+    "126": "0x0083",
+    "188": "0x00EC",
+    "64": "0x0029",
+    "987": "0x0649",
+    "213": "0x0113",
+    "336": "0x0203",
+    "882": "0x0579",
+    "393": "0x0272",
+    "14": "0x0479",
+    "618": "0x03E7",
+    "735": "0x0474",
+    "829": "0x052E",
+    "222": "0x012F",
+    "80": "0x0047",
+    "727": "0x046A",
+    "258": "0x0170",
+    "19": "0x0487",
+    "459": "0x02E7",
+    "139": "0x0099",
+    "269": "0x0185",
+    "179": "0x00D5",
+    "631": "0x03F6",
+    "414": "0x02A4",
+    "40": "0x04A9",
+    "69": "0x0036",
+    "870": "0x0559",
+    "570": "0x03B3",
+    "260": "0x0172",
+    "34": "0x0498",
+    "423": "0x02AD",
+    "343": "0x020D",
+    "982": "0x0644",
+    "557": "0x039B",
+    "284": "0x01A8",
+    "497": "0x0331",
+    "334": "0x01FF",
+    "945": "0x05F4",
+    "621": "0x03EA",
+    "472": "0x0300",
+    "921": "0x05C7",
+    "125": "0x0082",
+    "464": "0x02EE",
+    "576": "0x03C2",
+    "835": "0x0540",
+    "180": "0x00D8",
+    "501": "0x0337",
+    "254": "0x0169",
+    "737": "0x0479",
+    "63": "0x0027",
+    "756": "0x0498",
+    "516": "0x0356",
+    "53": "0x04CB",
+    "149": "0x00A7",
+    "663": "0x042B",
+    "160": "0x00B1",
+    "984": "0x0646",
+    "483": "0x0319",
+    "545": "0x0386",
+    "824": "0x051F",
+    "250": "0x015E",
+    "100": "0x005C",
+    "749": "0x048D",
+    "760": "0x049E",
+    "394": "0x0273",
+    "12": "0x0474",
+    "771": "0x04B8",
+    "919": "0x05C1",
+    "328": "0x01EB",
+    "106": "0x0065",
+    "936": "0x05DD",
+    "933": "0x05D9",
+    "205": "0x0107",
+    "564": "0x03A6",
+    "360": "0x0235",
+    "186": "0x00E7",
+    "115": "0x0073",
+    "453": "0x02DC",
+    "530": "0x036C",
+    "130": "0x0089",
+    "67": "0x0032",
+    "71": "0x0038",
+    "454": "0x02DF",
+    "533": "0x0371",
+    "573": "0x03BA",
+    "16": "0x047F",
+    "816": "0x050B",
+    "144": "0x009F",
+    "869": "0x0557",
+    "725": "0x0468",
+    "565": "0x03A7",
+    "326": "0x01E8",
+    "451": "0x02D7",
+    "709": "0x0456",
+    "368": "0x0243",
+    "346": "0x0213",
+    "467": "0x02F6",
+    "941": "0x05E8",
+    "817": "0x050D",
+    "197": "0x00FC",
+    "779": "0x04C3",
+    "279": "0x019F",
+    "465": "0x02F1",
+    "211": "0x0110",
+    "223": "0x0132",
+    "352": "0x021D",
+    "567": "0x03AA",
+    "214": "0x0115",
+    "120": "0x007A",
+    "323": "0x01E1",
+    "330": "0x01F0",
+    "766": "0x04AB",
+    "452": "0x02D9",
+    "651": "0x041A",
+    "278": "0x019C",
+    "639": "0x0405",
+    "81": "0x004A",
+    "310": "0x01C9",
+    "257": "0x016F",
+    "538": "0x0378",
+    "282": "0x01A3",
+    "926": "0x05CA",
+    "473": "0x0303",
+    "117": "0x0076",
+    "715": "0x0460",
+    "134": "0x008D",
+    "433": "0x02BD",
+    "915": "0x05B5",
+    "903": "0x05A3",
+    "517": "0x0358",
+    "448": "0x02D3",
+    "424": "0x02B0",
+    "235": "0x0145",
+    "757": "0x049B",
+    "35": "0x049B",
+    "845": "0x0555",
+    "730": "0x046F",
+    "303": "0x01BC",
+    "902": "0x05A0",
+    "895": "0x0595",
+    "405": "0x0286",
+    "932": "0x05D6",
+    "569": "0x03B0",
+    "575": "0x03BF",
+    "297": "0x01B4",
+    "15": "0x047C",
+    "868": "0x0556",
+    "82": "0x004B",
+    "361": "0x0238",
+    "979": "0x0641",
+    "622": "0x03ED",
+    "642": "0x040D",
+    "391": "0x026D",
+    "886": "0x0585",
+    "523": "0x0361",
+    "831": "0x0534",
+    "267": "0x0180",
+    "503": "0x033C",
+    "632": "0x03F9",
+    "561": "0x03A4",
+    "767": "0x04AE",
+    "233": "0x0141",
+    "449": "0x02D5",
+    "123": "0x007E",
+    "550": "0x038E",
+    "775": "0x04BB",
+    "202": "0x0102",
+    "513": "0x0351",
+    "312": "0x01CE",
+    "396": "0x0274",
+    "502": "0x0339",
+    "397": "0x0275",
+    "918": "0x05BE",
+    "939": "0x05E2",
+    "524": "0x0364",
+    "146": "0x00A2",
+    "463": "0x02EB",
+    "534": "0x0372",
+    "960": "0x062C",
+    "113": "0x006F",
+    "657": "0x0420",
+    "790": "0x04D1",
+    "783": "0x04C5",
+    "809": "0x04FF",
+    "793": "0x04DA",
+    "218": "0x011F",
+    "207": "0x0109",
+    "300": "0x01B8",
+    "77": "0x003E",
+    "406": "0x0289",
+    "539": "0x037B",
+    "109": "0x006A",
+    "79": "0x0044",
+    "943": "0x05EE",
+    "678": "0x043F",
+    "875": "0x0564",
+    "629": "0x03F3",
+    "191": "0x00F1",
+    "738": "0x047C",
+    "968": "0x0636",
+    "705": "0x0451",
+    "834": "0x053D",
+    "531": "0x036E",
+    "353": "0x0220",
+    "266": "0x017E",
+    "765": "0x04A9",
+    "320": "0x01D8",
+    "640": "0x0408",
+    "357": "0x022A",
+    "752": "0x0492",
+    "162": "0x00B6",
+    "525": "0x0366",
+    "899": "0x059D",
+    "593": "0x03DE",
+    "461": "0x02E8",
+    "842": "0x054C",
+    "586": "0x03DD",
+    "116": "0x0074",
+    "47": "0x04BB",
+    "962": "0x0630",
+    "980": "0x0642",
+    "930": "0x05D0",
+    "45": "0x04B5",
+    "385": "0x025F",
+    "259": "0x0171",
+    "33": "0x0495",
+    "898": "0x059A",
+    "383": "0x025D",
+    "947": "0x05FA",
+    "837": "0x0546",
+    "48": "0x04BD",
+    "456": "0x02E4",
+    "976": "0x063C",
+    "251": "0x0161",
+    "908": "0x05AC",
+    "897": "0x0597",
+    "623": "0x03F0",
+    "78": "0x0041",
+    "646": "0x0412",
+    "351": "0x021B",
+    "659": "0x0424",
+    "480": "0x0316",
+    "776": "0x04BD",
+    "825": "0x0522",
+    "714": "0x045D",
+    "263": "0x0175",
+    "445": "0x02CF",
+    "492": "0x0323",
+    "265": "0x017B",
+    "924": "0x05C8",
+    "390": "0x026A",
+    "217": "0x011D",
+    "281": "0x01A1",
+    "135": "0x008F",
+    "39": "0x04A6",
+    "387": "0x0262",
+    "888": "0x058B",
+    "193": "0x00F7",
+    "975": "0x063B",
+    "99": "0x005B",
+    "896": "0x0596",
+    "934": "0x05DA",
+    "720": "0x0465",
+    "237": "0x014A",
+    "551": "0x038F",
+    "68": "0x0035",
+    "307": "0x01C3",
+    "942": "0x05EB",
+    "671": "0x0433",
+    "912": "0x05B2",
+    "746": "0x0487",
+    "838": "0x0549",
+    "305": "0x01C0",
+    "293": "0x01AB",
+    "415": "0x02A5",
+    "373": "0x024C",
+    "271": "0x018A",
+    "349": "0x0218",
+    "11": "0x0472",
+    "515": "0x0355",
+    "745": "0x0484",
+    "813": "0x0507",
+    "929": "0x05CD",
+    "181": "0x00DB",
+    "581": "0x03D4",
+    "674": "0x0439",
+    "552": "0x0390",
+    "985": "0x0647",
+    "425": "0x02B2",
+    "219": "0x0122",
+    "626": "0x03F2",
+    "318": "0x01D5",
+    "491": "0x0322",
+    "909": "0x05AD",
+    "298": "0x01B6",
+    "38": "0x04A4",
+    "660": "0x0425",
+    "964": "0x0632",
+    "583": "0x03D6",
+    "295": "0x01AF",
+    "244": "0x0157",
+    "690": "0x0444",
+    "174": "0x00CE",
+    "408": "0x028E",
+    "370": "0x0247",
+    "438": "0x02C4",
+    "873": "0x055E",
+    "544": "0x0383",
+    "317": "0x01D4",
+    "493": "0x0326",
+    "957": "0x0625",
+    "814": "0x0508",
+    "215": "0x0117",
+    "906": "0x05AA",
+    "124": "0x0081",
+    "185": "0x00E5",
+    "245": "0x0159",
+    "770": "0x04B5",
+    "187": "0x00EA",
+    "36": "0x049E",
+    "372": "0x024B",
+    "170": "0x00C8",
+    "242": "0x0154",
+    "804": "0x04F6",
+    "798": "0x04E9",
+    "462": "0x02E9",
+    "520": "0x035D",
+    "802": "0x04F2",
+    "736": "0x0477",
+    "542": "0x0381",
+    "506": "0x0344",
+    "136": "0x0092",
+    "296": "0x01B1",
+    "877": "0x056A",
+    "76": "0x003C",
+    "466": "0x02F4",
+    "558": "0x039E",
+    "114": "0x0072",
+    "309": "0x01C6",
+    "931": "0x05D3",
+    "274": "0x0192",
+    "594": "0x03E1",
+    "6": "0x0470",
+    "649": "0x0417",
+    "791": "0x04D4",
+    "255": "0x016B",
+    "431": "0x02BB",
+    "166": "0x00BE",
+    "821": "0x0516",
+    "920": "0x05C4",
+    "119": "0x0079",
+    "940": "0x05E5",
+    "647": "0x0413",
+    "241": "0x0152",
+    "230": "0x013B",
+    "878": "0x056D",
+    "827": "0x0528",
+    "687": "0x0441",
+    "418": "0x02AC",
+    "891": "0x058E",
+    "874": "0x0561",
+    "948": "0x05FD",
+    "234": "0x0143",
+    "894": "0x0593",
+    "210": "0x010F",
+    "559": "0x03A0",
+    "50": "0x04C3",
+    "148": "0x00A5",
+    "885": "0x0582",
+    "20": "0x048A",
+    "389": "0x0267",
+    "163": "0x00B8",
+    "173": "0x00CD",
+    "718": "0x0462",
+    "252": "0x0163",
+    "377": "0x0252",
+    "556": "0x0398",
+    "97": "0x0058",
+    "280": "0x01A0",
+    "41": "0x04AB",
+    "402": "0x027F",
+    "159": "0x00AF",
+    "595": "0x03E4",
+    "324": "0x01E3",
+    "981": "0x0643",
+    "52": "0x04C8",
+    "345": "0x0210",
+    "371": "0x0249",
+    "198": "0x00FD",
+    "437": "0x02C3",
+    "546": "0x0388",
+    "763": "0x04A4",
+    "369": "0x0245",
+    "294": "0x01AD",
+    "455": "0x02E1",
+    "784": "0x04C8",
+    "733": "0x0470",
+    "974": "0x063A",
+    "547": "0x0389",
+    "574": "0x03BD",
+    "478": "0x0312",
+    "313": "0x01D1",
+    "820": "0x0513",
+    "726": "0x0469",
+    "13": "0x0477",
+    "18": "0x0484",
+    "96": "0x0056",
+    "209": "0x010D",
+    "638": "0x0403",
+    "697": "0x0446",
+    "342": "0x020A",
+    "910": "0x05AE",
+    "662": "0x0428",
+    "785": "0x04CB",
+    "315": "0x01D3",
+    "325": "0x01E5",
+    "444": "0x02CE",
+    "306": "0x01C2",
+    "378": "0x0255",
+    "434": "0x02BE",
+    "830": "0x0531",
+    "750": "0x0490",
+    "329": "0x01ED",
+    "803": "0x04F5",
+    "208": "0x010A",
+    "744": "0x0481",
+    "959": "0x0629",
+    "354": "0x0223",
+    "978": "0x0640",
+    "710": "0x0458",
+    "876": "0x0567",
+    "224": "0x0133",
+    "93": "0x0051",
+    "171": "0x00CB",
+    "256": "0x016E",
+    "311": "0x01CC",
+    "826": "0x0525",
+    "430": "0x02B8",
+    "49": "0x04C0",
+    "435": "0x02BF",
+    "810": "0x0500",
+    "137": "0x0094",
+    "379": "0x0257",
+    "514": "0x0354",
+    "668": "0x042E",
+    "801": "0x04EF",
+    "216": "0x011A",
+    "836": "0x0543",
+    "268": "0x0182",
+    "44": "0x04B3",
+    "84": "0x004D",
+    "555": "0x0396",
+    "548": "0x038C",
+    "768": "0x04B0",
+    "347": "0x0215",
+    "536": "0x0376",
+    "652": "0x041D",
+    "510": "0x034E",
+    "504": "0x033F",
+    "107": "0x0067",
+    "566": "0x03A8",
+    "457": "0x02E5",
+    "633": "0x03FB",
+    "489": "0x0321",
+    "986": "0x0648",
+    "17": "0x0481",
+    "151": "0x00AA",
+    "94": "0x0054",
+    "31": "0x0491",
+    "641": "0x040A",
+    "967": "0x0635",
+    "778": "0x04C0",
+    "356": "0x0228",
+    "584": "0x03D8",
+    "572": "0x03B7",
+    "203": "0x0103",
+    "140": "0x009C",
+    "404": "0x0284",
+    "799": "0x04EC",
+    "917": "0x05BB",
+    "823": "0x051C",
+    "630": "0x03F4",
+    "828": "0x052B",
+    "468": "0x02F8",
+    "805": "0x04F7",
+    "143": "0x009D",
+    "495": "0x032F",
+    "364": "0x023C",
+    "388": "0x0265",
+    "272": "0x018D",
+    "248": "0x015B",
+    "104": "0x0063",
+    "739": "0x047F",
+    "507": "0x0346",
+    "577": "0x03C4",
+    "806": "0x04F9",
+    "883": "0x057C",
+    "335": "0x0202",
+    "713": "0x045B",
+    "881": "0x0576",
+    "961": "0x062F",
+    "532": "0x0370",
+    "236": "0x0147",
+    "262": "0x0173",
+    "582": "0x03D5",
+    "401": "0x027C",
+    "509": "0x034C",
+    "165": "0x00BB",
+    "769": "0x04B3",
+    "127": "0x0085",
+    "872": "0x055B",
+    "879": "0x0570",
+    "484": "0x031B",
+    "428": "0x02B6",
+    "110": "0x006B",
+    "362": "0x0239",
+    "526": "0x0368",
+    "562": "0x03A5",
+    "617": "0x03E5",
+    "51": "0x04C5",
+    "670": "0x0432",
+    "884": "0x057F",
+    "299": "0x01B7",
+    "375": "0x0250",
+    "176": "0x00D0",
+    "400": "0x0279",
+    "498": "0x0332",
+    "475": "0x0308",
+    "308": "0x01C4",
+    "348": "0x0216",
+    "450": "0x02D6",
+    "808": "0x04FE",
+    "65": "0x002C",
+    "350": "0x0219",
+    "702": "0x044E",
+    "253": "0x0166",
+    "231": "0x013D",
+    "540": "0x037C",
+    "887": "0x0588",
+    "927": "0x05CB",
+    "367": "0x0241",
+    "648": "0x0416",
+    "925": "0x05C9",
+    "190": "0x00EF",
+    "225": "0x0134",
+    "880": "0x0573",
+    "893": "0x0592",
+    "212": "0x0112",
+    "416": "0x02A7",
+    "762": "0x04A1",
+    "560": "0x03A3",
+    "499": "0x0333",
+    "386": "0x0260",
+    "70": "0x0037",
+    "470": "0x02FE",
+    "168": "0x00C3",
+    "340": "0x0208",
+    "301": "0x01BB",
+    "184": "0x00E2",
+    "183": "0x00DF",
+    "440": "0x02C5",
+    "794": "0x04DD",
+    "904": "0x05A6",
+    "172": "0x00CC",
+    "319": "0x01D6",
+    "398": "0x0276",
+    "966": "0x0634",
+    "412": "0x02A0",
+    "83": "0x004C",
+    "341": "0x0209",
+    "554": "0x0393",
+    "963": "0x0631",
+    "568": "0x03AD",
+    "95": "0x0055",
+    "637": "0x0400",
+    "688": "0x0442",
+    "264": "0x0178",
+    "747": "0x048A",
+    "792": "0x04D7",
+    "935": "0x05DC",
+    "314": "0x01D2",
+    "407": "0x028C",
+    "161": "0x00B4",
+    "275": "0x0194",
+    "382": "0x025B",
+    "246": "0x015A",
+    "949": "0x0600",
+    "175": "0x00CF",
+    "30": "0x0490",
+    "580": "0x03D1",
+    "543": "0x0382",
+    "363": "0x023A",
+    "485": "0x031C",
+    "928": "0x05CC",
+    "673": "0x0436",
+    "892": "0x0591",
+    "409": "0x0291",
+    "105": "0x0064",
+    "43": "0x04B0",
+    "658": "0x0421",
+    "447": "0x02D0",
+    "815": "0x0509",
+    "797": "0x04E6",
+    "907": "0x05AB",
+    "505": "0x0341",
+    "376": "0x0251",
+    "938": "0x05DF",
+    "789": "0x04CE",
+    "46": "0x04B8",
+    "226": "0x0136",
+    "304": "0x01BD",
+    "232": "0x013F",
+    "321": "0x01DB",
+    "42": "0x04AE",
+    "844": "0x0552",
+    "238": "0x014C",
+    "508": "0x0349",
+    "734": "0x0472",
+    "474": "0x0305",
+    "138": "0x0096",
+    "66": "0x002F",
+    "192": "0x00F4",
+    "911": "0x05AF",
+    "796": "0x04E3",
+    "701": "0x044C",
+    "811": "0x0502",
+    "240": "0x0150",
+    "486": "0x031D",
+    "571": "0x03B5",
+    "322": "0x01DE",
+    "169": "0x00C6",
+    "442": "0x02C9",
+    "182": "0x00DD",
+    "537": "0x0377",
+    "528": "0x036A",
+    "946": "0x05F7",
+    "129": "0x0088",
+    "751": "0x0491",
+    "677": "0x043C",
+    "469": "0x02FB",
+    "487": "0x0320",
+    "177": "0x00D2",
+    "937": "0x05DE",
+    "871": "0x055A",
+    "426": "0x02B4",
+    "958": "0x0628",
+    "167": "0x00C0",
+    "965": "0x0633",
+    "764": "0x04A6",
+    "634": "0x03FE",
+    "983": "0x0645",
+    "152": "0x00AC",
+    "384": "0x025E",
+    "399": "0x0277",
+    "458": "0x02E6",
+    "698": "0x0449",
+    "2": "0x0470",
+    "413": "0x02A3",
+    "32": "0x0492",
+    "201": "0x0100",
+    "795": "0x04E0",
+    "977": "0x063D"
   },
   "variables": {
-    "DRAW_VEC_INTENSITY": {
-      "name": "DRAW_VEC_INTENSITY",
-      "address": "0xC890",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC88A",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC886",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_GP_PTR": {
-      "name": "LEVEL_GP_PTR",
-      "address": "0xC898",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC89C",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC882",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "MIRROR_X": {
-      "name": "MIRROR_X",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_COIN_WIDTH": {
-      "name": "_COIN_WIDTH",
-      "address": "0x0010",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_HUGE_WIDTH": {
-      "name": "_BUBBLE_HUGE_WIDTH",
-      "address": "0x0034",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_COIN_CENTER_Y": {
-      "name": "_COIN_CENTER_Y",
+    "_FUJI_BG_CENTER_X": {
+      "name": "_FUJI_BG_CENTER_X",
       "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_COIN_CENTER_X": {
-      "name": "_COIN_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_PTR": {
-      "name": "LEVEL_PTR",
-      "address": "0xC891",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_X": {
-      "name": "_BUBBLE_LARGE_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_BG_PTR": {
-      "name": "LEVEL_BG_PTR",
-      "address": "0xC896",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "LEVEL_GP_COUNT": {
-      "name": "LEVEL_GP_COUNT",
-      "address": "0xC894",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC89E",
-      "size": 2,
-      "type": "arg",
-      "declLine": null
-    },
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC884",
-      "size": 2,
-      "type": "system",
-      "declLine": null
-    },
-    "LEVEL_BG_COUNT": {
-      "name": "LEVEL_BG_COUNT",
-      "address": "0xC893",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_HUGE_CENTER_Y": {
-      "name": "_BUBBLE_HUGE_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC889",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_BUBBLE_LARGE_CENTER_Y": {
-      "name": "_BUBBLE_LARGE_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0xC88F",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0xC88D",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1319,16 +4108,100 @@
       "type": "unknown",
       "declLine": null
     },
-    "LEVEL_FG_COUNT": {
-      "name": "LEVEL_FG_COUNT",
-      "address": "0xC895",
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC886",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "_BUBBLE_HUGE_CENTER_X": {
-      "name": "_BUBBLE_HUGE_CENTER_X",
-      "address": "0x0001",
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC889",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg5": {
+      "name": "arg5",
+      "address": "0xC8A6",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0xC88F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_PTR": {
+      "name": "LEVEL_PTR",
+      "address": "0xC891",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC882",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "_FUJI_BG_CENTER_Y": {
+      "name": "_FUJI_BG_CENTER_Y",
+      "address": "0x000C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8A2",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8A0",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "_FUJI_BG_WIDTH": {
+      "name": "_FUJI_BG_WIDTH",
+      "address": "0x00F9",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0xC88E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_BG_PTR": {
+      "name": "LEVEL_BG_PTR",
+      "address": "0xC896",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_GP_PTR": {
+      "name": "LEVEL_GP_PTR",
+      "address": "0xC898",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -1340,9 +4213,79 @@
       "type": "unknown",
       "declLine": null
     },
-    "_BUBBLE_LARGE_WIDTH": {
-      "name": "_BUBBLE_LARGE_WIDTH",
-      "address": "0x001E",
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0xC890",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC884",
+      "size": 2,
+      "type": "system",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC89E",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC89C",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0xC88D",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_FG_COUNT": {
+      "name": "LEVEL_FG_COUNT",
+      "address": "0xC895",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_GP_COUNT": {
+      "name": "LEVEL_GP_COUNT",
+      "address": "0xC894",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg4": {
+      "name": "arg4",
+      "address": "0xC8A4",
+      "size": 2,
+      "type": "arg",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0xC88C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "LEVEL_BG_COUNT": {
+      "name": "LEVEL_BG_COUNT",
+      "address": "0xC893",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC88A",
       "size": 2,
       "type": "unknown",
       "declLine": null

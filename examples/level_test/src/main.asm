@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 32 bytes
+; Total RAM used: 40 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -47,6 +47,10 @@ LEVEL_GP_PTR         EQU $C880+$18   ; SHOW_LEVEL: gameplay objects pointer (2 b
 LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (2 bytes)
 VAR_ARG0             EQU $C880+$1C   ; Function argument 0 (2 bytes)
 VAR_ARG1             EQU $C880+$1E   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$20   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$22   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$24   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$26   ; Function argument 5 (2 bytes)
 
     JMP START
 
@@ -621,13 +625,13 @@ SHOW_LEVEL_RUNTIME:
     ; Skip world bounds (8 bytes) + time/score (4 bytes)
     LEAX 12,X        ; X now points to object counts
     
-    ; Read object counts
-    LDA ,X+          ; A = bgCount
-    STA >LEVEL_BG_COUNT
-    LDA ,X+          ; A = gameplayCount
-    STA >LEVEL_GP_COUNT
-    LDA ,X+          ; A = fgCount
-    STA >LEVEL_FG_COUNT
+    ; Read object counts (use LDB+STB to ensure 1-byte operations)
+    LDB ,X+          ; B = bgCount
+    STB >LEVEL_BG_COUNT
+    LDB ,X+          ; B = gameplayCount
+    STB >LEVEL_GP_COUNT
+    LDB ,X+          ; B = fgCount
+    STB >LEVEL_FG_COUNT
     
     ; Read layer pointers
     LDD ,X++         ; D = bgObjectsPtr
@@ -639,6 +643,7 @@ SHOW_LEVEL_RUNTIME:
     
     ; === Draw Background Layer ===
 SLR_BG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_BG_COUNT
     CMPB #0
     BEQ SLR_GAMEPLAY
@@ -649,6 +654,7 @@ SLR_BG_PTR:
     ; === Draw Gameplay Layer ===
 SLR_GAMEPLAY:
 SLR_GP_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_GP_COUNT
     CMPB #0
     BEQ SLR_FOREGROUND
@@ -659,6 +665,7 @@ SLR_GP_PTR:
     ; === Draw Foreground Layer ===
 SLR_FOREGROUND:
 SLR_FG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_FG_COUNT
     CMPB #0
     BEQ SLR_DONE
@@ -677,8 +684,10 @@ SLR_DRAW_OBJECTS:
     ; NOTE: Use register-based loop (no stack juggling).
     ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
 SLR_OBJ_LOOP:
-    DECB             ; Decrement count
-    BMI SLR_OBJ_DONE ; All done if negative
+    TSTB             ; Test if count is zero
+    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)
+    
+    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
     
     ; X points to current object (20 bytes)
     ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
@@ -693,11 +702,11 @@ SLR_OBJ_LOOP:
     STA DRAW_VEC_INTENSITY
     
     ; Read y position (offset +3-4) - store LSB only
-    LDD 3,X
+    LDD 3,X          ; WARNING: This modifies B!
     STB DRAW_VEC_Y
     
     ; Read x position (offset +1-2) - store LSB only
-    LDD 1,X
+    LDD 1,X          ; WARNING: This modifies B!
     STB DRAW_VEC_X
     
     ; Read vector_ptr (offset +16-17)
@@ -712,6 +721,9 @@ SLR_OBJ_LOOP:
     
     ; Advance to next object (20 bytes)
     LEAX 20,X
+    
+    PULS B           ; Restore counter
+    DECB             ; Decrement count AFTER drawing
     BRA SLR_OBJ_LOOP
     
 SLR_OBJ_DONE:
@@ -772,7 +784,60 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:18
+    ; VPy_LINE:16
+; DRAW_VECTOR_EX("fuji_bg", x, y, mirror) - 5 path(s), width=249, center_x=0
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDD #0
+    STD RESULT
+    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
+    ; Decode mirror mode into separate flags:
+    CLR MIRROR_X  ; Clear X flag
+    CLR MIRROR_Y  ; Clear Y flag
+    CMPB #1       ; Check if X-mirror (mode 1)
+    BNE DSVEX_CHK_Y_0
+    LDA #1
+    STA MIRROR_X
+DSVEX_CHK_Y_0:
+    CMPB #2       ; Check if Y-mirror (mode 2)
+    BNE DSVEX_CHK_XY_1
+    LDA #1
+    STA MIRROR_Y
+DSVEX_CHK_XY_1:
+    CMPB #3       ; Check if both-mirror (mode 3)
+    BNE DSVEX_CALL_2
+    LDA #1
+    STA MIRROR_X
+    STA MIRROR_Y
+DSVEX_CALL_2:
+    ; Set intensity override for drawing
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; Intensity (0-127)
+    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_FUJI_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_FUJI_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_FUJI_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_FUJI_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_FUJI_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
+    LDD #0
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:19
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
@@ -785,79 +850,102 @@ LOOP_BODY:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 4 of 7 assets (unused assets excluded)
+; Embedded 2 of 7 assets (unused assets excluded)
 ; ========================================
 
-; Vector asset: coin
-; Generated from coin.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-8, max=8, width=16
-; Center: (0, 0)
+; Vector asset: fuji_bg
+; Generated from fuji_bg.vec (Malban Draw_Sync_List format)
+; Total paths: 5, points: 64
+; X bounds: min=-124, max=125, width=249
+; Center: (0, 12)
 
-_COIN_WIDTH EQU 16
-_COIN_CENTER_X EQU 0
-_COIN_CENTER_Y EQU 0
+_FUJI_BG_WIDTH EQU 249
+_FUJI_BG_CENTER_X EQU 0
+_FUJI_BG_CENTER_Y EQU 12
 
-_COIN_VECTORS:  ; Main entry
-_COIN_PATH0:    ; Path 0
-    FCB 120              ; path0: intensity
-    FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
-    FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
+_FUJI_BG_VECTORS:  ; Main entry
+_FUJI_BG_PATH0:    ; Path 0
+    FCB 80              ; path0: intensity
+    FCB $DC,$84,0,0        ; path0: header (y=-36, x=-124, relative to center)
+    FCB $FF,$0A,$1E          ; line 0: flag=-1, dy=10, dx=30
+    FCB $FF,$0E,$1E          ; line 1: flag=-1, dy=14, dx=30
+    FCB $FF,$0F,$15          ; line 2: flag=-1, dy=15, dx=21
+    FCB $FF,$11,$17          ; line 3: flag=-1, dy=17, dx=23
+    FCB $FF,$0E,$0E          ; line 4: flag=-1, dy=14, dx=14
+    FCB $FF,$FE,$03          ; line 5: flag=-1, dy=-2, dx=3
+    FCB $FF,$03,$04          ; line 6: flag=-1, dy=3, dx=4
+    FCB $FF,$FE,$04          ; line 7: flag=-1, dy=-2, dx=4
+    FCB $FF,$01,$07          ; line 8: flag=-1, dy=1, dx=7
+    FCB $FF,$02,$04          ; line 9: flag=-1, dy=2, dx=4
+    FCB $FF,$FD,$06          ; line 10: flag=-1, dy=-3, dx=6
+    FCB $FF,$03,$03          ; line 11: flag=-1, dy=3, dx=3
+    FCB $FF,$EB,$11          ; line 12: flag=-1, dy=-21, dx=17
+    FCB $FF,$F4,$11          ; line 13: flag=-1, dy=-12, dx=17
+    FCB $FF,$F0,$16          ; line 14: flag=-1, dy=-16, dx=22
+    FCB $FF,$F6,$14          ; line 15: flag=-1, dy=-10, dx=20
+    FCB $FF,$F6,$18          ; line 16: flag=-1, dy=-10, dx=24
+    FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH1:    ; Path 1
+    FCB 95              ; path1: intensity
+    FCB $0E,$F1,0,0        ; path1: header (y=14, x=-15, relative to center)
+    FCB $FF,$06,$03          ; line 0: flag=-1, dy=6, dx=3
+    FCB $FF,$04,$03          ; line 1: flag=-1, dy=4, dx=3
+    FCB $FF,$FD,$04          ; line 2: flag=-1, dy=-3, dx=4
+    FCB $FF,$FC,$FC          ; line 3: flag=-1, dy=-4, dx=-4
+    FCB $FF,$FD,$FA          ; line 4: flag=-1, dy=-3, dx=-6
+    FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH2:    ; Path 2
+    FCB 95              ; path2: intensity
+    FCB $13,$07,0,0        ; path2: header (y=19, x=7, relative to center)
+    FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
     FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
-    FCB $FF,$FA,$FE          ; line 2: flag=-1, dy=-6, dx=-2
-    FCB $FF,$FE,$FA          ; line 3: flag=-1, dy=-2, dx=-6
-    FCB $FF,$02,$FA          ; line 4: flag=-1, dy=2, dx=-6
-    FCB $FF,$06,$FE          ; line 5: flag=-1, dy=6, dx=-2
-    FCB $FF,$06,$02          ; line 6: flag=-1, dy=6, dx=2
-    FCB $FF,$02,$06          ; closing line: flag=-1, dy=2, dx=6
+    FCB $FF,$F9,$FD          ; line 2: flag=-1, dy=-7, dx=-3
+    FCB $FF,$FD,$04          ; line 3: flag=-1, dy=-3, dx=4
+    FCB $FF,$08,$03          ; line 4: flag=-1, dy=8, dx=3
+    FCB $FF,$07,$FE          ; line 5: flag=-1, dy=7, dx=-2
+    FCB $FF,$06,$01          ; line 6: flag=-1, dy=6, dx=1
+    FCB $FF,$02,$FE          ; line 7: flag=-1, dy=2, dx=-2
     FCB 2                ; End marker (path complete)
 
-; Vector asset: bubble_huge
-; Generated from bubble_huge.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-25, max=27, width=52
-; Center: (1, 0)
-
-_BUBBLE_HUGE_WIDTH EQU 52
-_BUBBLE_HUGE_CENTER_X EQU 1
-_BUBBLE_HUGE_CENTER_Y EQU 0
-
-_BUBBLE_HUGE_VECTORS:  ; Main entry
-_BUBBLE_HUGE_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $00,$1A,0,0        ; path0: header (y=0, x=26, relative to center)
-    FCB $FF,$12,$F8          ; line 0: flag=-1, dy=18, dx=-8
-    FCB $FF,$08,$EE          ; line 1: flag=-1, dy=8, dx=-18
-    FCB $FF,$F8,$EE          ; line 2: flag=-1, dy=-8, dx=-18
-    FCB $FF,$EE,$F8          ; line 3: flag=-1, dy=-18, dx=-8
-    FCB $FF,$EE,$08          ; line 4: flag=-1, dy=-18, dx=8
-    FCB $FF,$F8,$12          ; line 5: flag=-1, dy=-8, dx=18
-    FCB $FF,$08,$12          ; line 6: flag=-1, dy=8, dx=18
-    FCB $FF,$12,$08          ; closing line: flag=-1, dy=18, dx=8
+_FUJI_BG_PATH3:    ; Path 3
+    FCB 95              ; path3: intensity
+    FCB $15,$18,0,0        ; path3: header (y=21, x=24, relative to center)
+    FCB $FF,$F7,$05          ; line 0: flag=-1, dy=-9, dx=5
+    FCB $FF,$F7,$0C          ; line 1: flag=-1, dy=-9, dx=12
+    FCB $FF,$0B,$FA          ; line 2: flag=-1, dy=11, dx=-6
+    FCB $FF,$07,$F5          ; line 3: flag=-1, dy=7, dx=-11
     FCB 2                ; End marker (path complete)
 
-; Vector asset: bubble_large
-; Generated from bubble_large.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-15, max=15, width=30
-; Center: (0, 0)
-
-_BUBBLE_LARGE_WIDTH EQU 30
-_BUBBLE_LARGE_CENTER_X EQU 0
-_BUBBLE_LARGE_CENTER_Y EQU 0
-
-_BUBBLE_LARGE_VECTORS:  ; Main entry
-_BUBBLE_LARGE_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
-    FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
-    FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
-    FCB $FF,$F6,$FB          ; line 2: flag=-1, dy=-10, dx=-5
-    FCB $FF,$FB,$F6          ; line 3: flag=-1, dy=-5, dx=-10
-    FCB $FF,$05,$F6          ; line 4: flag=-1, dy=5, dx=-10
-    FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
-    FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
-    FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
+_FUJI_BG_PATH4:    ; Path 4
+    FCB 100              ; path4: intensity
+    FCB $F9,$C7,0,0        ; path4: header (y=-7, x=-57, relative to center)
+    FCB $FF,$09,$1A          ; line 0: flag=-1, dy=9, dx=26
+    FCB $FF,$EF,$F2          ; line 1: flag=-1, dy=-17, dx=-14
+    FCB $FF,$1B,$22          ; line 2: flag=-1, dy=27, dx=34
+    FCB $FF,$F2,$FB          ; line 3: flag=-1, dy=-14, dx=-5
+    FCB $FF,$00,$03          ; line 4: flag=-1, dy=0, dx=3
+    FCB $FF,$F7,$FB          ; line 5: flag=-1, dy=-9, dx=-5
+    FCB $FF,$FA,$01          ; line 6: flag=-1, dy=-6, dx=1
+    FCB $FF,$0E,$0E          ; line 7: flag=-1, dy=14, dx=14
+    FCB $FF,$F1,$00          ; line 8: flag=-1, dy=-15, dx=0
+    FCB $FF,$0A,$05          ; line 9: flag=-1, dy=10, dx=5
+    FCB $FF,$EA,$06          ; line 10: flag=-1, dy=-22, dx=6
+    FCB $FF,$1C,$05          ; line 11: flag=-1, dy=28, dx=5
+    FCB $FF,$EF,$06          ; line 12: flag=-1, dy=-17, dx=6
+    FCB $FF,$03,$01          ; line 13: flag=-1, dy=3, dx=1
+    FCB $FF,$FD,$04          ; line 14: flag=-1, dy=-3, dx=4
+    FCB $FF,$0B,$03          ; line 15: flag=-1, dy=11, dx=3
+    FCB $FF,$F5,$05          ; line 16: flag=-1, dy=-11, dx=5
+    FCB $FF,$10,$FF          ; line 17: flag=-1, dy=16, dx=-1
+    FCB $FF,$EE,$13          ; line 18: flag=-1, dy=-18, dx=19
+    FCB $FF,$12,$F7          ; line 19: flag=-1, dy=18, dx=-9
+    FCB $FF,$F9,$0E          ; line 20: flag=-1, dy=-7, dx=14
+    FCB $FF,$04,$02          ; line 21: flag=-1, dy=4, dx=2
+    FCB $FF,$FC,$14          ; line 22: flag=-1, dy=-4, dx=20
     FCB 2                ; End marker (path complete)
 
 ; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
@@ -873,8 +961,8 @@ _TEST_LEVEL_LEVEL:
     FDB 0  ; Time limit (seconds)
     FDB 0  ; Target score
     FCB 0  ; Background object count
-    FCB 3  ; Gameplay object count
-    FCB 1  ; Foreground object count
+    FCB 1  ; Gameplay object count
+    FCB 0  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
@@ -882,26 +970,10 @@ _TEST_LEVEL_LEVEL:
 _TEST_LEVEL_BG_OBJECTS:
 
 _TEST_LEVEL_GAMEPLAY_OBJECTS:
-; Object: obj_1767518126194 (enemy)
+; Object: obj_1767807647116 (enemy)
     FCB 1  ; type
-    FDB -62  ; x
-    FDB 19  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
-    FCB 255  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 0  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
-; Object: obj_1767622837565 (enemy)
-    FCB 1  ; type
-    FDB -46  ; x
-    FDB -49  ; y
+    FDB 0  ; x
+    FDB -2  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
@@ -911,42 +983,10 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FCB 0  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay
-    FDB _COIN_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
-; Object: obj_1767622852070 (enemy)
-    FCB 1  ; type
-    FDB 30  ; x
-    FDB -59  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 0  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _BUBBLE_HUGE_VECTORS  ; vector_ptr
+    FDB _FUJI_BG_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
 
 _TEST_LEVEL_FG_OBJECTS:
-; Object: obj_1767518128341 (enemy)
-    FCB 1  ; type
-    FDB 69  ; x
-    FDB 16  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 0  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
 
 

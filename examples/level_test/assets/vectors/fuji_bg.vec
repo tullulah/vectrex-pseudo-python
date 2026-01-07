@@ -12,18 +12,6 @@
       "visible": true,
       "paths": [
         {
-          "name": "path_1766881090393",
-          "intensity": 127,
-          "closed": false,
-          "points": [
-            {
-              "x": -125,
-              "y": -49,
-              "z": 0
-            }
-          ]
-        },
-        {
           "name": "path_1766881487650",
           "intensity": 80,
           "closed": false,

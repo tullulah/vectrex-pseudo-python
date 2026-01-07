@@ -307,8 +307,17 @@ impl VecResource {
         }
         
         // Generate individual labels for each path (_NAME_PATH0, _NAME_PATH1, ...)
-        // Main label (_NAME_VECTORS) points to first path (PATH0)
-        asm.push_str(&format!("_{}_VECTORS:  ; Main entry\n", symbol_name));
+        // Main label (_NAME_VECTORS) points to header with path count + path pointers
+        let path_count = self.visible_paths().len();
+        
+        asm.push_str(&format!("_{}_VECTORS:  ; Main entry (header + {} path(s))\n", symbol_name, path_count));
+        asm.push_str(&format!("    FCB {}               ; path_count (runtime metadata)\n", path_count));
+        
+        // Emit pointer table for all paths (allows runtime iteration)
+        for path_idx in 0..path_count {
+            asm.push_str(&format!("    FDB _{}_PATH{}        ; pointer to path {}\n", symbol_name, path_idx, path_idx));
+        }
+        asm.push_str("\n");
         
         for (path_idx, path) in self.visible_paths().iter().enumerate() {
             let is_last_path = path_idx == self.visible_paths().len() - 1;

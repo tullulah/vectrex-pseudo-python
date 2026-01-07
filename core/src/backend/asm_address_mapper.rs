@@ -69,34 +69,14 @@ pub fn generate_asm_address_map(
         // Handle labels (e.g., "VECTREX_PRINT_TEXT:")
         if trimmed.ends_with(':') {
             let label = &trimmed[..trimmed.len()-1];
-            
-            // DEBUG: Check if label in symbol table
-            if label == "START" || label == "MAIN" || label == "LOOP_BODY" {
-                eprintln!("DEBUG: Looking up label '{}' in symbol_table... exists={}", label, symbol_table.contains_key(label));
-            }
-            
-            // CRITICAL: Synchronize current_address with binary symbol table
-            // If this label exists in symbol_table, use its address as truth
-            let runtime_address = if let Some(&symbol_addr) = symbol_table.get(label) {
-                eprintln!("✓ Syncing label '{}' with symbol table: 0x{:04X} (was current_addr=0x{:04X})", 
-                    label, symbol_addr, current_address);
-                // Update current_address to match symbol table (remove header offset to get logical address)
+            if let Some(&symbol_addr) = symbol_table.get(label) {
+                // Symbol found in table: use it as authoritative source
                 current_address = symbol_addr.wrapping_sub(header_offset);
-                // CRITICAL FIX: bin_offset must be the ABSOLUTE address in binary, NOT relative
-                bin_offset = symbol_addr as usize; // Physical offset in binary file
-                symbol_addr // Use absolute address from symbol table
-            } else {
-                // Label not in symbol table - use calculated address
-                current_address.wrapping_add(header_offset)
-            };
-            
-            last_valid_address = runtime_address;
-            // FIX (2026-01-06): Labels should NOT be in asmAddressMap
-            // They mark addresses but don't consume bytes themselves
-            // The NEXT instruction after the label will have this address
-            eprintln!("Found label '{}' at line {} → ${:04X} (runtime: ${:04X}) - NOT added to map", 
-                label, line_number, current_address, runtime_address);
-            continue; // Labels don't advance PC and are not in the map
+                bin_offset = symbol_addr as usize;
+            }
+            // Labels are NOT added to the map - they don't represent executable code
+            // The next instruction after the label will have the address
+            continue;
         }
         
         // Skip comment lines - they don't have addresses
@@ -106,7 +86,8 @@ pub fn generate_asm_address_map(
         
         // Handle instructions - use REAL disassembly from binary
         if trimmed.chars().next().map_or(false, |c| c.is_uppercase()) || trimmed.starts_with('\t') {
-            // Add header offset to match emulator's reported PC
+            // Use RUNTIME address (with header offset) for PDB - this matches what debugger expects
+            // The debugger/emulator reports PC using runtime addresses (logical + header_offset)
             let runtime_address = current_address.wrapping_add(header_offset);
             last_valid_address = runtime_address;
             
@@ -118,12 +99,12 @@ pub fn generate_asm_address_map(
             };
             
             // DEBUG: Log first 20 instructions to see progression
-            if line_number <= 175 {
+            if line_number >= 430 && line_number <= 436 {
                 eprintln!("  ASM line {}: current_addr=0x{:04X} runtime=0x{:04X} bin_offset=0x{:04X} size={} | {}", 
                     line_number, current_address, runtime_address, bin_offset, instruction_size, trimmed);
             }
             
-            // Map this line to current address
+            // Map this line to RUNTIME address (what debugger/emulator uses)
             asm_line_map.insert(line_number, AsmLineAddress {
                 line_number,
                 address: runtime_address,

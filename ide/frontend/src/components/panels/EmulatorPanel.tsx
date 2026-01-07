@@ -733,6 +733,12 @@ export const EmulatorPanel: React.FC = () => {
         const currentPC = vecx.e6809?.reg_pc;
         console.log(`[EmulatorPanel] 🔴 Breakpoint hit detected at PC: ${formatAddress(currentPC)}`);
         
+        // Log registers automatically
+        if (vecx.e6809) {
+          const regs = vecx.e6809;
+          console.log(`📊 REGISTERS: A: 0x${regs.reg_a?.toString(16).padStart(2, '0')} B: 0x${regs.reg_b?.toString(16).padStart(2, '0')} X: 0x${regs.reg_x?.toString(16).padStart(4, '0')} Y: 0x${regs.reg_y?.toString(16).padStart(4, '0')} U: 0x${regs.reg_u?.toString(16).padStart(4, '0')} S: 0x${regs.reg_s?.toString(16).padStart(4, '0')} DP: 0x${regs.reg_dp?.toString(16).padStart(2, '0')} CC: 0x${regs.reg_cc?.toString(16).padStart(2, '0')} PC: 0x${regs.reg_pc?.toString(16).padStart(4, '0')}`);
+        }
+        
         // Pausar emulador
         if (vecx.running) {
           vecx.stop();
