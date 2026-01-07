@@ -366,7 +366,9 @@ async function createWindow() {
     // F5 triggers debug-continue (not reload)
     if (input.type === 'keyDown' && input.key === 'F5' && !ctrl && !input.shift) {
       console.log('[IDE] 🟢 F5 pressed - sending debug-continue to frontend');
-      mainWindow.webContents.send('debug-continue-hotkey');
+      if (mainWindow) {
+        mainWindow.webContents.send('debug-continue-hotkey');
+      }
       event.preventDefault();
       return;
     }
