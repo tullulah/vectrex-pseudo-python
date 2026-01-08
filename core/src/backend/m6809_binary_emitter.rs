@@ -1067,6 +1067,16 @@ impl BinaryEmitter {
             } else {
                 // Buscar en equates con uppercase (símbolos BIOS/INCLUDE son uppercase)
                 let upper_symbol = sym_ref.symbol.to_uppercase();
+                if equates.get(&upper_symbol).is_none() {
+                    // Debug: mostrar DÓNDE se agregó esta referencia
+                    eprintln!("❌ SÍMBOLO NO RESUELTO: '{}' (uppercase: '{}') at offset={}, is_relative={}, ref_size={}", 
+                        sym_ref.symbol, upper_symbol, sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
+                    
+                    // Si es un carácter solitario, probablemente es un error de parsing
+                    if sym_ref.symbol.len() == 1 {
+                        eprintln!("   ⚠️  POSIBLE BUG: Símbolo de 1 carácter '{}' - probablemente offset mal parseado", sym_ref.symbol);
+                    }
+                }
                 *equates.get(&upper_symbol)
                     .ok_or_else(|| format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol))?
             };
@@ -1075,17 +1085,34 @@ impl BinaryEmitter {
 
             if sym_ref.is_relative {
                 // Branch relativo: calcular offset desde la siguiente instrucción
-                let next_addr = self.current_address - (self.code.len() - sym_ref.offset - sym_ref.ref_size as usize) as u16;
+                // Fórmula correcta: next_addr = branch_instruction_addr + opcode_size + ref_size (offset bytes)
+                let org = self.current_address - self.code.len() as u16;
+                
+                // Detectar si es long branch (opcode 2 bytes) o short branch (opcode 1 byte)
+                // Long branches: LBEQ, LBNE, LBCC, LBCS, etc. (opcode = 0x10 0x2x)
+                // Short branches: BEQ, BNE, BCC, BCS, etc. (opcode = 0x2x)
+                let opcode_size = if sym_ref.ref_size == 2 { 2 } else { 1 };
+                
+                // CRÍTICO: sym_ref.offset apunta al OFFSET FIELD, no al inicio del opcode
+                // Por eso necesitamos restar opcode_size para obtener el inicio real del branch
+                let branch_instruction_addr = org + sym_ref.offset as u16 - opcode_size;
+                let next_addr = branch_instruction_addr + opcode_size + sym_ref.ref_size as u16;
                 let offset_i32 = effective_target as i32 - next_addr as i32;
                 
-                // 🔍 TRACE: Resolución de branches importantes
-                if sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
-                    eprintln!("🔗 Resolving {} at offset {}: target=${:04X}, next=${:04X}, offset={} ({}bytes)", 
-                        sym_ref.symbol, sym_ref.offset, target_addr, next_addr, offset_i32, sym_ref.ref_size);
+                // 🔍 TRACE: Resolución de branches importantes (expandido para debug)
+                if sym_ref.symbol.contains("ULR") || sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
+                    eprintln!("🔗 Resolving {} at offset {}: branch_addr=${:04X}, opcode_size={}, ref_size={}, next=${:04X}, target=${:04X}, offset={}", 
+                        sym_ref.symbol, sym_ref.offset, branch_instruction_addr, opcode_size, sym_ref.ref_size, next_addr, target_addr, offset_i32);
                 }
                 
                 if sym_ref.ref_size == 1 {
                     // Branch corto (8-bit offset)
+                    if offset_i32 < -128 || offset_i32 > 127 {
+                        return Err(format!(
+                            "❌ Branch offset OUT OF RANGE for '{}' at 0x{:04X}: offset={} (need LBEQ/LBNE/LBxx instead of BEQ/BNE/Bxx)\n   Tip: Distance from 0x{:04X} to 0x{:04X} = {} bytes (exceeds 8-bit range -128..127)",
+                            sym_ref.symbol, branch_instruction_addr, offset_i32, next_addr, target_addr, offset_i32
+                        ));
+                    }
                     let offset = offset_i32 as i8;
                     self.code[sym_ref.offset] = offset as u8;
                 } else {

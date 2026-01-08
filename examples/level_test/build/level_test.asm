@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 40 bytes
+; Total RAM used: 32 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -47,10 +47,6 @@ LEVEL_GP_PTR         EQU $C880+$18   ; SHOW_LEVEL: gameplay objects pointer (2 b
 LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (2 bytes)
 VAR_ARG0             EQU $C880+$1C   ; Function argument 0 (2 bytes)
 VAR_ARG1             EQU $C880+$1E   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$20   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$22   ; Function argument 3 (2 bytes)
-VAR_ARG4             EQU $C880+$24   ; Function argument 4 (2 bytes)
-VAR_ARG5             EQU $C880+$26   ; Function argument 5 (2 bytes)
 
     JMP START
 
@@ -223,7 +219,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSL_W2
 CLR VIA_shift_reg
-BRA DSL_LOOP
+LBRA DSL_LOOP            ; Long branch back to loop start
 ; Next path: read new intensity and header, then continue drawing
 DSL_NEXT_PATH:
 ; Save current X position before reading anything
@@ -279,7 +275,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSL_W3
 CLR VIA_shift_reg       ; Clear before continuing
-BRA DSL_LOOP            ; Continue drawing
+LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH
 DSL_DONE:
 RTS
 
@@ -361,7 +357,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSLA_W2
 CLR VIA_shift_reg
-BRA DSLA_LOOP
+LBRA DSLA_LOOP           ; Long branch
 ; Next path: add offset to new coordinates too
 DSLA_NEXT_PATH:
 TFR X,D
@@ -413,7 +409,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSLA_W3
 CLR VIA_shift_reg
-BRA DSLA_LOOP
+LBRA DSLA_LOOP           ; Long branch
 DSLA_DONE:
 RTS
 Draw_Sync_List_At_With_Mirrors:
@@ -514,7 +510,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSWM_W2
 CLR VIA_shift_reg
-BRA DSWM_LOOP
+LBRA DSWM_LOOP          ; Long branch
 ; Next path: repeat mirror logic for new path header
 DSWM_NEXT_PATH:
 TFR X,D
@@ -581,7 +577,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSWM_W3
 CLR VIA_shift_reg
-BRA DSWM_LOOP
+LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
 RTS
 ; === LOAD_LEVEL_RUNTIME ===
@@ -748,6 +744,222 @@ SLR_PATH_DONE:
 SLR_OBJ_DONE:
     RTS
 
+; === UPDATE_LEVEL_RUNTIME ===
+; Update level state (physics, velocity, spawn delays)
+; Applies physics to all objects in 3 layers (bg/gameplay/fg)
+; DEBUG VARIABLES (for breakpoint inspection):
+ULR_DEBUG_COUNTER EQU RESULT+30  ; Loop counter debug
+ULR_DEBUG_U_SAVED EQU RESULT+32  ; U saved value
+ULR_DEBUG_U_AFTER EQU RESULT+34  ; U after restore
+ULR_DEBUG_FLAGS   EQU RESULT+36  ; Physics flags
+
+UPDATE_LEVEL_RUNTIME:
+    PSHS U,X,Y,D  ; Preserve all registers
+    
+    ; DEBUG: Initialize counter
+    CLR ULR_DEBUG_COUNTER
+    CLR ULR_DEBUG_COUNTER+1
+
+    ; Load level pointer
+    LDX LEVEL_PTR
+    LBEQ ULR_EXIT  ; Exit if no level loaded (long branch)
+
+    ; Skip to object counts (offset +12)
+    ; Level header: 4*FDB (bounds) + 2*FDB (time/score) = 12 bytes
+    LEAX 12,X
+    LDA ,X       ; Background count
+    LEAX 1,X
+    LDB ,X       ; Gameplay count
+    LEAX 1,X
+    PSHS B       ; Save gameplay count on stack
+    ADDA ,X      ; A = bg + foreground count
+    ADDA ,S+     ; A = bg + gameplay + foreground (pop gameplay from stack)
+    TSTA
+    LBEQ ULR_EXIT ; Exit if no objects (long branch)
+
+    ; X now points after last count, skip to layer pointers
+    LEAX 1,X     ; X now at first layer pointer
+    LDU ,X       ; U = pointer to background objects
+    
+    ; A = total object count (already computed)
+
+ULR_LOOP:
+    ; DEBUG: Increment counter
+    LDD ULR_DEBUG_COUNTER
+    ADDD #1
+    STD ULR_DEBUG_COUNTER
+    
+    ; U = pointer to object data (20 bytes per object)
+    ; DEBUG: Save U value
+    STU ULR_DEBUG_U_SAVED
+    
+    ; Object structure (levelres.rs):
+    ; +0: type (1 byte)
+    ; +1: x (2 bytes signed)
+    ; +3: y (2 bytes signed)
+    ; +5: scale (2 bytes fixed)
+    ; +7: rotation (1 byte)
+    ; +8: intensity (1 byte)
+    ; +9: velocity_x (1 byte signed)
+    ; +10: velocity_y (1 byte signed)
+    ; +11: physics_flags (1 byte)
+    ; +12: collision_flags (1 byte)
+    ; +13: collision_size (1 byte)
+    ; +14: spawn_delay (2 bytes)
+    ; +16: vector_ptr (2 bytes)
+    ; +18: properties_ptr (2 bytes)
+
+    ; Check physics_flags (offset +11)
+    LDB 11,U     ; Read flags WITHOUT modifying U
+    STB ULR_DEBUG_FLAGS  ; DEBUG: Save flags
+    TSTB
+    LBEQ ULR_NEXT  ; Skip if no physics enabled (flags = 0) - LONG BRANCH
+    ; === Apply Physics ===
+    PSHS A        ; CRITICAL: Save loop counter (A) before physics code
+
+    ; Check if dynamic physics enabled (bit 0)
+    BITB #$01
+    LBEQ ULR_PHYSICS_DONE  ; Skip if not dynamic - LONG BRANCH
+
+    ; Check if gravity enabled (bit 1)
+    BITB #$02
+    BEQ ULR_NO_GRAVITY
+
+    ; Apply gravity: velocity_y -= 1
+    LEAU 10,U     ; U points to velocity_y
+    LDB ,U
+    DECB          ; Subtract gravity
+    ; Clamp to -15..+15 (max velocity like playground)
+    CMPB #$F1     ; Compare with -15 (in two's complement)
+    BGE ULR_VY_OK
+    LDB #$F1      ; Clamp to -15
+ULR_VY_OK:
+    STB ,U        ; Store updated velocity_y
+    LEAU -10,U    ; Restore U to object start
+
+ULR_NO_GRAVITY:
+    ; Apply velocity to position
+    ; x += velocity_x
+    LEAU 1,U      ; U points to x
+    LDD ,U        ; Load x (16-bit)
+    LEAU 8,U      ; U points to velocity_x (+9 from object start = +8 from x)
+    LDB ,U
+    SEX           ; Sign-extend B to 16-bit in D
+    LEAU 1,U
+    ADDD ,U       ; D = x + velocity_x
+    STD ,U        ; Store new x
+
+    ; y += velocity_y
+    LEAU 3,U      ; U points to y
+    LDD ,U        ; Load y (16-bit)
+    LEAU 7,U      ; U points to velocity_y (+10 from object start = +7 from y)
+    LDB ,U
+    SEX           ; Sign-extend B to 16-bit in D
+    LEAU 3,U
+    ADDD ,U       ; D = y + velocity_y
+    STD ,U        ; Store new y
+
+    ; === Check World Bounds (Wall Collisions) ===
+    ; Load collision_flags (offset +12)
+    LEAU 12,U
+    LDB ,U
+    BITB #$02     ; Check bounce_walls flag (bit 1)
+    LBEQ ULR_PHYSICS_DONE  ; Skip bounce if not enabled - LONG BRANCH
+
+    ; Load world bounds from LEVEL_PTR header
+    LDX LEVEL_PTR
+    ; World bounds at offset 0-7:
+    ; +0: xMin (FDB), +2: xMax (FDB), +4: yMin (FDB), +6: yMax (FDB)
+
+    ; Check X bounds
+    LEAU 1,U      ; U points to x
+    LDD ,U        ; Load object x
+    CMPD ,X       ; Compare with xMin
+    BGE ULR_X_MIN_OK
+    ; Hit xMin wall - bounce
+    LDD ,X        ; D = xMin
+    STD ,U        ; x = xMin
+    LEAU 8,U      ; U points to velocity_x
+    LDB ,U        ; velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB ,U
+    BRA ULR_X_DONE
+ULR_X_MIN_OK:
+ULR_X_DONE:
+
+    LEAU 1,U      ; U points to x
+    LDD ,U        ; Load object x
+    LEAX 2,X      ; X points to xMax
+    CMPD ,X       ; Compare with xMax
+    LEAX -2,X     ; X back to xMin
+    BLE ULR_X_MAX_OK
+    ; Hit xMax wall - bounce
+    LEAX 2,X      ; X points to xMax
+    LDD ,X        ; D = xMax
+    LEAX -2,X     ; X back to xMin
+    STD ,U        ; x = xMax
+    LEAU 8,U      ; U points to velocity_x
+    LDB ,U        ; velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB ,U
+    BRA ULR_Y_START
+ULR_X_MAX_OK:
+ULR_Y_START:
+
+    ; Check Y bounds
+    LEAU 3,U      ; U points to y
+    LDD ,U        ; Load object y
+    LEAX 4,X      ; X points to yMin
+    CMPD ,X       ; Compare with yMin
+    LEAX -4,X     ; X back to xMin
+    BGE ULR_Y_MIN_OK
+    ; Hit yMin wall - bounce
+    LEAX 4,X      ; X points to yMin
+    LDD ,X        ; D = yMin
+    LEAX -4,X     ; X back to xMin
+    STD ,U        ; y = yMin
+    LEAU 7,U      ; U points to velocity_y
+    LDB ,U        ; velocity_y
+    NEGB          ; velocity_y = -velocity_y
+    STB ,U
+    BRA ULR_Y_DONE
+ULR_Y_MIN_OK:
+ULR_Y_DONE:
+
+    LEAU 3,U      ; U points to y
+    LDD ,U        ; Load object y
+    LEAX 6,X      ; X points to yMax
+    CMPD ,X       ; Compare with yMax
+    LEAX -6,X     ; X back to xMin
+    BLE ULR_Y_MAX_OK
+    ; Hit yMax wall - bounce
+    LEAX 6,X      ; X points to yMax
+    LDD ,X        ; D = yMax
+    LEAX -6,X     ; X back to xMin
+    STD ,U        ; y = yMax
+    LEAU 7,U      ; U points to velocity_y
+    LDB ,U        ; velocity_y
+    NEGB          ; velocity_y = -velocity_y
+    STB ,U
+    BRA ULR_PHYSICS_DONE
+ULR_Y_MAX_OK:
+
+ULR_PHYSICS_DONE:
+    PULS A        ; Restore loop counter
+
+ULR_NEXT:
+    ; Advance to next object (U already at object start)
+    
+    ; DEBUG: Check current U
+    STU ULR_DEBUG_U_AFTER
+    
+    LEAU 20,U     ; Advance to next object (20 bytes per object)
+    DECA          ; Decrement object counter
+    LBNE ULR_LOOP  ; Continue if more objects - LONG BRANCH
+ULR_EXIT:
+    PULS D,Y,X,U  ; Restore registers
+    RTS
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -803,87 +1015,17 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:15
-; DRAW_VECTOR("fuji_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #-60
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_FUJI_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:16
-; DRAW_VECTOR_EX("coin", x, y, mirror) - 1 path(s), width=16, center_x=0
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD #0
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_0
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_0:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_1
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_1:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_2
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_2:
-    ; Set intensity override for drawing
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_COIN_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    ; DEBUG: Statement 2 - Discriminant(8)
-    ; VPy_LINE:19
+    ; VPy_LINE:13
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:19
+; NATIVE_CALL: UPDATE_LEVEL at line 19
+    JSR UPDATE_LEVEL_RUNTIME
+    CLRA
+    CLRB
     STD RESULT
     RTS
 
@@ -893,35 +1035,8 @@ DSVEX_CALL_2:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 5 of 7 assets (unused assets excluded)
+; Embedded 4 of 7 assets (unused assets excluded)
 ; ========================================
-
-; Vector asset: coin
-; Generated from coin.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 8
-; X bounds: min=-8, max=8, width=16
-; Center: (0, 0)
-
-_COIN_WIDTH EQU 16
-_COIN_CENTER_X EQU 0
-_COIN_CENTER_Y EQU 0
-
-_COIN_VECTORS:  ; Main entry (header + 1 path(s))
-    FCB 1               ; path_count (runtime metadata)
-    FDB _COIN_PATH0        ; pointer to path 0
-
-_COIN_PATH0:    ; Path 0
-    FCB 120              ; path0: intensity
-    FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
-    FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
-    FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
-    FCB $FF,$FA,$FE          ; line 2: flag=-1, dy=-6, dx=-2
-    FCB $FF,$FE,$FA          ; line 3: flag=-1, dy=-2, dx=-6
-    FCB $FF,$02,$FA          ; line 4: flag=-1, dy=2, dx=-6
-    FCB $FF,$06,$FE          ; line 5: flag=-1, dy=6, dx=-2
-    FCB $FF,$06,$02          ; line 6: flag=-1, dy=6, dx=2
-    FCB $FF,$02,$06          ; closing line: flag=-1, dy=2, dx=6
-    FCB 2                ; End marker (path complete)
 
 ; Vector asset: bubble_huge
 ; Generated from bubble_huge.vec (Malban Draw_Sync_List format)
@@ -1091,19 +1206,17 @@ _TEST_LEVEL_LEVEL:
     FDB 127  ; yMax (16-bit signed)
     FDB 0  ; Time limit (seconds)
     FDB 0  ; Target score
-    FCB 0  ; Background object count
-    FCB 3  ; Gameplay object count
+    FCB 1  ; Background object count
+    FCB 2  ; Gameplay object count
     FCB 0  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
 
 _TEST_LEVEL_BG_OBJECTS:
-
-_TEST_LEVEL_GAMEPLAY_OBJECTS:
-; Object: obj_1767823651769 (enemy)
+; Object: obj_1767873794056 (enemy)
     FCB 1  ; type
-    FDB 0  ; x
+    FDB 1  ; x
     FDB 0  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
@@ -1117,15 +1230,17 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FDB _FUJI_BG_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
+
+_TEST_LEVEL_GAMEPLAY_OBJECTS:
 ; Object: obj_1767862794353 (enemy)
     FCB 1  ; type
-    FDB -62  ; x
-    FDB 68  ; y
+    FDB 52  ; x
+    FDB 61  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
     FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
+    FCB 255  ; velocity_y
     FCB 0  ; physics_flags
     FCB 0  ; collision_flags
     FCB 10  ; collision_size
@@ -1133,10 +1248,10 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FDB _BUBBLE_HUGE_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
-; Object: obj_1767862796300 (enemy)
+; Object: obj_1767873800421 (enemy)
     FCB 1  ; type
-    FDB 60  ; x
-    FDB 54  ; y
+    FDB -48  ; x
+    FDB 63  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)

@@ -621,6 +621,15 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         return true;
     }
     
+    // UPDATE_LEVEL: Update level state (physics, animations, spawn delays)
+    // Usage: UPDATE_LEVEL()
+    if up == "UPDATE_LEVEL" && args.len() == 0 {
+        add_native_call_comment(out, "UPDATE_LEVEL");
+        out.push_str("    JSR UPDATE_LEVEL_RUNTIME\n");
+        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
+    
     if up == "VECTREX_DRAW_VECTORLIST" { // alias to compact list runtime
         if args.len()==1 {
             if let Expr::StringLit(s) = &args[0] {

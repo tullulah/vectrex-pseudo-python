@@ -901,7 +901,7 @@ sfx_doframe:
         ANDA #$40\n\
         BEQ DSL_W2\n\
         CLR VIA_shift_reg\n\
-        BRA DSL_LOOP\n\
+        LBRA DSL_LOOP            ; Long branch back to loop start\n\
         ; Next path: read new intensity and header, then continue drawing\n\
         DSL_NEXT_PATH:\n\
         ; Save current X position before reading anything\n\
@@ -957,7 +957,7 @@ sfx_doframe:
         ANDA #$40\n\
         BEQ DSL_W3\n\
         CLR VIA_shift_reg       ; Clear before continuing\n\
-        BRA DSL_LOOP            ; Continue drawing\n\
+        LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH\n\
         DSL_DONE:\n\
         RTS\n"
         );
@@ -1044,7 +1044,7 @@ sfx_doframe:
         ANDA #$40\n\
         BEQ DSLA_W2\n\
         CLR VIA_shift_reg\n\
-        BRA DSLA_LOOP\n\
+        LBRA DSLA_LOOP           ; Long branch\n\
         ; Next path: add offset to new coordinates too\n\
         DSLA_NEXT_PATH:\n\
         TFR X,D\n\
@@ -1096,7 +1096,7 @@ sfx_doframe:
         ANDA #$40\n\
         BEQ DSLA_W3\n\
         CLR VIA_shift_reg\n\
-        BRA DSLA_LOOP\n\
+        LBRA DSLA_LOOP           ; Long branch\n\
         DSLA_DONE:\n\
         RTS\n"
         );
@@ -1209,7 +1209,7 @@ DSWM_NO_NEGATE_DX:\n\
             ANDA #$40\n\
             BEQ DSWM_W2\n\
             CLR VIA_shift_reg\n\
-            BRA DSWM_LOOP\n\
+            LBRA DSWM_LOOP          ; Long branch\n\
             ; Next path: repeat mirror logic for new path header\n\
             DSWM_NEXT_PATH:\n\
             TFR X,D\n\
@@ -1276,7 +1276,7 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             ANDA #$40\n\
             BEQ DSWM_W3\n\
             CLR VIA_shift_reg\n\
-            BRA DSWM_LOOP\n\
+            LBRA DSWM_LOOP          ; Long branch\n\
             DSWM_DONE:\n\
             RTS\n"
         );
@@ -1644,6 +1644,229 @@ DCR_DELTA_TABLE:\n\
         out.push_str("SLR_OBJ_DONE:\n");
         out.push_str("    RTS\n");
         out.push_str("\n");
+    }
+    
+    // UPDATE_LEVEL_RUNTIME - Placeholder for level state updates
+    if w.contains("UPDATE_LEVEL_RUNTIME") {
+        out.push_str("; === UPDATE_LEVEL_RUNTIME ===\n");
+        out.push_str("; Update level state (physics, velocity, spawn delays)\n");
+        out.push_str("; Applies physics to all objects in 3 layers (bg/gameplay/fg)\n");
+        out.push_str("; DEBUG VARIABLES (for breakpoint inspection):\n");
+        out.push_str("ULR_DEBUG_COUNTER EQU RESULT+30  ; Loop counter debug\n");
+        out.push_str("ULR_DEBUG_U_SAVED EQU RESULT+32  ; U saved value\n");
+        out.push_str("ULR_DEBUG_U_AFTER EQU RESULT+34  ; U after restore\n");
+        out.push_str("ULR_DEBUG_FLAGS   EQU RESULT+36  ; Physics flags\n");
+        out.push_str("\n");
+        out.push_str("UPDATE_LEVEL_RUNTIME:\n");
+        out.push_str("    PSHS U,X,Y,D  ; Preserve all registers\n");
+        out.push_str("    \n");
+        out.push_str("    ; DEBUG: Initialize counter\n");
+        out.push_str("    CLR ULR_DEBUG_COUNTER\n");
+        out.push_str("    CLR ULR_DEBUG_COUNTER+1\n");
+        out.push_str("\n");
+        out.push_str("    ; Load level pointer\n");
+        out.push_str("    LDX LEVEL_PTR\n");
+        out.push_str("    LBEQ ULR_EXIT  ; Exit if no level loaded (long branch)\n");
+        out.push_str("\n");
+        out.push_str("    ; Skip to object counts (offset +12)\n");
+        out.push_str("    ; Level header: 4*FDB (bounds) + 2*FDB (time/score) = 12 bytes\n");
+        out.push_str("    LEAX 12,X\n");
+        out.push_str("    LDA ,X       ; Background count\n");
+        out.push_str("    LEAX 1,X\n");
+        out.push_str("    LDB ,X       ; Gameplay count\n");
+        out.push_str("    LEAX 1,X\n");
+        out.push_str("    PSHS B       ; Save gameplay count on stack\n");
+        out.push_str("    ADDA ,X      ; A = bg + foreground count\n");
+        out.push_str("    ADDA ,S+     ; A = bg + gameplay + foreground (pop gameplay from stack)\n");
+        out.push_str("    TSTA\n");
+        out.push_str("    LBEQ ULR_EXIT ; Exit if no objects (long branch)\n");
+        out.push_str("\n");
+        out.push_str("    ; X now points after last count, skip to layer pointers\n");
+        out.push_str("    LEAX 1,X     ; X now at first layer pointer\n");
+        out.push_str("    LDU ,X       ; U = pointer to background objects\n");
+        out.push_str("    \n");
+        out.push_str("    ; A = total object count (already computed)\n");
+        out.push_str("\n");
+        out.push_str("ULR_LOOP:
+    ; DEBUG: Increment counter
+    LDD ULR_DEBUG_COUNTER
+    ADDD #1
+    STD ULR_DEBUG_COUNTER
+    
+    ; U = pointer to object data (20 bytes per object)
+    ; DEBUG: Save U value
+    STU ULR_DEBUG_U_SAVED
+    
+    ; Object structure (levelres.rs):
+    ; +0: type (1 byte)
+    ; +1: x (2 bytes signed)
+    ; +3: y (2 bytes signed)
+    ; +5: scale (2 bytes fixed)
+    ; +7: rotation (1 byte)
+    ; +8: intensity (1 byte)
+    ; +9: velocity_x (1 byte signed)
+    ; +10: velocity_y (1 byte signed)
+    ; +11: physics_flags (1 byte)
+    ; +12: collision_flags (1 byte)
+    ; +13: collision_size (1 byte)
+    ; +14: spawn_delay (2 bytes)
+    ; +16: vector_ptr (2 bytes)
+    ; +18: properties_ptr (2 bytes)
+
+    ; Check physics_flags (offset +11)
+    LDB 11,U     ; Read flags WITHOUT modifying U
+    STB ULR_DEBUG_FLAGS  ; DEBUG: Save flags
+    TSTB
+    LBEQ ULR_NEXT  ; Skip if no physics enabled (flags = 0) - LONG BRANCH
+");
+        out.push_str("    ; === Apply Physics ===\n");
+        out.push_str("    PSHS A        ; CRITICAL: Save loop counter (A) before physics code\n");
+        out.push_str("\n");
+        out.push_str("    ; Check if dynamic physics enabled (bit 0)\n");
+        out.push_str("    BITB #$01\n");
+        out.push_str("    LBEQ ULR_PHYSICS_DONE  ; Skip if not dynamic - LONG BRANCH\n");
+        out.push_str("\n");
+        out.push_str("    ; Check if gravity enabled (bit 1)\n");
+        out.push_str("    BITB #$02\n");
+        out.push_str("    BEQ ULR_NO_GRAVITY\n");
+        out.push_str("\n");
+        out.push_str("    ; Apply gravity: velocity_y -= 1\n");
+        out.push_str("    LEAU 10,U     ; U points to velocity_y\n");
+        out.push_str("    LDB ,U\n");
+        out.push_str("    DECB          ; Subtract gravity\n");
+        out.push_str("    ; Clamp to -15..+15 (max velocity like playground)\n");
+        out.push_str("    CMPB #$F1     ; Compare with -15 (in two's complement)\n");
+        out.push_str("    BGE ULR_VY_OK\n");
+        out.push_str("    LDB #$F1      ; Clamp to -15\n");
+        out.push_str("ULR_VY_OK:\n");
+        out.push_str("    STB ,U        ; Store updated velocity_y\n");
+        out.push_str("    LEAU -10,U    ; Restore U to object start\n");
+        out.push_str("\n");
+        out.push_str("ULR_NO_GRAVITY:\n");
+        out.push_str("    ; Apply velocity to position\n");
+        out.push_str("    ; x += velocity_x\n");
+        out.push_str("    LEAU 1,U      ; U points to x\n");
+        out.push_str("    LDD ,U        ; Load x (16-bit)\n");
+        out.push_str("    LEAU 8,U      ; U points to velocity_x (+9 from object start = +8 from x)\n");
+        out.push_str("    LDB ,U\n");
+        out.push_str("    SEX           ; Sign-extend B to 16-bit in D\n");
+        out.push_str("    LEAU 1,U\n");
+        out.push_str("    ADDD ,U       ; D = x + velocity_x\n");
+        out.push_str("    STD ,U        ; Store new x\n");
+        out.push_str("\n");
+        out.push_str("    ; y += velocity_y\n");
+        out.push_str("    LEAU 3,U      ; U points to y\n");
+        out.push_str("    LDD ,U        ; Load y (16-bit)\n");
+        out.push_str("    LEAU 7,U      ; U points to velocity_y (+10 from object start = +7 from y)\n");
+        out.push_str("    LDB ,U\n");
+        out.push_str("    SEX           ; Sign-extend B to 16-bit in D\n");
+        out.push_str("    LEAU 3,U\n");
+        out.push_str("    ADDD ,U       ; D = y + velocity_y\n");
+        out.push_str("    STD ,U        ; Store new y\n");
+        out.push_str("\n");
+        out.push_str("    ; === Check World Bounds (Wall Collisions) ===\n");
+        out.push_str("    ; Load collision_flags (offset +12)\n");
+        out.push_str("    LEAU 12,U\n");
+        out.push_str("    LDB ,U\n");
+        out.push_str("    BITB #$02     ; Check bounce_walls flag (bit 1)\n");
+        out.push_str("    LBEQ ULR_PHYSICS_DONE  ; Skip bounce if not enabled - LONG BRANCH\n");
+        out.push_str("\n");
+        out.push_str("    ; Load world bounds from LEVEL_PTR header\n");
+        out.push_str("    LDX LEVEL_PTR\n");
+        out.push_str("    ; World bounds at offset 0-7:\n");
+        out.push_str("    ; +0: xMin (FDB), +2: xMax (FDB), +4: yMin (FDB), +6: yMax (FDB)\n");
+        out.push_str("\n");
+        out.push_str("    ; Check X bounds\n");
+        out.push_str("    LEAU 1,U      ; U points to x\n");
+        out.push_str("    LDD ,U        ; Load object x\n");
+        out.push_str("    CMPD ,X       ; Compare with xMin\n");
+        out.push_str("    BGE ULR_X_MIN_OK\n");
+        out.push_str("    ; Hit xMin wall - bounce\n");
+        out.push_str("    LDD ,X        ; D = xMin\n");
+        out.push_str("    STD ,U        ; x = xMin\n");
+        out.push_str("    LEAU 8,U      ; U points to velocity_x\n");
+        out.push_str("    LDB ,U        ; velocity_x\n");
+        out.push_str("    NEGB          ; velocity_x = -velocity_x\n");
+        out.push_str("    STB ,U\n");
+        out.push_str("    BRA ULR_X_DONE\n");
+        out.push_str("ULR_X_MIN_OK:\n");
+        out.push_str("ULR_X_DONE:\n");
+        out.push_str("\n");
+        out.push_str("    LEAU 1,U      ; U points to x\n");
+        out.push_str("    LDD ,U        ; Load object x\n");
+        out.push_str("    LEAX 2,X      ; X points to xMax\n");
+        out.push_str("    CMPD ,X       ; Compare with xMax\n");
+        out.push_str("    LEAX -2,X     ; X back to xMin\n");
+        out.push_str("    BLE ULR_X_MAX_OK\n");
+        out.push_str("    ; Hit xMax wall - bounce\n");
+        out.push_str("    LEAX 2,X      ; X points to xMax\n");
+        out.push_str("    LDD ,X        ; D = xMax\n");
+        out.push_str("    LEAX -2,X     ; X back to xMin\n");
+        out.push_str("    STD ,U        ; x = xMax\n");
+        out.push_str("    LEAU 8,U      ; U points to velocity_x\n");
+        out.push_str("    LDB ,U        ; velocity_x\n");
+        out.push_str("    NEGB          ; velocity_x = -velocity_x\n");
+        out.push_str("    STB ,U\n");
+        out.push_str("    BRA ULR_Y_START\n");
+        out.push_str("ULR_X_MAX_OK:\n");
+        out.push_str("ULR_Y_START:\n");
+        out.push_str("\n");
+        out.push_str("    ; Check Y bounds\n");
+        out.push_str("    LEAU 3,U      ; U points to y\n");
+        out.push_str("    LDD ,U        ; Load object y\n");
+        out.push_str("    LEAX 4,X      ; X points to yMin\n");
+        out.push_str("    CMPD ,X       ; Compare with yMin\n");
+        out.push_str("    LEAX -4,X     ; X back to xMin\n");
+        out.push_str("    BGE ULR_Y_MIN_OK\n");
+        out.push_str("    ; Hit yMin wall - bounce\n");
+        out.push_str("    LEAX 4,X      ; X points to yMin\n");
+        out.push_str("    LDD ,X        ; D = yMin\n");
+        out.push_str("    LEAX -4,X     ; X back to xMin\n");
+        out.push_str("    STD ,U        ; y = yMin\n");
+        out.push_str("    LEAU 7,U      ; U points to velocity_y\n");
+        out.push_str("    LDB ,U        ; velocity_y\n");
+        out.push_str("    NEGB          ; velocity_y = -velocity_y\n");
+        out.push_str("    STB ,U\n");
+        out.push_str("    BRA ULR_Y_DONE\n");
+        out.push_str("ULR_Y_MIN_OK:\n");
+        out.push_str("ULR_Y_DONE:\n");
+        out.push_str("\n");
+        out.push_str("    LEAU 3,U      ; U points to y\n");
+        out.push_str("    LDD ,U        ; Load object y\n");
+        out.push_str("    LEAX 6,X      ; X points to yMax\n");
+        out.push_str("    CMPD ,X       ; Compare with yMax\n");
+        out.push_str("    LEAX -6,X     ; X back to xMin\n");
+        out.push_str("    BLE ULR_Y_MAX_OK\n");
+        out.push_str("    ; Hit yMax wall - bounce\n");
+        out.push_str("    LEAX 6,X      ; X points to yMax\n");
+        out.push_str("    LDD ,X        ; D = yMax\n");
+        out.push_str("    LEAX -6,X     ; X back to xMin\n");
+        out.push_str("    STD ,U        ; y = yMax\n");
+        out.push_str("    LEAU 7,U      ; U points to velocity_y\n");
+        out.push_str("    LDB ,U        ; velocity_y\n");
+        out.push_str("    NEGB          ; velocity_y = -velocity_y\n");
+        out.push_str("    STB ,U\n");
+        out.push_str("    BRA ULR_PHYSICS_DONE\n");
+        out.push_str("ULR_Y_MAX_OK:\n");
+        out.push_str("\n");
+        out.push_str("ULR_PHYSICS_DONE:\n");
+        out.push_str("    PULS A        ; Restore loop counter\n");
+        out.push_str("\n");
+        out.push_str("ULR_NEXT:
+    ; Advance to next object (U already at object start)
+    
+    ; DEBUG: Check current U
+    STU ULR_DEBUG_U_AFTER
+    
+    LEAU 20,U     ; Advance to next object (20 bytes per object)
+    DECA          ; Decrement object counter
+    LBNE ULR_LOOP  ; Continue if more objects - LONG BRANCH
+");
+        out.push_str("ULR_EXIT:
+    PULS D,Y,X,U  ; Restore registers
+    RTS
+
+");
     }
 }
 

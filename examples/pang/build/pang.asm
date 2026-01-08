@@ -783,7 +783,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSL_W2
 CLR VIA_shift_reg
-BRA DSL_LOOP
+LBRA DSL_LOOP            ; Long branch back to loop start
 ; Next path: read new intensity and header, then continue drawing
 DSL_NEXT_PATH:
 ; Save current X position before reading anything
@@ -839,7 +839,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSL_W3
 CLR VIA_shift_reg       ; Clear before continuing
-BRA DSL_LOOP            ; Continue drawing
+LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH
 DSL_DONE:
 RTS
 
@@ -921,7 +921,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSLA_W2
 CLR VIA_shift_reg
-BRA DSLA_LOOP
+LBRA DSLA_LOOP           ; Long branch
 ; Next path: add offset to new coordinates too
 DSLA_NEXT_PATH:
 TFR X,D
@@ -973,7 +973,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSLA_W3
 CLR VIA_shift_reg
-BRA DSLA_LOOP
+LBRA DSLA_LOOP           ; Long branch
 DSLA_DONE:
 RTS
 Draw_Sync_List_At_With_Mirrors:
@@ -1074,7 +1074,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSWM_W2
 CLR VIA_shift_reg
-BRA DSWM_LOOP
+LBRA DSWM_LOOP          ; Long branch
 ; Next path: repeat mirror logic for new path header
 DSWM_NEXT_PATH:
 TFR X,D
@@ -1141,7 +1141,7 @@ LDA VIA_int_flags
 ANDA #$40
 BEQ DSWM_W3
 CLR VIA_shift_reg
-BRA DSWM_LOOP
+LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
 RTS
 START:

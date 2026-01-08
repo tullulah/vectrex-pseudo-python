@@ -398,17 +398,32 @@ export function PlaygroundPanel() {
         layers: {
           background: objects.filter(obj => obj.layer === 'background').map(obj => ({
             ...obj,
-            velocity: obj.velocity || { x: 0, y: 0 },
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
             layer: 'background' as const
           })) as VPlayObject[],
           gameplay: objects.filter(obj => !obj.layer || obj.layer === 'gameplay').map(obj => ({
             ...obj,
-            velocity: obj.velocity || { x: 0, y: 0 },
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
             layer: 'gameplay' as const
           })) as VPlayObject[],
           foreground: objects.filter(obj => obj.layer === 'foreground').map(obj => ({
             ...obj,
-            velocity: obj.velocity || { x: 0, y: 0 },
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
             layer: 'foreground' as const
           })) as VPlayObject[]
         },

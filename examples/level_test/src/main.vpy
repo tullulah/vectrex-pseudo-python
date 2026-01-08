@@ -7,21 +7,13 @@ META AUTHOR = "VPy Team"
 def main():
     SET_INTENSITY(127)
     # Load level once at startup
-    LOAD_LEVEL("test_level")  # Disabled - not implemented
+    LOAD_LEVEL("test_level")
 
 def loop():
-
-
-    DRAW_VECTOR("fuji_bg", 0, -60)
-    DRAW_VECTOR_EX("coin", 0, 0, 0, 0 )
-    # Draw all level objects automatically
-    # This draws: background (mountain), gameplay (bubble + coin)
     SHOW_LEVEL()
-
-    
 
     # Manual drawing fallback
 
     
     # Update level state (placeholder for now)
-    # UPDATE_LEVEL()  # TODO: Not implemented yet
+    UPDATE_LEVEL()  # TODO: Not implemented yet

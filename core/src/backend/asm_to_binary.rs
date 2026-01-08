@@ -464,6 +464,11 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
     let mnemonic = parts[0].to_uppercase();
     let operand = if parts.len() > 1 { parts[1].trim() } else { "" };
     
+    // DEBUG: Ver TODAS las instrucciones indexadas
+    if operand.contains(',') && operand.len() <= 6 && !operand.contains("++") {
+        eprintln!("🔎 parse_and_emit: {} '{}' (full line: '{}')", mnemonic, operand, code);
+    }
+    
     // Despachar según mnemónico
     match mnemonic.as_str() {
         // === DIRECTIVAS DE DATOS ===
@@ -568,8 +573,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),
-        "CMPA" => emit_cmpa(emitter, operand),
-        "CMPB" => emit_cmpb(emitter, operand),
+        "CMPA" => emit_cmpa(emitter, operand, equates),
+        "CMPB" => emit_cmpb(emitter, operand, equates),
         "CMPD" => emit_cmpd(emitter, operand, equates),
         "CMPX" => emit_cmpx(emitter, operand, equates),
         "CMPY" => emit_cmpy(emitter, operand, equates),
@@ -745,7 +750,7 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let val = parse_immediate(&operand[1..])?;
         emitter.lda_immediate(val);
     } else if operand.contains(',') {
-        // Modo indexado
+        // Modo indexado: LDA ,X  LDA 5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.lda_indexed(postbyte);
         if let Some(off) = offset {
@@ -841,6 +846,9 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 
 fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
+        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
+        emitter.ldd_immediate(val);
+    } else if operand.starts_with('>') {
         let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.ldd_immediate(val);
     } else if operand.starts_with('>') {
@@ -1423,6 +1431,18 @@ fn emit_adda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.adda_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // Modo indexado: ADDA ,X  ADDA 5,Y  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(0xAB);  // ADDA indexed opcode
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
@@ -1446,6 +1466,15 @@ fn emit_addb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.addb_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE (e.g., ",X", "B,X", "5,Y")
+        emitter.emit(0xEB); // ADDB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         match evaluate_expression(operand, equates) {
@@ -1472,8 +1501,17 @@ fn emit_suba(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.suba_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xA0); // SUBA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
-        // Por ahora solo extended mode mediante placeholder
+        // Extended mode
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
                 emitter.emit(0xB0); // SUBA extended opcode
@@ -1497,6 +1535,15 @@ fn emit_sbca(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.sbca_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xA2); // SBCA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         // Extended mode
@@ -1524,6 +1571,15 @@ fn emit_sbcb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.sbcb_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xE2); // SBCB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         // Extended mode
         match evaluate_expression(operand, equates) {
@@ -1550,6 +1606,15 @@ fn emit_subb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.subb_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE (e.g., ",X", "B,X", "5,Y")
+        emitter.emit(0xE0); // SUBB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
@@ -1574,6 +1639,15 @@ fn emit_addd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.addd_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xE3); // ADDD indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         // Extended mode (symbol or address)
@@ -1633,6 +1707,15 @@ fn emit_anda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.anda_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xA4); // ANDA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
@@ -1659,6 +1742,15 @@ fn emit_andb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.andb_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xE4); // ANDB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         match evaluate_expression(operand, equates) {
@@ -1687,6 +1779,15 @@ fn emit_bitb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate(&operand[1..])?;
         emitter.bitb_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xE5); // BITB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
@@ -1713,9 +1814,35 @@ fn emit_orb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let val = parse_immediate(&operand[1..])?;
         emitter.orb_immediate(val);
         Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xEA); // ORB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
     } else {
-        // ORB solo soporta modo inmediato (#$xx)
-        Err(format!("ORB solo soporta modo inmediato (#$xx), encontrado: {}", operand))
+        // Extended mode
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.emit(0xFA); // ORB extended opcode
+                emitter.emit_word(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.emit(0xFA);
+                    emitter.emit_word(0);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
     }
 }
 
@@ -1723,6 +1850,15 @@ fn emit_ora(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.ora_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xAA); // ORA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         match evaluate_expression(operand, equates) {
@@ -1750,6 +1886,15 @@ fn emit_eora(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.eora_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xA8); // EORA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         match evaluate_expression(operand, equates) {
@@ -1813,22 +1958,78 @@ fn emit_tfr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_cmpa(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmpa(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.cmpa_immediate(val);
+    } else if operand.contains(',') {
+        // INDEXED MODE (e.g., ",X", "B,X", "5,Y")
+        emitter.emit(0xA1); // CMPA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else {
-        return Err("CMPA extended no implementado aún".to_string());
+        // DIRECT or EXTENDED
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                if addr <= 0xFF {
+                    // DIRECT mode
+                    emitter.emit(0x91); // CMPA direct opcode
+                    emitter.emit(addr as u8);
+                } else {
+                    // Extended addressing
+                    emitter.emit(0xB1); // CMPA extended opcode
+                    emitter.emit_word(addr);
+                }
+            }
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let sym = e.strip_prefix("SYMBOL:").unwrap();
+                emitter.emit(0xB1); // CMPA extended (assume)
+                emitter.add_symbol_ref(sym, false, 2);
+                emitter.emit_word(0); // Placeholder
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
 
-fn emit_cmpb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
+fn emit_cmpb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
         emitter.cmpb_immediate(val);
+    } else if operand.contains(',') {
+        // INDEXED MODE (e.g., ",X", "B,X", "5,Y")
+        emitter.emit(0xE1); // CMPB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
     } else {
-        return Err("CMPB extended no implementado aún".to_string());
+        // DIRECT or EXTENDED (assume DIRECT for now)
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                if addr <= 0xFF {
+                    // DIRECT mode
+                    emitter.emit(0xD1); // CMPB direct opcode
+                    emitter.emit(addr as u8);
+                } else {
+                    // Extended addressing
+                    emitter.emit(0xF1); // CMPB extended opcode
+                    emitter.emit_word(addr);
+                }
+            }
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let sym = e.strip_prefix("SYMBOL:").unwrap();
+                emitter.emit(0xF1); // CMPB extended (assume)
+                emitter.add_symbol_ref(sym, false, 2);
+                emitter.emit_word(0); // Placeholder
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
@@ -1837,6 +2038,19 @@ fn emit_cmpd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     if operand.starts_with('#') {
         let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpd_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // Modo indexado: CMPD ,X  CMPD 5,Y  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(0x10);  // CMPD prefix
+        emitter.emit(0xA3);  // CMPD indexed opcode
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
         Ok(())
     } else {
         match evaluate_expression(operand, equates) {
@@ -2084,18 +2298,24 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
         let reg_str = trimmed[comma_pos+1..].trim();
         let reg_bits = get_reg_bits(reg_str)?;
         
+        eprintln!("🐛 parse_indexed_mode: offset_str='{}' reg_str='{}' reg_bits=0x{:02X}", offset_str, reg_str, reg_bits);
+        
         if offset_str.is_empty() {
             // ,REG → zero offset (indirect)
+            eprintln!("🐛   → zero offset: 0x{:02X}", 0x84 | reg_bits);
             return Ok((0x84 | reg_bits, None));
         } else {
             // offset,REG
             let offset = parse_signed(offset_str)?;
+            eprintln!("🐛   → parsed offset: {}", offset);
             if offset >= -16 && offset <= 15 {
                 // 5-bit offset en postbyte
                 let postbyte = ((offset as u8) & 0x1F) | reg_bits;
+                eprintln!("🐛   → 5-bit postbyte: 0x{:02X}", postbyte);
                 return Ok((postbyte, None));
             } else {
                 // 8-bit offset
+                eprintln!("🐛   → 8-bit postbyte: 0x{:02X} offset={}", 0x88 | reg_bits, offset);
                 return Ok((0x88 | reg_bits, Some(offset)));
             }
         }
