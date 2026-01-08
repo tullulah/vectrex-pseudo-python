@@ -1479,14 +1479,150 @@ DCR_DELTA_TABLE:\n\
     // === LEVEL SYSTEM HELPERS ===
     if w.contains("LOAD_LEVEL_RUNTIME") {
         out.push_str("; === LOAD_LEVEL_RUNTIME ===\n");
-        out.push_str("; Load level data from ROM\n");
+        out.push_str("; Load level data from ROM and copy objects to RAM\n");
         out.push_str("; Input: X = pointer to level data in ROM\n");
-        out.push_str("; Output: LEVEL_PTR = pointer to level data (persistent)\n");
-        out.push_str(";         RESULT    = pointer to level data (return value)\n");
+        out.push_str("; Output: LEVEL_PTR = pointer to level header (persistent)\n");
+        out.push_str(";         RESULT    = pointer to level header (return value)\n");
+        out.push_str(";         Objects copied to RAM buffers:\n");
+        out.push_str(";           LEVEL_BG_BUFFER (max 8 objects * 24 bytes = 192 bytes)\n");
+        out.push_str(";           LEVEL_GP_BUFFER (max 16 objects * 24 bytes = 384 bytes)\n");
+        out.push_str(";           LEVEL_FG_BUFFER (max 8 objects * 24 bytes = 192 bytes)\n");
         out.push_str("LOAD_LEVEL_RUNTIME:\n");
-        out.push_str("    STX >LEVEL_PTR ; Store level pointer persistently\n");
-        out.push_str("    STX RESULT     ; Also return it in RESULT\n");
-        out.push_str("    RTS\n\n");
+        out.push_str("    PSHS D,X,Y,U     ; Preserve registers\n");
+        out.push_str("    \n");
+        out.push_str("    ; Store level pointer persistently\n");
+        out.push_str("    STX LEVEL_PTR\n");
+        out.push_str("    \n");
+        out.push_str("    ; Skip world bounds (8 bytes) + time/score (4 bytes)\n");
+        out.push_str("    LEAX 12,X        ; X now points to object counts\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read object counts\n");
+        out.push_str("    LDB ,X+          ; B = bgCount\n");
+        out.push_str("    STB LEVEL_BG_COUNT\n");
+        out.push_str("    LDB ,X+          ; B = gameplayCount\n");
+        out.push_str("    STB LEVEL_GP_COUNT\n");
+        out.push_str("    LDB ,X+          ; B = fgCount\n");
+        out.push_str("    STB LEVEL_FG_COUNT\n");
+        out.push_str("    \n");
+        out.push_str("    ; Read layer pointers (ROM)\n");
+        out.push_str("    LDD ,X++         ; D = bgObjectsPtr (ROM)\n");
+        out.push_str("    STD LEVEL_BG_ROM_PTR\n");
+        out.push_str("    LDD ,X++         ; D = gameplayObjectsPtr (ROM)\n");
+        out.push_str("    STD LEVEL_GP_ROM_PTR\n");
+        out.push_str("    LDD ,X++         ; D = fgObjectsPtr (ROM)\n");
+        out.push_str("    STD LEVEL_FG_ROM_PTR\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Clear all buffers (mark as empty with type=0xFF) ===\n");
+        out.push_str("    JSR LLR_CLEAR_BUFFERS\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Copy Background Objects to RAM ===\n");
+        out.push_str("    LDB LEVEL_BG_COUNT\n");
+        out.push_str("    BEQ LLR_SKIP_BG  ; Skip if zero\n");
+        out.push_str("    LDX LEVEL_BG_ROM_PTR  ; X = source (ROM)\n");
+        out.push_str("    LDU #LEVEL_BG_BUFFER   ; U = destination (RAM)\n");
+        out.push_str("    PSHS U              ; Save buffer start BEFORE copy\n");
+        out.push_str("    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)\n");
+        out.push_str("    PULS D              ; Restore buffer start\n");
+        out.push_str("    STD LEVEL_BG_PTR    ; Store correct pointer\n");
+        out.push_str("LLR_SKIP_BG:\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Copy Gameplay Objects to RAM ===\n");
+        out.push_str("    LDB LEVEL_GP_COUNT\n");
+        out.push_str("    BEQ LLR_SKIP_GP  ; Skip if zero\n");
+        out.push_str("    LDX LEVEL_GP_ROM_PTR  ; X = source (ROM)\n");
+        out.push_str("    LDU #LEVEL_GP_BUFFER   ; U = destination (RAM)\n");
+        out.push_str("    PSHS U              ; Save buffer start BEFORE copy\n");
+        out.push_str("    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)\n");
+        out.push_str("    PULS D              ; Restore buffer start\n");
+        out.push_str("    STD LEVEL_GP_PTR    ; Store correct pointer\n");
+        out.push_str("LLR_SKIP_GP:\n");
+        out.push_str("    \n");
+        out.push_str("    ; === Copy Foreground Objects to RAM ===\n");
+        out.push_str("    LDB LEVEL_FG_COUNT\n");
+        out.push_str("    BEQ LLR_SKIP_FG  ; Skip if zero\n");
+        out.push_str("    LDX LEVEL_FG_ROM_PTR  ; X = source (ROM)\n");
+        out.push_str("    LDU #LEVEL_FG_BUFFER   ; U = destination (RAM)\n");
+        out.push_str("    PSHS U              ; Save buffer start BEFORE copy\n");
+        out.push_str("    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)\n");
+        out.push_str("    PULS D              ; Restore buffer start\n");
+        out.push_str("    STD LEVEL_FG_PTR    ; Store correct pointer\n");
+        out.push_str("LLR_SKIP_FG:\n");
+        out.push_str("    \n");
+        out.push_str("    ; Return level pointer in RESULT\n");
+        out.push_str("    LDX LEVEL_PTR\n");
+        out.push_str("    STX RESULT\n");
+        out.push_str("    \n");
+        out.push_str("    PULS D,X,Y,U,PC  ; Restore and return\n");
+        out.push_str("    \n");
+        out.push_str("; === Subroutine: Clear All Level Buffers ===\n");
+        out.push_str("; Mark all objects as empty (type=0xFF) to avoid reading garbage\n");
+        out.push_str("; Clobbers: A, B, U\n");
+        out.push_str("LLR_CLEAR_BUFFERS:\n");
+        out.push_str("    LDA #$FF         ; Empty marker\n");
+        out.push_str("    ; Clear BG buffer (160 bytes = 8 objects)\n");
+        out.push_str("    LDU #LEVEL_BG_BUFFER\n");
+        out.push_str("    LDB #8           ; 8 objects\n");
+        out.push_str("LLR_CLR_BG_LOOP:\n");
+        out.push_str("    STA ,U           ; Write 0xFF to type byte (offset +0)\n");
+        out.push_str("    LEAU 20,U        ; Next object\n");
+        out.push_str("    DECB\n");
+        out.push_str("    BNE LLR_CLR_BG_LOOP\n");
+        out.push_str("    ; Clear GP buffer (320 bytes = 16 objects)\n");
+        out.push_str("    LDU #LEVEL_GP_BUFFER\n");
+        out.push_str("    LDB #16          ; 16 objects\n");
+        out.push_str("LLR_CLR_GP_LOOP:\n");
+        out.push_str("    STA ,U           ; Write 0xFF to type byte\n");
+        out.push_str("    LEAU 20,U\n");
+        out.push_str("    DECB\n");
+        out.push_str("    BNE LLR_CLR_GP_LOOP\n");
+        out.push_str("    ; Clear FG buffer (160 bytes = 8 objects)\n");
+        out.push_str("    LDU #LEVEL_FG_BUFFER\n");
+        out.push_str("    LDB #8           ; 8 objects\n");
+        out.push_str("LLR_CLR_FG_LOOP:\n");
+        out.push_str("    STA ,U           ; Write 0xFF to type byte\n");
+        out.push_str("    LEAU 20,U\n");
+        out.push_str("    DECB\n");
+        out.push_str("    BNE LLR_CLR_FG_LOOP\n");
+        out.push_str("    RTS\n");
+        out.push_str("    \n");
+        out.push_str("; === Subroutine: Copy N Objects ===\n");
+        out.push_str("; Input: B = count, X = source (ROM), U = destination (RAM)\n");
+        out.push_str("; Each object is 24 bytes (including scale, rotation, collision_size, spawn_delay, vector_ptr, properties_ptr)\n");
+        out.push_str("; Clobbers: A, B, X, U\n");
+        out.push_str("LLR_COPY_OBJECTS:\n");
+        out.push_str("LLR_COPY_LOOP:\n");
+        out.push_str("    TSTB\n");
+        out.push_str("    BEQ LLR_COPY_DONE\n");
+        out.push_str("    PSHS B           ; Save counter (LDD will clobber B!)\n");
+        out.push_str("    \n");
+        out.push_str("    ; Copy 24 bytes from X to U\n");
+        out.push_str("    LDD ,X++         ; Bytes 0-1\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 2-3\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 4-5\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 6-7\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 8-9\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 10-11\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 12-13\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 14-15\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 16-17\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    LDD ,X++         ; Bytes 18-19\n");
+        out.push_str("    STD ,U++\n");
+        out.push_str("    \n");
+        out.push_str("    PULS B           ; Restore counter\n");
+        out.push_str("    DECB             ; Decrement after copy\n");
+        out.push_str("    BRA LLR_COPY_LOOP\n");
+        out.push_str("LLR_COPY_DONE:\n");
+        out.push_str("    RTS\n");
+        out.push_str("\n");
     }
     
     if w.contains("SHOW_LEVEL_RUNTIME") {
@@ -1544,7 +1680,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_GAMEPLAY\n");
         out.push_str("SLR_BG_PTR:\n");
-        out.push_str("    LDX >LEVEL_BG_PTR\n");
+        out.push_str("    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)\n");
         out.push_str("    JSR SLR_DRAW_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("    ; === Draw Gameplay Layer ===\n");
@@ -1555,7 +1691,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_FOREGROUND\n");
         out.push_str("SLR_GP_PTR:\n");
-        out.push_str("    LDX >LEVEL_GP_PTR\n");
+        out.push_str("    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)\n");
         out.push_str("    JSR SLR_DRAW_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("    ; === Draw Foreground Layer ===\n");
@@ -1566,7 +1702,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_DONE\n");
         out.push_str("SLR_FG_PTR:\n");
-        out.push_str("    LDX >LEVEL_FG_PTR\n");
+        out.push_str("    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)\n");
         out.push_str("    JSR SLR_DRAW_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("SLR_DONE:\n");
@@ -1651,222 +1787,139 @@ DCR_DELTA_TABLE:\n\
         out.push_str("; === UPDATE_LEVEL_RUNTIME ===\n");
         out.push_str("; Update level state (physics, velocity, spawn delays)\n");
         out.push_str("; Applies physics to all objects in 3 layers (bg/gameplay/fg)\n");
-        out.push_str("; DEBUG VARIABLES (for breakpoint inspection):\n");
-        out.push_str("ULR_DEBUG_COUNTER EQU RESULT+30  ; Loop counter debug\n");
-        out.push_str("ULR_DEBUG_U_SAVED EQU RESULT+32  ; U saved value\n");
-        out.push_str("ULR_DEBUG_U_AFTER EQU RESULT+34  ; U after restore\n");
-        out.push_str("ULR_DEBUG_FLAGS   EQU RESULT+36  ; Physics flags\n");
-        out.push_str("\n");
+        out.push_str("; CRITICAL: Works on RAM BUFFERS, not ROM!\n");
+        out.push_str(";\n");
         out.push_str("UPDATE_LEVEL_RUNTIME:\n");
         out.push_str("    PSHS U,X,Y,D  ; Preserve all registers\n");
         out.push_str("    \n");
-        out.push_str("    ; DEBUG: Initialize counter\n");
-        out.push_str("    CLR ULR_DEBUG_COUNTER\n");
-        out.push_str("    CLR ULR_DEBUG_COUNTER+1\n");
-        out.push_str("\n");
-        out.push_str("    ; Load level pointer\n");
-        out.push_str("    LDX LEVEL_PTR\n");
-        out.push_str("    LBEQ ULR_EXIT  ; Exit if no level loaded (long branch)\n");
-        out.push_str("\n");
-        out.push_str("    ; Skip to object counts (offset +12)\n");
-        out.push_str("    ; Level header: 4*FDB (bounds) + 2*FDB (time/score) = 12 bytes\n");
-        out.push_str("    LEAX 12,X\n");
-        out.push_str("    LDA ,X       ; Background count\n");
-        out.push_str("    LEAX 1,X\n");
-        out.push_str("    LDB ,X       ; Gameplay count\n");
-        out.push_str("    LEAX 1,X\n");
-        out.push_str("    PSHS B       ; Save gameplay count on stack\n");
-        out.push_str("    ADDA ,X      ; A = bg + foreground count\n");
-        out.push_str("    ADDA ,S+     ; A = bg + gameplay + foreground (pop gameplay from stack)\n");
-        out.push_str("    TSTA\n");
-        out.push_str("    LBEQ ULR_EXIT ; Exit if no objects (long branch)\n");
-        out.push_str("\n");
-        out.push_str("    ; X now points after last count, skip to layer pointers\n");
-        out.push_str("    LEAX 1,X     ; X now at first layer pointer\n");
-        out.push_str("    LDU ,X       ; U = pointer to background objects\n");
+        out.push_str("    ; === Update Background Objects ===\n");
+        out.push_str("    LDB LEVEL_BG_COUNT\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ ULR_GAMEPLAY\n");
+        out.push_str("    LDU #LEVEL_BG_BUFFER  ; U = RAM buffer\n");
+        out.push_str("    BSR ULR_UPDATE_LAYER  ; Process objects\n");
         out.push_str("    \n");
-        out.push_str("    ; A = total object count (already computed)\n");
+        out.push_str("ULR_GAMEPLAY:\n");
+        out.push_str("    ; === Update Gameplay Objects ===\n");
+        out.push_str("    LDB LEVEL_GP_COUNT\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ ULR_FOREGROUND\n");
+        out.push_str("    LDU #LEVEL_GP_BUFFER  ; U = RAM buffer\n");
+        out.push_str("    BSR ULR_UPDATE_LAYER  ; Process objects\n");
+        out.push_str("    \n");
+        out.push_str("ULR_FOREGROUND:\n");
+        out.push_str("    ; === Update Foreground Objects ===\n");
+        out.push_str("    LDB LEVEL_FG_COUNT\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ ULR_EXIT\n");
+        out.push_str("    LDU #LEVEL_FG_BUFFER  ; U = RAM buffer\n");
+        out.push_str("    BSR ULR_UPDATE_LAYER  ; Process objects\n");
+        out.push_str("    \n");
+        out.push_str("ULR_EXIT:\n");
+        out.push_str("    PULS D,Y,X,U  ; Restore registers\n");
+        out.push_str("    RTS\n");
         out.push_str("\n");
-        out.push_str("ULR_LOOP:
-    ; DEBUG: Increment counter
-    LDD ULR_DEBUG_COUNTER
-    ADDD #1
-    STD ULR_DEBUG_COUNTER
-    
-    ; U = pointer to object data (20 bytes per object)
-    ; DEBUG: Save U value
-    STU ULR_DEBUG_U_SAVED
-    
-    ; Object structure (levelres.rs):
-    ; +0: type (1 byte)
-    ; +1: x (2 bytes signed)
-    ; +3: y (2 bytes signed)
-    ; +5: scale (2 bytes fixed)
-    ; +7: rotation (1 byte)
-    ; +8: intensity (1 byte)
-    ; +9: velocity_x (1 byte signed)
-    ; +10: velocity_y (1 byte signed)
-    ; +11: physics_flags (1 byte)
-    ; +12: collision_flags (1 byte)
-    ; +13: collision_size (1 byte)
-    ; +14: spawn_delay (2 bytes)
-    ; +16: vector_ptr (2 bytes)
-    ; +18: properties_ptr (2 bytes)
-
-    ; Check physics_flags (offset +11)
-    LDB 11,U     ; Read flags WITHOUT modifying U
-    STB ULR_DEBUG_FLAGS  ; DEBUG: Save flags
-    TSTB
-    LBEQ ULR_NEXT  ; Skip if no physics enabled (flags = 0) - LONG BRANCH
-");
-        out.push_str("    ; === Apply Physics ===\n");
-        out.push_str("    PSHS A        ; CRITICAL: Save loop counter (A) before physics code\n");
+        out.push_str("; === ULR_UPDATE_LAYER - Process all objects in a layer ===\n");
+        out.push_str("; Input: B = object count, U = buffer base address\n");
+        out.push_str("; Uses: X for world bounds\n");
+        out.push_str("ULR_UPDATE_LAYER:\n");
+        out.push_str("    LDX LEVEL_PTR  ; Load level pointer for world bounds\n");
+        out.push_str("    CMPX #0\n");
+        out.push_str("    BEQ ULR_LAYER_EXIT  ; No level loaded\n");
+        out.push_str("    \n");
+        out.push_str("ULR_LOOP:\n");
+        out.push_str("    ; U = pointer to object data (24 bytes per object)\n");
+        out.push_str("    ; Object structure:\n");
+        out.push_str("    ; +0: type (1 byte)\n");
+        out.push_str("    ; +1: x (2 bytes signed)\n");
+        out.push_str("    ; +3: y (2 bytes signed)\n");
+        out.push_str("    ; +5: scale (2 bytes - not used by physics)\n");
+        out.push_str("    ; +7: rotation (1 byte - not used by physics)\n");
+        out.push_str("    ; +8: intensity (1 byte - not used by physics)\n");
+        out.push_str("    ; +9: velocity_x (1 byte signed)\n");
+        out.push_str("    ; +10: velocity_y (1 byte signed)\n");
+        out.push_str("    ; +11: physics_flags (1 byte)\n");
+        out.push_str("    ; +12: collision_flags (1 byte)\n");
+        out.push_str("    ; +13-23: other fields (collision_size, spawn_delay, vector_ptr, properties_ptr)\n");
+        out.push_str("\n");
+        out.push_str("    ; Check physics_flags (offset +11)\n");
+        out.push_str("    PSHS B  ; Save loop counter\n");
+        out.push_str("    LDB 11,U     ; Read flags\n");
+        out.push_str("    CMPB #0\n");
+        out.push_str("    BEQ ULR_NEXT  ; Skip if no physics enabled\n");
         out.push_str("\n");
         out.push_str("    ; Check if dynamic physics enabled (bit 0)\n");
         out.push_str("    BITB #$01\n");
-        out.push_str("    LBEQ ULR_PHYSICS_DONE  ; Skip if not dynamic - LONG BRANCH\n");
+        out.push_str("    BEQ ULR_NEXT  ; Skip if not dynamic\n");
         out.push_str("\n");
         out.push_str("    ; Check if gravity enabled (bit 1)\n");
         out.push_str("    BITB #$02\n");
         out.push_str("    BEQ ULR_NO_GRAVITY\n");
         out.push_str("\n");
         out.push_str("    ; Apply gravity: velocity_y -= 1\n");
-        out.push_str("    LEAU 10,U     ; U points to velocity_y\n");
-        out.push_str("    LDB ,U\n");
+        out.push_str("    LDB 10,U      ; Read velocity_y\n");
         out.push_str("    DECB          ; Subtract gravity\n");
-        out.push_str("    ; Clamp to -15..+15 (max velocity like playground)\n");
-        out.push_str("    CMPB #$F1     ; Compare with -15 (in two's complement)\n");
+        out.push_str("    ; Clamp to -15..+15 (max velocity)\n");
+        out.push_str("    CMPB #$F1     ; Compare with -15\n");
         out.push_str("    BGE ULR_VY_OK\n");
         out.push_str("    LDB #$F1      ; Clamp to -15\n");
         out.push_str("ULR_VY_OK:\n");
-        out.push_str("    STB ,U        ; Store updated velocity_y\n");
-        out.push_str("    LEAU -10,U    ; Restore U to object start\n");
+        out.push_str("    STB 10,U      ; Store updated velocity_y\n");
         out.push_str("\n");
         out.push_str("ULR_NO_GRAVITY:\n");
         out.push_str("    ; Apply velocity to position\n");
         out.push_str("    ; x += velocity_x\n");
-        out.push_str("    LEAU 1,U      ; U points to x\n");
-        out.push_str("    LDD ,U        ; Load x (16-bit)\n");
-        out.push_str("    LEAU 8,U      ; U points to velocity_x (+9 from object start = +8 from x)\n");
-        out.push_str("    LDB ,U\n");
+        out.push_str("    LDB 9,U       ; Load velocity_x (signed 8-bit)\n");
         out.push_str("    SEX           ; Sign-extend B to 16-bit in D\n");
-        out.push_str("    LEAU 1,U\n");
-        out.push_str("    ADDD ,U       ; D = x + velocity_x\n");
-        out.push_str("    STD ,U        ; Store new x\n");
+        out.push_str("    ADDD 1,U      ; D = x + velocity_x (x at offset +1)\n");
+        out.push_str("    STD 1,U       ; Store new x\n");
         out.push_str("\n");
         out.push_str("    ; y += velocity_y\n");
-        out.push_str("    LEAU 3,U      ; U points to y\n");
-        out.push_str("    LDD ,U        ; Load y (16-bit)\n");
-        out.push_str("    LEAU 7,U      ; U points to velocity_y (+10 from object start = +7 from y)\n");
-        out.push_str("    LDB ,U\n");
+        out.push_str("    LDB 10,U      ; Load velocity_y (signed 8-bit)\n");
         out.push_str("    SEX           ; Sign-extend B to 16-bit in D\n");
-        out.push_str("    LEAU 3,U\n");
-        out.push_str("    ADDD ,U       ; D = y + velocity_y\n");
-        out.push_str("    STD ,U        ; Store new y\n");
+        out.push_str("    ADDD 3,U      ; D = y + velocity_y (y at offset +3)\n");
+        out.push_str("    STD 3,U       ; Store new y\n");
         out.push_str("\n");
         out.push_str("    ; === Check World Bounds (Wall Collisions) ===\n");
-        out.push_str("    ; Load collision_flags (offset +12)\n");
-        out.push_str("    LEAU 12,U\n");
-        out.push_str("    LDB ,U\n");
+        out.push_str("    LDB 12,U      ; Load collision_flags\n");
         out.push_str("    BITB #$02     ; Check bounce_walls flag (bit 1)\n");
-        out.push_str("    LBEQ ULR_PHYSICS_DONE  ; Skip bounce if not enabled - LONG BRANCH\n");
+        out.push_str("    BEQ ULR_NEXT  ; Skip bounce if not enabled\n");
         out.push_str("\n");
-        out.push_str("    ; Load world bounds from LEVEL_PTR header\n");
-        out.push_str("    LDX LEVEL_PTR\n");
-        out.push_str("    ; World bounds at offset 0-7:\n");
-        out.push_str("    ; +0: xMin (FDB), +2: xMax (FDB), +4: yMin (FDB), +6: yMax (FDB)\n");
+        out.push_str("    ; World bounds from LEVEL_PTR (X already loaded)\n");
+        out.push_str("    ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)\n");
         out.push_str("\n");
-        out.push_str("    ; Check X bounds\n");
-        out.push_str("    LEAU 1,U      ; U points to x\n");
-        out.push_str("    LDD ,U        ; Load object x\n");
-        out.push_str("    CMPD ,X       ; Compare with xMin\n");
-        out.push_str("    BGE ULR_X_MIN_OK\n");
-        out.push_str("    ; Hit xMin wall - bounce\n");
-        out.push_str("    LDD ,X        ; D = xMin\n");
-        out.push_str("    STD ,U        ; x = xMin\n");
-        out.push_str("    LEAU 8,U      ; U points to velocity_x\n");
-        out.push_str("    LDB ,U        ; velocity_x\n");
-        out.push_str("    NEGB          ; velocity_x = -velocity_x\n");
-        out.push_str("    STB ,U\n");
-        out.push_str("    BRA ULR_X_DONE\n");
-        out.push_str("ULR_X_MIN_OK:\n");
-        out.push_str("ULR_X_DONE:\n");
-        out.push_str("\n");
-        out.push_str("    LEAU 1,U      ; U points to x\n");
-        out.push_str("    LDD ,U        ; Load object x\n");
-        out.push_str("    LEAX 2,X      ; X points to xMax\n");
-        out.push_str("    CMPD ,X       ; Compare with xMax\n");
-        out.push_str("    LEAX -2,X     ; X back to xMin\n");
-        out.push_str("    BLE ULR_X_MAX_OK\n");
-        out.push_str("    ; Hit xMax wall - bounce\n");
-        out.push_str("    LEAX 2,X      ; X points to xMax\n");
-        out.push_str("    LDD ,X        ; D = xMax\n");
-        out.push_str("    LEAX -2,X     ; X back to xMin\n");
-        out.push_str("    STD ,U        ; x = xMax\n");
-        out.push_str("    LEAU 8,U      ; U points to velocity_x\n");
-        out.push_str("    LDB ,U        ; velocity_x\n");
-        out.push_str("    NEGB          ; velocity_x = -velocity_x\n");
-        out.push_str("    STB ,U\n");
-        out.push_str("    BRA ULR_Y_START\n");
-        out.push_str("ULR_X_MAX_OK:\n");
-        out.push_str("ULR_Y_START:\n");
-        out.push_str("\n");
-        out.push_str("    ; Check Y bounds\n");
-        out.push_str("    LEAU 3,U      ; U points to y\n");
-        out.push_str("    LDD ,U        ; Load object y\n");
-        out.push_str("    LEAX 4,X      ; X points to yMin\n");
-        out.push_str("    CMPD ,X       ; Compare with yMin\n");
-        out.push_str("    LEAX -4,X     ; X back to xMin\n");
+        out.push_str("    ; Check Y bounds (more common in falling)\n");
+        out.push_str("    LDD 3,U       ; Load object y\n");
+        out.push_str("    CMPD 4,X      ; Compare y with yMin (direct value at offset 4)\n");
         out.push_str("    BGE ULR_Y_MIN_OK\n");
         out.push_str("    ; Hit yMin wall - bounce\n");
-        out.push_str("    LEAX 4,X      ; X points to yMin\n");
-        out.push_str("    LDD ,X        ; D = yMin\n");
-        out.push_str("    LEAX -4,X     ; X back to xMin\n");
-        out.push_str("    STD ,U        ; y = yMin\n");
-        out.push_str("    LEAU 7,U      ; U points to velocity_y\n");
-        out.push_str("    LDB ,U        ; velocity_y\n");
+        out.push_str("    LDD 4,X       ; D = yMin (direct value)\n");
+        out.push_str("    STD 3,U       ; y = yMin\n");
+        out.push_str("    LDB 10,U      ; velocity_y\n");
         out.push_str("    NEGB          ; velocity_y = -velocity_y\n");
-        out.push_str("    STB ,U\n");
-        out.push_str("    BRA ULR_Y_DONE\n");
+        out.push_str("    STB 10,U\n");
         out.push_str("ULR_Y_MIN_OK:\n");
-        out.push_str("ULR_Y_DONE:\n");
         out.push_str("\n");
-        out.push_str("    LEAU 3,U      ; U points to y\n");
-        out.push_str("    LDD ,U        ; Load object y\n");
-        out.push_str("    LEAX 6,X      ; X points to yMax\n");
-        out.push_str("    CMPD ,X       ; Compare with yMax\n");
-        out.push_str("    LEAX -6,X     ; X back to xMin\n");
-        out.push_str("    BLE ULR_Y_MAX_OK\n");
+        out.push_str("    ; Check yMax\n");
+        out.push_str("    LDD 3,U       ; Load object y\n");
+        out.push_str("    CMPD 6,X      ; Compare with yMax (direct value at offset 6)\n");
+        out.push_str("    BLE ULR_NEXT\n");
         out.push_str("    ; Hit yMax wall - bounce\n");
-        out.push_str("    LEAX 6,X      ; X points to yMax\n");
-        out.push_str("    LDD ,X        ; D = yMax\n");
-        out.push_str("    LEAX -6,X     ; X back to xMin\n");
-        out.push_str("    STD ,U        ; y = yMax\n");
-        out.push_str("    LEAU 7,U      ; U points to velocity_y\n");
-        out.push_str("    LDB ,U        ; velocity_y\n");
+        out.push_str("    LDD 6,X       ; D = yMax (direct value)\n");
+        out.push_str("    STD 3,U       ; y = yMax\n");
+        out.push_str("    LDB 10,U      ; velocity_y\n");
         out.push_str("    NEGB          ; velocity_y = -velocity_y\n");
-        out.push_str("    STB ,U\n");
-        out.push_str("    BRA ULR_PHYSICS_DONE\n");
-        out.push_str("ULR_Y_MAX_OK:\n");
+        out.push_str("    STB 10,U\n");
         out.push_str("\n");
-        out.push_str("ULR_PHYSICS_DONE:\n");
-        out.push_str("    PULS A        ; Restore loop counter\n");
+        out.push_str("ULR_NEXT:\n");
+        out.push_str("    PULS B        ; Restore loop counter\n");
+        out.push_str("    LEAU 20,U     ; Move to next object (20 bytes)\n");
+        out.push_str("    DECB\n");
+        out.push_str("    BNE ULR_LOOP  ; Continue if more objects\n");
         out.push_str("\n");
-        out.push_str("ULR_NEXT:
-    ; Advance to next object (U already at object start)
-    
-    ; DEBUG: Check current U
-    STU ULR_DEBUG_U_AFTER
-    
-    LEAU 20,U     ; Advance to next object (20 bytes per object)
-    DECA          ; Decrement object counter
-    LBNE ULR_LOOP  ; Continue if more objects - LONG BRANCH
-");
-        out.push_str("ULR_EXIT:
-    PULS D,Y,X,U  ; Restore registers
-    RTS
-
-");
+        out.push_str("ULR_LAYER_EXIT:\n");
+        out.push_str("    RTS\n");
+        out.push_str("\n");
     }
 }
 

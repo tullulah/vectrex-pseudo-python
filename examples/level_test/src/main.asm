@@ -785,7 +785,7 @@ SLR_BG_COUNT:
     CMPB #0
     BEQ SLR_GAMEPLAY
 SLR_BG_PTR:
-    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)
+    LDX >LEVEL_BG_PTR
     JSR SLR_DRAW_OBJECTS
     
     ; === Draw Gameplay Layer ===
@@ -796,7 +796,7 @@ SLR_GP_COUNT:
     CMPB #0
     BEQ SLR_FOREGROUND
 SLR_GP_PTR:
-    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)
+    LDX >LEVEL_GP_PTR
     JSR SLR_DRAW_OBJECTS
     
     ; === Draw Foreground Layer ===
@@ -807,7 +807,7 @@ SLR_FG_COUNT:
     CMPB #0
     BEQ SLR_DONE
 SLR_FG_PTR:
-    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)
+    LDX >LEVEL_FG_PTR
     JSR SLR_DRAW_OBJECTS
     
 SLR_DONE:
@@ -1076,17 +1076,17 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
+    ; VPy_LINE:14
+; NATIVE_CALL: UPDATE_LEVEL at line 14
+    JSR UPDATE_LEVEL_RUNTIME
+    CLRA
+    CLRB
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
     ; VPy_LINE:15
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:17
-; NATIVE_CALL: UPDATE_LEVEL at line 17
-    JSR UPDATE_LEVEL_RUNTIME
-    CLRA
-    CLRB
     STD RESULT
     RTS
 
@@ -1325,9 +1325,9 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 2  ; velocity_x
-    FCB 253  ; velocity_y
-    FCB 1  ; physics_flags
+    FCB 0  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 3  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay
@@ -1341,9 +1341,9 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 253  ; velocity_x
-    FCB 254  ; velocity_y
-    FCB 1  ; physics_flags
+    FCB 11  ; velocity_x
+    FCB 5  ; velocity_y
+    FCB 3  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay
@@ -1358,8 +1358,8 @@ _TEST_LEVEL_BG_OBJECTS:
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
     FCB 1  ; velocity_x
-    FCB 255  ; velocity_y
-    FCB 1  ; physics_flags
+    FCB 0  ; velocity_y
+    FCB 3  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay

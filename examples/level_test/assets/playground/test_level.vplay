@@ -35,21 +35,38 @@
         "gravity": 1,
         "bounceDamping": 0.85,
         "physicsType": "gravity"
-      }
-    ],
-    "gameplay": [
+      },
       {
         "id": "obj_1767862794353",
         "type": "enemy",
         "vectorName": "bubble_huge",
-        "layer": "gameplay",
-        "x": 52,
-        "y": 61,
+        "layer": "background",
+        "x": 45,
+        "y": 71,
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 0.4858333333333273,
-          "y": -1.1480304023320211
+          "x": 2,
+          "y": -3
+        },
+        "physicsEnabled": true,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "bounce"
+      },
+      {
+        "id": "obj_1767883264744",
+        "type": "enemy",
+        "vectorName": "coin",
+        "layer": "background",
+        "x": -52,
+        "y": 35,
+        "rotation": 0,
+        "scale": 1,
+        "velocity": {
+          "x": -3,
+          "y": -2
         },
         "physicsEnabled": true,
         "collidable": true,
@@ -61,14 +78,14 @@
         "id": "obj_1767873800421",
         "type": "enemy",
         "vectorName": "bubble_large",
-        "layer": "gameplay",
-        "x": -48,
-        "y": 63,
+        "layer": "background",
+        "x": -59,
+        "y": 68,
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": -0.47083333333333144,
-          "y": -0.36475624985734595
+          "x": 1,
+          "y": -1
         },
         "physicsEnabled": true,
         "collidable": true,
@@ -77,6 +94,7 @@
         "physicsType": "bounce"
       }
     ],
+    "gameplay": [],
     "foreground": []
   },
   "spawnPoints": {

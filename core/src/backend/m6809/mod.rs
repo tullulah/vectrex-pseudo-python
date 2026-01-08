@@ -526,9 +526,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("LEVEL_BG_COUNT", 1, "SHOW_LEVEL: background object count");
         ram.allocate("LEVEL_GP_COUNT", 1, "SHOW_LEVEL: gameplay object count");
         ram.allocate("LEVEL_FG_COUNT", 1, "SHOW_LEVEL: foreground object count");
-        ram.allocate("LEVEL_BG_PTR", 2, "SHOW_LEVEL: background objects pointer");
-        ram.allocate("LEVEL_GP_PTR", 2, "SHOW_LEVEL: gameplay objects pointer");
-        ram.allocate("LEVEL_FG_PTR", 2, "SHOW_LEVEL: foreground objects pointer");
+        ram.allocate("LEVEL_BG_PTR", 2, "SHOW_LEVEL: background objects pointer (RAM buffer)");
+        ram.allocate("LEVEL_GP_PTR", 2, "SHOW_LEVEL: gameplay objects pointer (RAM buffer)");
+        ram.allocate("LEVEL_FG_PTR", 2, "SHOW_LEVEL: foreground objects pointer (RAM buffer)");
+        
+        // ROM pointers (temporary during LOAD_LEVEL)
+        ram.allocate("LEVEL_BG_ROM_PTR", 2, "LOAD_LEVEL: background objects pointer (ROM)");
+        ram.allocate("LEVEL_GP_ROM_PTR", 2, "LOAD_LEVEL: gameplay objects pointer (ROM)");
+        ram.allocate("LEVEL_FG_ROM_PTR", 2, "LOAD_LEVEL: foreground objects pointer (ROM)");
+        
+        // Object buffers in RAM (each object is 24 bytes)
+        ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
+        ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
+        ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
     }
     
     // 10. DRAW_LINE variables (only if DRAW_LINE is used)

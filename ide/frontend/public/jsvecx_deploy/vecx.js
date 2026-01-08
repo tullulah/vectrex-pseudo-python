@@ -671,7 +671,8 @@ function VecX()
             // CRITICAL: Check breakpoint AFTER instruction execution (PC may have changed)
             var newPC = e6809.reg_pc;
             
-            // TEMP DEBUG: Log when passing through target addresses
+            // TEMP DEBUG: Log when passing through target addresses (DISABLED - too verbose)
+            /*
             if (newPC === 0x04DB || newPC === 0x4DB) {
                 console.log('[JSVecx Debug] 🔍 Passing through PC: 0x' + newPC.toString(16).toUpperCase() + 
                            ', debugState=' + this.debugState + 
@@ -679,6 +680,7 @@ function VecX()
                            ', stepMode=' + this.stepMode +
                            ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(','));
             }
+            */
             
             // CRITICAL: Check breakpoints ALWAYS (never disable them)
             if (this.debugState === 'running' && this.breakpoints.has(newPC)) {

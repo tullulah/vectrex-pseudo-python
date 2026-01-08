@@ -12,6 +12,7 @@ interface MemoryGridViewProps {
   memory: Uint8Array;
   variables: Record<string, VariableInfo>;
   timestamp: number;
+  targetAddress?: number | null;
 }
 
 // Color palette for different variable types
@@ -21,6 +22,9 @@ const TYPE_COLORS: Record<string, string> = {
   arg: '#e67e22',      // Orange
   system: '#95a5a6',   // Gray
   audio: '#e74c3c',    // Red
+  buffer_bg: '#16a085', // Teal (background layer)
+  buffer_gp: '#f39c12', // Orange (gameplay layer)
+  buffer_fg: '#8e44ad', // Purple (foreground layer)
   unknown: '#34495e'   // Dark gray
 };
 
@@ -29,13 +33,14 @@ const parseAddr = (addr: string): number => {
   return parseInt(addr.replace('0x', ''), 16);
 };
 
-export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variables, timestamp }) => {
+export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variables, timestamp, targetAddress }) => {
   const [hoveredByte, setHoveredByte] = useState<number | null>(null);
   const [selectedVar, setSelectedVar] = useState<string | null>(null);
   const [watchList, setWatchList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState<number>(0);
+  const [highlightedAddress, setHighlightedAddress] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   // Add variable to watch list
@@ -103,19 +108,64 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
     }
   }, [currentSearchIndex, searchResults]);
 
-  // Build memory map: address -> variable info
+  // Build memory map: address -> variable info (moved BEFORE useEffect that uses it)
   const memoryMap = useMemo(() => {
     const map = new Map<number, { var: VariableInfo; offset: number }>();
     
     Object.entries(variables).forEach(([name, varInfo]) => {
       const startAddr = parseAddr(varInfo.address);
+      
+      // Detect buffer type by name and override type for color coding
+      let displayType = varInfo.type;
+      if (name.includes('LEVEL_BG_BUFFER')) {
+        displayType = 'buffer_bg';
+      } else if (name.includes('LEVEL_GP_BUFFER')) {
+        displayType = 'buffer_gp';
+      } else if (name.includes('LEVEL_FG_BUFFER')) {
+        displayType = 'buffer_fg';
+      }
+      
       for (let i = 0; i < varInfo.size; i++) {
-        map.set(startAddr + i, { var: varInfo, offset: i });
+        map.set(startAddr + i, { var: { ...varInfo, type: displayType }, offset: i });
       }
     });
     
     return map;
   }, [variables]);
+
+  // Jump to target address when it changes
+  useEffect(() => {
+    if (targetAddress === null || targetAddress === undefined) return;
+    if (!gridRef.current) return;
+    
+    const element = gridRef.current.querySelector(`[data-addr="${targetAddress}"]`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Check if target address is the START of a variable
+      const varAtTarget = memoryMap.get(targetAddress);
+      if (varAtTarget && varAtTarget.offset === 0) {
+        // This is the start of a variable - highlight ALL bytes of this variable
+        const varSize = varAtTarget.var.size;
+        setHighlightedAddress(targetAddress); // Store base address
+        setSelectedVar(varAtTarget.var.name); // Auto-select the variable
+        addToWatch(varAtTarget.var.name); // Auto-add to watch
+        
+        console.log(`[MemoryGridView] Jumped to variable ${varAtTarget.var.name} at $${targetAddress.toString(16).toUpperCase()} (${varSize} bytes)`);
+      } else {
+        // Single byte highlight
+        setHighlightedAddress(targetAddress);
+        console.log(`[MemoryGridView] Scrolled to address $${targetAddress.toString(16).toUpperCase()}`);
+      }
+      
+      // Clear highlight after 3 seconds
+      setTimeout(() => {
+        setHighlightedAddress(null);
+      }, 3000);
+    } else {
+      console.warn(`[MemoryGridView] Address $${targetAddress.toString(16).toUpperCase()} not found in visible regions`);
+    }
+  }, [targetAddress, memoryMap, addToWatch]);
 
   // Focus on interesting memory regions (RAM areas)
   const regions = [
@@ -157,6 +207,13 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
                 const isHovered = hoveredByte === addr;
                 const isSelected = varInfo && selectedVar === varInfo.var.name;
                 
+                // Highlight entire variable range when jumping to its start address
+                const varStartAddr = varInfo ? parseAddr(varInfo.var.address) : 0;
+                const isHighlighted = highlightedAddress !== null && varInfo && 
+                  highlightedAddress === varStartAddr &&
+                  addr >= varStartAddr && 
+                  addr < varStartAddr + varInfo.var.size;
+                
                 let bgColor = '#2c3e50'; // Default empty
                 let borderColor = '#34495e';
                 
@@ -170,7 +227,10 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
                   }
                 }
                 
-                if (isHovered || isSelected) {
+                if (isHighlighted) {
+                  borderColor = '#f1c40f'; // Yellow highlight for jump target
+                  bgColor = adjustBrightness(bgColor, 20); // Brighten
+                } else if (isHovered || isSelected) {
                   borderColor = '#f39c12';
                 }
 
@@ -190,11 +250,11 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
                       width: 40,
                       height: 40,
                       backgroundColor: bgColor,
-                      border: `1px solid ${borderColor}`,
+                      border: isHighlighted ? `3px solid ${borderColor}` : `1px solid ${borderColor}`,
                       cursor: varInfo ? 'pointer' : 'default',
                       transition: 'all 0.1s',
-                      transform: isHovered ? 'scale(1.15)' : 'scale(1)',
-                      zIndex: isHovered ? 10 : 1,
+                      transform: (isHovered || isHighlighted) ? 'scale(1.15)' : 'scale(1)',
+                      zIndex: (isHovered || isHighlighted) ? 10 : 1,
                       position: 'relative',
                       display: 'flex',
                       alignItems: 'center',
@@ -205,6 +265,7 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      boxShadow: isHighlighted ? '0 0 10px rgba(241, 196, 15, 0.5)' : 'none',
                     }}
                     title={varInfo 
                       ? `${varInfo.var.name} [${varInfo.var.address}+${varInfo.offset}] = 0x${byte.toString(16).padStart(2, '0')} (${byte})`
@@ -238,7 +299,23 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
 
   // Show selected variable details
   const selectedVarInfo = selectedVar ? variables[selectedVar] : null;
-  const selectedVarValue = selectedVarInfo ? readVariableValue(memory, selectedVarInfo) : null;
+  const selectedVarValue = useMemo(() => {
+    if (!selectedVarInfo) return null;
+    return readVariableValue(memory, selectedVarInfo);
+  }, [memory, selectedVarInfo, timestamp]);
+
+  // Memoize watch list values so they recalculate when memory changes
+  const watchListValues = useMemo(() => {
+    return watchList.map(varName => {
+      const varInfo = variables[varName];
+      if (!varInfo) return null;
+      return {
+        varName,
+        varInfo,
+        value: readVariableValue(memory, varInfo)
+      };
+    }).filter((item): item is { varName: string; varInfo: VariableInfo; value: string } => item !== null);
+  }, [watchList, variables, memory, timestamp]);
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'monospace' }}>
@@ -326,15 +403,19 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
         {/* Watch list */}
         <div style={{ 
           borderBottom: '1px solid #444',
-          maxHeight: '40%',
+          flex: selectedVarInfo ? '0 1 auto' : '1 1 auto',
+          minHeight: selectedVarInfo ? 150 : 0,
+          maxHeight: selectedVarInfo ? '35%' : 'none',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}>
           <div style={{ 
             padding: 12,
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center'
+            alignItems: 'center',
+            flexShrink: 0
           }}>
             <div style={{ fontSize: 12, fontWeight: 'bold', color: '#ecf0f1' }}>
               Watch List ({watchList.length})
@@ -356,7 +437,7 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
               </button>
             )}
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px', minHeight: 0 }}>
             {watchList.length === 0 ? (
               <div style={{ 
                 fontSize: 11, 
@@ -369,58 +450,60 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {watchList.map(varName => {
-                  const varInfo = variables[varName];
-                  if (!varInfo) return null;
-                  
-                  const value = readVariableValue(memory, varInfo);
-                  
-                  return (
-                    <div
-                      key={varName}
+                {watchListValues.map(({ varName, varInfo, value }) => (
+                  <div
+                    key={varName}
+                    style={{
+                      padding: 8,
+                      backgroundColor: '#34495e',
+                      borderLeft: `3px solid ${TYPE_COLORS[varInfo.type] || TYPE_COLORS.unknown}`,
+                      borderRadius: 2,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontSize: 11, 
+                        fontWeight: 'bold', 
+                        color: '#ecf0f1',
+                        marginBottom: 4
+                      }}>
+                        {varName}
+                      </div>
+                      <div style={{ 
+                        fontSize: 9, 
+                        color: '#95a5a6',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.4',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word'
+                      }}>
+                        {value}
+                      </div>
+                      <div style={{ fontSize: 9, color: '#7f8c8d', marginTop: 2 }}>
+                        {varInfo.address} • {varInfo.size}B
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFromWatch(varName)}
                       style={{
-                        padding: 8,
-                        backgroundColor: '#34495e',
-                        borderLeft: `3px solid ${TYPE_COLORS[varInfo.type] || TYPE_COLORS.unknown}`,
+                        padding: '2px 6px',
+                        fontSize: 10,
+                        backgroundColor: 'transparent',
+                        border: '1px solid #e74c3c',
+                        color: '#e74c3c',
+                        cursor: 'pointer',
                         borderRadius: 2,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start'
+                        flexShrink: 0
                       }}
                     >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ 
-                          fontSize: 11, 
-                          fontWeight: 'bold', 
-                          color: '#ecf0f1',
-                          marginBottom: 4
-                        }}>
-                          {varName}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#95a5a6' }}>
-                          {value}
-                        </div>
-                        <div style={{ fontSize: 9, color: '#7f8c8d', marginTop: 2 }}>
-                          {varInfo.address} • {varInfo.size}B
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeFromWatch(varName)}
-                        style={{
-                          padding: '2px 6px',
-                          fontSize: 10,
-                          backgroundColor: 'transparent',
-                          border: '1px solid #e74c3c',
-                          color: '#e74c3c',
-                          cursor: 'pointer',
-                          borderRadius: 2,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -431,16 +514,36 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
           <div style={{ 
             padding: 12, 
             borderBottom: '1px solid #444',
-            backgroundColor: '#34495e'
+            backgroundColor: '#34495e',
+            flex: '1 1 auto',
+            minHeight: 200,
+            maxHeight: '50%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
           }}>
-            <div style={{ fontSize: 14, fontWeight: 'bold', color: '#ecf0f1', marginBottom: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 'bold', color: '#ecf0f1', marginBottom: 8, flexShrink: 0 }}>
               {selectedVarInfo.name}
             </div>
-            <div style={{ fontSize: 11, color: '#bdc3c7', lineHeight: 1.6 }}>
+            <div style={{ 
+              fontSize: 11, 
+              color: '#bdc3c7', 
+              lineHeight: 1.6,
+              flex: 1,
+              overflow: 'auto',
+              minHeight: 0
+            }}>
               <div>Address: {selectedVarInfo.address}</div>
               <div>Type: {selectedVarInfo.type}</div>
               <div>Size: {selectedVarInfo.size} byte{selectedVarInfo.size > 1 ? 's' : ''}</div>
-              <div>Value: {selectedVarValue}</div>
+              <div style={{ 
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: 'monospace',
+                marginTop: 4
+              }}>
+                Value: {selectedVarValue}
+              </div>
             </div>
           </div>
         )}
@@ -505,11 +608,112 @@ export const MemoryGridView: React.FC<MemoryGridViewProps> = ({ memory, variable
   );
 };
 
+// Helper to decode a single object from buffer (20 bytes)
+function decodeObject(memory: Uint8Array, baseAddr: number, objIndex: number): string | null {
+  const addr = baseAddr + (objIndex * 20);  // 20 bytes per object
+  
+  // Check if we have enough bytes
+  if (addr + 20 > memory.length) {
+    console.log(`[decodeObject] Index ${objIndex}: Not enough bytes (addr ${addr} + 20 > ${memory.length})`);
+    return null;
+  }
+  
+  const type = memory[addr];
+  
+  // DEBUG: Log first 8 bytes of each object in hex
+  const hexBytes = Array.from(memory.slice(addr, addr + 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+  console.log(`[decodeObject] Index ${objIndex} @0x${addr.toString(16)}: [${hexBytes}] type=${type}`);
+  
+  // Filter out invalid/uninitialized objects (type must be 0-5 or 255 for empty)
+  if (type > 5 && type !== 255) {
+    console.log(`[decodeObject] Index ${objIndex}: REJECTED - invalid type=${type} (addr=0x${addr.toString(16)})`);
+    return null;
+  }
+  if (type === 255) return null; // Empty slot
+  
+  const x = (memory[addr + 1] << 8) | memory[addr + 2];
+  const y = (memory[addr + 3] << 8) | memory[addr + 4];
+  
+  // Convert to signed values EARLY to check validity
+  const signedX = x > 32767 ? x - 65536 : x;
+  const signedY = y > 32767 ? y - 65536 : y;
+  
+  // Reject objects with absurd coordinates (Vectrex screen is roughly -128 to 127)
+  // Allow some margin for off-screen objects, but reject obvious garbage
+  if (Math.abs(signedX) > 500 || Math.abs(signedY) > 500) {
+    console.log(`[decodeObject] Index ${objIndex}: REJECTED - absurd coords @(${signedX},${signedY}), type=${type}`);
+    return null; // Invalid coordinates = garbage data
+  }
+  const scale = (memory[addr + 5] << 8) | memory[addr + 6];
+  const rotation = memory[addr + 7];
+  const intensity = memory[addr + 8];
+  const velX = memory[addr + 9];
+  const velY = memory[addr + 10];
+  const physicsFlags = memory[addr + 11];
+  const collisionFlags = memory[addr + 12];
+  
+  // Convert signed velocities
+  const signedVelX = velX > 127 ? velX - 256 : velX;
+  const signedVelY = velY > 127 ? velY - 256 : velY;
+  
+  // Type names
+  const typeNames = ['player_start', 'enemy', 'obstacle', 'collectible', 'background', 'trigger'];
+  const typeName = typeNames[type];
+  
+  // Physics flags
+  const isDynamic = (physicsFlags & 0x01) !== 0;
+  const hasGravity = (physicsFlags & 0x02) !== 0;
+  const physicsStr = isDynamic ? (hasGravity ? 'dynamic+gravity' : 'dynamic') : 'static';
+  
+  // Collision flags
+  const hasCollision = (collisionFlags & 0x01) !== 0;
+  const bounceWalls = (collisionFlags & 0x02) !== 0;
+  const collisionStr = hasCollision ? (bounceWalls ? 'coll+bounce' : 'coll') : '';
+  
+  return `[${objIndex}] ${typeName} @(${signedX},${signedY}) vel:(${signedVelX},${signedVelY}) ${physicsStr}${collisionStr ? ' ' + collisionStr : ''}`;
+}
+
 // Helper to read variable value from memory
 function readVariableValue(memory: Uint8Array, varInfo: VariableInfo): string {
   const addr = parseAddr(varInfo.address);
+  // Detect if it's a level buffer (decode objects)
+  const isLevelBuffer = varInfo.name.includes('LEVEL_BG_BUFFER') || 
+                        varInfo.name.includes('LEVEL_GP_BUFFER') || 
+                        varInfo.name.includes('LEVEL_FG_BUFFER');
   
-  if (varInfo.type === 'array') {
+  if (isLevelBuffer) {
+    // Decode objects (24 bytes each)
+    const objectSize = 24;
+    const numObjects = Math.floor(varInfo.size / objectSize);
+    const lines = [];
+    
+    for (let i = 0; i < numObjects; i++) {
+      const objData = decodeObject(memory, addr, i);
+      if (objData !== null) {  // Only show valid objects
+        lines.push(objData);
+      }
+    }
+    
+    if (lines.length === 0) {
+      return '(no valid objects)';
+    }
+    
+    const result = lines.join('\n');
+    console.log(`[MemoryGridView] Buffer ${varInfo.name}: ${lines.length} objects, ${result.length} chars`);
+    return result;
+  } else if (varInfo.size > 20 && !varInfo.name.includes('BUFFER')) {
+    // Other large variables: show hex dump
+    const bytes = [];
+    const displaySize = Math.min(varInfo.size, 32);
+    for (let i = 0; i < displaySize; i++) {
+      bytes.push(memory[addr + i].toString(16).padStart(2, '0').toUpperCase());
+    }
+    const hexDump = bytes.join(' ');
+    if (varInfo.size > 32) {
+      return `${hexDump}... (${varInfo.size} bytes total)`;
+    }
+    return hexDump;
+  } else if (varInfo.type === 'array') {
     // Show ALL elements (no truncation)
     const elements = [];
     const numElements = varInfo.size / 2;

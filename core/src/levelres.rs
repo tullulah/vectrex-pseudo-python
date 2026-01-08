@@ -93,6 +93,18 @@ pub struct VPlayObject {
     pub spawn_delay: u16,
     #[serde(default, rename = "destroyOffscreen")]
     pub destroy_offscreen: bool,
+    
+    // Playground format compatibility (flat structure)
+    #[serde(default, rename = "physicsEnabled")]
+    pub physics_enabled: bool,
+    #[serde(default, rename = "physicsType")]
+    pub physics_type: Option<String>,
+    #[serde(default)]
+    pub collidable: bool,
+    #[serde(default)]
+    pub gravity: f32,
+    #[serde(default, rename = "bounceDamping")]
+    pub bounce_damping: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +263,8 @@ impl VPlayLevel {
         
         // Physics flags byte
         let mut physics_flags = 0u8;
+        
+        // Check nested physics structure first, then flat Playground format
         if let Some(ref physics) = obj.physics {
             if physics.physics_type == "dynamic" {
                 physics_flags |= 0x01; // Bit 0: dynamic physics enabled
@@ -258,11 +272,24 @@ impl VPlayLevel {
             if physics.gravity != 0.0 {
                 physics_flags |= 0x02; // Bit 1: gravity enabled
             }
+        } else if obj.physics_enabled {
+            // Playground flat format
+            if let Some(ref physics_type) = obj.physics_type {
+                // All physicsType options enable physics (bit 0)
+                physics_flags |= 0x01; // Bit 0: physics enabled
+                
+                // Check if gravity is enabled
+                if physics_type == "gravity" || physics_type == "projectile" {
+                    physics_flags |= 0x02; // Bit 1: gravity enabled
+                }
+            }
         }
         out.push_str(&format!("    FCB {}  ; physics_flags\n", physics_flags));
         
         // Collision flags byte
         let mut collision_flags = 0u8;
+        
+        // Check nested collision structure first, then flat Playground format
         if let Some(ref collision) = obj.collision {
             if collision.enabled {
                 collision_flags |= 0x01; // Bit 0: collision enabled
@@ -272,6 +299,19 @@ impl VPlayLevel {
             }
             if collision.shape == "circle" {
                 collision_flags |= 0x04; // Bit 2: circle shape (0=rect)
+            }
+        } else if obj.physics_enabled {
+            // Playground flat format
+            if obj.collidable {
+                collision_flags |= 0x01; // Bit 0: collision enabled
+            }
+            
+            // Check physicsType for bounce behavior
+            // All physics types with collision should bounce on world bounds
+            if let Some(ref physics_type) = obj.physics_type {
+                if physics_type == "bounce" || physics_type == "gravity" || physics_type == "projectile" {
+                    collision_flags |= 0x02; // Bit 1: bounce on walls
+                }
             }
         }
         out.push_str(&format!("    FCB {}  ; collision_flags\n", collision_flags));

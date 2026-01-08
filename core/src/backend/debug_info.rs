@@ -552,7 +552,31 @@ pub fn parse_asm_variables(asm: &str) -> HashMap<String, VariableInfo> {
         // Determine variable type and size from name and comment
         let comment = trimmed.split(';').nth(1).unwrap_or("").trim();
         
-        let (var_type, size) = if var_name.contains("_DATA") {
+        // First, try to extract explicit size from comment (e.g., "(320 bytes)")
+        let explicit_size = if let Some(bytes_pos) = comment.rfind(" bytes)") {
+            // Find the opening parenthesis before "bytes)"
+            let before_bytes = &comment[..bytes_pos];
+            if let Some(paren_pos) = before_bytes.rfind('(') {
+                // Extract the number between '(' and ' bytes)'
+                let num_str = &before_bytes[paren_pos + 1..].trim();
+                num_str.parse::<usize>().ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let (var_type, size) = if let Some(explicit_bytes) = explicit_size {
+            // Use explicit size from comment
+            if var_name.contains("BUFFER") || var_name.contains("LEVEL_") {
+                ("system", explicit_bytes)
+            } else if var_name.contains("_DATA") {
+                ("array", explicit_bytes)
+            } else {
+                ("unknown", explicit_bytes)
+            }
+        } else if var_name.contains("_DATA") {
             // Array data - try to extract element count from comment
             let element_count = if comment.contains("elements") {
                 // Extract number from "Array data (5 elements)"

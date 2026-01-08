@@ -12,8 +12,4 @@ def main():
 def loop():
     SHOW_LEVEL()
 
-    # Manual drawing fallback
-
-    
-    # Update level state (placeholder for now)
-    UPDATE_LEVEL()  # TODO: Not implemented yet
+    UPDATE_LEVEL()  # Apply gravity, velocity, collisions
