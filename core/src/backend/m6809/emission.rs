@@ -1102,8 +1102,8 @@ sfx_doframe:
         );
     }
     
-    // Draw_Sync_List_At_With_Mirrors - Only emit if DRAW_VECTOR_EX or SHOW_LEVEL is used
-    if usage.uses_draw_vector_ex || usage.uses_show_level {
+    // Draw_Sync_List_At_With_Mirrors - Only emit if DRAW_VECTOR, DRAW_VECTOR_EX or SHOW_LEVEL is used
+    if usage.uses_draw_vector || usage.uses_draw_vector_ex || usage.uses_show_level {
         // Draw_Sync_List_At_With_Mirrors: Unified mirror support (X, Y, or both)
         // Reads MIRROR_X and MIRROR_Y flags (set by DRAW_VECTOR_EX) and conditionally negates
         // Much more efficient than 4 separate functions - one unified runtime logic with conditional branches

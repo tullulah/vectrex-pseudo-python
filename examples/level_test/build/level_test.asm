@@ -803,6 +803,38 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
+    ; VPy_LINE:15
+; DRAW_VECTOR("fuji_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #-60
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_FUJI_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
     ; VPy_LINE:16
 ; DRAW_VECTOR_EX("coin", x, y, mirror) - 1 path(s), width=16, center_x=0
     LDD #0
@@ -847,7 +879,7 @@ DSVEX_CALL_2:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
+    ; DEBUG: Statement 2 - Discriminant(8)
     ; VPy_LINE:19
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME

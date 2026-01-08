@@ -3339,21 +3339,24 @@ DRAW_TITLE_SCREEN: ; function
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LOGO_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH5  ; Path 5
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LOGO_PATH6  ; Path 6
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3603,19 +3606,22 @@ CE_174:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_FUJI_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_FUJI_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_FUJI_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_FUJI_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_FUJI_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_FUJI_BG_PATH5  ; Path 5
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3655,13 +3661,16 @@ CE_177:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_KEIRIN_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_KEIRIN_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_KEIRIN_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3701,15 +3710,18 @@ CE_180:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUDDHA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BUDDHA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BUDDHA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BUDDHA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3749,13 +3761,16 @@ CE_183:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ANGKOR_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ANGKOR_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ANGKOR_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3795,13 +3810,16 @@ CE_186:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_AYERS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_AYERS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_AYERS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3841,15 +3859,18 @@ CE_189:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_TAJ_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_TAJ_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_TAJ_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_TAJ_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3889,17 +3910,20 @@ CE_192:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LENINGRAD_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LENINGRAD_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LENINGRAD_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LENINGRAD_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LENINGRAD_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3939,17 +3963,20 @@ CE_195:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PARIS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PARIS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PARIS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PARIS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PARIS_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -3989,15 +4016,18 @@ CE_198:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_LONDON_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LONDON_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LONDON_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_LONDON_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4037,15 +4067,18 @@ CE_201:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BARCELONA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BARCELONA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BARCELONA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_BARCELONA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4085,21 +4118,24 @@ CE_204:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ATHENS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH5  ; Path 5
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ATHENS_BG_PATH6  ; Path 6
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4139,15 +4175,18 @@ CE_207:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PYRAMIDS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PYRAMIDS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PYRAMIDS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_PYRAMIDS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4187,15 +4226,18 @@ CE_210:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_KILIMANJARO_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_KILIMANJARO_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_KILIMANJARO_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_KILIMANJARO_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4235,17 +4277,20 @@ CE_213:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_NEWYORK_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_NEWYORK_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_NEWYORK_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_NEWYORK_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_NEWYORK_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4285,17 +4330,20 @@ CE_216:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_MAYAN_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_MAYAN_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_MAYAN_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_MAYAN_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_MAYAN_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4335,15 +4383,18 @@ CE_219:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ANTARCTICA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ANTARCTICA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ANTARCTICA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_ANTARCTICA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -4363,17 +4414,20 @@ IF_NEXT_217:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_EASTER_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_EASTER_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_EASTER_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_EASTER_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     LDX #_EASTER_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -6701,9 +6755,12 @@ CE_364:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_HUGE_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -6776,9 +6833,12 @@ CE_367:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_LARGE_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -6851,9 +6911,12 @@ CE_370:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_MEDIUM_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -6895,9 +6958,12 @@ IF_NEXT_368:
     STA DRAW_VEC_X
     LDA TMPPTR+1  ; Y position
     STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_BUBBLE_SMALL_PATH0  ; Path 0
-    JSR Draw_Sync_List_At
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
@@ -7154,7 +7220,26 @@ _PLAYER_WALK_1_WIDTH EQU 19
 _PLAYER_WALK_1_CENTER_X EQU 1
 _PLAYER_WALK_1_CENTER_Y EQU 0
 
-_PLAYER_WALK_1_VECTORS:  ; Main entry
+_PLAYER_WALK_1_VECTORS:  ; Main entry (header + 17 path(s))
+    FCB 17               ; path_count (runtime metadata)
+    FDB _PLAYER_WALK_1_PATH0        ; pointer to path 0
+    FDB _PLAYER_WALK_1_PATH1        ; pointer to path 1
+    FDB _PLAYER_WALK_1_PATH2        ; pointer to path 2
+    FDB _PLAYER_WALK_1_PATH3        ; pointer to path 3
+    FDB _PLAYER_WALK_1_PATH4        ; pointer to path 4
+    FDB _PLAYER_WALK_1_PATH5        ; pointer to path 5
+    FDB _PLAYER_WALK_1_PATH6        ; pointer to path 6
+    FDB _PLAYER_WALK_1_PATH7        ; pointer to path 7
+    FDB _PLAYER_WALK_1_PATH8        ; pointer to path 8
+    FDB _PLAYER_WALK_1_PATH9        ; pointer to path 9
+    FDB _PLAYER_WALK_1_PATH10        ; pointer to path 10
+    FDB _PLAYER_WALK_1_PATH11        ; pointer to path 11
+    FDB _PLAYER_WALK_1_PATH12        ; pointer to path 12
+    FDB _PLAYER_WALK_1_PATH13        ; pointer to path 13
+    FDB _PLAYER_WALK_1_PATH14        ; pointer to path 14
+    FDB _PLAYER_WALK_1_PATH15        ; pointer to path 15
+    FDB _PLAYER_WALK_1_PATH16        ; pointer to path 16
+
 _PLAYER_WALK_1_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0C,$FB,0,0        ; path0: header (y=12, x=-5, relative to center)
@@ -7309,7 +7394,26 @@ _PLAYER_WALK_2_WIDTH EQU 21
 _PLAYER_WALK_2_CENTER_X EQU 0
 _PLAYER_WALK_2_CENTER_Y EQU -1
 
-_PLAYER_WALK_2_VECTORS:  ; Main entry
+_PLAYER_WALK_2_VECTORS:  ; Main entry (header + 17 path(s))
+    FCB 17               ; path_count (runtime metadata)
+    FDB _PLAYER_WALK_2_PATH0        ; pointer to path 0
+    FDB _PLAYER_WALK_2_PATH1        ; pointer to path 1
+    FDB _PLAYER_WALK_2_PATH2        ; pointer to path 2
+    FDB _PLAYER_WALK_2_PATH3        ; pointer to path 3
+    FDB _PLAYER_WALK_2_PATH4        ; pointer to path 4
+    FDB _PLAYER_WALK_2_PATH5        ; pointer to path 5
+    FDB _PLAYER_WALK_2_PATH6        ; pointer to path 6
+    FDB _PLAYER_WALK_2_PATH7        ; pointer to path 7
+    FDB _PLAYER_WALK_2_PATH8        ; pointer to path 8
+    FDB _PLAYER_WALK_2_PATH9        ; pointer to path 9
+    FDB _PLAYER_WALK_2_PATH10        ; pointer to path 10
+    FDB _PLAYER_WALK_2_PATH11        ; pointer to path 11
+    FDB _PLAYER_WALK_2_PATH12        ; pointer to path 12
+    FDB _PLAYER_WALK_2_PATH13        ; pointer to path 13
+    FDB _PLAYER_WALK_2_PATH14        ; pointer to path 14
+    FDB _PLAYER_WALK_2_PATH15        ; pointer to path 15
+    FDB _PLAYER_WALK_2_PATH16        ; pointer to path 16
+
 _PLAYER_WALK_2_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0D,$FC,0,0        ; path0: header (y=13, x=-4, relative to center)
@@ -7464,7 +7568,10 @@ _BUBBLE_HUGE_WIDTH EQU 52
 _BUBBLE_HUGE_CENTER_X EQU 1
 _BUBBLE_HUGE_CENTER_Y EQU 0
 
-_BUBBLE_HUGE_VECTORS:  ; Main entry
+_BUBBLE_HUGE_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _BUBBLE_HUGE_PATH0        ; pointer to path 0
+
 _BUBBLE_HUGE_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $00,$1A,0,0        ; path0: header (y=0, x=26, relative to center)
@@ -7488,7 +7595,26 @@ _PLAYER_WALK_3_WIDTH EQU 20
 _PLAYER_WALK_3_CENTER_X EQU 1
 _PLAYER_WALK_3_CENTER_Y EQU -1
 
-_PLAYER_WALK_3_VECTORS:  ; Main entry
+_PLAYER_WALK_3_VECTORS:  ; Main entry (header + 17 path(s))
+    FCB 17               ; path_count (runtime metadata)
+    FDB _PLAYER_WALK_3_PATH0        ; pointer to path 0
+    FDB _PLAYER_WALK_3_PATH1        ; pointer to path 1
+    FDB _PLAYER_WALK_3_PATH2        ; pointer to path 2
+    FDB _PLAYER_WALK_3_PATH3        ; pointer to path 3
+    FDB _PLAYER_WALK_3_PATH4        ; pointer to path 4
+    FDB _PLAYER_WALK_3_PATH5        ; pointer to path 5
+    FDB _PLAYER_WALK_3_PATH6        ; pointer to path 6
+    FDB _PLAYER_WALK_3_PATH7        ; pointer to path 7
+    FDB _PLAYER_WALK_3_PATH8        ; pointer to path 8
+    FDB _PLAYER_WALK_3_PATH9        ; pointer to path 9
+    FDB _PLAYER_WALK_3_PATH10        ; pointer to path 10
+    FDB _PLAYER_WALK_3_PATH11        ; pointer to path 11
+    FDB _PLAYER_WALK_3_PATH12        ; pointer to path 12
+    FDB _PLAYER_WALK_3_PATH13        ; pointer to path 13
+    FDB _PLAYER_WALK_3_PATH14        ; pointer to path 14
+    FDB _PLAYER_WALK_3_PATH15        ; pointer to path 15
+    FDB _PLAYER_WALK_3_PATH16        ; pointer to path 16
+
 _PLAYER_WALK_3_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0D,$FB,0,0        ; path0: header (y=13, x=-5, relative to center)
@@ -7643,7 +7769,26 @@ _PLAYER_WALK_4_WIDTH EQU 19
 _PLAYER_WALK_4_CENTER_X EQU 1
 _PLAYER_WALK_4_CENTER_Y EQU -1
 
-_PLAYER_WALK_4_VECTORS:  ; Main entry
+_PLAYER_WALK_4_VECTORS:  ; Main entry (header + 17 path(s))
+    FCB 17               ; path_count (runtime metadata)
+    FDB _PLAYER_WALK_4_PATH0        ; pointer to path 0
+    FDB _PLAYER_WALK_4_PATH1        ; pointer to path 1
+    FDB _PLAYER_WALK_4_PATH2        ; pointer to path 2
+    FDB _PLAYER_WALK_4_PATH3        ; pointer to path 3
+    FDB _PLAYER_WALK_4_PATH4        ; pointer to path 4
+    FDB _PLAYER_WALK_4_PATH5        ; pointer to path 5
+    FDB _PLAYER_WALK_4_PATH6        ; pointer to path 6
+    FDB _PLAYER_WALK_4_PATH7        ; pointer to path 7
+    FDB _PLAYER_WALK_4_PATH8        ; pointer to path 8
+    FDB _PLAYER_WALK_4_PATH9        ; pointer to path 9
+    FDB _PLAYER_WALK_4_PATH10        ; pointer to path 10
+    FDB _PLAYER_WALK_4_PATH11        ; pointer to path 11
+    FDB _PLAYER_WALK_4_PATH12        ; pointer to path 12
+    FDB _PLAYER_WALK_4_PATH13        ; pointer to path 13
+    FDB _PLAYER_WALK_4_PATH14        ; pointer to path 14
+    FDB _PLAYER_WALK_4_PATH15        ; pointer to path 15
+    FDB _PLAYER_WALK_4_PATH16        ; pointer to path 16
+
 _PLAYER_WALK_4_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0D,$FB,0,0        ; path0: header (y=13, x=-5, relative to center)
@@ -7798,7 +7943,26 @@ _PLAYER_WALK_5_WIDTH EQU 19
 _PLAYER_WALK_5_CENTER_X EQU 1
 _PLAYER_WALK_5_CENTER_Y EQU 0
 
-_PLAYER_WALK_5_VECTORS:  ; Main entry
+_PLAYER_WALK_5_VECTORS:  ; Main entry (header + 17 path(s))
+    FCB 17               ; path_count (runtime metadata)
+    FDB _PLAYER_WALK_5_PATH0        ; pointer to path 0
+    FDB _PLAYER_WALK_5_PATH1        ; pointer to path 1
+    FDB _PLAYER_WALK_5_PATH2        ; pointer to path 2
+    FDB _PLAYER_WALK_5_PATH3        ; pointer to path 3
+    FDB _PLAYER_WALK_5_PATH4        ; pointer to path 4
+    FDB _PLAYER_WALK_5_PATH5        ; pointer to path 5
+    FDB _PLAYER_WALK_5_PATH6        ; pointer to path 6
+    FDB _PLAYER_WALK_5_PATH7        ; pointer to path 7
+    FDB _PLAYER_WALK_5_PATH8        ; pointer to path 8
+    FDB _PLAYER_WALK_5_PATH9        ; pointer to path 9
+    FDB _PLAYER_WALK_5_PATH10        ; pointer to path 10
+    FDB _PLAYER_WALK_5_PATH11        ; pointer to path 11
+    FDB _PLAYER_WALK_5_PATH12        ; pointer to path 12
+    FDB _PLAYER_WALK_5_PATH13        ; pointer to path 13
+    FDB _PLAYER_WALK_5_PATH14        ; pointer to path 14
+    FDB _PLAYER_WALK_5_PATH15        ; pointer to path 15
+    FDB _PLAYER_WALK_5_PATH16        ; pointer to path 16
+
 _PLAYER_WALK_5_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0C,$FB,0,0        ; path0: header (y=12, x=-5, relative to center)
@@ -7953,7 +8117,10 @@ _BUBBLE_LARGE_WIDTH EQU 40
 _BUBBLE_LARGE_CENTER_X EQU 0
 _BUBBLE_LARGE_CENTER_Y EQU 0
 
-_BUBBLE_LARGE_VECTORS:  ; Main entry
+_BUBBLE_LARGE_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _BUBBLE_LARGE_PATH0        ; pointer to path 0
+
 _BUBBLE_LARGE_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $00,$14,0,0        ; path0: header (y=0, x=20, relative to center)
@@ -7993,7 +8160,14 @@ _NEWYORK_BG_WIDTH EQU 50
 _NEWYORK_BG_CENTER_X EQU 0
 _NEWYORK_BG_CENTER_Y EQU 27
 
-_NEWYORK_BG_VECTORS:  ; Main entry
+_NEWYORK_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _NEWYORK_BG_PATH0        ; pointer to path 0
+    FDB _NEWYORK_BG_PATH1        ; pointer to path 1
+    FDB _NEWYORK_BG_PATH2        ; pointer to path 2
+    FDB _NEWYORK_BG_PATH3        ; pointer to path 3
+    FDB _NEWYORK_BG_PATH4        ; pointer to path 4
+
 _NEWYORK_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $21,$FB,0,0        ; path0: header (y=33, x=-5, relative to center)
@@ -8046,7 +8220,13 @@ _PYRAMIDS_BG_WIDTH EQU 180
 _PYRAMIDS_BG_CENTER_X EQU 0
 _PYRAMIDS_BG_CENTER_Y EQU 0
 
-_PYRAMIDS_BG_VECTORS:  ; Main entry
+_PYRAMIDS_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _PYRAMIDS_BG_PATH0        ; pointer to path 0
+    FDB _PYRAMIDS_BG_PATH1        ; pointer to path 1
+    FDB _PYRAMIDS_BG_PATH2        ; pointer to path 2
+    FDB _PYRAMIDS_BG_PATH3        ; pointer to path 3
+
 _PYRAMIDS_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $D3,$A6,0,0        ; path0: header (y=-45, x=-90, relative to center)
@@ -8083,7 +8263,14 @@ _EASTER_BG_WIDTH EQU 70
 _EASTER_BG_CENTER_X EQU 0
 _EASTER_BG_CENTER_Y EQU 15
 
-_EASTER_BG_VECTORS:  ; Main entry
+_EASTER_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _EASTER_BG_PATH0        ; pointer to path 0
+    FDB _EASTER_BG_PATH1        ; pointer to path 1
+    FDB _EASTER_BG_PATH2        ; pointer to path 2
+    FDB _EASTER_BG_PATH3        ; pointer to path 3
+    FDB _EASTER_BG_PATH4        ; pointer to path 4
+
 _EASTER_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $05,$E7,0,0        ; path0: header (y=5, x=-25, relative to center)
@@ -8133,7 +8320,12 @@ _KEIRIN_BG_WIDTH EQU 200
 _KEIRIN_BG_CENTER_X EQU 0
 _KEIRIN_BG_CENTER_Y EQU 10
 
-_KEIRIN_BG_VECTORS:  ; Main entry
+_KEIRIN_BG_VECTORS:  ; Main entry (header + 3 path(s))
+    FCB 3               ; path_count (runtime metadata)
+    FDB _KEIRIN_BG_PATH0        ; pointer to path 0
+    FDB _KEIRIN_BG_PATH1        ; pointer to path 1
+    FDB _KEIRIN_BG_PATH2        ; pointer to path 2
+
 _KEIRIN_BG_PATH0:    ; Path 0
     FCB 100              ; path0: intensity
     FCB $D8,$9C,0,0        ; path0: header (y=-40, x=-100, relative to center)
@@ -8167,7 +8359,13 @@ _BARCELONA_BG_WIDTH EQU 100
 _BARCELONA_BG_CENTER_X EQU 0
 _BARCELONA_BG_CENTER_Y EQU 22
 
-_BARCELONA_BG_VECTORS:  ; Main entry
+_BARCELONA_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _BARCELONA_BG_PATH0        ; pointer to path 0
+    FDB _BARCELONA_BG_PATH1        ; pointer to path 1
+    FDB _BARCELONA_BG_PATH2        ; pointer to path 2
+    FDB _BARCELONA_BG_PATH3        ; pointer to path 3
+
 _BARCELONA_BG_PATH0:    ; Path 0
     FCB 120              ; path0: intensity
     FCB $D6,$CE,0,0        ; path0: header (y=-42, x=-50, relative to center)
@@ -8214,7 +8412,10 @@ _BUBBLE_SMALL_WIDTH EQU 20
 _BUBBLE_SMALL_CENTER_X EQU 0
 _BUBBLE_SMALL_CENTER_Y EQU 0
 
-_BUBBLE_SMALL_VECTORS:  ; Main entry
+_BUBBLE_SMALL_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _BUBBLE_SMALL_PATH0        ; pointer to path 0
+
 _BUBBLE_SMALL_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $00,$0A,0,0        ; path0: header (y=0, x=10, relative to center)
@@ -8254,7 +8455,16 @@ _LOGO_WIDTH EQU 163
 _LOGO_CENTER_X EQU 0
 _LOGO_CENTER_Y EQU 0
 
-_LOGO_VECTORS:  ; Main entry
+_LOGO_VECTORS:  ; Main entry (header + 7 path(s))
+    FCB 7               ; path_count (runtime metadata)
+    FDB _LOGO_PATH0        ; pointer to path 0
+    FDB _LOGO_PATH1        ; pointer to path 1
+    FDB _LOGO_PATH2        ; pointer to path 2
+    FDB _LOGO_PATH3        ; pointer to path 3
+    FDB _LOGO_PATH4        ; pointer to path 4
+    FDB _LOGO_PATH5        ; pointer to path 5
+    FDB _LOGO_PATH6        ; pointer to path 6
+
 _LOGO_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $13,$AE,0,0        ; path0: header (y=19, x=-82, relative to center)
@@ -8358,7 +8568,12 @@ _ANGKOR_BG_WIDTH EQU 120
 _ANGKOR_BG_CENTER_X EQU 0
 _ANGKOR_BG_CENTER_Y EQU 12
 
-_ANGKOR_BG_VECTORS:  ; Main entry
+_ANGKOR_BG_VECTORS:  ; Main entry (header + 3 path(s))
+    FCB 3               ; path_count (runtime metadata)
+    FDB _ANGKOR_BG_PATH0        ; pointer to path 0
+    FDB _ANGKOR_BG_PATH1        ; pointer to path 1
+    FDB _ANGKOR_BG_PATH2        ; pointer to path 2
+
 _ANGKOR_BG_PATH0:    ; Path 0
     FCB 120              ; path0: intensity
     FCB $D6,$EC,0,0        ; path0: header (y=-42, x=-20, relative to center)
@@ -8397,7 +8612,14 @@ _PARIS_BG_WIDTH EQU 100
 _PARIS_BG_CENTER_X EQU 0
 _PARIS_BG_CENTER_Y EQU 17
 
-_PARIS_BG_VECTORS:  ; Main entry
+_PARIS_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _PARIS_BG_PATH0        ; pointer to path 0
+    FDB _PARIS_BG_PATH1        ; pointer to path 1
+    FDB _PARIS_BG_PATH2        ; pointer to path 2
+    FDB _PARIS_BG_PATH3        ; pointer to path 3
+    FDB _PARIS_BG_PATH4        ; pointer to path 4
+
 _PARIS_BG_PATH0:    ; Path 0
     FCB 100              ; path0: intensity
     FCB $D1,$CE,0,0        ; path0: header (y=-47, x=-50, relative to center)
@@ -8443,7 +8665,13 @@ _BUDDHA_BG_WIDTH EQU 160
 _BUDDHA_BG_CENTER_X EQU 0
 _BUDDHA_BG_CENTER_Y EQU 20
 
-_BUDDHA_BG_VECTORS:  ; Main entry
+_BUDDHA_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _BUDDHA_BG_PATH0        ; pointer to path 0
+    FDB _BUDDHA_BG_PATH1        ; pointer to path 1
+    FDB _BUDDHA_BG_PATH2        ; pointer to path 2
+    FDB _BUDDHA_BG_PATH3        ; pointer to path 3
+
 _BUDDHA_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $14,$B0,0,0        ; path0: header (y=20, x=-80, relative to center)
@@ -8480,7 +8708,13 @@ _TAJ_BG_WIDTH EQU 140
 _TAJ_BG_CENTER_X EQU 0
 _TAJ_BG_CENTER_Y EQU 22
 
-_TAJ_BG_VECTORS:  ; Main entry
+_TAJ_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _TAJ_BG_PATH0        ; pointer to path 0
+    FDB _TAJ_BG_PATH1        ; pointer to path 1
+    FDB _TAJ_BG_PATH2        ; pointer to path 2
+    FDB _TAJ_BG_PATH3        ; pointer to path 3
+
 _TAJ_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $12,$E2,0,0        ; path0: header (y=18, x=-30, relative to center)
@@ -8520,7 +8754,14 @@ _MAYAN_BG_WIDTH EQU 160
 _MAYAN_BG_CENTER_X EQU 0
 _MAYAN_BG_CENTER_Y EQU 10
 
-_MAYAN_BG_VECTORS:  ; Main entry
+_MAYAN_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _MAYAN_BG_PATH0        ; pointer to path 0
+    FDB _MAYAN_BG_PATH1        ; pointer to path 1
+    FDB _MAYAN_BG_PATH2        ; pointer to path 2
+    FDB _MAYAN_BG_PATH3        ; pointer to path 3
+    FDB _MAYAN_BG_PATH4        ; pointer to path 4
+
 _MAYAN_BG_PATH0:    ; Path 0
     FCB 100              ; path0: intensity
     FCB $D8,$B0,0,0        ; path0: header (y=-40, x=-80, relative to center)
@@ -8571,7 +8812,10 @@ _HOOK_WIDTH EQU 12
 _HOOK_CENTER_X EQU 0
 _HOOK_CENTER_Y EQU 0
 
-_HOOK_VECTORS:  ; Main entry
+_HOOK_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _HOOK_PATH0        ; pointer to path 0
+
 _HOOK_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $FC,$FA,0,0        ; path0: header (y=-4, x=-6, relative to center)
@@ -8596,7 +8840,24 @@ _MAP_WIDTH EQU 242
 _MAP_CENTER_X EQU -6
 _MAP_CENTER_Y EQU -3
 
-_MAP_VECTORS:  ; Main entry
+_MAP_VECTORS:  ; Main entry (header + 15 path(s))
+    FCB 15               ; path_count (runtime metadata)
+    FDB _MAP_PATH0        ; pointer to path 0
+    FDB _MAP_PATH1        ; pointer to path 1
+    FDB _MAP_PATH2        ; pointer to path 2
+    FDB _MAP_PATH3        ; pointer to path 3
+    FDB _MAP_PATH4        ; pointer to path 4
+    FDB _MAP_PATH5        ; pointer to path 5
+    FDB _MAP_PATH6        ; pointer to path 6
+    FDB _MAP_PATH7        ; pointer to path 7
+    FDB _MAP_PATH8        ; pointer to path 8
+    FDB _MAP_PATH9        ; pointer to path 9
+    FDB _MAP_PATH10        ; pointer to path 10
+    FDB _MAP_PATH11        ; pointer to path 11
+    FDB _MAP_PATH12        ; pointer to path 12
+    FDB _MAP_PATH13        ; pointer to path 13
+    FDB _MAP_PATH14        ; pointer to path 14
+
 _MAP_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $22,$D7,0,0        ; path0: header (y=34, x=-41, relative to center)
@@ -8832,7 +9093,13 @@ _LONDON_BG_WIDTH EQU 40
 _LONDON_BG_CENTER_X EQU 0
 _LONDON_BG_CENTER_Y EQU 15
 
-_LONDON_BG_VECTORS:  ; Main entry
+_LONDON_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _LONDON_BG_PATH0        ; pointer to path 0
+    FDB _LONDON_BG_PATH1        ; pointer to path 1
+    FDB _LONDON_BG_PATH2        ; pointer to path 2
+    FDB _LONDON_BG_PATH3        ; pointer to path 3
+
 _LONDON_BG_PATH0:    ; Path 0
     FCB 110              ; path0: intensity
     FCB $D3,$EC,0,0        ; path0: header (y=-45, x=-20, relative to center)
@@ -8875,7 +9142,14 @@ _LENINGRAD_BG_WIDTH EQU 60
 _LENINGRAD_BG_CENTER_X EQU 0
 _LENINGRAD_BG_CENTER_Y EQU 30
 
-_LENINGRAD_BG_VECTORS:  ; Main entry
+_LENINGRAD_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _LENINGRAD_BG_PATH0        ; pointer to path 0
+    FDB _LENINGRAD_BG_PATH1        ; pointer to path 1
+    FDB _LENINGRAD_BG_PATH2        ; pointer to path 2
+    FDB _LENINGRAD_BG_PATH3        ; pointer to path 3
+    FDB _LENINGRAD_BG_PATH4        ; pointer to path 4
+
 _LENINGRAD_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $05,$E7,0,0        ; path0: header (y=5, x=-25, relative to center)
@@ -8927,7 +9201,10 @@ _LOCATION_MARKER_WIDTH EQU 22
 _LOCATION_MARKER_CENTER_X EQU 0
 _LOCATION_MARKER_CENTER_Y EQU 1
 
-_LOCATION_MARKER_VECTORS:  ; Main entry
+_LOCATION_MARKER_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _LOCATION_MARKER_PATH0        ; pointer to path 0
+
 _LOCATION_MARKER_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $0B,$00,0,0        ; path0: header (y=11, x=0, relative to center)
@@ -8953,7 +9230,12 @@ _AYERS_BG_WIDTH EQU 180
 _AYERS_BG_CENTER_X EQU 0
 _AYERS_BG_CENTER_Y EQU 10
 
-_AYERS_BG_VECTORS:  ; Main entry
+_AYERS_BG_VECTORS:  ; Main entry (header + 3 path(s))
+    FCB 3               ; path_count (runtime metadata)
+    FDB _AYERS_BG_PATH0        ; pointer to path 0
+    FDB _AYERS_BG_PATH1        ; pointer to path 1
+    FDB _AYERS_BG_PATH2        ; pointer to path 2
+
 _AYERS_BG_PATH0:    ; Path 0
     FCB 110              ; path0: intensity
     FCB $D8,$A6,0,0        ; path0: header (y=-40, x=-90, relative to center)
@@ -8989,7 +9271,15 @@ _FUJI_BG_WIDTH EQU 250
 _FUJI_BG_CENTER_X EQU 0
 _FUJI_BG_CENTER_Y EQU 0
 
-_FUJI_BG_VECTORS:  ; Main entry
+_FUJI_BG_VECTORS:  ; Main entry (header + 6 path(s))
+    FCB 6               ; path_count (runtime metadata)
+    FDB _FUJI_BG_PATH0        ; pointer to path 0
+    FDB _FUJI_BG_PATH1        ; pointer to path 1
+    FDB _FUJI_BG_PATH2        ; pointer to path 2
+    FDB _FUJI_BG_PATH3        ; pointer to path 3
+    FDB _FUJI_BG_PATH4        ; pointer to path 4
+    FDB _FUJI_BG_PATH5        ; pointer to path 5
+
 _FUJI_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $CF,$83,0,0        ; path0: header (y=-49, x=-125, relative to center)
@@ -9089,7 +9379,13 @@ _KILIMANJARO_BG_WIDTH EQU 200
 _KILIMANJARO_BG_CENTER_X EQU 0
 _KILIMANJARO_BG_CENTER_Y EQU 12
 
-_KILIMANJARO_BG_VECTORS:  ; Main entry
+_KILIMANJARO_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _KILIMANJARO_BG_PATH0        ; pointer to path 0
+    FDB _KILIMANJARO_BG_PATH1        ; pointer to path 1
+    FDB _KILIMANJARO_BG_PATH2        ; pointer to path 2
+    FDB _KILIMANJARO_BG_PATH3        ; pointer to path 3
+
 _KILIMANJARO_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $D6,$9C,0,0        ; path0: header (y=-42, x=-100, relative to center)
@@ -9129,7 +9425,16 @@ _ATHENS_BG_WIDTH EQU 160
 _ATHENS_BG_CENTER_X EQU 0
 _ATHENS_BG_CENTER_Y EQU 22
 
-_ATHENS_BG_VECTORS:  ; Main entry
+_ATHENS_BG_VECTORS:  ; Main entry (header + 7 path(s))
+    FCB 7               ; path_count (runtime metadata)
+    FDB _ATHENS_BG_PATH0        ; pointer to path 0
+    FDB _ATHENS_BG_PATH1        ; pointer to path 1
+    FDB _ATHENS_BG_PATH2        ; pointer to path 2
+    FDB _ATHENS_BG_PATH3        ; pointer to path 3
+    FDB _ATHENS_BG_PATH4        ; pointer to path 4
+    FDB _ATHENS_BG_PATH5        ; pointer to path 5
+    FDB _ATHENS_BG_PATH6        ; pointer to path 6
+
 _ATHENS_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $12,$B0,0,0        ; path0: header (y=18, x=-80, relative to center)
@@ -9183,7 +9488,13 @@ _ANTARCTICA_BG_WIDTH EQU 240
 _ANTARCTICA_BG_CENTER_X EQU 0
 _ANTARCTICA_BG_CENTER_Y EQU 15
 
-_ANTARCTICA_BG_VECTORS:  ; Main entry
+_ANTARCTICA_BG_VECTORS:  ; Main entry (header + 4 path(s))
+    FCB 4               ; path_count (runtime metadata)
+    FDB _ANTARCTICA_BG_PATH0        ; pointer to path 0
+    FDB _ANTARCTICA_BG_PATH1        ; pointer to path 1
+    FDB _ANTARCTICA_BG_PATH2        ; pointer to path 2
+    FDB _ANTARCTICA_BG_PATH3        ; pointer to path 3
+
 _ANTARCTICA_BG_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $DD,$B0,0,0        ; path0: header (y=-35, x=-80, relative to center)
@@ -9222,7 +9533,10 @@ _BUBBLE_MEDIUM_WIDTH EQU 30
 _BUBBLE_MEDIUM_CENTER_X EQU 0
 _BUBBLE_MEDIUM_CENTER_Y EQU 0
 
-_BUBBLE_MEDIUM_VECTORS:  ; Main entry
+_BUBBLE_MEDIUM_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _BUBBLE_MEDIUM_PATH0        ; pointer to path 0
+
 _BUBBLE_MEDIUM_PATH0:    ; Path 0
     FCB 127              ; path0: intensity
     FCB $00,$0F,0,0        ; path0: header (y=0, x=15, relative to center)

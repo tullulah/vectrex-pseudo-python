@@ -92,10 +92,14 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA DRAW_VEC_Y\n");
                 
                 // Generate code to draw each path at offset position
+                // Clear mirror flags (DRAW_VECTOR uses no mirroring)
+                out.push_str("    CLR MIRROR_X\n");
+                out.push_str("    CLR MIRROR_Y\n");
+                out.push_str("    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data\n");
                 out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    JSR Draw_Sync_List_At\n");
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function\n");
                 }
                 out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
