@@ -785,7 +785,7 @@ SLR_BG_COUNT:
     CMPB #0
     BEQ SLR_GAMEPLAY
 SLR_BG_PTR:
-    LDX >LEVEL_BG_PTR
+    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)
     JSR SLR_DRAW_OBJECTS
     
     ; === Draw Gameplay Layer ===
@@ -796,7 +796,7 @@ SLR_GP_COUNT:
     CMPB #0
     BEQ SLR_FOREGROUND
 SLR_GP_PTR:
-    LDX >LEVEL_GP_PTR
+    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)
     JSR SLR_DRAW_OBJECTS
     
     ; === Draw Foreground Layer ===
@@ -807,7 +807,7 @@ SLR_FG_COUNT:
     CMPB #0
     BEQ SLR_DONE
 SLR_FG_PTR:
-    LDX >LEVEL_FG_PTR
+    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)
     JSR SLR_DRAW_OBJECTS
     
 SLR_DONE:
@@ -926,7 +926,7 @@ ULR_EXIT:
 ULR_UPDATE_LAYER:
     LDX LEVEL_PTR  ; Load level pointer for world bounds
     CMPX #0
-    BEQ ULR_LAYER_EXIT  ; No level loaded
+    LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)
     
 ULR_LOOP:
     ; U = pointer to object data (24 bytes per object)
@@ -947,11 +947,11 @@ ULR_LOOP:
     PSHS B  ; Save loop counter
     LDB 11,U     ; Read flags
     CMPB #0
-    BEQ ULR_NEXT  ; Skip if no physics enabled
+    LBEQ ULR_NEXT  ; Skip if no physics enabled (long branch)
 
     ; Check if dynamic physics enabled (bit 0)
     BITB #$01
-    BEQ ULR_NEXT  ; Skip if not dynamic
+    LBEQ ULR_NEXT  ; Skip if not dynamic (long branch)
 
     ; Check if gravity enabled (bit 1)
     BITB #$02
@@ -984,31 +984,94 @@ ULR_NO_GRAVITY:
     ; === Check World Bounds (Wall Collisions) ===
     LDB 12,U      ; Load collision_flags
     BITB #$02     ; Check bounce_walls flag (bit 1)
-    BEQ ULR_NEXT  ; Skip bounce if not enabled
+    LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
 
-    ; World bounds from LEVEL_PTR (X already loaded)
+    ; Load world bounds pointer from LEVEL_PTR
+    LDX LEVEL_PTR
     ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)
 
-    ; Check Y bounds (more common in falling)
+    ; === Check X Bounds (Left/Right walls with collision_size) ===
+    ; Check xMin: if (x - collision_size) < xMin then bounce
+    LDB 13,U      ; Load collision_size
+    SEX           ; Sign-extend to 16-bit
+    TFR D,Y       ; Y = collision_size
+    LDD 1,U       ; Load object x
+    SUBD ,Y       ; D = x - collision_size
+    CMPD 0,X      ; Compare with xMin
+    BGE ULR_X_MAX_CHECK  ; Skip if x >= xMin
+    ; Hit xMin wall - only bounce if moving left (velocity_x < 0)
+    LDB 9,U       ; velocity_x
+    CMPB #0
+    BGE ULR_X_MAX_CHECK  ; Skip if moving right (already bouncing away)
+    ; Bounce: set position and reverse velocity
+    LDD 0,X       ; D = xMin
+    ADDD ,Y       ; D = xMin + collision_size
+    STD 1,U       ; x = xMin + collision_size
+    LDB 9,U       ; Reload velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB 9,U
+
+    ; Check xMax: if (x + collision_size) > xMax then bounce
+ULR_X_MAX_CHECK:
+    LDB 13,U      ; Reload collision_size
+    SEX
+    TFR D,Y
+    LDD 1,U       ; Load object x
+    ADDD ,Y       ; D = x + collision_size
+    CMPD 2,X      ; Compare with xMax
+    BLE ULR_Y_BOUNDS  ; Skip if x <= xMax
+    ; Hit xMax wall - only bounce if moving right (velocity_x > 0)
+    LDB 9,U       ; velocity_x
+    CMPB #0
+    BLE ULR_Y_BOUNDS  ; Skip if moving left (already bouncing away)
+    ; Bounce: set position and reverse velocity
+    LDD 2,X       ; D = xMax
+    SUBD ,Y       ; D = xMax - collision_size
+    STD 1,U       ; x = xMax - collision_size
+    LDB 9,U       ; Reload velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB 9,U
+
+    ; === Check Y Bounds (Top/Bottom walls with collision_size) ===
+ULR_Y_BOUNDS:
+    ; Check yMin: if (y - collision_size) < yMin then bounce
+    LDB 13,U      ; Reload collision_size
+    SEX
+    TFR D,Y
     LDD 3,U       ; Load object y
-    CMPD 4,X      ; Compare y with yMin (direct value at offset 4)
-    BGE ULR_Y_MIN_OK
-    ; Hit yMin wall - bounce
-    LDD 4,X       ; D = yMin (direct value)
-    STD 3,U       ; y = yMin
+    SUBD ,Y       ; D = y - collision_size
+    CMPD 4,X      ; Compare with yMin
+    BGE ULR_Y_MAX_CHECK  ; Skip if y >= yMin
+    ; Hit yMin wall - only bounce if moving down (velocity_y < 0)
     LDB 10,U      ; velocity_y
+    CMPB #0
+    BGE ULR_Y_MAX_CHECK  ; Skip if moving up (already bouncing away)
+    ; Bounce: set position and reverse velocity
+    LDD 4,X       ; D = yMin
+    ADDD ,Y       ; D = yMin + collision_size
+    STD 3,U       ; y = yMin + collision_size
+    LDB 10,U      ; Reload velocity_y
     NEGB          ; velocity_y = -velocity_y
     STB 10,U
-ULR_Y_MIN_OK:
 
-    ; Check yMax
+    ; Check yMax: if (y + collision_size) > yMax then bounce
+ULR_Y_MAX_CHECK:
+    LDB 13,U      ; Reload collision_size
+    SEX
+    TFR D,Y
     LDD 3,U       ; Load object y
-    CMPD 6,X      ; Compare with yMax (direct value at offset 6)
-    BLE ULR_NEXT
-    ; Hit yMax wall - bounce
-    LDD 6,X       ; D = yMax (direct value)
-    STD 3,U       ; y = yMax
+    ADDD ,Y       ; D = y + collision_size
+    CMPD 6,X      ; Compare with yMax
+    BLE ULR_NEXT  ; Skip if y <= yMax
+    ; Hit yMax wall - only bounce if moving up (velocity_y > 0)
     LDB 10,U      ; velocity_y
+    CMPB #0
+    BLE ULR_NEXT  ; Skip if moving down (already bouncing away)
+    ; Bounce: set position and reverse velocity
+    LDD 6,X       ; D = yMax
+    SUBD ,Y       ; D = yMax - collision_size
+    STD 3,U       ; y = yMax - collision_size
+    LDB 10,U      ; Reload velocity_y
     NEGB          ; velocity_y = -velocity_y
     STB 10,U
 
@@ -1016,7 +1079,7 @@ ULR_NEXT:
     PULS B        ; Restore loop counter
     LEAU 20,U     ; Move to next object (20 bytes)
     DECB
-    BNE ULR_LOOP  ; Continue if more objects
+    LBNE ULR_LOOP  ; Continue if more objects (long branch)
 
 ULR_LAYER_EXIT:
     RTS
@@ -1076,17 +1139,17 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:14
-; NATIVE_CALL: UPDATE_LEVEL at line 14
-    JSR UPDATE_LEVEL_RUNTIME
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:15
+    ; VPy_LINE:13
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
+    STD RESULT
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:15
+; NATIVE_CALL: UPDATE_LEVEL at line 15
+    JSR UPDATE_LEVEL_RUNTIME
+    CLRA
+    CLRB
     STD RESULT
     RTS
 
@@ -1325,9 +1388,9 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
+    FCB 1  ; velocity_x
     FCB 0  ; velocity_y
-    FCB 3  ; physics_flags
+    FCB 1  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay
@@ -1341,9 +1404,9 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 11  ; velocity_x
-    FCB 5  ; velocity_y
-    FCB 3  ; physics_flags
+    FCB 1  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 1  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay
@@ -1357,9 +1420,9 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 1  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 3  ; physics_flags
+    FCB 0  ; velocity_x
+    FCB 254  ; velocity_y
+    FCB 1  ; physics_flags
     FCB 3  ; collision_flags
     FCB 10  ; collision_size
     FDB 0  ; spawn_delay

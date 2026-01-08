@@ -46,8 +46,8 @@
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 2,
-          "y": -3
+          "x": 1,
+          "y": 0
         },
         "physicsEnabled": true,
         "collidable": true,
@@ -65,8 +65,8 @@
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": -3,
-          "y": -2
+          "x": 1,
+          "y": 0
         },
         "physicsEnabled": true,
         "collidable": true,
@@ -84,8 +84,8 @@
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 1,
-          "y": -1
+          "x": 0,
+          "y": -2
         },
         "physicsEnabled": true,
         "collidable": true,

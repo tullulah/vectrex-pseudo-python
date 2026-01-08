@@ -295,11 +295,12 @@ impl VPlayLevel {
                 collision_flags |= 0x01; // Bit 0: collision enabled
             }
             if collision.bounce_walls {
-                collision_flags |= 0x02; // Bit 1: bounce on walls
+                collision_flags |= 0x02; // Bit 1: bounce on Y walls (top/bottom)
             }
             if collision.shape == "circle" {
                 collision_flags |= 0x04; // Bit 2: circle shape (0=rect)
             }
+            // Bit 3: wrap X (default false = bounce on X walls)
         } else if obj.physics_enabled {
             // Playground flat format
             if obj.collidable {
@@ -310,7 +311,8 @@ impl VPlayLevel {
             // All physics types with collision should bounce on world bounds
             if let Some(ref physics_type) = obj.physics_type {
                 if physics_type == "bounce" || physics_type == "gravity" || physics_type == "projectile" {
-                    collision_flags |= 0x02; // Bit 1: bounce on walls
+                    collision_flags |= 0x02; // Bit 1: bounce on Y walls (top/bottom)
+                    // Bit 3 NOT set = also bounce on X walls (left/right)
                 }
             }
         }
