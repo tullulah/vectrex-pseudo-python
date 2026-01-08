@@ -1607,7 +1607,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    \n");
         out.push_str("    ; Read vector_ptr (offset +16-17)\n");
         out.push_str("    LDU 16,X\n");
-        out.push_str("    TFR X,Y          ; Save object pointer in Y\n");
+        out.push_str("    PSHS X           ; Save object pointer on stack (Y may be corrupted by Draw_Sync_List)\n");
         out.push_str("    TFR U,X          ; X = vector data pointer (points to header)\n");
         out.push_str("    \n");
         out.push_str("    ; Read path_count from header (byte 0)\n");
@@ -1631,9 +1631,8 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    BRA SLR_PATH_LOOP\n");
         out.push_str("    \n");
         out.push_str("SLR_PATH_DONE:\n");
-        out.push_str("    PULS B           ; Clean up stack (final count = 0)\n");
-        out.push_str("    \n");
-        out.push_str("    TFR Y,X          ; Restore object pointer\n");
+        out.push_str("    ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed\n");
+        out.push_str("    PULS X           ; Restore object pointer from stack\n");
         out.push_str("    \n");
         out.push_str("    ; Advance to next object (20 bytes)\n");
         out.push_str("    LEAX 20,X\n");

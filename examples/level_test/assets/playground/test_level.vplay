@@ -7,7 +7,7 @@
     "difficulty": "medium",
     "timeLimit": 0,
     "targetScore": 0,
-    "description": "Created in Playground - 2026-01-07"
+    "description": "Created in Playground - 2026-01-08"
   },
   "worldBounds": {
     "xMin": -96,
@@ -19,12 +19,12 @@
     "background": [],
     "gameplay": [
       {
-        "id": "obj_1767823597230",
+        "id": "obj_1767823651769",
         "type": "enemy",
-        "vectorName": "coin",
+        "vectorName": "fuji_bg",
         "layer": "gameplay",
-        "x": -40,
-        "y": 47,
+        "x": 0,
+        "y": 0,
         "rotation": 0,
         "scale": 1,
         "velocity": {
@@ -38,12 +38,31 @@
         "physicsType": "gravity"
       },
       {
-        "id": "obj_1767823651769",
+        "id": "obj_1767862794353",
         "type": "enemy",
-        "vectorName": "fuji_bg",
+        "vectorName": "bubble_huge",
         "layer": "gameplay",
-        "x": 0,
-        "y": 0,
+        "x": -62,
+        "y": 68,
+        "rotation": 0,
+        "scale": 1,
+        "velocity": {
+          "x": 0,
+          "y": 0
+        },
+        "physicsEnabled": false,
+        "collidable": true,
+        "gravity": 1,
+        "bounceDamping": 0.85,
+        "physicsType": "gravity"
+      },
+      {
+        "id": "obj_1767862796300",
+        "type": "enemy",
+        "vectorName": "bubble_large",
+        "layer": "gameplay",
+        "x": 60,
+        "y": 54,
         "rotation": 0,
         "scale": 1,
         "velocity": {
