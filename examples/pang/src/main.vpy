@@ -234,11 +234,11 @@ def draw_map_screen():
 def draw_title_screen():
     #Dibujar logo centrado
     SET_INTENSITY(80)
-    DRAW_VECTOR("logo", 0, 20)
+    DRAW_VECTOR("logo", 0, 70)
 
     SET_INTENSITY(title_intensity)
-    PRINT_TEXT(-90, -40, "PRESS A BUTTON")
-    PRINT_TEXT(-50, -60, "TO START")
+    PRINT_TEXT(-90, 0, "PRESS A BUTTON")
+    PRINT_TEXT(-50, -20, "TO START")
 
     if (title_state == 0):
         title_intensity += 1

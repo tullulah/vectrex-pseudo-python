@@ -124,6 +124,11 @@ pub fn get_builtin_arity(func_name: &str) -> Option<AritySpec> {
         "COS" | "MATH_COS" | "MATH.COS" => Some(AritySpec::Exact(1)),       // angle (0-127 represents 0-2π)
         "TAN" | "MATH_TAN" | "MATH.TAN" => Some(AritySpec::Exact(1)),       // angle (0-127 represents 0-2π)
         
+        // Level system functions (Phase 4: Dynamic Buffer Sizing)
+        "LOAD_LEVEL" => Some(AritySpec::Exact(1)),            // level_index - Load level data and allocate RAM buffer if physics enabled
+        "SHOW_LEVEL" => Some(AritySpec::Exact(0)),            // no arguments - Draw all level layers using pre-configured pointers
+        "UPDATE_LEVEL" => Some(AritySpec::Exact(0)),          // no arguments - Update gameplay layer physics objects
+        
         _ => None,
     }
 }
@@ -173,6 +178,11 @@ pub fn is_builtin_function(name: &str) -> bool {
     if matches!(upper.as_str(),
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|"MATH.SIN"|"MATH.COS"|"MATH.TAN"
     ) {
+        return true;
+    }
+    
+    // Level system functions (Phase 4: Dynamic Buffer Sizing)
+    if matches!(upper.as_str(), "LOAD_LEVEL"|"SHOW_LEVEL"|"UPDATE_LEVEL") {
         return true;
     }
     

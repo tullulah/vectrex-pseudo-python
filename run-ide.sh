@@ -6,7 +6,7 @@ set -e
 # Traducción de run-ide.ps1 compatible con Bash/Zsh
 
 # Parse de argumentos
-NO_DEV_TOOLS=true
+NO_DEV_TOOLS=false
 STRICT_CSP=false
 NO_RUST_BUILD=false
 NO_WASM_BUILD=false

@@ -1490,50 +1490,60 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    PSHS D,X,Y,U     ; Preserve registers\n");
         out.push_str("    \n");
         out.push_str("    ; Store level pointer persistently\n");
-        out.push_str("    STX LEVEL_PTR\n");
+        out.push_str("    STX >LEVEL_PTR\n");
         out.push_str("    \n");
         out.push_str("    ; Skip world bounds (8 bytes) + time/score (4 bytes)\n");
         out.push_str("    LEAX 12,X        ; X now points to object counts\n");
         out.push_str("    \n");
         out.push_str("    ; Read object counts\n");
         out.push_str("    LDB ,X+          ; B = bgCount\n");
-        out.push_str("    STB LEVEL_BG_COUNT\n");
+        out.push_str("    STB >LEVEL_BG_COUNT\n");
         out.push_str("    LDB ,X+          ; B = gameplayCount\n");
-        out.push_str("    STB LEVEL_GP_COUNT\n");
+        out.push_str("    STB >LEVEL_GP_COUNT\n");
         out.push_str("    LDB ,X+          ; B = fgCount\n");
-        out.push_str("    STB LEVEL_FG_COUNT\n");
+        out.push_str("    STB >LEVEL_FG_COUNT\n");
         out.push_str("    \n");
         out.push_str("    ; Read layer pointers (ROM)\n");
         out.push_str("    LDD ,X++         ; D = bgObjectsPtr (ROM)\n");
-        out.push_str("    STD LEVEL_BG_ROM_PTR\n");
+        out.push_str("    STD >LEVEL_BG_ROM_PTR\n");
         out.push_str("    LDD ,X++         ; D = gameplayObjectsPtr (ROM)\n");
-        out.push_str("    STD LEVEL_GP_ROM_PTR\n");
+        out.push_str("    STD >LEVEL_GP_ROM_PTR\n");
         out.push_str("    LDD ,X++         ; D = fgObjectsPtr (ROM)\n");
-        out.push_str("    STD LEVEL_FG_ROM_PTR\n");
+        out.push_str("    STD >LEVEL_FG_ROM_PTR\n");
         out.push_str("    \n");
-        out.push_str("    ; === Clear GP buffer only (BG/FG read from ROM) ===\n");
-        out.push_str("    LDA #$FF         ; Empty marker\n");
-        out.push_str("    LDU #LEVEL_GP_BUFFER\n");
-        out.push_str("    LDB #16          ; 16 objects\n");
-        out.push_str("LLR_CLR_GP_LOOP:\n");
-        out.push_str("    STA ,U           ; Write 0xFF to type byte\n");
-        out.push_str("    LEAU 14,U\n");
-        out.push_str("    DECB\n");
-        out.push_str("    BNE LLR_CLR_GP_LOOP\n");
+        out.push_str("    ; === Setup GP pointer: RAM buffer if physics, ROM if static ===\n");
+        out.push_str("    LDB >LEVEL_GP_COUNT\n");
+        out.push_str("    BEQ LLR_SKIP_GP  ; Skip if zero objects\n");
         out.push_str("    \n");
-        out.push_str("    ; === Copy ONLY Gameplay Objects to RAM (BG and FG stay in ROM) ===\n");
-        out.push_str("    LDB LEVEL_GP_COUNT\n");
-        out.push_str("    BEQ LLR_SKIP_GP  ; Skip if zero\n");
-        out.push_str("    LDX LEVEL_GP_ROM_PTR  ; X = source (ROM)\n");
-        out.push_str("    LDU #LEVEL_GP_BUFFER   ; U = destination (RAM)\n");
-        out.push_str("    PSHS U              ; Save buffer start BEFORE copy\n");
-        out.push_str("    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)\n");
-        out.push_str("    PULS D              ; Restore buffer start\n");
-        out.push_str("    STD LEVEL_GP_PTR    ; Store correct pointer\n");
+        if opts.buffer_requirements.as_ref().map(|r| r.needs_buffer).unwrap_or(false) {
+            out.push_str("    ; Physics enabled → Copy GP objects to RAM buffer\n");
+            out.push_str("    LDA #$FF         ; Empty marker\n");
+            out.push_str("    LDU #LEVEL_GP_BUFFER\n");
+            out.push_str("    LDB #16          ; 16 objects\n");
+            out.push_str("LLR_CLR_GP_LOOP:\n");
+            out.push_str("    STA ,U           ; Write 0xFF to type byte\n");
+            out.push_str("    LEAU 14,U\n");
+            out.push_str("    DECB\n");
+            out.push_str("    BNE LLR_CLR_GP_LOOP\n");
+            out.push_str("    \n");
+            out.push_str("    LDB >LEVEL_GP_COUNT   ; Reload count\n");
+            out.push_str("    LDX >LEVEL_GP_ROM_PTR ; X = source (ROM)\n");
+            out.push_str("    LDU #LEVEL_GP_BUFFER ; U = destination (RAM)\n");
+            out.push_str("    PSHS U              ; Save buffer start BEFORE copy\n");
+            out.push_str("    JSR LLR_COPY_OBJECTS ; Copy B objects from X to U\n");
+            out.push_str("    PULS D              ; Restore buffer start\n");
+            out.push_str("    STD >LEVEL_GP_PTR    ; Store RAM buffer pointer\n");
+            out.push_str("    BRA LLR_GP_DONE\n");
+        } else {
+            out.push_str("    ; No physics → GP reads from ROM like BG/FG\n");
+            out.push_str("    LDD >LEVEL_GP_ROM_PTR ; Just point to ROM\n");
+            out.push_str("    STD >LEVEL_GP_PTR    ; Store ROM pointer\n");
+        }
+        out.push_str("LLR_GP_DONE:\n");
         out.push_str("LLR_SKIP_GP:\n");
         out.push_str("    \n");
         out.push_str("    ; Return level pointer in RESULT\n");
-        out.push_str("    LDX LEVEL_PTR\n");
+        out.push_str("    LDX >LEVEL_PTR\n");
         out.push_str("    STX RESULT\n");
         out.push_str("    \n");
         out.push_str("    PULS D,X,Y,U,PC  ; Restore and return\n");
@@ -1627,13 +1637,10 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    LDB ,X+          ; B = fgCount\n");
         out.push_str("    STB >LEVEL_FG_COUNT\n");
         out.push_str("    \n");
-        out.push_str("    ; Read layer pointers\n");
-        out.push_str("    LDD ,X++         ; D = bgObjectsPtr\n");
-        out.push_str("    STD >LEVEL_BG_PTR\n");
-        out.push_str("    LDD ,X++         ; D = gameplayObjectsPtr\n");
-        out.push_str("    STD >LEVEL_GP_PTR\n");
-        out.push_str("    LDD ,X++         ; D = fgObjectsPtr\n");
-        out.push_str("    STD >LEVEL_FG_PTR\n");
+        out.push_str("    ; NOTE: Layer pointers already set by LOAD_LEVEL\n");
+        out.push_str("    ; - LEVEL_BG_PTR points to ROM (set by LOAD_LEVEL)\n");
+        out.push_str("    ; - LEVEL_GP_PTR points to RAM buffer if physics, ROM if static (set by LOAD_LEVEL)\n");
+        out.push_str("    ; - LEVEL_FG_PTR points to ROM (set by LOAD_LEVEL)\n");
         out.push_str("    \n");
         out.push_str("    ; === Draw Background Layer (from ROM) ===\n");
         out.push_str("SLR_BG_COUNT:\n");
@@ -1654,8 +1661,15 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    CMPB #0\n");
         out.push_str("    BEQ SLR_FOREGROUND\n");
         out.push_str("SLR_GP_PTR:\n");
-        out.push_str("    LDA #14          ; RAM objects are 14 bytes (x/y/scale/delay 1-byte optimized)\n");
-        out.push_str("    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer\n");
+        
+        // Stride depends on whether buffer exists (14=RAM, 20=ROM)
+        if opts.buffer_requirements.as_ref().map(|r| r.needs_buffer).unwrap_or(false) {
+            out.push_str("    LDA #14          ; GP objects in RAM buffer (14 bytes)\n");
+        } else {
+            out.push_str("    LDA #20          ; GP objects read from ROM (20 bytes)\n");
+        }
+        
+        out.push_str("    LDX >LEVEL_GP_PTR ; Read from pointer (RAM if physics, ROM if static)\n");
         out.push_str("    JSR SLR_DRAW_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("    ; === Draw Foreground Layer (from ROM) ===\n");
@@ -1745,14 +1759,12 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    \n");
         out.push_str("    ; Read path_count from header (byte 0)\n");
         out.push_str("    LDB ,X+          ; B = path_count, X now points to pointer table\n");
-        out.push_str("    PSHS B           ; Save path_count on stack\n");
         out.push_str("    \n");
         out.push_str("    ; Draw all paths using pointer table (DP already set to $D0 by SHOW_LEVEL_RUNTIME)\n");
         out.push_str("SLR_PATH_LOOP:\n");
-        out.push_str("    PULS B           ; Get remaining count\n");
-        out.push_str("    TSTB\n");
-        out.push_str("    BEQ SLR_PATH_DONE\n");
-        out.push_str("    DECB\n");
+        out.push_str("    TSTB             ; Check if count is zero\n");
+        out.push_str("    BEQ SLR_PATH_DONE ; Exit if no paths left\n");
+        out.push_str("    DECB             ; Decrement count\n");
         out.push_str("    PSHS B           ; Save decremented count\n");
         out.push_str("    \n");
         out.push_str("    ; Read next path pointer from table (X points to current FDB entry)\n");
@@ -1761,10 +1773,10 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    TFR U,X          ; X = actual path data\n");
         out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Draw this path\n");
         out.push_str("    PULS X           ; Restore pointer table position\n");
+        out.push_str("    PULS B           ; Restore counter for next iteration\n");
         out.push_str("    BRA SLR_PATH_LOOP\n");
         out.push_str("    \n");
         out.push_str("SLR_PATH_DONE:\n");
-        out.push_str("    ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed\n");
         out.push_str("    PULS X           ; Restore object pointer from stack\n");
         out.push_str("    \n");
         out.push_str("    ; Advance to next object using stride from stack\n");
@@ -1798,11 +1810,15 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    LDB LEVEL_GP_COUNT\n");
         out.push_str("    CMPB #0\n");
         out.push_str("    LBEQ ULR_EXIT  ; Long branch (no objects to update)\n");
-        out.push_str("    LDU #LEVEL_GP_BUFFER  ; U = RAM buffer\n");
+        out.push_str("    LDU LEVEL_GP_PTR  ; U = GP pointer (RAM if physics, ROM if static)\n");
         out.push_str("    BSR ULR_UPDATE_LAYER  ; Process objects\n");
         out.push_str("    \n");
-        out.push_str("    ; === Object-to-Object Collisions (GAMEPLAY only) ===\n");
-        out.push_str("    JSR ULR_GAMEPLAY_COLLISIONS  ; Use JSR for long distance\n");
+        
+        // Only emit collision detection if physics buffer exists
+        if opts.buffer_requirements.as_ref().map(|r| r.needs_buffer).unwrap_or(false) {
+            out.push_str("    ; === Object-to-Object Collisions (GAMEPLAY only) ===\n");
+            out.push_str("    JSR ULR_GAMEPLAY_COLLISIONS  ; Use JSR for long distance\n");
+        }
         out.push_str("    \n");
         out.push_str("    ; === Skip Foreground (static, no updates) ===\n");
         out.push_str("    ; FG objects are read directly from ROM - no physics processing needed\n");
@@ -1815,7 +1831,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("; Input: B = object count, U = buffer base address\n");
         out.push_str("; Uses: X for world bounds\n");
         out.push_str("ULR_UPDATE_LAYER:\n");
-        out.push_str("    LDX LEVEL_PTR  ; Load level pointer for world bounds\n");
+        out.push_str("    LDX >LEVEL_PTR  ; Load level pointer for world bounds\n");
         out.push_str("    CMPX #0\n");
         out.push_str("    LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)\n");
         out.push_str("    \n");
@@ -1878,7 +1894,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)\n");
         out.push_str("\n");
         out.push_str("    ; Load world bounds pointer from LEVEL_PTR\n");
-        out.push_str("    LDX LEVEL_PTR\n");
+        out.push_str("    LDX >LEVEL_PTR\n");
         out.push_str("    ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)\n");
         out.push_str("\n");
         out.push_str("    ; === Check X Bounds (Left/Right walls) ===\n");
@@ -1989,7 +2005,10 @@ DCR_DELTA_TABLE:\n\
         out.push_str("ULR_LAYER_EXIT:\n");
         out.push_str("    RTS\n");
         out.push_str("\n");
-        out.push_str("; === ULR_GAMEPLAY_COLLISIONS - Check collisions between gameplay objects ===\n");
+        
+        // Only emit collision detection function if physics buffer exists
+        if opts.buffer_requirements.as_ref().map(|r| r.needs_buffer).unwrap_or(false) {
+            out.push_str("; === ULR_GAMEPLAY_COLLISIONS - Check collisions between gameplay objects ===\n");
         out.push_str("; Input: None (uses LEVEL_GP_BUFFER and LEVEL_GP_COUNT)\n");
         out.push_str("ULR_GAMEPLAY_COLLISIONS:\n");
         out.push_str("    ; Ultra-simple algorithm: NO stack juggling, use RAM variables\n");
@@ -2127,6 +2146,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("UGPC_EXIT:\n");
         out.push_str("    RTS\n");
         out.push_str("    \n");
+        } // End conditional ULR_GAMEPLAY_COLLISIONS
     }
 }
 

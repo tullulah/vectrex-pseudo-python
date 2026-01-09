@@ -1,17 +1,21 @@
-META TITLE = "Level System Test"
+META TITLE = "Level Debug"
 META AUTHOR = "VPy Team"
 
-# Test level system builtins - Automatic drawing
-# TODO: Level system not yet implemented in this branch
+# Debug SHOW_LEVEL with breakpoints
 
 def main():
     SET_INTENSITY(127)
-    # Load level once at startup
     LOAD_LEVEL("test_level")
+    # Breakpoint 1: After LOAD_LEVEL
+   
 
 def loop():
+    # Breakpoint 2: Before SHOW_LEVEL
+
     SHOW_LEVEL()
+    # Breakpoint 3: After SHOW_LEVEL
 
-    UPDATE_LEVEL()  # Apply gravity, velocity, collisions
+    update_level()
 
-    #DRAW_VECTOR("fuji_bg", 0, 0)
+    
+

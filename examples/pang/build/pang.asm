@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 388 bytes
+; Total RAM used: 295 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
@@ -72,60 +72,59 @@ LEVEL_FG_PTR         EQU $C880+$43   ; SHOW_LEVEL: foreground objects pointer (R
 LEVEL_BG_ROM_PTR     EQU $C880+$45   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
 LEVEL_GP_ROM_PTR     EQU $C880+$47   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$49   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_DYNAMIC_COUNT  EQU $C880+$4B   ; Number of active dynamic objects (max 12) (1 bytes)
-LEVEL_DYNAMIC_BUFFER EQU $C880+$4C   ; Dynamic objects state (12 objects * 10 bytes) (120 bytes)
-UGPC_OUTER_IDX       EQU $C880+$C4   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$C5   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$C6   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$C7   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$C9   ; Manhattan distance temporary (16-bit) (2 bytes)
-VLINE_DX_16          EQU $C880+$CB   ; x1-x0 (16-bit) for line drawing (2 bytes)
-VLINE_DY_16          EQU $C880+$CD   ; y1-y0 (16-bit) for line drawing (2 bytes)
-VLINE_DX             EQU $C880+$CF   ; Clamped dx (8-bit) (1 bytes)
-VLINE_DY             EQU $C880+$D0   ; Clamped dy (8-bit) (1 bytes)
-VLINE_DY_REMAINING   EQU $C880+$D1   ; Remaining dy for segment 2 (16-bit) (2 bytes)
-VLINE_DX_REMAINING   EQU $C880+$D3   ; Remaining dx for segment 2 (16-bit) (2 bytes)
-VLINE_STEPS          EQU $C880+$D5   ; Line drawing step counter (1 bytes)
-VLINE_LIST           EQU $C880+$D6   ; 2-byte vector list (Y|endbit, X) (2 bytes)
-VAR_SCREEN           EQU $C880+$D8   ; User variable (2 bytes)
-VAR_TITLE_INTENSITY  EQU $C880+$DA   ; User variable (2 bytes)
-VAR_TITLE_STATE      EQU $C880+$DC   ; User variable (2 bytes)
-VAR_CURRENT_MUSIC    EQU $C880+$DE   ; User variable (2 bytes)
-VAR_JOYSTICK1_STATE_DATA EQU $C880+$E0   ; Array data (6 elements) (12 bytes)
-VAR_CURRENT_LOCATION EQU $C880+$EC   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_INTENSITY EQU $C880+$EE   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_DIRECTION EQU $C880+$F0   ; User variable (2 bytes)
-VAR_JOY_X            EQU $C880+$F2   ; User variable (2 bytes)
-VAR_JOY_Y            EQU $C880+$F4   ; User variable (2 bytes)
-VAR_PREV_JOY_X       EQU $C880+$F6   ; User variable (2 bytes)
-VAR_PREV_JOY_Y       EQU $C880+$F8   ; User variable (2 bytes)
-VAR_COUNTDOWN_TIMER  EQU $C880+$FA   ; User variable (2 bytes)
-VAR_COUNTDOWN_ACTIVE EQU $C880+$FC   ; User variable (2 bytes)
-VAR_JOYSTICK_POLL_COUNTER EQU $C880+$FE   ; User variable (2 bytes)
-VAR_HOOK_ACTIVE      EQU $C880+$100   ; User variable (2 bytes)
-VAR_HOOK_X           EQU $C880+$102   ; User variable (2 bytes)
-VAR_HOOK_Y           EQU $C880+$104   ; User variable (2 bytes)
-VAR_HOOK_GUN_X       EQU $C880+$106   ; User variable (2 bytes)
-VAR_HOOK_GUN_Y       EQU $C880+$108   ; User variable (2 bytes)
-VAR_HOOK_INIT_Y      EQU $C880+$10A   ; User variable (2 bytes)
-VAR_PLAYER_X         EQU $C880+$10C   ; User variable (2 bytes)
-VAR_MOVE_SPEED       EQU $C880+$10E   ; User variable (2 bytes)
-VAR_ABS_JOY          EQU $C880+$110   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_FRAME EQU $C880+$112   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_COUNTER EQU $C880+$114   ; User variable (2 bytes)
-VAR_PLAYER_FACING    EQU $C880+$116   ; User variable (2 bytes)
-VAR_ENEMY_ACTIVE_DATA EQU $C880+$118   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_X_DATA     EQU $C880+$128   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_Y_DATA     EQU $C880+$138   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VX_DATA    EQU $C880+$148   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VY_DATA    EQU $C880+$158   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_SIZE_DATA  EQU $C880+$168   ; Array data (8 elements) (16 bytes)
-VAR_ARG0             EQU $C880+$178   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$17A   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$17C   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$17E   ; Function argument 3 (2 bytes)
-VAR_ARG4             EQU $C880+$180   ; Function argument 4 (2 bytes)
-VAR_ARG5             EQU $C880+$182   ; Function argument 5 (2 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$4B   ; Gameplay objects buffer (max 2 objects × 14 bytes, auto-sized) (28 bytes)
+UGPC_OUTER_IDX       EQU $C880+$67   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$68   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$69   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$6A   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$6C   ; Manhattan distance temporary (16-bit) (2 bytes)
+VLINE_DX_16          EQU $C880+$6E   ; x1-x0 (16-bit) for line drawing (2 bytes)
+VLINE_DY_16          EQU $C880+$70   ; y1-y0 (16-bit) for line drawing (2 bytes)
+VLINE_DX             EQU $C880+$72   ; Clamped dx (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$73   ; Clamped dy (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$74   ; Remaining dy for segment 2 (16-bit) (2 bytes)
+VLINE_DX_REMAINING   EQU $C880+$76   ; Remaining dx for segment 2 (16-bit) (2 bytes)
+VLINE_STEPS          EQU $C880+$78   ; Line drawing step counter (1 bytes)
+VLINE_LIST           EQU $C880+$79   ; 2-byte vector list (Y|endbit, X) (2 bytes)
+VAR_SCREEN           EQU $C880+$7B   ; User variable (2 bytes)
+VAR_TITLE_INTENSITY  EQU $C880+$7D   ; User variable (2 bytes)
+VAR_TITLE_STATE      EQU $C880+$7F   ; User variable (2 bytes)
+VAR_CURRENT_MUSIC    EQU $C880+$81   ; User variable (2 bytes)
+VAR_JOYSTICK1_STATE_DATA EQU $C880+$83   ; Array data (6 elements) (12 bytes)
+VAR_CURRENT_LOCATION EQU $C880+$8F   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_INTENSITY EQU $C880+$91   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_DIRECTION EQU $C880+$93   ; User variable (2 bytes)
+VAR_JOY_X            EQU $C880+$95   ; User variable (2 bytes)
+VAR_JOY_Y            EQU $C880+$97   ; User variable (2 bytes)
+VAR_PREV_JOY_X       EQU $C880+$99   ; User variable (2 bytes)
+VAR_PREV_JOY_Y       EQU $C880+$9B   ; User variable (2 bytes)
+VAR_COUNTDOWN_TIMER  EQU $C880+$9D   ; User variable (2 bytes)
+VAR_COUNTDOWN_ACTIVE EQU $C880+$9F   ; User variable (2 bytes)
+VAR_JOYSTICK_POLL_COUNTER EQU $C880+$A1   ; User variable (2 bytes)
+VAR_HOOK_ACTIVE      EQU $C880+$A3   ; User variable (2 bytes)
+VAR_HOOK_X           EQU $C880+$A5   ; User variable (2 bytes)
+VAR_HOOK_Y           EQU $C880+$A7   ; User variable (2 bytes)
+VAR_HOOK_GUN_X       EQU $C880+$A9   ; User variable (2 bytes)
+VAR_HOOK_GUN_Y       EQU $C880+$AB   ; User variable (2 bytes)
+VAR_HOOK_INIT_Y      EQU $C880+$AD   ; User variable (2 bytes)
+VAR_PLAYER_X         EQU $C880+$AF   ; User variable (2 bytes)
+VAR_MOVE_SPEED       EQU $C880+$B1   ; User variable (2 bytes)
+VAR_ABS_JOY          EQU $C880+$B3   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_FRAME EQU $C880+$B5   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_COUNTER EQU $C880+$B7   ; User variable (2 bytes)
+VAR_PLAYER_FACING    EQU $C880+$B9   ; User variable (2 bytes)
+VAR_ENEMY_ACTIVE_DATA EQU $C880+$BB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_X_DATA     EQU $C880+$CB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_Y_DATA     EQU $C880+$DB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VX_DATA    EQU $C880+$EB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VY_DATA    EQU $C880+$FB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_SIZE_DATA  EQU $C880+$10B   ; Array data (8 elements) (16 bytes)
+VAR_ARG0             EQU $C880+$11B   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$11D   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$11F   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$121   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$123   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$125   ; Function argument 5 (2 bytes)
 PSG_MUSIC_PTR_DP   EQU $24  ; DP-relative
 PSG_MUSIC_START_DP EQU $26  ; DP-relative
 PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
@@ -1162,163 +1161,116 @@ LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
 RTS
 ; === LOAD_LEVEL_RUNTIME ===
-; Load level data from ROM and build dynamic objects index
+; Load level data from ROM and copy objects to RAM
 ; Input: X = pointer to level data in ROM
 ; Output: LEVEL_PTR = pointer to level header (persistent)
 ;         RESULT    = pointer to level header (return value)
-;         LEVEL_DYNAMIC_COUNT = number of dynamic objects found
-;         LEVEL_DYNAMIC_BUFFER = state for dynamic objects (6 bytes each)
-; 
-; OPTIMIZATION: Static objects (physicsEnabled=false) are NOT copied to RAM.
-; They remain in ROM and are rendered directly. Only dynamic objects get RAM state.
-; Dynamic state: rom_index(1), pos_x(2), pos_y(2), vel_x(2), vel_y(2), flags(1) = 10 bytes per object
+;         OPTIMIZATION: BG and FG are static → read from ROM directly
+;                       Only GP is copied to RAM (has dynamic objects)
+;           LEVEL_GP_BUFFER (max 16 objects * 20 bytes = 320 bytes)
 LOAD_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     
     ; Store level pointer persistently
-    STX LEVEL_PTR
+    STX >LEVEL_PTR
     
     ; Skip world bounds (8 bytes) + time/score (4 bytes)
     LEAX 12,X        ; X now points to object counts
     
     ; Read object counts
     LDB ,X+          ; B = bgCount
-    STB LEVEL_BG_COUNT
+    STB >LEVEL_BG_COUNT
     LDB ,X+          ; B = gameplayCount
-    STB LEVEL_GP_COUNT
+    STB >LEVEL_GP_COUNT
     LDB ,X+          ; B = fgCount
-    STB LEVEL_FG_COUNT
+    STB >LEVEL_FG_COUNT
     
     ; Read layer pointers (ROM)
     LDD ,X++         ; D = bgObjectsPtr (ROM)
-    STD LEVEL_BG_ROM_PTR
+    STD >LEVEL_BG_ROM_PTR
     LDD ,X++         ; D = gameplayObjectsPtr (ROM)
-    STD LEVEL_GP_ROM_PTR
+    STD >LEVEL_GP_ROM_PTR
     LDD ,X++         ; D = fgObjectsPtr (ROM)
-    STD LEVEL_FG_ROM_PTR
+    STD >LEVEL_FG_ROM_PTR
     
-    ; === Clear dynamic buffer ===
-    CLR LEVEL_DYNAMIC_COUNT
+    ; === Setup GP pointer: RAM buffer if physics, ROM if static ===
+    LDB >LEVEL_GP_COUNT
+    BEQ LLR_SKIP_GP  ; Skip if zero objects
+    
+    ; Physics enabled → Copy GP objects to RAM buffer
     LDA #$FF         ; Empty marker
-    LDX #LEVEL_DYNAMIC_BUFFER
-    LDB #120         ; 12 objects * 10 bytes
-LLR_CLEAR_LOOP:
-    STA ,X+
+    LDU #LEVEL_GP_BUFFER
+    LDB #16          ; 16 objects
+LLR_CLR_GP_LOOP:
+    STA ,U           ; Write 0xFF to type byte
+    LEAU 14,U
     DECB
-    BNE LLR_CLEAR_LOOP
+    BNE LLR_CLR_GP_LOOP
     
-    ; === Scan ALL layers for dynamic objects ===
-    ; U = dynamic buffer write pointer
-    LDU #LEVEL_DYNAMIC_BUFFER
-    
-    ; Scan background layer
-    LDB LEVEL_BG_COUNT
-    BEQ LLR_SKIP_BG_SCAN
-    LDX LEVEL_BG_ROM_PTR
-    LDA #0           ; Start at index 0
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_BG_SCAN:
-    
-    ; Scan gameplay layer
-    LDB LEVEL_GP_COUNT
-    BEQ LLR_SKIP_GP_SCAN
-    LDX LEVEL_GP_ROM_PTR
-    LDA LEVEL_BG_COUNT  ; Offset index by BG count
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_GP_SCAN:
-    
-    ; Scan foreground layer
-    LDB LEVEL_FG_COUNT
-    BEQ LLR_SKIP_FG_SCAN
-    LDX LEVEL_FG_ROM_PTR
-    LDA LEVEL_BG_COUNT
-    ADDA LEVEL_GP_COUNT  ; Offset by BG + GP count
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_FG_SCAN:
+    LDB >LEVEL_GP_COUNT   ; Reload count
+    LDX >LEVEL_GP_ROM_PTR ; X = source (ROM)
+    LDU #LEVEL_GP_BUFFER ; U = destination (RAM)
+    PSHS U              ; Save buffer start BEFORE copy
+    JSR LLR_COPY_OBJECTS ; Copy B objects from X to U
+    PULS D              ; Restore buffer start
+    STD >LEVEL_GP_PTR    ; Store RAM buffer pointer
+    BRA LLR_GP_DONE
+LLR_GP_DONE:
+LLR_SKIP_GP:
     
     ; Return level pointer in RESULT
-    LDX LEVEL_PTR
+    LDX >LEVEL_PTR
     STX RESULT
     
     PULS D,X,Y,U,PC  ; Restore and return
     
-; === Subroutine: Scan Layer for Dynamic Objects ===
-; Scan ROM objects and copy state for dynamic objects only
-; Input: A = starting rom_index (for this layer)
-;        B = object count in layer
-;        X = ROM pointer to first object in layer
-;        U = dynamic buffer write pointer
-; Output: U = advanced past any added dynamic objects
-;         LEVEL_DYNAMIC_COUNT = updated
-; Object structure in ROM (24 bytes):
-;   +0: type, +1: sprite_id, +2-3: x, +4-5: y
-;   +6-7: width, +8-9: height
-;   +10-11: velocity_x, +12-13: velocity_y
-;   +14-15: flags (bit 0 = physicsEnabled/dynamic)
-;   +16: intensity, +17: scale, +18: rotation, +19: collision_size
-;   +20-21: spawn_delay, +22-23: vector_ptr
-LLR_SCAN_LAYER:
-    PSHS A           ; Save rom_index counter
-LLR_SCAN_LOOP:
+; === Subroutine: Copy N Objects ===
+; Input: B = count, X = source (ROM), U = destination (RAM)
+; OPTIMIZATION: Skip 'type' field (+0) - read from ROM when needed
+; Each ROM object is 20 bytes, but we copy only 19 bytes to RAM (skip type)
+; Clobbers: A, B, X, U
+LLR_COPY_OBJECTS:
+LLR_COPY_LOOP:
     TSTB
-    BEQ LLR_SCAN_DONE
+    BEQ LLR_COPY_DONE
+    PSHS B           ; Save counter (LDD will clobber B!)
     
-    ; Check if dynamic: Read flags at offset +14
-    LDA 14,X         ; A = flags low byte
-    ANDA #$01        ; Test bit 0 (physicsEnabled)
-    BEQ LLR_SCAN_NEXT  ; Skip if static
+    ; Skip type (offset +0) and intensity (offset +8) fields in ROM
+    LEAX 1,X         ; X now points to +1 (x position)
     
-    ; Dynamic object found - check if buffer full
-    LDA LEVEL_DYNAMIC_COUNT
-    CMPA #12
-    BHS LLR_SCAN_OVERFLOW  ; Skip if >= 12 (buffer full)
-    
-    ; Copy to dynamic buffer (10 bytes):
-    ; +0: rom_index
-    PULS A           ; Get rom_index
+    ; Copy 14 bytes optimized: x,y,scale,spawn_delay as 1-byte values
+    LDA 1,X          ; ROM +2 (x low byte) → RAM +0
     STA ,U+
-    PSHS A           ; Save it back
-    
-    ; +1-2: position_x (from ROM offset +2-3)
-    LDD 2,X
-    STD ,U++
-    
-    ; +3-4: position_y (from ROM offset +4-5)
-    LDD 4,X
-    STD ,U++
-    
-    ; +5-6: velocity_x (from ROM offset +10-11)
-    LDD 10,X
-    STD ,U++
-    
-    ; +7-8: velocity_y (from ROM offset +12-13)
-    LDD 12,X
-    STD ,U++
-    
-    ; +9: active_flags (initialize to 0x01 = active)
-    LDA #$01
+    LDA 3,X          ; ROM +4 (y low byte) → RAM +1
     STA ,U+
+    LDA 5,X          ; ROM +6 (scale low byte) → RAM +2
+    STA ,U+
+    LDA 6,X          ; ROM +7 (rotation) → RAM +3
+    STA ,U+
+    LEAX 8,X         ; Skip to ROM +9 (past intensity at +8)
+    LDA ,X+          ; ROM +9 (velocity_x) → RAM +4
+    STA ,U+
+    LDA ,X+          ; ROM +10 (velocity_y) → RAM +5
+    STA ,U+
+    LDA ,X+          ; ROM +11 (physics_flags) → RAM +6
+    STA ,U+
+    LDA ,X+          ; ROM +12 (collision_flags) → RAM +7
+    STA ,U+
+    LDA ,X+          ; ROM +13 (collision_size) → RAM +8
+    STA ,U+
+    LDA 1,X          ; ROM +15 (spawn_delay low byte) → RAM +9
+    STA ,U+
+    LEAX 2,X         ; Skip spawn_delay (2 bytes)
+    LDD ,X++         ; ROM +16-17 (vector_ptr) → RAM +10-11
+    STD ,U++
+    LDD ,X++         ; ROM +18-19 (properties_ptr) → RAM +12-13
+    STD ,U++
     
-    ; Increment dynamic count
-    INC LEVEL_DYNAMIC_COUNT
-    
-LLR_SCAN_NEXT:
-    ; Advance to next object (24 bytes)
-    LEAX 24,X
-    
-    ; Increment rom_index
-    PULS A
-    INCA
-    PSHS A
-    
-    DECB
-    BRA LLR_SCAN_LOOP
-    
-LLR_SCAN_OVERFLOW:
-    ; Buffer full - skip remaining objects
-    ; TODO: Could emit warning/error in debug builds
-LLR_SCAN_DONE:
-    PULS A,PC        ; Restore and return
+    PULS B           ; Restore counter
+    DECB             ; Decrement after copy
+    BRA LLR_COPY_LOOP
+LLR_COPY_DONE:
+    RTS
 
 START:
     LDA #$D0
@@ -3513,7 +3465,7 @@ DRAW_TITLE_SCREEN: ; function
     STD RESULT
     LDA RESULT+1  ; X position (low byte)
     STA TMPPTR    ; Save X to temporary storage
-    LDD #20
+    LDD #70
     STD RESULT
     LDA RESULT+1  ; Y position (low byte)
     STA TMPPTR+1  ; Save Y to temporary storage
@@ -3558,7 +3510,7 @@ DRAW_TITLE_SCREEN: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    LDD #-40
+    LDD #0
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
@@ -3577,7 +3529,7 @@ DRAW_TITLE_SCREEN: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-    LDD #-60
+    LDD #-20
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
