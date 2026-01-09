@@ -1599,6 +1599,7 @@ MIN_BOUNCE_VY EQU 10
 GROUND_Y EQU 65466
     ; VPy_LINE:97
 LOOP_BODY:
+    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
