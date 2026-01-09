@@ -89,6 +89,11 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
         unresolved_equs = still_unresolved;
     }
     
+    // DEBUG: Check LEVEL_GP_BUFFER value after EQU resolution
+    if let Some(&value) = equates.get("LEVEL_GP_BUFFER") {
+        eprintln!("DEBUG: After EQU resolution, LEVEL_GP_BUFFER = 0x{:04X} ({})", value, value);
+    }
+    
     // Primera pasada: procesar etiquetas, EQU y generar código
     let mut current_line = 1;
     let mut last_global_label = String::from("_START");  // Track última etiqueta global para locales
@@ -616,9 +621,26 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
     if let Some(pos) = expr.rfind('+') {
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
+        
+        // DEBUG: Log splits for diagnosis
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG evaluate_expression: expr='{}' left='{}' right='{}'", expr, left, right);
+        }
+        
         let offset = evaluate_expression(right, equates)?; // Recursivo para right
+        
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG: offset parsed = 0x{:04X} ({})", offset, offset);
+        }
+        
         return match evaluate_expression(left, equates) {
-            Ok(base) => Ok(base.wrapping_add(offset)),
+            Ok(base) => {
+                let result = base.wrapping_add(offset);
+                if expr.contains("C880") || expr.contains("C982") {
+                    eprintln!("DEBUG: base=0x{:04X} + offset=0x{:04X} = 0x{:04X}", base, offset, result);
+                }
+                Ok(result)
+            },
             Err(e) if e.starts_with("SYMBOL:") => {
                 // Preservar addend cuando el símbolo base aún no está resuelto (pass 2)
                 if offset > i16::MAX as u16 {
@@ -2718,6 +2740,9 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         // Try equates first (fast path)
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
+            if upper.contains("LEVEL_GP_BUFFER") || value == 0xC982 {
+                eprintln!("DEBUG emit_ldu: Found {} = 0x{:04X} in equates", upper, value);
+            }
             emitter.ldu_immediate(value);
         } else {
             match evaluate_expression(value_part, equates) {

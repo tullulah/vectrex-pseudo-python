@@ -13,7 +13,7 @@
       "paths": [
         {
           "name": "circle",
-          "intensity": 80,
+          "intensity": 111,
           "closed": true,
           "points": [
             {

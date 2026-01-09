@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='Level System Test' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='Level Debug' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "LEVEL SYSTEM TEST"
+    FCC "LEVEL DEBUG"
     FCB $80
     FCB 0
 
@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 269 bytes
+; Total RAM used: 101 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -48,14 +48,14 @@ LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (R
 LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
 LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 16 objects * 14 bytes, positions/scale/delay 1-byte optimized) (224 bytes)
-UGPC_OUTER_IDX       EQU $C880+$102   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$103   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$104   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$105   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$107   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$109   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$10B   ; Function argument 1 (2 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 4 objects × 14 bytes, auto-sized) (56 bytes)
+UGPC_OUTER_IDX       EQU $C880+$5A   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$5B   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$5C   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$5D   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$5F   ; Manhattan distance temporary (16-bit) (2 bytes)
+VAR_ARG0             EQU $C880+$61   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$63   ; Function argument 1 (2 bytes)
 
     JMP START
 
@@ -601,28 +601,32 @@ LOAD_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     
     ; Store level pointer persistently
-    STX LEVEL_PTR
+    STX >LEVEL_PTR
     
     ; Skip world bounds (8 bytes) + time/score (4 bytes)
     LEAX 12,X        ; X now points to object counts
     
     ; Read object counts
     LDB ,X+          ; B = bgCount
-    STB LEVEL_BG_COUNT
+    STB >LEVEL_BG_COUNT
     LDB ,X+          ; B = gameplayCount
-    STB LEVEL_GP_COUNT
+    STB >LEVEL_GP_COUNT
     LDB ,X+          ; B = fgCount
-    STB LEVEL_FG_COUNT
+    STB >LEVEL_FG_COUNT
     
     ; Read layer pointers (ROM)
     LDD ,X++         ; D = bgObjectsPtr (ROM)
-    STD LEVEL_BG_ROM_PTR
+    STD >LEVEL_BG_ROM_PTR
     LDD ,X++         ; D = gameplayObjectsPtr (ROM)
-    STD LEVEL_GP_ROM_PTR
+    STD >LEVEL_GP_ROM_PTR
     LDD ,X++         ; D = fgObjectsPtr (ROM)
-    STD LEVEL_FG_ROM_PTR
+    STD >LEVEL_FG_ROM_PTR
     
-    ; === Clear GP buffer only (BG/FG read from ROM) ===
+    ; === Setup GP pointer: RAM buffer if physics, ROM if static ===
+    LDB >LEVEL_GP_COUNT
+    BEQ LLR_SKIP_GP  ; Skip if zero objects
+    
+    ; Physics enabled → Copy GP objects to RAM buffer
     LDA #$FF         ; Empty marker
     LDU #LEVEL_GP_BUFFER
     LDB #16          ; 16 objects
@@ -632,19 +636,19 @@ LLR_CLR_GP_LOOP:
     DECB
     BNE LLR_CLR_GP_LOOP
     
-    ; === Copy ONLY Gameplay Objects to RAM (BG and FG stay in ROM) ===
-    LDB LEVEL_GP_COUNT
-    BEQ LLR_SKIP_GP  ; Skip if zero
-    LDX LEVEL_GP_ROM_PTR  ; X = source (ROM)
-    LDU #LEVEL_GP_BUFFER   ; U = destination (RAM)
+    LDB >LEVEL_GP_COUNT   ; Reload count
+    LDX >LEVEL_GP_ROM_PTR ; X = source (ROM)
+    LDU #LEVEL_GP_BUFFER ; U = destination (RAM)
     PSHS U              ; Save buffer start BEFORE copy
-    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
+    JSR LLR_COPY_OBJECTS ; Copy B objects from X to U
     PULS D              ; Restore buffer start
-    STD LEVEL_GP_PTR    ; Store correct pointer
+    STD >LEVEL_GP_PTR    ; Store RAM buffer pointer
+    BRA LLR_GP_DONE
+LLR_GP_DONE:
 LLR_SKIP_GP:
     
     ; Return level pointer in RESULT
-    LDX LEVEL_PTR
+    LDX >LEVEL_PTR
     STX RESULT
     
     PULS D,X,Y,U,PC  ; Restore and return
@@ -735,13 +739,10 @@ SHOW_LEVEL_RUNTIME:
     LDB ,X+          ; B = fgCount
     STB >LEVEL_FG_COUNT
     
-    ; Read layer pointers
-    LDD ,X++         ; D = bgObjectsPtr
-    STD >LEVEL_BG_PTR
-    LDD ,X++         ; D = gameplayObjectsPtr
-    STD >LEVEL_GP_PTR
-    LDD ,X++         ; D = fgObjectsPtr
-    STD >LEVEL_FG_PTR
+    ; NOTE: Layer pointers already set by LOAD_LEVEL
+    ; - LEVEL_BG_PTR points to ROM (set by LOAD_LEVEL)
+    ; - LEVEL_GP_PTR points to RAM buffer if physics, ROM if static (set by LOAD_LEVEL)
+    ; - LEVEL_FG_PTR points to ROM (set by LOAD_LEVEL)
     
     ; === Draw Background Layer (from ROM) ===
 SLR_BG_COUNT:
@@ -762,8 +763,8 @@ SLR_GP_COUNT:
     CMPB #0
     BEQ SLR_FOREGROUND
 SLR_GP_PTR:
-    LDA #14          ; RAM objects are 14 bytes (x/y/scale/delay 1-byte optimized)
-    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer
+    LDA #14          ; GP objects in RAM buffer (14 bytes)
+    LDX >LEVEL_GP_PTR ; Read from pointer (RAM if physics, ROM if static)
     JSR SLR_DRAW_OBJECTS
     
     ; === Draw Foreground Layer (from ROM) ===
@@ -853,14 +854,12 @@ SLR_DRAW_VECTOR:
     
     ; Read path_count from header (byte 0)
     LDB ,X+          ; B = path_count, X now points to pointer table
-    PSHS B           ; Save path_count on stack
     
     ; Draw all paths using pointer table (DP already set to $D0 by SHOW_LEVEL_RUNTIME)
 SLR_PATH_LOOP:
-    PULS B           ; Get remaining count
-    TSTB
-    BEQ SLR_PATH_DONE
-    DECB
+    TSTB             ; Check if count is zero
+    BEQ SLR_PATH_DONE ; Exit if no paths left
+    DECB             ; Decrement count
     PSHS B           ; Save decremented count
     
     ; Read next path pointer from table (X points to current FDB entry)
@@ -869,10 +868,10 @@ SLR_PATH_LOOP:
     TFR U,X          ; X = actual path data
     JSR Draw_Sync_List_At_With_Mirrors  ; Draw this path
     PULS X           ; Restore pointer table position
+    PULS B           ; Restore counter for next iteration
     BRA SLR_PATH_LOOP
     
 SLR_PATH_DONE:
-    ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed
     PULS X           ; Restore object pointer from stack
     
     ; Advance to next object using stride from stack
@@ -902,7 +901,7 @@ UPDATE_LEVEL_RUNTIME:
     LDB LEVEL_GP_COUNT
     CMPB #0
     LBEQ ULR_EXIT  ; Long branch (no objects to update)
-    LDU #LEVEL_GP_BUFFER  ; U = RAM buffer
+    LDU LEVEL_GP_PTR  ; U = GP pointer (RAM if physics, ROM if static)
     BSR ULR_UPDATE_LAYER  ; Process objects
     
     ; === Object-to-Object Collisions (GAMEPLAY only) ===
@@ -919,7 +918,7 @@ ULR_EXIT:
 ; Input: B = object count, U = buffer base address
 ; Uses: X for world bounds
 ULR_UPDATE_LAYER:
-    LDX LEVEL_PTR  ; Load level pointer for world bounds
+    LDX >LEVEL_PTR  ; Load level pointer for world bounds
     CMPX #0
     LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)
     
@@ -982,7 +981,7 @@ ULR_NO_GRAVITY:
     LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
 
     ; Load world bounds pointer from LEVEL_PTR
-    LDX LEVEL_PTR
+    LDX >LEVEL_PTR
     ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)
 
     ; === Check X Bounds (Left/Right walls) ===
@@ -1241,18 +1240,18 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
+    ; VPy_LINE:6
     ; VPy_LINE:7
-    ; VPy_LINE:8
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 8
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:10
+    ; VPy_LINE:8
 ; LOAD_LEVEL("test_level") - load level data
     LDX #_TEST_LEVEL_LEVEL
     JSR LOAD_LEVEL_RUNTIME
@@ -1287,14 +1286,14 @@ LOOP_BODY:
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:13
+    ; VPy_LINE:15
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:15
-; NATIVE_CALL: UPDATE_LEVEL at line 15
+    ; VPy_LINE:18
+; NATIVE_CALL: UPDATE_LEVEL at line 18
     JSR UPDATE_LEVEL_RUNTIME
     CLRA
     CLRB
@@ -1307,7 +1306,7 @@ LOOP_BODY:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 4 of 7 assets (unused assets excluded)
+; Embedded 5 of 7 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: coin
@@ -1325,7 +1324,7 @@ _COIN_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _COIN_PATH0        ; pointer to path 0
 
 _COIN_PATH0:    ; Path 0
-    FCB 89              ; path0: intensity
+    FCB 111              ; path0: intensity
     FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
     FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
     FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
@@ -1352,7 +1351,7 @@ _BUBBLE_HUGE_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _BUBBLE_HUGE_PATH0        ; pointer to path 0
 
 _BUBBLE_HUGE_PATH0:    ; Path 0
-    FCB 76              ; path0: intensity
+    FCB 111              ; path0: intensity
     FCB $00,$1A,0,0        ; path0: header (y=0, x=26, relative to center)
     FCB $FF,$12,$F8          ; line 0: flag=-1, dy=18, dx=-8
     FCB $FF,$08,$EE          ; line 1: flag=-1, dy=8, dx=-18
@@ -1379,7 +1378,7 @@ _BUBBLE_LARGE_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _BUBBLE_LARGE_PATH0        ; pointer to path 0
 
 _BUBBLE_LARGE_PATH0:    ; Path 0
-    FCB 80              ; path0: intensity
+    FCB 111              ; path0: intensity
     FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
     FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
     FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
@@ -1391,6 +1390,108 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
     FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
     FCB 2                ; End marker (path complete)
 
+; Vector asset: fuji_bg
+; Generated from fuji_bg.vec (Malban Draw_Sync_List format)
+; Total paths: 5, points: 64
+; X bounds: min=-124, max=125, width=249
+; Center: (0, 12)
+
+_FUJI_BG_WIDTH EQU 249
+_FUJI_BG_CENTER_X EQU 0
+_FUJI_BG_CENTER_Y EQU 12
+
+_FUJI_BG_VECTORS:  ; Main entry (header + 5 path(s))
+    FCB 5               ; path_count (runtime metadata)
+    FDB _FUJI_BG_PATH0        ; pointer to path 0
+    FDB _FUJI_BG_PATH1        ; pointer to path 1
+    FDB _FUJI_BG_PATH2        ; pointer to path 2
+    FDB _FUJI_BG_PATH3        ; pointer to path 3
+    FDB _FUJI_BG_PATH4        ; pointer to path 4
+
+_FUJI_BG_PATH0:    ; Path 0
+    FCB 80              ; path0: intensity
+    FCB $DC,$84,0,0        ; path0: header (y=-36, x=-124, relative to center)
+    FCB $FF,$0A,$1E          ; line 0: flag=-1, dy=10, dx=30
+    FCB $FF,$0E,$1E          ; line 1: flag=-1, dy=14, dx=30
+    FCB $FF,$0F,$15          ; line 2: flag=-1, dy=15, dx=21
+    FCB $FF,$11,$17          ; line 3: flag=-1, dy=17, dx=23
+    FCB $FF,$0E,$0E          ; line 4: flag=-1, dy=14, dx=14
+    FCB $FF,$FE,$03          ; line 5: flag=-1, dy=-2, dx=3
+    FCB $FF,$03,$04          ; line 6: flag=-1, dy=3, dx=4
+    FCB $FF,$FE,$04          ; line 7: flag=-1, dy=-2, dx=4
+    FCB $FF,$01,$07          ; line 8: flag=-1, dy=1, dx=7
+    FCB $FF,$02,$04          ; line 9: flag=-1, dy=2, dx=4
+    FCB $FF,$FD,$06          ; line 10: flag=-1, dy=-3, dx=6
+    FCB $FF,$03,$03          ; line 11: flag=-1, dy=3, dx=3
+    FCB $FF,$EB,$11          ; line 12: flag=-1, dy=-21, dx=17
+    FCB $FF,$F4,$11          ; line 13: flag=-1, dy=-12, dx=17
+    FCB $FF,$F0,$16          ; line 14: flag=-1, dy=-16, dx=22
+    FCB $FF,$F6,$14          ; line 15: flag=-1, dy=-10, dx=20
+    FCB $FF,$F6,$18          ; line 16: flag=-1, dy=-10, dx=24
+    FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH1:    ; Path 1
+    FCB 95              ; path1: intensity
+    FCB $0E,$F1,0,0        ; path1: header (y=14, x=-15, relative to center)
+    FCB $FF,$06,$03          ; line 0: flag=-1, dy=6, dx=3
+    FCB $FF,$04,$03          ; line 1: flag=-1, dy=4, dx=3
+    FCB $FF,$FD,$04          ; line 2: flag=-1, dy=-3, dx=4
+    FCB $FF,$FC,$FC          ; line 3: flag=-1, dy=-4, dx=-4
+    FCB $FF,$FD,$FA          ; line 4: flag=-1, dy=-3, dx=-6
+    FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH2:    ; Path 2
+    FCB 95              ; path2: intensity
+    FCB $13,$07,0,0        ; path2: header (y=19, x=7, relative to center)
+    FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
+    FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
+    FCB $FF,$F9,$FD          ; line 2: flag=-1, dy=-7, dx=-3
+    FCB $FF,$FD,$04          ; line 3: flag=-1, dy=-3, dx=4
+    FCB $FF,$08,$03          ; line 4: flag=-1, dy=8, dx=3
+    FCB $FF,$07,$FE          ; line 5: flag=-1, dy=7, dx=-2
+    FCB $FF,$06,$01          ; line 6: flag=-1, dy=6, dx=1
+    FCB $FF,$02,$FE          ; line 7: flag=-1, dy=2, dx=-2
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH3:    ; Path 3
+    FCB 95              ; path3: intensity
+    FCB $15,$18,0,0        ; path3: header (y=21, x=24, relative to center)
+    FCB $FF,$F7,$05          ; line 0: flag=-1, dy=-9, dx=5
+    FCB $FF,$F7,$0C          ; line 1: flag=-1, dy=-9, dx=12
+    FCB $FF,$0B,$FA          ; line 2: flag=-1, dy=11, dx=-6
+    FCB $FF,$07,$F5          ; line 3: flag=-1, dy=7, dx=-11
+    FCB 2                ; End marker (path complete)
+
+_FUJI_BG_PATH4:    ; Path 4
+    FCB 100              ; path4: intensity
+    FCB $F9,$C7,0,0        ; path4: header (y=-7, x=-57, relative to center)
+    FCB $FF,$09,$1A          ; line 0: flag=-1, dy=9, dx=26
+    FCB $FF,$EF,$F2          ; line 1: flag=-1, dy=-17, dx=-14
+    FCB $FF,$1B,$22          ; line 2: flag=-1, dy=27, dx=34
+    FCB $FF,$F2,$FB          ; line 3: flag=-1, dy=-14, dx=-5
+    FCB $FF,$00,$03          ; line 4: flag=-1, dy=0, dx=3
+    FCB $FF,$F7,$FB          ; line 5: flag=-1, dy=-9, dx=-5
+    FCB $FF,$FA,$01          ; line 6: flag=-1, dy=-6, dx=1
+    FCB $FF,$0E,$0E          ; line 7: flag=-1, dy=14, dx=14
+    FCB $FF,$F1,$00          ; line 8: flag=-1, dy=-15, dx=0
+    FCB $FF,$0A,$05          ; line 9: flag=-1, dy=10, dx=5
+    FCB $FF,$EA,$06          ; line 10: flag=-1, dy=-22, dx=6
+    FCB $FF,$1C,$05          ; line 11: flag=-1, dy=28, dx=5
+    FCB $FF,$EF,$06          ; line 12: flag=-1, dy=-17, dx=6
+    FCB $FF,$03,$01          ; line 13: flag=-1, dy=3, dx=1
+    FCB $FF,$FD,$04          ; line 14: flag=-1, dy=-3, dx=4
+    FCB $FF,$0B,$03          ; line 15: flag=-1, dy=11, dx=3
+    FCB $FF,$F5,$05          ; line 16: flag=-1, dy=-11, dx=5
+    FCB $FF,$10,$FF          ; line 17: flag=-1, dy=16, dx=-1
+    FCB $FF,$EE,$13          ; line 18: flag=-1, dy=-18, dx=19
+    FCB $FF,$12,$F7          ; line 19: flag=-1, dy=18, dx=-9
+    FCB $FF,$F9,$0E          ; line 20: flag=-1, dy=-7, dx=14
+    FCB $FF,$04,$02          ; line 21: flag=-1, dy=4, dx=2
+    FCB $FF,$FC,$14          ; line 22: flag=-1, dy=-4, dx=20
+    FCB 2                ; End marker (path complete)
+
 ; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
 ; ==== Level: TEST_LEVEL ====
 ; Author: 
@@ -1399,18 +1500,52 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
 _TEST_LEVEL_LEVEL:
     FDB -96  ; World bounds: xMin (16-bit signed)
     FDB 95  ; xMax (16-bit signed)
-    FDB -128  ; yMin (16-bit signed)
+    FDB -70  ; yMin (16-bit signed)
     FDB 127  ; yMax (16-bit signed)
     FDB 0  ; Time limit (seconds)
     FDB 0  ; Target score
-    FCB 4  ; Background object count
-    FCB 0  ; Gameplay object count
+    FCB 1  ; Background object count
+    FCB 4  ; Gameplay object count
     FCB 0  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
 
 _TEST_LEVEL_BG_OBJECTS:
+; Object: obj_1767991638010 (enemy)
+    FCB 1  ; type
+    FDB 0  ; x
+    FDB -2  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 0  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 0  ; physics_flags
+    FCB 0  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _FUJI_BG_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
+
+_TEST_LEVEL_GAMEPLAY_OBJECTS:
+; Object: obj_1767970445633 (enemy)
+    FCB 1  ; type
+    FDB -37  ; x
+    FDB -47  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 255  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 1  ; physics_flags
+    FCB 1  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _COIN_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
 ; Object: obj_1767862794353 (enemy)
     FCB 1  ; type
     FDB 45  ; x
@@ -1429,8 +1564,8 @@ _TEST_LEVEL_BG_OBJECTS:
 
 ; Object: obj_1767883264744 (enemy)
     FCB 1  ; type
-    FDB -52  ; x
-    FDB 35  ; y
+    FDB -27  ; x
+    FDB 36  ; y
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
@@ -1459,24 +1594,6 @@ _TEST_LEVEL_BG_OBJECTS:
     FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
-; Object: obj_1767970445633 (enemy)
-    FCB 1  ; type
-    FDB -37  ; x
-    FDB -47  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 1  ; physics_flags
-    FCB 1  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _COIN_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
-
-_TEST_LEVEL_GAMEPLAY_OBJECTS:
 
 _TEST_LEVEL_FG_OBJECTS:
 

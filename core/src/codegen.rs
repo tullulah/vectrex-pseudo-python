@@ -138,6 +138,7 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("GET_OBJECT_PTR", 2),  // Get pointer to object data: layer, index
     ("GET_LEVEL_BOUNDS", 0),// Get world bounds (returns: xMin, xMax, yMin, yMax in RESULT)
     ("SHOW_LEVEL", 0),      // Draw all objects from all layers automatically
+    ("UPDATE_LEVEL", 0),    // Update gameplay layer physics objects
     ("UPDATE_LEVEL", 0),    // Update level state (physics, animations) - placeholder
     
     // Compatibilidad hacia atrás (deprecated)
@@ -199,6 +200,27 @@ pub enum AssetType {
     Level,   // .vplay file (level data for games)
 }
 
+/// Buffer requirements calculated from .vplay analysis
+#[derive(Debug, Clone)]
+pub struct BufferRequirements {
+    /// Maximum number of gameplay objects with physics across all levels
+    pub max_physics_objects: usize,
+    /// Whether ANY level has physics objects (false = no buffer needed)
+    pub needs_buffer: bool,
+    /// List of all .vplay files analyzed
+    pub analyzed_files: Vec<std::path::PathBuf>,
+}
+
+impl BufferRequirements {
+    pub fn buffer_size_bytes(&self) -> usize {
+        if !self.needs_buffer {
+            return 0;
+        }
+        // 14 bytes per object (Phase 3 optimized structure)
+        self.max_physics_objects * 14
+    }
+}
+
 // CodegenOptions: options affecting generation (title, etc.).
 #[derive(Clone)]
 pub struct CodegenOptions {
@@ -222,6 +244,7 @@ pub struct CodegenOptions {
     pub mutable_arrays: std::collections::BTreeSet<String>, // Set of mutable (non-const) array names that need RAM allocation
     pub structs: StructRegistry, // Struct layout information (Phase 2)
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
+    pub buffer_requirements: Option<BufferRequirements>, // Dynamic buffer sizing from .vplay analysis
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 

@@ -63,6 +63,10 @@ impl BinaryEmitter {
 
     /// Emite un word de 16 bits (big-endian, formato 6809)
     pub fn emit_word(&mut self, word: u16) {
+        // DEBUG: Log suspicious values
+        if word == 0xC982 || word == 0xC8A2 || (word & 0xFF00 == 0xC800) {
+            eprintln!("DEBUG emit_word: word=0x{:04X} at offset=0x{:04X}", word, self.code.len());
+        }
         self.emit((word >> 8) as u8);  // High byte primero
         self.emit(word as u8);          // Low byte segundo
     }

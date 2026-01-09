@@ -525,6 +525,41 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     };
     
     if tgt == target::Target::All {
+        // Analyze .vplay files for buffer sizing
+        let buffer_requirements = if path.extension().and_then(|e| e.to_str()) == Some("vpy") {
+            let source_file = &path;
+            let project_root = if source_file.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str()) == Some("src") {
+                source_file.parent().and_then(|p| p.parent())
+            } else {
+                source_file.parent()
+            };
+            
+            if let Some(root) = project_root {
+                match vectrex_lang::vplay_analyzer::analyze_project_vplay_files(root) {
+                    Ok(req) => {
+                        if req.needs_buffer {
+                            eprintln!("✓ Analyzed {} .vplay files", req.analyzed_files.len());
+                            eprintln!("✓ Max physics objects: {} (buffer: {} bytes)", 
+                                     req.max_physics_objects, req.buffer_size_bytes());
+                        } else {
+                            eprintln!("✓ No physics objects found - buffer not needed");
+                        }
+                        Some(req)
+                    }
+                    Err(e) => {
+                        eprintln!("⚠ Warning: .vplay analysis failed: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
         for ct in target::concrete_targets() {
             let asm = codegen::emit_asm(&final_module, *ct, &codegen::CodegenOptions {
                 title: title.to_string(),
@@ -546,6 +581,11 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
                 type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
+                buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
+                    max_physics_objects: r.max_physics_objects,
+                    needs_buffer: r.needs_buffer,
+                    analyzed_files: r.analyzed_files.clone(),
+                }),
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -562,6 +602,42 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 0: Asset discovery
         eprintln!("Phase 0: Asset discovery...");
         let assets = discover_assets(&path);
+        
+        // Phase 0.5: .vplay analysis for buffer sizing
+        eprintln!("Phase 0.5: Analyzing .vplay files for dynamic buffer sizing...");
+        let buffer_requirements = if path.extension().and_then(|e| e.to_str()) == Some("vpy") {
+            let source_file = &path;
+            let project_root = if source_file.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str()) == Some("src") {
+                source_file.parent().and_then(|p| p.parent())
+            } else {
+                source_file.parent()
+            };
+            
+            if let Some(root) = project_root {
+                match vectrex_lang::vplay_analyzer::analyze_project_vplay_files(root) {
+                    Ok(req) => {
+                        if req.needs_buffer {
+                            eprintln!("✓ Analyzed {} .vplay files", req.analyzed_files.len());
+                            eprintln!("✓ Max physics objects: {} (buffer: {} bytes)", 
+                                     req.max_physics_objects, req.buffer_size_bytes());
+                        } else {
+                            eprintln!("✓ No physics objects found - buffer not needed");
+                        }
+                        Some(req)
+                    }
+                    Err(e) => {
+                        eprintln!("⚠ Warning: .vplay analysis failed: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         
         // Phase 4: Code generation
         eprintln!("Phase 4: Code generation (ASM emission)...");
@@ -585,6 +661,11 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
             type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
+            buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
+                max_physics_objects: r.max_physics_objects,
+                needs_buffer: r.needs_buffer,
+                analyzed_files: r.analyzed_files.clone(),
+            }),
         });
         
         // Phase 4 validation: Check if assembly was actually generated
