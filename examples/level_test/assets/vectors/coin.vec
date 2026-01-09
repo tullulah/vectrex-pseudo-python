@@ -13,7 +13,7 @@
       "paths": [
         {
           "name": "outer",
-          "intensity": 51,
+          "intensity": 111,
           "closed": true,
           "points": [
             {

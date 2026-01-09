@@ -63,6 +63,10 @@ impl BinaryEmitter {
 
     /// Emite un word de 16 bits (big-endian, formato 6809)
     pub fn emit_word(&mut self, word: u16) {
+        // DEBUG: Log suspicious values
+        if word == 0xC982 || word == 0xC8A2 || (word & 0xFF00 == 0xC800) {
+            eprintln!("DEBUG emit_word: word=0x{:04X} at offset=0x{:04X}", word, self.code.len());
+        }
         self.emit((word >> 8) as u8);  // High byte primero
         self.emit(word as u8);          // Low byte segundo
     }
@@ -83,6 +87,16 @@ impl BinaryEmitter {
 
     /// Registra referencia a símbolo con addend (e.g. LABEL+1)
     pub fn add_symbol_ref_with_addend(&mut self, symbol: &str, is_relative: bool, ref_size: u8, addend: i16) {
+        // CRITICAL FIX: Reject single-character symbols that are register names
+        if symbol.len() == 1 {
+            let c = symbol.chars().next().unwrap().to_ascii_uppercase();
+            if ['A', 'B', 'X', 'Y', 'U', 'S', 'D'].contains(&c) {
+                // This is likely a parsing error - register names should not be treated as symbols
+                eprintln!("❌ BUG: Attempted to add register name '{}' as symbol at offset={} - REJECTED", symbol, self.current_offset());
+                return; // Don't add invalid symbol refs
+            }
+        }
+        
         self.symbol_refs.push(SymbolRef {
             offset: self.current_offset(),
             symbol: symbol.to_string(),
@@ -98,6 +112,11 @@ impl BinaryEmitter {
     /// Esto evita el patrón incorrecto de: add_symbol_ref(); <instr>_extended(0x0000)
     /// donde el SymbolRef quedaba apuntando al opcode en vez del operando.
     pub fn emit_extended_symbol_ref(&mut self, opcode: u8, symbol: &str, addend: i16) {
+        let start_offset = self.current_offset();
+        if symbol.len() == 1 {
+            eprintln!("⚠️ emit_extended_symbol_ref: symbol='{}' opcode=0x{:02X} addend={} offset={}", 
+                symbol, opcode, addend, start_offset);
+        }
         self.record_line_mapping();
         self.emit(opcode);
         self.add_symbol_ref_with_addend(symbol, false, 2, addend);
@@ -108,6 +127,12 @@ impl BinaryEmitter {
     /// operando inmediato de 16 bits (word) que referencia a un símbolo a
     /// resolver en segunda pasada.
     pub fn emit_immediate16_symbol_ref(&mut self, opcode: &[u8], symbol: &str, addend: i16) {
+        // DEBUG: Log single-char symbols BEFORE emitting anything
+        let start_offset = self.current_offset();
+        if symbol.len() == 1 {
+            eprintln!("⚠️ emit_immediate16_symbol_ref: symbol='{}' opcode={:02X?} addend={} offset={}", 
+                symbol, opcode, addend, start_offset);
+        }
         self.record_line_mapping();
         for &b in opcode {
             self.emit(b);

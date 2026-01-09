@@ -408,25 +408,45 @@ export const EmulatorPanel: React.FC = () => {
   // Función para cargar overlay basado en nombre de ROM (definida antes de ser usada)
   const loadOverlay = useCallback(async (romName: string) => {
     const baseName = romName.replace(/\.(bin|BIN|vec)$/, '').toLowerCase();
-    const overlayPath = `/overlays/${baseName}.png`;
+    
+    console.log(`[EmulatorPanel] 🖼️  loadOverlay called for ROM: "${romName}" (base: "${baseName}")`);
     
     try {
-      // Verificar si existe el overlay
-      const response = await fetch(overlayPath, { method: 'HEAD' });
-      if (response.ok) {
-        setCurrentOverlay(overlayPath);
-        console.log(`[EmulatorPanel] ✓ Overlay found: ${overlayPath}`);
-      } else {
-        // No se encontró overlay - quitarlo
+      // Obtener la ruta del proyecto actual
+      const projectState = (window as any).__projectStore__?.getState?.();
+      const projectRoot = projectState?.vpyProject?.rootDir;
+      console.log(`[EmulatorPanel] 📁 Project root: ${projectRoot || '(no project loaded)'}`);
+      
+      if (!projectRoot) {
         setCurrentOverlay(null);
-        console.log(`[EmulatorPanel] No overlay found for: ${baseName} - removing overlay`);
+        console.log(`[EmulatorPanel] ⚠️  No project loaded - cannot load overlay`);
+        return;
       }
+      
+      // Intentar cargar overlay genérico del proyecto usando IPC
+      const overlayFsPath = `${projectRoot}/assets/overlay/overlay.png`;
+      console.log(`[EmulatorPanel] 🔍 Checking project overlay: ${overlayFsPath}`);
+      
+      const result = await (window as any).files.readFileBin(overlayFsPath);
+      
+      if (result.error) {
+        console.log(`[EmulatorPanel] ℹ️  No overlay found at: ${overlayFsPath}`);
+        console.log(`[EmulatorPanel] Error: ${result.error}`);
+        setCurrentOverlay(null);
+        return;
+      }
+      
+      // Convertir base64 a data URL
+      const dataUrl = `data:image/png;base64,${result.base64}`;
+      setCurrentOverlay(dataUrl);
+      console.log(`[EmulatorPanel] ✅ Project overlay loaded: ${overlayFsPath} (${result.size} bytes)`);
+      
     } catch (e) {
       // Error al buscar overlay - quitarlo
       setCurrentOverlay(null);
-      console.log(`[EmulatorPanel] Error loading overlay for: ${baseName} - removing overlay`);
+      console.log(`[EmulatorPanel] ❌ Error loading overlay:`, e);
     }
-  }, []); // sin dependencias
+  }, []); // sin dependencias (lee projectState dinámicamente)
 
   // Phase 3: Breakpoint management functions
   const addBreakpoint = useCallback((address: number) => {

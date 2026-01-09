@@ -371,7 +371,7 @@ fn estimate_instruction_size_deprecated(line: &str) -> u16 {
         "BHI" | "BLS" | "BGE" | "BLT" | "BGT" | "BLE" | "BSR" => 2,
         
         // Long branches - always 4 bytes
-        "LBRA" | "LBEQ" | "LBNE" | "LBCC" | "LBCS" | "LBPL" | "LBMI" |
+        "LBRA" | "LBEQ" | "LBNE" | "LBCC" | "LBHS" | "LBCS" | "LBLO" | "LBPL" | "LBMI" |
         "LBVC" | "LBVS" | "LBHI" | "LBLS" | "LBGE" | "LBLT" | "LBGT" | "LBLE" | "LBSR" => 4,
         
         // JSR, JMP - always 3 bytes (extended addressing)

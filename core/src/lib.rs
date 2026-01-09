@@ -11,6 +11,7 @@ pub mod vecres;   // Vector resource format (.vec)
 pub mod musres;   // Music resource format (.vmus)
 pub mod sfxres;   // Sound effects resource format (.vsfx)
 pub mod levelres; // Level resource format (.vplay)
+pub mod vplay_analyzer; // Automatic .vplay analysis for dynamic buffer sizing
 pub mod struct_layout; // Struct layout computation (Phase 2)
 pub mod backend;
 // Legacy emulator module removed; use vectrex_emulator crate instead.

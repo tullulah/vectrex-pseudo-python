@@ -89,6 +89,11 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
         unresolved_equs = still_unresolved;
     }
     
+    // DEBUG: Check LEVEL_GP_BUFFER value after EQU resolution
+    if let Some(&value) = equates.get("LEVEL_GP_BUFFER") {
+        eprintln!("DEBUG: After EQU resolution, LEVEL_GP_BUFFER = 0x{:04X} ({})", value, value);
+    }
+    
     // Primera pasada: procesar etiquetas, EQU y generar código
     let mut current_line = 1;
     let mut last_global_label = String::from("_START");  // Track última etiqueta global para locales
@@ -514,6 +519,10 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "LBNE" => emit_lbne(emitter, operand, last_global_label),
         "LBCS" => emit_lbcs(emitter, operand, last_global_label),
         "LBCC" => emit_lbcc(emitter, operand, last_global_label),
+        "LBHS" => emit_lbcc(emitter, operand, last_global_label), // LBHS = LBCC (branch if higher or same)
+        "LBLO" => emit_lbcs(emitter, operand, last_global_label), // LBLO = LBCS (branch if lower)
+        "LBHI" => emit_lbhi(emitter, operand, last_global_label),
+        "LBLS" => emit_lbls(emitter, operand, last_global_label),
         "LBLT" => emit_lblt(emitter, operand, last_global_label),
         "LBGE" => emit_lbge(emitter, operand, last_global_label),
         "LBGT" => emit_lbgt(emitter, operand, last_global_label),
@@ -612,9 +621,26 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
     if let Some(pos) = expr.rfind('+') {
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
+        
+        // DEBUG: Log splits for diagnosis
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG evaluate_expression: expr='{}' left='{}' right='{}'", expr, left, right);
+        }
+        
         let offset = evaluate_expression(right, equates)?; // Recursivo para right
+        
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG: offset parsed = 0x{:04X} ({})", offset, offset);
+        }
+        
         return match evaluate_expression(left, equates) {
-            Ok(base) => Ok(base.wrapping_add(offset)),
+            Ok(base) => {
+                let result = base.wrapping_add(offset);
+                if expr.contains("C880") || expr.contains("C982") {
+                    eprintln!("DEBUG: base=0x{:04X} + offset=0x{:04X} = 0x{:04X}", base, offset, result);
+                }
+                Ok(result)
+            },
             Err(e) if e.starts_with("SYMBOL:") => {
                 // Preservar addend cuando el símbolo base aún no está resuelto (pass 2)
                 if offset > i16::MAX as u16 {
@@ -1422,6 +1448,40 @@ fn emit_lbpl(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> R
         let offset = parse_signed(operand)?;
         emitter.emit(0x10);
         emitter.emit(0x2A);
+        emitter.emit_word(offset as u16);
+        Ok(())
+    }
+}
+
+fn emit_lbhi(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        emitter.emit(0x10);
+        emitter.emit(0x22); // BHI condition
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
+        emitter.emit_word(0x0000);
+        Ok(())
+    } else {
+        let offset = parse_signed(operand)?;
+        emitter.emit(0x10);
+        emitter.emit(0x22);
+        emitter.emit_word(offset as u16);
+        Ok(())
+    }
+}
+
+fn emit_lbls(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        emitter.emit(0x10);
+        emitter.emit(0x23); // BLS condition
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
+        emitter.emit_word(0x0000);
+        Ok(())
+    } else {
+        let offset = parse_signed(operand)?;
+        emitter.emit(0x10);
+        emitter.emit(0x23);
         emitter.emit_word(offset as u16);
         Ok(())
     }
@@ -2486,6 +2546,14 @@ fn emit_fdb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     // FDB $C800,label - Form Constant Word(s)
     let parts: Vec<&str> = operand.split(',').map(|s| s.trim()).collect();
     for part in parts {
+        // Skip single-character "symbols" that are likely register names or parsing errors
+        if part.len() == 1 {
+            let c = part.chars().next().unwrap().to_ascii_uppercase();
+            if ['A', 'B', 'X', 'Y', 'U', 'S'].contains(&c) {
+                return Err(format!("FDB: Símbolo de un carácter '{}' no permitido (probablemente error de parsing)", part));
+            }
+        }
+        
         // Intentar resolver como símbolo primero
         let upper = part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
@@ -2546,6 +2614,11 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 Ok(value) => emitter.ldx_immediate(value),
                 Err(e) if e.starts_with("SYMBOL:") => {
                     let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    // DEBUG: Log when adding symbol ref
+                    if symbol.len() == 1 {
+                        eprintln!("⚠️ LDX emit_ldx: operand='{}' value_part='{}' symbol='{}' addend={} offset={}", 
+                            operand, value_part, symbol, addend, emitter.current_offset());
+                    }
                     emitter.emit_immediate16_symbol_ref(&[0x8E], &symbol, addend);
                 }
                 Err(_) => {
@@ -2667,6 +2740,9 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         // Try equates first (fast path)
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
+            if upper.contains("LEVEL_GP_BUFFER") || value == 0xC982 {
+                eprintln!("DEBUG emit_ldu: Found {} = 0x{:04X} in equates", upper, value);
+            }
             emitter.ldu_immediate(value);
         } else {
             match evaluate_expression(value_part, equates) {

@@ -245,6 +245,10 @@ pub fn emit(module: &Module, t: Target, ti: &TargetInfo, opts: &CodegenOptions) 
 
 // emit_with_debug: Same as emit but also returns debug information for .pdb generation
 pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &CodegenOptions) -> (String, DebugInfo) {
+    // === PHASE 0: Buffer requirements already analyzed in main.rs ===
+    // The analysis is passed via opts.buffer_requirements
+    let buffer_requirements = opts.buffer_requirements.clone();
+    
     // Initialize debug info with source and binary names
     let source_name = opts.source_path.as_ref()
         .and_then(|p| std::path::Path::new(p).file_name())
@@ -535,17 +539,39 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("LEVEL_GP_ROM_PTR", 2, "LOAD_LEVEL: gameplay objects pointer (ROM)");
         ram.allocate("LEVEL_FG_ROM_PTR", 2, "LOAD_LEVEL: foreground objects pointer (ROM)");
         
-        // Object buffers in RAM (each object is 24 bytes)
-        ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
-        ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
-        ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
+        // Object buffers in RAM - DYNAMIC SIZING based on .vplay analysis
+        // BG and FG layers are static → read directly from ROM (saves RAM)
+        // OPTIMIZATION: 'type' and 'intensity' fields omitted from RAM (Phase 2)
+        // OPTIMIZATION: x,y,scale,spawn_delay are 8-bit (Phase 3)
+        // Result: 14 bytes per object
+        let (buffer_size, max_objects) = if let Some(ref req) = buffer_requirements {
+            if req.needs_buffer {
+                (req.buffer_size_bytes(), req.max_physics_objects)
+            } else {
+                // No physics objects found - GP will read from ROM like BG/FG
+                (0, 0)
+            }
+        } else {
+            // Analysis failed - use minimal default (1 object)
+            eprintln!("⚠ Warning: .vplay analysis failed, using minimal buffer (1 object)");
+            (14, 1)
+        };
         
-        // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
-        ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");
-        ram.allocate("UGPC_OUTER_MAX", 1, "Outer loop max value (count-1)");
-        ram.allocate("UGPC_INNER_IDX", 1, "Inner loop index for collision detection");
-        ram.allocate("UGPC_DX", 2, "Distance X temporary (16-bit)");
-        ram.allocate("UGPC_DIST", 2, "Manhattan distance temporary (16-bit)");
+        // Only create buffer if physics objects exist
+        if buffer_size > 0 {
+            ram.allocate(
+                "LEVEL_GP_BUFFER", 
+                buffer_size, 
+                &format!("Gameplay objects buffer (max {} objects × 14 bytes, auto-sized)", max_objects)
+            );
+            
+            // Collision detection temporaries (only if buffer exists)
+            ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");
+            ram.allocate("UGPC_OUTER_MAX", 1, "Outer loop max value (count-1)");
+            ram.allocate("UGPC_INNER_IDX", 1, "Inner loop index for collision detection");
+            ram.allocate("UGPC_DX", 2, "Distance X temporary (16-bit)");
+            ram.allocate("UGPC_DIST", 2, "Manhattan distance temporary (16-bit)");
+        }
     }
     
     // 10. DRAW_LINE variables (only if DRAW_LINE is used)
@@ -909,6 +935,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     if frame_size > 0 {
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
+                    
+                    // Auto-inject WAIT_RECAL at START of every frame (MANDATORY for Vectrex synchronization)
+                    out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
                     
                     // Auto-inject UPDATE_BUTTONS at START of loop (before user code)
                     // This calls Read_Btns once per frame, populating $C80F from PSG register 14
