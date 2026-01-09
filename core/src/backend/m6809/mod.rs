@@ -535,10 +535,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("LEVEL_GP_ROM_PTR", 2, "LOAD_LEVEL: gameplay objects pointer (ROM)");
         ram.allocate("LEVEL_FG_ROM_PTR", 2, "LOAD_LEVEL: foreground objects pointer (ROM)");
         
-        // Object buffers in RAM (each object is 20 bytes) - RESTORED from master
-        ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
-        ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
-        ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
+        // Object buffers in RAM - OPTIMIZATION: Only GP layer needs RAM (has dynamic objects)
+        // BG and FG layers are static → read directly from ROM (saves 320 bytes)
+        // FURTHER OPTIMIZATION: 'type' and 'intensity' fields omitted from RAM → 18 bytes per object (saves 32 bytes)
+        ram.allocate("LEVEL_GP_BUFFER", 288, "Gameplay objects buffer (max 16 objects * 18 bytes, 'type'+'intensity' omitted)");
         
         // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
         ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");

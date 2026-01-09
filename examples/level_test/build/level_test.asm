@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 170 bytes
+; Total RAM used: 333 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -48,17 +48,14 @@ LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (R
 LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
 LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_DYNAMIC_COUNT  EQU $C880+$22   ; Number of active dynamic objects (max 12) (1 bytes)
-LEVEL_DYNAMIC_BUFFER EQU $C880+$23   ; Dynamic objects state (12 objects * 10 bytes) (120 bytes)
-UGPC_OUTER_IDX       EQU $C880+$9B   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$9C   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$9D   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$9E   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$A0   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$A2   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$A4   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$A6   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$A8   ; Function argument 3 (2 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 16 objects * 18 bytes, 'type'+'intensity' omitted) (288 bytes)
+UGPC_OUTER_IDX       EQU $C880+$142   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$143   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$144   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$145   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$147   ; Manhattan distance temporary (16-bit) (2 bytes)
+VAR_ARG0             EQU $C880+$149   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$14B   ; Function argument 1 (2 bytes)
 
     JMP START
 
@@ -597,10 +594,9 @@ RTS
 ; Input: X = pointer to level data in ROM
 ; Output: LEVEL_PTR = pointer to level header (persistent)
 ;         RESULT    = pointer to level header (return value)
-;         Objects copied to RAM buffers:
-;           LEVEL_BG_BUFFER (max 8 objects * 24 bytes = 192 bytes)
-;           LEVEL_GP_BUFFER (max 16 objects * 24 bytes = 384 bytes)
-;           LEVEL_FG_BUFFER (max 8 objects * 24 bytes = 192 bytes)
+;         OPTIMIZATION: BG and FG are static → read from ROM directly
+;                       Only GP is copied to RAM (has dynamic objects)
+;           LEVEL_GP_BUFFER (max 16 objects * 20 bytes = 320 bytes)
 LOAD_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     
@@ -626,21 +622,17 @@ LOAD_LEVEL_RUNTIME:
     LDD ,X++         ; D = fgObjectsPtr (ROM)
     STD LEVEL_FG_ROM_PTR
     
-    ; === Clear all buffers (mark as empty with type=0xFF) ===
-    JSR LLR_CLEAR_BUFFERS
+    ; === Clear GP buffer only (BG/FG read from ROM) ===
+    LDA #$FF         ; Empty marker
+    LDU #LEVEL_GP_BUFFER
+    LDB #16          ; 16 objects
+LLR_CLR_GP_LOOP:
+    STA ,U           ; Write 0xFF to type byte
+    LEAU 18,U
+    DECB
+    BNE LLR_CLR_GP_LOOP
     
-    ; === Copy Background Objects to RAM ===
-    LDB LEVEL_BG_COUNT
-    BEQ LLR_SKIP_BG  ; Skip if zero
-    LDX LEVEL_BG_ROM_PTR  ; X = source (ROM)
-    LDU #LEVEL_BG_BUFFER   ; U = destination (RAM)
-    PSHS U              ; Save buffer start BEFORE copy
-    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
-    PULS D              ; Restore buffer start
-    STD LEVEL_BG_PTR    ; Store correct pointer
-LLR_SKIP_BG:
-    
-    ; === Copy Gameplay Objects to RAM ===
+    ; === Copy ONLY Gameplay Objects to RAM (BG and FG stay in ROM) ===
     LDB LEVEL_GP_COUNT
     BEQ LLR_SKIP_GP  ; Skip if zero
     LDX LEVEL_GP_ROM_PTR  ; X = source (ROM)
@@ -651,57 +643,16 @@ LLR_SKIP_BG:
     STD LEVEL_GP_PTR    ; Store correct pointer
 LLR_SKIP_GP:
     
-    ; === Copy Foreground Objects to RAM ===
-    LDB LEVEL_FG_COUNT
-    BEQ LLR_SKIP_FG  ; Skip if zero
-    LDX LEVEL_FG_ROM_PTR  ; X = source (ROM)
-    LDU #LEVEL_FG_BUFFER   ; U = destination (RAM)
-    PSHS U              ; Save buffer start BEFORE copy
-    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
-    PULS D              ; Restore buffer start
-    STD LEVEL_FG_PTR    ; Store correct pointer
-LLR_SKIP_FG:
-    
     ; Return level pointer in RESULT
     LDX LEVEL_PTR
     STX RESULT
     
     PULS D,X,Y,U,PC  ; Restore and return
     
-; === Subroutine: Clear All Level Buffers ===
-; Mark all objects as empty (type=0xFF) to avoid reading garbage
-; Clobbers: A, B, U
-LLR_CLEAR_BUFFERS:
-    LDA #$FF         ; Empty marker
-    ; Clear BG buffer (160 bytes = 8 objects)
-    LDU #LEVEL_BG_BUFFER
-    LDB #8           ; 8 objects
-LLR_CLR_BG_LOOP:
-    STA ,U           ; Write 0xFF to type byte (offset +0)
-    LEAU 20,U        ; Next object
-    DECB
-    BNE LLR_CLR_BG_LOOP
-    ; Clear GP buffer (320 bytes = 16 objects)
-    LDU #LEVEL_GP_BUFFER
-    LDB #16          ; 16 objects
-LLR_CLR_GP_LOOP:
-    STA ,U           ; Write 0xFF to type byte
-    LEAU 20,U
-    DECB
-    BNE LLR_CLR_GP_LOOP
-    ; Clear FG buffer (160 bytes = 8 objects)
-    LDU #LEVEL_FG_BUFFER
-    LDB #8           ; 8 objects
-LLR_CLR_FG_LOOP:
-    STA ,U           ; Write 0xFF to type byte
-    LEAU 20,U
-    DECB
-    BNE LLR_CLR_FG_LOOP
-    RTS
-    
 ; === Subroutine: Copy N Objects ===
 ; Input: B = count, X = source (ROM), U = destination (RAM)
-; Each object is 24 bytes (including scale, rotation, collision_size, spawn_delay, vector_ptr, properties_ptr)
+; OPTIMIZATION: Skip 'type' field (+0) - read from ROM when needed
+; Each ROM object is 20 bytes, but we copy only 19 bytes to RAM (skip type)
 ; Clobbers: A, B, X, U
 LLR_COPY_OBJECTS:
 LLR_COPY_LOOP:
@@ -709,27 +660,31 @@ LLR_COPY_LOOP:
     BEQ LLR_COPY_DONE
     PSHS B           ; Save counter (LDD will clobber B!)
     
-    ; Copy 24 bytes from X to U
-    LDD ,X++         ; Bytes 0-1
+    ; Skip type (offset +0) and intensity (offset +8) fields in ROM
+    LEAX 1,X         ; X now points to +1 (x position)
+    
+    ; Copy 18 bytes from X to U (ROM offsets +1 to +7, then +9 to +19)
+    LDD ,X++         ; ROM +1-2 (x) → RAM +0-1
     STD ,U++
-    LDD ,X++         ; Bytes 2-3
+    LDD ,X++         ; ROM +3-4 (y) → RAM +2-3
     STD ,U++
-    LDD ,X++         ; Bytes 4-5
+    LDD ,X++         ; ROM +5-6 (scale) → RAM +4-5
     STD ,U++
-    LDD ,X++         ; Bytes 6-7
+    LDA ,X+          ; ROM +7 (rotation) → RAM +6
+    STA ,U+
+    LEAX 1,X         ; Skip intensity at ROM +8
+    LDD ,X++         ; ROM +9-10 (velocity_x, velocity_y) → RAM +7-8
     STD ,U++
-    LDD ,X++         ; Bytes 8-9
+    LDD ,X++         ; ROM +11-12 (physics_flags, collision_flags) → RAM +9-10
     STD ,U++
-    LDD ,X++         ; Bytes 10-11
+    LDD ,X++         ; ROM +13-14 (collision_size, spawn_delay high) → RAM +11-12
     STD ,U++
-    LDD ,X++         ; Bytes 12-13
+    LDD ,X++         ; ROM +15-16 (spawn_delay low, vector_ptr high) → RAM +13-14
     STD ,U++
-    LDD ,X++         ; Bytes 14-15
+    LDD ,X++         ; ROM +17-18 (vector_ptr low, properties_ptr high) → RAM +15-16
     STD ,U++
-    LDD ,X++         ; Bytes 16-17
-    STD ,U++
-    LDD ,X++         ; Bytes 18-19
-    STD ,U++
+    LDA ,X+          ; ROM +19 (properties_ptr low) → RAM +17
+    STA ,U+
     
     PULS B           ; Restore counter
     DECB             ; Decrement after copy
@@ -746,16 +701,15 @@ LLR_COPY_DONE:
 ;   +8:  FDB timeLimit, targetScore
 ;   +12: FCB bgCount, gameplayCount, fgCount
 ;   +15: FDB bgObjectsPtr, gameplayObjectsPtr, fgObjectsPtr
-; Object structure (20 bytes each):
-;   +0:  FCB type
-;   +1:  FDB x, y (position)
-;   +5:  FDB scale (8.8 fixed point)
-;   +7:  FCB rotation, intensity
-;   +9:  FCB velocity_x, velocity_y
-;   +11: FCB physics_flags, collision_flags, collision_size
-;   +14: FDB spawn_delay
-;   +16: FDB vector_ptr
-;   +18: FDB properties_ptr
+; RAM object structure (19 bytes each, 'type' omitted - read from ROM):
+;   +0:  FDB x, y (position)
+;   +4:  FDB scale (8.8 fixed point)
+;   +6:  FCB rotation, intensity
+;   +8:  FCB velocity_x, velocity_y
+;   +10: FCB physics_flags, collision_flags, collision_size
+;   +13: FDB spawn_delay
+;   +15: FDB vector_ptr
+;   +17: FDB properties_ptr
 SHOW_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)
@@ -784,17 +738,18 @@ SHOW_LEVEL_RUNTIME:
     LDD ,X++         ; D = fgObjectsPtr
     STD >LEVEL_FG_PTR
     
-    ; === Draw Background Layer ===
+    ; === Draw Background Layer (from ROM) ===
 SLR_BG_COUNT:
     CLRB             ; Clear high byte to prevent corruption
     LDB >LEVEL_BG_COUNT
     CMPB #0
     BEQ SLR_GAMEPLAY
 SLR_BG_PTR:
-    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)
+    LDA #20          ; ROM objects are 20 bytes (with 'type' field)
+    LDX >LEVEL_BG_ROM_PTR ; Read from ROM directly (no RAM copy)
     JSR SLR_DRAW_OBJECTS
     
-    ; === Draw Gameplay Layer ===
+    ; === Draw Gameplay Layer (from RAM) ===
 SLR_GAMEPLAY:
 SLR_GP_COUNT:
     CLRB             ; Clear high byte to prevent corruption
@@ -802,10 +757,11 @@ SLR_GP_COUNT:
     CMPB #0
     BEQ SLR_FOREGROUND
 SLR_GP_PTR:
-    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)
+    LDA #18          ; RAM objects are 18 bytes (without 'type' and 'intensity' fields)
+    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer
     JSR SLR_DRAW_OBJECTS
     
-    ; === Draw Foreground Layer ===
+    ; === Draw Foreground Layer (from ROM) ===
 SLR_FOREGROUND:
 SLR_FG_COUNT:
     CLRB             ; Clear high byte to prevent corruption
@@ -813,7 +769,8 @@ SLR_FG_COUNT:
     CMPB #0
     BEQ SLR_DONE
 SLR_FG_PTR:
-    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)
+    LDA #20          ; ROM objects are 20 bytes (with 'type' field)
+    LDX >LEVEL_FG_ROM_PTR ; Read from ROM directly (no RAM copy)
     JSR SLR_DRAW_OBJECTS
     
 SLR_DONE:
@@ -821,39 +778,71 @@ SLR_DONE:
     PULS D,X,Y,U,PC  ; Restore and return
     
 ; === Subroutine: Draw N Objects ===
-; Input: B = count, X = objects ptr
-; Each object is 20 bytes
+; Input: A = stride (19=RAM, 20=ROM), B = count, X = objects ptr
 SLR_DRAW_OBJECTS:
+    PSHS A           ; Save stride on stack
     ; NOTE: Use register-based loop (no stack juggling).
     ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
 SLR_OBJ_LOOP:
     TSTB             ; Test if count is zero
-    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)
+    LBEQ SLR_OBJ_DONE ; Exit if zero (LONG branch - intensity calc made loop large)
     
     PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
     
-    ; X points to current object (20 bytes)
-    ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
-    ;           FCB rotation (+7), FCB intensity (+8), ..., FDB vector_ptr (+16)
+    ; X points to current object
+    ; ROM: 20 bytes with 'type' at +0 (offsets: intensity +8, y +3, x +1, vector_ptr +16)
+    ; RAM: 18 bytes without 'type' and 'intensity' (offsets: y +2, x +0, vector_ptr +14)
+    ; NOTE: intensity ALWAYS read from ROM (even for RAM objects)
     
-    ; Clear mirror flags (no mirroring support yet)
+    ; Determine object type based on stride (peek from stack)
+    LDA 1,S          ; Load stride from stack (offset +1 because B is at top)
+    CMPA #20
+    BEQ SLR_ROM_OFFSETS
+    
+    ; RAM offsets (18 bytes, no 'type' or 'intensity')
+    ; Need to calculate ROM address for intensity: ROM_PTR + (objIndex * 20) + 8
+    ; objIndex = (X - LEVEL_GP_BUFFER) / 18
+    PSHS X           ; Save RAM object pointer
+    LDB >LEVEL_GP_COUNT
+    SUBB 2,S         ; objIndex = totalCount - currentCounter
+    ; Multiply objIndex by 20 using loop (B * 20)
+    PSHS B           ; Save objIndex for loop counter
+    LDD >LEVEL_GP_ROM_PTR ; D = ROM base
+SLR_RAM_INTENSITY_LOOP:
+    LDB ,S           ; Load counter
+    BEQ SLR_RAM_INTENSITY_DONE  ; Exit if 0
+    ADDD #20         ; D += 20
+    DEC ,S           ; Decrement counter on stack
+    LBRA SLR_RAM_INTENSITY_LOOP
+SLR_RAM_INTENSITY_DONE:
+    LEAS 1,S         ; Clean objIndex from stack
+    TFR D,Y          ; Y = ROM object address
+    LDA 8,Y          ; intensity at ROM +8
+    STA DRAW_VEC_INTENSITY
+    PULS X           ; Restore RAM object pointer
+    
     CLR MIRROR_X
     CLR MIRROR_Y
-    
-    ; Read intensity (offset +8) and store as override
-    LDA 8,X
-    STA DRAW_VEC_INTENSITY
-    
-    ; Read y position (offset +3-4) - store LSB only
-    LDD 3,X          ; WARNING: This modifies B!
+    LDD 2,X          ; y at +2
     STB DRAW_VEC_Y
-    
-    ; Read x position (offset +1-2) - store LSB only
-    LDD 1,X          ; WARNING: This modifies B!
+    LDD 0,X          ; x at +0
     STB DRAW_VEC_X
+    LDU 14,X         ; vector_ptr at +14
+    BRA SLR_DRAW_VECTOR
     
-    ; Read vector_ptr (offset +16-17)
-    LDU 16,X
+SLR_ROM_OFFSETS:
+    ; ROM offsets (20 bytes, with 'type' at +0)
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    LDA 8,X          ; intensity at +8
+    STA DRAW_VEC_INTENSITY
+    LDD 3,X          ; y at +3
+    STB DRAW_VEC_Y
+    LDD 1,X          ; x at +1
+    STB DRAW_VEC_X
+    LDU 16,X         ; vector_ptr at +16
+    
+SLR_DRAW_VECTOR:
     PSHS X           ; Save object pointer on stack (Y may be corrupted by Draw_Sync_List)
     TFR U,X          ; X = vector data pointer (points to header)
     
@@ -881,16 +870,333 @@ SLR_PATH_DONE:
     ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed
     PULS X           ; Restore object pointer from stack
     
-    ; Advance to next object (20 bytes)
-    LEAX 20,X
+    ; Advance to next object using stride from stack
+    LDA 1,S          ; Load stride from stack (offset +1 because B is at top)
+    LEAX A,X         ; X += stride (18 or 20 bytes)
     
     PULS B           ; Restore counter
     DECB             ; Decrement count AFTER drawing
-    BRA SLR_OBJ_LOOP
+    LBRA SLR_OBJ_LOOP  ; LONG branch - intensity calc made loop large
     
 SLR_OBJ_DONE:
+    PULS A           ; Clean up stride from stack
     RTS
 
+; === UPDATE_LEVEL_RUNTIME ===
+; Update level state (physics, velocity, spawn delays)
+; OPTIMIZATION: Only updates GP layer (BG/FG are static, read from ROM)
+; CRITICAL: Works on RAM BUFFERS, not ROM!
+;
+UPDATE_LEVEL_RUNTIME:
+    PSHS U,X,Y,D  ; Preserve all registers
+    
+    ; === Skip Background (static, no updates) ===
+    ; BG objects are read directly from ROM - no physics processing needed
+    
+    ; === Update Gameplay Objects ONLY ===
+    LDB LEVEL_GP_COUNT
+    CMPB #0
+    LBEQ ULR_EXIT  ; Long branch (no objects to update)
+    LDU #LEVEL_GP_BUFFER  ; U = RAM buffer
+    BSR ULR_UPDATE_LAYER  ; Process objects
+    
+    ; === Object-to-Object Collisions (GAMEPLAY only) ===
+    JSR ULR_GAMEPLAY_COLLISIONS  ; Use JSR for long distance
+    
+    ; === Skip Foreground (static, no updates) ===
+    ; FG objects are read directly from ROM - no physics processing needed
+    
+ULR_EXIT:
+    PULS D,Y,X,U  ; Restore registers
+    RTS
+
+; === ULR_UPDATE_LAYER - Process all objects in a layer ===
+; Input: B = object count, U = buffer base address
+; Uses: X for world bounds
+ULR_UPDATE_LAYER:
+    LDX LEVEL_PTR  ; Load level pointer for world bounds
+    CMPX #0
+    LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)
+    
+ULR_LOOP:
+    ; U = pointer to object data (19 bytes per object in RAM)
+    ; RAM object structure (type omitted - read from ROM if needed):
+    ; +0: x (2 bytes signed)
+    ; +2: y (2 bytes signed)
+    ; +4: scale (2 bytes - not used by physics)
+    ; +6: rotation (1 byte - not used by physics)
+    ; +7: intensity (1 byte - not used by physics)
+    ; +8: velocity_x (1 byte signed)
+    ; +9: velocity_y (1 byte signed)
+    ; +10: physics_flags (1 byte)
+    ; +11: collision_flags (1 byte)
+    ; +12-18: other fields (collision_size, spawn_delay, vector_ptr, properties_ptr)
+
+    ; Check physics_flags (offset +9)
+    PSHS B  ; Save loop counter
+    LDB 9,U      ; Read flags
+    CMPB #0
+    LBEQ ULR_NEXT  ; Skip if no physics enabled (long branch)
+
+    ; Check if dynamic physics enabled (bit 0)
+    BITB #$01
+    LBEQ ULR_NEXT  ; Skip if not dynamic (long branch)
+
+    ; Check if gravity enabled (bit 1)
+    BITB #$02
+    LBEQ ULR_NO_GRAVITY  ; Long branch
+
+    ; Apply gravity: velocity_y -= 1
+    LDB 8,U       ; Read velocity_y
+    DECB          ; Subtract gravity
+    ; Clamp to -15..+15 (max velocity)
+    CMPB #$F1     ; Compare with -15
+    BGE ULR_VY_OK
+    LDB #$F1      ; Clamp to -15
+ULR_VY_OK:
+    STB 8,U       ; Store updated velocity_y
+
+ULR_NO_GRAVITY:
+    ; Apply velocity to position
+    ; x += velocity_x
+    LDB 7,U       ; Load velocity_x (signed 8-bit)
+    SEX           ; Sign-extend B to 16-bit in D
+    ADDD 0,U      ; D = x + velocity_x (x at offset +0)
+    STD 0,U       ; Store new x
+
+    ; y += velocity_y
+    LDB 8,U       ; Load velocity_y (signed 8-bit)
+    SEX           ; Sign-extend B to 16-bit in D
+    ADDD 2,U      ; D = y + velocity_y (y at offset +2)
+    STD 2,U       ; Store new y
+
+    ; === Check World Bounds (Wall Collisions) ===
+    LDB 10,U      ; Load collision_flags
+    BITB #$02     ; Check bounce_walls flag (bit 1)
+    LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
+
+    ; Load world bounds pointer from LEVEL_PTR
+    LDX LEVEL_PTR
+    ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)
+
+    ; === Check X Bounds (Left/Right walls) ===
+    ; Check xMin: if (x - collision_size) < xMin then bounce
+    LDB 11,U      ; collision_size (offset +11)
+    SEX           ; Sign-extend to 16-bit in D
+    PSHS D        ; Save collision_size on stack
+    LDD 0,U       ; Load object x
+    SUBD ,S++     ; D = x - collision_size (left edge), pop stack
+    CMPD 0,X      ; Compare left edge with xMin
+    LBGE ULR_X_MAX_CHECK  ; Skip if left_edge >= xMin (LONG)
+    ; Hit xMin wall - only bounce if moving left (velocity_x < 0)
+    LDB 7,U       ; velocity_x
+    CMPB #0
+    LBGE ULR_X_MAX_CHECK  ; Skip if moving right (LONG)
+    ; Bounce: set position so left edge = xMin
+    LDB 11,U      ; Reload collision_size
+    SEX
+    ADDD 0,X      ; D = xMin + collision_size (center position)
+    STD 0,U       ; x = xMin + collision_size
+    LDB 7,U       ; Reload velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB 7,U
+
+    ; Check xMax: if (x + collision_size) > xMax then bounce
+ULR_X_MAX_CHECK:
+    LDB 11,U      ; Reload collision_size
+    SEX
+    PSHS D        ; Save collision_size on stack
+    LDD 0,U       ; Load object x
+    ADDD ,S++     ; D = x + collision_size (right edge), pop stack
+    CMPD 2,X      ; Compare right edge with xMax
+    LBLE ULR_Y_BOUNDS  ; Skip if right_edge <= xMax (LONG)
+    ; Hit xMax wall - only bounce if moving right (velocity_x > 0)
+    LDB 7,U       ; velocity_x
+    CMPB #0
+    LBLE ULR_Y_BOUNDS  ; Skip if moving left (LONG)
+    ; Bounce: set position so right edge = xMax
+    LDB 11,U      ; Reload collision_size
+    SEX
+    TFR D,Y       ; Y = collision_size
+    LDD 2,X       ; D = xMax
+    PSHS Y        ; Push collision_size
+    SUBD ,S++     ; D = xMax - collision_size (center position), pop
+    STD 0,U       ; x = xMax - collision_size
+    LDB 7,U       ; Reload velocity_x
+    NEGB          ; velocity_x = -velocity_x
+    STB 7,U
+
+    ; === Check Y Bounds (Top/Bottom walls) ===
+ULR_Y_BOUNDS:
+    ; Check yMin: if (y - collision_size) < yMin then bounce
+    LDB 11,U      ; Reload collision_size
+    SEX
+    PSHS D        ; Save collision_size on stack
+    LDD 2,U       ; Load object y
+    SUBD ,S++     ; D = y - collision_size (bottom edge), pop stack
+    CMPD 4,X      ; Compare bottom edge with yMin
+    LBGE ULR_Y_MAX_CHECK  ; Skip if bottom_edge >= yMin (LONG)
+    ; Hit yMin wall - only bounce if moving down (velocity_y < 0)
+    LDB 8,U       ; velocity_y
+    CMPB #0
+    LBGE ULR_Y_MAX_CHECK  ; Skip if moving up (LONG)
+    ; Bounce: set position so bottom edge = yMin
+    LDB 11,U      ; Reload collision_size
+    SEX
+    ADDD 4,X      ; D = yMin + collision_size (center position)
+    STD 2,U       ; y = yMin + collision_size
+    LDB 8,U       ; Reload velocity_y
+    NEGB          ; velocity_y = -velocity_y
+    STB 8,U
+
+    ; Check yMax: if (y + collision_size) > yMax then bounce
+ULR_Y_MAX_CHECK:
+    LDB 11,U      ; Reload collision_size
+    SEX
+    PSHS D        ; Save collision_size on stack
+    LDD 2,U       ; Load object y
+    ADDD ,S++     ; D = y + collision_size (top edge), pop stack
+    CMPD 6,X      ; Compare top edge with yMax
+    LBLE ULR_NEXT  ; Skip if top_edge <= yMax (LONG)
+    ; Hit yMax wall - only bounce if moving up (velocity_y > 0)
+    LDB 8,U       ; velocity_y
+    CMPB #0
+    LBLE ULR_NEXT  ; Skip if moving down (LONG)
+    ; Bounce: set position so top edge = yMax
+    LDB 11,U      ; Reload collision_size
+    SEX
+    TFR D,Y       ; Y = collision_size
+    LDD 6,X       ; D = yMax
+    PSHS Y        ; Push collision_size
+    SUBD ,S++     ; D = yMax - collision_size (center position), pop
+    STD 2,U       ; y = yMax - collision_size
+    LDB 8,U       ; Reload velocity_y
+    NEGB          ; velocity_y = -velocity_y
+    STB 8,U
+
+ULR_NEXT:
+    PULS B        ; Restore loop counter
+    LEAU 18,U     ; Move to next object (18 bytes)
+    DECB
+    LBNE ULR_LOOP  ; Continue if more objects (long branch)
+
+ULR_LAYER_EXIT:
+    RTS
+
+; === ULR_GAMEPLAY_COLLISIONS - Check collisions between gameplay objects ===
+; Input: None (uses LEVEL_GP_BUFFER and LEVEL_GP_COUNT)
+ULR_GAMEPLAY_COLLISIONS:
+    ; Ultra-simple algorithm: NO stack juggling, use RAM variables
+    LDA LEVEL_GP_COUNT
+    CMPA #2
+    BHS UGPC_START   ; Continue if >=2
+    RTS              ; Early exit
+UGPC_START:
+    
+    ; Store count-1 in temporary RAM (we'll iterate up to this)
+    DECA
+    STA UGPC_OUTER_MAX   ; Store at RESULT+20 (temp storage)
+    CLR UGPC_OUTER_IDX   ; Start at 0
+    
+UGPC_OUTER_LOOP:
+    ; Calculate U = LEVEL_GP_BUFFER + (UGPC_OUTER_IDX * 20)
+    LDU #LEVEL_GP_BUFFER
+    LDB UGPC_OUTER_IDX
+    BEQ UGPC_SKIP_OUTER_MUL  ; If idx=0, U already correct
+UGPC_OUTER_MUL:
+    LEAU 18,U
+    DECB
+    BNE UGPC_OUTER_MUL
+UGPC_SKIP_OUTER_MUL:
+    
+    ; Check if collidable
+    LDB 10,U
+    BITB #$01
+    BEQ UGPC_NEXT_OUTER
+    
+    ; Inner loop: check against all objects AFTER current
+    LDA UGPC_OUTER_IDX
+    INCA             ; Start from next object
+    STA UGPC_INNER_IDX
+    
+UGPC_INNER_LOOP:
+    ; Check if inner reached count
+    LDA UGPC_INNER_IDX
+    CMPA LEVEL_GP_COUNT
+    BHS UGPC_INNER_DONE  ; Done if idx >= count
+    
+    ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 18)
+    LDY #LEVEL_GP_BUFFER
+    LDB UGPC_INNER_IDX
+    BEQ UGPC_SKIP_INNER_MUL
+UGPC_INNER_MUL:
+    LEAY 18,Y
+    DECB
+    BNE UGPC_INNER_MUL
+UGPC_SKIP_INNER_MUL:
+    
+    ; Check if Y collidable
+    LDB 10,Y
+    BITB #$01
+    BEQ UGPC_NEXT_INNER
+    
+    ; Manhattan distance |x1-x2| + |y1-y2|
+    LDD 0,U          ; x1
+    SUBD 0,Y         ; x1-x2
+    BPL UGPC_DX_POS
+    COMA
+    COMB
+    ADDD #1
+UGPC_DX_POS:
+    STD UGPC_DX      ; Store |dx| in temp
+    
+    LDD 2,U          ; y1
+    SUBD 2,Y         ; y1-y2
+    BPL UGPC_DY_POS
+    COMA
+    COMB
+    ADDD #1
+UGPC_DY_POS:
+    ADDD UGPC_DX     ; distance = |dx| + |dy|
+    STD UGPC_DIST
+    
+    ; Sum of radii
+    LDB 11,U
+    ADDB 11,Y
+    SEX              ; D = sum_radius (normal, not doubled)
+    ; Collision if distance < sum_radius (i.e., sum_radius > distance)
+    CMPD UGPC_DIST   ; Compare sum_radius with distance
+    BHI UGPC_COLLISION  ; Jump to collision if sum_radius > distance
+    BRA UGPC_NEXT_INNER ; No collision, skip
+    
+UGPC_COLLISION:
+    ; COLLISION! Swap velocities (elastic collision)
+    ; Swap velocity_x
+    LDA 7,U          ; A = vel_x of object 1
+    LDB 7,Y          ; B = vel_x of object 2
+    STB 7,U          ; Object 1 gets object 2's vel_x
+    STA 7,Y          ; Object 2 gets object 1's vel_x
+    ; Swap velocity_y
+    LDA 8,U          ; A = vel_y of object 1
+    LDB 8,Y          ; B = vel_y of object 2
+    STB 8,U          ; Object 1 gets object 2's vel_y
+    STA 8,Y          ; Object 2 gets object 1's vel_y
+    
+UGPC_NEXT_INNER:
+    INC UGPC_INNER_IDX
+    LBRA UGPC_INNER_LOOP
+    
+UGPC_INNER_DONE:
+UGPC_NEXT_OUTER:
+    INC UGPC_OUTER_IDX
+    LDA UGPC_OUTER_IDX
+    CMPA UGPC_OUTER_MAX
+    BHI UGPC_EXIT    ; Exit if idx > max
+    LBRA UGPC_OUTER_LOOP  ; Continue (LONG)
+    
+UGPC_EXIT:
+    RTS
+    
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -953,36 +1259,11 @@ LOOP_BODY:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:17
-; DRAW_VECTOR("fuji_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_FUJI_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
+    ; VPy_LINE:15
+; NATIVE_CALL: UPDATE_LEVEL at line 15
+    JSR UPDATE_LEVEL_RUNTIME
+    CLRA
+    CLRB
     STD RESULT
     RTS
 
@@ -992,7 +1273,7 @@ LOOP_BODY:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 5 of 7 assets (unused assets excluded)
+; Embedded 4 of 7 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: coin
@@ -1010,7 +1291,7 @@ _COIN_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _COIN_PATH0        ; pointer to path 0
 
 _COIN_PATH0:    ; Path 0
-    FCB 51              ; path0: intensity
+    FCB 89              ; path0: intensity
     FCB $08,$00,0,0        ; path0: header (y=8, x=0, relative to center)
     FCB $FF,$FE,$06          ; line 0: flag=-1, dy=-2, dx=6
     FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
@@ -1037,7 +1318,7 @@ _BUBBLE_HUGE_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _BUBBLE_HUGE_PATH0        ; pointer to path 0
 
 _BUBBLE_HUGE_PATH0:    ; Path 0
-    FCB 49              ; path0: intensity
+    FCB 76              ; path0: intensity
     FCB $00,$1A,0,0        ; path0: header (y=0, x=26, relative to center)
     FCB $FF,$12,$F8          ; line 0: flag=-1, dy=18, dx=-8
     FCB $FF,$08,$EE          ; line 1: flag=-1, dy=8, dx=-18
@@ -1064,7 +1345,7 @@ _BUBBLE_LARGE_VECTORS:  ; Main entry (header + 1 path(s))
     FDB _BUBBLE_LARGE_PATH0        ; pointer to path 0
 
 _BUBBLE_LARGE_PATH0:    ; Path 0
-    FCB 49              ; path0: intensity
+    FCB 80              ; path0: intensity
     FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
     FCB $FF,$FB,$0A          ; line 0: flag=-1, dy=-5, dx=10
     FCB $FF,$F6,$05          ; line 1: flag=-1, dy=-10, dx=5
@@ -1074,108 +1355,6 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
     FCB $FF,$0A,$FB          ; line 5: flag=-1, dy=10, dx=-5
     FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
     FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
-    FCB 2                ; End marker (path complete)
-
-; Vector asset: fuji_bg
-; Generated from fuji_bg.vec (Malban Draw_Sync_List format)
-; Total paths: 5, points: 64
-; X bounds: min=-124, max=125, width=249
-; Center: (0, 12)
-
-_FUJI_BG_WIDTH EQU 249
-_FUJI_BG_CENTER_X EQU 0
-_FUJI_BG_CENTER_Y EQU 12
-
-_FUJI_BG_VECTORS:  ; Main entry (header + 5 path(s))
-    FCB 5               ; path_count (runtime metadata)
-    FDB _FUJI_BG_PATH0        ; pointer to path 0
-    FDB _FUJI_BG_PATH1        ; pointer to path 1
-    FDB _FUJI_BG_PATH2        ; pointer to path 2
-    FDB _FUJI_BG_PATH3        ; pointer to path 3
-    FDB _FUJI_BG_PATH4        ; pointer to path 4
-
-_FUJI_BG_PATH0:    ; Path 0
-    FCB 80              ; path0: intensity
-    FCB $DC,$84,0,0        ; path0: header (y=-36, x=-124, relative to center)
-    FCB $FF,$0A,$1E          ; line 0: flag=-1, dy=10, dx=30
-    FCB $FF,$0E,$1E          ; line 1: flag=-1, dy=14, dx=30
-    FCB $FF,$0F,$15          ; line 2: flag=-1, dy=15, dx=21
-    FCB $FF,$11,$17          ; line 3: flag=-1, dy=17, dx=23
-    FCB $FF,$0E,$0E          ; line 4: flag=-1, dy=14, dx=14
-    FCB $FF,$FE,$03          ; line 5: flag=-1, dy=-2, dx=3
-    FCB $FF,$03,$04          ; line 6: flag=-1, dy=3, dx=4
-    FCB $FF,$FE,$04          ; line 7: flag=-1, dy=-2, dx=4
-    FCB $FF,$01,$07          ; line 8: flag=-1, dy=1, dx=7
-    FCB $FF,$02,$04          ; line 9: flag=-1, dy=2, dx=4
-    FCB $FF,$FD,$06          ; line 10: flag=-1, dy=-3, dx=6
-    FCB $FF,$03,$03          ; line 11: flag=-1, dy=3, dx=3
-    FCB $FF,$EB,$11          ; line 12: flag=-1, dy=-21, dx=17
-    FCB $FF,$F4,$11          ; line 13: flag=-1, dy=-12, dx=17
-    FCB $FF,$F0,$16          ; line 14: flag=-1, dy=-16, dx=22
-    FCB $FF,$F6,$14          ; line 15: flag=-1, dy=-10, dx=20
-    FCB $FF,$F6,$18          ; line 16: flag=-1, dy=-10, dx=24
-    FCB $FF,$00,$00          ; line 17: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (path complete)
-
-_FUJI_BG_PATH1:    ; Path 1
-    FCB 95              ; path1: intensity
-    FCB $0E,$F1,0,0        ; path1: header (y=14, x=-15, relative to center)
-    FCB $FF,$06,$03          ; line 0: flag=-1, dy=6, dx=3
-    FCB $FF,$04,$03          ; line 1: flag=-1, dy=4, dx=3
-    FCB $FF,$FD,$04          ; line 2: flag=-1, dy=-3, dx=4
-    FCB $FF,$FC,$FC          ; line 3: flag=-1, dy=-4, dx=-4
-    FCB $FF,$FD,$FA          ; line 4: flag=-1, dy=-3, dx=-6
-    FCB $FF,$00,$00          ; line 5: flag=-1, dy=0, dx=0
-    FCB 2                ; End marker (path complete)
-
-_FUJI_BG_PATH2:    ; Path 2
-    FCB 95              ; path2: intensity
-    FCB $13,$07,0,0        ; path2: header (y=19, x=7, relative to center)
-    FCB $FF,$F9,$FD          ; line 0: flag=-1, dy=-7, dx=-3
-    FCB $FF,$FA,$02          ; line 1: flag=-1, dy=-6, dx=2
-    FCB $FF,$F9,$FD          ; line 2: flag=-1, dy=-7, dx=-3
-    FCB $FF,$FD,$04          ; line 3: flag=-1, dy=-3, dx=4
-    FCB $FF,$08,$03          ; line 4: flag=-1, dy=8, dx=3
-    FCB $FF,$07,$FE          ; line 5: flag=-1, dy=7, dx=-2
-    FCB $FF,$06,$01          ; line 6: flag=-1, dy=6, dx=1
-    FCB $FF,$02,$FE          ; line 7: flag=-1, dy=2, dx=-2
-    FCB 2                ; End marker (path complete)
-
-_FUJI_BG_PATH3:    ; Path 3
-    FCB 95              ; path3: intensity
-    FCB $15,$18,0,0        ; path3: header (y=21, x=24, relative to center)
-    FCB $FF,$F7,$05          ; line 0: flag=-1, dy=-9, dx=5
-    FCB $FF,$F7,$0C          ; line 1: flag=-1, dy=-9, dx=12
-    FCB $FF,$0B,$FA          ; line 2: flag=-1, dy=11, dx=-6
-    FCB $FF,$07,$F5          ; line 3: flag=-1, dy=7, dx=-11
-    FCB 2                ; End marker (path complete)
-
-_FUJI_BG_PATH4:    ; Path 4
-    FCB 100              ; path4: intensity
-    FCB $F9,$C7,0,0        ; path4: header (y=-7, x=-57, relative to center)
-    FCB $FF,$09,$1A          ; line 0: flag=-1, dy=9, dx=26
-    FCB $FF,$EF,$F2          ; line 1: flag=-1, dy=-17, dx=-14
-    FCB $FF,$1B,$22          ; line 2: flag=-1, dy=27, dx=34
-    FCB $FF,$F2,$FB          ; line 3: flag=-1, dy=-14, dx=-5
-    FCB $FF,$00,$03          ; line 4: flag=-1, dy=0, dx=3
-    FCB $FF,$F7,$FB          ; line 5: flag=-1, dy=-9, dx=-5
-    FCB $FF,$FA,$01          ; line 6: flag=-1, dy=-6, dx=1
-    FCB $FF,$0E,$0E          ; line 7: flag=-1, dy=14, dx=14
-    FCB $FF,$F1,$00          ; line 8: flag=-1, dy=-15, dx=0
-    FCB $FF,$0A,$05          ; line 9: flag=-1, dy=10, dx=5
-    FCB $FF,$EA,$06          ; line 10: flag=-1, dy=-22, dx=6
-    FCB $FF,$1C,$05          ; line 11: flag=-1, dy=28, dx=5
-    FCB $FF,$EF,$06          ; line 12: flag=-1, dy=-17, dx=6
-    FCB $FF,$03,$01          ; line 13: flag=-1, dy=3, dx=1
-    FCB $FF,$FD,$04          ; line 14: flag=-1, dy=-3, dx=4
-    FCB $FF,$0B,$03          ; line 15: flag=-1, dy=11, dx=3
-    FCB $FF,$F5,$05          ; line 16: flag=-1, dy=-11, dx=5
-    FCB $FF,$10,$FF          ; line 17: flag=-1, dy=16, dx=-1
-    FCB $FF,$EE,$13          ; line 18: flag=-1, dy=-18, dx=19
-    FCB $FF,$12,$F7          ; line 19: flag=-1, dy=18, dx=-9
-    FCB $FF,$F9,$0E          ; line 20: flag=-1, dy=-7, dx=14
-    FCB $FF,$04,$02          ; line 21: flag=-1, dy=4, dx=2
-    FCB $FF,$FC,$14          ; line 22: flag=-1, dy=-4, dx=20
     FCB 2                ; End marker (path complete)
 
 ; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
@@ -1190,30 +1369,14 @@ _TEST_LEVEL_LEVEL:
     FDB 127  ; yMax (16-bit signed)
     FDB 0  ; Time limit (seconds)
     FDB 0  ; Target score
-    FCB 1  ; Background object count
-    FCB 3  ; Gameplay object count
+    FCB 0  ; Background object count
+    FCB 4  ; Gameplay object count
     FCB 0  ; Foreground object count
     FDB _TEST_LEVEL_BG_OBJECTS
     FDB _TEST_LEVEL_GAMEPLAY_OBJECTS
     FDB _TEST_LEVEL_FG_OBJECTS
 
 _TEST_LEVEL_BG_OBJECTS:
-; Object: obj_1767949012188 (enemy)
-    FCB 1  ; type
-    FDB 0  ; x
-    FDB 0  ; y
-    FDB 256  ; scale (8.8 fixed)
-    FCB 0  ; rotation
-    FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 0  ; velocity_x
-    FCB 0  ; velocity_y
-    FCB 0  ; physics_flags
-    FCB 0  ; collision_flags
-    FCB 10  ; collision_size
-    FDB 0  ; spawn_delay
-    FDB _FUJI_BG_VECTORS  ; vector_ptr
-    FDB 0  ; properties_ptr (reserved)
-
 
 _TEST_LEVEL_GAMEPLAY_OBJECTS:
 ; Object: obj_1767862794353 (enemy)
@@ -1239,7 +1402,7 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 2  ; velocity_x
+    FCB 3  ; velocity_x
     FCB 1  ; velocity_y
     FCB 1  ; physics_flags
     FCB 3  ; collision_flags
@@ -1262,6 +1425,22 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FCB 15  ; collision_size
     FDB 0  ; spawn_delay
     FDB _BUBBLE_LARGE_VECTORS  ; vector_ptr
+    FDB 0  ; properties_ptr (reserved)
+
+; Object: obj_1767970445633 (enemy)
+    FCB 1  ; type
+    FDB -37  ; x
+    FDB -47  ; y
+    FDB 256  ; scale (8.8 fixed)
+    FCB 0  ; rotation
+    FCB 0  ; intensity (0=use vec, >0=override)
+    FCB 0  ; velocity_x
+    FCB 0  ; velocity_y
+    FCB 1  ; physics_flags
+    FCB 1  ; collision_flags
+    FCB 10  ; collision_size
+    FDB 0  ; spawn_delay
+    FDB _COIN_VECTORS  ; vector_ptr
     FDB 0  ; properties_ptr (reserved)
 
 
