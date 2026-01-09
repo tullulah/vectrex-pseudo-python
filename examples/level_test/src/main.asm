@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 333 bytes
+; Total RAM used: 269 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -48,14 +48,14 @@ LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (R
 LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
 LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 16 objects * 18 bytes, 'type'+'intensity' omitted) (288 bytes)
-UGPC_OUTER_IDX       EQU $C880+$142   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$143   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$144   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$145   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$147   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$149   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$14B   ; Function argument 1 (2 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 16 objects * 14 bytes, positions/scale/delay 1-byte optimized) (224 bytes)
+UGPC_OUTER_IDX       EQU $C880+$102   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$103   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$104   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$105   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$107   ; Manhattan distance temporary (16-bit) (2 bytes)
+VAR_ARG0             EQU $C880+$109   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$10B   ; Function argument 1 (2 bytes)
 
     JMP START
 
@@ -628,7 +628,7 @@ LOAD_LEVEL_RUNTIME:
     LDB #16          ; 16 objects
 LLR_CLR_GP_LOOP:
     STA ,U           ; Write 0xFF to type byte
-    LEAU 18,U
+    LEAU 14,U
     DECB
     BNE LLR_CLR_GP_LOOP
     
@@ -663,28 +663,33 @@ LLR_COPY_LOOP:
     ; Skip type (offset +0) and intensity (offset +8) fields in ROM
     LEAX 1,X         ; X now points to +1 (x position)
     
-    ; Copy 18 bytes from X to U (ROM offsets +1 to +7, then +9 to +19)
-    LDD ,X++         ; ROM +1-2 (x) → RAM +0-1
-    STD ,U++
-    LDD ,X++         ; ROM +3-4 (y) → RAM +2-3
-    STD ,U++
-    LDD ,X++         ; ROM +5-6 (scale) → RAM +4-5
-    STD ,U++
-    LDA ,X+          ; ROM +7 (rotation) → RAM +6
+    ; Copy 14 bytes optimized: x,y,scale,spawn_delay as 1-byte values
+    LDA 0,X          ; ROM +1 (x high byte) → RAM +0
     STA ,U+
-    LEAX 1,X         ; Skip intensity at ROM +8
-    LDD ,X++         ; ROM +9-10 (velocity_x, velocity_y) → RAM +7-8
-    STD ,U++
-    LDD ,X++         ; ROM +11-12 (physics_flags, collision_flags) → RAM +9-10
-    STD ,U++
-    LDD ,X++         ; ROM +13-14 (collision_size, spawn_delay high) → RAM +11-12
-    STD ,U++
-    LDD ,X++         ; ROM +15-16 (spawn_delay low, vector_ptr high) → RAM +13-14
-    STD ,U++
-    LDD ,X++         ; ROM +17-18 (vector_ptr low, properties_ptr high) → RAM +15-16
-    STD ,U++
-    LDA ,X+          ; ROM +19 (properties_ptr low) → RAM +17
+    LDA 2,X          ; ROM +3 (y high byte) → RAM +1
     STA ,U+
+    LDA 4,X          ; ROM +5 (scale high byte) → RAM +2
+    STA ,U+
+    LDA 6,X          ; ROM +7 (rotation) → RAM +3
+    STA ,U+
+    LEAX 8,X         ; Skip to ROM +9 (past intensity at +8)
+    LDA ,X+          ; ROM +9 (velocity_x) → RAM +4
+    STA ,U+
+    LDA ,X+          ; ROM +10 (velocity_y) → RAM +5
+    STA ,U+
+    LDA ,X+          ; ROM +11 (physics_flags) → RAM +6
+    STA ,U+
+    LDA ,X+          ; ROM +12 (collision_flags) → RAM +7
+    STA ,U+
+    LDA ,X+          ; ROM +13 (collision_size) → RAM +8
+    STA ,U+
+    LDA 1,X          ; ROM +15 (spawn_delay low byte) → RAM +9
+    STA ,U+
+    LEAX 2,X         ; Skip spawn_delay (2 bytes)
+    LDD ,X++         ; ROM +16-17 (vector_ptr) → RAM +10-11
+    STD ,U++
+    LDD ,X++         ; ROM +18-19 (properties_ptr) → RAM +12-13
+    STD ,U++
     
     PULS B           ; Restore counter
     DECB             ; Decrement after copy
@@ -757,7 +762,7 @@ SLR_GP_COUNT:
     CMPB #0
     BEQ SLR_FOREGROUND
 SLR_GP_PTR:
-    LDA #18          ; RAM objects are 18 bytes (without 'type' and 'intensity' fields)
+    LDA #14          ; RAM objects are 14 bytes (x/y/scale/delay 1-byte optimized)
     LDX #LEVEL_GP_BUFFER ; Read from RAM buffer
     JSR SLR_DRAW_OBJECTS
     
@@ -823,11 +828,11 @@ SLR_RAM_INTENSITY_DONE:
     
     CLR MIRROR_X
     CLR MIRROR_Y
-    LDD 2,X          ; y at +2
+    LDD 1,X          ; y at +1
     STB DRAW_VEC_Y
     LDD 0,X          ; x at +0
     STB DRAW_VEC_X
-    LDU 14,X         ; vector_ptr at +14
+    LDU 10,X         ; vector_ptr at +10
     BRA SLR_DRAW_VECTOR
     
 SLR_ROM_OFFSETS:
@@ -934,7 +939,7 @@ ULR_LOOP:
 
     ; Check physics_flags (offset +9)
     PSHS B  ; Save loop counter
-    LDB 9,U      ; Read flags
+    LDB 6,U      ; Read flags
     CMPB #0
     LBEQ ULR_NEXT  ; Skip if no physics enabled (long branch)
 
@@ -954,24 +959,24 @@ ULR_LOOP:
     BGE ULR_VY_OK
     LDB #$F1      ; Clamp to -15
 ULR_VY_OK:
-    STB 8,U       ; Store updated velocity_y
+    STB 5,U       ; Store updated velocity_y
 
 ULR_NO_GRAVITY:
     ; Apply velocity to position
     ; x += velocity_x
-    LDB 7,U       ; Load velocity_x (signed 8-bit)
+    LDB 4,U       ; Load velocity_x (signed 8-bit)
     SEX           ; Sign-extend B to 16-bit in D
     ADDD 0,U      ; D = x + velocity_x (x at offset +0)
     STD 0,U       ; Store new x
 
     ; y += velocity_y
-    LDB 8,U       ; Load velocity_y (signed 8-bit)
+    LDB 5,U       ; Load velocity_y (signed 8-bit)
     SEX           ; Sign-extend B to 16-bit in D
     ADDD 2,U      ; D = y + velocity_y (y at offset +2)
     STD 2,U       ; Store new y
 
     ; === Check World Bounds (Wall Collisions) ===
-    LDB 10,U      ; Load collision_flags
+    LDB 7,U      ; Load collision_flags
     BITB #$02     ; Check bounce_walls flag (bit 1)
     LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
 
@@ -981,7 +986,7 @@ ULR_NO_GRAVITY:
 
     ; === Check X Bounds (Left/Right walls) ===
     ; Check xMin: if (x - collision_size) < xMin then bounce
-    LDB 11,U      ; collision_size (offset +11)
+    LDB 8,U      ; collision_size (offset +8)
     SEX           ; Sign-extend to 16-bit in D
     PSHS D        ; Save collision_size on stack
     LDD 0,U       ; Load object x
@@ -993,7 +998,7 @@ ULR_NO_GRAVITY:
     CMPB #0
     LBGE ULR_X_MAX_CHECK  ; Skip if moving right (LONG)
     ; Bounce: set position so left edge = xMin
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     ADDD 0,X      ; D = xMin + collision_size (center position)
     STD 0,U       ; x = xMin + collision_size
@@ -1003,7 +1008,7 @@ ULR_NO_GRAVITY:
 
     ; Check xMax: if (x + collision_size) > xMax then bounce
 ULR_X_MAX_CHECK:
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
     LDD 0,U       ; Load object x
@@ -1015,7 +1020,7 @@ ULR_X_MAX_CHECK:
     CMPB #0
     LBLE ULR_Y_BOUNDS  ; Skip if moving left (LONG)
     ; Bounce: set position so right edge = xMax
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     TFR D,Y       ; Y = collision_size
     LDD 2,X       ; D = xMax
@@ -1029,7 +1034,7 @@ ULR_X_MAX_CHECK:
     ; === Check Y Bounds (Top/Bottom walls) ===
 ULR_Y_BOUNDS:
     ; Check yMin: if (y - collision_size) < yMin then bounce
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
     LDD 2,U       ; Load object y
@@ -1041,7 +1046,7 @@ ULR_Y_BOUNDS:
     CMPB #0
     LBGE ULR_Y_MAX_CHECK  ; Skip if moving up (LONG)
     ; Bounce: set position so bottom edge = yMin
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     ADDD 4,X      ; D = yMin + collision_size (center position)
     STD 2,U       ; y = yMin + collision_size
@@ -1051,7 +1056,7 @@ ULR_Y_BOUNDS:
 
     ; Check yMax: if (y + collision_size) > yMax then bounce
 ULR_Y_MAX_CHECK:
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
     LDD 2,U       ; Load object y
@@ -1063,7 +1068,7 @@ ULR_Y_MAX_CHECK:
     CMPB #0
     LBLE ULR_NEXT  ; Skip if moving down (LONG)
     ; Bounce: set position so top edge = yMax
-    LDB 11,U      ; Reload collision_size
+    LDB 8,U      ; Reload collision_size
     SEX
     TFR D,Y       ; Y = collision_size
     LDD 6,X       ; D = yMax
@@ -1076,7 +1081,7 @@ ULR_Y_MAX_CHECK:
 
 ULR_NEXT:
     PULS B        ; Restore loop counter
-    LEAU 18,U     ; Move to next object (18 bytes)
+    LEAU 14,U     ; Move to next object (14 bytes)
     DECB
     LBNE ULR_LOOP  ; Continue if more objects (long branch)
 
@@ -1099,12 +1104,12 @@ UGPC_START:
     CLR UGPC_OUTER_IDX   ; Start at 0
     
 UGPC_OUTER_LOOP:
-    ; Calculate U = LEVEL_GP_BUFFER + (UGPC_OUTER_IDX * 20)
+    ; Calculate U = LEVEL_GP_BUFFER + (UGPC_OUTER_IDX * 14)
     LDU #LEVEL_GP_BUFFER
     LDB UGPC_OUTER_IDX
     BEQ UGPC_SKIP_OUTER_MUL  ; If idx=0, U already correct
 UGPC_OUTER_MUL:
-    LEAU 18,U
+    LEAU 14,U
     DECB
     BNE UGPC_OUTER_MUL
 UGPC_SKIP_OUTER_MUL:
@@ -1125,18 +1130,18 @@ UGPC_INNER_LOOP:
     CMPA LEVEL_GP_COUNT
     BHS UGPC_INNER_DONE  ; Done if idx >= count
     
-    ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 18)
+    ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 14)
     LDY #LEVEL_GP_BUFFER
     LDB UGPC_INNER_IDX
     BEQ UGPC_SKIP_INNER_MUL
 UGPC_INNER_MUL:
-    LEAY 18,Y
+    LEAY 14,Y
     DECB
     BNE UGPC_INNER_MUL
 UGPC_SKIP_INNER_MUL:
     
     ; Check if Y collidable
-    LDB 10,Y
+    LDB 7,Y
     BITB #$01
     BEQ UGPC_NEXT_INNER
     
@@ -1161,8 +1166,8 @@ UGPC_DY_POS:
     STD UGPC_DIST
     
     ; Sum of radii
-    LDB 11,U
-    ADDB 11,Y
+    LDB 8,U
+    ADDB 8,Y
     SEX              ; D = sum_radius (normal, not doubled)
     ; Collision if distance < sum_radius (i.e., sum_radius > distance)
     CMPD UGPC_DIST   ; Compare sum_radius with distance
