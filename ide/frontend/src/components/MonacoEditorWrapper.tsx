@@ -727,19 +727,43 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
       console.log('[Monaco] Current emulator breakpoints:', Array.from(currentEmulatorBps));
       
-      // Convert VPy lines to ASM addresses
+      // CRITICAL: Detect if current file is ASM or VPy
+      const isAsmFile = doc.uri.toLowerCase().endsWith('.asm');
+      console.log(`[Monaco] 📄 Current file type: ${isAsmFile ? 'ASM' : 'VPy'}`);
+      
+      // Convert VPy lines to ASM addresses (only if VPy file)
       const targetAddresses = new Set<number>();
-      for (const line of bps) {
-        const address = pdbData.lineMap?.[line.toString()];
-        console.log(`[Monaco] 🔍 VPy line ${line} → lineMap result: ${address}`);
-        if (address) {
-          const addr = parseInt(address, 16);
-          if (!isNaN(addr)) {
-            targetAddresses.add(addr);
-            console.log(`[Monaco] ✓ Added breakpoint target at 0x${addr.toString(16).toUpperCase()}`);
+      if (isAsmFile) {
+        // ASM file: breakpoints are already in ASM format, use asmAddressMap directly
+        console.log('[Monaco] 🔧 ASM file - using asmAddressMap for address lookup');
+        for (const line of bps) {
+          const address = pdbData.asmAddressMap?.[line.toString()];
+          console.log(`[Monaco] 🔍 ASM line ${line} → asmAddressMap result: ${address}`);
+          if (address) {
+            const addr = parseInt(address, 16);
+            if (!isNaN(addr)) {
+              targetAddresses.add(addr);
+              console.log(`[Monaco] ✓ Added breakpoint target at 0x${addr.toString(16).toUpperCase()}`);
+            }
+          } else {
+            console.warn(`[Monaco] ⚠️ No address mapping for ASM line ${line} in asmAddressMap`);
           }
-        } else {
-          console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line} in lineMap`);
+        }
+      } else {
+        // VPy file: convert VPy lines to ASM addresses using lineMap
+        console.log('[Monaco] 🔧 VPy file - using lineMap for address lookup');
+        for (const line of bps) {
+          const address = pdbData.lineMap?.[line.toString()];
+          console.log(`[Monaco] 🔍 VPy line ${line} → lineMap result: ${address}`);
+          if (address) {
+            const addr = parseInt(address, 16);
+            if (!isNaN(addr)) {
+              targetAddresses.add(addr);
+              console.log(`[Monaco] ✓ Added breakpoint target at 0x${addr.toString(16).toUpperCase()}`);
+            }
+          } else {
+            console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line} in lineMap`);
+          }
         }
       }
       
@@ -753,11 +777,24 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       // Get current emulator breakpoints
       const currentEmulatorBps = new Set<number>(emulatorDebug.getBreakpoints() as number[]);
       
-      // Convert VPy lines to ASM addresses
+      // CRITICAL: Detect if current file is ASM or VPy
+      const isAsmFile = doc.uri.toLowerCase().endsWith('.asm');
+      
+      // Convert lines to ASM addresses (using appropriate map)
       const targetAddresses = new Set<number>();
       for (const line of bps) {
-        const address = pdbData.lineMap?.[line.toString()];
-        logger.debug('Debug', `[Monaco] VPy line ${line} → ASM address ${address}`);
+        let address: string | undefined;
+        
+        if (isAsmFile) {
+          // ASM file: use asmAddressMap
+          address = pdbData.asmAddressMap?.[line.toString()];
+          logger.debug('Debug', `[Monaco] ASM line ${line} → ASM address ${address}`);
+        } else {
+          // VPy file: use lineMap
+          address = pdbData.lineMap?.[line.toString()];
+          logger.debug('Debug', `[Monaco] VPy line ${line} → ASM address ${address}`);
+        }
+        
         if (address) {
           const addr = parseInt(address, 16);
           if (!isNaN(addr)) {
@@ -765,7 +802,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
             logger.debug('Debug', `[Monaco] ✓ Added breakpoint at 0x${addr.toString(16).toUpperCase()}`);
           }
         } else {
-          logger.warn('Debug', `[Monaco] ⚠️ No ASM mapping for VPy line ${line}`);
+          logger.warn('Debug', `[Monaco] ⚠️ No ASM mapping for line ${line} (file type: ${isAsmFile ? 'ASM' : 'VPy'})`);
         }
       }
       
@@ -798,8 +835,19 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       // Add breakpoints that are new in Monaco
       for (const addr of targetAddresses) {
         if (!currentEmulatorBps.has(addr)) {
+          console.log(`[Monaco] 🔧 Calling emulatorDebug.addBreakpoint(${addr}) [type: ${typeof addr}]`);
           emulatorDebug.addBreakpoint(addr);
+          console.log(`[Monaco] ✓ addBreakpoint call completed`);
         }
+      }
+      
+      // CRITICAL: If emulator is in 'paused' state (waiting for breakpoints), start it now
+      const debugState = useDebugStore.getState().state;
+      if (debugState === 'paused' && targetAddresses.size > 0) {
+        console.log('[Monaco] 🚀 All breakpoints synced - starting emulator in debug mode');
+        emulatorDebug.start?.(); // Start the emulator now that breakpoints are ready
+        useDebugStore.getState().setState('running');
+        console.log('[Monaco] ✓ Emulator started with breakpoints');
       }
     }
   }, [breakpoints, doc?.uri, pdbData]);
@@ -873,10 +921,13 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     
     const editor = editorRef.current;
     const disposable = editor.onMouseDown((e: any) => {
-      // Check if click is in the glyph margin (where breakpoints appear)
-      if (e.target?.type === 2) { // GUTTER_GLYPH_MARGIN = 2
+      // Check if click is in ANY margin (glyph or line numbers)
+      // Type 2 = GUTTER_GLYPH_MARGIN, Type 3 = GUTTER_LINE_NUMBERS, Type 4 = GUTTER_LINE_DECORATIONS
+      const isGutterClick = e.target?.type === 2 || e.target?.type === 3 || e.target?.type === 4;
+      if (isGutterClick) {
         const lineNumber = e.target.position?.lineNumber;
         if (lineNumber) {
+          console.log(`[MonacoEditorWrapper] 🖱️  Gutter click at line ${lineNumber}, type=${e.target.type}`);
           toggleBreakpoint(doc.uri, lineNumber);
         }
       }
@@ -905,7 +956,10 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         default: break;
       }
     };
-    w.electronAPI.onCommand(handler);
+    const unsubscribe = w.electronAPI.onCommand(handler);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, []);
 
   if (!doc) {
@@ -945,8 +999,13 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !doc) return;
     
-    // Only show highlight when paused and we have a valid line number
-    if (debugState === 'paused' && currentVpyLine !== null) {
+    // CRITICAL: Only show highlight if this is the active document
+    // (prevents highlighting the same line in multiple open files)
+    const activeDoc = useEditorStore.getState().active;
+    const isActiveDoc = doc.uri === activeDoc;
+    
+    // Only show highlight when paused, we have a valid line number, AND this is the active doc
+    if (debugState === 'paused' && currentVpyLine !== null && isActiveDoc) {
       const decorations = [{
         range: new monacoRef.current!.Range(currentVpyLine, 1, currentVpyLine, 1),
         options: {
@@ -966,13 +1025,13 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       
       logger.debug('Debug', `Highlighted current line: ${currentVpyLine}`);
     } else {
-      // Clear decorations when not paused or no line
+      // Clear decorations when not paused or no line or not active doc
       currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
         currentLineDecorationsRef.current,
         []
       );
     }
-  }, [debugState, currentVpyLine, doc]);
+  }, [debugState, currentVpyLine, doc, active]);
 
   return (
     <Editor

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../state/projectStore';
+import { VPlayLevel, VPlayObject, VPlayValidator, DEFAULT_LEVEL, VPLAY_VERSION } from '../../types/vplay-schema';
 
 interface VecPath {
   name: string;
@@ -24,6 +25,7 @@ interface SceneObject {
   id: string;
   type: 'background' | 'enemy' | 'player' | 'projectile';
   vectorName: string;
+  layer?: 'background' | 'gameplay' | 'foreground'; // NUEVO: Layer del nivel
   x: number;
   y: number;
   rotation: number;
@@ -303,6 +305,8 @@ export function PlaygroundPanel() {
         // Object-to-object collisions
         const finalObjects = newObjects.map((obj, i) => {
           if (!obj.physicsEnabled) return obj;
+          // Skip if current object is not collidable
+          if (!obj.collidable) return obj;
 
           for (let j = 0; j < newObjects.length; j++) {
             if (i === j) continue;
@@ -374,14 +378,67 @@ export function PlaygroundPanel() {
         return;
       }
 
-      const sceneData = {
-        version: '1.0',
-        name: sceneName,
-        objects: objects.map(obj => ({
-          ...obj,
-          velocity: obj.velocity || { x: 0, y: 0 },
-        })),
+      const sceneData: VPlayLevel = {
+        version: VPLAY_VERSION,
+        type: 'level',
+        metadata: {
+          name: sceneName,
+          author: '',
+          difficulty: 'medium',
+          timeLimit: 0,
+          targetScore: 0,
+          description: `Created in Playground - ${new Date().toISOString().split('T')[0]}`
+        },
+        worldBounds: {
+          xMin: -96,
+          xMax: 95,
+          yMin: -128,
+          yMax: 127
+        },
+        layers: {
+          background: objects.filter(obj => obj.layer === 'background').map(obj => ({
+            ...obj,
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
+            layer: 'background' as const
+          })) as VPlayObject[],
+          gameplay: objects.filter(obj => !obj.layer || obj.layer === 'gameplay').map(obj => ({
+            ...obj,
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
+            layer: 'gameplay' as const
+          })) as VPlayObject[],
+          foreground: objects.filter(obj => obj.layer === 'foreground').map(obj => ({
+            ...obj,
+            x: Math.round(obj.x),
+            y: Math.round(obj.y),
+            velocity: obj.velocity ? { 
+              x: Math.round(obj.velocity.x), 
+              y: Math.round(obj.velocity.y) 
+            } : { x: 0, y: 0 },
+            layer: 'foreground' as const
+          })) as VPlayObject[]
+        },
+        spawnPoints: {
+          player: { x: 0, y: -100 }
+        }
       };
+
+      // Validate before saving
+      const validation = VPlayValidator.validate(sceneData);
+      if (!validation.valid) {
+        console.error('[Playground] Validation errors:', validation.errors);
+        showToast(`Validation failed: ${validation.errors[0]}`, 'error');
+        return;
+      }
 
       const filePath = `${projectRoot}/assets/playground/${sceneName}.vplay`;
       await (window as any).files.saveFile({
@@ -392,7 +449,7 @@ export function PlaygroundPanel() {
       console.log('[Playground] Saved scene:', filePath);
       showToast(`Scene "${sceneName}" saved!`, 'success');
       setShowSaveLoadModal(false);
-      setSceneName('');
+      // Keep sceneName so we can quick-save next time
       
       // Refresh scene list
       const result = await (window as any).files.readDirectory(`${projectRoot}/assets/playground`);
@@ -413,11 +470,37 @@ export function PlaygroundPanel() {
 
       const filePath = `${projectRoot}/assets/playground/${name}.vplay`;
       const result = await (window as any).files.readFile(filePath);
-      const sceneData = JSON.parse(result.content);
+      let sceneData = JSON.parse(result.content);
       
-      setObjects(sceneData.objects || []);
+      // Auto-migrate v1.0 to v2.0
+      if (sceneData.version === '1.0') {
+        console.log('[Playground] Migrating v1.0 level to v2.0');
+        sceneData = VPlayValidator.migrateV1toV2(sceneData);
+        showToast(`Migrated "${name}" from v1.0 to v2.0`, 'success');
+      }
+      
+      // Validate loaded data
+      const validation = VPlayValidator.validate(sceneData);
+      if (!validation.valid) {
+        console.error('[Playground] Validation errors:', validation.errors);
+        showToast(`Invalid level: ${validation.errors[0]}`, 'error');
+        return;
+      }
+      
+      // Extract objects from layers or legacy objects array
+      const loadedObjects: SceneObject[] = [];
+      if (sceneData.layers) {
+        loadedObjects.push(...(sceneData.layers.background || []));
+        loadedObjects.push(...(sceneData.layers.gameplay || []));
+        loadedObjects.push(...(sceneData.layers.foreground || []));
+      } else if (sceneData.objects) {
+        loadedObjects.push(...sceneData.objects);
+      }
+      
+      setObjects(loadedObjects);
       setSelectedId(null);
-      console.log('[Playground] Loaded scene:', name);
+      setSceneName(name); // Remember the scene name for future saves
+      console.log('[Playground] Loaded scene:', name, `(${loadedObjects.length} objects)`);
       showToast(`Scene "${name}" loaded!`, 'success');
       setShowSaveLoadModal(false);
     } catch (error) {
@@ -467,6 +550,7 @@ export function PlaygroundPanel() {
       id: `obj_${Date.now()}`,
       type: 'enemy',
       vectorName: draggedVector,
+      layer: 'gameplay', // Por defecto gameplay
       x: vecX,
       y: vecY,
       rotation: 0,
@@ -605,7 +689,7 @@ export function PlaygroundPanel() {
             let color = '#00ff0080'; // default cyan (non-collidable)
             if (isSelected) {
               color = '#00ff00'; // bright green when selected
-            } else if (obj.collidable) {
+            } else if (obj.collidable === true) {
               color = '#4080ff80'; // blue for collidable
             }
             
@@ -758,8 +842,14 @@ export function PlaygroundPanel() {
         <div style={{ flex: 1 }} />
         <button
           onClick={() => {
-            setModalMode('save');
-            setShowSaveLoadModal(true);
+            // Quick save: if we already have a name, save directly
+            if (sceneName.trim()) {
+              handleSaveScene();
+            } else {
+              // No name yet, open modal to ask for it
+              setModalMode('save');
+              setShowSaveLoadModal(true);
+            }
           }}
           style={{
             padding: '4px 12px',
@@ -943,6 +1033,37 @@ export function PlaygroundPanel() {
                       </label>
                       <div style={{ color: '#d4d4d4', fontFamily: 'monospace' }}>
                         {obj.vectorName}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
+                        Layer
+                      </label>
+                      <select
+                        value={obj.layer || 'gameplay'}
+                        onChange={(e) => {
+                          const newObjects = objects.map(o =>
+                            o.id === selectedId ? { ...o, layer: e.target.value as any } : o
+                          );
+                          setObjects(newObjects);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '4px',
+                          backgroundColor: '#2d2d2d',
+                          border: '1px solid #444',
+                          color: '#d4d4d4',
+                          borderRadius: '2px',
+                        }}
+                      >
+                        <option value="background">🏔️ Background (fondo, detrás)</option>
+                        <option value="gameplay">⚡ Gameplay (jugable, medio)</option>
+                        <option value="foreground">🌟 Foreground (frente, adelante)</option>
+                      </select>
+                      <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                        {obj.layer === 'background' && '🏔️ Dibuja primero - fondo del nivel'}
+                        {obj.layer === 'foreground' && '🌟 Dibuja último - frente del nivel'}
+                        {(!obj.layer || obj.layer === 'gameplay') && '⚡ Capa principal - objetos jugables'}
                       </div>
                     </div>
                     <div>

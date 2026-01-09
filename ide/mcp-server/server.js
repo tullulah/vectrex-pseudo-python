@@ -79,6 +79,27 @@ async function connectToIDE(retries = 5, delay = 100) {
           }
         });
         
+        // Handle connection close - reconnect automatically
+        socket.on('close', () => {
+          log('⚠️ IPC connection closed - will attempt reconnection');
+          ipcConnected = false;
+          ipcSocket = null;
+          
+          // Attempt to reconnect after 1 second
+          setTimeout(() => {
+            log('Attempting to reconnect to IDE...');
+            connectToIDE(10, 1000).catch(err => {
+              log('❌ Failed to reconnect:', err.message);
+            });
+          }, 1000);
+        });
+        
+        socket.on('end', () => {
+          log('⚠️ IPC connection ended');
+          ipcConnected = false;
+          ipcSocket = null;
+        });
+        
         resolve();
       });
       
@@ -685,6 +706,134 @@ class StdioTransport {
               content: { type: 'string', description: 'Valid JSON string matching exact format: {"version":"1.0","tempo":120,"notes":[...],"noise":[...]}. Leave empty for template.' }
             },
             required: ['name']
+          }
+        },
+        {
+          name: 'debugger_start',
+          description: 'Start debugging session (Ctrl+F5) - compiles and loads with breakpoints',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_remove_breakpoint',
+          description: 'Remove a breakpoint at a specific line',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uri: { type: 'string', description: 'Document URI' },
+              line: { type: 'number', description: 'Line number (1-indexed)' }
+            },
+            required: ['uri', 'line']
+          }
+        },
+        {
+          name: 'debugger_list_breakpoints',
+          description: 'List all active breakpoints',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_clear_breakpoints',
+          description: 'Clear all breakpoints',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_step_into',
+          description: 'Step Into (F11) - enter functions',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_step_over',
+          description: 'Step Over (F10) - execute without entering functions',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_step_out',
+          description: 'Step Out (Shift+F11) - exit current function',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_continue',
+          description: 'Continue execution (F5) until next breakpoint',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_pause',
+          description: 'Pause execution',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'debugger_get_registers',
+          description: 'Get current CPU register values (A, B, X, Y, U, S, PC, DP, CC)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'memory_dump',
+          description: 'Get memory snapshot (hex dump of RAM region)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              address: { type: 'number', description: 'Start address (decimal or 0xHEX)' },
+              size: { type: 'number', description: 'Number of bytes to read (default: 256, max: 4096)' }
+            },
+            required: ['address']
+          }
+        },
+        {
+          name: 'memory_list_variables',
+          description: 'Get all variables from PDB with sizes and types (sorted by size, largest first)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'memory_read_variable',
+          description: 'Read current value of specific variable from emulator',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Variable name (e.g., "LEVEL_GP_COUNT", "player_x")' }
+            },
+            required: ['name']
+          }
+        },
+        {
+          name: 'memory_write',
+          description: 'Write value to memory address for testing/debugging',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              address: { type: 'number', description: 'Memory address (hex or decimal, 0xC800-0xCFFF for RAM)' },
+              value: { type: 'number', description: 'Value to write (0-255 for 8-bit, 0-65535 for 16-bit)' },
+              size: { type: 'number', description: '1 or 2 bytes (default: 1)' }
+            },
+            required: ['address', 'value']
           }
         }
       ]

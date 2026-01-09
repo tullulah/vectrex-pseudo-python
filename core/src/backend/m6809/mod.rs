@@ -11,6 +11,7 @@ mod analysis;
 mod emission;
 mod collectors;
 mod ram_layout;
+mod address_tracker;
 
 // Re-export for backward compatibility
 pub use utils::*;
@@ -22,6 +23,7 @@ pub use analysis::*;
 pub use emission::*;
 pub use collectors::*;
 pub use ram_layout::*;
+pub use address_tracker::*;
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
@@ -29,7 +31,7 @@ use emission::{emit_function, emit_builtin_helpers};
 // Original imports
 use crate::ast::{BinOp, CmpOp, Expr, Function, Item, LogicOp, Module, Stmt};
 use super::string_literals::collect_string_literals;
-use super::debug_info::{DebugInfo, LineTracker, parse_asm_addresses, parse_native_call_comments, parse_asm_variables};
+use super::debug_info::{DebugInfo, LineTracker, parse_native_call_comments, parse_asm_variables};
 use crate::codegen::CodegenOptions;
 use crate::backend::trig::emit_trig_tables;
 use crate::target::{Target, TargetInfo};
@@ -47,33 +49,6 @@ macro_rules! check_depth {
     };
 }
 
-// Helper function to map legacy function names to their modern counterparts
-fn resolve_function_name(name: &str) -> Option<String> {
-    match name {
-        "PRINT_TEXT" => Some("VECTREX_PRINT_TEXT".to_string()),
-        "DEBUG_PRINT" => Some("VECTREX_DEBUG_PRINT".to_string()),
-        "DEBUG_PRINT_LABELED" => Some("VECTREX_DEBUG_PRINT_LABELED".to_string()),
-        "MOVE" => Some("VECTREX_MOVE_TO".to_string()),        // Unificado: MOVE -> VECTREX_MOVE_TO
-        "MOVE_TO" => Some("VECTREX_MOVE_TO".to_string()),     // Compatibilidad hacia atrás
-        "DRAW_TO" => Some("VECTREX_DRAW_TO".to_string()),
-        "POKE" => Some("VECTREX_POKE".to_string()),
-        "PEEK" => Some("VECTREX_PEEK".to_string()),
-        "PRINT_NUMBER" => Some("VECTREX_PRINT_NUMBER".to_string()),
-        // DRAW_LINE -> removed from auto-mapping, handled by inline optimization or explicit wrapper call
-        "DRAW_POLYGON" => Some("DRAW_POLYGON".to_string()),   // already handled if constants; allow pass-through if dynamic (future)
-        "DRAW_VL" => Some("VECTREX_DRAW_VL".to_string()),
-        "FRAME_BEGIN" => Some("VECTREX_FRAME_BEGIN".to_string()),
-        "VECTOR_PHASE_BEGIN" => Some("VECTREX_VECTOR_PHASE_BEGIN".to_string()),
-        "SET_ORIGIN" => Some("VECTREX_SET_ORIGIN".to_string()),
-        "SET_INTENSITY" => Some("VECTREX_SET_INTENSITY".to_string()),
-        "WAIT_RECAL" => Some("VECTREX_WAIT_RECAL".to_string()),
-        "PLAY_MUSIC1" => Some("VECTREX_PLAY_MUSIC1".to_string()),
-        "DBG_STATIC_VL" => Some("VECTREX_DBG_STATIC_VL".to_string()),
-        name if name.starts_with("VECTREX_") => Some(name.to_string()),
-        _ => None
-    }
-}
-
 // Helper function to calculate the correct include path based on source file location
 fn calculate_include_path(_opts: &CodegenOptions) -> String {
     // For lwasm compatibility: use "VECTREX.I" and pass -Iinclude to lwasm
@@ -87,13 +62,49 @@ fn calculate_runtime_path(_opts: &CodegenOptions) -> String {
     "runtime/vectorlist_runtime.asm".to_string()
 }
 
+// extract_level_vectors: Parse .vplay JSON and extract all vectorName references
+fn extract_level_vectors(level_name: &str, assets: &[crate::codegen::AssetInfo]) -> Vec<String> {
+    use crate::codegen::AssetType;
+    
+    // Find the level asset
+    let level_asset = assets.iter().find(|a| {
+        matches!(a.asset_type, AssetType::Level) && a.name == level_name
+    });
+    
+    if let Some(level_asset) = level_asset {
+        // Load and parse the level JSON
+        if let Ok(json_str) = std::fs::read_to_string(&level_asset.path) {
+            if let Ok(level_data) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                let mut vectors = Vec::new();
+                
+                // Extract vectorName from all layers
+                if let Some(layers) = level_data.get("layers") {
+                    for layer_name in ["background", "gameplay", "foreground"] {
+                        if let Some(layer) = layers.get(layer_name) {
+                            if let Some(objects) = layer.as_array() {
+                                for obj in objects {
+                                    if let Some(vector_name) = obj.get("vectorName").and_then(|v| v.as_str()) {
+                                        vectors.push(vector_name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return vectors;
+            }
+        }
+    }
+    Vec::new()
+}
+
 // analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
 // Returns set of asset names that are actually used in the code
-fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
+fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) -> std::collections::HashSet<String> {
     use std::collections::HashSet;
     let mut used = HashSet::new();
     
-    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, depth: usize) {
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum expression nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
@@ -102,94 +113,104 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
                 // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
-                // PLAY_MUSIC("asset_name"), or PLAY_SFX("asset_name")
+                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), or LOAD_LEVEL("level_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
                    (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
-                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) {
+                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
+                   (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
+                        
+                        // If loading a level, also mark vectors it references as used
+                        if name_upper == "LOAD_LEVEL" {
+                            let level_vectors = extract_level_vectors(asset_name, assets);
+                            for vec_name in level_vectors {
+                                eprintln!("[DEBUG] Level '{}' references vector: {}", asset_name, vec_name);
+                                used.insert(vec_name);
+                            }
+                        }
                     }
                 }
                 // Recursively scan arguments
                 for arg in &call_info.args {
-                    scan_expr(arg, used, depth + 1);
+                    scan_expr(arg, used, assets, depth + 1);
                 }
             },
             Expr::MethodCall(mc) => {
                 // Scan target and arguments for nested asset usages
-                scan_expr(&mc.target, used, depth + 1);
+                scan_expr(&mc.target, used, assets, depth + 1);
                 for arg in &mc.args {
-                    scan_expr(arg, used, depth + 1);
+                    scan_expr(arg, used, assets, depth + 1);
                 }
             },
             Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
-                scan_expr(left, used, depth + 1);
-                scan_expr(right, used, depth + 1);
+                scan_expr(left, used, assets, depth + 1);
+                scan_expr(right, used, assets, depth + 1);
             },
-            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, depth + 1),
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, assets, depth + 1),
             Expr::List(elements) => {
                 for elem in elements {
-                    scan_expr(elem, used, depth + 1);
+                    scan_expr(elem, used, assets, depth + 1);
                 }
             },
             Expr::Index { target, index } => {
-                scan_expr(target, used, depth + 1);
-                scan_expr(index, used, depth + 1);
+                scan_expr(target, used, assets, depth + 1);
+                scan_expr(index, used, assets, depth + 1);
             },
             _ => {}
         }
     }
     
-    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, depth: usize) {
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, assets: &[crate::codegen::AssetInfo], depth: usize) {
         const MAX_DEPTH: usize = 500;
         if depth > MAX_DEPTH {
             panic!("Maximum statement nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
         }
         match stmt {
-            Stmt::Assign { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::Let { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, depth + 1),
-            Stmt::Expr(expr, _line) => scan_expr(expr, used, depth + 1),
+            Stmt::Assign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Let { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used, assets, depth + 1),
             Stmt::If { cond, body, elifs, else_body, .. } => {
-                scan_expr(cond, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
                 for (elif_cond, elif_body) in elifs {
-                    scan_expr(elif_cond, used, depth + 1);
-                    for s in elif_body { scan_stmt(s, used, depth + 1); }
+                    scan_expr(elif_cond, used, assets, depth + 1);
+                    for s in elif_body { scan_stmt(s, used, assets, depth + 1); }
                 }
                 if let Some(els) = else_body {
-                    for s in els { scan_stmt(s, used, depth + 1); }
+                    for s in els { scan_stmt(s, used, assets, depth + 1); }
                 }
             },
             Stmt::While { cond, body, .. } => {
-                scan_expr(cond, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::For { start, end, step, body, .. } => {
-                scan_expr(start, used, depth + 1);
-                scan_expr(end, used, depth + 1);
+                scan_expr(start, used, assets, depth + 1);
+                scan_expr(end, used, assets, depth + 1);
                 if let Some(step_expr) = step {
-                    scan_expr(step_expr, used, depth + 1);
+                    scan_expr(step_expr, used, assets, depth + 1);
                 }
-                for s in body { scan_stmt(s, used, depth + 1); }
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::ForIn { iterable, body, .. } => {
-                scan_expr(iterable, used, depth + 1);
-                for s in body { scan_stmt(s, used, depth + 1); }
+                scan_expr(iterable, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
             },
             Stmt::Switch { expr, cases, default, .. } => {
-                scan_expr(expr, used, depth + 1);
+                scan_expr(expr, used, assets, depth + 1);
                 for (case_expr, case_body) in cases {
-                    scan_expr(case_expr, used, depth + 1);
-                    for s in case_body { scan_stmt(s, used, depth + 1); }
+                    scan_expr(case_expr, used, assets, depth + 1);
+                    for s in case_body { scan_stmt(s, used, assets, depth + 1); }
                 }
                 if let Some(default_body) = default {
-                    for s in default_body { scan_stmt(s, used, depth + 1); }
+                    for s in default_body { scan_stmt(s, used, assets, depth + 1); }
                 }
             },
-            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, depth + 1),
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, assets, depth + 1),
             _ => {}
         }
     }
@@ -199,14 +220,14 @@ fn analyze_used_assets(module: &Module) -> std::collections::HashSet<String> {
         match item {
             Item::Function(func) => {
                 for stmt in &func.body {
-                    scan_stmt(stmt, &mut used, 0);
+                    scan_stmt(stmt, &mut used, assets, 0);
                 }
             },
             Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
-                scan_expr(value, &mut used, 0);
+                scan_expr(value, &mut used, assets, 0);
             },
             Item::ExprStatement(expr) => {
-                scan_expr(expr, &mut used, 0);
+                scan_expr(expr, &mut used, assets, 0);
             },
             _ => {}
         }
@@ -231,7 +252,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         .unwrap_or("unknown.vpy")
         .to_string();
     
-    let binary_name = source_name.replace(".vpy", ".bin");
+    // Use output_name if provided (for projects), otherwise derive from source
+    let binary_name = if let Some(ref output_name) = opts.output_name {
+        format!("{}.bin", output_name)
+    } else {
+        source_name.replace(".vpy", ".bin")
+    };
+    
     let mut debug_info = DebugInfo::new(source_name.clone(), binary_name.clone());
     
     // Create LineTracker to populate lineMap during code generation  
@@ -239,6 +266,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let start_address = u16::from_str_radix(ti.origin.trim_start_matches("0x").trim_start_matches("$"), 16)
         .unwrap_or(0xC800);
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
+    
+    // Initialize address tracker for ASM listing generation
+    AddressTracker::init_global(start_address);
     
     let mut out = String::new();
     // CORREGIDO: Usar solo variables GLOBALES, no todas (que incluye locales)
@@ -403,6 +433,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
     
+    // Calculate max args needed (for VAR_ARG* allocation)
+    let max_args = compute_max_args_used(module);
+    
     // ========================================================================
     // AUTOMATIC RAM LAYOUT - Calculates all offsets automatically
     // No more hardcoded offsets, no collisions, always compact
@@ -421,8 +454,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("TMPRIGHT", 2, "Right operand temp");
         ram.allocate("TMPRIGHT2", 2, "Right operand temp 2 (for nested operations)");
     }
-    if !suppress_runtime && rt_usage.needs_tmp_ptr {
-        ram.allocate("TMPPTR", 2, "Pointer temp");
+    // TMPPTR always allocated (used by DRAW_VECTOR multi-path, arrays, structs, etc.)
+    if !suppress_runtime {
+        ram.allocate("TMPPTR", 2, "Pointer temp (used by DRAW_VECTOR, arrays, structs)");
         ram.allocate("TMPPTR2", 2, "Pointer temp 2 (for nested array operations)");
     }
     
@@ -472,6 +506,114 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("NUM_STR", 2, "String buffer for PRINT_NUMBER");
     }
     
+    // 9. DRAW_VECTOR position/mirror variables (used by DRAW_VECTOR, DRAW_VECTOR_EX, and SHOW_LEVEL)
+    if rt_usage.uses_draw_vector || rt_usage.uses_draw_vector_ex || rt_usage.uses_show_level {
+        ram.allocate("DRAW_VEC_X", 1, "X position offset for vector drawing");
+        ram.allocate("DRAW_VEC_Y", 1, "Y position offset for vector drawing");
+        ram.allocate("MIRROR_X", 1, "X-axis mirror flag (0=normal, 1=flip)");
+        ram.allocate("MIRROR_Y", 1, "Y-axis mirror flag (0=normal, 1=flip)");
+        ram.allocate("DRAW_VEC_INTENSITY", 1, "Intensity override (0=use vector's, >0=override)");
+    }
+
+    // 9.1 LEVEL system persistent pointer
+    // NOTE: Can't use RESULT for this because RESULT is clobbered by almost every builtin call.
+    if rt_usage.wrappers_used.contains("LOAD_LEVEL_RUNTIME") || rt_usage.wrappers_used.contains("SHOW_LEVEL_RUNTIME") {
+        ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
+
+        // NOTE: SHOW_LEVEL_RUNTIME originally used self-modifying code (patching immediates like
+        // `STA SLR_BG_COUNT+1`). Our native assembler does not reliably support label arithmetic,
+        // which can produce corrupted machine code. Use RAM-backed fields instead.
+        ram.allocate("LEVEL_BG_COUNT", 1, "SHOW_LEVEL: background object count");
+        ram.allocate("LEVEL_GP_COUNT", 1, "SHOW_LEVEL: gameplay object count");
+        ram.allocate("LEVEL_FG_COUNT", 1, "SHOW_LEVEL: foreground object count");
+        ram.allocate("LEVEL_BG_PTR", 2, "SHOW_LEVEL: background objects pointer (RAM buffer)");
+        ram.allocate("LEVEL_GP_PTR", 2, "SHOW_LEVEL: gameplay objects pointer (RAM buffer)");
+        ram.allocate("LEVEL_FG_PTR", 2, "SHOW_LEVEL: foreground objects pointer (RAM buffer)");
+        
+        // ROM pointers (temporary during LOAD_LEVEL)
+        ram.allocate("LEVEL_BG_ROM_PTR", 2, "LOAD_LEVEL: background objects pointer (ROM)");
+        ram.allocate("LEVEL_GP_ROM_PTR", 2, "LOAD_LEVEL: gameplay objects pointer (ROM)");
+        ram.allocate("LEVEL_FG_ROM_PTR", 2, "LOAD_LEVEL: foreground objects pointer (ROM)");
+        
+        // Object buffers in RAM (each object is 24 bytes)
+        ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
+        ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
+        ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
+        
+        // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
+        ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");
+        ram.allocate("UGPC_OUTER_MAX", 1, "Outer loop max value (count-1)");
+        ram.allocate("UGPC_INNER_IDX", 1, "Inner loop index for collision detection");
+        ram.allocate("UGPC_DX", 2, "Distance X temporary (16-bit)");
+        ram.allocate("UGPC_DIST", 2, "Manhattan distance temporary (16-bit)");
+    }
+    
+    // 10. DRAW_LINE variables (only if DRAW_LINE is used)
+    if rt_usage.needs_line_vars {
+        ram.allocate("VLINE_DX_16", 2, "x1-x0 (16-bit) for line drawing");
+        ram.allocate("VLINE_DY_16", 2, "y1-y0 (16-bit) for line drawing");
+        ram.allocate("VLINE_DX", 1, "Clamped dx (8-bit)");
+        ram.allocate("VLINE_DY", 1, "Clamped dy (8-bit)");
+        ram.allocate("VLINE_DY_REMAINING", 2, "Remaining dy for segment 2 (16-bit)");
+        ram.allocate("VLINE_DX_REMAINING", 2, "Remaining dx for segment 2 (16-bit)");
+        ram.allocate("VLINE_STEPS", 1, "Line drawing step counter");
+        ram.allocate("VLINE_LIST", 2, "2-byte vector list (Y|endbit, X)");
+    }
+    
+    // 11. DRAW_CIRCLE variables (only if DRAW_CIRCLE is used)
+    if rt_usage.uses_draw_circle {
+        ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X (byte)");
+        ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y (byte)");
+        ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter (byte)");
+        ram.allocate("DRAW_CIRCLE_INTENSITY", 1, "Circle intensity (byte)");
+        ram.allocate("DRAW_CIRCLE_TEMP", 8, "Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2)");
+    }
+    
+    // 12. Optional feature variables (blink intensity, fast wait)
+    if opts.blink_intensity {
+        ram.allocate("BLINK_STATE", 1, "Blink intensity state (toggles 0/1)");
+    }
+    if opts.fast_wait {
+        ram.allocate("FAST_WAIT_HIT", 1, "Fast wait recalibration flag");
+    }
+    
+    // 13. VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
+    if rt_usage.needs_vectorlist_runtime {
+        ram.allocate("VL_PTR", 2, "Current position in vector list");
+        ram.allocate("VL_Y", 1, "Y position (byte)");
+        ram.allocate("VL_X", 1, "X position (byte)");
+        ram.allocate("VL_SCALE", 1, "Scale factor (byte)");
+    }
+    
+    // 13. Global user variables (VAR_*)
+    // Build array size map for proper allocation
+    let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (name, value) in &non_const_vars {
+        if let Expr::List(elements) = value {
+            array_sizes.insert(name.clone(), elements.len());
+        }
+    }
+    
+    for v in syms {
+        if let Some(&array_len) = array_sizes.get(&v) {
+            // Arrays: allocate space for N elements * 2 bytes each
+            let var_name = format!("VAR_{}_DATA", v.to_uppercase());
+            ram.allocate(&var_name, array_len * 2, &format!("Array data ({} elements)", array_len));
+        } else {
+            // Scalar variables: 2 bytes each
+            let var_name = format!("VAR_{}", v.to_uppercase());
+            ram.allocate(&var_name, 2, "User variable");
+        }
+    }
+    
+    // 14. Function argument scratch space (VAR_ARG0-ARGn)
+    if !suppress_runtime && max_args > 0 {
+        for i in 0..max_args {
+            let arg_name = format!("VAR_ARG{}", i);
+            ram.allocate(&arg_name, 2, &format!("Function argument {}", i));
+        }
+    }
+    
     out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
     out.push_str("; AUTO-GENERATED - All offsets calculated automatically\n");
     out.push_str(&format!("; Total RAM used: {} bytes\n", ram.total_size()));
@@ -496,6 +638,25 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
         if let Some(offset) = ram.get_offset("PSG_DELAY_FRAMES") {
             out.push_str(&format!("PSG_DELAY_FRAMES_DP EQU ${:02X}  ; DP-relative\n", offset));
+        }
+    }
+    
+    // DP-relative offsets for SFX (lwasm compatibility)
+    if has_sfx_assets {
+        if let Some(offset) = ram.get_offset("SFX_PTR") {
+            out.push_str(&format!("SFX_PTR_DP         EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_TICK") {
+            out.push_str(&format!("SFX_TICK_DP        EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_ACTIVE") {
+            out.push_str(&format!("SFX_ACTIVE_DP      EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_PHASE") {
+            out.push_str(&format!("SFX_PHASE_DP       EQU ${:02X}  ; DP-relative\n", offset));
+        }
+        if let Some(offset) = ram.get_offset("SFX_VOL") {
+            out.push_str(&format!("SFX_VOL_DP         EQU ${:02X}  ; DP-relative\n", offset));
         }
     }
     out.push_str("\n");
@@ -550,9 +711,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // CRITICAL: Initialize SFX system variables to prevent garbage data interference
         if has_sfx_calls {
             out.push_str("    ; Initialize SFX variables to prevent random noise on startup\n");
-            out.push_str("    CLR sfx_status         ; Mark SFX as inactive (0=off)\n");
+            out.push_str("    CLR SFX_ACTIVE         ; Mark SFX as inactive (0=off)\n");
             out.push_str("    LDD #$0000\n");
-            out.push_str("    STD sfx_pointer        ; Clear SFX pointer\n");
+            out.push_str("    STD SFX_PTR            ; Clear SFX pointer\n");
         }
         
         out.push_str("\n");
@@ -573,6 +734,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Emit main() function body inline only if it has real content
         if main_has_content {
             out.push_str("    ; *** DEBUG *** main() function code inline (initialization)\n");
+            
+            // ✅ Register main() definition line in .pdb BEFORE main() code executes
+            if let Some(main_func) = user_main {
+                tracker.set_line(main_func.line);
+                out.push_str(&format!("    ; VPy_LINE:{}\n", main_func.line));
+            }
             
             // Initialize global variables with their initial values (ONCE at startup)
             // Use global_vars_with_line to emit line markers for PDB coverage
@@ -633,11 +800,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Choose label based on whether we have START or not
         let main_label = if main_has_content { "MAIN" } else { "main" };
         
-        // ✅ Register main() definition line in .pdb
-        if let Some(main_func) = user_main {
-            tracker.set_line(main_func.line);
-            out.push_str(&format!("; VPy_LINE:{}\n", main_func.line));
-        }
+        // NOTE: main() definition line already registered above (before main() code)
+        // This label (MAIN:) is the FRAME LOOP, not the main() function
         
         out.push_str(&format!("\n{}:\n", main_label));
         
@@ -976,9 +1140,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     
-    // Determine max args used (0..5) BEFORE evaluating suppress_runtime
-    let max_args = compute_max_args_used(module);
-    // Re-evaluate suppress_runtime now that we know max_args
+    // Re-evaluate suppress_runtime now that we know max_args (calculated earlier)
     let no_runtime_vars_needed = !rt_usage.needs_tmp_left && !rt_usage.needs_tmp_right && 
                                  !rt_usage.needs_tmp_ptr && 
                                  !rt_usage.needs_mul_helper && !rt_usage.needs_div_helper && 
@@ -994,86 +1156,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str(&ram.emit_storage_allocations());
     }
     
-    // VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
-    // Always define if any code might use DRAW_VECTOR_LIST
-    if opts.exclude_ram_org {
-        out.push_str("VL_PTR     EQU $CF80      ; Current position in vector list\n");
-        out.push_str("VL_Y       EQU $CF82      ; Y position (1 byte)\n");
-        out.push_str("VL_X       EQU $CF83      ; X position (1 byte)\n");
-        out.push_str("VL_SCALE   EQU $CF84      ; Scale factor (1 byte)\n");
-    } else {
-        out.push_str("VL_PTR:    FDB 0    ; Current position in vector list\n");
-        out.push_str("VL_Y:      FCB 0    ; Y position\n");
-        out.push_str("VL_X:      FCB 0    ; X position\n");
-        out.push_str("VL_SCALE:  FCB 0    ; Scale factor\n");
-    }
-    
-    let mut var_offset = 0; // Variables start at separate base, not after RESULT temps
-    
-    // Build a map of array sizes for proper RAM allocation
-    let mut array_sizes: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for (name, value) in &non_const_vars {
-        if let Expr::List(elements) = value {
-            array_sizes.insert(name.clone(), elements.len());
-        }
-    }
-    
-    for v in syms {
-        if opts.exclude_ram_org {
-            // FIX: Use separate memory area for global variables, not RESULT+offset
-            // Global variables should persist between function calls, but RESULT is temporary
-            // Use $CF10 to avoid collision with debug RAM at $CF00-$CF03
-            
-            // Check if this variable is an array - if so, allocate space for actual array data
-            if let Some(&array_len) = array_sizes.get(&v) {
-                // Arrays need space for the actual data (N elements * 2 bytes each)
-                out.push_str(&format!("VAR_{}_DATA EQU $C8C0+{}  ; Array data ({} elements)\n", 
-                    v.to_uppercase(), var_offset, array_len));
-                var_offset += array_len * 2;  // Reserve space for all elements
-                // Note: We don't create VAR_NAME anymore - code will use VAR_NAME_DATA directly
-            } else {
-                // Regular scalar variables - 2 bytes each
-                out.push_str(&format!("VAR_{} EQU $C8C0+{}\n", v.to_uppercase(), var_offset));
-                var_offset += 2;
-            }
-        } else {
-            out.push_str(&format!("VAR_{}: FDB 0\n", v.to_uppercase()));
-        }
-    }
-    // Global mutables already allocated via symbol list; (future) could emit non-zero inits via a small startup routine.
-    
-    // ✅ Emit VAR_ARG EQU definitions HERE (before assets/strings)
-    // This ensures ALL EQU definitions are together and don't interrupt FCB/FCC data
-    if !suppress_runtime {
-        out.push_str("; Call argument scratch space\n");
-        if opts.exclude_ram_org {
-            // Function arguments can use RESULT area since they're temporary
-            // RESULT is defined as $C880, calculate absolute addresses
-            // CRITICAL: Must be AFTER all PSG/SFX variables to avoid corruption
-            // PSG vars: +28 to +34 ($C89C-$C8A2), SFX vars: +40 to +48 ($C8A8-$C8B0)
-            let result_base = 0xC880u16;
-            let mut arg_offset = 50; // Start after SFX_ACTIVE at +48 (0xC8B0)
-            for i in 0..max_args { 
-                let abs_addr = result_base + arg_offset;
-                out.push_str(&format!("VAR_ARG{} EQU ${:04X}\n", i, abs_addr)); 
-                arg_offset += 2; 
-            }
-        } else {
-            if max_args >=1 { out.push_str("VAR_ARG0: FDB 0\n"); }
-            if max_args >=2 { out.push_str("VAR_ARG1: FDB 0\n"); }
-            if max_args >=3 { out.push_str("VAR_ARG2: FDB 0\n"); }
-            if max_args >=4 { out.push_str("VAR_ARG3: FDB 0\n"); }
-            if max_args >=5 { out.push_str("VAR_ARG4: FDB 0\n"); }
-            if max_args >=6 { out.push_str("VAR_ARG5: FDB 0\n"); }
-        }
-    }
-    
-    // ✅ CRITICAL FIX: Embed assets HERE (after ALL EQU definitions, before strings)
-    // The native assembler processes ALL lines but EQU doesn't generate bytes
-    // We need FCB data AFTER all EQUs but BEFORE strings to ensure it's included
+    // Assets: Only embed if code uses them
     if !opts.assets.is_empty() {
         // Analyze which assets are actually used in the code
-        let used_assets = analyze_used_assets(module);
+        let used_assets = analyze_used_assets(module, &opts.assets);
         eprintln!("[DEBUG] Used assets: {:?}", used_assets);
         eprintln!("[DEBUG] Available assets: {:?}", opts.assets.iter().map(|a| &a.name).collect::<Vec<_>>());
         
@@ -1113,6 +1199,21 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                             },
                             Err(e) => {
                                 out.push_str(&format!("; ERROR: Failed to load/generate music asset {}: {}\n", asset.path, e));
+                            }
+                        }
+                    },
+                    crate::codegen::AssetType::Level => {
+                        // Level assets - use levelres to generate ASM data
+                        use crate::levelres::VPlayLevel;
+                        match VPlayLevel::load(std::path::Path::new(&asset.path)) {
+                            Ok(level) => {
+                                out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
+                                let asm = level.compile_to_asm();
+                                out.push_str(&asm);
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                out.push_str(&format!("; ERROR: Failed to load level asset {}: {}\n", asset.path, e));
                             }
                         }
                     },
@@ -1265,176 +1366,27 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     // VAR_ARG definitions moved earlier (before assets/strings) to keep all EQUs together
-    
-    // CRITICAL FIX: Reset var_offset to 0 for system internal variables (RESULT+offset)
-    // Global variables use $C8C0+offset, system temps use RESULT+offset (separate spaces)
-    var_offset = 0;
-    
-    if opts.diag_freeze { if opts.exclude_ram_org { out.push_str(&format!("DIAG_COUNTER EQU RESULT+{}\n", var_offset)); var_offset += 1; } else { out.push_str("DIAG_COUNTER: FCB 0\n"); } }
-    if rt_usage.needs_vcur_vars {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("VCUR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-            out.push_str(&format!("VCUR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else { out.push_str("; Current beam position (low byte storage)\nVCUR_X: FCB 0\nVCUR_Y: FCB 0\n"); }
-    }
-    if rt_usage.needs_line_vars {
-        if opts.exclude_ram_org {
-            // CRITICAL: DRAW_LINE_WRAPPER uses RESULT+0-9 for arguments
-            // Temporals must start at RESULT+10 to avoid overwriting arguments
-            out.push_str(&format!("VLINE_DX_16 EQU RESULT+10\n"));      // x1-x0 (16-bit)
-            out.push_str(&format!("VLINE_DY_16 EQU RESULT+12\n"));      // y1-y0 (16-bit)
-            out.push_str(&format!("VLINE_DX EQU RESULT+14\n"));         // clamped dx (8-bit)
-            out.push_str(&format!("VLINE_DY EQU RESULT+15\n"));         // clamped dy (8-bit)
-            out.push_str(&format!("VLINE_DY_REMAINING EQU RESULT+16\n")); // remaining dy segment 2 (16-bit)
-            out.push_str(&format!("VLINE_DX_REMAINING EQU RESULT+18\n")); // remaining dx segment 2 (16-bit)
-            out.push_str(&format!("VLINE_STEPS EQU RESULT+20\n"));
-            out.push_str(&format!("VLINE_LIST EQU RESULT+21\n"));       // 2-byte vector list
-            var_offset = 23;  // Next offset available
-        } else { out.push_str("; Line drawing temps\nVLINE_DX_16: FDB 0  ; 16-bit dx for long lines\nVLINE_DY_16: FDB 0  ; 16-bit dy for long lines\nVLINE_DX: FCB 0  ; clamped dx (8-bit)\nVLINE_DY: FCB 0  ; clamped dy (8-bit)\nVLINE_DY_REMAINING: FDB 0  ; 16-bit remaining dy for segment 2\nVLINE_DX_REMAINING: FDB 0  ; 16-bit remaining dx for segment 2\nVLINE_STEPS: FCB 0\nVLINE_LIST: FCB 0,0 ; 2-byte vector list (Y|endbit, X)\n"); }
-    }
-    // DRAW_VECTOR offset position storage (always needed for DRAW_VECTOR)
-    if opts.exclude_ram_org {
-        out.push_str(&format!("DRAW_VEC_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_VEC_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("MIRROR_X EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("MIRROR_Y EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_VEC_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
-    } else {
-        out.push_str("; DRAW_VECTOR position offset\nDRAW_VEC_X: FCB 0\nDRAW_VEC_Y: FCB 0\n");
-        out.push_str("; Mirror flags for DRAW_VECTOR_EX unified function\nMIRROR_X: FCB 0\nMIRROR_Y: FCB 0\n");
-        out.push_str("; Intensity override (0=use vector's intensity, non-zero=override)\nDRAW_VEC_INTENSITY: FCB 0\n");
-    }
-    
-    // DRAW_CIRCLE runtime variables (changed to bytes to avoid DP issues)
-    if opts.exclude_ram_org {
-        out.push_str(&format!("DRAW_CIRCLE_XC EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_YC EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_DIAM EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_INTENSITY EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        out.push_str(&format!("DRAW_CIRCLE_TEMP EQU RESULT+{}\n", var_offset)); var_offset += 8; // TEMP is still 8 bytes (radius=2, xc=2, yc=2, spare=2)
-    } else {
-        out.push_str("; DRAW_CIRCLE runtime variables (bytes, not words - to avoid DP corruption)\n");
-        out.push_str("DRAW_CIRCLE_XC: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_YC: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_DIAM: FCB 0\n");
-        out.push_str("DRAW_CIRCLE_INTENSITY: FCB 0\n");
-        out.push_str("; DRAW_CIRCLE_TEMP still needs 8 bytes for internal calculations\n");
-        out.push_str("DRAW_CIRCLE_TEMP: FDB 0,0,0,0  ; radius(2), xc(2), yc(2), spare(2)\n");
-    }
+    // All runtime variables now allocated via ram.allocate() (sections 1-12 above)
+    // No more RESULT+offset system - everything uses absolute addresses
     
     // Vector drawing temporary storage - NO LONGER NEEDED (removed old DRAW_VECTOR_RUNTIME)
     // Now using inline code with BIOS Draw_VLc function
     
-    // Blink state variable (1 byte) must live in RAM, not ROM.
-    if opts.blink_intensity {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("BLINK_STATE EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else {
-            out.push_str("BLINK_STATE: FCB 0\n");
-        }
-    }
-    if opts.fast_wait {
-        if opts.exclude_ram_org {
-            out.push_str(&format!("FAST_WAIT_HIT EQU RESULT+{}\n", var_offset)); var_offset += 1;
-        } else {
-            out.push_str("FAST_WAIT_HIT: FCB 0\n");
-        }
-    }
     // Shared trig tables (emit only if used)
     if module_uses_trig(module) {
         out.push_str("; Trig tables (shared)\n");
         emit_trig_tables(&mut out, "FDB");
     }
-    // Touch var_offset so compiler sees it used when EQU mode enabled
-    #[allow(unused_variables)]
-    { let _vo = var_offset; }
     
-    // Populate debug info with function symbols using REAL addresses from ASM parsing
-    // Parse the generated ASM to extract label addresses
-    let label_addresses = parse_asm_addresses(&out, 0x0000);
-    
-    // ✅ Parse variables from ASM EQU directives
+    // ✅ Parse variables from ASM EQU directives (NO estimations - just reads EQU values)
     let parsed_variables = parse_asm_variables(&out);
     for (name, var_info) in parsed_variables {
         debug_info.variables.insert(name, var_info);
     }
     
-    // Entry point is either START (if main has content) or main label
-    debug_info.set_entry_point(0x0000); // Vectrex cartridges start at 0x0000
-    
-    // Add symbols for main() and loop() functions with REAL addresses
-    if user_main.is_some() {
-        if main_has_content {
-            if let Some(&addr) = label_addresses.get("START") {
-                debug_info.add_symbol("START".to_string(), addr);
-            }
-            if let Some(&addr) = label_addresses.get("MAIN") {
-                debug_info.add_symbol("MAIN".to_string(), addr);
-            }
-        } else {
-            if let Some(&addr) = label_addresses.get("main") {
-                debug_info.add_symbol("main".to_string(), addr);
-            }
-        }
-    }
-    
-    if user_loop.is_some() {
-        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
-            debug_info.add_symbol("LOOP_BODY".to_string(), addr);
-        }
-    }
-    
-    // Add symbols for all other functions with REAL addresses
-    for item in &module.items {
-        if let Item::Function(f) = item {
-            if f.name != "main" && f.name != "loop" {
-                let label_name = f.name.to_uppercase();
-                if let Some(&addr) = label_addresses.get(&label_name) {
-                    debug_info.add_symbol(label_name.clone(), addr);
-                    
-                    // Add function metadata
-                    // Note: Line numbers will be 0 until AST is extended with line tracking
-                    let start_line = 0; // TODO: f.line when available
-                    let end_line = 0;   // TODO: Calculate from body when available
-                    debug_info.add_function(
-                        f.name.clone(),
-                        addr,
-                        start_line,
-                        end_line,
-                        "vpy"
-                    );
-                }
-            }
-        }
-    }
-    
-    // Add function metadata for main() if present
-    if let Some(_) = user_main {
-        if main_has_content {
-            if let Some(&addr) = label_addresses.get("MAIN") {
-                debug_info.add_function(
-                    "main".to_string(),
-                    addr,
-                    0, // TODO: Get from AST when available
-                    0, // TODO: Calculate when available
-                    "vpy"
-                );
-            }
-        }
-    }
-    
-    // Add function metadata for loop() if present
-    if let Some(_) = user_loop {
-        if let Some(&addr) = label_addresses.get("LOOP_BODY") {
-            debug_info.add_function(
-                "loop".to_string(),
-                addr,
-                0, // TODO: Get from AST when available
-                0, // TODO: Calculate when available
-                "vpy"
-            );
-        }
-    }
+    // DO NOT populate symbols here with estimated addresses
+    // Symbols (START, MAIN, LOOP_BODY, user functions) will be set in Phase 6 from real binary symbol table
+    // entryPoint will be set in Phase 6 from real binary START address
     
     // Phase 4: Parse native call comments from ASM
     let native_calls = parse_native_call_comments(&out);
@@ -1442,11 +1394,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         debug_info.add_native_call(line_num, function_name);
     }
     
-    // ✅ CRITICAL: Parse VPy_LINE markers from generated ASM to get REAL addresses
-    // This replaces the tracker lineMap (which has incorrect addresses due to no advance() calls)
-    // We parse the entire ASM to calculate actual addresses based on instruction sizes
-    use super::debug_info::parse_vpy_line_markers;
-    debug_info.line_map = parse_vpy_line_markers(&out, start_address);
+    // ✅ CRITICAL: Do NOT generate estimated lineMap here
+    // The lineMap will be populated in main.rs with REAL addresses from binary
+    // Estimated addresses (based on ORG without header offset) cause bugs
+    // use super::debug_info::parse_vpy_line_markers;
+    // debug_info.line_map = parse_vpy_line_markers(&out, start_address);
+    debug_info.line_map.clear(); // Ensure empty - main.rs will populate with real addresses
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)

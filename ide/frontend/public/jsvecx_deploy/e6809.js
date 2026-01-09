@@ -25,12 +25,308 @@ var MUSIC_FUNCTION_ADDRS = {
   0x013B: 'STOP_MUSIC_RUNTIME'
 };
 
+// Opcode execution trace buffer (circular, last 100 opcodes)
+var OPCODE_TRACE_BUFFER = [];
+// Default to a larger buffer so we can capture the jump into garbage/ram.
+// Can be overridden at runtime via window.OPCODE_TRACE_MAX.
+var OPCODE_TRACE_MAX = 2000;
+var OPCODE_TRACE_ENABLED = true;
+var CURRENT_ROM_NAME = null;
+var CURRENT_ROM_PATH = null;
+var TRACE_DUMPED = false;
+var TRACE_DUMP_IN_PROGRESS = false;
+
+// Full trace (stream-to-disk) mode
+// IMPORTANT: this runs on the emulation thread. Avoid per-instruction string formatting.
+// We stream binary records in large chunks.
+// Record format (18 bytes):
+//  pc:u16, b0:u8,b1:u8,b2:u8,b3:u8, a:u8,b:u8, x:u16,y:u16,u:u16,s:u16, dp:u8, cc:u8
+var FULL_TRACE_BUF = null; // Uint8Array
+var FULL_TRACE_BUF_OFF = 0;
+var FULL_TRACE_DROPPED = false;
+var FULL_TRACE_FILE_PATH = null;
+var FULL_TRACE_FLUSH_IN_PROGRESS = false;
+var FULL_TRACE_TOTAL_BYTES = 0;
+
+function isFullTraceEnabled() {
+    try {
+        if (typeof window !== 'undefined' && window.OPCODE_TRACE_FULL != null) {
+            return !!window.OPCODE_TRACE_FULL;
+        }
+    } catch (e) {}
+    return false;
+}
+
+function getFullTraceMaxTotalBytes() {
+    // Hard safety cap to avoid infinite disk usage.
+    try {
+        if (typeof window !== 'undefined' && window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES != null) {
+            var n = Number(window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES);
+            if (Number.isFinite(n)) {
+                n = Math.floor(n);
+                if (n < 1024 * 1024) n = 1024 * 1024;
+                if (n > 5 * 1024 * 1024 * 1024) n = 5 * 1024 * 1024 * 1024;
+                return n;
+            }
+        }
+    } catch (e) {}
+    return 1024 * 1024 * 1024; // 1GB default max
+}
+
+function getFullTraceChunkSize() {
+    // Buffer size in memory before flushing. Larger = fewer IPC calls.
+    try {
+        if (typeof window !== 'undefined' && window.OPCODE_TRACE_FULL_CHUNK_BYTES != null) {
+            var n = Number(window.OPCODE_TRACE_FULL_CHUNK_BYTES);
+            if (Number.isFinite(n)) {
+                n = Math.floor(n);
+                if (n < 256 * 1024) n = 256 * 1024;
+                if (n > 16 * 1024 * 1024) n = 16 * 1024 * 1024;
+                return n;
+            }
+        }
+    } catch (e) {}
+    return 4 * 1024 * 1024; // 4MB
+}
+
+function setFullTraceFilePathFromRom() {
+    FULL_TRACE_FILE_PATH = null;
+    if (CURRENT_ROM_PATH && typeof CURRENT_ROM_PATH === 'string') {
+        FULL_TRACE_FILE_PATH = CURRENT_ROM_PATH.replace(/\.(bin|BIN)$/, '.tracebin');
+    }
+}
+
+function clearFullTrace() {
+    FULL_TRACE_BUF = null;
+    FULL_TRACE_BUF_OFF = 0;
+    FULL_TRACE_DROPPED = false;
+    FULL_TRACE_TOTAL_BYTES = 0;
+    setFullTraceFilePathFromRom();
+}
+
+function ensureFullTraceBuf() {
+    if (!FULL_TRACE_BUF) {
+        FULL_TRACE_BUF = new Uint8Array(getFullTraceChunkSize());
+        FULL_TRACE_BUF_OFF = 0;
+    }
+}
+
+function enqueueFullTraceRecord(pc, b0, b1, b2, b3, a, b, x, y, u, s, dp, cc) {
+    if (!isFullTraceEnabled()) return;
+    if (FULL_TRACE_DROPPED) return;
+    if (!FULL_TRACE_FILE_PATH) setFullTraceFilePathFromRom();
+    if (!FULL_TRACE_FILE_PATH) return;
+
+    var maxTotal = getFullTraceMaxTotalBytes();
+    if (FULL_TRACE_TOTAL_BYTES + 18 > maxTotal) {
+        FULL_TRACE_DROPPED = true;
+        return;
+    }
+
+    ensureFullTraceBuf();
+    if (FULL_TRACE_BUF.length - FULL_TRACE_BUF_OFF < 18) {
+        // Buffer full; request flush (best effort) and drop if can't keep up.
+        // We do not flush synchronously here to avoid stalling the emulation thread.
+        try { if (typeof window !== 'undefined' && window.__flushFullTraceNow) window.__flushFullTraceNow(); } catch (e) {}
+        // Allocate a new buffer; old one will be flushed on next tick.
+        FULL_TRACE_BUF = new Uint8Array(getFullTraceChunkSize());
+        FULL_TRACE_BUF_OFF = 0;
+    }
+
+    var o = FULL_TRACE_BUF_OFF;
+    FULL_TRACE_BUF[o+0] = (pc >> 8) & 0xff;
+    FULL_TRACE_BUF[o+1] = pc & 0xff;
+    FULL_TRACE_BUF[o+2] = b0 & 0xff;
+    FULL_TRACE_BUF[o+3] = b1 & 0xff;
+    FULL_TRACE_BUF[o+4] = b2 & 0xff;
+    FULL_TRACE_BUF[o+5] = b3 & 0xff;
+    FULL_TRACE_BUF[o+6] = a & 0xff;
+    FULL_TRACE_BUF[o+7] = b & 0xff;
+    FULL_TRACE_BUF[o+8] = (x >> 8) & 0xff;
+    FULL_TRACE_BUF[o+9] = x & 0xff;
+    FULL_TRACE_BUF[o+10] = (y >> 8) & 0xff;
+    FULL_TRACE_BUF[o+11] = y & 0xff;
+    FULL_TRACE_BUF[o+12] = (u >> 8) & 0xff;
+    FULL_TRACE_BUF[o+13] = u & 0xff;
+    FULL_TRACE_BUF[o+14] = (s >> 8) & 0xff;
+    FULL_TRACE_BUF[o+15] = s & 0xff;
+    FULL_TRACE_BUF[o+16] = dp & 0xff;
+    FULL_TRACE_BUF[o+17] = cc & 0xff;
+
+    FULL_TRACE_BUF_OFF += 18;
+    FULL_TRACE_TOTAL_BYTES += 18;
+}
+
+async function flushFullTraceQueue() {
+    if (!isFullTraceEnabled()) return;
+    if (FULL_TRACE_FLUSH_IN_PROGRESS) return;
+    if (!FULL_TRACE_FILE_PATH) setFullTraceFilePathFromRom();
+    if (!FULL_TRACE_FILE_PATH) return;
+    if (!FULL_TRACE_BUF || FULL_TRACE_BUF_OFF === 0) return;
+
+    try {
+        if (typeof window === 'undefined') return;
+        const w = window;
+        if (!w.files || typeof w.files.appendFileBin !== 'function') return;
+
+        FULL_TRACE_FLUSH_IN_PROGRESS = true;
+
+        // Flush current buffer as binary chunk
+        var chunk = FULL_TRACE_BUF.subarray(0, FULL_TRACE_BUF_OFF);
+        FULL_TRACE_BUF_OFF = 0;
+        await w.files.appendFileBin({ path: FULL_TRACE_FILE_PATH, data: chunk });
+    } catch (e) {
+        // If append fails, stop growing memory indefinitely
+        FULL_TRACE_DROPPED = true;
+    } finally {
+        FULL_TRACE_FLUSH_IN_PROGRESS = false;
+    }
+}
+
+function getOpcodeTraceMax() {
+    try {
+        if (typeof window !== 'undefined' && window.OPCODE_TRACE_MAX != null) {
+            var n = Number(window.OPCODE_TRACE_MAX);
+            if (Number.isFinite(n)) {
+                n = Math.floor(n);
+                if (n < 10) n = 10;
+                if (n > 10000) n = 10000;
+                return n;
+            }
+        }
+    } catch (e) {}
+    return OPCODE_TRACE_MAX;
+}
+
+function addOpcodeTrace(pc, opcode, regs, bytes) {
+    if (!OPCODE_TRACE_ENABLED) return;
+    
+    OPCODE_TRACE_BUFFER.push({
+        pc: pc,
+        opcode: opcode,
+        bytes: bytes || [],
+        a: regs.a,
+        b: regs.b,
+        x: regs.x,
+        y: regs.y,
+        u: regs.u,
+        s: regs.s,
+        dp: regs.dp,
+        cc: regs.cc
+    });
+    
+    // Keep only last N
+    var maxEntries = getOpcodeTraceMax();
+    while (OPCODE_TRACE_BUFFER.length > maxEntries) {
+        OPCODE_TRACE_BUFFER.shift();
+    }
+}
+
+function clearOpcodeTrace() {
+    OPCODE_TRACE_BUFFER = [];
+    TRACE_DUMPED = false;
+    TRACE_DUMP_IN_PROGRESS = false;
+    clearFullTrace();
+}
+
+function dumpOpcodeTrace(errorMsg) {
+    if (TRACE_DUMPED || TRACE_DUMP_IN_PROGRESS) return;
+    TRACE_DUMP_IN_PROGRESS = true;
+    if (OPCODE_TRACE_BUFFER.length === 0) {
+        TRACE_DUMPED = true;
+        TRACE_DUMP_IN_PROGRESS = false;
+        return;
+    }
+    
+    var maxEntries = getOpcodeTraceMax();
+    let output = "=== OPCODE EXECUTION TRACE (Last " + OPCODE_TRACE_BUFFER.length + " instructions, max " + maxEntries + ") ===\n";
+    output += "Error: " + errorMsg + "\n\n";
+    output += "PC     BYTES           A  B  X    Y    U    S    DP CC\n";
+    output += "====== =============== == == ==== ==== ==== ==== == ==\n";
+    
+    for (let i = 0; i < OPCODE_TRACE_BUFFER.length; i++) {
+        const t = OPCODE_TRACE_BUFFER[i];
+        output += t.pc.toString(16).toUpperCase().padStart(4, '0') + "   ";
+        const bytesStr = (t.bytes && t.bytes.length)
+            ? t.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+            : t.opcode.toString(16).toUpperCase().padStart(2, '0');
+        output += bytesStr.padEnd(15, ' ') + " ";
+        output += t.a.toString(16).toUpperCase().padStart(2, '0') + " ";
+        output += t.b.toString(16).toUpperCase().padStart(2, '0') + " ";
+        output += t.x.toString(16).toUpperCase().padStart(4, '0') + " ";
+        output += t.y.toString(16).toUpperCase().padStart(4, '0') + " ";
+        output += t.u.toString(16).toUpperCase().padStart(4, '0') + " ";
+        output += t.s.toString(16).toUpperCase().padStart(4, '0') + " ";
+        output += t.dp.toString(16).toUpperCase().padStart(2, '0') + " ";
+        output += t.cc.toString(16).toUpperCase().padStart(2, '0');
+        
+        if (i === OPCODE_TRACE_BUFFER.length - 1) {
+            output += " <-- ERROR HERE";
+        }
+        output += "\n";
+    }
+    
+    // Save to disk (Electron) if possible, otherwise fallback to browser download.
+    try {
+        if (typeof window !== 'undefined') {
+            const w = window;
+            // Prefer absolute bin path if provided
+            const stackPath = (CURRENT_ROM_PATH && typeof CURRENT_ROM_PATH === 'string')
+                ? CURRENT_ROM_PATH.replace(/\.(bin|BIN)$/, '.stack')
+                : null;
+
+            if (stackPath && w.files && typeof w.files.saveFile === 'function') {
+                w.files.saveFile({ path: stackPath, content: output })
+                    .then(() => console.log("📝 Stack trace saved to: " + stackPath))
+                    .catch((e) => console.warn("Failed to save .stack via Electron files API:", e));
+            } else if (CURRENT_ROM_NAME) {
+                const fileName = CURRENT_ROM_NAME.replace(/\.(bin|BIN)$/, '.stack');
+                const blob = new Blob([output], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+                console.log("📝 Stack trace downloaded: " + fileName);
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to persist .stack:", e);
+    }
+
+    TRACE_DUMPED = true;
+    TRACE_DUMP_IN_PROGRESS = false;
+    
+    return output;
+}
+
 // Expose to window for debugging panel
 if (typeof window !== 'undefined') {
     window.MUSIC_CALL_LOG = MUSIC_CALL_LOG;
     window.MUSIC_CALL_LOG_ENABLED = MUSIC_CALL_LOG_ENABLED;
     window.MUSIC_CALL_LOG_LIMIT = MUSIC_CALL_LOG_LIMIT;
     window.MUSIC_FUNCTION_ADDRS = MUSIC_FUNCTION_ADDRS;
+    window.OPCODE_TRACE_BUFFER = OPCODE_TRACE_BUFFER;
+    window.clearOpcodeTrace = clearOpcodeTrace;
+    window.dumpOpcodeTrace = dumpOpcodeTrace;
+    window.CURRENT_ROM_NAME = null;
+    window.CURRENT_ROM_PATH = null;
+    window.OPCODE_TRACE_FULL = window.OPCODE_TRACE_FULL ?? false;
+    window.OPCODE_TRACE_FULL_CHUNK_BYTES = window.OPCODE_TRACE_FULL_CHUNK_BYTES ?? (4 * 1024 * 1024);
+    window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES = window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES ?? (1024 * 1024 * 1024);
+}
+
+// Background flusher for full trace streaming
+if (typeof window !== 'undefined') {
+    try {
+        if (!window.__fullTraceFlushTimer) {
+            window.__fullTraceFlushTimer = setInterval(() => {
+                flushFullTraceQueue();
+            }, 250);
+        }
+        window.__flushFullTraceNow = () => flushFullTraceQueue();
+    } catch (e) {}
 }
 
 function e6809()
@@ -301,7 +597,34 @@ function e6809()
                 cycles.value+=(5);
                 break;
             default:
-                console.log("undefined post-byte");
+                const postByteError = "Undefined post-byte: 0x" + pb.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0');
+                console.log("⚠️ UNDEFINED POST-BYTE ERROR:");
+                console.log("  PC: 0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("  Post-byte: 0x" + pb.toString(16).toUpperCase().padStart(2, '0') + " (" + pb + ")");
+                console.log("  Registers:");
+                console.log("    A: 0x" + this.reg_a.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    B: 0x" + this.reg_b.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    X: 0x" + this.reg_x.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    Y: 0x" + this.reg_y.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    U: 0x" + this.reg_u.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
+                
+                // Dump trace to file
+                const traceOutput = dumpOpcodeTrace(postByteError);
+                console.log("\n" + traceOutput);
+
+                // Stop emulator to avoid infinite error loops
+                try {
+                    if (this.vecx) {
+                        if (typeof this.vecx.debugStop === 'function') this.vecx.debugStop();
+                        else if (typeof this.vecx.stop === 'function') this.vecx.stop();
+                    }
+                } catch (e) {}
+
+                utils.showError(postByteError);
+                
                 break;
         }
         return ea;
@@ -771,6 +1094,44 @@ function e6809()
             return cycles.value + 1;
         }
         op = this.vecx.read8(this.reg_pc++);
+        var op_pc = (this.reg_pc - 1) & 0xffff;
+        
+        // Record opcode trace
+        addOpcodeTrace(op_pc, op, {
+            a: this.reg_a,
+            b: this.reg_b,
+            x: this.reg_x.value,
+            y: this.reg_y.value,
+            u: this.reg_u.value,
+            s: this.reg_s.value,
+            dp: this.reg_dp & 0xFF,
+            cc: this.reg_cc
+        }, [
+            op & 0xff,
+            this.vecx.read8((op_pc + 1) & 0xffff) & 0xff,
+            this.vecx.read8((op_pc + 2) & 0xffff) & 0xff,
+            this.vecx.read8((op_pc + 3) & 0xffff) & 0xff
+        ]);
+
+        // Full trace (binary streaming): one fixed-size record per instruction
+        if (isFullTraceEnabled()) {
+            var fb1 = this.vecx.read8((op_pc + 1) & 0xffff) & 0xff;
+            var fb2 = this.vecx.read8((op_pc + 2) & 0xffff) & 0xff;
+            var fb3 = this.vecx.read8((op_pc + 3) & 0xffff) & 0xff;
+            enqueueFullTraceRecord(
+                op_pc,
+                op & 0xff, fb1, fb2, fb3,
+                this.reg_a & 0xff,
+                this.reg_b & 0xff,
+                this.reg_x.value & 0xffff,
+                this.reg_y.value & 0xffff,
+                this.reg_u.value & 0xffff,
+                this.reg_s.value & 0xffff,
+                this.reg_dp & 0xff,
+                this.reg_cc & 0xff
+            );
+        }
+        
         switch( op )
         {
             case 0x00:
@@ -1811,6 +2172,11 @@ function e6809()
                 this.reg_x.value+=(this.reg_b & 0xff);
                 cycles.value+=(3);
                 break;
+            case 0x1b:
+                // ABA - Add B to A
+                this.reg_a = this.inst_add8(this.reg_a, (this.reg_b & 0xff));
+                cycles.value+=(2);
+                break;
             case 0x1a:
                 this.reg_cc |= this.vecx.read8(this.reg_pc++);
                 cycles.value+=(3);
@@ -2108,7 +2474,40 @@ function e6809()
                 }
                 break;
             default:
-                utils.showError("unknown page-0 op code: " + op);
+                const errorMsg = "Unknown page-0 opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + op_pc.toString(16).toUpperCase().padStart(4, '0');
+                console.log("⚠️ UNKNOWN PAGE-0 OPCODE ERROR:");
+                console.log("  PC: 0x" + op_pc.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("  Opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " (" + op + ")");
+                console.log("  Registers:");
+                console.log("    A: 0x" + this.reg_a.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    B: 0x" + this.reg_b.toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    X: 0x" + this.reg_x.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    Y: 0x" + this.reg_y.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    U: 0x" + this.reg_u.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
+                console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
+                console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
+                
+                // Dump trace to file
+                const traceOutput = dumpOpcodeTrace(errorMsg);
+                console.log("\n" + traceOutput);
+
+                // Kick a final flush for full trace (best effort)
+                try {
+                    if (typeof window !== 'undefined' && window.__flushFullTraceNow) {
+                        window.__flushFullTraceNow();
+                    }
+                } catch (e) {}
+
+                // Stop emulator to avoid infinite error loops
+                try {
+                    if (this.vecx) {
+                        if (typeof this.vecx.debugStop === 'function') this.vecx.debugStop();
+                        else if (typeof this.vecx.stop === 'function') this.vecx.stop();
+                    }
+                } catch (e) {}
+
+                utils.showError(errorMsg);
                 break;
         }
         return cycles.value;

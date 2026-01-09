@@ -48,6 +48,8 @@ export const MemoryPanel: React.FC = () => {
   const [memory, setMemory] = useState<Uint8Array>(new Uint8Array(65536));
   const [variables, setVariables] = useState<Record<string, VariableInfo>>({});
   const [autoUpdate, setAutoUpdate] = useState<boolean>(false);
+  const [targetAddress, setTargetAddress] = useState<number | null>(null);
+  const [addressInput, setAddressInput] = useState<string>('');
 
   // Load PDB file to get variable information
   const loadPDB = useCallback(async () => {
@@ -226,6 +228,41 @@ export const MemoryPanel: React.FC = () => {
     } catch (e) {
       alert('Failed to read memory from JSVecX: ' + e);
       console.error('[MemoryPanel] Binary dump error:', e);
+    }
+  };
+
+  // Jump to address functionality
+  const handleJumpToAddress = () => {
+    const input = addressInput.trim();
+    if (!input) return;
+    
+    // Parse different formats: $C942, 0xC942, C942, 51522
+    let addr: number;
+    if (input.startsWith('$')) {
+      addr = parseInt(input.substring(1), 16);
+    } else if (input.startsWith('0x') || input.startsWith('0X')) {
+      addr = parseInt(input.substring(2), 16);
+    } else if (/^[0-9A-Fa-f]{1,4}$/.test(input)) {
+      addr = parseInt(input, 16);
+    } else if (/^\d+$/.test(input)) {
+      addr = parseInt(input, 10);
+    } else {
+      alert(`Invalid address format: "${input}"\n\nSupported formats:\n  • $C942 (hex with $)\n  • 0xC942 (hex with 0x)\n  • C942 (hex)\n  • 51522 (decimal)`);
+      return;
+    }
+    
+    if (addr < 0 || addr > 0xFFFF) {
+      alert(`Address out of range: ${addr}\nMust be between 0x0000 and 0xFFFF`);
+      return;
+    }
+    
+    setTargetAddress(addr);
+    console.log(`[MemoryPanel] Jumping to address $${addr.toString(16).toUpperCase()} (${addr})`);
+  };
+
+  const handleAddressInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleJumpToAddress();
     }
   };
 

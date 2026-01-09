@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "name": "mountain",
+  "canvas": {
+    "width": 256,
+    "height": 256,
+    "origin": "center"
+  },
+  "layers": [
+    {
+      "name": "default",
+      "visible": true,
+      "paths": [
+        {
+          "name": "path_1767518103634",
+          "intensity": 127,
+          "closed": false,
+          "points": [
+            {
+              "x": -38,
+              "y": 0,
+              "z": 0
+            },
+            {
+              "x": -25,
+              "y": 26,
+              "z": 0
+            },
+            {
+              "x": 26,
+              "y": 27,
+              "z": 0
+            },
+            {
+              "x": 38,
+              "y": -1,
+              "z": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "center_x": 0,
+  "center_y": 13
+}

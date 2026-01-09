@@ -46,6 +46,19 @@ pub struct AsmFunctionLocation {
     pub func_type: String,
 }
 
+/// Line map entry with file source information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LineMapEntry {
+    /// Source file name (e.g., "main.vpy" or "main.asm")
+    pub file: String,
+    
+    /// Memory address in hex (e.g., "0x01A1")
+    pub address: String,
+    
+    /// Line number in source file (1-based)
+    pub line: usize,
+}
+
 /// Variable metadata for memory visualization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariableInfo {
@@ -89,9 +102,17 @@ pub struct DebugInfo {
     /// Symbol table: symbol name -> address in hex
     pub symbols: HashMap<String, String>,
     
-    /// Line mapping: VPy line number (as string) -> address in hex
+    /// Line mapping: VPy line number (as string) -> address in hex (DEPRECATED - use vpyLineMap)
     #[serde(rename = "lineMap")]
     pub line_map: HashMap<String, String>,
+    
+    /// VPy line mapping with file info: address in hex -> LineMapEntry
+    #[serde(rename = "vpyLineMap")]
+    pub vpy_line_map: HashMap<String, LineMapEntry>,
+    
+    /// ASM line mapping with file info: address in hex -> LineMapEntry  
+    #[serde(rename = "asmLineMap")]
+    pub asm_line_map: HashMap<String, LineMapEntry>,
     
     /// Functions metadata for enhanced debugging
     pub functions: HashMap<String, FunctionInfo>,
@@ -114,7 +135,9 @@ pub struct DebugInfo {
 
 impl DebugInfo {
     pub fn new(source: String, binary: String) -> Self {
-        let asm = source.replace(".vpy", ".asm");
+        // Derive ASM name from binary name (not source) to match project naming
+        // e.g., "test_bp_min.bin" -> "test_bp_min.asm"
+        let asm = binary.replace(".bin", ".asm");
         Self {
             version: "1.0".to_string(),
             source,
@@ -123,6 +146,8 @@ impl DebugInfo {
             entry_point: "0x0000".to_string(),
             symbols: HashMap::new(),
             line_map: HashMap::new(),
+            vpy_line_map: HashMap::new(),
+            asm_line_map: HashMap::new(),
             functions: HashMap::new(),
             native_calls: HashMap::new(),
             asm_functions: HashMap::new(),
@@ -190,6 +215,28 @@ impl DebugInfo {
     /// Add ASM line address mapping 
     pub fn add_asm_address(&mut self, line_number: usize, address: u16) {
         self.asm_address_map.insert(line_number.to_string(), format!("0x{:04X}", address));
+    }
+    
+    /// Add VPy line to new line map with file info
+    pub fn add_vpy_line(&mut self, line: usize, address: u16, file: &str) {
+        let addr_str = format!("0x{:04X}", address);
+        let entry = LineMapEntry {
+            file: file.to_string(),
+            address: addr_str.clone(),
+            line,
+        };
+        self.vpy_line_map.insert(addr_str, entry);
+    }
+    
+    /// Add ASM line to new line map with file info
+    pub fn add_asm_line(&mut self, line: usize, address: u16, file: &str) {
+        let addr_str = format!("0x{:04X}", address);
+        let entry = LineMapEntry {
+            file: file.to_string(),
+            address: addr_str.clone(),
+            line,
+        };
+        self.asm_line_map.insert(addr_str, entry);
     }
     
     /// Serialize to JSON string
@@ -280,9 +327,10 @@ fn parse_hex_or_decimal(s: &str) -> Result<u16, ()> {
     }
 }
 
-/// Estimate the size in bytes of a single ASM instruction line
-/// This is a rough approximation based on typical 6809 instruction sizes
-fn estimate_instruction_size(line: &str) -> u16 {
+/// DEPRECATED: Instruction size estimation is unreliable and causes confusion
+/// DO NOT USE - All address calculations must come from BinaryEmitter (single source of truth)
+#[allow(dead_code)]
+fn estimate_instruction_size_deprecated(line: &str) -> u16 {
     let trimmed = line.trim();
     
     // Extract instruction mnemonic (first word)
@@ -370,9 +418,11 @@ fn estimate_instruction_size(line: &str) -> u16 {
     }
 }
 
-/// Parse ASM output and build label-to-address map
-/// Returns HashMap of label names to their addresses
-pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
+/// DEPRECATED: ASM address estimation is unreliable and causes confusion
+/// DO NOT USE - All symbols must come from binary_symbol_table (Phase 6)
+/// Use BinaryEmitter as single source of truth
+#[allow(dead_code)]
+pub fn parse_asm_addresses_deprecated(asm: &str, org: u16) -> HashMap<String, u16> {
     let mut addresses = HashMap::new();
     let mut current_address = org;
     let mut line_count = 0;
@@ -449,8 +499,8 @@ pub fn parse_asm_addresses(asm: &str, org: u16) -> HashMap<String, u16> {
             continue;
         }
         
-        // Regular instruction - estimate size
-        current_address += estimate_instruction_size(line);
+        // Regular instruction - DEPRECATED estimation (DO NOT USE)
+        current_address += estimate_instruction_size_deprecated(line);
     }
     
     addresses
@@ -502,7 +552,31 @@ pub fn parse_asm_variables(asm: &str) -> HashMap<String, VariableInfo> {
         // Determine variable type and size from name and comment
         let comment = trimmed.split(';').nth(1).unwrap_or("").trim();
         
-        let (var_type, size) = if var_name.contains("_DATA") {
+        // First, try to extract explicit size from comment (e.g., "(320 bytes)")
+        let explicit_size = if let Some(bytes_pos) = comment.rfind(" bytes)") {
+            // Find the opening parenthesis before "bytes)"
+            let before_bytes = &comment[..bytes_pos];
+            if let Some(paren_pos) = before_bytes.rfind('(') {
+                // Extract the number between '(' and ' bytes)'
+                let num_str = &before_bytes[paren_pos + 1..].trim();
+                num_str.parse::<usize>().ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let (var_type, size) = if let Some(explicit_bytes) = explicit_size {
+            // Use explicit size from comment
+            if var_name.contains("BUFFER") || var_name.contains("LEVEL_") {
+                ("system", explicit_bytes)
+            } else if var_name.contains("_DATA") {
+                ("array", explicit_bytes)
+            } else {
+                ("unknown", explicit_bytes)
+            }
+        } else if var_name.contains("_DATA") {
             // Array data - try to extract element count from comment
             let element_count = if comment.contains("elements") {
                 // Extract number from "Array data (5 elements)"
@@ -560,10 +634,11 @@ pub fn parse_asm_variables(asm: &str) -> HashMap<String, VariableInfo> {
     variables
 }
 
-/// Parse VPy line markers from ASM and build lineMap with real addresses
-/// Format: "    ; VPy_LINE:7"
-/// Returns: HashMap<line_number (as string), address (as "0xC800" hex string)>
-pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
+/// DEPRECATED: VPy line marker parsing with estimation is unreliable
+/// DO NOT USE - Use generate_asm_address_map (Phase 6.5) + asmAddressMap instead
+/// Real addresses come from binary disassembly, not estimation
+#[allow(dead_code)]
+pub fn parse_vpy_line_markers_deprecated(asm: &str, org: u16) -> HashMap<String, String> {
     let mut line_map = HashMap::new();
     let mut current_address = org;
     let mut pending_marker: Option<String> = None;
@@ -661,8 +736,8 @@ pub fn parse_vpy_line_markers(asm: &str, org: u16) -> HashMap<String, String> {
             continue;
         }
         
-        // Regular instruction - estimate size and advance address
-        current_address += estimate_instruction_size(line);
+        // Regular instruction - DEPRECATED estimation (DO NOT USE)
+        current_address += estimate_instruction_size_deprecated(line);
     }
     
     // Register any pending marker at end of file
@@ -701,10 +776,10 @@ pub fn parse_native_call_comments(asm: &str) -> HashMap<usize, String> {
     native_calls
 }
 
-/// Estimate the size in bytes of generated ASM code
-/// This is a rough approximation based on typical 6809 instruction sizes
+/// DEPRECATED: ASM size estimation is unreliable
+/// DO NOT USE - Get size from real binary instead
 #[allow(dead_code)]
-pub fn estimate_asm_size(asm: &str) -> u16 {
+pub fn estimate_asm_size_deprecated(asm: &str) -> u16 {
     let mut size = 0u16;
     
     for line in asm.lines() {
@@ -746,8 +821,8 @@ pub fn estimate_asm_size(asm: &str) -> u16 {
             continue;
         }
         
-        // Regular instruction
-        size += estimate_instruction_size(line);
+        // Regular instruction - DEPRECATED estimation (DO NOT USE)
+        size += estimate_instruction_size_deprecated(line);
     }
     
     size

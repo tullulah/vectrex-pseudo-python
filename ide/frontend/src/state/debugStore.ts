@@ -27,6 +27,11 @@ export interface PdbData {
     type: 'vpy' | 'native' | 'bios';
   }>;
   asmAddressMap?: Record<string, string>; // ASM line number -> binary address
+  asmLineMap?: Record<string, {
+    file: string;
+    address: string;
+    line: number;
+  }>;
 }
 
 export interface CallFrame {
@@ -139,7 +144,25 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
     // For each file's breakpoints, convert line → address and send to WASM
     Object.entries(breakpoints).forEach(([uri, lines]) => {
       lines.forEach((line) => {
-        const addressHex = pdb.lineMap[line.toString()];
+        let addressHex: string | undefined = undefined;
+        
+        // Check if this is an ASM file breakpoint
+        const isAsmFile = uri.endsWith('.asm');
+        console.log(`[DebugStore] 🔍 Checking breakpoint: ${uri}:${line} (isAsmFile: ${isAsmFile})`);
+        
+        if (isAsmFile) {
+          // Search asmLineMap for this line number
+          const asmEntry = Object.values(pdb.asmLineMap || {}).find(
+            (entry: any) => entry.line === line
+          );
+          if (asmEntry) {
+            addressHex = asmEntry.address;
+          }
+        } else {
+          // VPy file - use lineMap (VPy line → address)
+          addressHex = pdb.lineMap[line.toString()];
+        }
+        
         if (addressHex) {
           const address = parseInt(addressHex, 16);
           console.log(`[DebugStore] 📍 Breakpoint: ${uri}:${line} → ${addressHex} (${address})`);
@@ -150,7 +173,7 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
             uri
           }, '*');
         } else {
-          console.warn(`[DebugStore] ⚠️  No address found for line ${line} in .pdb`);
+          console.warn(`[DebugStore] ⚠️  No address mapping for ${isAsmFile ? 'ASM' : 'VPy'} line ${line} (file: ${uri})`);
         }
       });
     });
@@ -232,17 +255,34 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
       return;
     }
     
-    const address = pdbData.lineMap[line.toString()];
+    let addressHex: string | undefined = undefined;
     
-    if (address) {
-      console.log(`[DebugStore] ➕ Breakpoint added and synced to emulator: line ${line} → ${address}`);
+    // Check if this is an ASM file breakpoint
+    if (uri.endsWith('.asm')) {
+      // Search asmLineMap for this line number
+      const asmEntry = Object.values(pdbData.asmLineMap || {}).find(
+        (entry: any) => entry.line === line
+      );
+      if (asmEntry) {
+        addressHex = asmEntry.address;
+      }
+    } else {
+      // VPy file - use lineMap (VPy line → address)
+      addressHex = pdbData.lineMap[line.toString()];
+    }
+    
+    if (addressHex) {
+      const address = parseInt(addressHex, 16); // Parse hex string to decimal
+      console.log(`[DebugStore] ➕ Breakpoint added and synced to emulator: ${uri}:${line} → ${addressHex} (${address})`);
       window.postMessage({
         type: 'debug-add-breakpoint',
         address,
-        line
+        line,
+        uri
       }, '*');
     } else {
-      console.warn(`[DebugStore] ⚠️ No address mapping for VPy line ${line}`);
+      const fileType = uri.endsWith('.asm') ? 'ASM' : 'VPy';
+      console.warn(`[DebugStore] ⚠️ No address mapping for ${fileType} line ${line} (file: ${uri})`);
     }
   },
   
@@ -251,15 +291,33 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
     
     if (!pdbData) return;
     
-    const address = pdbData.lineMap[line.toString()];
+    let addressHex: string | undefined = undefined;
     
-    if (address) {
-      console.log(`[DebugStore] ➖ Breakpoint removed: line ${line} → ${address}`);
+    // Check if this is an ASM file breakpoint
+    if (uri.endsWith('.asm')) {
+      // Search asmLineMap for this line number
+      const asmEntry = Object.values(pdbData.asmLineMap || {}).find(
+        (entry: any) => entry.line === line
+      );
+      if (asmEntry) {
+        addressHex = asmEntry.address;
+      }
+    } else {
+      // VPy file - use lineMap (VPy line → address)
+      addressHex = pdbData.lineMap[line.toString()];
+    }
+    
+    if (addressHex) {
+      const address = parseInt(addressHex, 16); // Parse hex string to decimal
+      console.log(`[DebugStore] ➖ Breakpoint removed: ${uri}:${line} → ${addressHex} (${address})`);
       window.postMessage({
         type: 'debug-remove-breakpoint',
         address,
-        line
+        line,
+        uri
       }, '*');
+    } else {
+      console.warn(`[DebugStore] ⚠️  Cannot remove - no address found for line ${line} (file: ${uri})`);
     }
   }
 }));

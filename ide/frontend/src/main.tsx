@@ -822,6 +822,9 @@ def loop():
           // Cambiar a estado stopped
           useDebugStore.getState().setState('stopped');
           
+          // Resetear flag de loadingForDebug (salir del modo debug)
+          useDebugStore.getState().setLoadingForDebug(false);
+          
           // Limpiar datos de debug
           useDebugStore.getState().setCurrentVpyLine(null);
           useDebugStore.getState().setCurrentAsmAddress(null);
@@ -859,7 +862,16 @@ def loop():
         break;
       case 'debug.stepInto':
         logger.debug('App', 'step into');
-        window.postMessage({ type: 'debug-step-into' }, '*');
+        // FIX (2026-01-06): Send different message based on debugging mode
+        // If in ASM mode, step normally. If in VPy mode, switch to ASM without executing
+        const asmDebuggingMode = (window as any).asmDebuggingMode;
+        if (asmDebuggingMode) {
+          // Already in ASM - do normal step
+          window.postMessage({ type: 'debug-step-into' }, '*');
+        } else {
+          // In VPy - switch to ASM view without executing
+          window.postMessage({ type: 'debug-switch-to-asm' }, '*');
+        }
         break;
       case 'debug.stepOut':
         logger.debug('App', 'step out');
@@ -1193,17 +1205,6 @@ def loop():
     }
   }, [documents, openDocument, activeBinName, openVpyProject, closeVpyProject]);
 
-  // Listen for commands from native menu (macOS)
-  useEffect(() => {
-    const electronAPI = (window as any).electronAPI;
-    if (!electronAPI?.onCommand) return;
-
-    electronAPI.onCommand((commandId: string, payload?: any) => {
-      logger.debug('App', `Menu command: ${commandId}`);
-      commandExec(commandId, payload);
-    });
-  }, [commandExec]);
-
   // Keyboard shortcuts mapping (similar to VS conventions)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1232,6 +1233,7 @@ def loop():
       else if (e.key === 'F10') { e.preventDefault(); commandExec('debug.stepOver'); }
       else if (e.key === 'F11' && !e.shiftKey) { e.preventDefault(); commandExec('debug.stepInto'); }
       else if (e.key === 'F11' && e.shiftKey) { e.preventDefault(); commandExec('debug.stepOut'); }
+      else if (e.key === 'F12') { e.preventDefault(); commandExec('debug.continue'); }
       else if (e.key === 'F5' && e.shiftKey) { e.preventDefault(); commandExec('debug.stop'); }
       // Git
       else if (ctrl && e.key.toLowerCase() === 'g' && !e.shiftKey) { e.preventDefault(); commandExec('git.checkout'); } // Ctrl+G = Git checkout branch
@@ -1277,7 +1279,10 @@ def loop():
       }
     };
     
-    electronAPI.onCommand(handler);
+    const unsubscribe = electronAPI.onCommand(handler);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [commandExec]);
 
   // Update native menu with recent projects

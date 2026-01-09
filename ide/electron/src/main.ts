@@ -363,9 +363,12 @@ async function createWindow() {
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const ctrl = input.control || input.meta; // Ctrl on Windows/Linux, Cmd on macOS
     
-    // Block F5 (normal refresh)
+    // F5 triggers debug-continue (not reload)
     if (input.type === 'keyDown' && input.key === 'F5' && !ctrl && !input.shift) {
-      console.log('[IDE] ⚠️ Blocked F5 reload - use IDE build commands instead');
+      console.log('[IDE] 🟢 F5 pressed - sending debug-continue to frontend');
+      if (mainWindow) {
+        mainWindow.webContents.send('debug-continue-hotkey');
+      }
       event.preventDefault();
       return;
     }
@@ -1298,6 +1301,37 @@ ipcMain.handle('file:save', async (_e, args: { path: string; content: string; ex
     return { path, mtime: statAfter.mtimeMs, size: statAfter.size };
   } catch (e: any) {
     return { error: e?.message || 'save_failed' };
+  }
+});
+
+// Append text content to a file (used for large streaming traces)
+ipcMain.handle('file:append', async (_e, args: { path: string; content: string }) => {
+  const { path, content } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  try {
+    const parentDir = dirname(path);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+    await fs.appendFile(path, content ?? '', 'utf8');
+    const statAfter = await fs.stat(path).catch(() => null);
+    return { ok: true, path, size: statAfter?.size };
+  } catch (e: any) {
+    return { error: e?.message || 'append_failed' };
+  }
+});
+
+// Append binary content to a file (used for high-throughput emulator traces)
+ipcMain.handle('file:appendBin', async (_e, args: { path: string; data: Uint8Array }) => {
+  const { path, data } = args || {} as any;
+  if (!path) return { error: 'no_path' };
+  try {
+    const parentDir = dirname(path);
+    await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+    const buf = Buffer.from(data || new Uint8Array());
+    await fs.appendFile(path, buf);
+    const statAfter = await fs.stat(path).catch(() => null);
+    return { ok: true, path, size: statAfter?.size };
+  } catch (e: any) {
+    return { error: e?.message || 'append_failed' };
   }
 });
 

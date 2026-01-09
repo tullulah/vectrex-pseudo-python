@@ -231,6 +231,20 @@ export class MCPServer {
       },
     });
 
+    this.registerTool('memory/write', this.memoryWrite.bind(this), {
+      name: 'memory/write',
+      description: 'Write value to memory address (for testing/debugging)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          address: { type: 'number', description: 'Memory address (hex or decimal)' },
+          value: { type: 'number', description: 'Value to write (0-255 for 8-bit)' },
+          size: { type: 'number', description: 'Size in bytes (1 or 2, default: 1)' },
+        },
+        required: ['address', 'value'],
+      },
+    });
+
     // Debugger tools
     this.registerTool('debugger/add_breakpoint', this.addBreakpoint.bind(this), {
       name: 'debugger/add_breakpoint',
@@ -245,12 +259,141 @@ export class MCPServer {
       },
     });
 
+    this.registerTool('debugger/remove_breakpoint', this.removeBreakpoint.bind(this), {
+      name: 'debugger/remove_breakpoint',
+      description: 'Remove a specific breakpoint',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          uri: { type: 'string', description: 'Document URI' },
+          line: { type: 'number', description: 'Line number (1-indexed)' },
+        },
+        required: ['uri', 'line'],
+      },
+    });
+
+    this.registerTool('debugger/list_breakpoints', this.listBreakpoints.bind(this), {
+      name: 'debugger/list_breakpoints',
+      description: 'List all active breakpoints',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/clear_breakpoints', this.clearBreakpoints.bind(this), {
+      name: 'debugger/clear_breakpoints',
+      description: 'Remove all breakpoints',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/step_into', this.stepInto.bind(this), {
+      name: 'debugger/step_into',
+      description: 'Step into next instruction (F11). If in VPy code, switches to ASM view without executing.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/step_over', this.stepOver.bind(this), {
+      name: 'debugger/step_over',
+      description: 'Step over next instruction (F10)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/step_out', this.stepOut.bind(this), {
+      name: 'debugger/step_out',
+      description: 'Step out of current function (Shift+F11)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/continue', this.debugContinue.bind(this), {
+      name: 'debugger/continue',
+      description: 'Continue execution until next breakpoint (F5)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('debugger/pause', this.debugPause.bind(this), {
+      name: 'debugger/pause',
+      description: 'Pause execution',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
     this.registerTool('debugger/get_callstack', this.getCallstack.bind(this), {
       name: 'debugger/get_callstack',
       description: 'Get current call stack',
       inputSchema: {
         type: 'object',
         properties: {},
+      },
+    });
+
+    this.registerTool('debugger/start', this.debugStart.bind(this), {
+      name: 'debugger/start',
+      description: 'Start debugging session (Ctrl+F5) - compiles and loads with breakpoints',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    // Observability tools
+    this.registerTool('debugger/get_registers', this.getRegisters.bind(this), {
+      name: 'debugger/get_registers',
+      description: 'Get current CPU register values (A, B, X, Y, U, S, PC, DP, CC)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('memory/dump', this.memoryDump.bind(this), {
+      name: 'memory/dump',
+      description: 'Get memory snapshot (hex dump of RAM region)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          address: { type: 'number', description: 'Start address (decimal or 0xHEX)' },
+          size: { type: 'number', description: 'Number of bytes to read (default: 256, max: 4096)' },
+        },
+        required: ['address'],
+      },
+    });
+
+    this.registerTool('memory/list_variables', this.listVariables.bind(this), {
+      name: 'memory/list_variables',
+      description: 'Get all variables from PDB with sizes and types (sorted by size, largest first)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    });
+
+    this.registerTool('memory/read_variable', this.readVariable.bind(this), {
+      name: 'memory/read_variable',
+      description: 'Read current value of specific variable from emulator',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Variable name (e.g., "LEVEL_GP_COUNT", "player_x")' },
+        },
+        required: ['name'],
       },
     });
 
@@ -926,6 +1069,37 @@ export class MCPServer {
     }
 
     try {
+      // Check if there are active breakpoints - if so, enable debug mode
+      const hasBreakpoints = await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__editorStore__;
+          if (!store) return false;
+          const state = store.getState();
+          const breakpoints = state.breakpoints || {};
+          // Check if ANY file has breakpoints
+          for (const uri in breakpoints) {
+            if (breakpoints[uri] && breakpoints[uri].length > 0) {
+              return true;
+            }
+          }
+          return false;
+        })()
+      `);
+
+      // If there are breakpoints, set loadingForDebug flag
+      if (hasBreakpoints) {
+        console.log('[MCP Server] Breakpoints detected - enabling debug mode');
+        await this.mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const debugStore = window.__debugStore__;
+            if (debugStore) {
+              debugStore.getState().setLoadingForDebug(true);
+              console.log('[MCP Server] ✓ loadingForDebug set to true');
+            }
+          })()
+        `);
+      }
+
       // Get current project and call executeCompilation directly
       const { getCurrentProject, executeCompilation } = await import('../main.js');
       const project = getCurrentProject();
@@ -1424,6 +1598,352 @@ export class MCPServer {
     return result;
   }
 
+  private async memoryWrite(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { address, value, size = 1 } = params;
+
+    // Validate parameters
+    if (typeof address !== 'number') {
+      throw new Error('Address must be a number (hex or decimal)');
+    }
+    if (typeof value !== 'number') {
+      throw new Error('Value must be a number');
+    }
+    if (size !== 1 && size !== 2) {
+      throw new Error('Size must be 1 (8-bit) or 2 (16-bit)');
+    }
+
+    // Validate value range
+    if (size === 1 && (value < 0 || value > 255)) {
+      throw new Error('Value must be 0-255 for 8-bit write');
+    }
+    if (size === 2 && (value < 0 || value > 65535)) {
+      throw new Error('Value must be 0-65535 for 16-bit write');
+    }
+
+    // Write to memory
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const vecx = window.vecx;
+        if (!vecx) {
+          return { __error: true, message: 'Emulator not available' };
+        }
+
+        const address = ${address};
+        const value = ${value};
+        const size = ${size};
+
+        try {
+          // Validate RAM range (0xC800-0xCFFF is RAM)
+          if (address < 0xC800 || address >= 0xD000) {
+            throw new Error('Address 0x' + address.toString(16).toUpperCase() + ' outside RAM range (0xC800-0xCFFF)');
+          }
+
+          // Write to memory
+          if (size === 1) {
+            // 8-bit write
+            vecx.write8(address, value);
+          } else {
+            // 16-bit write (big-endian)
+            const high = (value >> 8) & 0xFF;
+            const low = value & 0xFF;
+            vecx.write8(address, high);
+            vecx.write8(address + 1, low);
+          }
+
+          // Read back for confirmation
+          let readBack;
+          if (size === 1) {
+            readBack = vecx.read8(address) & 0xFF;
+          } else {
+            const high = vecx.read8(address) & 0xFF;
+            const low = vecx.read8(address + 1) & 0xFF;
+            readBack = (high << 8) | low;
+          }
+
+          return {
+            success: true,
+            address: '0x' + address.toString(16).toUpperCase().padStart(4, '0'),
+            value: readBack,
+            valueHex: '0x' + readBack.toString(16).toUpperCase().padStart(size === 1 ? 2 : 4, '0'),
+            valueDec: readBack,
+            size: size
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async debugStart(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    // Send debug.start command via window.postMessage
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        window.postMessage({ type: 'command', command: 'debug.start' }, '*');
+        return { success: true };
+      })()
+    `);
+
+    return { success: true, message: 'Debug session started' };
+  }
+
+  private async getRegisters(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx || !vecx.cpu) {
+            return { __error: true, message: 'Emulator not running or CPU not available' };
+          }
+
+          const cpu = vecx.cpu;
+          
+          // Read all registers
+          const a = cpu.a & 0xFF;
+          const b = cpu.b & 0xFF;
+          const d = (a << 8) | b;
+          const x = cpu.x & 0xFFFF;
+          const y = cpu.y & 0xFFFF;
+          const u = cpu.u & 0xFFFF;
+          const s = cpu.s & 0xFFFF;
+          const pc = cpu.pc & 0xFFFF;
+          const dp = cpu.dp & 0xFF;
+          const cc = cpu.cc & 0xFF;
+          
+          return {
+            A: { value: a, hex: '0x' + a.toString(16).toUpperCase().padStart(2, '0'), decimal: a },
+            B: { value: b, hex: '0x' + b.toString(16).toUpperCase().padStart(2, '0'), decimal: b },
+            D: { value: d, hex: '0x' + d.toString(16).toUpperCase().padStart(4, '0'), decimal: d },
+            X: { value: x, hex: '0x' + x.toString(16).toUpperCase().padStart(4, '0'), decimal: x },
+            Y: { value: y, hex: '0x' + y.toString(16).toUpperCase().padStart(4, '0'), decimal: y },
+            U: { value: u, hex: '0x' + u.toString(16).toUpperCase().padStart(4, '0'), decimal: u },
+            S: { value: s, hex: '0x' + s.toString(16).toUpperCase().padStart(4, '0'), decimal: s },
+            PC: { value: pc, hex: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'), decimal: pc },
+            DP: { value: dp, hex: '0x' + dp.toString(16).toUpperCase().padStart(2, '0'), decimal: dp },
+            CC: { 
+              value: cc, 
+              hex: '0x' + cc.toString(16).toUpperCase().padStart(2, '0'), 
+              decimal: cc,
+              flags: {
+                C: (cc & 0x01) ? 1 : 0, // Carry
+                V: (cc & 0x02) ? 1 : 0, // Overflow
+                Z: (cc & 0x04) ? 1 : 0, // Zero
+                N: (cc & 0x08) ? 1 : 0, // Negative
+                I: (cc & 0x10) ? 1 : 0, // IRQ mask
+                H: (cc & 0x20) ? 1 : 0, // Half-carry
+                F: (cc & 0x40) ? 1 : 0, // FIRQ mask
+                E: (cc & 0x80) ? 1 : 0  // Entire flag
+              }
+            }
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async memoryDump(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { address, size = 256 } = params;
+    const maxSize = 4096;
+    const actualSize = Math.min(size, maxSize);
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+
+          const startAddr = ${address};
+          const numBytes = ${actualSize};
+          const bytes = [];
+          
+          for (let i = 0; i < numBytes; i++) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const byte = vecx.read8(addr) & 0xFF;
+            bytes.push(byte);
+          }
+
+          // Format as hex dump (16 bytes per line)
+          const lines = [];
+          for (let i = 0; i < bytes.length; i += 16) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const addrHex = '0x' + addr.toString(16).toUpperCase().padStart(4, '0');
+            const chunk = bytes.slice(i, i + 16);
+            const hexBytes = chunk.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            const ascii = chunk.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+            lines.push(addrHex + ': ' + hexBytes.padEnd(48, ' ') + ' | ' + ascii);
+          }
+
+          return {
+            address: startAddr,
+            size: numBytes,
+            bytes: bytes,
+            dump: lines.join('\\n')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async listVariables(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const compilerState = window.__compilerState__;
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const variables = [];
+
+          // Extract variables from PDB symbols
+          if (pdb.symbols) {
+            for (const [name, info] of Object.entries(pdb.symbols)) {
+              const addr = typeof info === 'number' ? info : (info.address || 0);
+              const size = (info.size || 2); // Default 2 bytes (16-bit)
+              const type = info.type || 'unknown';
+              
+              variables.push({
+                name: name,
+                address: addr,
+                addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+                size: size,
+                type: type
+              });
+            }
+          }
+
+          // Sort by size (largest first)
+          variables.sort((a, b) => b.size - a.size);
+
+          return {
+            count: variables.length,
+            variables: variables
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async readVariable(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { name } = params;
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          const compilerState = window.__compilerState__;
+          
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+          
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const varName = '${name}';
+          
+          // Find variable in PDB
+          if (!pdb.symbols || !pdb.symbols[varName]) {
+            return { __error: true, message: 'Variable "' + varName + '" not found in PDB' };
+          }
+
+          const info = pdb.symbols[varName];
+          const addr = typeof info === 'number' ? info : (info.address || 0);
+          const size = (info.size || 2); // Default 2 bytes
+          
+          // Read value from memory
+          let value;
+          if (size === 1) {
+            value = vecx.read8(addr) & 0xFF;
+          } else {
+            // 16-bit big-endian
+            const high = vecx.read8(addr) & 0xFF;
+            const low = vecx.read8(addr + 1) & 0xFF;
+            value = (high << 8) | low;
+          }
+
+          return {
+            name: varName,
+            address: addr,
+            addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+            size: size,
+            value: value,
+            valueHex: '0x' + value.toString(16).toUpperCase().padStart(size * 2, '0'),
+            valueDec: value,
+            valueBin: '0b' + value.toString(2).padStart(size * 8, '0')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
   private async addBreakpoint(params: any): Promise<any> {
     if (!this.mainWindow) {
       throw new Error('No main window available');
@@ -1457,6 +1977,170 @@ export class MCPServer {
     `);
 
     return result;
+  }
+
+  private async removeBreakpoint(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { uri, line } = params;
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) throw new Error('Editor store not available');
+        const state = store.getState();
+        const doc = state.documents.find(d => d.uri === '${uri}');
+        if (doc && doc.breakpoints?.includes(${line})) {
+          store.getState().toggleBreakpoint('${uri}', ${line});
+        }
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async listBreakpoints(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) return { breakpoints: [] };
+        const state = store.getState();
+        const breakpoints = [];
+        for (const doc of state.documents) {
+          if (doc.breakpoints && doc.breakpoints.length > 0) {
+            for (const line of doc.breakpoints) {
+              breakpoints.push({ uri: doc.uri, line });
+            }
+          }
+        }
+        return { breakpoints };
+      })()
+    `);
+
+    return result;
+  }
+
+  private async clearBreakpoints(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__editorStore__;
+        if (!store) throw new Error('Editor store not available');
+        const state = store.getState();
+        // Remove all breakpoints from all documents
+        for (const doc of state.documents) {
+          if (doc.breakpoints && doc.breakpoints.length > 0) {
+            const lines = [...doc.breakpoints];
+            for (const line of lines) {
+              store.getState().toggleBreakpoint(doc.uri, line);
+            }
+          }
+        }
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async stepInto(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        window.postMessage({ type: 'debug-step-into' }, '*');
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async stepOver(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        window.postMessage({ type: 'debug-step-over' }, '*');
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async stepOut(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        window.postMessage({ type: 'debug-step-out' }, '*');
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async debugContinue(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__debugStore__;
+        if (!store) throw new Error('Debug store not available');
+        store.getState().setState('running');
+        
+        // Resume emulator
+        const vecx = window.vecx;
+        if (vecx && !vecx.running) {
+          vecx.run();
+        }
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
+  }
+
+  private async debugPause(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__debugStore__;
+        if (!store) throw new Error('Debug store not available');
+        store.getState().setState('paused');
+        
+        // Pause emulator
+        const vecx = window.vecx;
+        if (vecx && vecx.running) {
+          vecx.stop();
+        }
+        return { success: true };
+      })()
+    `);
+
+    return { success: true };
   }
 
   private async getProjectStructure(params: any): Promise<any> {

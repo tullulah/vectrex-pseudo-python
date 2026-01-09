@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "name": "bubble_large",
+  "canvas": {
+    "width": 256,
+    "height": 256,
+    "origin": "center"
+  },
+  "layers": [
+    {
+      "name": "default",
+      "visible": true,
+      "paths": [
+        {
+          "name": "circle",
+          "intensity": 49,
+          "closed": true,
+          "points": [
+            {
+              "x": 0,
+              "y": 15
+            },
+            {
+              "x": 10,
+              "y": 10
+            },
+            {
+              "x": 15,
+              "y": 0
+            },
+            {
+              "x": 10,
+              "y": -10
+            },
+            {
+              "x": 0,
+              "y": -15
+            },
+            {
+              "x": -10,
+              "y": -10
+            },
+            {
+              "x": -15,
+              "y": 0
+            },
+            {
+              "x": -10,
+              "y": 10
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "center_x": 0,
+  "center_y": 0
+}

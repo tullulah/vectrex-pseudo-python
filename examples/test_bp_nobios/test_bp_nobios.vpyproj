@@ -1,0 +1,6 @@
+{
+  "name": "test_bp_nobios",
+  "version": "1.0.0",
+  "entryFile": "src/main.vpy",
+  "outputDir": "build"
+}

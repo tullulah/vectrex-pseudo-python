@@ -33,6 +33,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     "VECTREX_PLAY_MUSIC1"|"DRAW_VECTOR"|"DRAW_VECTOR_EX"|"DRAW_VECTOR_LIST"|"DRAW_LINE"|"PLAY_MUSIC"|"PLAY_SFX"|"STOP_MUSIC"|"AUDIO_UPDATE"|"MUSIC_UPDATE"|"SFX_UPDATE"|"ASM"|
         "J1_X"|"J1_Y"|"UPDATE_BUTTONS"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
+        "LOAD_LEVEL"|"SHOW_LEVEL"|"UPDATE_LEVEL"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
     "MUL_A"|"DIV_A"|"MOD_A"|
@@ -91,10 +92,16 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA DRAW_VEC_Y\n");
                 
                 // Generate code to draw each path at offset position
+                // Clear mirror flags (DRAW_VECTOR uses no mirroring)
+                out.push_str("    CLR MIRROR_X\n");
+                out.push_str("    CLR MIRROR_Y\n");
+                out.push_str("    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data\n");
+                out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    JSR Draw_Sync_List_At\n");
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function\n");
                 }
+                out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
                 out.push_str("    LDD #0\n    STD RESULT\n");
                 return true;
@@ -207,10 +214,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)\n");
                 
                 // Generate code to draw each path using unified mirrored function
+                out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
                     out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY\n");
                 }
+                out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
                 out.push_str("    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw\n");
                 out.push_str("    LDD #0\n    STD RESULT\n");
@@ -576,6 +585,48 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    LDD #0\n");
         out.push_str(".j2b4_done:\n");
         out.push_str("    STD RESULT\n");
+        return true;
+    }
+    
+    // LOAD_LEVEL: Load level data from ROM to RAM
+    // Usage: LOAD_LEVEL("test_level")
+    if up == "LOAD_LEVEL" && args.len() == 1 {
+        if let Expr::StringLit(level_name) = &args[0] {
+            // Check if level asset exists
+            let level_exists = opts.assets.iter().any(|a| {
+                a.name == *level_name && matches!(a.asset_type, crate::codegen::AssetType::Level)
+            });
+            
+            if level_exists {
+                let symbol = format!("_{}_LEVEL", level_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                out.push_str(&format!("; LOAD_LEVEL(\"{}\") - load level data\n", level_name));
+                out.push_str(&format!("    LDX #{}\n", symbol));
+                out.push_str("    JSR LOAD_LEVEL_RUNTIME\n");
+                out.push_str("    LDD RESULT  ; Returns level pointer\n");
+                return true;
+            } else {
+                out.push_str(&format!("; ERROR: Level asset '{}' not found\n", level_name));
+                out.push_str("    LDD #0\n    STD RESULT\n");
+                return true;
+            }
+        }
+    }
+    
+    // SHOW_LEVEL: Draw all level objects
+    // Usage: SHOW_LEVEL()
+    if up == "SHOW_LEVEL" && args.len() == 0 {
+        out.push_str("; SHOW_LEVEL() - draw all level objects\n");
+        out.push_str("    JSR SHOW_LEVEL_RUNTIME\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // UPDATE_LEVEL: Update level state (physics, animations, spawn delays)
+    // Usage: UPDATE_LEVEL()
+    if up == "UPDATE_LEVEL" && args.len() == 0 {
+        add_native_call_comment(out, "UPDATE_LEVEL");
+        out.push_str("    JSR UPDATE_LEVEL_RUNTIME\n");
+        out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
         return true;
     }
     

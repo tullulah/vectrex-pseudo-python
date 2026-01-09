@@ -14,6 +14,7 @@ FAST=false
 NO_CLEAR=false
 VERBOSE_LSP=false
 PRODUCTION=false
+ENABLE_TRACEBIN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       VERBOSE_LSP=true
       shift
       ;;
+    --enable-tracebin)
+      ENABLE_TRACEBIN=true
+      shift
+      ;;
     --production)
       PRODUCTION=true
       shift
@@ -60,6 +65,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --fast             Omite npm install si ya existe node_modules"
       echo "  --no-clear         Preserva logs (no limpia pantalla)"
       echo "  --verbose-lsp      Más logging sobre ruta/estado LSP"
+      echo "  --enable-tracebin  Habilita generación de archivos .tracebin (deshabilitado por defecto)"
       echo "  --production       Ejecuta en modo producción (sin hot reload)"
       echo "  --help             Muestra esta ayuda"
       exit 0
@@ -147,6 +153,12 @@ fi
 
 if [ "$VERBOSE_LSP" = true ]; then
   export VPY_IDE_VERBOSE_LSP=1
+else
+  unset VPY_IDE_VERBOSE_LSP
+fi
+
+if [ "$ENABLE_TRACEBIN" = true ]; then
+  export VPY_IDE_ENABLE_TRACEBIN=1
 else
   unset VPY_IDE_VERBOSE_LSP
 fi
