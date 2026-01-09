@@ -535,21 +535,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("LEVEL_GP_ROM_PTR", 2, "LOAD_LEVEL: gameplay objects pointer (ROM)");
         ram.allocate("LEVEL_FG_ROM_PTR", 2, "LOAD_LEVEL: foreground objects pointer (ROM)");
         
-        // === DYNAMIC MEMORY OPTIMIZATION ===
-        // Instead of copying ALL objects to RAM (640 bytes), we only store
-        // mutable state for dynamic objects (physicsEnabled=true).
-        // Static objects (walls, platforms) are rendered directly from ROM.
-        
-        // Dynamic objects buffer (10 bytes per object):
-        //   +0: rom_index (1 byte)     - Index to ROM object array
-        //   +1-2: position_x (2 bytes) - Mutable X position (signed 16-bit)
-        //   +3-4: position_y (2 bytes) - Mutable Y position (signed 16-bit)
-        //   +5-6: velocity_x (2 bytes) - X velocity (signed 16-bit)
-        //   +7-8: velocity_y (2 bytes) - Y velocity (signed 16-bit)
-        //   +9: active_flags (1 byte)  - Runtime flags (active, visible, etc.)
-        // NOTE: Position is copied from ROM to RAM because ROM is read-only.
-        ram.allocate("LEVEL_DYNAMIC_COUNT", 1, "Number of active dynamic objects (max 12)");
-        ram.allocate("LEVEL_DYNAMIC_BUFFER", 120, "Dynamic objects state (12 objects * 10 bytes)");
+        // Object buffers in RAM (each object is 20 bytes) - RESTORED from master
+        ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
+        ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
+        ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
         
         // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
         ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");
