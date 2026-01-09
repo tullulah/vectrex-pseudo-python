@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 118 bytes
+; Total RAM used: 166 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -49,14 +49,14 @@ LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (R
 LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
 LEVEL_DYNAMIC_COUNT  EQU $C880+$22   ; Number of active dynamic objects (max 12) (1 bytes)
-LEVEL_DYNAMIC_BUFFER EQU $C880+$23   ; Dynamic objects state (12 objects * 6 bytes) (72 bytes)
-UGPC_OUTER_IDX       EQU $C880+$6B   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$6C   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$6D   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$6E   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$70   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$72   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$74   ; Function argument 1 (2 bytes)
+LEVEL_DYNAMIC_BUFFER EQU $C880+$23   ; Dynamic objects state (12 objects * 10 bytes) (120 bytes)
+UGPC_OUTER_IDX       EQU $C880+$9B   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$9C   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$9D   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$9E   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$A0   ; Manhattan distance temporary (16-bit) (2 bytes)
+VAR_ARG0             EQU $C880+$A2   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$A4   ; Function argument 1 (2 bytes)
 
     JMP START
 
@@ -600,7 +600,7 @@ RTS
 ; 
 ; OPTIMIZATION: Static objects (physicsEnabled=false) are NOT copied to RAM.
 ; They remain in ROM and are rendered directly. Only dynamic objects get RAM state.
-; Dynamic state: rom_index(1), vel_x(2), vel_y(2), flags(1) = 6 bytes per object
+; Dynamic state: rom_index(1), pos_x(2), pos_y(2), vel_x(2), vel_y(2), flags(1) = 10 bytes per object
 LOAD_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     
@@ -630,7 +630,7 @@ LOAD_LEVEL_RUNTIME:
     CLR LEVEL_DYNAMIC_COUNT
     LDA #$FF         ; Empty marker
     LDX #LEVEL_DYNAMIC_BUFFER
-    LDB #72          ; 12 objects * 6 bytes
+    LDB #120         ; 12 objects * 10 bytes
 LLR_CLEAR_LOOP:
     STA ,X+
     DECB
@@ -702,23 +702,29 @@ LLR_SCAN_LOOP:
     CMPA #12
     BHS LLR_SCAN_OVERFLOW  ; Skip if >= 12 (buffer full)
     
-    ; Copy to dynamic buffer (6 bytes):
+    ; Copy to dynamic buffer (10 bytes):
     ; +0: rom_index
     PULS A           ; Get rom_index
     STA ,U+
     PSHS A           ; Save it back
     
-    ; +1-2: velocity_x (from ROM offset +10-11)
+    ; +1-2: position_x (from ROM offset +2-3)
+    LDD 2,X
+    STD ,U++
+    
+    ; +3-4: position_y (from ROM offset +4-5)
+    LDD 4,X
+    STD ,U++
+    
+    ; +5-6: velocity_x (from ROM offset +10-11)
     LDD 10,X
-    STA ,U+          ; High byte
-    STB ,U+          ; Low byte
+    STD ,U++
     
-    ; +3-4: velocity_y (from ROM offset +12-13)
+    ; +7-8: velocity_y (from ROM offset +12-13)
     LDD 12,X
-    STA ,U+          ; High byte
-    STB ,U+          ; Low byte
+    STD ,U++
     
-    ; +5: active_flags (initialize to 0x01 = active)
+    ; +9: active_flags (initialize to 0x01 = active)
     LDA #$01
     STA ,U+
     
@@ -744,485 +750,339 @@ LLR_SCAN_DONE:
     PULS A,PC        ; Restore and return
 
 ; === SHOW_LEVEL_RUNTIME ===
-; Draw all level objects from loaded level
+; Draw all level objects using ROM-first optimization
+; Phase 1: Draw static objects directly from ROM (0 RAM overhead)
+; Phase 2: Draw dynamic objects from LEVEL_DYNAMIC_BUFFER
 ; Input: LEVEL_PTR = pointer to level data
-; Level structure (from levelres.rs):
-;   +0:  FDB xMin, xMax (world bounds)
-;   +4:  FDB yMin, yMax
-;   +8:  FDB timeLimit, targetScore
-;   +12: FCB bgCount, gameplayCount, fgCount
-;   +15: FDB bgObjectsPtr, gameplayObjectsPtr, fgObjectsPtr
-; Object structure (20 bytes each):
-;   +0:  FCB type
-;   +1:  FDB x, y (position)
-;   +5:  FDB scale (8.8 fixed point)
-;   +7:  FCB rotation, intensity
-;   +9:  FCB velocity_x, velocity_y
-;   +11: FCB physics_flags, collision_flags, collision_size
-;   +14: FDB spawn_delay
-;   +16: FDB vector_ptr
-;   +18: FDB properties_ptr
 SHOW_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     
-    ; Get level pointer (persistent)
-    LDX >LEVEL_PTR
+    ; Check if level loaded
+    LDX LEVEL_PTR
     CMPX #0
-    BEQ SLR_DONE     ; No level loaded
+    LBEQ SLR_DONE    ; No level loaded (long branch)
     
-    ; Skip world bounds (8 bytes) + time/score (4 bytes)
-    LEAX 12,X        ; X now points to object counts
+    ; === PHASE 1: Draw Static Objects from ROM ===
+    ; Skip to layer pointers (12 bytes header + 3 bytes counts)
+    LEAX 15,X
     
-    ; Read object counts (use LDB+STB to ensure 1-byte operations)
-    LDB ,X+          ; B = bgCount
-    STB >LEVEL_BG_COUNT
-    LDB ,X+          ; B = gameplayCount
-    STB >LEVEL_GP_COUNT
-    LDB ,X+          ; B = fgCount
-    STB >LEVEL_FG_COUNT
+    ; Draw background layer (static only)
+    LDB LEVEL_BG_COUNT
+    BEQ SLR_SKIP_BG_STATIC
+    LDX LEVEL_BG_ROM_PTR
+    JSR SLR_DRAW_STATIC_LAYER
+SLR_SKIP_BG_STATIC:
     
-    ; Read layer pointers
-    LDD ,X++         ; D = bgObjectsPtr
-    STD >LEVEL_BG_PTR
-    LDD ,X++         ; D = gameplayObjectsPtr
-    STD >LEVEL_GP_PTR
-    LDD ,X++         ; D = fgObjectsPtr
-    STD >LEVEL_FG_PTR
+    ; Draw gameplay layer (static only)
+    LDB LEVEL_GP_COUNT
+    BEQ SLR_SKIP_GP_STATIC
+    LDX LEVEL_GP_ROM_PTR
+    JSR SLR_DRAW_STATIC_LAYER
+SLR_SKIP_GP_STATIC:
     
-    ; === Draw Background Layer ===
-SLR_BG_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_BG_COUNT
-    CMPB #0
-    BEQ SLR_GAMEPLAY
-SLR_BG_PTR:
-    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)
-    JSR SLR_DRAW_OBJECTS
+    ; Draw foreground layer (static only)
+    LDB LEVEL_FG_COUNT
+    BEQ SLR_SKIP_FG_STATIC
+    LDX LEVEL_FG_ROM_PTR
+    JSR SLR_DRAW_STATIC_LAYER
+SLR_SKIP_FG_STATIC:
     
-    ; === Draw Gameplay Layer ===
-SLR_GAMEPLAY:
-SLR_GP_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_GP_COUNT
-    CMPB #0
-    BEQ SLR_FOREGROUND
-SLR_GP_PTR:
-    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)
-    JSR SLR_DRAW_OBJECTS
-    
-    ; === Draw Foreground Layer ===
-SLR_FOREGROUND:
-SLR_FG_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_FG_COUNT
-    CMPB #0
+    ; === PHASE 2: Draw Dynamic Objects from RAM ===
+    LDB LEVEL_DYNAMIC_COUNT
     BEQ SLR_DONE
-SLR_FG_PTR:
-    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)
-    JSR SLR_DRAW_OBJECTS
+    LDU #LEVEL_DYNAMIC_BUFFER
+    JSR SLR_DRAW_DYNAMIC_OBJECTS
     
 SLR_DONE:
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access - ONCE at end)
+    JSR $F1AF        ; DP_to_C8 (restore DP)
     PULS D,X,Y,U,PC  ; Restore and return
     
-; === Subroutine: Draw N Objects ===
-; Input: B = count, X = objects ptr
-; Each object is 20 bytes
-SLR_DRAW_OBJECTS:
-    ; NOTE: Use register-based loop (no stack juggling).
-    ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
-SLR_OBJ_LOOP:
-    TSTB             ; Test if count is zero
-    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)
+; === SLR_DRAW_STATIC_LAYER: Draw static objects from ROM ===
+; Input: B = object count, X = ROM pointer to first object
+; Skips objects with physicsEnabled flag (those are in dynamic buffer)
+SLR_DRAW_STATIC_LAYER:
+    TSTB
+    BEQ SLR_DSL_DONE
+    PSHS B
     
-    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
+    ; Check if dynamic (offset +14, bit 0)
+    LDA 14,X
+    ANDA #$01
+    BNE SLR_DSL_SKIP  ; Skip if dynamic
     
-    ; X points to current object (20 bytes)
-    ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
-    ;           FCB rotation (+7), FCB intensity (+8), ..., FDB vector_ptr (+16)
+    ; Static object - draw from ROM
+    JSR SLR_DRAW_ONE_OBJECT  ; X = ROM pointer
     
-    ; Clear mirror flags (no mirroring support yet)
+SLR_DSL_SKIP:
+    ; Advance to next object (24 bytes)
+    LEAX 24,X
+    PULS B
+    DECB
+    BRA SLR_DRAW_STATIC_LAYER
+    
+SLR_DSL_DONE:
+    RTS
+    
+; === SLR_DRAW_DYNAMIC_OBJECTS: Draw from dynamic buffer ===
+; Input: B = dynamic count, U = LEVEL_DYNAMIC_BUFFER
+; Reads position from RAM (not ROM) since objects have moved
+SLR_DRAW_DYNAMIC_OBJECTS:
+    TSTB
+    LBEQ SLR_DDO_DONE
+    PSHS B
+    
+    ; Dynamic buffer entry (10 bytes):
+    ; +0: rom_index, +1-2: pos_x, +3-4: pos_y, +5-6: vel_x, +7-8: vel_y, +9: flags
+    
+    ; Get rom_index and calculate ROM offset
+    LDA ,U+          ; A = rom_index
+    PSHS U           ; Save dynamic buffer pos
+    
+    ; Calculate ROM pointer: rom_index * 24
+    ; First determine which layer this index belongs to
+    LDB LEVEL_BG_COUNT
+    CMPB A
+    BHI SLR_DDO_IN_BG  ; If index < bgCount, it's in BG
+    
+    ; Not in BG, check GP
+    ADDB LEVEL_GP_COUNT  ; B = bgCount + gpCount
+    CMPB A
+    BHI SLR_DDO_IN_GP  ; If index < bgCount+gpCount, it's in GP
+    
+    ; Must be in FG
+    LDX LEVEL_FG_ROM_PTR
+    LDB LEVEL_BG_COUNT
+    ADDB LEVEL_GP_COUNT
+    BRA SLR_DDO_CALC_OFFSET
+    
+SLR_DDO_IN_BG:
+    LDX LEVEL_BG_ROM_PTR
+    CLRB             ; Offset from start of layer
+    BRA SLR_DDO_CALC_OFFSET
+    
+SLR_DDO_IN_GP:
+    LDX LEVEL_GP_ROM_PTR
+    LDB LEVEL_BG_COUNT
+    
+SLR_DDO_CALC_OFFSET:
+    ; A = rom_index, B = layer_base_index, X = layer ROM ptr
+    PSHS A
+    SUBA B           ; A = index within layer
+    ; Multiply by 24: A = A * 24 = A * 16 + A * 8
+    TFR A,B          ; Save original A
+    LSLB
+    LSLB
+    LSLB             ; B = A * 8
+    PSHS B           ; Save A*8
+    TFR A,B          ; B = original A
+    LSLB
+    LSLB
+    LSLB
+    LSLB             ; B = A * 16
+    ADDB ,S+         ; B = A*16 + A*8 = A*24, pop stack
+    CLRA             ; Clear high byte
+    LEAX D,X         ; X = X + (A*24)
+    PULS A           ; Get rom_index back
+    PULS U           ; Restore dynamic buffer position
+    
+    ; Override position with RAM values (objects have moved!)
+    ; Read pos_x from U+0-1 (U now points after rom_index)
+    LDD ,U++
+    STB DRAW_VEC_X   ; Store X position (LSB)
+    
+    ; Read pos_y from U+0-1 (U advanced)
+    LDD ,U++
+    STB DRAW_VEC_Y   ; Store Y position (LSB)
+    
+    ; Skip velocity (4 bytes) and flags (1 byte)
+    LEAU 5,U
+    
+    ; Read intensity and vector_ptr from ROM (X points to ROM object)
+    LDA 16,X         ; Intensity from ROM
+    STA DRAW_VEC_INTENSITY
+    
+    LDY 22,X         ; Vector pointer from ROM (offset +22-23)
+    PSHS U           ; Save dynamic buffer pos
+    TFR Y,X          ; X = vector data
+    
+    ; Clear mirrors
     CLR MIRROR_X
     CLR MIRROR_Y
     
-    ; Read intensity (offset +8) and store as override
-    LDA 8,X
-    STA DRAW_VEC_INTENSITY
+    ; Draw paths
+    LDB ,X+          ; B = path_count
+    PSHS B
+SLR_DDO_PATH_LOOP:
+    PULS B
+    TSTB
+    LBEQ SLR_DDO_PATH_DONE
+    DECB
+    PSHS B
+    LDY ,X++         ; Read path pointer
+    PSHS X
+    TFR Y,X
+    JSR Draw_Sync_List_At_With_Mirrors
+    PULS X
+    BRA SLR_DDO_PATH_LOOP
+SLR_DDO_PATH_DONE:
     
-    ; Read y position (offset +3-4) - store LSB only
-    LDD 3,X          ; WARNING: This modifies B!
+    PULS U           ; Restore dynamic buffer position
+    PULS B
+    DECB
+    LBRA SLR_DRAW_DYNAMIC_OBJECTS
+    
+SLR_DDO_DONE:
+    RTS
+    
+; === SLR_DRAW_ONE_OBJECT: Draw single object from ROM ===
+; Input: X = ROM pointer to object (24 bytes)
+; Reads position, intensity, vector_ptr from ROM
+SLR_DRAW_ONE_OBJECT:
+    ; Read position from ROM
+    LDD 2,X          ; X position (offset +2-3)
+    STB DRAW_VEC_X
+    LDD 4,X          ; Y position (offset +4-5)
     STB DRAW_VEC_Y
     
-    ; Read x position (offset +1-2) - store LSB only
-    LDD 1,X          ; WARNING: This modifies B!
-    STB DRAW_VEC_X
+    ; Read intensity
+    LDA 16,X
+    STA DRAW_VEC_INTENSITY
     
-    ; Read vector_ptr (offset +16-17)
-    LDU 16,X
-    PSHS X           ; Save object pointer on stack (Y may be corrupted by Draw_Sync_List)
-    TFR U,X          ; X = vector data pointer (points to header)
+    ; Clear mirrors
+    CLR MIRROR_X
+    CLR MIRROR_Y
     
-    ; Read path_count from header (byte 0)
-    LDB ,X+          ; B = path_count, X now points to pointer table
-    PSHS B           ; Save path_count on stack
+    ; Read vector_ptr (offset +22-23)
+    PSHS X           ; Save object pointer
+    LDX 22,X         ; X = vector data pointer
     
-    ; Draw all paths using pointer table (DP already set to $D0 by SHOW_LEVEL_RUNTIME)
-SLR_PATH_LOOP:
-    PULS B           ; Get remaining count
+    ; Draw all paths
+    LDB ,X+          ; B = path_count
+    PSHS B
+SLR_DOO_PATH_LOOP:
+    PULS B
     TSTB
-    BEQ SLR_PATH_DONE
+    BEQ SLR_DOO_PATH_DONE
     DECB
-    PSHS B           ; Save decremented count
+    PSHS B
+    LDU ,X++         ; Read path pointer
+    PSHS X
+    TFR U,X
+    JSR Draw_Sync_List_At_With_Mirrors
+    PULS X
+    BRA SLR_DOO_PATH_LOOP
+SLR_DOO_PATH_DONE:
     
-    ; Read next path pointer from table (X points to current FDB entry)
-    LDU ,X++         ; U = path pointer, X advances to next entry
-    PSHS X           ; Save pointer table position
-    TFR U,X          ; X = actual path data
-    JSR Draw_Sync_List_At_With_Mirrors  ; Draw this path
-    PULS X           ; Restore pointer table position
-    BRA SLR_PATH_LOOP
-    
-SLR_PATH_DONE:
-    ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed
-    PULS X           ; Restore object pointer from stack
-    
-    ; Advance to next object (20 bytes)
-    LEAX 20,X
-    
-    PULS B           ; Restore counter
-    DECB             ; Decrement count AFTER drawing
-    BRA SLR_OBJ_LOOP
-    
-SLR_OBJ_DONE:
+    PULS X           ; Restore object pointer
     RTS
 
 ; === UPDATE_LEVEL_RUNTIME ===
-; Update level state (physics, velocity, spawn delays)
-; Applies physics to all objects in 3 layers (bg/gameplay/fg)
-; CRITICAL: Works on RAM BUFFERS, not ROM!
-;
+; Update level state (physics, velocity) for dynamic objects ONLY
+; Static objects don't need updates (they never move)
+; Operates on LEVEL_DYNAMIC_BUFFER (10 bytes per object)
 UPDATE_LEVEL_RUNTIME:
     PSHS U,X,Y,D  ; Preserve all registers
     
-    ; === Update Background Objects ===
-    LDB LEVEL_BG_COUNT
-    CMPB #0
-    LBEQ ULR_GAMEPLAY  ; Long branch
-    LDU #LEVEL_BG_BUFFER  ; U = RAM buffer
-    BSR ULR_UPDATE_LAYER  ; Process objects
+    ; Check if any dynamic objects exist
+    LDB LEVEL_DYNAMIC_COUNT
+    BEQ ULR_EXIT
     
-ULR_GAMEPLAY:
-    ; === Update Gameplay Objects ===
-    LDB LEVEL_GP_COUNT
-    CMPB #0
-    LBEQ ULR_FOREGROUND  ; Long branch
-    LDU #LEVEL_GP_BUFFER  ; U = RAM buffer
-    BSR ULR_UPDATE_LAYER  ; Process objects
+    ; Get world bounds for collision checks
+    LDX LEVEL_PTR
+    CMPX #0
+    BEQ ULR_EXIT  ; No level loaded
     
-    ; === Object-to-Object Collisions (GAMEPLAY only) ===
-    JSR ULR_GAMEPLAY_COLLISIONS  ; Use JSR for long distance
+    ; U = dynamic buffer pointer
+    LDU #LEVEL_DYNAMIC_BUFFER
     
-ULR_FOREGROUND:
-    ; === Update Foreground Objects ===
-    LDB LEVEL_FG_COUNT
-    CMPB #0
-    LBEQ ULR_EXIT  ; Long branch
-    LDU #LEVEL_FG_BUFFER  ; U = RAM buffer
-    BSR ULR_UPDATE_LAYER  ; Process objects
+ULR_LOOP:
+    ; Dynamic buffer entry (10 bytes):
+    ; +0: rom_index, +1-2: pos_x, +3-4: pos_y, +5-6: vel_x, +7-8: vel_y, +9: flags
+    
+    PSHS B           ; Save counter
+    
+    ; Skip rom_index
+    LEAU 1,U
+    
+    ; Apply velocity: pos_x += vel_x
+    LDD ,U           ; Load pos_x (offset +0-1 after rom_index)
+    ADDD 4,U         ; Add vel_x (offset +4-5)
+    STD ,U           ; Store new pos_x
+    
+    ; Apply velocity: pos_y += vel_y
+    LDD 2,U          ; Load pos_y (offset +2-3)
+    ADDD 6,U         ; Add vel_y (offset +6-7)
+    STD 2,U          ; Store new pos_y
+    
+    ; === Check World Bounds (Wall Collisions) ===
+    ; Simplified: Bounce if position exceeds bounds
+    
+    ; Check X bounds (xMin at X+0, xMax at X+2)
+    LDD ,U           ; pos_x
+    CMPD 0,X         ; Compare with xMin
+    BGE ULR_X_MAX_CHECK
+    ; Hit xMin - clamp position and negate velocity
+    LDD 0,X
+    STD ,U           ; pos_x = xMin
+    LDD 4,U          ; vel_x
+    NEGA
+    NEGB
+    SBCA #0
+    STD 4,U          ; vel_x = -vel_x
+    
+ULR_X_MAX_CHECK:
+    LDD ,U           ; pos_x
+    CMPD 2,X         ; Compare with xMax
+    BLE ULR_Y_MIN_CHECK
+    ; Hit xMax - clamp position and negate velocity
+    LDD 2,X
+    STD ,U           ; pos_x = xMax
+    LDD 4,U          ; vel_x
+    NEGA
+    NEGB
+    SBCA #0
+    STD 4,U          ; vel_x = -vel_x
+    
+    ; Check Y bounds (yMin at X+4, yMax at X+6)
+ULR_Y_MIN_CHECK:
+    LDD 2,U          ; pos_y
+    CMPD 4,X         ; Compare with yMin
+    BGE ULR_Y_MAX_CHECK
+    ; Hit yMin - clamp position and negate velocity
+    LDD 4,X
+    STD 2,U          ; pos_y = yMin
+    LDD 6,U          ; vel_y
+    NEGA
+    NEGB
+    SBCA #0
+    STD 6,U          ; vel_y = -vel_y
+    
+ULR_Y_MAX_CHECK:
+    LDD 2,U          ; pos_y
+    CMPD 6,X         ; Compare with yMax
+    BLE ULR_NEXT
+    ; Hit yMax - clamp position and negate velocity
+    LDD 6,X
+    STD 2,U          ; pos_y = yMax
+    LDD 6,U          ; vel_y
+    NEGA
+    NEGB
+    SBCA #0
+    STD 6,U          ; vel_y = -vel_y
+    
+ULR_NEXT:
+    ; Advance to next dynamic object (10 bytes total)
+    LEAU 9,U         ; Skip remaining bytes (already skipped rom_index)
+    
+    PULS B
+    DECB
+    BNE ULR_LOOP
     
 ULR_EXIT:
     PULS D,Y,X,U  ; Restore registers
     RTS
 
-; === ULR_UPDATE_LAYER - Process all objects in a layer ===
-; Input: B = object count, U = buffer base address
-; Uses: X for world bounds
-ULR_UPDATE_LAYER:
-    LDX LEVEL_PTR  ; Load level pointer for world bounds
-    CMPX #0
-    LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)
-    
-ULR_LOOP:
-    ; U = pointer to object data (24 bytes per object)
-    ; Object structure:
-    ; +0: type (1 byte)
-    ; +1: x (2 bytes signed)
-    ; +3: y (2 bytes signed)
-    ; +5: scale (2 bytes - not used by physics)
-    ; +7: rotation (1 byte - not used by physics)
-    ; +8: intensity (1 byte - not used by physics)
-    ; +9: velocity_x (1 byte signed)
-    ; +10: velocity_y (1 byte signed)
-    ; +11: physics_flags (1 byte)
-    ; +12: collision_flags (1 byte)
-    ; +13-23: other fields (collision_size, spawn_delay, vector_ptr, properties_ptr)
-
-    ; Check physics_flags (offset +11)
-    PSHS B  ; Save loop counter
-    LDB 11,U     ; Read flags
-    CMPB #0
-    LBEQ ULR_NEXT  ; Skip if no physics enabled (long branch)
-
-    ; Check if dynamic physics enabled (bit 0)
-    BITB #$01
-    LBEQ ULR_NEXT  ; Skip if not dynamic (long branch)
-
-    ; Check if gravity enabled (bit 1)
-    BITB #$02
-    LBEQ ULR_NO_GRAVITY  ; Long branch
-
-    ; Apply gravity: velocity_y -= 1
-    LDB 10,U      ; Read velocity_y
-    DECB          ; Subtract gravity
-    ; Clamp to -15..+15 (max velocity)
-    CMPB #$F1     ; Compare with -15
-    BGE ULR_VY_OK
-    LDB #$F1      ; Clamp to -15
-ULR_VY_OK:
-    STB 10,U      ; Store updated velocity_y
-
-ULR_NO_GRAVITY:
-    ; Apply velocity to position
-    ; x += velocity_x
-    LDB 9,U       ; Load velocity_x (signed 8-bit)
-    SEX           ; Sign-extend B to 16-bit in D
-    ADDD 1,U      ; D = x + velocity_x (x at offset +1)
-    STD 1,U       ; Store new x
-
-    ; y += velocity_y
-    LDB 10,U      ; Load velocity_y (signed 8-bit)
-    SEX           ; Sign-extend B to 16-bit in D
-    ADDD 3,U      ; D = y + velocity_y (y at offset +3)
-    STD 3,U       ; Store new y
-
-    ; === Check World Bounds (Wall Collisions) ===
-    LDB 12,U      ; Load collision_flags
-    BITB #$02     ; Check bounce_walls flag (bit 1)
-    LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
-
-    ; Load world bounds pointer from LEVEL_PTR
-    LDX LEVEL_PTR
-    ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)
-
-    ; === Check X Bounds (Left/Right walls) ===
-    ; Check xMin: if (x - collision_size) < xMin then bounce
-    LDB 13,U      ; collision_size (offset +13)
-    SEX           ; Sign-extend to 16-bit in D
-    PSHS D        ; Save collision_size on stack
-    LDD 1,U       ; Load object x
-    SUBD ,S++     ; D = x - collision_size (left edge), pop stack
-    CMPD 0,X      ; Compare left edge with xMin
-    LBGE ULR_X_MAX_CHECK  ; Skip if left_edge >= xMin (LONG)
-    ; Hit xMin wall - only bounce if moving left (velocity_x < 0)
-    LDB 9,U       ; velocity_x
-    CMPB #0
-    LBGE ULR_X_MAX_CHECK  ; Skip if moving right (LONG)
-    ; Bounce: set position so left edge = xMin
-    LDB 13,U      ; Reload collision_size
-    SEX
-    ADDD 0,X      ; D = xMin + collision_size (center position)
-    STD 1,U       ; x = xMin + collision_size
-    LDB 9,U       ; Reload velocity_x
-    NEGB          ; velocity_x = -velocity_x
-    STB 9,U
-
-    ; Check xMax: if (x + collision_size) > xMax then bounce
-ULR_X_MAX_CHECK:
-    LDB 13,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDD 1,U       ; Load object x
-    ADDD ,S++     ; D = x + collision_size (right edge), pop stack
-    CMPD 2,X      ; Compare right edge with xMax
-    LBLE ULR_Y_BOUNDS  ; Skip if right_edge <= xMax (LONG)
-    ; Hit xMax wall - only bounce if moving right (velocity_x > 0)
-    LDB 9,U       ; velocity_x
-    CMPB #0
-    LBLE ULR_Y_BOUNDS  ; Skip if moving left (LONG)
-    ; Bounce: set position so right edge = xMax
-    LDB 13,U      ; Reload collision_size
-    SEX
-    TFR D,Y       ; Y = collision_size
-    LDD 2,X       ; D = xMax
-    PSHS Y        ; Push collision_size
-    SUBD ,S++     ; D = xMax - collision_size (center position), pop
-    STD 1,U       ; x = xMax - collision_size
-    LDB 9,U       ; Reload velocity_x
-    NEGB          ; velocity_x = -velocity_x
-    STB 9,U
-
-    ; === Check Y Bounds (Top/Bottom walls) ===
-ULR_Y_BOUNDS:
-    ; Check yMin: if (y - collision_size) < yMin then bounce
-    LDB 13,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDD 3,U       ; Load object y
-    SUBD ,S++     ; D = y - collision_size (bottom edge), pop stack
-    CMPD 4,X      ; Compare bottom edge with yMin
-    LBGE ULR_Y_MAX_CHECK  ; Skip if bottom_edge >= yMin (LONG)
-    ; Hit yMin wall - only bounce if moving down (velocity_y < 0)
-    LDB 10,U      ; velocity_y
-    CMPB #0
-    LBGE ULR_Y_MAX_CHECK  ; Skip if moving up (LONG)
-    ; Bounce: set position so bottom edge = yMin
-    LDB 13,U      ; Reload collision_size
-    SEX
-    ADDD 4,X      ; D = yMin + collision_size (center position)
-    STD 3,U       ; y = yMin + collision_size
-    LDB 10,U      ; Reload velocity_y
-    NEGB          ; velocity_y = -velocity_y
-    STB 10,U
-
-    ; Check yMax: if (y + collision_size) > yMax then bounce
-ULR_Y_MAX_CHECK:
-    LDB 13,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDD 3,U       ; Load object y
-    ADDD ,S++     ; D = y + collision_size (top edge), pop stack
-    CMPD 6,X      ; Compare top edge with yMax
-    LBLE ULR_NEXT  ; Skip if top_edge <= yMax (LONG)
-    ; Hit yMax wall - only bounce if moving up (velocity_y > 0)
-    LDB 10,U      ; velocity_y
-    CMPB #0
-    LBLE ULR_NEXT  ; Skip if moving down (LONG)
-    ; Bounce: set position so top edge = yMax
-    LDB 13,U      ; Reload collision_size
-    SEX
-    TFR D,Y       ; Y = collision_size
-    LDD 6,X       ; D = yMax
-    PSHS Y        ; Push collision_size
-    SUBD ,S++     ; D = yMax - collision_size (center position), pop
-    STD 3,U       ; y = yMax - collision_size
-    LDB 10,U      ; Reload velocity_y
-    NEGB          ; velocity_y = -velocity_y
-    STB 10,U
-
-ULR_NEXT:
-    PULS B        ; Restore loop counter
-    LEAU 20,U     ; Move to next object (20 bytes)
-    DECB
-    LBNE ULR_LOOP  ; Continue if more objects (long branch)
-
-ULR_LAYER_EXIT:
-    RTS
-
-; === ULR_GAMEPLAY_COLLISIONS - Check collisions between gameplay objects ===
-; Input: None (uses LEVEL_GP_BUFFER and LEVEL_GP_COUNT)
-ULR_GAMEPLAY_COLLISIONS:
-    ; Ultra-simple algorithm: NO stack juggling, use RAM variables
-    LDA LEVEL_GP_COUNT
-    CMPA #2
-    BHS UGPC_START   ; Continue if >=2
-    RTS              ; Early exit
-UGPC_START:
-    
-    ; Store count-1 in temporary RAM (we'll iterate up to this)
-    DECA
-    STA UGPC_OUTER_MAX   ; Store at RESULT+20 (temp storage)
-    CLR UGPC_OUTER_IDX   ; Start at 0
-    
-UGPC_OUTER_LOOP:
-    ; Calculate U = LEVEL_GP_BUFFER + (UGPC_OUTER_IDX * 20)
-    LDU #LEVEL_GP_BUFFER
-    LDB UGPC_OUTER_IDX
-    BEQ UGPC_SKIP_OUTER_MUL  ; If idx=0, U already correct
-UGPC_OUTER_MUL:
-    LEAU 20,U
-    DECB
-    BNE UGPC_OUTER_MUL
-UGPC_SKIP_OUTER_MUL:
-    
-    ; Check if collidable
-    LDB 12,U
-    BITB #$01
-    BEQ UGPC_NEXT_OUTER
-    
-    ; Inner loop: check against all objects AFTER current
-    LDA UGPC_OUTER_IDX
-    INCA             ; Start from next object
-    STA UGPC_INNER_IDX
-    
-UGPC_INNER_LOOP:
-    ; Check if inner reached count
-    LDA UGPC_INNER_IDX
-    CMPA LEVEL_GP_COUNT
-    BHS UGPC_INNER_DONE  ; Done if idx >= count
-    
-    ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 20)
-    LDY #LEVEL_GP_BUFFER
-    LDB UGPC_INNER_IDX
-    BEQ UGPC_SKIP_INNER_MUL
-UGPC_INNER_MUL:
-    LEAY 20,Y
-    DECB
-    BNE UGPC_INNER_MUL
-UGPC_SKIP_INNER_MUL:
-    
-    ; Check if Y collidable
-    LDB 12,Y
-    BITB #$01
-    BEQ UGPC_NEXT_INNER
-    
-    ; Manhattan distance |x1-x2| + |y1-y2|
-    LDD 1,U          ; x1
-    SUBD 1,Y         ; x1-x2
-    BPL UGPC_DX_POS
-    COMA
-    COMB
-    ADDD #1
-UGPC_DX_POS:
-    STD UGPC_DX      ; Store |dx| in temp
-    
-    LDD 3,U          ; y1
-    SUBD 3,Y         ; y1-y2
-    BPL UGPC_DY_POS
-    COMA
-    COMB
-    ADDD #1
-UGPC_DY_POS:
-    ADDD UGPC_DX     ; distance = |dx| + |dy|
-    STD UGPC_DIST
-    
-    ; Sum of radii
-    LDB 13,U
-    ADDB 13,Y
-    SEX              ; D = sum_radius (normal, not doubled)
-    ; Collision if distance < sum_radius (i.e., sum_radius > distance)
-    CMPD UGPC_DIST   ; Compare sum_radius with distance
-    BHI UGPC_COLLISION  ; Jump to collision if sum_radius > distance
-    BRA UGPC_NEXT_INNER ; No collision, skip
-    
-UGPC_COLLISION:
-    ; COLLISION! Swap velocities (elastic collision)
-    ; Swap velocity_x
-    LDA 9,U          ; A = vel_x of object 1
-    LDB 9,Y          ; B = vel_x of object 2
-    STB 9,U          ; Object 1 gets object 2's vel_x
-    STA 9,Y          ; Object 2 gets object 1's vel_x
-    ; Swap velocity_y
-    LDA 10,U         ; A = vel_y of object 1
-    LDB 10,Y         ; B = vel_y of object 2
-    STB 10,U         ; Object 1 gets object 2's vel_y
-    STA 10,Y         ; Object 2 gets object 1's vel_y
-    
-UGPC_NEXT_INNER:
-    INC UGPC_INNER_IDX
-    LBRA UGPC_INNER_LOOP
-    
-UGPC_INNER_DONE:
-UGPC_NEXT_OUTER:
-    INC UGPC_OUTER_IDX
-    LDA UGPC_OUTER_IDX
-    CMPA UGPC_OUTER_MAX
-    BHI UGPC_EXIT    ; Exit if idx > max
-    LBRA UGPC_OUTER_LOOP  ; Continue (LONG)
-    
-UGPC_EXIT:
-    RTS
-    
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)

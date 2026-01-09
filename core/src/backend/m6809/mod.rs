@@ -540,15 +540,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // mutable state for dynamic objects (physicsEnabled=true).
         // Static objects (walls, platforms) are rendered directly from ROM.
         
-        // Dynamic objects buffer (6 bytes per object):
+        // Dynamic objects buffer (10 bytes per object):
         //   +0: rom_index (1 byte)     - Index to ROM object array
-        //   +1: velocity_x_hi (1 byte) - High byte of velocity_x
-        //   +2: velocity_x_lo (1 byte) - Low byte of velocity_x
-        //   +3: velocity_y_hi (1 byte) - High byte of velocity_y
-        //   +4: velocity_y_lo (1 byte) - Low byte of velocity_y
-        //   +5: active_flags (1 byte)  - Runtime flags (active, visible, etc.)
+        //   +1-2: position_x (2 bytes) - Mutable X position (signed 16-bit)
+        //   +3-4: position_y (2 bytes) - Mutable Y position (signed 16-bit)
+        //   +5-6: velocity_x (2 bytes) - X velocity (signed 16-bit)
+        //   +7-8: velocity_y (2 bytes) - Y velocity (signed 16-bit)
+        //   +9: active_flags (1 byte)  - Runtime flags (active, visible, etc.)
+        // NOTE: Position is copied from ROM to RAM because ROM is read-only.
         ram.allocate("LEVEL_DYNAMIC_COUNT", 1, "Number of active dynamic objects (max 12)");
-        ram.allocate("LEVEL_DYNAMIC_BUFFER", 72, "Dynamic objects state (12 objects * 6 bytes)");
+        ram.allocate("LEVEL_DYNAMIC_BUFFER", 120, "Dynamic objects state (12 objects * 10 bytes)");
         
         // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
         ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");

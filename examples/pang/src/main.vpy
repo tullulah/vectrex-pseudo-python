@@ -43,14 +43,14 @@ joystick_poll_counter = 0  # Counter to poll joystick every N frames
 # Hook (disparo) system
 hook_active = 0          # 0=inactive, 1=active
 hook_x = 0               # X position of hook (captured at fire time)
-hook_y = -100            # Y position of hook (starts at ground level)
+hook_y = -70            # Y position of hook (starts at ground level)
 const hook_max_y = 127          # Maximum Y position (well up the screen, signed value)
 hook_gun_x = 0           # Gun X position at fire time (stays fixed while hook travels)
 hook_gun_y = 0           # Gun Y position at fire time (stays fixed while hook travels)
 hook_init_y = 0          # Initial Y position of gun (stays fixed for rope start point)
 # Player variables
 player_x = 0             # Player X position
-const player_y = -100          # Player Y position (on ground)
+const player_y = -70          # Player Y position (on ground)
 move_speed = 0           # Current movement speed (calculated from joystick)
 abs_joy = 0              # Helper for absolute value calculation
 player_anim_frame = 1    # Current animation frame (1-5)
@@ -71,7 +71,7 @@ enemy_size = [0, 0, 0, 0, 0, 0, 0, 0]          # Size: 4=huge, 3=large, 2=medium
 const GRAVITY = 1         # Gravedad ligera para efecto pompa de jabón
 const BOUNCE_DAMPING = 17 # Velocity retained after bounce (17/20 = 85%) - pompas mantienen energía
 const MIN_BOUNCE_VY = 10  # Velocidad mínima de rebote para evitar vibraciones (debe superar gravedad acumulada)
-const GROUND_Y = -80      # Y position of ground
+const GROUND_Y = -70      # Y position of ground
 
 
 def main():
@@ -92,7 +92,7 @@ def main():
     # Initialize hook system
     hook_active = 0
     hook_x = 0
-    hook_y = -100
+    hook_y = -70
 
 def loop():
 
@@ -181,7 +181,7 @@ def loop():
             if hook_active == 0:
                 if (joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1):
                     hook_active = 1
-                    hook_y = -100  # Start from ground level (direct signed value)
+                    hook_y = -70  # Start from ground level (direct signed value)
                     PLAY_SFX("hit")
                     
                     # Capture gun position at fire time
@@ -203,7 +203,7 @@ def loop():
                 # Check if hook reached top
                 if hook_y >= hook_max_y:
                     hook_active = 0
-                    hook_y = -100
+                    hook_y = -70
             
             draw_game_level()
 
