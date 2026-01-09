@@ -1767,6 +1767,182 @@ export class MCPServer {
     return result;
   }
 
+  private async memoryDump(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { address, size = 256 } = params;
+    const maxSize = 4096;
+    const actualSize = Math.min(size, maxSize);
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+
+          const startAddr = ${address};
+          const numBytes = ${actualSize};
+          const bytes = [];
+          
+          for (let i = 0; i < numBytes; i++) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const byte = vecx.read8(addr) & 0xFF;
+            bytes.push(byte);
+          }
+
+          // Format as hex dump (16 bytes per line)
+          const lines = [];
+          for (let i = 0; i < bytes.length; i += 16) {
+            const addr = (startAddr + i) & 0xFFFF;
+            const addrHex = '0x' + addr.toString(16).toUpperCase().padStart(4, '0');
+            const chunk = bytes.slice(i, i + 16);
+            const hexBytes = chunk.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            const ascii = chunk.map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+            lines.push(addrHex + ': ' + hexBytes.padEnd(48, ' ') + ' | ' + ascii);
+          }
+
+          return {
+            address: startAddr,
+            size: numBytes,
+            bytes: bytes,
+            dump: lines.join('\\n')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async listVariables(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const compilerState = window.__compilerState__;
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const variables = [];
+
+          // Extract variables from PDB symbols
+          if (pdb.symbols) {
+            for (const [name, info] of Object.entries(pdb.symbols)) {
+              const addr = typeof info === 'number' ? info : (info.address || 0);
+              const size = (info.size || 2); // Default 2 bytes (16-bit)
+              const type = info.type || 'unknown';
+              
+              variables.push({
+                name: name,
+                address: addr,
+                addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+                size: size,
+                type: type
+              });
+            }
+          }
+
+          // Sort by size (largest first)
+          variables.sort((a, b) => b.size - a.size);
+
+          return {
+            count: variables.length,
+            variables: variables
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
+
+  private async readVariable(params: any): Promise<any> {
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    const { name } = params;
+
+    const result = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          const vecx = window.vecx;
+          const compilerState = window.__compilerState__;
+          
+          if (!vecx) {
+            return { __error: true, message: 'Emulator not running' };
+          }
+          
+          if (!compilerState || !compilerState.pdbData) {
+            return { __error: true, message: 'No PDB data available (compile first)' };
+          }
+
+          const pdb = compilerState.pdbData;
+          const varName = '${name}';
+          
+          // Find variable in PDB
+          if (!pdb.symbols || !pdb.symbols[varName]) {
+            return { __error: true, message: 'Variable "' + varName + '" not found in PDB' };
+          }
+
+          const info = pdb.symbols[varName];
+          const addr = typeof info === 'number' ? info : (info.address || 0);
+          const size = (info.size || 2); // Default 2 bytes
+          
+          // Read value from memory
+          let value;
+          if (size === 1) {
+            value = vecx.read8(addr) & 0xFF;
+          } else {
+            // 16-bit big-endian
+            const high = vecx.read8(addr) & 0xFF;
+            const low = vecx.read8(addr + 1) & 0xFF;
+            value = (high << 8) | low;
+          }
+
+          return {
+            name: varName,
+            address: addr,
+            addressHex: '0x' + addr.toString(16).toUpperCase().padStart(4, '0'),
+            size: size,
+            value: value,
+            valueHex: '0x' + value.toString(16).toUpperCase().padStart(size * 2, '0'),
+            valueDec: value,
+            valueBin: '0b' + value.toString(2).padStart(size * 8, '0')
+          };
+        } catch (e) {
+          return { __error: true, message: e.message || String(e) };
+        }
+      })()
+    `);
+
+    if (result && (result as any).__error) {
+      throw new Error((result as any).message);
+    }
+
+    return result;
+  }
 
   private async addBreakpoint(params: any): Promise<any> {
     if (!this.mainWindow) {
