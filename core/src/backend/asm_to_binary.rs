@@ -514,6 +514,10 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "LBNE" => emit_lbne(emitter, operand, last_global_label),
         "LBCS" => emit_lbcs(emitter, operand, last_global_label),
         "LBCC" => emit_lbcc(emitter, operand, last_global_label),
+        "LBHS" => emit_lbcc(emitter, operand, last_global_label), // LBHS = LBCC (branch if higher or same)
+        "LBLO" => emit_lbcs(emitter, operand, last_global_label), // LBLO = LBCS (branch if lower)
+        "LBHI" => emit_lbhi(emitter, operand, last_global_label),
+        "LBLS" => emit_lbls(emitter, operand, last_global_label),
         "LBLT" => emit_lblt(emitter, operand, last_global_label),
         "LBGE" => emit_lbge(emitter, operand, last_global_label),
         "LBGT" => emit_lbgt(emitter, operand, last_global_label),
@@ -1422,6 +1426,40 @@ fn emit_lbpl(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> R
         let offset = parse_signed(operand)?;
         emitter.emit(0x10);
         emitter.emit(0x2A);
+        emitter.emit_word(offset as u16);
+        Ok(())
+    }
+}
+
+fn emit_lbhi(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        emitter.emit(0x10);
+        emitter.emit(0x22); // BHI condition
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
+        emitter.emit_word(0x0000);
+        Ok(())
+    } else {
+        let offset = parse_signed(operand)?;
+        emitter.emit(0x10);
+        emitter.emit(0x22);
+        emitter.emit_word(offset as u16);
+        Ok(())
+    }
+}
+
+fn emit_lbls(emitter: &mut BinaryEmitter, operand: &str, last_global: &str) -> Result<(), String> {
+    if is_label(operand) {
+        emitter.emit(0x10);
+        emitter.emit(0x23); // BLS condition
+        let full_label = expand_local_label(operand, last_global);
+        emitter.add_symbol_ref(&full_label, true, 2);
+        emitter.emit_word(0x0000);
+        Ok(())
+    } else {
+        let offset = parse_signed(operand)?;
+        emitter.emit(0x10);
+        emitter.emit(0x23);
         emitter.emit_word(offset as u16);
         Ok(())
     }

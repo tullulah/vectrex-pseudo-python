@@ -16,13 +16,12 @@
     "yMax": 127
   },
   "layers": {
-    "background": [],
-    "gameplay": [
+    "background": [
       {
         "id": "obj_1767862794353",
         "type": "enemy",
         "vectorName": "bubble_huge",
-        "layer": "gameplay",
+        "layer": "background",
         "x": 45,
         "y": 71,
         "rotation": 0,
@@ -45,7 +44,7 @@
         "id": "obj_1767883264744",
         "type": "enemy",
         "vectorName": "coin",
-        "layer": "gameplay",
+        "layer": "background",
         "x": -52,
         "y": 35,
         "rotation": 0,
@@ -68,7 +67,7 @@
         "id": "obj_1767873800421",
         "type": "enemy",
         "vectorName": "bubble_large",
-        "layer": "gameplay",
+        "layer": "background",
         "x": -58,
         "y": 68,
         "rotation": 0,
@@ -91,7 +90,7 @@
         "id": "obj_1767970445633",
         "type": "enemy",
         "vectorName": "coin",
-        "layer": "gameplay",
+        "layer": "background",
         "x": -37,
         "y": -47,
         "rotation": 0,
@@ -107,6 +106,7 @@
         "physicsType": "static"
       }
     ],
+    "gameplay": [],
     "foreground": []
   },
   "spawnPoints": {

@@ -139,7 +139,7 @@ fn estimate_instruction_size(instruction: &str) -> u16 {
         
         // Branches (2 bytes for short, 3 for long)
         "BRA" | "BRN" | "BHI" | "BLS" | "BCC" | "BCS" | "BNE" | "BEQ" | "BVC" | "BVS" | "BPL" | "BMI" | "BGE" | "BLT" | "BGT" | "BLE" | "BSR" => 2,
-        "LBRA" | "LBRN" | "LBHI" | "LBLS" | "LBCC" | "LBCS" | "LBNE" | "LBEQ" | "LBVC" | "LBVS" | "LBPL" | "LBMI" | "LBGE" | "LBLT" | "LBGT" | "LBLE" | "LBSR" => 3,
+        "LBRA" | "LBRN" | "LBHI" | "LBLS" | "LBCC" | "LBHS" | "LBCS" | "LBLO" | "LBNE" | "LBEQ" | "LBVC" | "LBVS" | "LBPL" | "LBMI" | "LBGE" | "LBLT" | "LBGT" | "LBLE" | "LBSR" => 3,
         
         // Load/Store - depends on addressing mode
         "LDA" | "LDB" | "STA" | "STB" | "CMPA" | "CMPB" | "ADDA" | "ADDB" | "SUBA" | "SUBB" | "ANDA" | "ANDB" | "ORA" | "ORB" | "EORA" | "EORB" => {
