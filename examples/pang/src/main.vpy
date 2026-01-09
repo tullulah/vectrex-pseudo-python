@@ -128,6 +128,7 @@ def loop():
             current_location = current_location + 1
             if current_location >= num_locations:
                 current_location = 0
+                LOAD_LEVEL("fuji_level1_v2")
         elif joy_x < -40 and prev_joy_x >= -40:  # Left threshold
             current_location = current_location - 1
             if current_location < 0:
