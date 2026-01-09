@@ -916,7 +916,7 @@ SLR_DDO_CALC_OFFSET:
 SLR_DDO_PATH_LOOP:
     PULS B
     TSTB
-    BEQ SLR_DDO_PATH_DONE
+    LBEQ SLR_DDO_PATH_DONE
     DECB
     PSHS B
     LDY ,X++         ; Read path pointer
@@ -930,7 +930,7 @@ SLR_DDO_PATH_DONE:
     PULS U           ; Restore dynamic buffer position
     PULS B
     DECB
-    BRA SLR_DRAW_DYNAMIC_OBJECTS
+    LBRA SLR_DRAW_DYNAMIC_OBJECTS
     
 SLR_DDO_DONE:
     RTS

@@ -921,6 +921,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
                     
+                    // Auto-inject WAIT_RECAL at START of every frame (MANDATORY for Vectrex synchronization)
+                    out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
+                    
                     // Auto-inject UPDATE_BUTTONS at START of loop (before user code)
                     // This calls Read_Btns once per frame, populating $C80F from PSG register 14
                     // Works in emulator (frontend pre-writes $C80F) and hardware (Read_Btns reads PSG)
