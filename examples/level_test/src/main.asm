@@ -664,11 +664,11 @@ LLR_COPY_LOOP:
     LEAX 1,X         ; X now points to +1 (x position)
     
     ; Copy 14 bytes optimized: x,y,scale,spawn_delay as 1-byte values
-    LDA 0,X          ; ROM +1 (x high byte) → RAM +0
+    LDA 1,X          ; ROM +2 (x low byte) → RAM +0
     STA ,U+
-    LDA 2,X          ; ROM +3 (y high byte) → RAM +1
+    LDA 3,X          ; ROM +4 (y low byte) → RAM +1
     STA ,U+
-    LDA 4,X          ; ROM +5 (scale high byte) → RAM +2
+    LDA 5,X          ; ROM +6 (scale low byte) → RAM +2
     STA ,U+
     LDA 6,X          ; ROM +7 (rotation) → RAM +3
     STA ,U+
@@ -828,9 +828,9 @@ SLR_RAM_INTENSITY_DONE:
     
     CLR MIRROR_X
     CLR MIRROR_Y
-    LDD 1,X          ; y at +1
+    LDB 1,X          ; y at +1 (1 byte)
     STB DRAW_VEC_Y
-    LDD 0,X          ; x at +0
+    LDB 0,X          ; x at +0 (1 byte)
     STB DRAW_VEC_X
     LDU 10,X         ; vector_ptr at +10
     BRA SLR_DRAW_VECTOR
@@ -962,18 +962,19 @@ ULR_VY_OK:
     STB 5,U       ; Store updated velocity_y
 
 ULR_NO_GRAVITY:
-    ; Apply velocity to position
+    ; Apply velocity to position (8-bit arithmetic)
     ; x += velocity_x
+    LDA 0,U       ; Load x (8-bit at offset +0)
     LDB 4,U       ; Load velocity_x (signed 8-bit)
-    SEX           ; Sign-extend B to 16-bit in D
-    ADDD 0,U      ; D = x + velocity_x (x at offset +0)
-    STD 0,U       ; Store new x
+    PSHS A        ; Save original x
+    ADDA 4,U      ; A = x + velocity_x
+    STA 0,U       ; Store new x
+    PULS A        ; Clean stack
 
     ; y += velocity_y
-    LDB 5,U       ; Load velocity_y (signed 8-bit)
-    SEX           ; Sign-extend B to 16-bit in D
-    ADDD 2,U      ; D = y + velocity_y (y at offset +2)
-    STD 2,U       ; Store new y
+    LDA 1,U       ; Load y (8-bit at offset +1)
+    ADDA 5,U      ; A = y + velocity_y
+    STA 1,U       ; Store new y
 
     ; === Check World Bounds (Wall Collisions) ===
     LDB 7,U      ; Load collision_flags
@@ -989,34 +990,36 @@ ULR_NO_GRAVITY:
     LDB 8,U      ; collision_size (offset +8)
     SEX           ; Sign-extend to 16-bit in D
     PSHS D        ; Save collision_size on stack
-    LDD 0,U       ; Load object x
+    LDB 0,U       ; Load object x (8-bit at offset +0)
+    SEX           ; Sign-extend x to 16-bit
     SUBD ,S++     ; D = x - collision_size (left edge), pop stack
     CMPD 0,X      ; Compare left edge with xMin
     LBGE ULR_X_MAX_CHECK  ; Skip if left_edge >= xMin (LONG)
     ; Hit xMin wall - only bounce if moving left (velocity_x < 0)
-    LDB 7,U       ; velocity_x
+    LDB 4,U       ; velocity_x (offset +4)
     CMPB #0
     LBGE ULR_X_MAX_CHECK  ; Skip if moving right (LONG)
     ; Bounce: set position so left edge = xMin
     LDB 8,U      ; Reload collision_size
     SEX
     ADDD 0,X      ; D = xMin + collision_size (center position)
-    STD 0,U       ; x = xMin + collision_size
-    LDB 7,U       ; Reload velocity_x
+    STB 0,U       ; x = (xMin + collision_size) low byte (8-bit store)
+    LDB 4,U       ; Reload velocity_x
     NEGB          ; velocity_x = -velocity_x
-    STB 7,U
+    STB 4,U
 
     ; Check xMax: if (x + collision_size) > xMax then bounce
 ULR_X_MAX_CHECK:
     LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
-    LDD 0,U       ; Load object x
+    LDB 0,U       ; Load object x (8-bit at offset +0)
+    SEX           ; Sign-extend x to 16-bit
     ADDD ,S++     ; D = x + collision_size (right edge), pop stack
     CMPD 2,X      ; Compare right edge with xMax
     LBLE ULR_Y_BOUNDS  ; Skip if right_edge <= xMax (LONG)
     ; Hit xMax wall - only bounce if moving right (velocity_x > 0)
-    LDB 7,U       ; velocity_x
+    LDB 4,U       ; velocity_x (offset +4)
     CMPB #0
     LBLE ULR_Y_BOUNDS  ; Skip if moving left (LONG)
     ; Bounce: set position so right edge = xMax
@@ -1026,10 +1029,10 @@ ULR_X_MAX_CHECK:
     LDD 2,X       ; D = xMax
     PSHS Y        ; Push collision_size
     SUBD ,S++     ; D = xMax - collision_size (center position), pop
-    STD 0,U       ; x = xMax - collision_size
-    LDB 7,U       ; Reload velocity_x
+    STB 0,U       ; x = (xMax - collision_size) low byte (8-bit store)
+    LDB 4,U       ; Reload velocity_x
     NEGB          ; velocity_x = -velocity_x
-    STB 7,U
+    STB 4,U
 
     ; === Check Y Bounds (Top/Bottom walls) ===
 ULR_Y_BOUNDS:
@@ -1037,34 +1040,36 @@ ULR_Y_BOUNDS:
     LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
-    LDD 2,U       ; Load object y
+    LDB 1,U       ; Load object y (8-bit at offset +1)
+    SEX           ; Sign-extend y to 16-bit
     SUBD ,S++     ; D = y - collision_size (bottom edge), pop stack
     CMPD 4,X      ; Compare bottom edge with yMin
     LBGE ULR_Y_MAX_CHECK  ; Skip if bottom_edge >= yMin (LONG)
     ; Hit yMin wall - only bounce if moving down (velocity_y < 0)
-    LDB 8,U       ; velocity_y
+    LDB 5,U       ; velocity_y (offset +5)
     CMPB #0
     LBGE ULR_Y_MAX_CHECK  ; Skip if moving up (LONG)
     ; Bounce: set position so bottom edge = yMin
     LDB 8,U      ; Reload collision_size
     SEX
     ADDD 4,X      ; D = yMin + collision_size (center position)
-    STD 2,U       ; y = yMin + collision_size
-    LDB 8,U       ; Reload velocity_y
+    STB 1,U       ; y = (yMin + collision_size) low byte (8-bit store)
+    LDB 5,U       ; Reload velocity_y
     NEGB          ; velocity_y = -velocity_y
-    STB 8,U
+    STB 5,U
 
     ; Check yMax: if (y + collision_size) > yMax then bounce
 ULR_Y_MAX_CHECK:
     LDB 8,U      ; Reload collision_size
     SEX
     PSHS D        ; Save collision_size on stack
-    LDD 2,U       ; Load object y
+    LDB 1,U       ; Load object y (8-bit at offset +1)
+    SEX           ; Sign-extend y to 16-bit
     ADDD ,S++     ; D = y + collision_size (top edge), pop stack
     CMPD 6,X      ; Compare top edge with yMax
     LBLE ULR_NEXT  ; Skip if top_edge <= yMax (LONG)
     ; Hit yMax wall - only bounce if moving up (velocity_y > 0)
-    LDB 8,U       ; velocity_y
+    LDB 5,U       ; velocity_y (offset +5)
     CMPB #0
     LBLE ULR_NEXT  ; Skip if moving down (LONG)
     ; Bounce: set position so top edge = yMax
@@ -1074,10 +1079,10 @@ ULR_Y_MAX_CHECK:
     LDD 6,X       ; D = yMax
     PSHS Y        ; Push collision_size
     SUBD ,S++     ; D = yMax - collision_size (center position), pop
-    STD 2,U       ; y = yMax - collision_size
-    LDB 8,U       ; Reload velocity_y
+    STB 1,U       ; y = (yMax - collision_size) low byte (8-bit store)
+    LDB 5,U       ; Reload velocity_y
     NEGB          ; velocity_y = -velocity_y
-    STB 8,U
+    STB 5,U
 
 ULR_NEXT:
     PULS B        ; Restore loop counter
@@ -1117,7 +1122,7 @@ UGPC_SKIP_OUTER_MUL:
     ; Check if collidable
     LDB 10,U
     BITB #$01
-    BEQ UGPC_NEXT_OUTER
+    LBEQ UGPC_NEXT_OUTER
     
     ; Inner loop: check against all objects AFTER current
     LDA UGPC_OUTER_IDX
@@ -1128,7 +1133,7 @@ UGPC_INNER_LOOP:
     ; Check if inner reached count
     LDA UGPC_INNER_IDX
     CMPA LEVEL_GP_COUNT
-    BHS UGPC_INNER_DONE  ; Done if idx >= count
+    LBHS UGPC_INNER_DONE  ; Done if idx >= count (LONG)
     
     ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 14)
     LDY #LEVEL_GP_BUFFER
@@ -1143,11 +1148,23 @@ UGPC_SKIP_INNER_MUL:
     ; Check if Y collidable
     LDB 7,Y
     BITB #$01
-    BEQ UGPC_NEXT_INNER
+    LBEQ UGPC_NEXT_INNER
     
     ; Manhattan distance |x1-x2| + |y1-y2|
-    LDD 0,U          ; x1
-    SUBD 0,Y         ; x1-x2
+    LDB 0,U          ; x1 (8-bit at offset +0)
+    SEX              ; Sign-extend to 16-bit
+    PSHS D           ; Save x1
+    LDB 0,Y          ; x2 (8-bit at offset +0)
+    SEX              ; Sign-extend to 16-bit
+    TFR D,X          ; X = x2
+    PULS D           ; D = x1
+    PSHS X           ; Save X register
+    TFR X,D          ; D = x2
+    PULS X           ; Restore X
+    PSHS D           ; Push x2
+    LDB 0,U          ; Reload x1
+    SEX
+    SUBD ,S++        ; x1-x2
     BPL UGPC_DX_POS
     COMA
     COMB
@@ -1155,8 +1172,20 @@ UGPC_SKIP_INNER_MUL:
 UGPC_DX_POS:
     STD UGPC_DX      ; Store |dx| in temp
     
-    LDD 2,U          ; y1
-    SUBD 2,Y         ; y1-y2
+    LDB 1,U          ; y1 (8-bit at offset +1)
+    SEX              ; Sign-extend to 16-bit
+    PSHS D           ; Save y1
+    LDB 1,Y          ; y2 (8-bit at offset +1)
+    SEX              ; Sign-extend to 16-bit
+    TFR D,X          ; X = y2 (temp)
+    PULS D           ; D = y1
+    PSHS X           ; Save X
+    TFR X,D          ; D = y2
+    PULS X           ; Restore X
+    PSHS D           ; Push y2
+    LDB 1,U          ; Reload y1
+    SEX
+    SUBD ,S++        ; y1-y2
     BPL UGPC_DY_POS
     COMA
     COMB
@@ -1171,21 +1200,21 @@ UGPC_DY_POS:
     SEX              ; D = sum_radius (normal, not doubled)
     ; Collision if distance < sum_radius (i.e., sum_radius > distance)
     CMPD UGPC_DIST   ; Compare sum_radius with distance
-    BHI UGPC_COLLISION  ; Jump to collision if sum_radius > distance
-    BRA UGPC_NEXT_INNER ; No collision, skip
+    LBHI UGPC_COLLISION  ; Jump to collision if sum_radius > distance (LONG)
+    LBRA UGPC_NEXT_INNER ; No collision, skip (LONG)
     
 UGPC_COLLISION:
     ; COLLISION! Swap velocities (elastic collision)
-    ; Swap velocity_x
-    LDA 7,U          ; A = vel_x of object 1
-    LDB 7,Y          ; B = vel_x of object 2
-    STB 7,U          ; Object 1 gets object 2's vel_x
-    STA 7,Y          ; Object 2 gets object 1's vel_x
-    ; Swap velocity_y
-    LDA 8,U          ; A = vel_y of object 1
-    LDB 8,Y          ; B = vel_y of object 2
-    STB 8,U          ; Object 1 gets object 2's vel_y
-    STA 8,Y          ; Object 2 gets object 1's vel_y
+    ; Swap velocity_x (offset +4)
+    LDA 4,U          ; A = vel_x of object 1
+    LDB 4,Y          ; B = vel_x of object 2
+    STB 4,U          ; Object 1 gets object 2's vel_x
+    STA 4,Y          ; Object 2 gets object 1's vel_x
+    ; Swap velocity_y (offset +5)
+    LDA 5,U          ; A = vel_y of object 1
+    LDB 5,Y          ; B = vel_y of object 2
+    STB 5,U          ; Object 1 gets object 2's vel_y
+    STA 5,Y          ; Object 2 gets object 1's vel_y
     
 UGPC_NEXT_INNER:
     INC UGPC_INNER_IDX
@@ -1196,7 +1225,7 @@ UGPC_NEXT_OUTER:
     INC UGPC_OUTER_IDX
     LDA UGPC_OUTER_IDX
     CMPA UGPC_OUTER_MAX
-    BHI UGPC_EXIT    ; Exit if idx > max
+    LBHI UGPC_EXIT    ; Exit if idx > max (LONG)
     LBRA UGPC_OUTER_LOOP  ; Continue (LONG)
     
 UGPC_EXIT:
