@@ -2486,6 +2486,14 @@ fn emit_fdb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     // FDB $C800,label - Form Constant Word(s)
     let parts: Vec<&str> = operand.split(',').map(|s| s.trim()).collect();
     for part in parts {
+        // Skip single-character "symbols" that are likely register names or parsing errors
+        if part.len() == 1 {
+            let c = part.chars().next().unwrap().to_ascii_uppercase();
+            if ['A', 'B', 'X', 'Y', 'U', 'S'].contains(&c) {
+                return Err(format!("FDB: Símbolo de un carácter '{}' no permitido (probablemente error de parsing)", part));
+            }
+        }
+        
         // Intentar resolver como símbolo primero
         let upper = part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
@@ -2546,6 +2554,11 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 Ok(value) => emitter.ldx_immediate(value),
                 Err(e) if e.starts_with("SYMBOL:") => {
                     let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    // DEBUG: Log when adding symbol ref
+                    if symbol.len() == 1 {
+                        eprintln!("⚠️ LDX emit_ldx: operand='{}' value_part='{}' symbol='{}' addend={} offset={}", 
+                            operand, value_part, symbol, addend, emitter.current_offset());
+                    }
                     emitter.emit_immediate16_symbol_ref(&[0x8E], &symbol, addend);
                 }
                 Err(_) => {
