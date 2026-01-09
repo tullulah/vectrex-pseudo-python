@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 170 bytes
+; Total RAM used: 689 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -48,17 +48,18 @@ LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (R
 LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
 LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
 LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_DYNAMIC_COUNT  EQU $C880+$22   ; Number of active dynamic objects (max 12) (1 bytes)
-LEVEL_DYNAMIC_BUFFER EQU $C880+$23   ; Dynamic objects state (12 objects * 10 bytes) (120 bytes)
-UGPC_OUTER_IDX       EQU $C880+$9B   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$9C   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$9D   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$9E   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$A0   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$A2   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$A4   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$A6   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$A8   ; Function argument 3 (2 bytes)
+LEVEL_BG_BUFFER      EQU $C880+$22   ; Background objects buffer (max 8 objects * 20 bytes) (160 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$C2   ; Gameplay objects buffer (max 16 objects * 20 bytes) (320 bytes)
+LEVEL_FG_BUFFER      EQU $C880+$202   ; Foreground objects buffer (max 8 objects * 20 bytes) (160 bytes)
+UGPC_OUTER_IDX       EQU $C880+$2A2   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$2A3   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$2A4   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$2A5   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$2A7   ; Manhattan distance temporary (16-bit) (2 bytes)
+VAR_ARG0             EQU $C880+$2A9   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$2AB   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$2AD   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$2AF   ; Function argument 3 (2 bytes)
 
     JMP START
 
@@ -593,16 +594,14 @@ LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
 RTS
 ; === LOAD_LEVEL_RUNTIME ===
-; Load level data from ROM and build dynamic objects index
+; Load level data from ROM and copy objects to RAM
 ; Input: X = pointer to level data in ROM
 ; Output: LEVEL_PTR = pointer to level header (persistent)
 ;         RESULT    = pointer to level header (return value)
-;         LEVEL_DYNAMIC_COUNT = number of dynamic objects found
-;         LEVEL_DYNAMIC_BUFFER = state for dynamic objects (6 bytes each)
-; 
-; OPTIMIZATION: Static objects (physicsEnabled=false) are NOT copied to RAM.
-; They remain in ROM and are rendered directly. Only dynamic objects get RAM state.
-; Dynamic state: rom_index(1), pos_x(2), pos_y(2), vel_x(2), vel_y(2), flags(1) = 10 bytes per object
+;         Objects copied to RAM buffers:
+;           LEVEL_BG_BUFFER (max 8 objects * 24 bytes = 192 bytes)
+;           LEVEL_GP_BUFFER (max 16 objects * 24 bytes = 384 bytes)
+;           LEVEL_FG_BUFFER (max 8 objects * 24 bytes = 192 bytes)
 LOAD_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
     
@@ -628,44 +627,41 @@ LOAD_LEVEL_RUNTIME:
     LDD ,X++         ; D = fgObjectsPtr (ROM)
     STD LEVEL_FG_ROM_PTR
     
-    ; === Clear dynamic buffer ===
-    CLR LEVEL_DYNAMIC_COUNT
-    LDA #$FF         ; Empty marker
-    LDX #LEVEL_DYNAMIC_BUFFER
-    LDB #120         ; 12 objects * 10 bytes
-LLR_CLEAR_LOOP:
-    STA ,X+
-    DECB
-    BNE LLR_CLEAR_LOOP
+    ; === Clear all buffers (mark as empty with type=0xFF) ===
+    JSR LLR_CLEAR_BUFFERS
     
-    ; === Scan ALL layers for dynamic objects ===
-    ; U = dynamic buffer write pointer
-    LDU #LEVEL_DYNAMIC_BUFFER
-    
-    ; Scan background layer
+    ; === Copy Background Objects to RAM ===
     LDB LEVEL_BG_COUNT
-    BEQ LLR_SKIP_BG_SCAN
-    LDX LEVEL_BG_ROM_PTR
-    LDA #0           ; Start at index 0
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_BG_SCAN:
+    BEQ LLR_SKIP_BG  ; Skip if zero
+    LDX LEVEL_BG_ROM_PTR  ; X = source (ROM)
+    LDU #LEVEL_BG_BUFFER   ; U = destination (RAM)
+    PSHS U              ; Save buffer start BEFORE copy
+    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
+    PULS D              ; Restore buffer start
+    STD LEVEL_BG_PTR    ; Store correct pointer
+LLR_SKIP_BG:
     
-    ; Scan gameplay layer
+    ; === Copy Gameplay Objects to RAM ===
     LDB LEVEL_GP_COUNT
-    BEQ LLR_SKIP_GP_SCAN
-    LDX LEVEL_GP_ROM_PTR
-    LDA LEVEL_BG_COUNT  ; Offset index by BG count
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_GP_SCAN:
+    BEQ LLR_SKIP_GP  ; Skip if zero
+    LDX LEVEL_GP_ROM_PTR  ; X = source (ROM)
+    LDU #LEVEL_GP_BUFFER   ; U = destination (RAM)
+    PSHS U              ; Save buffer start BEFORE copy
+    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
+    PULS D              ; Restore buffer start
+    STD LEVEL_GP_PTR    ; Store correct pointer
+LLR_SKIP_GP:
     
-    ; Scan foreground layer
+    ; === Copy Foreground Objects to RAM ===
     LDB LEVEL_FG_COUNT
-    BEQ LLR_SKIP_FG_SCAN
-    LDX LEVEL_FG_ROM_PTR
-    LDA LEVEL_BG_COUNT
-    ADDA LEVEL_GP_COUNT  ; Offset by BG + GP count
-    JSR LLR_SCAN_LAYER
-LLR_SKIP_FG_SCAN:
+    BEQ LLR_SKIP_FG  ; Skip if zero
+    LDX LEVEL_FG_ROM_PTR  ; X = source (ROM)
+    LDU #LEVEL_FG_BUFFER   ; U = destination (RAM)
+    PSHS U              ; Save buffer start BEFORE copy
+    JSR LLR_COPY_OBJECTS   ; Copy B objects from X to U (U increments!)
+    PULS D              ; Restore buffer start
+    STD LEVEL_FG_PTR    ; Store correct pointer
+LLR_SKIP_FG:
     
     ; Return level pointer in RESULT
     LDX LEVEL_PTR
@@ -673,309 +669,227 @@ LLR_SKIP_FG_SCAN:
     
     PULS D,X,Y,U,PC  ; Restore and return
     
-; === Subroutine: Scan Layer for Dynamic Objects ===
-; Scan ROM objects and copy state for dynamic objects only
-; Input: A = starting rom_index (for this layer)
-;        B = object count in layer
-;        X = ROM pointer to first object in layer
-;        U = dynamic buffer write pointer
-; Output: U = advanced past any added dynamic objects
-;         LEVEL_DYNAMIC_COUNT = updated
-; Object structure in ROM (24 bytes):
-;   +0: type, +1: sprite_id, +2-3: x, +4-5: y
-;   +6-7: width, +8-9: height
-;   +10-11: velocity_x, +12-13: velocity_y
-;   +14-15: flags (bit 0 = physicsEnabled/dynamic)
-;   +16: intensity, +17: scale, +18: rotation, +19: collision_size
-;   +20-21: spawn_delay, +22-23: vector_ptr
-LLR_SCAN_LAYER:
-    PSHS A           ; Save rom_index counter
-LLR_SCAN_LOOP:
-    TSTB
-    BEQ LLR_SCAN_DONE
-    
-    ; Check if dynamic: Read flags at offset +14
-    LDA 14,X         ; A = flags low byte
-    ANDA #$01        ; Test bit 0 (physicsEnabled)
-    BEQ LLR_SCAN_NEXT  ; Skip if static
-    
-    ; Dynamic object found - check if buffer full
-    LDA LEVEL_DYNAMIC_COUNT
-    CMPA #12
-    BHS LLR_SCAN_OVERFLOW  ; Skip if >= 12 (buffer full)
-    
-    ; Copy to dynamic buffer (10 bytes):
-    ; +0: rom_index
-    PULS A           ; Get rom_index
-    STA ,U+
-    PSHS A           ; Save it back
-    
-    ; +1-2: position_x (from ROM offset +2-3)
-    LDD 2,X
-    STD ,U++
-    
-    ; +3-4: position_y (from ROM offset +4-5)
-    LDD 4,X
-    STD ,U++
-    
-    ; +5-6: velocity_x (from ROM offset +10-11)
-    LDD 10,X
-    STD ,U++
-    
-    ; +7-8: velocity_y (from ROM offset +12-13)
-    LDD 12,X
-    STD ,U++
-    
-    ; +9: active_flags (initialize to 0x01 = active)
-    LDA #$01
-    STA ,U+
-    
-    ; Increment dynamic count
-    INC LEVEL_DYNAMIC_COUNT
-    
-LLR_SCAN_NEXT:
-    ; Advance to next object (24 bytes)
-    LEAX 24,X
-    
-    ; Increment rom_index
-    PULS A
-    INCA
-    PSHS A
-    
+; === Subroutine: Clear All Level Buffers ===
+; Mark all objects as empty (type=0xFF) to avoid reading garbage
+; Clobbers: A, B, U
+LLR_CLEAR_BUFFERS:
+    LDA #$FF         ; Empty marker
+    ; Clear BG buffer (160 bytes = 8 objects)
+    LDU #LEVEL_BG_BUFFER
+    LDB #8           ; 8 objects
+LLR_CLR_BG_LOOP:
+    STA ,U           ; Write 0xFF to type byte (offset +0)
+    LEAU 20,U        ; Next object
     DECB
-    BRA LLR_SCAN_LOOP
+    BNE LLR_CLR_BG_LOOP
+    ; Clear GP buffer (320 bytes = 16 objects)
+    LDU #LEVEL_GP_BUFFER
+    LDB #16          ; 16 objects
+LLR_CLR_GP_LOOP:
+    STA ,U           ; Write 0xFF to type byte
+    LEAU 20,U
+    DECB
+    BNE LLR_CLR_GP_LOOP
+    ; Clear FG buffer (160 bytes = 8 objects)
+    LDU #LEVEL_FG_BUFFER
+    LDB #8           ; 8 objects
+LLR_CLR_FG_LOOP:
+    STA ,U           ; Write 0xFF to type byte
+    LEAU 20,U
+    DECB
+    BNE LLR_CLR_FG_LOOP
+    RTS
     
-LLR_SCAN_OVERFLOW:
-    ; Buffer full - skip remaining objects
-    ; TODO: Could emit warning/error in debug builds
-LLR_SCAN_DONE:
-    PULS A,PC        ; Restore and return
+; === Subroutine: Copy N Objects ===
+; Input: B = count, X = source (ROM), U = destination (RAM)
+; Each object is 24 bytes (including scale, rotation, collision_size, spawn_delay, vector_ptr, properties_ptr)
+; Clobbers: A, B, X, U
+LLR_COPY_OBJECTS:
+LLR_COPY_LOOP:
+    TSTB
+    BEQ LLR_COPY_DONE
+    PSHS B           ; Save counter (LDD will clobber B!)
+    
+    ; Copy 24 bytes from X to U
+    LDD ,X++         ; Bytes 0-1
+    STD ,U++
+    LDD ,X++         ; Bytes 2-3
+    STD ,U++
+    LDD ,X++         ; Bytes 4-5
+    STD ,U++
+    LDD ,X++         ; Bytes 6-7
+    STD ,U++
+    LDD ,X++         ; Bytes 8-9
+    STD ,U++
+    LDD ,X++         ; Bytes 10-11
+    STD ,U++
+    LDD ,X++         ; Bytes 12-13
+    STD ,U++
+    LDD ,X++         ; Bytes 14-15
+    STD ,U++
+    LDD ,X++         ; Bytes 16-17
+    STD ,U++
+    LDD ,X++         ; Bytes 18-19
+    STD ,U++
+    
+    PULS B           ; Restore counter
+    DECB             ; Decrement after copy
+    BRA LLR_COPY_LOOP
+LLR_COPY_DONE:
+    RTS
 
 ; === SHOW_LEVEL_RUNTIME ===
-; Draw all level objects using ROM-first optimization
-; Phase 1: Draw static objects directly from ROM (0 RAM overhead)
-; Phase 2: Draw dynamic objects from LEVEL_DYNAMIC_BUFFER
+; Draw all level objects from loaded level
 ; Input: LEVEL_PTR = pointer to level data
+; Level structure (from levelres.rs):
+;   +0:  FDB xMin, xMax (world bounds)
+;   +4:  FDB yMin, yMax
+;   +8:  FDB timeLimit, targetScore
+;   +12: FCB bgCount, gameplayCount, fgCount
+;   +15: FDB bgObjectsPtr, gameplayObjectsPtr, fgObjectsPtr
+; Object structure (20 bytes each):
+;   +0:  FCB type
+;   +1:  FDB x, y (position)
+;   +5:  FDB scale (8.8 fixed point)
+;   +7:  FCB rotation, intensity
+;   +9:  FCB velocity_x, velocity_y
+;   +11: FCB physics_flags, collision_flags, collision_size
+;   +14: FDB spawn_delay
+;   +16: FDB vector_ptr
+;   +18: FDB properties_ptr
 SHOW_LEVEL_RUNTIME:
     PSHS D,X,Y,U     ; Preserve registers
-    ; NOTE: DP must be $C8 (not $D0) for drawing functions to access RAM
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)
     
-    ; Check if level loaded
-    LDX LEVEL_PTR
+    ; Get level pointer (persistent)
+    LDX >LEVEL_PTR
     CMPX #0
-    LBEQ SLR_DONE    ; No level loaded (long branch)
+    BEQ SLR_DONE     ; No level loaded
     
-    ; === PHASE 1: Draw Static Objects from ROM ===
-    ; Skip to layer pointers (12 bytes header + 3 bytes counts)
-    LEAX 15,X
+    ; Skip world bounds (8 bytes) + time/score (4 bytes)
+    LEAX 12,X        ; X now points to object counts
     
-    ; Draw background layer (static only)
-    LDB LEVEL_BG_COUNT
-    BEQ SLR_SKIP_BG_STATIC
-    LDX LEVEL_BG_ROM_PTR
-    JSR SLR_DRAW_STATIC_LAYER
-SLR_SKIP_BG_STATIC:
+    ; Read object counts (use LDB+STB to ensure 1-byte operations)
+    LDB ,X+          ; B = bgCount
+    STB >LEVEL_BG_COUNT
+    LDB ,X+          ; B = gameplayCount
+    STB >LEVEL_GP_COUNT
+    LDB ,X+          ; B = fgCount
+    STB >LEVEL_FG_COUNT
     
-    ; Draw gameplay layer (static only)
-    LDB LEVEL_GP_COUNT
-    BEQ SLR_SKIP_GP_STATIC
-    LDX LEVEL_GP_ROM_PTR
-    JSR SLR_DRAW_STATIC_LAYER
-SLR_SKIP_GP_STATIC:
+    ; Read layer pointers
+    LDD ,X++         ; D = bgObjectsPtr
+    STD >LEVEL_BG_PTR
+    LDD ,X++         ; D = gameplayObjectsPtr
+    STD >LEVEL_GP_PTR
+    LDD ,X++         ; D = fgObjectsPtr
+    STD >LEVEL_FG_PTR
     
-    ; Draw foreground layer (static only)
-    LDB LEVEL_FG_COUNT
-    BEQ SLR_SKIP_FG_STATIC
-    LDX LEVEL_FG_ROM_PTR
-    JSR SLR_DRAW_STATIC_LAYER
-SLR_SKIP_FG_STATIC:
+    ; === Draw Background Layer ===
+SLR_BG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
+    LDB >LEVEL_BG_COUNT
+    CMPB #0
+    BEQ SLR_GAMEPLAY
+SLR_BG_PTR:
+    LDX #LEVEL_BG_BUFFER ; Read from RAM buffer (not ROM)
+    JSR SLR_DRAW_OBJECTS
     
-    ; === PHASE 2: Draw Dynamic Objects from RAM ===
-    LDB LEVEL_DYNAMIC_COUNT
+    ; === Draw Gameplay Layer ===
+SLR_GAMEPLAY:
+SLR_GP_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
+    LDB >LEVEL_GP_COUNT
+    CMPB #0
+    BEQ SLR_FOREGROUND
+SLR_GP_PTR:
+    LDX #LEVEL_GP_BUFFER ; Read from RAM buffer (not ROM)
+    JSR SLR_DRAW_OBJECTS
+    
+    ; === Draw Foreground Layer ===
+SLR_FOREGROUND:
+SLR_FG_COUNT:
+    CLRB             ; Clear high byte to prevent corruption
+    LDB >LEVEL_FG_COUNT
+    CMPB #0
     BEQ SLR_DONE
-    LDU #LEVEL_DYNAMIC_BUFFER
-    JSR SLR_DRAW_DYNAMIC_OBJECTS
+SLR_FG_PTR:
+    LDX #LEVEL_FG_BUFFER ; Read from RAM buffer (not ROM)
+    JSR SLR_DRAW_OBJECTS
     
 SLR_DONE:
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access - ONCE at end)
     PULS D,X,Y,U,PC  ; Restore and return
     
-; === SLR_DRAW_STATIC_LAYER: Draw static objects from ROM ===
-; Input: B = object count, X = ROM pointer to first object
-; Skips objects with physicsEnabled flag (those are in dynamic buffer)
-SLR_DRAW_STATIC_LAYER:
-    TSTB
-    BEQ SLR_DSL_DONE
-    PSHS B
+; === Subroutine: Draw N Objects ===
+; Input: B = count, X = objects ptr
+; Each object is 20 bytes
+SLR_DRAW_OBJECTS:
+    ; NOTE: Use register-based loop (no stack juggling).
+    ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
+SLR_OBJ_LOOP:
+    TSTB             ; Test if count is zero
+    BEQ SLR_OBJ_DONE ; Exit if zero (prevents off-by-one)
     
-    ; Check if dynamic (offset +14, bit 0)
-    LDA 14,X
-    ANDA #$01
-    BNE SLR_DSL_SKIP  ; Skip if dynamic
+    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
     
-    ; Static object - draw from ROM
-    JSR SLR_DRAW_ONE_OBJECT  ; X = ROM pointer
+    ; X points to current object (20 bytes)
+    ; Structure: FCB type (+0), FDB x (+1), FDB y (+3), FDB scale (+5),
+    ;           FCB rotation (+7), FCB intensity (+8), ..., FDB vector_ptr (+16)
     
-SLR_DSL_SKIP:
-    ; Advance to next object (24 bytes)
-    LEAX 24,X
-    PULS B
-    DECB
-    BRA SLR_DRAW_STATIC_LAYER
-    
-SLR_DSL_DONE:
-    RTS
-    
-; === SLR_DRAW_DYNAMIC_OBJECTS: Draw from dynamic buffer ===
-; Input: B = dynamic count, U = LEVEL_DYNAMIC_BUFFER
-; Reads position from RAM (not ROM) since objects have moved
-SLR_DRAW_DYNAMIC_OBJECTS:
-    TSTB
-    LBEQ SLR_DDO_DONE
-    PSHS B
-    
-    ; Dynamic buffer entry (10 bytes):
-    ; +0: rom_index, +1-2: pos_x, +3-4: pos_y, +5-6: vel_x, +7-8: vel_y, +9: flags
-    
-    ; Get rom_index and calculate ROM offset
-    LDA ,U+          ; A = rom_index
-    PSHS U           ; Save dynamic buffer pos
-    
-    ; Calculate ROM pointer: rom_index * 24
-    ; First determine which layer this index belongs to
-    LDB LEVEL_BG_COUNT
-    CMPB A
-    BHI SLR_DDO_IN_BG  ; If index < bgCount, it's in BG
-    
-    ; Not in BG, check GP
-    ADDB LEVEL_GP_COUNT  ; B = bgCount + gpCount
-    CMPB A
-    BHI SLR_DDO_IN_GP  ; If index < bgCount+gpCount, it's in GP
-    
-    ; Must be in FG
-    LDX LEVEL_FG_ROM_PTR
-    LDB LEVEL_BG_COUNT
-    ADDB LEVEL_GP_COUNT
-    BRA SLR_DDO_CALC_OFFSET
-    
-SLR_DDO_IN_BG:
-    LDX LEVEL_BG_ROM_PTR
-    CLRB             ; Offset from start of layer
-    BRA SLR_DDO_CALC_OFFSET
-    
-SLR_DDO_IN_GP:
-    LDX LEVEL_GP_ROM_PTR
-    LDB LEVEL_BG_COUNT
-    
-SLR_DDO_CALC_OFFSET:
-    ; A = rom_index, B = layer_base_index, X = layer ROM ptr
-    PSHS A
-    SUBA B           ; A = index within layer
-    ; Multiply by 24: A = A * 24 = A * 16 + A * 8
-    TFR A,B          ; Save original A
-    LSLB
-    LSLB
-    LSLB             ; B = A * 8
-    PSHS B           ; Save A*8
-    TFR A,B          ; B = original A
-    LSLB
-    LSLB
-    LSLB
-    LSLB             ; B = A * 16
-    ADDB ,S+         ; B = A*16 + A*8 = A*24, pop stack
-    CLRA             ; Clear high byte
-    LEAX D,X         ; X = X + (A*24)
-    PULS A           ; Get rom_index back
-    PULS U           ; Restore dynamic buffer position
-    
-    ; Override position with RAM values (objects have moved!)
-    ; Read pos_x from U+0-1 (U now points after rom_index)
-    LDD ,U++
-    STB DRAW_VEC_X   ; Store X position (LSB)
-    
-    ; Read pos_y from U+0-1 (U advanced)
-    LDD ,U++
-    STB DRAW_VEC_Y   ; Store Y position (LSB)
-    
-    ; Skip velocity (4 bytes) and flags (1 byte)
-    LEAU 5,U
-    
-    ; Read intensity and vector_ptr from ROM (X points to ROM object)
-    LDA 16,X         ; Intensity from ROM
-    STA DRAW_VEC_INTENSITY
-    
-    LDY 22,X         ; Vector pointer from ROM (offset +22-23)
-    PSHS U           ; Save dynamic buffer pos
-    TFR Y,X          ; X = vector data
-    
-    ; Clear mirrors
+    ; Clear mirror flags (no mirroring support yet)
     CLR MIRROR_X
     CLR MIRROR_Y
     
-    ; Draw paths
-    LDB ,X+          ; B = path_count
-    PSHS B
-SLR_DDO_PATH_LOOP:
-    PULS B
-    TSTB
-    LBEQ SLR_DDO_PATH_DONE
-    DECB
-    PSHS B
-    LDY ,X++         ; Read path pointer
-    PSHS X
-    TFR Y,X
-    JSR Draw_Sync_List_At_With_Mirrors
-    PULS X
-    BRA SLR_DDO_PATH_LOOP
-SLR_DDO_PATH_DONE:
+    ; Read intensity (offset +8) and store as override
+    LDA 8,X
+    STA DRAW_VEC_INTENSITY
     
-    PULS U           ; Restore dynamic buffer position
-    PULS B
-    DECB
-    LBRA SLR_DRAW_DYNAMIC_OBJECTS
-    
-SLR_DDO_DONE:
-    RTS
-    
-; === SLR_DRAW_ONE_OBJECT: Draw single object from ROM ===
-; Input: X = ROM pointer to object (24 bytes)
-; Reads position, intensity, vector_ptr from ROM
-SLR_DRAW_ONE_OBJECT:
-    ; Read position from ROM
-    LDD 2,X          ; X position (offset +2-3)
-    STB DRAW_VEC_X
-    LDD 4,X          ; Y position (offset +4-5)
+    ; Read y position (offset +3-4) - store LSB only
+    LDD 3,X          ; WARNING: This modifies B!
     STB DRAW_VEC_Y
     
-    ; Read intensity
-    LDA 16,X
-    STA DRAW_VEC_INTENSITY
+    ; Read x position (offset +1-2) - store LSB only
+    LDD 1,X          ; WARNING: This modifies B!
+    STB DRAW_VEC_X
     
-    ; Clear mirrors
-    CLR MIRROR_X
-    CLR MIRROR_Y
+    ; Read vector_ptr (offset +16-17)
+    LDU 16,X
+    PSHS X           ; Save object pointer on stack (Y may be corrupted by Draw_Sync_List)
+    TFR U,X          ; X = vector data pointer (points to header)
     
-    ; Read vector_ptr (offset +22-23)
-    PSHS X           ; Save object pointer
-    LDX 22,X         ; X = vector data pointer
+    ; Read path_count from header (byte 0)
+    LDB ,X+          ; B = path_count, X now points to pointer table
+    PSHS B           ; Save path_count on stack
     
-    ; Draw all paths
-    LDB ,X+          ; B = path_count
-    PSHS B
-SLR_DOO_PATH_LOOP:
-    PULS B
+    ; Draw all paths using pointer table (DP already set to $D0 by SHOW_LEVEL_RUNTIME)
+SLR_PATH_LOOP:
+    PULS B           ; Get remaining count
     TSTB
-    BEQ SLR_DOO_PATH_DONE
+    BEQ SLR_PATH_DONE
     DECB
-    PSHS B
-    LDU ,X++         ; Read path pointer
-    PSHS X
-    TFR U,X
-    JSR Draw_Sync_List_At_With_Mirrors
-    PULS X
-    BRA SLR_DOO_PATH_LOOP
-SLR_DOO_PATH_DONE:
+    PSHS B           ; Save decremented count
     
-    PULS X           ; Restore object pointer
+    ; Read next path pointer from table (X points to current FDB entry)
+    LDU ,X++         ; U = path pointer, X advances to next entry
+    PSHS X           ; Save pointer table position
+    TFR U,X          ; X = actual path data
+    JSR Draw_Sync_List_At_With_Mirrors  ; Draw this path
+    PULS X           ; Restore pointer table position
+    BRA SLR_PATH_LOOP
+    
+SLR_PATH_DONE:
+    ; NOTE: Counter already popped by PULS B before TSTB - no cleanup needed
+    PULS X           ; Restore object pointer from stack
+    
+    ; Advance to next object (20 bytes)
+    LEAX 20,X
+    
+    PULS B           ; Restore counter
+    DECB             ; Decrement count AFTER drawing
+    BRA SLR_OBJ_LOOP
+    
+SLR_OBJ_DONE:
     RTS
 
 START:
