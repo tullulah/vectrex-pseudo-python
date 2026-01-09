@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 166 bytes
+; Total RAM used: 170 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
@@ -57,6 +57,8 @@ UGPC_DX              EQU $C880+$9E   ; Distance X temporary (16-bit) (2 bytes)
 UGPC_DIST            EQU $C880+$A0   ; Manhattan distance temporary (16-bit) (2 bytes)
 VAR_ARG0             EQU $C880+$A2   ; Function argument 0 (2 bytes)
 VAR_ARG1             EQU $C880+$A4   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$A6   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$A8   ; Function argument 3 (2 bytes)
 
     JMP START
 
@@ -977,112 +979,6 @@ SLR_DOO_PATH_DONE:
     PULS X           ; Restore object pointer
     RTS
 
-; === UPDATE_LEVEL_RUNTIME ===
-; Update level state (physics, velocity) for dynamic objects ONLY
-; Static objects don't need updates (they never move)
-; Operates on LEVEL_DYNAMIC_BUFFER (10 bytes per object)
-UPDATE_LEVEL_RUNTIME:
-    PSHS U,X,Y,D  ; Preserve all registers
-    
-    ; Check if any dynamic objects exist
-    LDB LEVEL_DYNAMIC_COUNT
-    BEQ ULR_EXIT
-    
-    ; Get world bounds for collision checks
-    LDX LEVEL_PTR
-    CMPX #0
-    BEQ ULR_EXIT  ; No level loaded
-    
-    ; U = dynamic buffer pointer
-    LDU #LEVEL_DYNAMIC_BUFFER
-    
-ULR_LOOP:
-    ; Dynamic buffer entry (10 bytes):
-    ; +0: rom_index, +1-2: pos_x, +3-4: pos_y, +5-6: vel_x, +7-8: vel_y, +9: flags
-    
-    PSHS B           ; Save counter
-    
-    ; Skip rom_index
-    LEAU 1,U
-    
-    ; Apply velocity: pos_x += vel_x
-    LDD ,U           ; Load pos_x (offset +0-1 after rom_index)
-    ADDD 4,U         ; Add vel_x (offset +4-5)
-    STD ,U           ; Store new pos_x
-    
-    ; Apply velocity: pos_y += vel_y
-    LDD 2,U          ; Load pos_y (offset +2-3)
-    ADDD 6,U         ; Add vel_y (offset +6-7)
-    STD 2,U          ; Store new pos_y
-    
-    ; === Check World Bounds (Wall Collisions) ===
-    ; Simplified: Bounce if position exceeds bounds
-    
-    ; Check X bounds (xMin at X+0, xMax at X+2)
-    LDD ,U           ; pos_x
-    CMPD 0,X         ; Compare with xMin
-    BGE ULR_X_MAX_CHECK
-    ; Hit xMin - clamp position and negate velocity
-    LDD 0,X
-    STD ,U           ; pos_x = xMin
-    LDD 4,U          ; vel_x
-    NEGA
-    NEGB
-    SBCA #0
-    STD 4,U          ; vel_x = -vel_x
-    
-ULR_X_MAX_CHECK:
-    LDD ,U           ; pos_x
-    CMPD 2,X         ; Compare with xMax
-    BLE ULR_Y_MIN_CHECK
-    ; Hit xMax - clamp position and negate velocity
-    LDD 2,X
-    STD ,U           ; pos_x = xMax
-    LDD 4,U          ; vel_x
-    NEGA
-    NEGB
-    SBCA #0
-    STD 4,U          ; vel_x = -vel_x
-    
-    ; Check Y bounds (yMin at X+4, yMax at X+6)
-ULR_Y_MIN_CHECK:
-    LDD 2,U          ; pos_y
-    CMPD 4,X         ; Compare with yMin
-    BGE ULR_Y_MAX_CHECK
-    ; Hit yMin - clamp position and negate velocity
-    LDD 4,X
-    STD 2,U          ; pos_y = yMin
-    LDD 6,U          ; vel_y
-    NEGA
-    NEGB
-    SBCA #0
-    STD 6,U          ; vel_y = -vel_y
-    
-ULR_Y_MAX_CHECK:
-    LDD 2,U          ; pos_y
-    CMPD 6,X         ; Compare with yMax
-    BLE ULR_NEXT
-    ; Hit yMax - clamp position and negate velocity
-    LDD 6,X
-    STD 2,U          ; pos_y = yMax
-    LDD 6,U          ; vel_y
-    NEGA
-    NEGB
-    SBCA #0
-    STD 6,U          ; vel_y = -vel_y
-    
-ULR_NEXT:
-    ; Advance to next dynamic object (10 bytes total)
-    LEAU 9,U         ; Skip remaining bytes (already skipped rom_index)
-    
-    PULS B
-    DECB
-    BNE ULR_LOOP
-    
-ULR_EXIT:
-    PULS D,Y,X,U  ; Restore registers
-    RTS
-
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1134,6 +1030,7 @@ MAIN:
 
     ; VPy_LINE:12
 LOOP_BODY:
+    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
@@ -1144,11 +1041,36 @@ LOOP_BODY:
     LDD #0
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:15
-; NATIVE_CALL: UPDATE_LEVEL at line 15
-    JSR UPDATE_LEVEL_RUNTIME
-    CLRA
-    CLRB
+    ; VPy_LINE:17
+; DRAW_VECTOR("fuji_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_FUJI_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
     STD RESULT
     RTS
 

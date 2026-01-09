@@ -12,4 +12,6 @@ def main():
 def loop():
     SHOW_LEVEL()
 
-    UPDATE_LEVEL()  # Apply gravity, velocity, collisions
+    #UPDATE_LEVEL()  # Apply gravity, velocity, collisions
+
+    DRAW_VECTOR("fuji_bg", 0, 0)

@@ -1647,7 +1647,7 @@ DCR_DELTA_TABLE:\n\
         out.push_str("; Input: LEVEL_PTR = pointer to level data\n");
         out.push_str("SHOW_LEVEL_RUNTIME:\n");
         out.push_str("    PSHS D,X,Y,U     ; Preserve registers\n");
-        out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
+        out.push_str("    ; NOTE: DP must be $C8 (not $D0) for drawing functions to access RAM\n");
         out.push_str("    \n");
         out.push_str("    ; Check if level loaded\n");
         out.push_str("    LDX LEVEL_PTR\n");
@@ -1686,7 +1686,6 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    JSR SLR_DRAW_DYNAMIC_OBJECTS\n");
         out.push_str("    \n");
         out.push_str("SLR_DONE:\n");
-        out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP)\n");
         out.push_str("    PULS D,X,Y,U,PC  ; Restore and return\n");
         out.push_str("    \n");
         out.push_str("; === SLR_DRAW_STATIC_LAYER: Draw static objects from ROM ===\n");
