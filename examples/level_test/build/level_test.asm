@@ -1554,8 +1554,8 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
     FDB 256  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
-    FCB 1  ; velocity_x
-    FCB 254  ; velocity_y
+    FCB 0  ; velocity_x
+    FCB 255  ; velocity_y
     FCB 1  ; physics_flags
     FCB 3  ; collision_flags
     FCB 15  ; collision_size
