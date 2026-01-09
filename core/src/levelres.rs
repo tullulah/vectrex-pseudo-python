@@ -136,14 +136,16 @@ pub struct VPlayPhysics {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VPlayCollision {
     pub enabled: bool,
-    pub layer: String,
+    #[serde(default)]
+    pub layer: Option<String>,
     #[serde(default)]
     pub radius: Option<u16>,
     #[serde(default)]
     pub width: Option<u16>,
     #[serde(default)]
     pub height: Option<u16>,
-    pub shape: String,
+    #[serde(default)]
+    pub shape: Option<String>,
     #[serde(default, rename = "bounceWalls")]
     pub bounce_walls: bool,
     #[serde(default, rename = "destroyOnCollision")]
@@ -272,7 +274,11 @@ impl VPlayLevel {
             if physics.gravity != 0.0 {
                 physics_flags |= 0x02; // Bit 1: gravity enabled
             }
-        } else if obj.physics_enabled {
+        }
+        
+        // CRITICAL: Check flat Playground format ALWAYS (even if nested physics exists)
+        // This allows collision field to coexist with physicsEnabled/physicsType
+        if obj.physics_enabled {
             // Playground flat format
             if let Some(ref physics_type) = obj.physics_type {
                 // All physicsType options enable physics (bit 0)
@@ -289,7 +295,7 @@ impl VPlayLevel {
         // Collision flags byte
         let mut collision_flags = 0u8;
         
-        // Check nested collision structure first, then flat Playground format
+        // Check nested collision structure first
         if let Some(ref collision) = obj.collision {
             if collision.enabled {
                 collision_flags |= 0x01; // Bit 0: collision enabled
@@ -297,11 +303,15 @@ impl VPlayLevel {
             if collision.bounce_walls {
                 collision_flags |= 0x02; // Bit 1: bounce on Y walls (top/bottom)
             }
-            if collision.shape == "circle" {
-                collision_flags |= 0x04; // Bit 2: circle shape (0=rect)
+            if let Some(ref shape) = collision.shape {
+                if shape == "circle" {
+                    collision_flags |= 0x04; // Bit 2: circle shape (0=rect)
+                }
             }
-            // Bit 3: wrap X (default false = bounce on X walls)
-        } else if obj.physics_enabled {
+        }
+        
+        // CRITICAL: Also check flat Playground format (can coexist with nested collision)
+        if obj.physics_enabled {
             // Playground flat format
             if obj.collidable {
                 collision_flags |= 0x01; // Bit 0: collision enabled

@@ -7,7 +7,7 @@
     "difficulty": "medium",
     "timeLimit": 0,
     "targetScore": 0,
-    "description": "Created in Playground - 2026-01-08"
+    "description": "Created in Playground - 2026-01-09"
   },
   "worldBounds": {
     "xMin": -96,
@@ -18,11 +18,11 @@
   "layers": {
     "background": [
       {
-        "id": "obj_1767873794056",
+        "id": "obj_1767949012188",
         "type": "enemy",
         "vectorName": "fuji_bg",
         "layer": "background",
-        "x": 1,
+        "x": 0,
         "y": 0,
         "rotation": 0,
         "scale": 1,
@@ -35,66 +35,79 @@
         "gravity": 1,
         "bounceDamping": 0.85,
         "physicsType": "gravity"
-      },
+      }
+    ],
+    "gameplay": [
       {
         "id": "obj_1767862794353",
         "type": "enemy",
         "vectorName": "bubble_huge",
-        "layer": "background",
+        "layer": "gameplay",
         "x": 45,
         "y": 71,
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 1,
-          "y": 0
+          "x": -1,
+          "y": -1
         },
         "physicsEnabled": true,
         "collidable": true,
         "gravity": 1,
         "bounceDamping": 0.85,
-        "physicsType": "bounce"
+        "physicsType": "bounce",
+        "collision": {
+          "enabled": true,
+          "radius": 27
+        }
       },
       {
         "id": "obj_1767883264744",
         "type": "enemy",
         "vectorName": "coin",
-        "layer": "background",
+        "layer": "gameplay",
         "x": -52,
         "y": 35,
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 1,
-          "y": 0
+          "x": 2,
+          "y": 1
         },
         "physicsEnabled": true,
         "collidable": true,
         "gravity": 1,
         "bounceDamping": 0.85,
-        "physicsType": "bounce"
+        "physicsType": "bounce",
+        "collision": {
+          "enabled": true,
+          "radius": 8
+        }
       },
       {
         "id": "obj_1767873800421",
         "type": "enemy",
         "vectorName": "bubble_large",
-        "layer": "background",
-        "x": -59,
+        "layer": "gameplay",
+        "x": -58,
         "y": 68,
         "rotation": 0,
         "scale": 1,
         "velocity": {
-          "x": 0,
+          "x": 1,
           "y": -2
         },
         "physicsEnabled": true,
         "collidable": true,
         "gravity": 1,
         "bounceDamping": 0.85,
-        "physicsType": "bounce"
+        "physicsType": "bounce",
+        "collision": {
+          "enabled": true,
+          "radius": 15
+        }
       }
     ],
-    "gameplay": [],
     "foreground": []
   },
   "spawnPoints": {

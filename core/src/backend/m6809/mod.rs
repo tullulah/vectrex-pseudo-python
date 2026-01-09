@@ -539,6 +539,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("LEVEL_BG_BUFFER", 160, "Background objects buffer (max 8 objects * 20 bytes)");
         ram.allocate("LEVEL_GP_BUFFER", 320, "Gameplay objects buffer (max 16 objects * 20 bytes)");
         ram.allocate("LEVEL_FG_BUFFER", 160, "Foreground objects buffer (max 8 objects * 20 bytes)");
+        
+        // Collision detection temporaries (used by ULR_GAMEPLAY_COLLISIONS)
+        ram.allocate("UGPC_OUTER_IDX", 1, "Outer loop index for collision detection");
+        ram.allocate("UGPC_OUTER_MAX", 1, "Outer loop max value (count-1)");
+        ram.allocate("UGPC_INNER_IDX", 1, "Inner loop index for collision detection");
+        ram.allocate("UGPC_DX", 2, "Distance X temporary (16-bit)");
+        ram.allocate("UGPC_DIST", 2, "Manhattan distance temporary (16-bit)");
     }
     
     // 10. DRAW_LINE variables (only if DRAW_LINE is used)

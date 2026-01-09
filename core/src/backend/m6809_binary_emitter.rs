@@ -482,6 +482,20 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
+    /// BITA #immediate (opcode 0x85)
+    pub fn bita_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0x85);
+        self.emit(value);
+    }
+
+    /// BITA extended (opcode 0xB5)
+    pub fn bita_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xB5);
+        self.emit_word(addr);
+    }
+
     /// BITB #immediate (opcode 0xC5)
     pub fn bitb_immediate(&mut self, value: u8) {
         self.record_line_mapping();

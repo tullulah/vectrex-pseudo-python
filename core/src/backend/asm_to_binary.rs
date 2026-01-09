@@ -534,6 +534,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         // === LOGIC ===
         "ANDA" => emit_anda(emitter, operand, equates),
         "ANDB" => emit_andb(emitter, operand, equates),
+        "BITA" => emit_bita(emitter, operand, equates),
         "BITB" => emit_bitb(emitter, operand, equates),
         "ORB" => emit_orb(emitter, operand, equates),
         "ORA" => emit_ora(emitter, operand, equates),
@@ -1764,6 +1765,41 @@ fn emit_andb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
                     let symbol = &msg[7..];
                     emitter.add_symbol_ref(symbol, false, 2);
                     emitter.emit(0xF4);
+                    emitter.emit_word(0);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_bita(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.bita_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE
+        emitter.emit(0xA5); // BITA indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else {
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.bita_extended(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.emit(0xB5); // BITA extended
                     emitter.emit_word(0);
                     Ok(())
                 } else {
