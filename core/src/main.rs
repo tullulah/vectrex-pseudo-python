@@ -478,6 +478,18 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     })?;
     eprintln!("✓ Phase 3 SUCCESS: Parsed module with {} top-level items", module.items.len());
     
+    // Debug: Show bank switching configuration if present
+    if let Some(bank_config) = codegen::BankConfig::from_meta(&module.meta) {
+        eprintln!("   [Bank Switching] Enabled with {} banks:", bank_config.rom_bank_count);
+        eprintln!("     - Total ROM: {} KB ({} bytes)", 
+            bank_config.rom_total_size / 1024, bank_config.rom_total_size);
+        eprintln!("     - Bank size: {} KB ({} bytes)", 
+            bank_config.rom_bank_size / 1024, bank_config.rom_bank_size);
+        eprintln!("     - Banked window: 0x0000-0x{:04X} ({} banks swappable)", 
+            bank_config.banked_window_size() - 1, bank_config.rom_bank_count - 1);
+        eprintln!("     - Fixed bank #{}: Always at 0x4000-0x5FFF", bank_config.fixed_bank);
+    }
+    
     // Phase 3.5: Multi-file resolution (if module has imports)
     let final_module = if !module.imports.is_empty() {
         eprintln!("Phase 3.5: Multi-file import resolution...");
@@ -586,6 +598,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     needs_buffer: r.needs_buffer,
                     analyzed_files: r.analyzed_files.clone(),
                 }),
+                bank_config: codegen::BankConfig::from_meta(&final_module.meta),
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -666,6 +679,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 needs_buffer: r.needs_buffer,
                 analyzed_files: r.analyzed_files.clone(),
             }),
+            bank_config: codegen::BankConfig::from_meta(&final_module.meta),
         });
         
         // Phase 4 validation: Check if assembly was actually generated

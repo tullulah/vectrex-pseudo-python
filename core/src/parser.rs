@@ -188,6 +188,9 @@ impl<'a> Parser<'a> {
                 if key.eq_ignore_ascii_case("TITLE") { if let Expr::StringLit(s)=&value { meta.title_override = Some(s.clone()); } }
                 else if key.eq_ignore_ascii_case("MUSIC") { if let Expr::StringLit(s)=&value { meta.music_override = Some(s.clone()); } }
                 else if key.eq_ignore_ascii_case("COPYRIGHT") { if let Expr::StringLit(s)=&value { meta.copyright_override = Some(s.clone()); } }
+                // Bank switching configuration (numeric values)
+                else if key.eq_ignore_ascii_case("ROM_TOTAL_SIZE") { if let Expr::Number(n)=value { meta.rom_total_size = Some(n as u32); } }
+                else if key.eq_ignore_ascii_case("ROM_BANK_SIZE") { if let Expr::Number(n)=value { meta.rom_bank_size = Some(n as u32); } }
                 continue;
             }
             if self.match_kind(&TokenKind::VectorList) || self.match_ident_case("VECTORLIST") {

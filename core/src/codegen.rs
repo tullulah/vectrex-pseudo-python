@@ -221,6 +221,67 @@ impl BufferRequirements {
     }
 }
 
+// Bank switching configuration (automatic bank assignment)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BankConfig {
+    /// Total ROM size in bytes (e.g., 524288 for 512KB)
+    pub rom_total_size: u32,
+    /// Bank size in bytes (default: 16384 = 16KB)
+    pub rom_bank_size: u32,
+    /// Number of banks (calculated: rom_total_size / rom_bank_size)
+    pub rom_bank_count: u8,
+    /// Fixed bank ID (last bank, always visible at 0x4000-0x7FFF)
+    pub fixed_bank: u8,
+    /// ROM bank register address (hardware, default: 0x4000)
+    pub rom_bank_reg: u16,
+}
+
+impl BankConfig {
+    /// Create BankConfig from META directives (with defaults)
+    pub fn from_meta(meta: &ModuleMeta) -> Option<Self> {
+        let rom_total_size = meta.rom_total_size?;
+        let rom_bank_size = meta.rom_bank_size.unwrap_or(16384); // Default 16KB
+        
+        if rom_total_size < rom_bank_size {
+            eprintln!("⚠️  Warning: ROM_TOTAL_SIZE ({}) < ROM_BANK_SIZE ({}), bank switching disabled",
+                rom_total_size, rom_bank_size);
+            return None;
+        }
+        
+        let rom_bank_count = (rom_total_size / rom_bank_size) as u8;
+        
+        if rom_bank_count == 0 {
+            eprintln!("⚠️  Warning: ROM_BANK_COUNT is 0 (ROM too small?), bank switching disabled");
+            return None;
+        }
+        
+        let fixed_bank = rom_bank_count.saturating_sub(1);
+        
+        Some(BankConfig {
+            rom_total_size,
+            rom_bank_size,
+            rom_bank_count,
+            fixed_bank,
+            rom_bank_reg: 0x4000,
+        })
+    }
+    
+    /// Check if bank switching is enabled (more than 1 bank)
+    pub fn is_enabled(&self) -> bool {
+        self.rom_bank_count > 1
+    }
+    
+    /// Get size of banked window (0x0000-0x3FFF typically)
+    pub fn banked_window_size(&self) -> u32 {
+        self.rom_bank_size
+    }
+    
+    /// Get size of fixed bank window (0x4000-0x7FFF typically)
+    pub fn fixed_window_size(&self) -> u32 {
+        8192 // 8KB fixed (rest of 16KB bank at 0x4000-0x5FFF)
+    }
+}
+
 // CodegenOptions: options affecting generation (title, etc.).
 #[derive(Clone)]
 pub struct CodegenOptions {
@@ -245,6 +306,7 @@ pub struct CodegenOptions {
     pub structs: StructRegistry, // Struct layout information (Phase 2)
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     pub buffer_requirements: Option<BufferRequirements>, // Dynamic buffer sizing from .vplay analysis
+    pub bank_config: Option<BankConfig>, // Bank switching configuration (automatic bank assignment)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
