@@ -16,6 +16,7 @@ pub mod call_graph;
 pub mod bank_optimizer;
 pub mod bank_wrappers;
 pub mod bank_call_analyzer;
+pub mod multi_bank_linker;
 
 // Re-export for backward compatibility
 pub use utils::*;
