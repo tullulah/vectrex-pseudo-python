@@ -424,7 +424,21 @@ def loop():
    - 5/5 tests passing
    - Commit: 1e0de558
 
-3. ⏸️ Phase 4.3: Relocation patching (3 hours)
+3. ✅ Phase 4.3: Address assignment (COMPLETE - 2025-01-02)
+   - Implemented in Phase 4.2 as assign_addresses()
+   - Assigns base addresses to sections
+   - Updates symbol addresses in global table
+   - Commit: 1e0de558
+
+4. ✅ Phase 4.4: Relocation patching (COMPLETE - 2025-01-02)
+   - Implement apply_relocations()
+   - Support Absolute16, Relative8, Relative16
+   - Support Direct, High8, Low8
+   - Test JSR patching
+   - 6/6 tests passing
+   - Commit: 8482a7ae
+
+5. ⏸️ Phase 4.5: Multi-object linking test (2 hours)
    - Test undefined reference detection
 
 3. ⏸️ Phase 4.3: Address assignment (2 hours)
