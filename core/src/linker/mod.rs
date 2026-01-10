@@ -17,7 +17,7 @@ pub use object::{
     TargetArch, ObjectFlags, SectionType, SymbolTable, DebugInfo
 };
 pub use script::LinkerScript;
-pub use resolver::SymbolResolver;
+pub use resolver::{SymbolResolver, GlobalSymbolTable, ResolvedSymbol};
 pub use bank_allocator::BankAllocator;
 pub use rom_writer::RomWriter;
 pub use asm_parser::{extract_sections, extract_sections_with_binary, build_symbol_table, collect_relocations};
