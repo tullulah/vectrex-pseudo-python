@@ -129,6 +129,106 @@ impl SymbolResolver {
         
         Ok(section_bases)
     }
+    
+    /// Apply relocations using resolved symbols
+    pub fn apply_relocations(
+        objects: &mut [VectrexObject],
+        global: &GlobalSymbolTable,
+        section_bases: &HashMap<(usize, usize), u16>,
+    ) -> Result<(), String> {
+        use crate::linker::object::RelocationType;
+        
+        for (obj_idx, obj) in objects.iter_mut().enumerate() {
+            for reloc in obj.relocations.clone() {  // Clone to avoid borrow conflict
+                // Lookup symbol address
+                let symbol = global.symbols.get(&reloc.symbol)
+                    .ok_or_else(|| format!("Symbol '{}' not found during relocation", reloc.symbol))?;
+                
+                // Get target section and its base address
+                let section_idx = reloc.section;
+                let section = obj.sections.get_mut(section_idx)
+                    .ok_or_else(|| format!("Section index {} out of bounds", section_idx))?;
+                
+                let section_base = section_bases.get(&(obj_idx, section_idx))
+                    .ok_or_else(|| format!("No base address for section {} in object {}", section_idx, obj_idx))?;
+                
+                // Calculate target address with addend
+                let target_address = (symbol.address as i32 + reloc.addend) as u16;
+                let offset = reloc.offset as usize;
+                
+                // Apply relocation based on type
+                match reloc.reloc_type {
+                    RelocationType::Absolute16 => {
+                        // Patch 2 bytes with absolute address (big-endian M6809)
+                        if offset + 1 < section.data.len() {
+                            section.data[offset] = (target_address >> 8) as u8;
+                            section.data[offset + 1] = (target_address & 0xFF) as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} + 2 exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::Relative8 => {
+                        // Calculate PC-relative offset (signed 8-bit)
+                        let pc_address = section_base + reloc.offset + 2;  // PC after instruction
+                        let relative_offset = (target_address as i32 - pc_address as i32) as i8;
+                        
+                        if offset < section.data.len() {
+                            section.data[offset] = relative_offset as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::Relative16 => {
+                        // Calculate PC-relative offset (signed 16-bit)
+                        let pc_address = section_base + reloc.offset + 3;  // PC after LBRA
+                        let relative_offset = (target_address as i32 - pc_address as i32) as i16;
+                        
+                        if offset + 1 < section.data.len() {
+                            section.data[offset] = (relative_offset >> 8) as u8;
+                            section.data[offset + 1] = (relative_offset & 0xFF) as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} + 2 exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::Direct => {
+                        // Direct page addressing (low 8 bits only)
+                        if offset < section.data.len() {
+                            section.data[offset] = (target_address & 0xFF) as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::High8 => {
+                        // High byte of address
+                        if offset < section.data.len() {
+                            section.data[offset] = (target_address >> 8) as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::Low8 => {
+                        // Low byte of address
+                        if offset < section.data.len() {
+                            section.data[offset] = (target_address & 0xFF) as u8;
+                        } else {
+                            return Err(format!("Relocation offset {} exceeds section size {}", 
+                                offset, section.data.len()));
+                        }
+                    }
+                    RelocationType::CrossBank => {
+                        return Err(format!("CrossBank relocation not yet implemented for symbol '{}'", reloc.symbol));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
 }
 
 // Legacy compatibility wrapper (deprecated - use SymbolResolver methods directly)
@@ -330,5 +430,50 @@ mod tests {
         // Verify symbol addresses
         assert_eq!(global.symbols["MAIN"].address, 0xC880 + 10);    // base + offset
         assert_eq!(global.symbols["HELPER"].address, 0xC8E4 + 20);  // base + offset
+    }
+    
+    #[test]
+    fn test_apply_relocations() {
+        use crate::linker::object::RelocationType;
+        
+        // Create object with MAIN symbol and a call to HELPER
+        let mut obj1 = create_test_object("main.vo", vec![("MAIN", 0, 0)]);
+        // Add placeholder JSR instruction: $BD $00 $00 (JSR abs)
+        obj1.sections[0].data[10] = 0xBD;  // JSR opcode
+        obj1.sections[0].data[11] = 0x00;  // Placeholder high byte
+        obj1.sections[0].data[12] = 0x00;  // Placeholder low byte
+        
+        // Add relocation for JSR target
+        obj1.relocations.push(Relocation {
+            section: 0,
+            offset: 11,  // Offset to address bytes
+            reloc_type: RelocationType::Absolute16,
+            symbol: "HELPER".to_string(),
+            addend: 0,
+        });
+        
+        // Create object with HELPER symbol
+        let obj2 = create_test_object("lib.vo", vec![("HELPER", 0, 0)]);
+        
+        let mut objects = vec![obj1, obj2];
+        
+        // Resolve symbols and assign addresses
+        let mut global = SymbolResolver::collect_symbols(&objects).unwrap();
+        let section_bases = SymbolResolver::assign_addresses(
+            &objects,
+            &mut global,
+            0xC880
+        ).unwrap();
+        
+        // Apply relocations
+        SymbolResolver::apply_relocations(&mut objects, &global, &section_bases).unwrap();
+        
+        // Verify JSR target was patched correctly
+        // HELPER is at 0xC8E4 (obj2 section 0 base)
+        let patched_high = objects[0].sections[0].data[11];
+        let patched_low = objects[0].sections[0].data[12];
+        let patched_address = ((patched_high as u16) << 8) | (patched_low as u16);
+        
+        assert_eq!(patched_address, 0xC8E4, "JSR target should be patched to HELPER address");
     }
 }
