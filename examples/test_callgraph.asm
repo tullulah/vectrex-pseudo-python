@@ -814,6 +814,38 @@ LOOP_BODY:
     JSR GAME_LOOP
     RTS
 
+
+; ===== CROSS-BANK CALL WRAPPERS =====
+; Auto-generated wrappers for bank switching
+
+
+; Cross-bank wrapper for init_game (Bank #0)
+init_game_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR init_game              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for game_loop (Bank #0)
+game_loop_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR game_loop              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+; ===== END CROSS-BANK WRAPPERS =====
+
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
