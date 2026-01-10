@@ -2,6 +2,7 @@
 // Extracts sections, symbols, and relocations from ASM with section markers
 
 use super::object::{Section, SectionType, Symbol, SymbolScope, SymbolTable, SymbolType, Relocation, RelocationType};
+use crate::backend::asm_to_binary::assemble_m6809;
 use std::collections::HashMap;
 
 /// Parsed section with ASM code
@@ -23,16 +24,64 @@ pub fn extract_sections(asm: &str) -> Result<Vec<Section>, String> {
     // Convert parsed sections to Section structs with binary data
     let mut sections = Vec::new();
     for ps in parsed {
-        // For now, we'll keep the ASM as-is (binary assembly comes later)
-        // Phase 3.1: Just extract sections
-        // Phase 3.2: Add binary assembly
+        // Phase 3.1: Just extract sections (no binary)
+        // Phase 3.2: Add binary assembly (see extract_sections_with_binary)
         let section = Section {
             name: ps.name.clone(),
             section_type: ps.section_type,
             bank_hint: None, // Linker decides
             alignment: 1, // Default alignment
-            data: Vec::new(), // TODO: Assemble ASM to binary
+            data: Vec::new(), // Empty for now
         };
+        sections.push(section);
+    }
+    
+    Ok(sections)
+}
+
+/// Extract sections from ASM with section markers AND assemble to binary
+/// 
+/// Input: ASM text with .section markers
+/// Output: Vec<Section> with assembled binary data
+pub fn extract_sections_with_binary(asm: &str, base_org: u16) -> Result<Vec<Section>, String> {
+    let parsed = parse_section_markers(asm)?;
+    
+    // Convert parsed sections to Section structs with binary data
+    let mut sections = Vec::new();
+    let mut current_org = base_org;
+    
+    for ps in parsed {
+        // BSS sections have no data (uninitialized)
+        if ps.section_type == SectionType::Bss {
+            // For BSS, estimate size from EQU directives
+            let size = estimate_bss_size(&ps.lines);
+            let section = Section {
+                name: ps.name.clone(),
+                section_type: ps.section_type,
+                bank_hint: None,
+                alignment: size as u16, // Store size in alignment field for BSS
+                data: Vec::new(), // BSS has no data in file
+            };
+            sections.push(section);
+            continue;
+        }
+        
+        // Assemble section ASM to binary
+        let section_asm = ps.lines.join("\n");
+        let (binary, _line_map, _symbols) = assemble_m6809(&section_asm, current_org)
+            .map_err(|e| format!("Failed to assemble section {}: {}", ps.name, e))?;
+        
+        let section = Section {
+            name: ps.name.clone(),
+            section_type: ps.section_type,
+            bank_hint: None,
+            alignment: 1,
+            data: binary.clone(),
+        };
+        
+        // Update org for next section
+        current_org = current_org.wrapping_add(binary.len() as u16);
+        
         sections.push(section);
     }
     
@@ -208,6 +257,39 @@ fn estimate_instruction_size(line: &str) -> u32 {
     2 // Default estimate
 }
 
+/// Estimate BSS section size from EQU directives
+fn estimate_bss_size(lines: &[String]) -> usize {
+    let mut total_size = 0;
+    
+    for line in lines {
+        let trimmed = line.trim();
+        
+        // Look for EQU directives with size comments
+        // Example: VAR_X EQU $C880+0 ; (2 bytes)
+        if trimmed.contains("EQU") && trimmed.contains("bytes") {
+            // Extract size from comment
+            if let Some(start) = trimmed.find('(') {
+                if let Some(end) = trimmed[start..].find(')') {
+                    let size_str = &trimmed[start+1..start+end];
+                    if let Some(num_str) = size_str.split_whitespace().next() {
+                        if let Ok(size) = num_str.parse::<usize>() {
+                            total_size += size;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // If no size found, estimate based on number of EQU directives
+    if total_size == 0 {
+        let equ_count = lines.iter().filter(|l| l.contains("EQU")).count();
+        total_size = equ_count * 2; // Assume 2 bytes per variable
+    }
+    
+    total_size
+}
+
 /// Collect relocations from sections
 /// 
 /// Scans for references to external symbols that need patching during linking
@@ -217,11 +299,167 @@ pub fn collect_relocations(
     asm: &str
 ) -> Result<Vec<Relocation>, String> {
     let mut relocations = Vec::new();
+    let parsed = parse_section_markers(asm)?;
     
-    // TODO: Parse ASM for JSR, BRA, LDD # instructions
-    // and create Relocation entries
+    // Build a set of exported symbol names for quick lookup
+    let mut exported_names = std::collections::HashSet::new();
+    for sym in &symbols.exports {
+        exported_names.insert(sym.name.as_str());
+    }
+    
+    // Scan each section for references
+    for (section_idx, ps) in parsed.iter().enumerate() {
+        let mut offset = 0u16;
+        
+        for line in &ps.lines {
+            let trimmed = line.trim();
+            
+            // Skip empty lines and comments
+            if trimmed.is_empty() || trimmed.starts_with(';') {
+                continue;
+            }
+            
+            // Skip label definitions
+            if trimmed.ends_with(':') {
+                continue;
+            }
+            
+            // JSR instruction - Absolute16 relocation
+            if let Some(target) = extract_jsr_target(trimmed) {
+                if !exported_names.contains(target.as_str()) {
+                    relocations.push(Relocation {
+                        section: section_idx,
+                        offset,
+                        reloc_type: RelocationType::Absolute16,
+                        symbol: target,
+                        addend: 0,
+                    });
+                }
+            }
+            
+            // LDD #label, LDX #label - Absolute16 relocation
+            if let Some(target) = extract_immediate_target(trimmed) {
+                if !exported_names.contains(target.as_str()) {
+                    relocations.push(Relocation {
+                        section: section_idx,
+                        offset,
+                        reloc_type: RelocationType::Absolute16,
+                        symbol: target,
+                        addend: 0,
+                    });
+                }
+            }
+            
+            // BRA, BEQ, BNE - Relative8 relocation
+            if let Some(target) = extract_branch_target(trimmed) {
+                if !exported_names.contains(target.as_str()) {
+                    relocations.push(Relocation {
+                        section: section_idx,
+                        offset,
+                        reloc_type: RelocationType::Relative8,
+                        symbol: target,
+                        addend: 0,
+                    });
+                }
+            }
+            
+            // LBRA, LBEQ - Relative16 relocation
+            if let Some(target) = extract_long_branch_target(trimmed) {
+                if !exported_names.contains(target.as_str()) {
+                    relocations.push(Relocation {
+                        section: section_idx,
+                        offset,
+                        reloc_type: RelocationType::Relative16,
+                        symbol: target,
+                        addend: 0,
+                    });
+                }
+            }
+            
+            // Update offset (rough estimate)
+            offset = offset.wrapping_add(estimate_instruction_size(trimmed) as u16);
+        }
+    }
     
     Ok(relocations)
+}
+
+/// Extract target symbol from JSR instruction
+fn extract_jsr_target(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("JSR ") {
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 2 {
+            // Remove trailing comments
+            let target = parts[1].split(';').next().unwrap().trim();
+            return Some(target.to_string());
+        }
+    }
+    None
+}
+
+/// Extract target symbol from immediate addressing (LDD #label, LDX #label)
+fn extract_immediate_target(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    
+    // LDD #symbol, LDX #symbol, LDA #symbol, etc.
+    if (trimmed.starts_with("LDD #") || 
+        trimmed.starts_with("LDX #") || 
+        trimmed.starts_with("LDU #") ||
+        trimmed.starts_with("LDS #")) && 
+       !trimmed.contains("$") && // Not a hex literal
+       !trimmed.chars().nth(5).map(|c| c.is_digit(10)).unwrap_or(false) { // Not a decimal literal
+        
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let target = parts[1].trim_start_matches('#').split(';').next().unwrap().trim();
+            return Some(target.to_string());
+        }
+    }
+    None
+}
+
+/// Extract target symbol from short branch (BRA, BEQ, BNE, etc.)
+fn extract_branch_target(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    
+    let branch_ops = ["BRA ", "BEQ ", "BNE ", "BCC ", "BCS ", 
+                      "BPL ", "BMI ", "BVC ", "BVS ", "BGE ", 
+                      "BGT ", "BLE ", "BLT ", "BHI ", "BLS "];
+    
+    for op in &branch_ops {
+        if trimmed.starts_with(op) {
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let target = parts[1].split(';').next().unwrap().trim();
+                // Skip numeric offsets (e.g., BRA -5)
+                if !target.starts_with('-') && !target.starts_with('+') && 
+                   !target.chars().next().map(|c| c.is_digit(10)).unwrap_or(false) {
+                    return Some(target.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract target symbol from long branch (LBRA, LBEQ, etc.)
+fn extract_long_branch_target(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    
+    let long_branch_ops = ["LBRA ", "LBEQ ", "LBNE ", "LBCC ", "LBCS ", 
+                          "LBPL ", "LBMI ", "LBVC ", "LBVS "];
+    
+    for op in &long_branch_ops {
+        if trimmed.starts_with(op) {
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let target = parts[1].split(';').next().unwrap().trim();
+                return Some(target.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -280,5 +518,66 @@ LOOP_BODY:
         assert_eq!(symbols.exports.len(), 2);
         assert!(symbols.exports.iter().any(|s| s.name == "MAIN"));
         assert!(symbols.exports.iter().any(|s| s.name == "LOOP_BODY"));
+    }
+    
+    #[test]
+    fn test_extract_sections_with_binary() {
+        let asm = r#"
+.section .text.main, "ax", @progbits
+START:
+    LDA #$80
+    STA $C880
+    RTS
+"#;
+        
+        let sections = extract_sections_with_binary(asm, 0x0000).unwrap();
+        
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].name, ".text.main");
+        assert_eq!(sections[0].section_type, SectionType::Text);
+        
+        // Binary should contain assembled instructions (not empty)
+        assert!(sections[0].data.len() > 0, "Section data should be assembled");
+        
+        // LDA #$80 = 86 80 (2 bytes)
+        // STA $C880 = B7 C8 80 (3 bytes)  
+        // RTS = 39 (1 byte)
+        // Total: 6 bytes expected
+        assert_eq!(sections[0].data.len(), 6, "Expected 6 bytes of assembled code");
+    }
+    
+    #[test]
+    fn test_collect_relocations() {
+        let asm = r#"
+.section .text.main, "ax", @progbits
+MAIN:
+    JSR Wait_Recal
+    LDX #STR_0
+    BRA LOOP_BODY
+    RTS
+
+INTERNAL_FUNC:
+    RTS
+"#;
+        
+        let sections = extract_sections(asm).unwrap();
+        let symbols = build_symbol_table(&sections, asm).unwrap();
+        let relocations = collect_relocations(&sections, &symbols, asm).unwrap();
+        
+        // Should find 3 relocations (Wait_Recal, STR_0, LOOP_BODY)
+        // INTERNAL_FUNC is exported so no relocation needed
+        assert_eq!(relocations.len(), 3, "Expected 3 relocations for external symbols");
+        
+        // Check JSR Wait_Recal
+        assert!(relocations.iter().any(|r| r.symbol == "Wait_Recal" && 
+                matches!(r.reloc_type, RelocationType::Absolute16)));
+        
+        // Check LDX #STR_0
+        assert!(relocations.iter().any(|r| r.symbol == "STR_0" && 
+                matches!(r.reloc_type, RelocationType::Absolute16)));
+        
+        // Check BRA LOOP_BODY
+        assert!(relocations.iter().any(|r| r.symbol == "LOOP_BODY" && 
+                matches!(r.reloc_type, RelocationType::Relative8)));
     }
 }
