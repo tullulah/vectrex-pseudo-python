@@ -931,8 +931,108 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut global_mutables: Vec<(String,i32)> = Vec::new();
     use std::collections::BTreeSet;
     let mut emitted_consts: BTreeSet<String> = BTreeSet::new();
-    for item in &module.items {
-        match item {
+    
+    // Group functions by bank if bank switching is enabled
+    if !opts.function_bank_map.is_empty() {
+        use std::collections::HashMap;
+        let mut functions_by_bank: HashMap<u8, Vec<&Function>> = HashMap::new();
+        
+        // Group all functions by their assigned bank (including main/loop for bank #31)
+        for item in &module.items {
+            if let Item::Function(f) = item {
+                // Get bank assignment (main/loop will be in bank #31, others as assigned)
+                let bank = opts.function_bank_map.get(&f.name).copied().unwrap_or(31);
+                functions_by_bank.entry(bank).or_insert_with(Vec::new).push(f);
+            }
+        }
+        
+        // Sort banks for consistent output (fixed bank #31 first, then others)
+        let mut sorted_banks: Vec<u8> = functions_by_bank.keys().copied().collect();
+        sorted_banks.sort_by(|a, b| {
+            // Fixed bank (#31) comes first, then others in ascending order
+            if *a == 31 { std::cmp::Ordering::Less }
+            else if *b == 31 { std::cmp::Ordering::Greater }
+            else { a.cmp(b) }
+        });
+        
+        // Emit each bank section
+        for bank_id in sorted_banks {
+            let functions = functions_by_bank.get(&bank_id).unwrap();
+            
+            // Emit bank header
+            out.push_str(&format!("\n; ================================================\n"));
+            out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
+            out.push_str(&format!("; ================================================\n"));
+            
+            // Set ORG based on bank type
+            if bank_id == 31 {
+                // Fixed bank - always at $4000-$5FFF
+                out.push_str(&format!("    ORG $4000  ; Fixed bank (always visible)\n\n"));
+            } else {
+                // Banked window - $0000-$3FFF (will be mapped based on bank register)
+                out.push_str(&format!("    ORG $0000  ; Banked window (switchable)\n\n"));
+            }
+            
+            // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
+            for f in functions {
+                if opts.auto_loop && f.name == "main" {
+                    // Skip main - it's inlined in START label
+                    continue;
+                } else if opts.auto_loop && f.name == "loop" {
+                    // Emit loop as LOOP_BODY with auto-injections
+                    tracker.set_line(f.line);
+                    out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
+                    out.push_str("LOOP_BODY:\n");
+                    
+                    // Collect locals and allocate stack frame
+                    let locals = collect_locals(&f.body, &global_names);
+                    let var_info = analyze_var_types(&f.body, &locals, &opts.structs);
+                    
+                    let mut frame_size = 0;
+                    for var_name in &locals {
+                        let size = var_info.get(var_name)
+                            .map(|(_, s)| *s as i32)
+                            .unwrap_or(2);
+                        frame_size += size;
+                    }
+                    
+                    if frame_size > 0 {
+                        out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
+                    }
+                    
+                    // Auto-inject WAIT_RECAL, UPDATE_BUTTONS
+                    out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
+                    out.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+                    out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+                    out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
+
+                    let fctx = FuncCtx { func_name: Some("loop".to_string()), locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
+                    for stmt in &f.body {
+                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
+                    }
+                    
+                    // Auto-inject AUDIO_UPDATE at END
+                    if opts.has_audio(module) {
+                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)\n");
+                    }
+                    
+                    // Free locals before RTS
+                    if frame_size > 0 {
+                        out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size));
+                    }
+                    out.push_str("    RTS\n\n");
+                } else {
+                    // Normal function
+                    emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
+                }
+            }
+        }
+    }
+    
+    // Emit main/loop and other items (VectorList, Const, GlobalLet) only if NO bank switching
+    if opts.function_bank_map.is_empty() {
+        for item in &module.items {
+            match item {
             Item::Function(f) => {
                 if opts.auto_loop && f.name == "main" {
                     // Skip main function in auto_loop mode - it's inlined in START/MAIN
@@ -996,7 +1096,20 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
                 }
             }
-                Item::VectorList { name, entries } => {
+            _ => {
+                // Skip other items (VectorList, Const, etc.) - will be emitted later
+            }
+        }
+    }
+    }
+    
+    // Emit VectorList, Const, GlobalLet, StructDef ALWAYS (regardless of bank switching)
+    for item in &module.items {
+        match item {
+            Item::Function(_) => {
+                // Functions already emitted above
+            }
+            Item::VectorList { name, entries } => {
                     // Emit compact data-only vector list consumed by Run_VectorList.
                     // Format: count, then 'count' triples (y,x,cmd). For CMD_INT an extra intensity byte follows. Terminator triple CMD_END added automatically.
                     // Map: Move -> START, Rect -> START + 4 LINE, Polygon -> START + n LINE, Origin -> ZERO (Reset0Ref), Intensity -> INT (with mapped byte).
