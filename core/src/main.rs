@@ -654,7 +654,8 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             // fast_wait desactivado en modo minimal
             if bin && *ct == target::Target::Vectrex {
                 // When generating for all targets, always use native assembler
-                assemble_bin(&out_path, false, include_dir)?;
+                let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
+                assemble_bin(&out_path, false, include_dir, bank_cfg.as_ref())?;
             }
         }
         Ok(())
@@ -823,7 +824,8 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 })?;
             } else {
                 // CRITICAL: Store symbol_table from binary for accurate header offset calculation
-                let (binary_symbol_table, line_map, org) = assemble_bin(&out_path, use_lwasm, include_dir).map_err(|e| {
+                let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
+                let (binary_symbol_table, line_map, org) = assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()).map_err(|e| {
                     eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
                     eprintln!("   Error: {}", e);
                     e
@@ -1061,7 +1063,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     }
 }
 
-fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
+fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>, bank_config: Option<&codegen::BankConfig>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
     let bin_path = asm_path.with_extension("bin");
     eprintln!("=== BINARY ASSEMBLY PHASE ===");
     eprintln!("ASM input: {}", asm_path.display());
@@ -1177,21 +1179,44 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
     let original_size = binary.0.len();
     eprintln!("✓ Assembler generated: {} bytes", original_size);
     
-    // Pad to 32KB cartridge size
+    // Pad to correct size based on bank configuration
+    let target_size = if let Some(cfg) = bank_config {
+        // Multi-bank ROM: use total ROM size
+        cfg.rom_total_size as usize
+    } else {
+        // Standard cartridge: 32KB
+        0x8000
+    };
+    
     let mut data = binary.0;
     let symbol_table = binary.1;
     let line_map = binary.2;
     let org = binary.3;
-    if original_size <= 0x8000 { 
-        data.resize(0x8000, 0); 
-        let remaining = 0x8000 - original_size;
-        eprintln!("✓ Padded to 32KB (available space: {} bytes / {} KB)", 
-            remaining, remaining / 1024);
-    } else if original_size == 0x8000 {
-        eprintln!("⚠ Cartridge is at maximum size (32KB)");
+    
+    if original_size <= target_size { 
+        data.resize(target_size, 0);
+        let remaining = target_size - original_size;
+        if target_size == 0x8000 {
+            eprintln!("✓ Padded to 32KB (available space: {} bytes / {} KB)", 
+                remaining, remaining / 1024);
+        } else {
+            eprintln!("✓ Padded to {} KB (available space: {} bytes / {} KB)", 
+                target_size / 1024, remaining, remaining / 1024);
+        }
+    } else if original_size == target_size {
+        if target_size == 0x8000 {
+            eprintln!("⚠ Cartridge is at maximum size (32KB)");
+        } else {
+            eprintln!("⚠ ROM is at maximum size ({} KB)", target_size / 1024);
+        }
     } else {
-        eprintln!("❌ Binary size exceeds 32KB cartridge limit by {} bytes", 
-            original_size - 0x8000);
+        if target_size == 0x8000 {
+            eprintln!("❌ Binary size exceeds 32KB cartridge limit by {} bytes", 
+                original_size - target_size);
+        } else {
+            eprintln!("❌ Binary size exceeds {} KB ROM limit by {} bytes", 
+                target_size / 1024, original_size - target_size);
+        }
     }
     
     // Write final binary to file
