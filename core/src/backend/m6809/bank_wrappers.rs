@@ -27,6 +27,36 @@
 //         RTS
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+/// Global wrapper generator (thread-safe singleton)
+/// Used during emission to determine if JSR calls need wrappers
+static WRAPPER_GENERATOR: Lazy<Mutex<Option<BankWrapperGenerator>>> = Lazy::new(|| Mutex::new(None));
+
+/// Initialize global wrapper generator (called from emit_with_debug)
+pub fn init_global_generator(generator: BankWrapperGenerator) {
+    let mut global = WRAPPER_GENERATOR.lock().unwrap();
+    *global = Some(generator);
+}
+
+/// Clear global wrapper generator (cleanup after emission)
+pub fn clear_global_generator() {
+    let mut global = WRAPPER_GENERATOR.lock().unwrap();
+    *global = None;
+}
+
+/// Check if a call from caller_func to callee_func needs a wrapper
+/// Returns wrapper name if needed, None if same-bank or no generator
+pub fn get_wrapper_for_call(caller_func: &str, callee_func: &str) -> Option<String> {
+    let global = WRAPPER_GENERATOR.lock().unwrap();
+    if let Some(ref gen) = *global {
+        if gen.is_cross_bank_call(caller_func, callee_func).is_some() {
+            return Some(gen.wrapper_name(callee_func));
+        }
+    }
+    None
+}
 
 /// Information about a cross-bank call that needs a wrapper
 #[derive(Debug, Clone)]
@@ -38,6 +68,7 @@ pub struct CrossBankCall {
 }
 
 /// Tracks cross-bank calls and generates wrappers
+#[derive(Clone)]
 pub struct BankWrapperGenerator {
     /// Function name → bank ID mapping (from bank optimizer)
     function_banks: HashMap<String, u8>,

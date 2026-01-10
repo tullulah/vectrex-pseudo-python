@@ -303,6 +303,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Print statistics
         gen.print_statistics();
         
+        // Initialize global generator for use during emission
+        bank_wrappers::init_global_generator(gen.clone());
+        
         Some(gen)
     } else {
         None
@@ -835,13 +838,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     }
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { func_name: None, locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
             
             if let Some(main_func) = user_main {
-                let fctx = FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() };
+                let fctx = FuncCtx { func_name: Some("main".to_string()), locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() };
                 for stmt in &main_func.body {
                     emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                 }
@@ -906,7 +909,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { func_name: None, locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
@@ -971,7 +974,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
                     out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
 
-                    let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
+                    let fctx = FuncCtx { func_name: Some("loop".to_string()), locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
@@ -1463,6 +1466,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // use super::debug_info::parse_vpy_line_markers;
     // debug_info.line_map = parse_vpy_line_markers(&out, start_address);
     debug_info.line_map.clear(); // Ensure empty - main.rs will populate with real addresses
+    
+    // Cleanup: Clear global wrapper generator
+    bank_wrappers::clear_global_generator();
     
     // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)

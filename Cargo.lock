@@ -1088,6 +1088,7 @@ dependencies = [
  "anyhow",
  "clap",
  "lazy_static",
+ "once_cell",
  "serde",
  "serde_json",
  "strum",
