@@ -478,8 +478,8 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     })?;
     eprintln!("✓ Phase 3 SUCCESS: Parsed module with {} top-level items", module.items.len());
     
-    // Debug: Show bank switching configuration if present
-    if let Some(bank_config) = codegen::BankConfig::from_meta(&module.meta) {
+    // Phase 3.6-3.7: Bank switching analysis (if enabled)
+    let bank_assignments = if let Some(bank_config) = codegen::BankConfig::from_meta(&module.meta) {
         eprintln!("   [Bank Switching] Enabled with {} banks:", bank_config.rom_bank_count);
         eprintln!("     - Total ROM: {} KB ({} bytes)", 
             bank_config.rom_total_size / 1024, bank_config.rom_total_size);
@@ -515,20 +515,26 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 3.7: Bank assignment optimization
         eprintln!("   [Bank Assignment] Running optimizer...");
         let optimizer = backend::m6809::bank_optimizer::BankOptimizer::new(bank_config, call_graph);
-        match optimizer.assign_banks() {
+        let bank_assignments = match optimizer.assign_banks() {
             Ok(assignments) => {
                 eprintln!("     ✓ Successfully assigned {} functions to banks", assignments.len());
                 
                 // Show statistics
                 let stats = optimizer.assignment_stats(&assignments);
                 stats.print();
+                
+                Some(assignments)
             }
             Err(e) => {
                 eprintln!("     ❌ Bank assignment failed: {}", e);
                 return Err(anyhow::anyhow!("Bank assignment error: {}", e));
             }
-        }
-    }
+        };
+        
+        bank_assignments
+    } else {
+        None
+    };
     
     // Phase 3.5: Multi-file resolution (if module has imports)
     let final_module = if !module.imports.is_empty() {
@@ -639,6 +645,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     analyzed_files: r.analyzed_files.clone(),
                 }),
                 bank_config: codegen::BankConfig::from_meta(&final_module.meta),
+                function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -720,6 +727,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 analyzed_files: r.analyzed_files.clone(),
             }),
             bank_config: codegen::BankConfig::from_meta(&final_module.meta),
+            function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
         });
         
         // Phase 4 validation: Check if assembly was actually generated
