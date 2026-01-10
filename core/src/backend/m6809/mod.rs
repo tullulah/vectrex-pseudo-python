@@ -12,6 +12,8 @@ mod emission;
 mod collectors;
 mod ram_layout;
 mod address_tracker;
+pub mod call_graph;
+pub mod bank_optimizer;
 
 // Re-export for backward compatibility
 pub use utils::*;
