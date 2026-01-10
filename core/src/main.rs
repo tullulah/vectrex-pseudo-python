@@ -1020,6 +1020,38 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             } else {
                 eprintln!("Phase 6.5/6.6: Debug symbols generation skipped (no debug info available)");
             }
+            
+            // Phase 6.7: Multi-bank ROM generation (if bank switching enabled)
+            if let Some(ref bank_config) = codegen::BankConfig::from_meta(&final_module.meta) {
+                if bank_config.is_enabled() {
+                    eprintln!("Phase 6.7: Multi-bank ROM generation...");
+                    
+                    let rom_path = out_path.with_extension("rom");
+                    let linker = backend::m6809::multi_bank_linker::MultiBankLinker::new(
+                        bank_config.rom_bank_size,
+                        bank_config.rom_bank_count,
+                        !use_lwasm, // Use native assembler by default unless lwasm is requested
+                    );
+                    
+                    match linker.generate_multibank_rom(&out_path, &rom_path) {
+                        Ok(_) => {
+                            eprintln!("✓ Phase 6.7 SUCCESS: Multi-bank ROM written to {}", rom_path.display());
+                            eprintln!("   Total size: {} KB ({} banks × {} KB)", 
+                                (bank_config.rom_total_size / 1024),
+                                bank_config.rom_bank_count,
+                                (bank_config.rom_bank_size / 1024));
+                        },
+                        Err(e) => {
+                            eprintln!("⚠ Warning: Multi-bank ROM generation failed: {}", e);
+                            eprintln!("   Single-bank .bin file is still available");
+                        }
+                    }
+                } else {
+                    eprintln!("Phase 6.7: Multi-bank ROM generation skipped (only 1 bank)");
+                }
+            } else {
+                eprintln!("Phase 6.7: Multi-bank ROM generation skipped (no bank config)");
+            }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");
         }
