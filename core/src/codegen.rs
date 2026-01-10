@@ -678,7 +678,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
-        emit_sections: false,  // Monolithic ASM mode (backward compatibility)
+        // NOTE: emit_sections now comes from opts.clone() - don't override here
         // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
@@ -717,7 +717,7 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     let ti = info(target);
     // If source defines CONST TITLE = "..." let it override CLI title.
     let mut effective = CodegenOptions { 
-        emit_sections: false,  // Monolithic ASM mode (default)
+        // NOTE: emit_sections now comes from opts.clone() - don't override here
         // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 

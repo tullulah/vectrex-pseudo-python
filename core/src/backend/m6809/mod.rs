@@ -427,6 +427,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Do NOT duplicate them here to maintain lwasm compatibility
     
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
+    // Emit section marker for header (if linker mode enabled)
+    emit_header_section(&mut out, opts);
     // Header (emulator-compatible variant):
     //  - 'g GCE 1998' + $80 (year per reference example)
     //  - music pointer (word) (set 0 if no custom music)
@@ -748,10 +750,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
         out.push_str("\n");
         
+        // Emit section marker for helper functions
+        emit_helpers_section(&mut out, opts);
+        
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
         if !suppress_runtime {
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
         }
+        
+        // Emit section marker for main initialization code
+        emit_main_section(&mut out, opts);
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
         
@@ -985,6 +993,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // Emit loop as LOOP_BODY with auto-injections
                     tracker.set_line(f.line);
                     out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
+                    
+                    // Emit section marker for loop code
+                    emit_loop_section(&mut out, opts);
+                    
                     out.push_str("LOOP_BODY:\n");
                     
                     // Collect locals and allocate stack frame
@@ -1044,6 +1056,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // ✅ CRITICAL: Record the loop() definition line in .pdb
                     tracker.set_line(f.line);
                     out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
+                    
+                    // Emit section marker for loop code
+                    emit_loop_section(&mut out, opts);
                     
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
@@ -1334,6 +1349,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if suppress_runtime { /* skip RAM ORG and temp vars entirely */ }
     else if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
+        
+        // Emit section marker for RAM variables
+        emit_bss_section(&mut out, opts);
+        
         out.push_str("; Variables (in RAM)\n");
         out.push_str(&ram.emit_storage_allocations());
     }
@@ -1535,6 +1554,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if !suppress_runtime && !filtered_strings.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
     if !filtered_strings.is_empty() {
+        // Emit section marker for read-only data (strings)
+        emit_rodata_section(&mut out, opts);
+        
         if filtered_strings.len()==1 {
             let (lit,_label) = filtered_strings[0];
             out.push_str("STR_0:\n");
