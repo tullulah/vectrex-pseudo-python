@@ -6,6 +6,22 @@ use std::path::PathBuf;
 use std::fs;
 use crate::backend::m6809_binary_emitter::BinaryEmitter;
 
+/// Reference type for unresolved symbols in object mode
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefType {
+    Absolute16,  // JSR, LDD #, LDX # - 2-byte absolute address
+    Relative8,   // BRA, BEQ, BNE - 1-byte signed offset
+    Relative16,  // LBRA, LBEQ - 2-byte signed offset
+}
+
+/// Unresolved symbol reference (for object mode)
+#[derive(Debug, Clone)]
+pub struct UnresolvedRef {
+    pub symbol: String,
+    pub offset: usize,      // Byte offset in assembled output
+    pub ref_type: RefType,  // Type of reference
+}
+
 // Global variable to store include directory (set before assembly)
 static mut INCLUDE_DIR: Option<PathBuf> = None;
 
@@ -16,10 +32,28 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
 }
 
 /// Convierte código M6809 assembly a formato binario
-/// Retorna (bytes_binarios, linea_vpy -> offset_binario, symbol_table)
-pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>), String> {
+/// 
+/// Arguments:
+/// - `asm_source`: ASM source code
+/// - `org`: Origin address
+/// - `object_mode`: If true, allows unresolved symbols and returns UnresolvedRef list
+///
+/// Returns:
+/// - bytes_binarios: Assembled binary
+/// - linea_vpy -> offset_binario: Line map
+/// - symbol_table: Defined symbols
+/// - unresolved_refs: Unresolved symbols (only in object_mode)
+pub fn assemble_m6809(
+    asm_source: &str, 
+    org: u16,
+    object_mode: bool,
+) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>, Vec<UnresolvedRef>), String> {
     let mut emitter = BinaryEmitter::new(org);
     let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
+    let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Símbolos no resueltos (object mode)
+    
+    // Configure emitter for object mode
+    emitter.set_object_mode(object_mode);
     
     // SIEMPRE cargar símbolos de Vectrex BIOS al inicio
     load_vectrex_symbols(&mut equates);
@@ -179,12 +213,17 @@ pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<us
     // Segunda pasada: resolver símbolos (incluyendo símbolos externos de BIOS)
     emitter.resolve_symbols_with_equates(&equates)?;
     
+    // En object mode, extraer referencias no resueltas del emitter
+    if object_mode {
+        unresolved_refs = emitter.take_unresolved_refs();
+    }
+    
     // Obtener mapeo y symbols ANTES de finalizar (finalize consume emitter)
     let line_map = emitter.get_line_to_offset_map().clone();
     let symbol_table = emitter.get_symbol_table().clone();
     let binary = emitter.finalize();
     
-    Ok((binary, line_map, symbol_table))
+    Ok((binary, line_map, symbol_table, unresolved_refs))
 }
 
 /// Extrae número de línea VPy desde comentario marcador

@@ -2,6 +2,7 @@
 // Elimina dependencia de lwasm proporcionando emisión binaria integrada con mapeo preciso
 
 use std::collections::HashMap;
+use crate::backend::asm_to_binary::{UnresolvedRef, RefType};
 
 /// Representa una referencia a símbolo que necesita resolverse en la segunda pasada
 #[derive(Debug, Clone)]
@@ -22,6 +23,8 @@ pub struct BinaryEmitter {
     line_to_offset: HashMap<usize, usize>,  // Línea VPy -> offset en binario
     offset_to_line: HashMap<usize, usize>,  // Offset en binario -> línea VPy
     current_line: usize,                    // Línea actual del código fuente VPy
+    object_mode: bool,                      // Object mode: allow unresolved symbols
+    unresolved_refs: Vec<UnresolvedRef>,    // Unresolved symbols (for object mode)
 }
 
 impl BinaryEmitter {
@@ -35,7 +38,19 @@ impl BinaryEmitter {
             line_to_offset: HashMap::new(),
             offset_to_line: HashMap::new(),
             current_line: 0,
+            object_mode: false,
+            unresolved_refs: Vec::new(),
         }
+    }
+    
+    /// Set object mode (allows unresolved symbols)
+    pub fn set_object_mode(&mut self, enabled: bool) {
+        self.object_mode = enabled;
+    }
+    
+    /// Get list of unresolved symbols (for object mode)
+    pub fn take_unresolved_refs(&mut self) -> Vec<UnresolvedRef> {
+        std::mem::take(&mut self.unresolved_refs)
     }
 
     /// Establece la línea actual del código fuente (para debug mapping)
@@ -1101,13 +1116,43 @@ impl BinaryEmitter {
     pub fn resolve_symbols_with_equates(&mut self, equates: &std::collections::HashMap<String, u16>) -> Result<(), String> {
         for sym_ref in &self.symbol_refs {
             // Buscar primero en symbols locales (case-sensitive)
-            let target_addr = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
-                addr
+            let target_addr_opt = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
+                Some(addr)
             } else {
                 // Buscar en equates con uppercase (símbolos BIOS/INCLUDE son uppercase)
                 let upper_symbol = sym_ref.symbol.to_uppercase();
-                if equates.get(&upper_symbol).is_none() {
-                    // Debug: mostrar DÓNDE se agregó esta referencia
+                equates.get(&upper_symbol).copied()
+            };
+            
+            // Si el símbolo no se encontró
+            let target_addr = match target_addr_opt {
+                Some(addr) => addr,
+                None => {
+                    let upper_symbol = sym_ref.symbol.to_uppercase();
+                    
+                    // En object mode: agregar a unresolved_refs y usar placeholder
+                    if self.object_mode {
+                        let ref_type = if sym_ref.is_relative {
+                            if sym_ref.ref_size == 1 {
+                                RefType::Relative8
+                            } else {
+                                RefType::Relative16
+                            }
+                        } else {
+                            RefType::Absolute16
+                        };
+                        
+                        self.unresolved_refs.push(UnresolvedRef {
+                            symbol: upper_symbol.clone(),
+                            offset: sym_ref.offset,
+                            ref_type,
+                        });
+                        
+                        // Usar placeholder 0x0000 (ya emitido durante first pass)
+                        continue;
+                    }
+                    
+                    // En modo normal: error
                     eprintln!("❌ SÍMBOLO NO RESUELTO: '{}' (uppercase: '{}') at offset={}, is_relative={}, ref_size={}", 
                         sym_ref.symbol, upper_symbol, sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
                     
@@ -1115,9 +1160,9 @@ impl BinaryEmitter {
                     if sym_ref.symbol.len() == 1 {
                         eprintln!("   ⚠️  POSIBLE BUG: Símbolo de 1 carácter '{}' - probablemente offset mal parseado", sym_ref.symbol);
                     }
+                    
+                    return Err(format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol));
                 }
-                *equates.get(&upper_symbol)
-                    .ok_or_else(|| format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol))?
             };
 
             let effective_target = target_addr.wrapping_add(sym_ref.addend as u16);
