@@ -212,10 +212,11 @@ impl MultiBankLinker {
         // Bank ASM already contains everything (header prepended for Bank #31)
         let full_asm = &bank_section.asm_code;
         
-        // Assemble with native assembler (integrated)
-        let (binary, _line_map, _symbol_table) = crate::backend::asm_to_binary::assemble_m6809(
+        // Assemble with native assembler (integrated, object_mode=false for final build)
+        let (binary, _line_map, _symbol_table, _unresolved) = crate::backend::asm_to_binary::assemble_m6809(
             full_asm,
-            bank_section.org
+            bank_section.org,
+            false
         ).map_err(|e| format!("Failed to assemble bank {}: {}", bank_section.bank_id, e))?;
         
         // Get binary data (already Vec<u8>, no .0 field)

@@ -1169,8 +1169,8 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
         // Set include directory for assembler
         backend::asm_to_binary::set_include_dir(include_dir.map(|p| p.to_path_buf()));
         
-        // Assemble with native assembler
-        let (binary, line_map, symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+        // Assemble with native assembler (object_mode=false for monolithic build)
+        let (binary, line_map, symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false)
             .map_err(|e| {
                 eprintln!("❌ Native assembler failed: {}", e);
                 eprintln!("\nPlease fix the assembly errors above.");
@@ -1270,7 +1270,7 @@ fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()
     let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
     eprintln!("    Detected ORG: 0x{:04X}", org);
     
-    let (native_binary, _line_map, _symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
+    let (native_binary, _line_map, _symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false)
         .map_err(|e| {
             eprintln!("❌ Native assembler failed: {}", e);
             anyhow::anyhow!("Native assembler failed: {}", e)
