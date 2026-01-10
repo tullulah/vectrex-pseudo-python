@@ -14,6 +14,8 @@ mod ram_layout;
 mod address_tracker;
 pub mod call_graph;
 pub mod bank_optimizer;
+pub mod bank_wrappers;
+pub mod bank_call_analyzer;
 
 // Re-export for backward compatibility
 pub use utils::*;
@@ -284,6 +286,27 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Collect const declarations (go to ROM only, NO RAM allocation or initialization)
     let const_vars = collect_const_vars(module);
     let const_vars_with_line = collect_const_vars_with_line(module); // WITH line numbers for PDB
+    
+    // Phase 3.8: Cross-bank call wrapper generation (TODO #8)
+    // Initialize wrapper generator if bank switching is enabled
+    let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
+        eprintln!("   [Phase 3.8] Analyzing cross-bank calls...");
+        let bank_register = 0x4000; // TODO: Make this configurable via BankConfig
+        let mut gen = bank_wrappers::BankWrapperGenerator::new(
+            opts.function_bank_map.clone(),
+            bank_register
+        );
+        
+        // Analyze AST to detect cross-bank calls
+        bank_call_analyzer::analyze_cross_bank_calls(module, &mut gen);
+        
+        // Print statistics
+        gen.print_statistics();
+        
+        Some(gen)
+    } else {
+        None
+    };
     
     // Build set of const array names to exclude from RAM allocation
     let const_array_names: std::collections::HashSet<String> = const_vars
@@ -1169,6 +1192,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
         // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
+    
+    // Phase 3.8: Generate cross-bank call wrappers (TODO #8)
+    if let Some(ref mut generator) = wrapper_generator {
+        let wrappers = generator.generate_all_wrappers();
+        if !wrappers.is_empty() {
+            out.push_str(&wrappers);
+        }
+    }
+    
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     
     // Re-evaluate suppress_runtime now that we know max_args (calculated earlier)
