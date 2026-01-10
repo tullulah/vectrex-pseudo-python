@@ -144,7 +144,7 @@ mod tests {
     
     // Helper to create minimal AST for testing
     fn create_test_function(name: &str, calls: Vec<&str>) -> Function {
-        use crate::ast::{Stmt, Expr, CallInfo, IdentInfo};
+        use crate::ast::{Stmt, Expr, CallInfo};
         
         let body: Vec<Stmt> = calls.iter().map(|callee| {
             Stmt::Expr(Expr::Call(CallInfo {
@@ -152,7 +152,7 @@ mod tests {
                 args: vec![],
                 source_line: 1,
                 col: 0,
-            }))
+            }), 1)
         }).collect();
         
         Function {
