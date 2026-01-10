@@ -77,17 +77,41 @@ impl MultiBankLinker {
         let mut current_org: Option<u16> = None;
         let mut current_code = String::new();
         let mut header = String::new();
+        let mut definitions = String::new(); // EQU definitions - needed by ALL banks
         let mut in_bank_section = false;
+        let mut in_definitions = false;
         
         for line in asm_content.lines() {
+            // Detect RAM definitions section
+            if line.contains("=== RAM VARIABLE DEFINITIONS") {
+                in_definitions = true;
+                definitions.push_str(line);
+                definitions.push('\n');
+                continue;
+            }
+            
+            // Collect EQU definitions
+            if in_definitions {
+                definitions.push_str(line);
+                definitions.push('\n');
+                // End of definitions when we hit empty line or non-EQU line
+                if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
+                    in_definitions = false;
+                }
+                continue;
+            }
+            
+
             // Detect bank header: "; BANK #N - M function(s)"
             if line.starts_with("; BANK #") {
                 // Save previous bank if exists
                 if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
+                    // Prepend definitions to bank code (ALL banks need EQU definitions)
+                    let full_code = format!("{}\n{}", definitions, current_code);
                     sections.insert(bank_id, BankSection {
                         bank_id,
                         org,
-                        asm_code: std::mem::take(&mut current_code), // Take ownership, leave empty string
+                        asm_code: full_code,
                         size_estimate: current_code.len(),
                     });
                 }
@@ -95,7 +119,7 @@ impl MultiBankLinker {
                 // Parse new bank ID
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 3 {
-                    let bank_str = parts[2].trim_end_matches(" -");
+                    let bank_str = parts[2].trim_matches(|c| c == '#' || c == ' ' || c == '-');
                     if let Ok(bank_id) = bank_str.parse::<u8>() {
                         current_bank_id = Some(bank_id);
                         current_code.clear();
@@ -132,24 +156,41 @@ impl MultiBankLinker {
         
         // Save last bank
         if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
-            let size = current_code.len(); // Calculate before move
+            // Prepend definitions to bank code
+            let full_code = format!("{}\n{}", definitions, current_code);
+            let size = full_code.len();
             sections.insert(bank_id, BankSection {
                 bank_id,
                 org,
-                asm_code: current_code,
+                asm_code: full_code,
                 size_estimate: size,
             });
         }
         
-        // Store header in a pseudo-bank for later use
+        // CRITICAL: Header (code before first bank) belongs to Bank #31 (fixed bank)
+        // The header contains START, strings, constants - all must be in fixed bank
+        // Prepend header to Bank #31's code
         if !header.is_empty() {
-            let size = header.len(); // Calculate before move
-            sections.insert(255, BankSection {
-                bank_id: 255,
-                org: 0,
-                asm_code: header,
-                size_estimate: size,
-            });
+            if let Some(bank31) = sections.get_mut(&31) {
+                // Bank #31 already has definitions prepended, now add header between definitions and code
+                // Structure: [definitions] + [header] + [Bank #31 code]
+                let existing_code = bank31.asm_code.clone();
+                // Remove definitions from existing code (they're already there)
+                let code_without_defs = existing_code.trim_start_matches(&definitions);
+                let combined = format!("{}\n{}\n{}", definitions, header, code_without_defs);
+                bank31.asm_code = combined;
+                bank31.size_estimate += header.len();
+            } else {
+                // No Bank #31 section found - create from header + definitions
+                let full_code = format!("{}\n{}", definitions, header);
+                let size = full_code.len();
+                sections.insert(31, BankSection {
+                    bank_id: 31,
+                    org: 0x4000,
+                    asm_code: full_code,
+                    size_estimate: size,
+                });
+            }
         }
         
         Ok(sections)
@@ -166,61 +207,31 @@ impl MultiBankLinker {
     pub fn assemble_bank(
         &self,
         bank_section: &BankSection,
-        header: &str,
         temp_dir: &Path,
     ) -> Result<Vec<u8>, String> {
-        // Create temporary ASM file for this bank
-        let temp_asm = temp_dir.join(format!("bank_{}.asm", bank_section.bank_id));
-        let temp_bin = temp_dir.join(format!("bank_{}.bin", bank_section.bank_id));
+        // Bank ASM already contains everything (header prepended for Bank #31)
+        let full_asm = &bank_section.asm_code;
         
-        // Combine header + bank code
-        let full_asm = format!("{}\n{}", header, bank_section.asm_code);
+        // Assemble with native assembler (integrated)
+        let (binary, _line_map, _symbol_table) = crate::backend::asm_to_binary::assemble_m6809(
+            full_asm,
+            bank_section.org
+        ).map_err(|e| format!("Failed to assemble bank {}: {}", bank_section.bank_id, e))?;
         
-        fs::write(&temp_asm, full_asm)
-            .map_err(|e| format!("Failed to write temp ASM for bank {}: {}", bank_section.bank_id, e))?;
-        
-        // Assemble with vecasm or lwasm
-        let success = if self.use_native_assembler {
-            // Native assembler (vecasm)
-            let output = Command::new("cargo")
-                .args(&["run", "--bin", "vecasm", "--", &temp_asm.to_string_lossy(), "-o", &temp_bin.to_string_lossy()])
-                .output()
-                .map_err(|e| format!("Failed to run vecasm for bank {}: {}", bank_section.bank_id, e))?;
-            
-            output.status.success()
-        } else {
-            // lwasm
-            let output = Command::new("lwasm")
-                .args(&[
-                    "--format=raw",
-                    "--output", &temp_bin.to_string_lossy(),
-                    &temp_asm.to_string_lossy(),
-                ])
-                .output()
-                .map_err(|e| format!("Failed to run lwasm for bank {}: {}", bank_section.bank_id, e))?;
-            
-            output.status.success()
-        };
-        
-        if !success {
-            return Err(format!("Assembly failed for bank {}", bank_section.bank_id));
-        }
-        
-        // Read binary
-        let mut binary = fs::read(&temp_bin)
-            .map_err(|e| format!("Failed to read binary for bank {}: {}", bank_section.bank_id, e))?;
+        // Get binary data (already Vec<u8>, no .0 field)
+        let mut binary_data = binary;
         
         // Pad to bank size (16KB)
         let bank_size = self.rom_bank_size as usize;
-        if binary.len() > bank_size {
+        if binary_data.len() > bank_size {
             return Err(format!("Bank {} overflow: {} bytes (max: {} bytes)", 
-                bank_section.bank_id, binary.len(), bank_size));
+                bank_section.bank_id, binary_data.len(), bank_size));
         }
         
         // Pad with 0xFF (standard for unused ROM)
-        binary.resize(bank_size, 0xFF);
+        binary_data.resize(bank_size, 0xFF);
         
-        Ok(binary)
+        Ok(binary_data)
     }
     
     /// Generate multi-bank ROM from sectioned ASM
@@ -245,12 +256,7 @@ impl MultiBankLinker {
         
         // Split by bank
         let sections = self.split_asm_by_bank(&asm_content)?;
-        eprintln!("     - Found {} bank section(s)", sections.len() - 1); // -1 for header
-        
-        // Extract header
-        let header = sections.get(&255)
-            .map(|s| s.asm_code.as_str())
-            .unwrap_or("");
+        eprintln!("     - Found {} bank section(s)", sections.len());
         
         // Create temp directory for bank assemblies
         let temp_dir = output_rom_path.parent()
@@ -264,7 +270,7 @@ impl MultiBankLinker {
         for bank_id in 0..self.rom_bank_count {
             if let Some(section) = sections.get(&bank_id) {
                 eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
-                let binary = self.assemble_bank(section, header, &temp_dir)?;
+                let binary = self.assemble_bank(section, &temp_dir)?;
                 rom_data.extend_from_slice(&binary);
             } else {
                 // Empty bank - fill with 0xFF

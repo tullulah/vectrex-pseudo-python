@@ -135,7 +135,6 @@ def hud_draw_level():
 # ============================================
 # GAME STATE - Global variables
 # ============================================
-
 current_level = 0
 player_score = 0
 player_lives = 3
@@ -153,13 +152,14 @@ def main():
 # ============================================
 
 def loop():
-    WAIT_RECAL()
     
-    # Simple test: just draw menu and level 1
+    # Test multi-bank: call functions from Bank #0
     SET_INTENSITY(127)
     PRINT_TEXT(-60, 60, "BIG GAME TEST")
     DRAW_LINE(-80, 50, 80, 50, 127)
     
-    # Draw some level 1 content
-    DRAW_LINE(-30, -30, 30, 30, 100)
-    DRAW_LINE(-30, 30, 30, -30, 100)
+    # Call functions from Bank #0 (cross-bank calls)
+    level1_init()
+    level1_render()
+    level2_init()
+    level2_render()

@@ -172,7 +172,7 @@ function VecX()
     {
         address &= 0xffff;
         
-        // Multi-bank ROM support
+        // Multi-bank ROM support (cartridge ROM at 0x0000-0x5FFF)
         if (this.isMultibank) {
             const bankSize = 0x4000; // 16KB per bank
             const numBanks = Math.floor(this.multibankRom.length / bankSize);

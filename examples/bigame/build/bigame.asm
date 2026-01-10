@@ -270,9 +270,6 @@ VECTREX_SET_INTENSITY:
     LDA VAR_ARG0+1
     JSR __Intensity_a
     RTS
-VECTREX_WAIT_RECAL:
-    JSR Wait_Recal
-    RTS
 ; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
 __Intensity_a:
 TFR B,A         ; Move B to A (BIOS expects intensity in A)
@@ -295,25 +292,25 @@ START:
     TFR X,S
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:148
-    ; VPy_LINE:139
+    ; VPy_LINE:147
+    ; VPy_LINE:138
     LDD #0
     STD VAR_CURRENT_LEVEL
-    ; VPy_LINE:140
+    ; VPy_LINE:139
     LDD #0
     STD VAR_PLAYER_SCORE
-    ; VPy_LINE:141
+    ; VPy_LINE:140
     LDD #3
     STD VAR_PLAYER_LIVES
-    ; VPy_LINE:142
+    ; VPy_LINE:141
     LDD #0
     STD VAR_GAME_STATE
-    ; VPy_LINE:149
+    ; VPy_LINE:148
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 149
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 148
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
@@ -347,29 +344,23 @@ MAIN:
 ; ================================================
     ORG $4000  ; Fixed bank (always visible)
 
-    ; VPy_LINE:155
+    ; VPy_LINE:154
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; VPy_LINE:156
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 156
-    JSR VECTREX_WAIT_RECAL
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:159
+    ; VPy_LINE:157
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 159
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 157
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:160
+    ; VPy_LINE:158
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-60
     STD RESULT
@@ -383,12 +374,12 @@ LOOP_BODY:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 160
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 158
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:161
+    ; VPy_LINE:159
     LDD #65456
     STD TMPPTR+0
     LDD #50
@@ -412,32 +403,14 @@ LOOP_BODY:
     JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
+    ; VPy_LINE:162
+    JSR level1_init_BANK_WRAPPER
+    ; VPy_LINE:163
+    JSR level1_render_BANK_WRAPPER
     ; VPy_LINE:164
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$3C
-    LDB #$3C
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
+    JSR level2_init_BANK_WRAPPER
     ; VPy_LINE:165
-    LDA #$D0
-    TFR A,DP
-    LDA #$64
-    JSR Intensity_a
-    CLR Vec_Misc_Count
-    LDA #$C4
-    LDB #$3C
-    JSR Draw_Line_d
-    LDA #$C8
-    TFR A,DP
-    LDD #0
-    STD RESULT
+    JSR level2_render_BANK_WRAPPER
     RTS
 
 
@@ -1280,6 +1253,64 @@ HUD_DRAW_LEVEL: ; function
     CLRB
     STD RESULT
     RTS
+
+
+; ===== CROSS-BANK CALL WRAPPERS =====
+; Auto-generated wrappers for bank switching
+
+
+; Cross-bank wrapper for level1_render (Bank #0)
+level1_render_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL1_RENDER              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for level2_render (Bank #0)
+level2_render_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL2_RENDER              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for level2_init (Bank #0)
+level2_init_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL2_INIT              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for level1_init (Bank #0)
+level1_init_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL1_INIT              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+; ===== END CROSS-BANK WRAPPERS =====
 
 ;***************************************************************************
 ; DATA SECTION

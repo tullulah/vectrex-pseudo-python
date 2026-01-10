@@ -12,6 +12,7 @@ mod emission;
 mod collectors;
 mod ram_layout;
 mod address_tracker;
+mod sections; // NEW: Section emission for linker object files
 pub mod call_graph;
 pub mod bank_optimizer;
 pub mod bank_wrappers;
@@ -29,6 +30,7 @@ pub use emission::*;
 pub use collectors::*;
 pub use ram_layout::*;
 pub use address_tracker::*;
+pub use sections::*; // NEW: Export section helpers
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};

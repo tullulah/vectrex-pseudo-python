@@ -1,6 +1,35 @@
 use vectrex_lang::ast::*;
 use vectrex_lang::codegen::{DiagnosticCode, emit_asm_with_diagnostics};
 
+// Helper to create default CodegenOptions for tests
+fn test_opts() -> vectrex_lang::codegen::CodegenOptions {
+    vectrex_lang::codegen::CodegenOptions {
+        title: "t".into(),
+        auto_loop: false,
+        diag_freeze: false,
+        force_extended_jsr: false,
+        _bank_size: 0,
+        per_frame_silence: false,
+        debug_init_draw: false,
+        blink_intensity: false,
+        exclude_ram_org: false,
+        fast_wait: false,
+        emit_sections: false, // Monolithic ASM mode for tests
+        source_path: None,
+        output_name: None,
+        assets: vec![],
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+        bank_config: None,
+        buffer_requirements: None,
+        function_bank_map: std::collections::HashMap::new(),
+    }
+}
+
 #[test]
 fn semantics_valid_decl_and_use() {
     let module = Module { items: vec![
@@ -12,26 +41,7 @@ fn semantics_valid_decl_and_use() {
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
     // emit_asm should not panic
-    let asm = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(),
-        auto_loop: false,
-        diag_freeze: false,
-        force_extended_jsr: false,
-        _bank_size: 0,
-        per_frame_silence: false,
-        debug_init_draw: false,
-        blink_intensity: false,
-        exclude_ram_org: false,
-        fast_wait: false,
-        source_path: None,
-        assets: vec![],
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-    });
+    let asm = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &test_opts());
     // El módulo requiere loop() pero no lo tiene, así que debe contener ERROR
     assert!(asm.contains("ERROR") || asm.contains("MAIN") || asm.to_uppercase().contains("MAIN"));
 }
@@ -43,15 +53,7 @@ fn semantics_undefined_use_reports_error() {
             Stmt::Expr(Expr::Ident(IdentInfo { name:"y".into(), source_line: 0, col: 0 }), 0)
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
-    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-    });
+    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &test_opts());
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UndeclaredVar)), "expected undeclared variable error, got: {:?}", diags);
 }
 
@@ -64,15 +66,7 @@ fn semantics_valid_builtin_arity() {
             Stmt::Return(None, 0)
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
-    let _ = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-    });
+    let _ = vectrex_lang::codegen::emit_asm(&module, vectrex_lang::target::Target::Vectrex, &test_opts());
 }
 
 #[test]
@@ -83,15 +77,7 @@ fn semantics_bad_builtin_arity_reports_error() {
             Stmt::Expr(Expr::Call(CallInfo { name: "DRAW_LINE".into(), source_line: 0, col: 0, args: vec![Expr::Number(0),Expr::Number(0),Expr::Number(1),Expr::Number(1)] }), 0)
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
-    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-    });
+    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &test_opts());
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::ArityMismatch)), "expected arity error, got: {:?}", diags);
 }
 
@@ -103,14 +89,6 @@ fn semantics_unused_var_warning() {
             Stmt::Return(None, 0)
         ]})
     ], imports: vec![], meta: ModuleMeta::default() };
-    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &vectrex_lang::codegen::CodegenOptions {
-        title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, source_path: None, assets: vec![],
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-    });
+    let (_asm, diags) = emit_asm_with_diagnostics(&module, vectrex_lang::target::Target::Vectrex, &test_opts());
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UnusedVar)), "expected unused var warning, got: {:?}", diags);
 }
