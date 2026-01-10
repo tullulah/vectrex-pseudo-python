@@ -282,6 +282,7 @@ pub struct LoopCtx {
 /// Function context with local variables
 #[derive(Clone)]
 pub struct FuncCtx { 
+    pub func_name: Option<String>, // NEW: Function name for cross-bank wrapper detection
     pub locals: Vec<String>,
     pub frame_size: i32,
     // Maps variable name to (type_name, size_in_bytes)

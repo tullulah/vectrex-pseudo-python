@@ -48,6 +48,7 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
         out.push_str(&format!("    LDD VAR_ARG{}\n    STD {},S ; param {}\n", i, offset, i));
     }
     let fctx = FuncCtx { 
+        func_name: Some(f.name.clone()),
         locals: locals.clone(), 
         frame_size, 
         var_info,

@@ -480,9 +480,9 @@ START:
     CLRB
     STD RESULT
     ; VPy_LINE:9
-    JSR INIT_GAME
+    JSR init_game_BANK_WRAPPER
     ; VPy_LINE:10
-    JSR GAME_LOOP
+    JSR game_loop_BANK_WRAPPER
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -811,26 +811,13 @@ LOOP_BODY:
     STD RESULT
     ; DEBUG: Statement 1 - Discriminant(8)
     ; VPy_LINE:61
-    JSR GAME_LOOP
+    JSR game_loop_BANK_WRAPPER
     RTS
 
 
 ; ===== CROSS-BANK CALL WRAPPERS =====
 ; Auto-generated wrappers for bank switching
 
-
-; Cross-bank wrapper for init_game (Bank #0)
-init_game_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR init_game              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
 
 ; Cross-bank wrapper for game_loop (Bank #0)
 game_loop_BANK_WRAPPER:
@@ -840,6 +827,19 @@ game_loop_BANK_WRAPPER:
     LDA #0             ; Load target bank ID
     STA $4000         ; Switch to target bank
     JSR game_loop              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for init_game (Bank #0)
+init_game_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR init_game              ; Call real function
     PULS A              ; Restore original bank from stack
     STA $4000         ; Switch back to original bank
     PULS A              ; Restore A register
