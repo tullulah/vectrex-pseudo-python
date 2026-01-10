@@ -12,7 +12,10 @@ pub mod bank_allocator;
 pub mod rom_writer;
 pub mod asm_parser;
 
-pub use object::{VectrexObject, ObjectHeader, Section, Symbol, Relocation};
+pub use object::{
+    VectrexObject, ObjectHeader, Section, Symbol, Relocation,
+    TargetArch, ObjectFlags, SectionType, SymbolTable, DebugInfo
+};
 pub use script::LinkerScript;
 pub use resolver::SymbolResolver;
 pub use bank_allocator::BankAllocator;

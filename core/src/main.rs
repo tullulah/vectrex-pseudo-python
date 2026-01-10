@@ -12,7 +12,9 @@ mod musres;   // Music resources (.vmus)
 mod sfxres;   // Sound effects resources (.vsfx)
 mod levelres; // Level resources (.vplay)
 mod struct_layout; // Struct layout computation
+mod linker;   // Linker system for modular compilation
 
+use vectrex_lang;  // For linker types
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
@@ -203,6 +205,17 @@ enum Commands {
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
+    /// Compile to object file (.vo) for linking
+    CompileObject {
+        /// Input .vpy file
+        input: PathBuf,
+        /// Output .vo file (default: same name with .vo extension)
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+        /// Title for cartridge header
+        #[arg(long, default_value="UNTITLED")]
+        title: String,
+    },
 }
 
 // main: parse CLI and dispatch subcommands.
@@ -223,6 +236,7 @@ fn main() -> Result<()> {
         Commands::Init { name, path } => init_cmd(&name, path.as_ref()),
         Commands::Vec2Asm { input, out } => vec2asm_cmd(&input, out.as_ref()),
         Commands::VecNew { name, path } => vec_new_cmd(&name, path.as_ref()),
+        Commands::CompileObject { input, out, title } => compile_object_cmd(&input, out.as_ref(), &title),
     }
 }
 
@@ -1394,4 +1408,116 @@ fn extract_org_directive(asm: &str) -> Option<u16> {
         }
     }
     None
+}
+
+/// Compile VPy source to .vo object file for linking
+fn compile_object_cmd(input: &Path, output: Option<&PathBuf>, title: &str) -> Result<()> {
+    use crate::linker::{VectrexObject, ObjectHeader, TargetArch, ObjectFlags, DebugInfo};
+    use crate::linker::{extract_sections_with_binary, build_symbol_table, collect_relocations};
+    
+    eprintln!("=== OBJECT FILE GENERATION ===");
+    eprintln!("Input: {}", input.display());
+    
+    // Phase 1-3: Parse VPy to AST
+    eprintln!("Phase 1-3: Parsing VPy source...");
+    let source = read_source(&input.to_path_buf())?;
+    let tokens = lexer::lex(&source)
+        .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
+    let module = parser::parse_with_filename(&tokens, &input.display().to_string())
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+    
+    // Phase 4: Generate ASM with section markers
+    eprintln!("Phase 4: Generating ASM with section markers...");
+    let assets = discover_assets(input);
+    
+    let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(&module, target::Target::Vectrex, &codegen::CodegenOptions {
+        title: title.to_string(),
+        auto_loop: true,
+        diag_freeze: false,
+        force_extended_jsr: false,
+        _bank_size: 0,
+        per_frame_silence: false,
+        debug_init_draw: false,
+        blink_intensity: false,
+        exclude_ram_org: true,
+        fast_wait: false,
+        emit_sections: true,  // CRITICAL: Enable section markers
+        source_path: Some(input.display().to_string()),
+        output_name: Some(title.to_string()),
+        assets,
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+        buffer_requirements: None,
+        bank_config: None,
+        function_bank_map: std::collections::HashMap::new(),
+    });
+    
+    if !diagnostics.is_empty() {
+        eprintln!("❌ Semantic errors detected:");
+        for diag in &diagnostics {
+            eprintln!("   {}", diag.message);
+        }
+        return Err(anyhow::anyhow!("Compilation failed with semantic errors"));
+    }
+    
+    // Phase 5: Parse ASM and assemble sections
+    eprintln!("Phase 5: Parsing sections and assembling to binary...");
+    let sections = extract_sections_with_binary(&asm, 0x0000)
+        .map_err(|e| anyhow::anyhow!("Section extraction error: {}", e))?;
+    eprintln!("  ✓ Extracted {} sections", sections.len());
+    
+    // Phase 6: Build symbol table
+    eprintln!("Phase 6: Building symbol table...");
+    let symbols = build_symbol_table(&sections, &asm)
+        .map_err(|e| anyhow::anyhow!("Symbol table error: {}", e))?;
+    eprintln!("  ✓ Found {} exports, {} imports", 
+        symbols.exports.len(), symbols.imports.len());
+    
+    // Phase 7: Collect relocations
+    eprintln!("Phase 7: Collecting relocations...");
+    let relocations = collect_relocations(&sections, &symbols, &asm)
+        .map_err(|e| anyhow::anyhow!("Relocation collection error: {}", e))?;
+    eprintln!("  ✓ Collected {} relocations", relocations.len());
+    
+    // Phase 8: Create object file
+    let obj = VectrexObject {
+        header: ObjectHeader {
+            magic: crate::linker::OBJECT_MAGIC,
+            version: crate::linker::OBJECT_FORMAT_VERSION,
+            target: TargetArch::M6809,
+            flags: ObjectFlags {
+                position_independent: false,
+                contains_bank_hints: false,
+            },
+            source_file: input.display().to_string(),
+        },
+        sections,
+        symbols,
+        relocations,
+        debug_info: DebugInfo::default(),
+    };
+    
+    // Phase 9: Write .vo file
+    let output_path = output.cloned().unwrap_or_else(|| {
+        input.with_extension("vo")
+    });
+    
+    eprintln!("Phase 9: Writing object file...");
+    let mut file = std::fs::File::create(&output_path)?;
+    obj.write(&mut file)
+        .map_err(|e| anyhow::anyhow!("Failed to write object file: {}", e))?;
+    
+    eprintln!("\n✓ SUCCESS: Object file generated");
+    eprintln!("  Output: {}", output_path.display());
+    eprintln!("  Size: {} bytes", fs::metadata(&output_path)?.len());
+    eprintln!("  Sections: {}", obj.sections.len());
+    eprintln!("  Symbols: {} exports, {} imports", 
+        obj.symbols.exports.len(), obj.symbols.imports.len());
+    eprintln!("  Relocations: {}", obj.relocations.len());
+    
+    Ok(())
 }
