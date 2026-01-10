@@ -584,6 +584,7 @@ function VecX()
                 }
             } else {
                 // Standard cartridge (up to 32KB)
+                console.log('[JSVecx Multi-bank] Regular Cart detected: ' + len + ' bytes (' + (len/1024) + 'KB)');
                 this.isMultibank = false;
                 for( var i = 0; i < len; i++ )
                 {
