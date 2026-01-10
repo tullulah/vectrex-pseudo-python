@@ -161,7 +161,7 @@ r#"
             self.bank_register,
             target_bank,
             self.bank_register,
-            func_name,
+            func_name.to_uppercase(),  // Convert to uppercase for ASM label
             self.bank_register
         )
     }

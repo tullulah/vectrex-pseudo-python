@@ -48,12 +48,14 @@ def draw_all():
     draw_enemies()
 
 def draw_player():
-    DRAW_VECTOR(0, 0, "player")
+    # Draw a simple line instead of using assets (to avoid string literal issues)
+    DRAW_LINE(-20, 0, 20, 0, 100)
 
 def draw_enemies():
     i = 0
     while i < 10:
-        DRAW_VECTOR(0, 0, "enemy")
+        # Draw simple lines for enemies
+        DRAW_LINE(-10, 10, 10, 10, 80)
         i = i + 1
 
 def loop():
