@@ -630,7 +630,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 blink_intensity: false,
                 exclude_ram_org: true,
                 fast_wait: false,
-                emit_sections: false,  // Monolithic ASM mode (legacy compatibility)
+                emit_sections: false,  // Monolithic ASM mode (backward compatible, default)
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
                 output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
                 assets: vec![], // TODO: Implement asset discovery
