@@ -110,7 +110,11 @@ fn test_object_mode_unresolved_symbols() {
 }
 ```
 
-## Phase 4.2: SymbolResolver Implementation
+## Phase 4.2: SymbolResolver Implementation ✅ COMPLETE (2025-01-02)
+
+**Status**: ✅ Implemented and tested
+
+**Commit**: 1e0de558 - "feat: linker Phase 4.2 - SymbolResolver implementation"
 
 ### Purpose
 Merge symbol tables from multiple .vo files and detect conflicts.
@@ -404,16 +408,23 @@ def loop():
 
 ## Implementation Order
 
-1. ✅ Phase 4.1: Assembler object mode (2 hours)
+1. ✅ Phase 4.1: Assembler object mode (COMPLETE - 2025-12-30)
    - Modify `assemble_m6809()` signature
    - Add `UnresolvedRef` struct
    - Emit placeholders for undefined symbols
    - Test with unresolved symbols
+   - Commit: d8f50bbc
 
-2. ⏸️ Phase 4.2: SymbolResolver (3 hours)
+2. ✅ Phase 4.2: SymbolResolver (COMPLETE - 2025-01-02)
    - Implement `collect_symbols()`
    - Implement `verify_imports()`
+   - Implement `assign_addresses()`
    - Test duplicate detection
+   - Test undefined imports
+   - 5/5 tests passing
+   - Commit: 1e0de558
+
+3. ⏸️ Phase 4.3: Relocation patching (3 hours)
    - Test undefined reference detection
 
 3. ⏸️ Phase 4.3: Address assignment (2 hours)
