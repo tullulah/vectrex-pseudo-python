@@ -28,6 +28,12 @@ function VecX()
     this.e8910.init(this.snd_regs);
     this.snd_select = 0;
     
+    // Multi-bank ROM support (512KB ROM with 32 banks of 16KB)
+    this.multibankRom = null;     // Full 512KB ROM data
+    this.currentBank = 0;         // Current bank number (0-31)
+    this.bankRegister = 0x4000;   // Bank register address
+    this.isMultibank = false;     // Flag if multi-bank ROM loaded
+    
     // Debug system - Estado del debugger
     this.debugState = 'stopped'; // 'stopped' | 'running' | 'paused'
     this.breakpoints = new Set(); // Set de direcciones con breakpoints
@@ -165,6 +171,27 @@ function VecX()
     this.read8 = function( address )
     {
         address &= 0xffff;
+        
+        // Multi-bank ROM support
+        if (this.isMultibank) {
+            const bankSize = 0x4000; // 16KB per bank
+            const numBanks = Math.floor(this.multibankRom.length / bankSize);
+            const fixedBankId = numBanks - 1; // Last bank is fixed
+            
+            // Banked window: 0x0000-0x3FFF (16KB switchable)
+            if (address < 0x4000) {
+                const bankOffset = this.currentBank * bankSize;
+                return this.multibankRom[bankOffset + address] & 0xff;
+            }
+            // Fixed bank (last bank): 0x4000-0x5FFF (8KB always visible)
+            if (address >= 0x4000 && address < 0x6000) {
+                const fixedBankOffset = fixedBankId * bankSize;
+                const localOffset = address - 0x4000;
+                return this.multibankRom[fixedBankOffset + localOffset] & 0xff;
+            }
+        }
+        
+        // Original ROM mapping (BIOS at 0xE000-0xFFFF)
         if( (address & 0xe000) == 0xe000 )
         {
             return this.rom[address & 0x1fff] & 0xff;
@@ -287,6 +314,17 @@ function VecX()
     {
         address &= 0xffff;
         data &= 0xff;
+        
+        // Multi-bank ROM support: Bank register at 0x4000
+        if (this.isMultibank && address === this.bankRegister) {
+            const bankSize = 0x4000;
+            const numBanks = Math.floor(this.multibankRom.length / bankSize);
+            const maxBankId = numBanks - 1;
+            this.currentBank = data & maxBankId; // Mask to valid bank range
+            console.log('[JSVecx Multi-bank] Bank switched to: ' + this.currentBank + '/' + maxBankId);
+            return;
+        }
+        
         if( (address & 0xe000) == 0xe000 )
         {
         }
@@ -531,9 +569,26 @@ function VecX()
         if( Globals.cartdata != null )
         {
             len = Globals.cartdata.length;
-            for( var i = 0; i < len; i++ )
-            {
-                this.cart[i] = Globals.cartdata.charCodeAt(i);
+            
+            // Multi-bank ROM detection: any ROM > 32KB is multi-bank (up to 4MB)
+            if (len > 32768) {
+                const bankSize = 16384; // 16KB per bank
+                const numBanks = Math.floor(len / bankSize);
+                console.log('[JSVecx Multi-bank] Detected ' + len + ' bytes ROM (' + (len/1024) + 'KB)');
+                console.log('[JSVecx Multi-bank] Banks: ' + numBanks + ' x ' + (bankSize/1024) + 'KB');
+                this.isMultibank = true;
+                this.currentBank = 0;
+                this.multibankRom = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    this.multibankRom[i] = Globals.cartdata.charCodeAt(i);
+                }
+            } else {
+                // Standard cartridge (up to 32KB)
+                this.isMultibank = false;
+                for( var i = 0; i < len; i++ )
+                {
+                    this.cart[i] = Globals.cartdata.charCodeAt(i);
+                }
             }
         }
         this.fcycles = Globals.FCYCLES_INIT;
