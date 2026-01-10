@@ -271,6 +271,11 @@ impl BankConfig {
         self.rom_bank_count > 1
     }
     
+    /// Get total number of banks
+    pub fn num_banks(&self) -> usize {
+        self.rom_bank_count as usize
+    }
+    
     /// Get size of banked window (0x0000-0x3FFF typically)
     pub fn banked_window_size(&self) -> u32 {
         self.rom_bank_size

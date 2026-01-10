@@ -488,6 +488,46 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         eprintln!("     - Banked window: 0x0000-0x{:04X} ({} banks swappable)", 
             bank_config.banked_window_size() - 1, bank_config.rom_bank_count - 1);
         eprintln!("     - Fixed bank #{}: Always at 0x4000-0x5FFF", bank_config.fixed_bank);
+        
+        // Phase 3.6: Call graph analysis (if bank switching enabled)
+        eprintln!("   [Call Graph] Analyzing function calls...");
+        let call_graph = backend::m6809::call_graph::build_call_graph(&module);
+        eprintln!("     - Functions: {}", call_graph.nodes.len());
+        eprintln!("     - Call edges: {}", call_graph.edges.len());
+        eprintln!("     - Total size: {} bytes ({:.1} KB)", 
+            call_graph.total_size(), call_graph.total_size() as f64 / 1024.0);
+        
+        // Show hot functions (called > 100 times)
+        let hot = call_graph.hot_functions(100);
+        if !hot.is_empty() {
+            eprintln!("     - Hot functions (>100 calls): {}", hot.join(", "));
+        }
+        
+        // Show critical functions
+        let critical: Vec<_> = call_graph.nodes.values()
+            .filter(|n| n.is_critical)
+            .map(|n| n.name.as_str())
+            .collect();
+        if !critical.is_empty() {
+            eprintln!("     - Critical (fixed bank): {}", critical.join(", "));
+        }
+        
+        // Phase 3.7: Bank assignment optimization
+        eprintln!("   [Bank Assignment] Running optimizer...");
+        let optimizer = backend::m6809::bank_optimizer::BankOptimizer::new(bank_config, call_graph);
+        match optimizer.assign_banks() {
+            Ok(assignments) => {
+                eprintln!("     ✓ Successfully assigned {} functions to banks", assignments.len());
+                
+                // Show statistics
+                let stats = optimizer.assignment_stats(&assignments);
+                stats.print();
+            }
+            Err(e) => {
+                eprintln!("     ❌ Bank assignment failed: {}", e);
+                return Err(anyhow::anyhow!("Bank assignment error: {}", e));
+            }
+        }
     }
     
     // Phase 3.5: Multi-file resolution (if module has imports)
