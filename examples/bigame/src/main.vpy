@@ -142,38 +142,24 @@ player_lives = 3
 game_state = 0  # 0=menu, 1=playing, 2=game_over
 
 # ============================================
-# MAIN - Entry point (Bank #31 - Fixed)
+# MAIN - Entry point
 # ============================================
 
 def main():
     SET_INTENSITY(127)
-    current_level = 0
-    game_state = 0
-    menu_init()
 
 # ============================================
-# LOOP - Main game loop (Bank #31 - Fixed)
+# LOOP - Main game loop
 # ============================================
 
 def loop():
-    # Game state machine with cross-bank calls
-    if game_state == 0:
-        # Menu
-        menu_update()
-        menu_render()
-    elif game_state == 1:
-        # Playing
-        if current_level == 0:
-            level1_update()
-            level1_render()
-        elif current_level == 1:
-            level2_update()
-            level2_render()
-        elif current_level == 2:
-            level3_update()
-            level3_render()
-        
-        # HUD (cross-bank call)
-        hud_draw_score()
-        hud_draw_lives()
-        hud_draw_level()
+    WAIT_RECAL()
+    
+    # Simple test: just draw menu and level 1
+    SET_INTENSITY(127)
+    PRINT_TEXT(-60, 60, "BIG GAME TEST")
+    DRAW_LINE(-80, 50, 80, 50, 127)
+    
+    # Draw some level 1 content
+    DRAW_LINE(-30, -30, 30, 30, 100)
+    DRAW_LINE(-30, 30, 30, -30, 100)

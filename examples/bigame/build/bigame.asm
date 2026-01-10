@@ -318,22 +318,6 @@ START:
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:150
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_CURRENT_LEVEL
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:151
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_GAME_STATE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:152
-    JSR menu_init_BANK_WRAPPER
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -363,152 +347,97 @@ MAIN:
 ; ================================================
     ORG $4000  ; Fixed bank (always visible)
 
-    ; VPy_LINE:158
+    ; VPy_LINE:155
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; VPy_LINE:159
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 159
+    ; VPy_LINE:156
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 156
     JSR VECTREX_WAIT_RECAL
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:162
-    LDD VAR_GAME_STATE
+    ; VPy_LINE:159
+    LDD #127
     STD RESULT
     LDD RESULT
-    STD TMPLEFT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 159
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:160
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_0
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 160
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:161
+    LDD #65456
+    STD TMPPTR+0
+    LDD #50
+    STD TMPPTR+2
+    LDD #80
+    STD TMPPTR+4
+    LDD #50
+    STD TMPPTR+6
+    LDD #127
+    STD TMPPTR+8
+    LDD TMPPTR+0
+    STD RESULT+0
+    LDD TMPPTR+2
+    STD RESULT+2
+    LDD TMPPTR+4
+    STD RESULT+4
+    LDD TMPPTR+6
+    STD RESULT+6
+    LDD TMPPTR+8
+    STD RESULT+8
+    JSR DRAW_LINE_WRAPPER
     LDD #0
     STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_2
-    LDD #0
-    STD RESULT
-    BRA CE_3
-CT_2:
-    LDD #1
-    STD RESULT
-CE_3:
-    LDD RESULT
-    LBEQ IF_NEXT_1
     ; VPy_LINE:164
-    JSR menu_update_BANK_WRAPPER
+    LDA #$D0
+    TFR A,DP
+    LDA #$64
+    JSR Intensity_a
+    CLR Vec_Misc_Count
+    LDA #$3C
+    LDB #$3C
+    JSR Draw_Line_d
+    LDA #$C8
+    TFR A,DP
+    LDD #0
+    STD RESULT
     ; VPy_LINE:165
-    JSR menu_render_BANK_WRAPPER
-    LBRA IF_END_0
-IF_NEXT_1:
-    LDD VAR_GAME_STATE
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_4
+    LDA #$D0
+    TFR A,DP
+    LDA #$64
+    JSR Intensity_a
+    CLR Vec_Misc_Count
+    LDA #$C4
+    LDB #$3C
+    JSR Draw_Line_d
+    LDA #$C8
+    TFR A,DP
     LDD #0
     STD RESULT
-    BRA CE_5
-CT_4:
-    LDD #1
-    STD RESULT
-CE_5:
-    LDD RESULT
-    LBEQ IF_END_0
-    ; VPy_LINE:168
-    LDD VAR_CURRENT_LEVEL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_8
-    LDD #0
-    STD RESULT
-    BRA CE_9
-CT_8:
-    LDD #1
-    STD RESULT
-CE_9:
-    LDD RESULT
-    LBEQ IF_NEXT_7
-    ; VPy_LINE:169
-    JSR level1_update_BANK_WRAPPER
-    ; VPy_LINE:170
-    JSR level1_render_BANK_WRAPPER
-    LBRA IF_END_6
-IF_NEXT_7:
-    LDD VAR_CURRENT_LEVEL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_11
-    LDD #0
-    STD RESULT
-    BRA CE_12
-CT_11:
-    LDD #1
-    STD RESULT
-CE_12:
-    LDD RESULT
-    LBEQ IF_NEXT_10
-    ; VPy_LINE:172
-    JSR level2_update_BANK_WRAPPER
-    ; VPy_LINE:173
-    JSR level2_render_BANK_WRAPPER
-    LBRA IF_END_6
-IF_NEXT_10:
-    LDD VAR_CURRENT_LEVEL
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #2
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_13
-    LDD #0
-    STD RESULT
-    BRA CE_14
-CT_13:
-    LDD #1
-    STD RESULT
-CE_14:
-    LDD RESULT
-    LBEQ IF_END_6
-    ; VPy_LINE:175
-    JSR level3_update_BANK_WRAPPER
-    ; VPy_LINE:176
-    JSR level3_render_BANK_WRAPPER
-    LBRA IF_END_6
-IF_END_6:
-    ; VPy_LINE:179
-    JSR hud_draw_score_BANK_WRAPPER
-    ; VPy_LINE:180
-    JSR hud_draw_lives_BANK_WRAPPER
-    ; VPy_LINE:181
-    JSR hud_draw_level_BANK_WRAPPER
-    LBRA IF_END_0
-IF_END_0:
     RTS
 
 
@@ -540,7 +469,7 @@ LEVEL1_INIT: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_1
+    LDX #STR_2
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -736,24 +665,24 @@ LEVEL1_COLLISION: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_17
+    BEQ CT_2
     LDD #0
     STD RESULT
-    BRA CE_18
-CT_17:
+    BRA CE_3
+CT_2:
     LDD #1
     STD RESULT
-CE_18:
+CE_3:
     LDD RESULT
-    LBEQ IF_NEXT_16
+    LBEQ IF_NEXT_1
     ; VPy_LINE:40
     LDD #1
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA IF_END_15
-IF_NEXT_16:
-IF_END_15:
+    LBRA IF_END_0
+IF_NEXT_1:
+IF_END_0:
     LEAS 2,S ; free locals
     RTS
 
@@ -780,7 +709,7 @@ LEVEL2_INIT: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_2
+    LDX #STR_3
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1001,7 +930,7 @@ LEVEL3_INIT: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_3
+    LDX #STR_4
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1222,7 +1151,7 @@ MENU_INIT: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_5
+    LDX #STR_6
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1293,7 +1222,7 @@ HUD_DRAW_SCORE: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_6
+    LDX #STR_7
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1317,7 +1246,7 @@ HUD_DRAW_LIVES: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_4
+    LDX #STR_5
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1341,7 +1270,7 @@ HUD_DRAW_LEVEL: ; function
     STD RESULT
     LDD RESULT
     STD VAR_ARG1
-    LDX #STR_0
+    LDX #STR_1
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
@@ -1352,190 +1281,31 @@ HUD_DRAW_LEVEL: ; function
     STD RESULT
     RTS
 
-
-; ===== CROSS-BANK CALL WRAPPERS =====
-; Auto-generated wrappers for bank switching
-
-
-; Cross-bank wrapper for hud_draw_score (Bank #0)
-hud_draw_score_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR HUD_DRAW_SCORE              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for menu_init (Bank #0)
-menu_init_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR MENU_INIT              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level2_render (Bank #0)
-level2_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL2_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level1_update (Bank #0)
-level1_update_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL1_UPDATE              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level3_update (Bank #0)
-level3_update_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL3_UPDATE              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level3_render (Bank #0)
-level3_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL3_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for hud_draw_lives (Bank #0)
-hud_draw_lives_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR HUD_DRAW_LIVES              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for menu_render (Bank #0)
-menu_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR MENU_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level1_render (Bank #0)
-level1_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL1_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level2_update (Bank #0)
-level2_update_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL2_UPDATE              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for hud_draw_level (Bank #0)
-hud_draw_level_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR HUD_DRAW_LEVEL              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for menu_update (Bank #0)
-menu_update_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR MENU_UPDATE              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-; ===== END CROSS-BANK WRAPPERS =====
-
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
 ; String literals (classic FCC + $80 terminator)
 STR_0:
-    FCC "LEVEL"
+    FCC "BIG GAME TEST"
     FCB $80
 STR_1:
-    FCC "LEVEL 1"
+    FCC "LEVEL"
     FCB $80
 STR_2:
-    FCC "LEVEL 2"
+    FCC "LEVEL 1"
     FCB $80
 STR_3:
-    FCC "LEVEL 3"
+    FCC "LEVEL 2"
     FCB $80
 STR_4:
-    FCC "LIVES"
+    FCC "LEVEL 3"
     FCB $80
 STR_5:
-    FCC "MAIN MENU"
+    FCC "LIVES"
     FCB $80
 STR_6:
+    FCC "MAIN MENU"
+    FCB $80
+STR_7:
     FCC "SCORE"
     FCB $80
