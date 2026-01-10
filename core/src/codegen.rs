@@ -312,6 +312,7 @@ pub struct CodegenOptions {
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     pub buffer_requirements: Option<BufferRequirements>, // Dynamic buffer sizing from .vplay analysis
     pub bank_config: Option<BankConfig>, // Bank switching configuration (automatic bank assignment)
+    pub function_bank_map: HashMap<String, u8>, // Maps function name → bank ID (automatic assignment result)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -676,6 +677,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
+        // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
     };
@@ -713,6 +715,7 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     let ti = info(target);
     // If source defines CONST TITLE = "..." let it override CLI title.
     let mut effective = CodegenOptions { 
+        // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
     };
