@@ -216,6 +216,20 @@ enum Commands {
         #[arg(long, default_value="UNTITLED")]
         title: String,
     },
+    /// Link multiple object files (.vo) into final binary
+    Link {
+        /// Input .vo files to link
+        inputs: Vec<PathBuf>,
+        /// Output .bin file
+        #[arg(short, long)]
+        out: PathBuf,
+        /// Base address for linking (default: 0xC880 - standard RAM start)
+        #[arg(long, default_value="51328")]  // 0xC880
+        base: u16,
+        /// Title for cartridge header
+        #[arg(long, default_value="UNTITLED")]
+        title: String,
+    },
 }
 
 // main: parse CLI and dispatch subcommands.
@@ -237,6 +251,7 @@ fn main() -> Result<()> {
         Commands::Vec2Asm { input, out } => vec2asm_cmd(&input, out.as_ref()),
         Commands::VecNew { name, path } => vec_new_cmd(&name, path.as_ref()),
         Commands::CompileObject { input, out, title } => compile_object_cmd(&input, out.as_ref(), &title),
+        Commands::Link { inputs, out, base, title } => link_cmd(&inputs, &out, base, &title),
     }
 }
 
@@ -1518,6 +1533,106 @@ fn compile_object_cmd(input: &Path, output: Option<&PathBuf>, title: &str) -> Re
     eprintln!("  Symbols: {} exports, {} imports", 
         obj.symbols.exports.len(), obj.symbols.imports.len());
     eprintln!("  Relocations: {}", obj.relocations.len());
+    
+    Ok(())
+}
+fn link_cmd(inputs: &[PathBuf], output: &Path, base_address: u16, title: &str) -> Result<()> {
+    use crate::linker::{VectrexObject, SymbolResolver};
+    
+    eprintln!("=== VECTREX LINKER ===");
+    eprintln!("Linking {} object files...", inputs.len());
+    eprintln!("Base address: 0x{:04X}", base_address);
+    
+    // Phase 1: Load all object files
+    eprintln!("\nPhase 1: Loading object files...");
+    let mut objects = Vec::new();
+    for (idx, input_path) in inputs.iter().enumerate() {
+        eprintln!("  [{}/{}] Loading {}...", idx + 1, inputs.len(), input_path.display());
+        
+        let mut file = std::fs::File::open(input_path)
+            .map_err(|e| anyhow::anyhow!("Failed to open {}: {}", input_path.display(), e))?;
+        
+        let obj = VectrexObject::read(&mut file)
+            .map_err(|e| anyhow::anyhow!("Failed to read object file {}: {}", input_path.display(), e))?;
+        
+        eprintln!("      Sections: {}", obj.sections.len());
+        eprintln!("      Exports: {}", obj.symbols.exports.len());
+        eprintln!("      Imports: {}", obj.symbols.imports.len());
+        eprintln!("      Relocations: {}", obj.relocations.len());
+        
+        objects.push(obj);
+    }
+    
+    // Phase 2: Collect symbols and build global symbol table
+    eprintln!("\nPhase 2: Building global symbol table...");
+    let mut global = SymbolResolver::collect_symbols(&objects)
+        .map_err(|e| anyhow::anyhow!("Symbol collection failed: {}", e))?;
+    eprintln!("  ✓ Collected {} global symbols", global.symbols.len());
+    
+    // Phase 3: Verify all imports are satisfied
+    eprintln!("\nPhase 3: Verifying imports...");
+    SymbolResolver::verify_imports(&objects, &global)
+        .map_err(|e| anyhow::anyhow!("Import verification failed:\n{}", e))?;
+    eprintln!("  ✓ All imports resolved");
+    
+    // Phase 4: Assign addresses to sections and symbols
+    eprintln!("\nPhase 4: Assigning addresses...");
+    let section_bases = SymbolResolver::assign_addresses(&objects, &mut global, base_address)
+        .map_err(|e| anyhow::anyhow!("Address assignment failed: {}", e))?;
+    eprintln!("  ✓ Assigned {} section addresses", section_bases.len());
+    
+    // Print symbol addresses for debugging
+    eprintln!("\nSymbol addresses:");
+    let mut sorted_symbols: Vec<_> = global.symbols.iter().collect();
+    sorted_symbols.sort_by_key(|(_, sym)| sym.address);
+    for (name, sym) in sorted_symbols.iter().take(10) {
+        eprintln!("  {} = 0x{:04X} ({})", name, sym.address, sym.source_file);
+    }
+    if sorted_symbols.len() > 10 {
+        eprintln!("  ... and {} more", sorted_symbols.len() - 10);
+    }
+    
+    // Phase 5: Apply relocations
+    eprintln!("\nPhase 5: Applying relocations...");
+    let mut objects_mut = objects.clone();
+    SymbolResolver::apply_relocations(&mut objects_mut, &global, &section_bases)
+        .map_err(|e| anyhow::anyhow!("Relocation patching failed: {}", e))?;
+    eprintln!("  ✓ Patched all relocations");
+    
+    // Phase 6: Merge all sections into final binary
+    eprintln!("\nPhase 6: Merging sections...");
+    let mut final_binary = Vec::new();
+    let mut current_address = base_address;
+    
+    for (obj_idx, obj) in objects_mut.iter().enumerate() {
+        for (section_idx, section) in obj.sections.iter().enumerate() {
+            let section_base = section_bases[&(obj_idx, section_idx)];
+            
+            // Add padding if needed
+            while final_binary.len() < (section_base - base_address) as usize {
+                final_binary.push(0x00);
+            }
+            
+            // Append section data
+            final_binary.extend_from_slice(&section.data);
+            current_address = section_base + section.data.len() as u16;
+            
+            eprintln!("  Section {} from {}: 0x{:04X}-0x{:04X} ({} bytes)",
+                section.name, obj.header.source_file, section_base, current_address, section.data.len());
+        }
+    }
+    
+    // Phase 7: Write final binary
+    eprintln!("\nPhase 7: Writing binary...");
+    std::fs::write(output, &final_binary)?;
+    
+    eprintln!("\n✓ SUCCESS: Linked binary generated");
+    eprintln!("  Output: {}", output.display());
+    eprintln!("  Size: {} bytes", final_binary.len());
+    eprintln!("  Base: 0x{:04X}", base_address);
+    eprintln!("  End: 0x{:04X}", current_address);
+    eprintln!("  Objects linked: {}", objects.len());
+    eprintln!("  Total symbols: {}", global.symbols.len());
     
     Ok(())
 }
