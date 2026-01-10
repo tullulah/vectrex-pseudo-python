@@ -1,13 +1,39 @@
 # Linker Phase 3: ASM Parser Implementation
 
-## Status: ✅ PHASE 3.1 COMPLETE (2026-01-10)
+## Status: ✅ COMPLETE (2026-01-10)
 
 ## Summary
-Phase 3.1 successfully implemented the ASM parser that extracts sections, symbols, and prepares for relocation collection. The parser can now read ASM with section markers and build object file metadata.
+Phase 3 successfully implemented complete ASM parsing with binary assembly and relocation collection. The parser can now:
+- Extract sections from ASM with .section markers
+- Assemble sections to binary M6809 code
+- Build symbol tables with accurate offsets
+- Detect and collect all relocations (JSR, LDD #, BRA, LBRA)
 
-## Implementation Overview
+## Implementation Results
 
-### Module: `core/src/linker/asm_parser.rs` (323 lines, 3 tests passing)
+### Phase 3.1: Section Extraction ✅
+- Parse `.section` markers
+- Group ASM lines by section
+- Extract section metadata
+- **Test**: `test_parse_section_markers` ✅
+
+### Phase 3.2: Binary Assembly ✅
+- Integrate with `asm_to_binary.rs`
+- Assemble each section independently
+- Handle BSS sections (no data)
+- **Function**: `extract_sections_with_binary(asm, org)`
+- **Test**: `test_extract_sections_with_binary` ✅
+
+### Phase 3.3: Relocation Collection ✅
+- Detect JSR instructions → Absolute16 relocations
+- Detect LDD #label, LDX #label → Absolute16 relocations
+- Detect BRA/BEQ/BNE → Relative8 relocations
+- Detect LBRA/LBEQ → Relative16 relocations
+- Filter out internal symbols (already exported)
+- **Function**: `collect_relocations(sections, symbols, asm)`
+- **Test**: `test_collect_relocations` ✅
+
+## Module: `core/src/linker/asm_parser.rs` (485 lines, 5 tests passing)
 
 #### Core Functions
 
