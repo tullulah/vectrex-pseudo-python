@@ -438,7 +438,17 @@ def loop():
    - 6/6 tests passing
    - Commit: 8482a7ae
 
-5. ⏸️ Phase 4.5: Multi-object linking test (2 hours)
+5. ✅ Phase 4.5: Multi-object linking test (COMPLETE - 2025-01-10)
+   - Implemented `link_cmd()` with full pipeline
+   - Load multiple .vo files
+   - Resolve symbols globally
+   - Assign addresses to sections
+   - Apply relocations
+   - Merge sections into final binary
+   - Commit: 51bd3b16
+   - Note: Full end-to-end test pending module system (VPy currently requires main/loop in each file)
+
+6. ⏸️ Phase 5: ROM Writing (future work)
    - Test undefined reference detection
 
 3. ⏸️ Phase 4.3: Address assignment (2 hours)
