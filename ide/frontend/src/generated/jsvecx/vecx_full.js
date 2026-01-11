@@ -4032,9 +4032,10 @@ function VecX()
     //unsigned char rom[8192];
     this.rom = new Array(0x2000);
     utils.initArray(this.rom, 0);
-    //unsigned char cart[32768];
-    this.cart = new Array(0x8000);
+    //unsigned char cart[32768]; // EXPANDED: Support up to 4MB multi-bank ROMs
+    this.cart = new Array(0x400000); // 4MB max (256 banks × 16KB)
     utils.initArray(this.cart, 0);
+    this.current_bank = 0; // Current bank mapped to 0x0000-0x3FFF (default: Bank 0)
     //static unsigned char ram[1024];
     this.ram = new Array(0x400);
     utils.initArray(this.ram, 0);
@@ -4510,7 +4511,23 @@ function VecX()
 
         if( address < 0x8000 )
         {
-            return this.cart[address] & 0xff;
+            // Multi-bank ROM support:
+            // 0x0000-0x3FFF: Banked window (switchable via current_bank)
+            // 0x4000-0x7FFF: Fixed bank #31 (always mapped)
+            var physical_address;
+            if (address < 0x4000) {
+                // Banked window: map to current_bank * 16KB
+                physical_address = (this.current_bank * 0x4000) + address;
+            } else {
+                // Fixed bank #31: map to offset 0x7C000 (bank 31 * 16KB)
+                physical_address = 0x7C000 + (address - 0x4000);
+            }
+            
+            // Bounds check (support up to 4MB)
+            if (physical_address < this.cart.length) {
+                return this.cart[physical_address] & 0xff;
+            }
+            return 0xff; // Out of bounds
         }
 
         return 0xff;
@@ -4759,7 +4776,12 @@ function VecX()
         }
         else if( address < 0x8000 )
         {
-            /* cartridge */
+            /* cartridge - bank switching register */
+            // Write to 0x4000 switches the current bank (0x0000-0x3FFF window)
+            if (address == 0x4000) {
+                this.current_bank = data & 0xff; // Bank number (0-255)
+                // console.log('[JSVecx] Bank switch to:', this.current_bank);
+            }
         }
     }
 
@@ -4771,6 +4793,9 @@ function VecX()
         {
             this.ram[r] = r & 0xff;
         }
+
+        /* reset bank switching to Bank 0 */
+        this.current_bank = 0;
 
         for( var r = 0; r < 16; r++ )
         {

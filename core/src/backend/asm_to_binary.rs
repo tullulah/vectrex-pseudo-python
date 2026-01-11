@@ -47,13 +47,15 @@ pub fn assemble_m6809(
     asm_source: &str, 
     org: u16,
     object_mode: bool,
+    use_long_branches: bool,
 ) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>, Vec<UnresolvedRef>), String> {
     let mut emitter = BinaryEmitter::new(org);
     let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
     let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Símbolos no resueltos (object mode)
     
-    // Configure emitter for object mode
+    // Configure emitter for object mode and long branches
     emitter.set_object_mode(object_mode);
+    emitter.set_long_branches(use_long_branches);
     
     // SIEMPRE cargar símbolos de Vectrex BIOS al inicio
     load_vectrex_symbols(&mut equates);

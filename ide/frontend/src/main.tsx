@@ -862,16 +862,9 @@ def loop():
         break;
       case 'debug.stepInto':
         logger.debug('App', 'step into');
-        // FIX (2026-01-06): Send different message based on debugging mode
-        // If in ASM mode, step normally. If in VPy mode, switch to ASM without executing
-        const asmDebuggingMode = (window as any).asmDebuggingMode;
-        if (asmDebuggingMode) {
-          // Already in ASM - do normal step
-          window.postMessage({ type: 'debug-step-into' }, '*');
-        } else {
-          // In VPy - switch to ASM view without executing
-          window.postMessage({ type: 'debug-switch-to-asm' }, '*');
-        }
+        // FIXED (2026-01-11): Always execute step-into, don't just switch views
+        // The emulator will handle stepping through wrappers and finding the target function
+        window.postMessage({ type: 'debug-step-into' }, '*');
         break;
       case 'debug.stepOut':
         logger.debug('App', 'step out');

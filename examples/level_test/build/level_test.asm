@@ -61,6 +61,14 @@ VAR_ARG1             EQU $C880+$63   ; Function argument 1 (2 bytes)
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
+; │ This section contains reusable code shared across all VPy       │
+; │ programs. These helpers are emitted once per compilation unit.  │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
 ; Returns: D = raw value from $C81B after Joy_Analog call
@@ -1230,6 +1238,13 @@ UGPC_NEXT_OUTER:
 UGPC_EXIT:
     RTS
     
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ PROGRAM CODE SECTION - User VPy Code                            │
+; │ This section contains the compiled user program logic.          │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1598,3 +1613,4 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
 _TEST_LEVEL_FG_OBJECTS:
 
 
+; === INLINE ARRAY LITERALS (from function bodies) ===

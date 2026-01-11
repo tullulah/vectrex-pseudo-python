@@ -25,6 +25,7 @@ pub struct BinaryEmitter {
     current_line: usize,                    // Línea actual del código fuente VPy
     object_mode: bool,                      // Object mode: allow unresolved symbols
     unresolved_refs: Vec<UnresolvedRef>,    // Unresolved symbols (for object mode)
+    use_long_branches: bool,                // Multi-bank mode: use long branches (LBEQ/LBNE/LBRA) instead of short
 }
 
 impl BinaryEmitter {
@@ -40,12 +41,19 @@ impl BinaryEmitter {
             current_line: 0,
             object_mode: false,
             unresolved_refs: Vec::new(),
+            use_long_branches: false,
         }
     }
     
     /// Set object mode (allows unresolved symbols)
     pub fn set_object_mode(&mut self, enabled: bool) {
         self.object_mode = enabled;
+    }
+    
+    /// Set long branch mode (use LBEQ/LBNE/LBRA instead of BEQ/BNE/BRA)
+    /// Required for multi-bank ROMs where branches may exceed 8-bit range
+    pub fn set_long_branches(&mut self, enabled: bool) {
+        self.use_long_branches = enabled;
     }
     
     /// Get list of unresolved symbols (for object mode)
@@ -350,12 +358,26 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BRA con etiqueta (resolver después)
+    /// BRA con etiqueta (auto-selecciona short/long según configuración)
     pub fn bra_label(&mut self, label: &str) {
+        if self.use_long_branches {
+            self.lbra_label(label);
+        } else {
+            self.record_line_mapping();
+            self.emit(0x20);
+            self.add_symbol_ref(label, true, 1);
+            self.emit(0x00); // Placeholder
+        }
+    }
+
+    /// LBRA - long branch siempre (opcode 0x16, offset 16-bit)
+    /// NOTE: LBRA tiene opcode especial 0x16 (no 0x10 0x20 como otros long branches)
+    pub fn lbra_label(&mut self, label: &str) {
         self.record_line_mapping();
-        self.emit(0x20);
-        self.add_symbol_ref(label, true, 1);
-        self.emit(0x00); // Placeholder
+        self.emit(0x16);  // LBRA special opcode (not 0x10 0x20)
+        self.add_symbol_ref(label, true, 2); // 2 bytes para offset de 16 bits
+        self.emit(0x00);
+        self.emit(0x00);
     }
 
     /// BEQ - branch si igual/cero (opcode 0x27)
@@ -365,12 +387,16 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BEQ con etiqueta
+    /// BEQ con etiqueta (auto-selecciona short/long según configuración)
     pub fn beq_label(&mut self, label: &str) {
-        self.record_line_mapping();
-        self.emit(0x27);
-        self.add_symbol_ref(label, true, 1);
-        self.emit(0x00);
+        if self.use_long_branches {
+            self.lbeq_label(label);
+        } else {
+            self.record_line_mapping();
+            self.emit(0x27);
+            self.add_symbol_ref(label, true, 1);
+            self.emit(0x00);
+        }
     }
 
     /// LBEQ - long branch si igual/cero (opcode 0x10 0x27, offset 16-bit)
@@ -390,12 +416,16 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BNE con etiqueta
+    /// BNE con etiqueta (auto-selecciona short/long según configuración)
     pub fn bne_label(&mut self, label: &str) {
-        self.record_line_mapping();
-        self.emit(0x26);
-        self.add_symbol_ref(label, true, 1);
-        self.emit(0x00);
+        if self.use_long_branches {
+            self.lbne_label(label);
+        } else {
+            self.record_line_mapping();
+            self.emit(0x26);
+            self.add_symbol_ref(label, true, 1);
+            self.emit(0x00);
+        }
     }
 
     /// LBNE - long branch si no igual (opcode 0x10 0x26, offset 16-bit)

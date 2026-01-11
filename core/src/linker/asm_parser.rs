@@ -68,7 +68,7 @@ pub fn extract_sections_with_binary(asm: &str, base_org: u16) -> Result<Vec<Sect
         
         // Assemble section ASM to binary (object_mode=true to allow unresolved symbols)
         let section_asm = ps.lines.join("\n");
-        let (binary, _line_map, _symbols, _unresolved) = assemble_m6809(&section_asm, current_org, true)
+        let (binary, _line_map, _symbols, _unresolved) = assemble_m6809(&section_asm, current_org, true, false)
             .map_err(|e| format!("Failed to assemble section {}: {}", ps.name, e))?;
         
         let section = Section {

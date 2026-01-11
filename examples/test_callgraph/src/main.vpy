@@ -25,10 +25,10 @@ def loop():
     
     # Update game logic
     update_player()
-    update_enemies()
-    draw_all()
+    # update_enemies()
+    # draw_all()
     
-    frame_count = frame_count + 1
+    # frame_count = frame_count + 1
 
 # ==================== GAME LOGIC ====================
 

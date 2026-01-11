@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 45 bytes
+; Total RAM used: 47 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
@@ -48,14 +48,24 @@ VAR_ENEMY2_X         EQU $C880+$1D   ; User variable (2 bytes)
 VAR_ENEMY2_Y         EQU $C880+$1F   ; User variable (2 bytes)
 VAR_ENEMY3_X         EQU $C880+$21   ; User variable (2 bytes)
 VAR_ENEMY3_Y         EQU $C880+$23   ; User variable (2 bytes)
-VAR_ARG0             EQU $C880+$25   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$27   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$29   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$2B   ; Function argument 3 (2 bytes)
+VAR_FRAME_COUNT      EQU $C880+$25   ; User variable (2 bytes)
+VAR_ARG0             EQU $C880+$27   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$29   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$2B   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$2D   ; Function argument 3 (2 bytes)
+CURRENT_ROM_BANK     EQU $CF02   ; Current ROM bank tracker (1 byte)
 
     JMP START
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
+
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
+; │ This section contains reusable code shared across all VPy       │
+; │ programs. These helpers are emitted once per compilation unit.  │
+; └─────────────────────────────────────────────────────────────────┘
+;
 
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
@@ -130,21 +140,6 @@ J1B4_BUILTIN:
     LDD #0
     RTS
 
-VECTREX_PRINT_TEXT:
-    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)
-    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)
-    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)
-    STA >$D00C     ; VIA_cntl
-    LDA #$D0
-    TFR A,DP       ; Set Direct Page to $D0 for BIOS
-    LDU VAR_ARG2   ; string pointer (ARG2 = third param)
-    LDA VAR_ARG1+1 ; Y (ARG1 = second param)
-    LDB VAR_ARG0+1 ; X (ARG0 = first param)
-    JSR Print_Str_d
-    JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)
-    RTS
 VECTREX_SET_INTENSITY:
     ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
     LDA #$98       ; VIA_cntl = $98 (DAC mode)
@@ -466,6 +461,13 @@ CLR VIA_shift_reg
 LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
 RTS
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ PROGRAM CODE SECTION - User VPy Code                            │
+; │ This section contains the compiled user program logic.          │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -474,39 +476,43 @@ START:
     STA VIA_t1_cnt_lo
     LDX #Vec_Default_Stk
     TFR X,S
+    LDA #0
+    STA $4000         ; Initialize banked window to bank 0
+    STA CURRENT_ROM_BANK ; Track current bank in RAM
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:15
-    ; VPy_LINE:8
+    ; VPy_LINE:18
+    ; VPy_LINE:9
     LDD #-50
     STD VAR_ENEMY1_X
-    ; VPy_LINE:9
+    ; VPy_LINE:10
     LDD #60
     STD VAR_ENEMY1_Y
-    ; VPy_LINE:10
-    LDD #0
-    STD VAR_ENEMY2_X
     ; VPy_LINE:11
     LDD #0
-    STD VAR_ENEMY2_Y
+    STD VAR_ENEMY2_X
     ; VPy_LINE:12
+    LDD #0
+    STD VAR_ENEMY2_Y
+    ; VPy_LINE:13
     LDD #50
     STD VAR_ENEMY3_X
-    ; VPy_LINE:13
+    ; VPy_LINE:14
     LDD #-60
     STD VAR_ENEMY3_Y
-    ; VPy_LINE:16
+    ; VPy_LINE:15
+    LDD #0
+    STD VAR_FRAME_COUNT
+    ; VPy_LINE:19
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 16
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 19
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:17
-    JSR init_game_BANK_WRAPPER
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -536,83 +542,36 @@ MAIN:
 ; ================================================
     ORG $4000  ; Fixed bank (always visible)
 
-    ; VPy_LINE:86
+    ; VPy_LINE:23
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; VPy_LINE:87
-    JSR game_loop_BANK_WRAPPER
+    ; VPy_LINE:24
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 24
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:27
+    JSR update_player_BANK_WRAPPER
     RTS
 
 
 ; ================================================
-; BANK #0 - 13 function(s)
+; BANK #0 - 1 function(s)
 ; ================================================
     ORG $0000  ; Banked window (switchable)
 
-    ; VPy_LINE:19
-INIT_GAME: ; function
-; --- function init_game ---
-    ; VPy_LINE:20
-    JSR LOAD_ASSETS
-    ; VPy_LINE:21
-    JSR SETUP_PLAYER
-    RTS
-
-    ; VPy_LINE:23
-LOAD_ASSETS: ; function
-; --- function load_assets ---
-    ; VPy_LINE:24
-    ; pass (no-op)
-    RTS
-
-    ; VPy_LINE:26
-SETUP_PLAYER: ; function
-; --- function setup_player ---
-    ; VPy_LINE:27
-    ; pass (no-op)
-    RTS
-
-    ; VPy_LINE:29
-GAME_LOOP: ; function
-; --- function game_loop ---
-    ; VPy_LINE:30
-    JSR UPDATE_PLAYER
-    ; VPy_LINE:31
-    JSR UPDATE_ENEMIES
-    ; VPy_LINE:32
-    JSR DRAW_ALL
-    RTS
-
-    ; VPy_LINE:34
-UPDATE_PLAYER: ; function
-; --- function update_player ---
-    ; VPy_LINE:35
-    JSR CHECK_INPUT
-    ; VPy_LINE:36
-    JSR MOVE_PLAYER
-    RTS
-
-    ; VPy_LINE:38
-CHECK_INPUT: ; function
-; --- function check_input ---
-    ; VPy_LINE:39
-    ; pass (no-op)
-    RTS
-
-    ; VPy_LINE:41
-MOVE_PLAYER: ; function
-; --- function move_player ---
-    ; VPy_LINE:42
-    ; pass (no-op)
-    RTS
-
-    ; VPy_LINE:44
+    ; VPy_LINE:48
 UPDATE_ENEMIES: ; function
 ; --- function update_enemies ---
-    ; VPy_LINE:46
+    ; VPy_LINE:50
     LDD VAR_ENEMY1_X
     STD RESULT
     LDD RESULT
@@ -631,7 +590,7 @@ UPDATE_ENEMIES: ; function
     LDU #VAR_ENEMY1_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:47
+    ; VPy_LINE:51
     LDD VAR_ENEMY1_X
     STD RESULT
     LDD RESULT
@@ -652,7 +611,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
-    ; VPy_LINE:48
+    ; VPy_LINE:52
     LDD #-100
     STD RESULT
     LDX RESULT
@@ -662,7 +621,7 @@ CE_3:
     LBRA IF_END_0
 IF_NEXT_1:
 IF_END_0:
-    ; VPy_LINE:51
+    ; VPy_LINE:55
     LDD VAR_ENEMY2_Y
     STD RESULT
     LDD RESULT
@@ -681,7 +640,7 @@ IF_END_0:
     LDU #VAR_ENEMY2_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:52
+    ; VPy_LINE:56
     LDD VAR_ENEMY2_Y
     STD RESULT
     LDD RESULT
@@ -702,7 +661,7 @@ CT_6:
 CE_7:
     LDD RESULT
     LBEQ IF_NEXT_5
-    ; VPy_LINE:53
+    ; VPy_LINE:57
     LDD #-100
     STD RESULT
     LDX RESULT
@@ -712,7 +671,7 @@ CE_7:
     LBRA IF_END_4
 IF_NEXT_5:
 IF_END_4:
-    ; VPy_LINE:56
+    ; VPy_LINE:60
     LDD VAR_ENEMY3_X
     STD RESULT
     LDD RESULT
@@ -731,7 +690,7 @@ IF_END_4:
     LDU #VAR_ENEMY3_X
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:57
+    ; VPy_LINE:61
     LDD VAR_ENEMY3_Y
     STD RESULT
     LDD RESULT
@@ -750,7 +709,7 @@ IF_END_4:
     LDU #VAR_ENEMY3_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:58
+    ; VPy_LINE:62
     LDD VAR_ENEMY3_X
     STD RESULT
     LDD RESULT
@@ -771,7 +730,7 @@ CT_10:
 CE_11:
     LDD RESULT
     LBEQ IF_NEXT_9
-    ; VPy_LINE:59
+    ; VPy_LINE:63
     LDD #100
     STD RESULT
     LDX RESULT
@@ -781,7 +740,7 @@ CE_11:
     LBRA IF_END_8
 IF_NEXT_9:
 IF_END_8:
-    ; VPy_LINE:60
+    ; VPy_LINE:64
     LDD VAR_ENEMY3_Y
     STD RESULT
     LDD RESULT
@@ -802,7 +761,7 @@ CT_14:
 CE_15:
     LDD RESULT
     LBEQ IF_NEXT_13
-    ; VPy_LINE:61
+    ; VPy_LINE:65
     LDD #100
     STD RESULT
     LDX RESULT
@@ -814,32 +773,139 @@ IF_NEXT_13:
 IF_END_12:
     RTS
 
-    ; VPy_LINE:63
-MOVE_ENEMY: ; function
-; --- function move_enemy ---
-    LEAS -2,S ; allocate locals
-    LDD VAR_ARG0
-    STD 0,S ; param 0
-    ; VPy_LINE:64
-    ; pass (no-op)
-    LEAS 2,S ; free locals
+
+; ================================================
+; BANK #1 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:78
+DRAW_ENEMIES: ; function
+; --- function draw_enemies ---
+    ; VPy_LINE:80
+; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
+    LDD VAR_ENEMY1_X
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD VAR_ENEMY1_Y
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ENEMY_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:81
+; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
+    LDD VAR_ENEMY2_X
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD VAR_ENEMY2_Y
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ENEMY_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:82
+; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
+    LDD VAR_ENEMY3_X
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD VAR_ENEMY3_Y
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ENEMY_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
     RTS
 
-    ; VPy_LINE:66
+
+; ================================================
+; BANK #2 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:69
 DRAW_ALL: ; function
 ; --- function draw_all ---
-    ; VPy_LINE:67
-    JSR DRAW_PLAYER
-    ; VPy_LINE:68
-    JSR DRAW_ENEMIES
-    ; VPy_LINE:69
-    JSR DRAW_BANK_INFO
+    ; VPy_LINE:71
+    JSR draw_player_BANK_WRAPPER
+    ; VPy_LINE:72
+    JSR draw_enemies_BANK_WRAPPER
     RTS
 
-    ; VPy_LINE:71
+
+; ================================================
+; BANK #3 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:35
+UPDATE_PLAYER: ; function
+; --- function update_player ---
+    ; VPy_LINE:37
+    JSR check_input_BANK_WRAPPER
+    ; VPy_LINE:38
+    JSR move_player_BANK_WRAPPER
+    RTS
+
+
+; ================================================
+; BANK #4 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:44
+MOVE_PLAYER: ; function
+; --- function move_player ---
+    ; VPy_LINE:46
+    ; pass (no-op)
+    RTS
+
+
+; ================================================
+; BANK #5 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:74
 DRAW_PLAYER: ; function
 ; --- function draw_player ---
-    ; VPy_LINE:72
+    ; VPy_LINE:76
 ; DRAW_VECTOR("player", x, y) - 1 path(s) at position
     LDD #0
     STD RESULT
@@ -864,140 +930,17 @@ DRAW_PLAYER: ; function
     STD RESULT
     RTS
 
-    ; VPy_LINE:74
-DRAW_ENEMIES: ; function
-; --- function draw_enemies ---
-    ; VPy_LINE:76
-; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
-    LDD VAR_ENEMY1_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD VAR_ENEMY1_Y
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    ; VPy_LINE:77
-; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
-    LDD VAR_ENEMY2_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD VAR_ENEMY2_Y
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    ; VPy_LINE:78
-; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
-    LDD VAR_ENEMY3_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD VAR_ENEMY3_Y
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    RTS
 
-    ; VPy_LINE:80
-DRAW_BANK_INFO: ; function
-; --- function draw_bank_info ---
-    ; VPy_LINE:82
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-120
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_0
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 82
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:83
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-120
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #85
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_2
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 83
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:84
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-120
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #70
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_1
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 84
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
+; ================================================
+; BANK #6 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:40
+CHECK_INPUT: ; function
+; --- function check_input ---
+    ; VPy_LINE:42
+    ; pass (no-op)
     RTS
 
 
@@ -1005,29 +948,83 @@ DRAW_BANK_INFO: ; function
 ; Auto-generated wrappers for bank switching
 
 
-; Cross-bank wrapper for game_loop (Bank #0)
-game_loop_BANK_WRAPPER:
+; Cross-bank wrapper for draw_player (Bank #5)
+draw_player_BANK_WRAPPER:
     PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
     PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR GAME_LOOP              ; Call real function
+    LDA #5             ; Load target bank ID
+    STA $4000         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    ; VPy_LINE:74
+    JSR DRAW_PLAYER              ; Call real function
     PULS A              ; Restore original bank from stack
     STA $4000         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
     PULS A              ; Restore A register
     RTS
 
-; Cross-bank wrapper for init_game (Bank #0)
-init_game_BANK_WRAPPER:
+; Cross-bank wrapper for update_player (Bank #3)
+update_player_BANK_WRAPPER:
     PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
     PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR INIT_GAME              ; Call real function
+    LDA #3             ; Load target bank ID
+    STA $4000         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    ; VPy_LINE:35
+    JSR UPDATE_PLAYER              ; Call real function
     PULS A              ; Restore original bank from stack
     STA $4000         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for check_input (Bank #6)
+check_input_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
+    PSHS A              ; Save current bank on stack
+    LDA #6             ; Load target bank ID
+    STA $4000         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    ; VPy_LINE:40
+    JSR CHECK_INPUT              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for move_player (Bank #4)
+move_player_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
+    PSHS A              ; Save current bank on stack
+    LDA #4             ; Load target bank ID
+    STA $4000         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    ; VPy_LINE:44
+    JSR MOVE_PLAYER              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_enemies (Bank #1)
+draw_enemies_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
+    PSHS A              ; Save current bank on stack
+    LDA #1             ; Load target bank ID
+    STA $4000         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    ; VPy_LINE:78
+    JSR DRAW_ENEMIES              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
     PULS A              ; Restore A register
     RTS
 ; ===== END CROSS-BANK WRAPPERS =====
@@ -1086,13 +1083,4 @@ _ENEMY_PATH0:    ; Path 0
     FCB $FF,$14,$00          ; closing line: flag=-1, dy=20, dx=0
     FCB 2                ; End marker (path complete)
 
-; String literals (classic FCC + $80 terminator)
-STR_0:
-    FCC "BANK SWITCHING TEST"
-    FCB $80
-STR_1:
-    FCC "GAME: BANK 0 (AUTO)"
-    FCB $80
-STR_2:
-    FCC "MAIN: BANK 31 (FIXED)"
-    FCB $80
+; === INLINE ARRAY LITERALS (from function bodies) ===

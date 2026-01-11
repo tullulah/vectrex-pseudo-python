@@ -303,6 +303,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             bank_register
         );
         
+        // Register function line numbers for debugging (wrapper line markers)
+        for item in &module.items {
+            if let Item::Function(f) = item {
+                gen.register_function_line(&f.name, f.line);
+            }
+        }
+        
         // Analyze AST to detect cross-bank calls
         bank_call_analyzer::analyze_cross_bank_calls(module, &mut gen);
         
@@ -641,6 +648,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if opts.fast_wait {
         ram.allocate("FAST_WAIT_HIT", 1, "Fast wait recalibration flag");
     }
+
+    // 12.1 Bank switching runtime tracking (current bank in RAM)
+    // IMPORTANT: Place CURRENT_ROM_BANK outside scratch region to avoid collisions.
+    // Fixed high-RAM address chosen to be collision-safe with VAR_* and temporaries.
+    if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
+        // Allocate CURRENT_ROM_BANK at fixed high-RAM address via allocator
+        ram.allocate_fixed("CURRENT_ROM_BANK", 0xCF02, 1, "Current ROM bank tracker (1 byte)");
+    }
     
     // 13. VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
     if rt_usage.needs_vectorlist_runtime {
@@ -760,7 +775,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         emit_helpers_section(&mut out, opts);
         
         // Emit builtin helpers BEFORE program code (fixes forward reference issues)
-        if !suppress_runtime {
+        // Skip if building separate modules (skip_builtins=true) to avoid duplicate symbols
+        if !suppress_runtime && !opts.skip_builtins {
             emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
         }
         
@@ -778,6 +794,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str(";\n\n");
         
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
+        // Initialize bank switching state if enabled
+        if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
+            // Default to bank 0 for the banked window
+            out.push_str("    LDA #0\n    STA $4000         ; Initialize banked window to bank 0\n    STA CURRENT_ROM_BANK ; Track current bank in RAM\n");
+        }
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
         let has_music_calls = rt_usage.wrappers_used.contains("PLAY_MUSIC_RUNTIME");
@@ -915,7 +936,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Use global_vars_with_line to emit line markers for PDB coverage
         if !main_has_content && !global_vars_with_line.is_empty() {
             out.push_str("    ; Initialize global variables (excluding const arrays)\n");
-            let mut array_counter = 0;
             for (name, value, source_line) in &global_vars_with_line {
                 // Skip const arrays (they're already in ROM)
                 if const_array_names.contains(name) {
@@ -928,10 +948,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 
                 if let Expr::List(_elements) = value {
                     // Array literal: load address of pre-generated array data
-                    let array_label = format!("ARRAY_{}", array_counter);
+                    let array_label = format!("ARRAY_{}", name.to_uppercase());
                     out.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
                     out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
-                    array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));

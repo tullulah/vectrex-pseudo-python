@@ -664,6 +664,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 exclude_ram_org: true,
                 fast_wait: false,
                 emit_sections: false,  // Monolithic ASM mode (backward compatible, default)
+                skip_builtins: false,
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
                 output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
                 assets: vec![], // TODO: Implement asset discovery
@@ -749,6 +750,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             exclude_ram_org: true,
             fast_wait: false,
             emit_sections: false,  // Monolithic ASM mode (default)
+            skip_builtins: false,
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
             assets,
@@ -1464,6 +1466,7 @@ fn compile_object_cmd(input: &Path, output: Option<&PathBuf>, title: &str) -> Re
         exclude_ram_org: true,
         fast_wait: false,
         emit_sections: true,  // CRITICAL: Enable section markers
+        skip_builtins: false,  // NOT using --separate-modules, so emit builtins
         source_path: Some(input.display().to_string()),
         output_name: Some(title.to_string()),
         assets,
@@ -1644,49 +1647,70 @@ fn link_cmd(inputs: &[PathBuf], output: &Path, base_address: u16, title: &str) -
     
     Ok(())
 }// build_separate_modules: Compile each module to .vo, then link (Phase 6.5)
-fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &str, _generate_bin: bool) -> Result<()> {
+// Implementation: Unifier-First + Section Extraction (PHASE6_FUTURE_WORK.md)
+fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &str, generate_bin: bool) -> Result<()> {
     eprintln!("=== SEPARATE MODULE COMPILATION (Phase 6.5) ===");
     eprintln!("Entry: {}", entry_path.display());
     
-    // Phase 1: Load all modules using resolver
-    eprintln!("\nPhase 1: Loading modules...");
-    let project_root = entry_path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    let mut resolver = resolver::ModuleResolver::new(project_root.clone());
+    // Phase 1: Parse entry module
+    eprintln!("\nPhase 1: Parsing entry module...");
+    let entry_pathbuf = entry_path.to_path_buf();
+    let src = read_source(&entry_pathbuf)?;
+    let tokens = lexer::lex(&src)?;
+    let module = parser::parse_with_filename(&tokens, &entry_path.display().to_string())?;
+    eprintln!("  ✓ Parsed {} top-level items", module.items.len());
+    
+    // Phase 2: Multi-file resolution (COPY from Phase 3.5 of build_cmd)
+    eprintln!("\nPhase 2: Multi-file import resolution...");
+    eprintln!("   Found {} import declarations", module.imports.len());
+    
+    let file_dir = entry_path.parent().unwrap_or(Path::new("."));
+    let project_root = if file_dir.ends_with("src") {
+        file_dir.parent().unwrap_or(file_dir).to_path_buf()
+    } else {
+        file_dir.to_path_buf()
+    };
+    
+    eprintln!("   Project root: {}", project_root.display());
+    
+    let mut resolver = resolver::ModuleResolver::new(project_root);
     resolver.load_project(entry_path)?;
     
     let loaded_modules = resolver.get_all_modules();
-    eprintln!("  ✓ Loaded {} modules", loaded_modules.len());
-    
-    // Phase 2: Compile each module to .vo (WITHOUT unifier)
-    eprintln!("\nPhase 2: Compiling modules to object files...");
-    let mut vo_files = Vec::new();
-    let output_dir = entry_path.parent().unwrap_or(Path::new("."));
     let num_modules = loaded_modules.len();
+    eprintln!("   Loaded {} module(s)", num_modules);
+    for loaded_mod in &loaded_modules {
+        eprintln!("    - {}", loaded_mod.path.display());
+    }
     
-    for loaded_mod in loaded_modules {
-        // Extract module name from path (filename without extension)
-        let module_name = loaded_mod.path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        let module_path = output_dir.join(format!("{}.vo", module_name));
-        eprintln!("  Compiling {} → {}", module_name, module_path.display());
-        
-        // Determine if this is the entry module (has main/loop)
-        let is_entry = loaded_mod.path == entry_path;
-        
-        // TODO: Transform cross-module references (currently not implemented)
-        // The unifier is needed for symbol resolution, which creates a chicken-and-egg problem.
-        // Alternative approach: Use unifier THEN extract sections per module.
-        // See PHASE6_FUTURE_WORK.md for details.
-        
-        // Generate ASM for THIS MODULE (NOTE: Will have semantic errors without unifier)
-        let assets = if is_entry { discover_assets(entry_path) } else { Vec::new() };
-        
-        let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(&loaded_mod.module, target::Target::Vectrex, &codegen::CodegenOptions {
+    // Phase 3: UNIFY (use existing unifier - 100% working code)
+    eprintln!("\nPhase 3: Unifying modules (symbol resolution)...");
+    let entry_module_name = entry_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("main")
+        .to_string();
+    
+    let options = unifier::UnifyOptions {
+        prefix_symbols: true,
+        prefix_separator: "_".to_string(),
+        tree_shake: false,
+    };
+    
+    let unified = unifier::unify_modules(&resolver, &entry_module_name, &options)
+        .map_err(|e| anyhow::anyhow!("Unification failed: {}", e))?;
+    
+    eprintln!("  ✓ Unified module: {} items", unified.module.items.len());
+    
+    // Phase 4: COMPILE unified module (single ASM with all symbols prefixed)
+    eprintln!("\nPhase 4: Compiling unified module to ASM...");
+    let assets = discover_assets(entry_path);
+    let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(
+        &unified.module, 
+        target::Target::Vectrex, 
+        &codegen::CodegenOptions {
             title: title.to_string(),
-            auto_loop: is_entry, // Only entry module has auto-loop
+            auto_loop: true, // Entry module behavior
             diag_freeze: false,
             force_extended_jsr: false,
             _bank_size: 0,
@@ -1695,9 +1719,10 @@ fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &s
             blink_intensity: false,
             exclude_ram_org: true,
             fast_wait: false,
-            emit_sections: true,
-            source_path: Some(loaded_mod.path.to_string_lossy().to_string()),
-            output_name: Some(module_name.clone()),
+            emit_sections: true, // CRITICAL for section extraction
+            skip_builtins: false, // Phase 6.4: Emit builtins (deferred optimization)
+            source_path: Some(entry_path.to_string_lossy().to_string()),
+            output_name: Some(entry_module_name.clone()),
             assets,
             const_values: std::collections::BTreeMap::new(),
             const_arrays: std::collections::BTreeMap::new(),
@@ -1709,22 +1734,53 @@ fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &s
             buffer_requirements: None,
             bank_config: None,
             function_bank_map: std::collections::HashMap::new(),
-        });
-        
-        if !diagnostics.is_empty() {
-            eprintln!("    ❌ Errors in {}", module_name);
-            for diag in &diagnostics {
-                eprintln!("       {}", diag.message);
-            }
-            return Err(anyhow::anyhow!("Module {} failed to compile", module_name));
         }
+    );
+    
+    // Filter only errors (not warnings)
+    let errors: Vec<_> = diagnostics.iter()
+        .filter(|d| d.severity == codegen::DiagnosticSeverity::Error)
+        .collect();
+    
+    if !errors.is_empty() {
+        eprintln!("  ❌ Compilation errors:");
+        for diag in &errors {
+            eprintln!("     {}", diag.message);
+        }
+        return Err(anyhow::anyhow!("Unified module failed to compile"));
+    }
+    
+    // Print warnings (non-blocking)
+    let warnings: Vec<_> = diagnostics.iter()
+        .filter(|d| d.severity != codegen::DiagnosticSeverity::Error)
+        .collect();
+    if !warnings.is_empty() {
+        eprintln!("  ⚠️  Compilation warnings:");
+        for diag in &warnings {
+            eprintln!("     {}", diag.message);
+        }
+    }
+    
+    eprintln!("  ✓ ASM generated ({} bytes)", asm.len());
+    
+    // Phase 5: EXTRACT sections per module (based on symbol prefixes)
+    eprintln!("\nPhase 5: Extracting sections per module...");
+    let sections_by_module = extract_module_sections(&asm, &unified.name_map, loaded_modules)?;
+    
+    eprintln!("  ✓ Extracted {} module sections", sections_by_module.len());
+    
+    // Phase 6: CREATE .vo per module
+    eprintln!("\nPhase 6: Creating object files...");
+    let output_dir = entry_path.parent().unwrap_or(Path::new("."));
+    let mut vo_files = Vec::new();
+    let mut first_module = true;
+    
+    for (module_name, sections) in sections_by_module {
+        let module_path = output_dir.join(format!("{}.vo", module_name));
         
-        // Parse ASM to object file
         use crate::linker::{VectrexObject, ObjectHeader, TargetArch, ObjectFlags, DebugInfo};
-        use crate::linker::{extract_sections_with_binary, build_symbol_table, collect_relocations};
+        use crate::linker::{build_symbol_table, collect_relocations};
         
-        let sections = extract_sections_with_binary(&asm, 0x0000)
-            .map_err(|e| anyhow::anyhow!("Section extraction failed for {}: {}", module_name, e))?;
         let symbols = build_symbol_table(&sections, &asm)
             .map_err(|e| anyhow::anyhow!("Symbol table failed for {}: {}", module_name, e))?;
         let relocations = collect_relocations(&sections, &symbols, &asm)
@@ -1747,30 +1803,105 @@ fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &s
             debug_info: DebugInfo::default(),
         };
         
-        // Write .vo file
         object.save(&module_path)?;
-        eprintln!("    ✓ {}: {} sections, {} exports, {} imports, {} relocations", 
+        
+        // First module contains all builtins, others don't
+        let builtin_status = if first_module { "with builtins" } else { "no builtins (in first module)" };
+        eprintln!("  ✓ {}: {} sections, {} exports, {} imports, {} relocations ({})", 
             module_name, 
             object.sections.len(), 
             object.symbols.exports.len(),
             object.symbols.imports.len(),
-            object.relocations.len());
+            object.relocations.len(),
+            builtin_status);
         
         vo_files.push(module_path);
+        first_module = false;
     }
     
-    // Phase 3: Link all .vo files
-    eprintln!("\nPhase 3: Linking {} object files...", vo_files.len());
-    let final_output = output.cloned().unwrap_or_else(|| {
-        entry_path.with_extension("bin")
-    });
-    
-    link_cmd(&vo_files, &final_output, 0xC880, title)?;
-    
-    eprintln!("\n✅ SEPARATE MODULE COMPILATION COMPLETE");
-    eprintln!("  Modules: {}", num_modules);
-    eprintln!("  Object files: {}", vo_files.len());
-    eprintln!("  Final binary: {}", final_output.display());
+    // Phase 7: LINK all .vo files (if --bin requested)
+    if generate_bin {
+        eprintln!("\nPhase 7: Linking {} object files...", vo_files.len());
+        let final_output = output.cloned().unwrap_or_else(|| {
+            entry_path.with_extension("bin")
+        });
+        
+        link_cmd(&vo_files, &final_output, 0xC880, title)?;
+        
+        eprintln!("\n✅ SEPARATE MODULE COMPILATION COMPLETE");
+        eprintln!("  Modules: {}", num_modules);
+        eprintln!("  Object files: {}", vo_files.len());
+        eprintln!("  Final binary: {}", final_output.display());
+    } else {
+        eprintln!("\n✅ OBJECT FILES GENERATED (no linking)");
+        eprintln!("  Modules: {}", num_modules);
+        eprintln!("  Object files: {}", vo_files.len());
+    }
     
     Ok(())
+}
+
+// Helper: Extract sections per module from unified ASM
+fn extract_module_sections(
+    asm: &str,
+    name_map: &std::collections::HashMap<(String, String), String>,
+    loaded_modules: Vec<&resolver::LoadedModule>,
+) -> Result<std::collections::HashMap<String, Vec<crate::linker::Section>>> {
+    use crate::linker::Section;
+    use std::collections::HashMap;
+    
+    // Build reverse map: UNIFIED_NAME -> module_name
+    let mut symbol_to_module: HashMap<String, String> = HashMap::new();
+    for ((module, _symbol), unified) in name_map {
+        symbol_to_module.insert(unified.clone(), module.clone());
+    }
+    
+    // Parse ASM and group sections by module
+    let mut sections_by_module: HashMap<String, Vec<Section>> = HashMap::new();
+    
+    // Initialize with all known modules
+    for loaded_mod in &loaded_modules {
+        let module_name = loaded_mod.path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        sections_by_module.insert(module_name, Vec::new());
+    }
+    
+    // Parse ASM and categorize sections
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Detect section start (label with colon)
+        if let Some(label) = trimmed.strip_suffix(':') {
+            // Determine which module owns this symbol
+            let module_name = if let Some(module) = symbol_to_module.get(label) {
+                module.clone()
+            } else {
+                // Default to entry module for non-prefixed symbols
+                loaded_modules.first()
+                    .and_then(|m| m.path.file_stem())
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("main")
+                    .to_string()
+            };
+            
+            // Create section for this symbol
+            let section = Section {
+                name: label.to_string(),
+                section_type: crate::linker::SectionType::Text, // Code sections
+                bank_hint: None,
+                alignment: 1,
+                data: Vec::new(), // TODO: Extract actual bytes from ASM
+            };
+            
+            sections_by_module
+                .entry(module_name)
+                .or_insert_with(Vec::new)
+                .push(section);
+        }
+    }
+    
+    Ok(sections_by_module)
 }

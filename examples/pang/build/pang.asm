@@ -165,6 +165,14 @@ SFX_VOL_DP         EQU $32  ; DP-relative
 ; VPy_LINE:74
 ; _CONST_DECL_11:  ; const GROUND_Y
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
+; │ This section contains reusable code shared across all VPy       │
+; │ programs. These helpers are emitted once per compilation unit.  │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
 ; Returns: D = raw value from $C81B after Joy_Analog call
@@ -1272,6 +1280,13 @@ LLR_COPY_LOOP:
 LLR_COPY_DONE:
     RTS
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ PROGRAM CODE SECTION - User VPy Code                            │
+; │ This section contains the compiled user program logic.          │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1303,14 +1318,14 @@ START:
     STD VAR_CURRENT_MUSIC
     ; VPy_LINE:27
     ; Copy array 'joystick1_state' from ROM to RAM (6 elements)
-    LDX #ARRAY_0       ; Source: ROM array data
+    LDX #ARRAY_JOYSTICK1_STATE       ; Source: ROM array data
     LDU #VAR_JOYSTICK1_STATE_DATA ; Dest: RAM array space
     LDD #6        ; Number of elements
-COPY_LOOP_0:
+COPY_LOOP_JOYSTICK1_STATE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_0 ; Loop until done
+    BNE COPY_LOOP_JOYSTICK1_STATE ; Loop until done
     ; VPy_LINE:30
     LDD #0
     STD VAR_CURRENT_LOCATION
@@ -1379,64 +1394,64 @@ COPY_LOOP_0:
     STD VAR_PLAYER_FACING
     ; VPy_LINE:63
     ; Copy array 'enemy_active' from ROM to RAM (8 elements)
-    LDX #ARRAY_1       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_ACTIVE       ; Source: ROM array data
     LDU #VAR_ENEMY_ACTIVE_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_1:
+COPY_LOOP_ENEMY_ACTIVE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_1 ; Loop until done
+    BNE COPY_LOOP_ENEMY_ACTIVE ; Loop until done
     ; VPy_LINE:64
     ; Copy array 'enemy_x' from ROM to RAM (8 elements)
-    LDX #ARRAY_2       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_X       ; Source: ROM array data
     LDU #VAR_ENEMY_X_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_2:
+COPY_LOOP_ENEMY_X:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_2 ; Loop until done
+    BNE COPY_LOOP_ENEMY_X ; Loop until done
     ; VPy_LINE:65
     ; Copy array 'enemy_y' from ROM to RAM (8 elements)
-    LDX #ARRAY_3       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_Y       ; Source: ROM array data
     LDU #VAR_ENEMY_Y_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_3:
+COPY_LOOP_ENEMY_Y:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_3 ; Loop until done
+    BNE COPY_LOOP_ENEMY_Y ; Loop until done
     ; VPy_LINE:66
     ; Copy array 'enemy_vx' from ROM to RAM (8 elements)
-    LDX #ARRAY_4       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_VX       ; Source: ROM array data
     LDU #VAR_ENEMY_VX_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_4:
+COPY_LOOP_ENEMY_VX:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_4 ; Loop until done
+    BNE COPY_LOOP_ENEMY_VX ; Loop until done
     ; VPy_LINE:67
     ; Copy array 'enemy_vy' from ROM to RAM (8 elements)
-    LDX #ARRAY_5       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_VY       ; Source: ROM array data
     LDU #VAR_ENEMY_VY_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_5:
+COPY_LOOP_ENEMY_VY:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_5 ; Loop until done
+    BNE COPY_LOOP_ENEMY_VY ; Loop until done
     ; VPy_LINE:68
     ; Copy array 'enemy_size' from ROM to RAM (8 elements)
-    LDX #ARRAY_6       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_SIZE       ; Source: ROM array data
     LDU #VAR_ENEMY_SIZE_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_6:
+COPY_LOOP_ENEMY_SIZE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_6 ; Loop until done
+    BNE COPY_LOOP_ENEMY_SIZE ; Loop until done
     ; VPy_LINE:81
     LDD #0
     STD RESULT
@@ -1537,18 +1552,6 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-STATE_TITLE EQU 0
-STATE_MAP EQU 1
-STATE_GAME EQU 2
-NUM_LOCATIONS EQU 17
-HOOK_MAX_Y EQU 127
-PLAYER_Y EQU 65466
-PLAYER_ANIM_SPEED EQU 5
-MAX_ENEMIES EQU 8
-GRAVITY EQU 1
-BOUNCE_DAMPING EQU 17
-MIN_BOUNCE_VY EQU 10
-GROUND_Y EQU 65466
     ; VPy_LINE:97
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
@@ -2672,7 +2675,7 @@ CE_100:
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_2
+    LDX #CONST_ARRAY_LOCATION_NAMES
     LDD TMPPTR
     LEAX D,X
     ; String array - load pointer from table
@@ -3356,7 +3359,7 @@ IF_END_140:
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_2
+    LDX #CONST_ARRAY_LOCATION_NAMES
     LDD TMPPTR
     LEAX D,X
     ; String array - load pointer from table
@@ -3377,7 +3380,7 @@ IF_END_140:
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_0
+    LDX #CONST_ARRAY_LOCATION_X_COORDS
     LDD TMPPTR
     LEAX D,X
     LDD ,X
@@ -3392,7 +3395,7 @@ IF_END_140:
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_1
+    LDX #CONST_ARRAY_LOCATION_Y_COORDS
     LDD TMPPTR
     LEAX D,X
     LDD ,X
@@ -5856,7 +5859,7 @@ SPAWN_ENEMIES: ; function
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_4
+    LDX #CONST_ARRAY_LEVEL_ENEMY_COUNT
     LDD TMPPTR
     LEAX D,X
     LDD ,X
@@ -5871,7 +5874,7 @@ SPAWN_ENEMIES: ; function
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_5
+    LDX #CONST_ARRAY_LEVEL_ENEMY_SPEED
     LDD TMPPTR
     LEAX D,X
     LDD ,X
@@ -7283,6 +7286,18 @@ READ_JOYSTICK1_STATE: ; function
     STD ,X
     RTS
 
+STATE_TITLE EQU 0
+STATE_MAP EQU 1
+STATE_GAME EQU 2
+NUM_LOCATIONS EQU 17
+HOOK_MAX_Y EQU 127
+PLAYER_Y EQU 65466
+PLAYER_ANIM_SPEED EQU 5
+MAX_ENEMIES EQU 8
+GRAVITY EQU 1
+BOUNCE_DAMPING EQU 17
+MIN_BOUNCE_VY EQU 10
+GROUND_Y EQU 65466
 MUL16:
     LDD MUL_A
     STD MUL_RES
@@ -11082,7 +11097,7 @@ _FUJI_LEVEL1_V2_FG_OBJECTS:
 
 
 ; Array literal for variable 'joystick1_state' (6 elements)
-ARRAY_0:
+ARRAY_JOYSTICK1_STATE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11091,7 +11106,7 @@ ARRAY_0:
     FDB 0   ; Element 5
 
 ; Array literal for variable 'enemy_active' (8 elements)
-ARRAY_1:
+ARRAY_ENEMY_ACTIVE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11102,7 +11117,7 @@ ARRAY_1:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_x' (8 elements)
-ARRAY_2:
+ARRAY_ENEMY_X:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11113,7 +11128,7 @@ ARRAY_2:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_y' (8 elements)
-ARRAY_3:
+ARRAY_ENEMY_Y:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11124,7 +11139,7 @@ ARRAY_3:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_vx' (8 elements)
-ARRAY_4:
+ARRAY_ENEMY_VX:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11135,7 +11150,7 @@ ARRAY_4:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_vy' (8 elements)
-ARRAY_5:
+ARRAY_ENEMY_VY:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11146,7 +11161,7 @@ ARRAY_5:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_size' (8 elements)
-ARRAY_6:
+ARRAY_ENEMY_SIZE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11156,9 +11171,10 @@ ARRAY_6:
     FDB 0   ; Element 6
     FDB 0   ; Element 7
 
+; === INLINE ARRAY LITERALS (from function bodies) ===
 ; VPy_LINE:17
 ; Const array literal for 'location_x_coords' (17 elements)
-CONST_ARRAY_0:
+CONST_ARRAY_LOCATION_X_COORDS:
     FDB 40   ; Element 0
     FDB 40   ; Element 1
     FDB -40   ; Element 2
@@ -11179,7 +11195,7 @@ CONST_ARRAY_0:
 
 ; VPy_LINE:18
 ; Const array literal for 'location_y_coords' (17 elements)
-CONST_ARRAY_1:
+CONST_ARRAY_LOCATION_Y_COORDS:
     FDB 110   ; Element 0
     FDB 79   ; Element 1
     FDB -20   ; Element 2
@@ -11200,151 +11216,151 @@ CONST_ARRAY_1:
 
 ; VPy_LINE:19
 ; Const string array for 'location_names' (17 strings)
-CONST_ARRAY_2_STR_0:
+CONST_ARRAY_LOCATION_NAMES_STR_0:
     FCC "MOUNT FUJI (JP)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_1:
+CONST_ARRAY_LOCATION_NAMES_STR_1:
     FCC "MOUNT KEIRIN (CN)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_2:
+CONST_ARRAY_LOCATION_NAMES_STR_2:
     FCC "EMERALD BUDDHA TEMPLE (TH)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_3:
+CONST_ARRAY_LOCATION_NAMES_STR_3:
     FCC "ANGKOR WAT (KH)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_4:
+CONST_ARRAY_LOCATION_NAMES_STR_4:
     FCC "AYERS ROCK (AU)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_5:
+CONST_ARRAY_LOCATION_NAMES_STR_5:
     FCC "TAJ MAHAL (IN)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_6:
+CONST_ARRAY_LOCATION_NAMES_STR_6:
     FCC "LENINGRAD (RU)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_7:
+CONST_ARRAY_LOCATION_NAMES_STR_7:
     FCC "PARIS (FR)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_8:
+CONST_ARRAY_LOCATION_NAMES_STR_8:
     FCC "LONDON (UK)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_9:
+CONST_ARRAY_LOCATION_NAMES_STR_9:
     FCC "BARCELONA (ES)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_10:
+CONST_ARRAY_LOCATION_NAMES_STR_10:
     FCC "ATHENS (GR)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_11:
+CONST_ARRAY_LOCATION_NAMES_STR_11:
     FCC "PYRAMIDS (EG)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_12:
+CONST_ARRAY_LOCATION_NAMES_STR_12:
     FCC "MOUNT KILIMANJARO (TZ)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_13:
+CONST_ARRAY_LOCATION_NAMES_STR_13:
     FCC "NEW YORK (US)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_14:
+CONST_ARRAY_LOCATION_NAMES_STR_14:
     FCC "MAYAN RUINS (MX)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_15:
+CONST_ARRAY_LOCATION_NAMES_STR_15:
     FCC "ANTARCTICA (AQ)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_16:
+CONST_ARRAY_LOCATION_NAMES_STR_16:
     FCC "EASTER ISLAND (CL)"
     FCB $80   ; String terminator
-CONST_ARRAY_2:  ; Pointer table for location_names
-    FDB CONST_ARRAY_2_STR_0  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_1  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_2  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_3  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_4  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_5  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_6  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_7  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_8  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_9  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_10  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_11  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_12  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_13  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_14  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_15  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_16  ; Pointer to string
+CONST_ARRAY_LOCATION_NAMES:  ; Pointer table for location_names
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_0  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_1  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_2  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_3  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_4  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_5  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_6  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_7  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_8  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_9  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_10  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_11  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_12  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_13  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_14  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_15  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_16  ; Pointer to string
 
 ; VPy_LINE:22
 ; Const string array for 'level_backgrounds' (17 strings)
-CONST_ARRAY_3_STR_0:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_0:
     FCC "FUJI_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_1:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_1:
     FCC "KEIRIN_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_2:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_2:
     FCC "BUDDHA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_3:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_3:
     FCC "ANGKOR_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_4:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_4:
     FCC "AYERS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_5:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_5:
     FCC "TAJ_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_6:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_6:
     FCC "LENINGRAD_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_7:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_7:
     FCC "PARIS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_8:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_8:
     FCC "LONDON_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_9:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_9:
     FCC "BARCELONA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_10:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_10:
     FCC "ATHENS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_11:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_11:
     FCC "PYRAMIDS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_12:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_12:
     FCC "KILIMANJARO_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_13:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_13:
     FCC "NEWYORK_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_14:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_14:
     FCC "MAYAN_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_15:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_15:
     FCC "ANTARCTICA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_16:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_16:
     FCC "EASTER_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3:  ; Pointer table for level_backgrounds
-    FDB CONST_ARRAY_3_STR_0  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_1  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_2  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_3  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_4  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_5  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_6  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_7  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_8  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_9  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_10  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_11  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_12  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_13  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_14  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_15  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_16  ; Pointer to string
+CONST_ARRAY_LEVEL_BACKGROUNDS:  ; Pointer table for level_backgrounds
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_0  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_1  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_2  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_3  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_4  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_5  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_6  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_7  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_8  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_9  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_10  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_11  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_12  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_13  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_14  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_15  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_16  ; Pointer to string
 
 ; VPy_LINE:24
 ; Const array literal for 'level_enemy_count' (17 elements)
-CONST_ARRAY_4:
+CONST_ARRAY_LEVEL_ENEMY_COUNT:
     FDB 1   ; Element 0
     FDB 1   ; Element 1
     FDB 2   ; Element 2
@@ -11365,7 +11381,7 @@ CONST_ARRAY_4:
 
 ; VPy_LINE:25
 ; Const array literal for 'level_enemy_speed' (17 elements)
-CONST_ARRAY_5:
+CONST_ARRAY_LEVEL_ENEMY_SPEED:
     FDB 1   ; Element 0
     FDB 1   ; Element 1
     FDB 1   ; Element 2

@@ -73,6 +73,9 @@ pub struct BankWrapperGenerator {
     /// Function name → bank ID mapping (from bank optimizer)
     function_banks: HashMap<String, u8>,
     
+    /// Function name → source line number (for debugging line markers)
+    function_lines: HashMap<String, usize>,
+    
     /// Set of cross-bank calls detected
     pub cross_bank_calls: Vec<CrossBankCall>,
     
@@ -88,10 +91,16 @@ impl BankWrapperGenerator {
     pub fn new(function_banks: HashMap<String, u8>, bank_register: u16) -> Self {
         Self {
             function_banks,
+            function_lines: HashMap::new(),
             cross_bank_calls: Vec::new(),
             generated_wrappers: HashSet::new(),
             bank_register,
         }
+    }
+    
+    /// Register the source line number for a function (for debugging)
+    pub fn register_function_line(&mut self, func_name: &str, line: usize) {
+        self.function_lines.insert(func_name.to_string(), line);
     }
     
     /// Detect if a function call is cross-bank
@@ -139,30 +148,40 @@ impl BankWrapperGenerator {
         
         self.generated_wrappers.insert(wrapper_name.clone());
         
-        // Generate wrapper ASM
+        // Generate wrapper ASM (use CURRENT_ROM_BANK RAM variable to track current bank)
+        // NOTE: The hardware ROM bank register at ${:04X} is write-only; do not attempt to read it.
+        //       We maintain CURRENT_ROM_BANK in RAM for correct restore.
+        
+        // Get source line number for debugging (if available)
+        let line_marker = if let Some(&line) = self.function_lines.get(func_name) {
+            format!("    ; VPy_LINE:{}\n", line)
+        } else {
+            String::new()
+        };
+        
         format!(
 r#"
-; Cross-bank wrapper for {} (Bank #{})
-{}:
+; Cross-bank wrapper for {fname} (Bank #{tbank})
+{wname}:
     PSHS A              ; Save A register
-    LDA ${:04X}         ; Read current bank register
+    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
     PSHS A              ; Save current bank on stack
-    LDA #{}             ; Load target bank ID
-    STA ${:04X}         ; Switch to target bank
-    JSR {}              ; Call real function
+    LDA #{tbank}             ; Load target bank ID
+    STA ${bankreg:04X}         ; Switch to target bank (write-only register)
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+{line_marker}    JSR {upper_fname}              ; Call real function
     PULS A              ; Restore original bank from stack
-    STA ${:04X}         ; Switch back to original bank
+    STA ${bankreg:04X}         ; Switch back to original bank
+    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
     PULS A              ; Restore A register
     RTS
 "#,
-            func_name,
-            target_bank,
-            wrapper_name,
-            self.bank_register,
-            target_bank,
-            self.bank_register,
-            func_name.to_uppercase(),  // Convert to uppercase for ASM label
-            self.bank_register
+            fname=func_name,
+            tbank=target_bank,
+            line_marker=line_marker,
+            wname=wrapper_name,
+            bankreg=self.bank_register,
+            upper_fname=func_name.to_uppercase(),
         )
     }
     

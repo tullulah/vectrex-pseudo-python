@@ -161,14 +161,21 @@ pub fn build_call_graph(module: &Module) -> CallGraph {
 
 /// Check if a function is critical (must be in fixed bank)
 fn is_critical_function(name: &str) -> bool {
-    matches!(name, "main" | "loop")
+    // Critical functions must be in fixed bank (Bank #31)
+    // These are entry points and functions called from multiple banks
+    matches!(name, "main" | "loop" | "LOOP_BODY" | "MAIN")
 }
 
 /// Estimate function size in bytes (rough approximation)
 fn estimate_function_size(func: &Function) -> usize {
-    // Very rough estimate: 10 bytes per statement + 20 bytes overhead
+    // Conservative estimate: 50 bytes per statement + 100 bytes overhead
+    // This accounts for:
+    // - Vector/graphics data (large constant arrays)
+    // - String literals (FCC directives)
+    // - Complex expressions (multiple M6809 instructions per statement)
+    // Better to overestimate and use more banks than underestimate and overflow
     let stmt_count = count_statements(&func.body);
-    20 + (stmt_count * 10)
+    100 + (stmt_count * 50)
 }
 
 /// Count statements recursively

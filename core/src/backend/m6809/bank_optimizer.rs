@@ -86,16 +86,33 @@ impl BankOptimizer {
             .collect();
         remaining_functions.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
         
-        // Step 3: First-Fit Decreasing assignment
+        // Step 3: First-Fit Decreasing assignment with load balancing
+        // Use round-robin to distribute functions across banks instead of cramming into Bank #0
+        let mut current_bank = 0usize;
+        
         for func in remaining_functions {
             let mut assigned = false;
+            let start_bank = current_bank;
             
-            // Try to fit in existing banks (excluding fixed bank for now)
-            for bank in banks.iter_mut().take((total_banks - 1) as usize) {
+            // Try to fit starting from current_bank, wrapping around
+            loop {
+                if current_bank >= (total_banks - 1) as usize {
+                    current_bank = 0;
+                }
+                
+                let bank = &mut banks[current_bank];
                 if bank.can_fit(func.size_bytes, bank_size) {
                     bank.add_function(func.name.clone(), func.size_bytes);
                     assignments.insert(func.name.clone(), bank.id);
                     assigned = true;
+                    current_bank = (current_bank + 1) % ((total_banks - 1) as usize); // Move to next bank
+                    break;
+                }
+                
+                current_bank = (current_bank + 1) % ((total_banks - 1) as usize);
+                
+                // If we've checked all banks, break
+                if current_bank == start_bank {
                     break;
                 }
             }
