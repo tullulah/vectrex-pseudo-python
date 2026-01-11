@@ -23,6 +23,7 @@ interface VecxRegs {
   A: number; B: number;
   X: number; Y: number; U: number; S: number;
   DP: number; CC: number;
+  BANK?: number;
 }
 
 // Componente simple para gráficas de barras
@@ -104,6 +105,22 @@ const MiniChart: React.FC<{
   );
 };
 
+// Helper: Get current VPy line number for a given PC address
+const getCurrentVpyLineForPC = (pc: number, pdbData: any): number | null => {
+  if (!pdbData?.lineMap) return null;
+  
+  const pcStr = formatAddress(pc);
+  
+  // Find VPy line that maps to this PC
+  for (const [lineStr, addr] of Object.entries(pdbData.lineMap)) {
+    if ((addr as string).toLowerCase() === pcStr.toLowerCase()) {
+      return parseInt(lineStr, 10);
+    }
+  }
+  
+  return null;
+};
+
 // Componente para mostrar información técnica del emulador (métricas reales)
 const EmulatorOutputInfo: React.FC = () => {
   const [metrics, setMetrics] = useState<VecxMetrics | null>(null);
@@ -173,6 +190,7 @@ const EmulatorOutputInfo: React.FC = () => {
       
       <div style={{ marginBottom: '2px' }}>
         PC: {hex16(regs?.PC)}
+        {' | '}BANK: {typeof regs?.BANK === 'number' ? regs.BANK.toString(16).toUpperCase() : '--'}
       </div>
       
       <div style={{ marginBottom: '2px' }}>
@@ -1000,13 +1018,22 @@ export const EmulatorPanel: React.FC = () => {
         case 'debug-step-into':
           console.log('[EmulatorPanel] 🔽 Debug: Step into');
           
-          // This is only called when in ASM debugging mode
-          // (main.tsx sends debug-switch-to-asm when in VPy mode)
           const debugStoreForStepInto = useDebugStore.getState();
-          console.log('[EmulatorPanel] 🔧 ASM debugging mode - executing instruction step');
           debugStoreForStepInto.setState('running');
-          if (vecx.debugStepInto) {
-            vecx.debugStepInto(false); // Step one instruction
+          
+          // FIXED (2026-01-11): Execute using JSVecx's built-in step mechanism
+          // Instead of manually looping, let JSVecx handle stepping properly
+          if (vecx.e6809 && vecx.debugStepInto) {
+            const currentPC = vecx.e6809.reg_pc;
+            const currentVpyLine = getCurrentVpyLineForPC(currentPC, debugStoreForStepInto.pdbData);
+            
+            console.log(`[EmulatorPanel] 📍 Single step from VPy line ${currentVpyLine}, PC ${formatAddress(currentPC)}`);
+            
+            // Execute ONE instruction and let the normal pause mechanism handle line updates
+            vecx.debugStepInto(false);
+            
+            // The emulator will pause after one step, and the 'debugger-paused' handler
+            // will update the current line based on the new PC
           }
           break;
           
@@ -1695,7 +1722,7 @@ export const EmulatorPanel: React.FC = () => {
   const onLoadROM = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.bin,.vec';
+    input.accept = '.bin,.vec,.rom';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -1787,11 +1814,10 @@ export const EmulatorPanel: React.FC = () => {
         
         // Si tenemos proyecto Y ROM compilada, intentar cargarla
         if (currentProjectPath && lastCompiledBinary && lastCompiledProject === currentProjectPath) {
-          console.log('[EmulatorPanel] ✓ Found compiled ROM for project, loading:', lastCompiledBinary);
-          
           try {
             const fileAPI = (window as any).files;
             if (fileAPI?.readFileBin) {
+              // All binaries are .bin (unified format: single or multibank)
               const result = await fileAPI.readFileBin(lastCompiledBinary);
               
               if (result && !result.error && result.base64) {
@@ -1807,7 +1833,7 @@ export const EmulatorPanel: React.FC = () => {
                   vecx.write8(0xC81B, 0);
                   vecx.write8(0xC81C, 0);
                   
-                  const romName = lastCompiledBinary.split(/[/\\\\]/).pop()?.replace(/\\.(bin|BIN)$/, '') || 'compiled';
+                  const romName = lastCompiledBinary.split(/[/\\]/).pop()?.replace(/\.(bin|BIN)$/, '') || 'compiled';
                   setLoadedROM(`Compiled - ${romName}`);
                   
                   // Clear opcode trace and set ROM name for .stack file generation
@@ -1815,7 +1841,7 @@ export const EmulatorPanel: React.FC = () => {
                     (window as any).clearOpcodeTrace();
                     // Bigger trace to capture the real jump into RAM/garbage
                     (window as any).OPCODE_TRACE_MAX = 5000;
-                    // Full trace streaming to disk (.trace next to .bin)
+                    // Full trace streaming to disk (.trace next to binary)
                     // Only enable if explicitly set via --enable-tracebin flag
                     // (window as any).OPCODE_TRACE_FULL = true;
                     (window as any).CURRENT_ROM_NAME = romName + '.bin';

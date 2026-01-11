@@ -2,8 +2,8 @@
 # VPy game for Vectrex
 
 META TITLE = "PANG"
-META ROM_TOTAL_SIZE = 524288  # 512 KB total ROM
-META ROM_BANK_SIZE = 16384    # 16 KB per bank (32 banks)
+# META ROM_TOTAL_SIZE = 524288  # 512 KB total ROM
+# META ROM_BANK_SIZE = 16384    # 16 KB per bank (32 banks)
 
 # Game states
 const STATE_TITLE = 0
@@ -98,7 +98,7 @@ def main():
 
 def loop():
 
-    read_joystick1_state()
+    #read_joystick1_state()
 
     if screen == STATE_TITLE: # Music already started in main()
         if (current_music == -1):

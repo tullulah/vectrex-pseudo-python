@@ -1060,21 +1060,22 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 eprintln!("Phase 6.5/6.6: Debug symbols generation skipped (no debug info available)");
             }
             
-            // Phase 6.7: Multi-bank ROM generation (if bank switching enabled)
+            // Phase 6.7: Multi-bank binary generation (unified format: always .bin)
             if let Some(ref bank_config) = codegen::BankConfig::from_meta(&final_module.meta) {
                 if bank_config.is_enabled() {
-                    eprintln!("Phase 6.7: Multi-bank ROM generation...");
+                    eprintln!("Phase 6.7: Multi-bank binary generation...");
                     
-                    let rom_path = out_path.with_extension("rom");
+                    // Generate multibank as .bin directly (unified format)
+                    let bin_path = out_path.with_extension("bin");
                     let linker = backend::m6809::multi_bank_linker::MultiBankLinker::new(
                         bank_config.rom_bank_size,
                         bank_config.rom_bank_count,
                         !use_lwasm, // Use native assembler by default unless lwasm is requested
                     );
                     
-                    match linker.generate_multibank_rom(&out_path, &rom_path) {
+                    match linker.generate_multibank_rom(&out_path, &bin_path) {
                         Ok(_) => {
-                            eprintln!("✓ Phase 6.7 SUCCESS: Multi-bank ROM written to {}", rom_path.display());
+                            eprintln!("✓ Phase 6.7 SUCCESS: Multi-bank binary written to {}", bin_path.display());
                             eprintln!("   Total size: {} KB ({} banks × {} KB)", 
                                 (bank_config.rom_total_size / 1024),
                                 bank_config.rom_bank_count,
@@ -1191,7 +1192,7 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
         backend::asm_to_binary::set_include_dir(include_dir.map(|p| p.to_path_buf()));
         
         // Assemble with native assembler (object_mode=false for monolithic build)
-        let (binary, line_map, symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false)
+        let (binary, line_map, symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false, false)
             .map_err(|e| {
                 eprintln!("❌ Native assembler failed: {}", e);
                 eprintln!("\nPlease fix the assembly errors above.");
@@ -1291,7 +1292,7 @@ fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()
     let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
     eprintln!("    Detected ORG: 0x{:04X}", org);
     
-    let (native_binary, _line_map, _symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false)
+    let (native_binary, _line_map, _symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false, false)
         .map_err(|e| {
             eprintln!("❌ Native assembler failed: {}", e);
             anyhow::anyhow!("Native assembler failed: {}", e)
