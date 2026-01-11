@@ -26,6 +26,15 @@ struct Backend {
 #[derive(Clone)]
 struct SymbolDef { name: String, uri: Url, range: Range }
 
+/// Tracks symbols exported from a module
+#[derive(Clone, Debug)]
+struct ModuleInfo {
+    name: String,
+    uri: Url,
+    functions: Vec<String>,  // Function names defined in this module
+    variables: Vec<String>,  // Global variable names
+}
+
 #[derive(Debug, Clone)]
 pub enum AritySpec {
     Exact(usize),      // Exact number of arguments required
@@ -191,6 +200,7 @@ pub fn is_builtin_function(name: &str) -> bool {
 
 lazy_static::lazy_static! {
     static ref SYMBOLS: Mutex<Vec<SymbolDef>> = Mutex::new(Vec::new());
+    static ref MODULES: Mutex<HashMap<String, ModuleInfo>> = Mutex::new(HashMap::new());
 }
 
 fn tr(locale: &str, key: &str) -> String {
@@ -357,6 +367,14 @@ fn validate_import_statement(uri: &Url, line: &str, line_num: u32, _locale: &str
                     if let Some(current_dir) = current_path.parent() {
                         let resolved = resolve_module_path_for_diagnostic(module_path, current_dir);
                         if !resolved {
+                            // NUEVO: Buscar módulos similares para sugerir
+                            let suggestions = find_similar_modules(module_path, current_dir);
+                            let suggestion_text = if suggestions.is_empty() {
+                                String::new()
+                            } else {
+                                format!("\n\nDid you mean: {}?", suggestions.join(", "))
+                            };
+                            
                             diags.push(Diagnostic {
                                 range: Range {
                                     start: Position { line: line_num, character: 5 },
@@ -366,7 +384,7 @@ fn validate_import_statement(uri: &Url, line: &str, line_num: u32, _locale: &str
                                 code: None,
                                 code_description: None,
                                 source: Some("vpy".into()),
-                                message: format!("Cannot resolve module '{}'. Check that the file exists.", module_path),
+                                message: format!("Cannot resolve module '{}'. Check that the file exists.{}", module_path, suggestion_text),
                                 related_information: None,
                                 tags: None,
                                 data: None,
@@ -414,10 +432,114 @@ fn validate_import_statement(uri: &Url, line: &str, line_num: u32, _locale: &str
                     tags: None,
                     data: None,
                 });
+            } else {
+                // Validar que el módulo existe
+                if let Ok(current_path) = uri.to_file_path() {
+                    if let Some(current_dir) = current_path.parent() {
+                        let resolved = resolve_module_path_for_diagnostic(module_name, current_dir);
+                        if !resolved {
+                            let suggestions = find_similar_modules(module_name, current_dir);
+                            let suggestion_text = if suggestions.is_empty() {
+                                String::new()
+                            } else {
+                                format!("\n\nDid you mean: {}?", suggestions.join(", "))
+                            };
+                            
+                            diags.push(Diagnostic {
+                                range: Range {
+                                    start: Position { line: line_num, character: 7 },
+                                    end: Position { line: line_num, character: 7 + module_name.len() as u32 },
+                                },
+                                severity: Some(DiagnosticSeverity::ERROR),
+                                code: None,
+                                code_description: None,
+                                source: Some("vpy".into()),
+                                message: format!("Cannot resolve module '{}'. Check that the file exists.{}", module_name, suggestion_text),
+                                related_information: None,
+                                tags: None,
+                                data: None,
+                            });
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+/// Find similar module names to suggest (Levenshtein distance)
+fn find_similar_modules(target: &str, current_dir: &std::path::Path) -> Vec<String> {
+    let mut suggestions = Vec::new();
+    
+    // Buscar archivos .vpy en el mismo directorio y src/
+    let mut search_dirs = vec![current_dir.to_path_buf()];
+    
+    // También buscar en src/ si no estamos ya ahí
+    let mut src_dir = current_dir.to_path_buf();
+    while !src_dir.ends_with("src") && src_dir.parent().is_some() {
+        src_dir = src_dir.parent().unwrap().to_path_buf();
+    }
+    if src_dir.ends_with("src") && src_dir != current_dir {
+        search_dirs.push(src_dir);
+    }
+    
+    for dir in search_dirs {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if let Some(filename) = entry.file_name().to_str() {
+                    if filename.ends_with(".vpy") {
+                        let module_name = filename.strip_suffix(".vpy").unwrap();
+                        // Calcular similitud (simple: prefijos comunes)
+                        if module_name != target {
+                            let common_prefix = target.chars()
+                                .zip(module_name.chars())
+                                .take_while(|(a, b)| a == b)
+                                .count();
+                            
+                            // Sugerir si tienen al menos 2 chars en común o Levenshtein distance pequeño
+                            if common_prefix >= 2 || levenshtein_distance(target, module_name) <= 2 {
+                                suggestions.push(module_name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    suggestions.truncate(3); // Max 3 sugerencias
+    suggestions
+}
+
+/// Simple Levenshtein distance for typo detection
+fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+    let len1 = s1.len();
+    let len2 = s2.len();
+    let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
+    
+    for i in 0..=len1 {
+        matrix[i][0] = i;
+    }
+    for j in 0..=len2 {
+        matrix[0][j] = j;
+    }
+    
+    for (i, c1) in s1.chars().enumerate() {
+        for (j, c2) in s2.chars().enumerate() {
+            let cost = if c1 == c2 { 0 } else { 1 };
+            matrix[i + 1][j + 1] = std::cmp::min(
+                std::cmp::min(
+                    matrix[i][j + 1] + 1,
+                    matrix[i + 1][j] + 1
+                ),
+                matrix[i][j] + cost
+            );
+        }
+    }
+    
+    matrix[len1][len2]
+}
+
 
 /// Helper to resolve module path for diagnostic purposes
 fn resolve_module_path_for_diagnostic(module_path: &str, current_dir: &std::path::Path) -> bool {
@@ -473,6 +595,70 @@ fn resolve_module_path_for_diagnostic(module_path: &str, current_dir: &std::path
     }
     
     false
+}
+
+/// Extract exported symbols (functions and variables) from a VPy module file
+fn extract_module_symbols(uri: &Url, text: &str) -> ModuleInfo {
+    let mut functions = Vec::new();
+    let mut variables = Vec::new();
+    
+    // Parse to extract top-level definitions
+    for line in text.lines() {
+        let trimmed = line.trim();
+        
+        // Extract function definitions: def function_name(...):
+        if trimmed.starts_with("def ") {
+            if let Some(rest) = trimmed.strip_prefix("def ") {
+                if let Some(name_end) = rest.find('(') {
+                    let func_name = rest[..name_end].trim();
+                    if !func_name.is_empty() && func_name != "main" && func_name != "loop" {
+                        functions.push(func_name.to_string());
+                    }
+                }
+            }
+        }
+        
+        // Extract variable declarations: variable_name = value (at top-level, no indentation)
+        if !trimmed.starts_with(' ') && !trimmed.starts_with('\t') {
+            if let Some(eq_pos) = trimmed.find('=') {
+                if !trimmed.starts_with("def ") && !trimmed.starts_with("if ") && 
+                   !trimmed.starts_with("for ") && !trimmed.starts_with("while ") &&
+                   !trimmed.starts_with("const ") && !trimmed.starts_with("let ") {
+                    let var_name = trimmed[..eq_pos].trim();
+                    // Check it's a valid identifier (no spaces, no operators)
+                    if !var_name.is_empty() && var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                        variables.push(var_name.to_string());
+                    }
+                }
+            }
+            
+            // Also handle const/let declarations
+            if trimmed.starts_with("const ") || trimmed.starts_with("let ") {
+                let prefix_len = if trimmed.starts_with("const ") { 6 } else { 4 };
+                if let Some(rest) = trimmed.get(prefix_len..) {
+                    if let Some(eq_pos) = rest.find('=') {
+                        let var_name = rest[..eq_pos].trim();
+                        if !var_name.is_empty() && var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                            variables.push(var_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Extract module name from URI
+    let module_name = uri.path().rsplit('/').next()
+        .and_then(|s| s.strip_suffix(".vpy"))
+        .unwrap_or("unknown")
+        .to_string();
+    
+    ModuleInfo {
+        name: module_name,
+        uri: uri.clone(),
+        functions,
+        variables,
+    }
 }
 
 // Function call parser for arity validation - VPy uses Python-style syntax with parentheses
@@ -1385,6 +1571,84 @@ impl LanguageServer for Backend {
                             detail: Some(format!("Imported from {}", module_name)),
                             ..Default::default()
                         });
+                    }
+                }
+            }
+        }
+        
+        // NUEVO: Detectar dot notation para completar miembros de módulos
+        // Ejemplo: "input." → completar con miembros de módulo input
+        let pos = params.text_document_position.position;
+        if let Some(current_line) = text.lines().nth(pos.line as usize) {
+            let cursor_pos = pos.character as usize;
+            if cursor_pos > 0 && cursor_pos <= current_line.len() {
+                // Buscar el texto antes del cursor
+                let before_cursor = &current_line[..cursor_pos];
+                
+                // Detectar patron "module_name."
+                if let Some(dot_pos) = before_cursor.rfind('.') {
+                    // Extraer el identificador antes del punto
+                    let before_dot = &before_cursor[..dot_pos];
+                    let module_candidate = before_dot.split(|c: char| !c.is_alphanumeric() && c != '_')
+                        .last()
+                        .unwrap_or("")
+                        .trim();
+                    
+                    if !module_candidate.is_empty() {
+                        // Buscar si es un módulo importado
+                        let mut found_module: Option<String> = None;
+                        
+                        // Buscar en imports: "import module_name"
+                        for line in text.lines() {
+                            let trimmed = line.trim();
+                            if trimmed.starts_with("import ") {
+                                if let Some(rest) = trimmed.strip_prefix("import ") {
+                                    let imported_name = rest.split_whitespace().next().unwrap_or("");
+                                    if imported_name == module_candidate {
+                                        found_module = Some(imported_name.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if let Some(module_name) = found_module {
+                            // Resolver el módulo a un archivo
+                            if let Some(module_uri) = self.resolve_module_to_uri(&module_name, &uri) {
+                                // Leer el contenido del módulo
+                                if let Ok(module_path) = module_uri.to_file_path() {
+                                    if let Ok(module_text) = std::fs::read_to_string(&module_path) {
+                                        let module_info = extract_module_symbols(&module_uri, &module_text);
+                                        
+                                        // Limpiar items previos (queremos solo miembros del módulo)
+                                        items.clear();
+                                        
+                                        // Agregar funciones del módulo
+                                        for func_name in &module_info.functions {
+                                            items.push(CompletionItem {
+                                                label: func_name.clone(),
+                                                kind: Some(CompletionItemKind::FUNCTION),
+                                                insert_text: Some(format!("{}($0)", func_name)),
+                                                insert_text_format: Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET),
+                                                detail: Some(format!("Function from {} module", module_name)),
+                                                ..Default::default()
+                                            });
+                                        }
+                                        
+                                        // Agregar variables del módulo
+                                        for var_name in &module_info.variables {
+                                            items.push(CompletionItem {
+                                                label: var_name.clone(),
+                                                kind: Some(CompletionItemKind::VARIABLE),
+                                                insert_text: Some(var_name.clone()),
+                                                detail: Some(format!("Variable from {} module", module_name)),
+                                                ..Default::default()
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
