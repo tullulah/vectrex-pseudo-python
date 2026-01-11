@@ -313,7 +313,7 @@ fn rewrite_stmt(
     match stmt {
         Stmt::Assign { target, value, source_line } => {
             Stmt::Assign {
-                target: target.clone(),
+                target: rewrite_assign_target(target, current_module, symbols, name_map, options),
                 value: rewrite_expr(value, current_module, symbols, name_map, options),
                 source_line: *source_line,
             }
@@ -400,7 +400,7 @@ fn rewrite_stmt(
         }
         Stmt::CompoundAssign { target, op, value, source_line } => {
             Stmt::CompoundAssign {
-                target: target.clone(),
+                target: rewrite_assign_target(target, current_module, symbols, name_map, options),
                 op: *op,
                 value: rewrite_expr(value, current_module, symbols, name_map, options),
                 source_line: *source_line,
@@ -450,7 +450,37 @@ fn rewrite_expr(
             })
         }
         Expr::MethodCall(mc) => {
-            // Method calls: rewrite target and args, keep method name as-is
+            // CRITICAL: Detect module.method() pattern (input.get_input(), graphics.draw_square(), etc.)
+            if let Expr::Ident(target_info) = &*mc.target {
+                // Check if target is an imported module (import input)
+                let module_check_key = format!("{}::{}", current_module, &target_info.name);
+                if let Some((origin_module, symbol_or_marker)) = symbols.aliases.get(&module_check_key) {
+                    // Check if this is a module import (marker = "*")
+                    if symbol_or_marker == "*" {
+                        // This is module.method() - transform to function call with unified name
+                        let unified_name = name_map
+                            .get(&(origin_module.clone(), mc.method_name.clone()))
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                // Fallback: prefix with module name
+                                format!("{}_{}", origin_module.to_uppercase(), mc.method_name.to_uppercase())
+                            });
+                        
+                        let rewritten_args: Vec<Expr> = mc.args.iter()
+                            .map(|e| rewrite_expr(e, current_module, symbols, name_map, options))
+                            .collect();
+                        
+                        return Expr::Call(crate::ast::CallInfo {
+                            name: unified_name,
+                            args: rewritten_args,
+                            source_line: mc.source_line,
+                            col: mc.col,
+                        });
+                    }
+                }
+            }
+            
+            // Not module.method() - rewrite target and args normally
             Expr::MethodCall(crate::ast::MethodCallInfo {
                 target: Box::new(rewrite_expr(&mc.target, current_module, symbols, name_map, options)),
                 method_name: mc.method_name.clone(),
@@ -500,7 +530,93 @@ fn rewrite_expr(
             }
         }
         Expr::FieldAccess { target, field, source_line, col } => {
+            // CRITICAL: Detect module.symbol pattern (input.get_input, input.input_result, etc.)
+            if let Expr::Ident(target_info) = &**target {
+                // Check if target is an imported module (import input)
+                let module_check_key = format!("{}::{}", current_module, &target_info.name);
+                if let Some((origin_module, symbol_or_marker)) = symbols.aliases.get(&module_check_key) {
+                    // Check if this is a module import (marker = "*")
+                    if symbol_or_marker == "*" {
+                        // This is module.symbol - look up the symbol in the origin module
+                        let unified_name = name_map
+                            .get(&(origin_module.clone(), field.clone()))
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                // Fallback: prefix with module name
+                                format!("{}_{}", origin_module.to_uppercase(), field.to_uppercase())
+                            });
+                        
+                        return Expr::Ident(IdentInfo {
+                            name: unified_name,
+                            source_line: *source_line,
+                            col: *col,
+                        });
+                    }
+                }
+            }
+            
+            // Not module.symbol - recurse normally
             Expr::FieldAccess {
+                target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
+                field: field.clone(),
+                source_line: *source_line,
+                col: *col,
+            }
+        }
+    }
+}
+
+/// Rewrite an assignment target with resolved references
+fn rewrite_assign_target(
+    target: &crate::ast::AssignTarget,
+    current_module: &str,
+    symbols: &SymbolTable,
+    name_map: &HashMap<(String, String), String>,
+    options: &UnifyOptions,
+) -> crate::ast::AssignTarget {
+    match target {
+        crate::ast::AssignTarget::Ident { name, source_line, col } => {
+            let resolved_name = resolve_identifier(name, current_module, symbols, name_map, options);
+            crate::ast::AssignTarget::Ident {
+                name: resolved_name,
+                source_line: *source_line,
+                col: *col,
+            }
+        }
+        crate::ast::AssignTarget::Index { target, index, source_line, col } => {
+            crate::ast::AssignTarget::Index {
+                target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
+                index: Box::new(rewrite_expr(index, current_module, symbols, name_map, options)),
+                source_line: *source_line,
+                col: *col,
+            }
+        }
+        crate::ast::AssignTarget::FieldAccess { target, field, source_line, col } => {
+            // Same logic as Expr::FieldAccess - detect module.symbol pattern
+            if let Expr::Ident(target_info) = &**target {
+                let module_check_key = format!("{}::{}", current_module, &target_info.name);
+                if let Some((origin_module, symbol_or_marker)) = symbols.aliases.get(&module_check_key) {
+                    if symbol_or_marker == "*" {
+                        // module.symbol in assignment - transform to Index with unified name
+                        let unified_name = name_map
+                            .get(&(origin_module.clone(), field.clone()))
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                format!("{}_{}", origin_module.to_uppercase(), field.to_uppercase())
+                            });
+                        
+                        // Return as Ident target (the unified symbol name)
+                        return crate::ast::AssignTarget::Ident {
+                            name: unified_name,
+                            source_line: *source_line,
+                            col: *col,
+                        };
+                    }
+                }
+            }
+            
+            // Not module.symbol - recurse normally
+            crate::ast::AssignTarget::FieldAccess {
                 target: Box::new(rewrite_expr(target, current_module, symbols, name_map, options)),
                 field: field.clone(),
                 source_line: *source_line,

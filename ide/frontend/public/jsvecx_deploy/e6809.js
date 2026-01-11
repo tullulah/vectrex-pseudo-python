@@ -31,6 +31,7 @@ var OPCODE_TRACE_BUFFER = [];
 // Can be overridden at runtime via window.OPCODE_TRACE_MAX.
 var OPCODE_TRACE_MAX = 2000;
 var OPCODE_TRACE_ENABLED = true;
+var ERROR_HALT = false;
 var CURRENT_ROM_NAME = null;
 var CURRENT_ROM_PATH = null;
 var TRACE_DUMPED = false;
@@ -190,7 +191,7 @@ function getOpcodeTraceMax() {
             if (Number.isFinite(n)) {
                 n = Math.floor(n);
                 if (n < 10) n = 10;
-                if (n > 10000) n = 10000;
+                if (n > 100000) n = 100000;  // Allow up to 100k instructions in circular buffer
                 return n;
             }
         }
@@ -201,6 +202,10 @@ function getOpcodeTraceMax() {
 function addOpcodeTrace(pc, opcode, regs, bytes) {
     if (!OPCODE_TRACE_ENABLED) return;
     
+    const bank = (this && this.vecx && typeof this.vecx.currentBank === 'number')
+        ? this.vecx.currentBank
+        : 0;
+
     OPCODE_TRACE_BUFFER.push({
         pc: pc,
         opcode: opcode,
@@ -212,7 +217,8 @@ function addOpcodeTrace(pc, opcode, regs, bytes) {
         u: regs.u,
         s: regs.s,
         dp: regs.dp,
-        cc: regs.cc
+        cc: regs.cc,
+        bank: bank
     });
     
     // Keep only last N
@@ -226,10 +232,47 @@ function clearOpcodeTrace() {
     OPCODE_TRACE_BUFFER = [];
     TRACE_DUMPED = false;
     TRACE_DUMP_IN_PROGRESS = false;
+    ERROR_HALT = false;
     clearFullTrace();
 }
 
-function dumpOpcodeTrace(errorMsg) {
+function dumpStackSnapshot(cpu) {
+    try {
+        const start = cpu.reg_s.value & 0xffff;
+        const lines = [];
+        const bytesPerLine = 16;
+        const totalBytes = 64; // Dump 64 bytes from stack (grows downward, so show upward addresses)
+        let out = "=== STACK SNAPSHOT (from S=" + start.toString(16).toUpperCase().padStart(4, '0') + ") ===\n";
+        for (let offset = 0; offset < totalBytes; offset += bytesPerLine) {
+            const addr = (start + offset) & 0xffff;
+            let line = addr.toString(16).toUpperCase().padStart(4, '0') + ": ";
+            for (let i = 0; i < bytesPerLine; i++) {
+                const b = cpu.vecx.read8((addr + i) & 0xffff) & 0xff;
+                line += b.toString(16).toUpperCase().padStart(2, '0') + " ";
+            }
+            lines.push(line.trimEnd());
+        }
+
+        out += lines.join("\n") + "\n";
+
+        // Interpret as big-endian words for quick return-address hints
+        out += "\n=== STACK WORDS (big-endian) ===\n";
+        let words = [];
+        for (let offset = 0; offset < totalBytes; offset += 2) {
+            const addr = (start + offset) & 0xffff;
+            const hi = cpu.vecx.read8(addr) & 0xff;
+            const lo = cpu.vecx.read8((addr + 1) & 0xffff) & 0xff;
+            words.push(hi.toString(16).toUpperCase().padStart(2, '0') + lo.toString(16).toUpperCase().padStart(2, '0'));
+        }
+        out += words.map((w, idx) => "".concat((start + idx * 2).toString(16).toUpperCase().padStart(4, '0'), " ", w)).join("\n") + "\n";
+
+        return out;
+    } catch (e) {
+        return "(stack snapshot unavailable: " + e + ")\n";
+    }
+}
+
+function dumpOpcodeTrace(errorMsg, extra) {
     if (TRACE_DUMPED || TRACE_DUMP_IN_PROGRESS) return;
     TRACE_DUMP_IN_PROGRESS = true;
     if (OPCODE_TRACE_BUFFER.length === 0) {
@@ -241,12 +284,13 @@ function dumpOpcodeTrace(errorMsg) {
     var maxEntries = getOpcodeTraceMax();
     let output = "=== OPCODE EXECUTION TRACE (Last " + OPCODE_TRACE_BUFFER.length + " instructions, max " + maxEntries + ") ===\n";
     output += "Error: " + errorMsg + "\n\n";
-    output += "PC     BYTES           A  B  X    Y    U    S    DP CC\n";
-    output += "====== =============== == == ==== ==== ==== ==== == ==\n";
+    output += "PC     BANK BYTES           A  B  X    Y    U    S    DP CC\n";
+    output += "====== ==== =============== == == ==== ==== ==== ==== == ==\n";
     
     for (let i = 0; i < OPCODE_TRACE_BUFFER.length; i++) {
         const t = OPCODE_TRACE_BUFFER[i];
         output += t.pc.toString(16).toUpperCase().padStart(4, '0') + "   ";
+        output += (t.bank ?? 0).toString(16).toUpperCase().padStart(4, '0') + " ";
         const bytesStr = (t.bytes && t.bytes.length)
             ? t.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
             : t.opcode.toString(16).toUpperCase().padStart(2, '0');
@@ -264,6 +308,10 @@ function dumpOpcodeTrace(errorMsg) {
             output += " <-- ERROR HERE";
         }
         output += "\n";
+    }
+
+    if (extra) {
+        output += "\n" + extra + "\n";
     }
     
     // Save to disk (Electron) if possible, otherwise fallback to browser download.
@@ -315,6 +363,7 @@ if (typeof window !== 'undefined') {
     window.OPCODE_TRACE_FULL = window.OPCODE_TRACE_FULL ?? false;
     window.OPCODE_TRACE_FULL_CHUNK_BYTES = window.OPCODE_TRACE_FULL_CHUNK_BYTES ?? (4 * 1024 * 1024);
     window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES = window.OPCODE_TRACE_FULL_MAX_TOTAL_BYTES ?? (1024 * 1024 * 1024);
+    window.STACK_SAVE_PROMPT = window.STACK_SAVE_PROMPT ?? false;
 }
 
 // Background flusher for full trace streaming
@@ -1033,12 +1082,17 @@ function e6809()
         this.reg_cc = this.FLAG_I | this.FLAG_F;
         this.irq_status = this.IRQ_NORMAL;
         this.reg_pc = this.read16(0xfffe);
+        ERROR_HALT = false;
     }
     this.cycles = new fptr(0);
     this.e6809_sstep = function( irq_i, irq_f )
     {
         var op = 0;
         var cycles = this.cycles;
+        if (ERROR_HALT) {
+            cycles.value = 0;
+            return cycles.value;
+        }
         cycles.value=(0);
         var ea = 0;
         var i0 = 0;
@@ -2416,6 +2470,7 @@ function e6809()
                         cycles.value+=(8);
                         break;
                     default:
+                        ERROR_HALT = true;
                         utils.showError("unknown page-1 op code: " + op);
                         break;
                 }
@@ -2469,11 +2524,13 @@ function e6809()
                         cycles.value+=(8);
                         break;
                     default:
+                        ERROR_HALT = true;
                         utils.showError("unknown page-2 op code: " + op);
                         break;
                 }
                 break;
             default:
+                ERROR_HALT = true;
                 const errorMsg = "Unknown page-0 opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + op_pc.toString(16).toUpperCase().padStart(4, '0');
                 console.log("⚠️ UNKNOWN PAGE-0 OPCODE ERROR:");
                 console.log("  PC: 0x" + op_pc.toString(16).toUpperCase().padStart(4, '0'));
@@ -2487,9 +2544,11 @@ function e6809()
                 console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
                 console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
                 console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
+                const stackSnapshot = dumpStackSnapshot(this);
+                console.log(stackSnapshot);
                 
                 // Dump trace to file
-                const traceOutput = dumpOpcodeTrace(errorMsg);
+                const traceOutput = dumpOpcodeTrace(errorMsg, stackSnapshot);
                 console.log("\n" + traceOutput);
 
                 // Kick a final flush for full trace (best effort)

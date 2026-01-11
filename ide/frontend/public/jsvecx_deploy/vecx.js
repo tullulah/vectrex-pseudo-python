@@ -183,8 +183,8 @@ function VecX()
                 const bankOffset = this.currentBank * bankSize;
                 return this.multibankRom[bankOffset + address] & 0xff;
             }
-            // Fixed bank (last bank): 0x4000-0x5FFF (8KB always visible)
-            if (address >= 0x4000 && address < 0x6000) {
+            // Fixed bank (last bank): 0x4000-0x7FFF (16KB always visible)
+            if (address >= 0x4000 && address < 0x8000) {
                 const fixedBankOffset = fixedBankId * bankSize;
                 const localOffset = address - 0x4000;
                 return this.multibankRom[fixedBankOffset + localOffset] & 0xff;
@@ -1262,7 +1262,8 @@ function VecX()
             U: (this.e6809.reg_u && this.e6809.reg_u.value) || 0,
             S: (this.e6809.reg_s && this.e6809.reg_s.value) || 0,
             DP: this.e6809.reg_dp || 0,
-            CC: this.e6809.reg_cc || 0
+            CC: this.e6809.reg_cc || 0,
+            BANK: this.currentBank || 0
         };
     }
     

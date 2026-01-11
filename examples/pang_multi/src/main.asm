@@ -165,6 +165,14 @@ SFX_VOL_DP         EQU $32  ; DP-relative
 ; VPy_LINE:76
 ; _CONST_DECL_11:  ; const GROUND_Y
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
+; │ This section contains reusable code shared across all VPy       │
+; │ programs. These helpers are emitted once per compilation unit.  │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
 ; Returns: D = raw value from $C81B after Joy_Analog call
@@ -1272,6 +1280,13 @@ LLR_COPY_LOOP:
 LLR_COPY_DONE:
     RTS
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ PROGRAM CODE SECTION - User VPy Code                            │
+; │ This section contains the compiled user program logic.          │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1303,14 +1318,14 @@ START:
     STD VAR_CURRENT_MUSIC
     ; VPy_LINE:29
     ; Copy array 'joystick1_state' from ROM to RAM (6 elements)
-    LDX #ARRAY_0       ; Source: ROM array data
+    LDX #ARRAY_JOYSTICK1_STATE       ; Source: ROM array data
     LDU #VAR_JOYSTICK1_STATE_DATA ; Dest: RAM array space
     LDD #6        ; Number of elements
-COPY_LOOP_0:
+COPY_LOOP_JOYSTICK1_STATE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_0 ; Loop until done
+    BNE COPY_LOOP_JOYSTICK1_STATE ; Loop until done
     ; VPy_LINE:32
     LDD #0
     STD VAR_CURRENT_LOCATION
@@ -1379,64 +1394,64 @@ COPY_LOOP_0:
     STD VAR_PLAYER_FACING
     ; VPy_LINE:65
     ; Copy array 'enemy_active' from ROM to RAM (8 elements)
-    LDX #ARRAY_1       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_ACTIVE       ; Source: ROM array data
     LDU #VAR_ENEMY_ACTIVE_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_1:
+COPY_LOOP_ENEMY_ACTIVE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_1 ; Loop until done
+    BNE COPY_LOOP_ENEMY_ACTIVE ; Loop until done
     ; VPy_LINE:66
     ; Copy array 'enemy_x' from ROM to RAM (8 elements)
-    LDX #ARRAY_2       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_X       ; Source: ROM array data
     LDU #VAR_ENEMY_X_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_2:
+COPY_LOOP_ENEMY_X:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_2 ; Loop until done
+    BNE COPY_LOOP_ENEMY_X ; Loop until done
     ; VPy_LINE:67
     ; Copy array 'enemy_y' from ROM to RAM (8 elements)
-    LDX #ARRAY_3       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_Y       ; Source: ROM array data
     LDU #VAR_ENEMY_Y_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_3:
+COPY_LOOP_ENEMY_Y:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_3 ; Loop until done
+    BNE COPY_LOOP_ENEMY_Y ; Loop until done
     ; VPy_LINE:68
     ; Copy array 'enemy_vx' from ROM to RAM (8 elements)
-    LDX #ARRAY_4       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_VX       ; Source: ROM array data
     LDU #VAR_ENEMY_VX_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_4:
+COPY_LOOP_ENEMY_VX:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_4 ; Loop until done
+    BNE COPY_LOOP_ENEMY_VX ; Loop until done
     ; VPy_LINE:69
     ; Copy array 'enemy_vy' from ROM to RAM (8 elements)
-    LDX #ARRAY_5       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_VY       ; Source: ROM array data
     LDU #VAR_ENEMY_VY_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_5:
+COPY_LOOP_ENEMY_VY:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_5 ; Loop until done
+    BNE COPY_LOOP_ENEMY_VY ; Loop until done
     ; VPy_LINE:70
     ; Copy array 'enemy_size' from ROM to RAM (8 elements)
-    LDX #ARRAY_6       ; Source: ROM array data
+    LDX #ARRAY_ENEMY_SIZE       ; Source: ROM array data
     LDU #VAR_ENEMY_SIZE_DATA ; Dest: RAM array space
     LDD #8        ; Number of elements
-COPY_LOOP_6:
+COPY_LOOP_ENEMY_SIZE:
     LDY ,X++        ; Load word from ROM, increment source
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
-    BNE COPY_LOOP_6 ; Loop until done
+    BNE COPY_LOOP_ENEMY_SIZE ; Loop until done
     ; VPy_LINE:83
     LDD #0
     STD RESULT
@@ -1537,28 +1552,20 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-STATE_TITLE EQU 0
-STATE_MAP EQU 1
-STATE_GAME EQU 2
-NUM_LOCATIONS EQU 17
-HOOK_MAX_Y EQU 127
-PLAYER_Y EQU 65466
-PLAYER_ANIM_SPEED EQU 5
-MAX_ENEMIES EQU 8
-GRAVITY EQU 1
-BOUNCE_DAMPING EQU 17
-MIN_BOUNCE_VY EQU 10
-GROUND_Y EQU 65466
+
+; ================================================
+; BANK #31 - 2 function(s)
+; ================================================
+    ORG $4000  ; Fixed bank (always visible)
+
     ; VPy_LINE:99
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; DEBUG: Statement 0 - Discriminant(8)
     ; VPy_LINE:101
-    JSR READ_JOYSTICK1_STATE
-    ; DEBUG: Statement 1 - Discriminant(9)
+    JSR read_joystick1_state_BANK_WRAPPER
     ; VPy_LINE:103
     LDD VAR_SCREEN
     STD RESULT
@@ -1618,7 +1625,7 @@ CE_7:
 IF_NEXT_5:
 IF_END_4:
     ; VPy_LINE:108
-    JSR DRAW_TITLE_SCREEN
+    JSR draw_title_screen_BANK_WRAPPER
     ; VPy_LINE:110
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
@@ -2570,7 +2577,7 @@ OR_END_82:
 IF_NEXT_80:
 IF_END_79:
     ; VPy_LINE:157
-    JSR DRAW_MAP_SCREEN
+    JSR draw_map_screen_BANK_WRAPPER
     LBRA IF_END_0
 IF_NEXT_24:
     LDD VAR_SCREEN
@@ -2615,7 +2622,7 @@ CE_100:
     LDD RESULT
     LBEQ IF_NEXT_98
     ; VPy_LINE:163
-    JSR DRAW_LEVEL_BACKGROUND
+    JSR draw_level_background_BANK_WRAPPER
     ; VPy_LINE:165
     LDD #127
     STD RESULT
@@ -2672,7 +2679,7 @@ CE_100:
     ASLB
     ROLA
     STD TMPPTR
-    LDX #CONST_ARRAY_2
+    LDX #CONST_ARRAY_LOCATION_NAMES
     LDD TMPPTR
     LEAX D,X
     ; String array - load pointer from table
@@ -2733,7 +2740,7 @@ CE_104:
     STU TMPPTR
     STX ,U
     ; VPy_LINE:178
-    JSR SPAWN_ENEMIES
+    JSR spawn_enemies_BANK_WRAPPER
     LBRA IF_END_101
 IF_NEXT_102:
 IF_END_101:
@@ -3122,1458 +3129,25 @@ IF_END_133:
 IF_NEXT_130:
 IF_END_129:
     ; VPy_LINE:210
-    JSR DRAW_GAME_LEVEL
+    JSR draw_game_level_BANK_WRAPPER
 IF_END_97:
     LBRA IF_END_0
 IF_END_0:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)
     RTS
 
-    ; VPy_LINE:212
-DRAW_MAP_SCREEN: ; function
-; --- function draw_map_screen ---
-    LEAS -4,S ; allocate locals
-    ; VPy_LINE:214
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 214
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:215
-; DRAW_VECTOR_EX("map", x, y, mirror) - 15 path(s), width=242, center_x=-6
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #20
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD #0
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_137
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_137:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_138
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_138:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_139
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_139:
-    ; Set intensity override for drawing
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_MAP_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_MAP_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    ; VPy_LINE:218
-    LDD VAR_LOCATION_GLOW_DIRECTION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_142
-    LDD #0
-    STD RESULT
-    BRA CE_143
-CT_142:
-    LDD #1
-    STD RESULT
-CE_143:
-    LDD RESULT
-    LBEQ IF_NEXT_141
-    ; VPy_LINE:219
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:220
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #127
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGE CT_146
-    LDD #0
-    STD RESULT
-    BRA CE_147
-CT_146:
-    LDD #1
-    STD RESULT
-CE_147:
-    LDD RESULT
-    LBEQ IF_NEXT_145
-    ; VPy_LINE:221
-    LDD #1
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_144
-IF_NEXT_145:
-IF_END_144:
-    LBRA IF_END_140
-IF_NEXT_141:
-    ; VPy_LINE:223
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:224
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLE CT_150
-    LDD #0
-    STD RESULT
-    BRA CE_151
-CT_150:
-    LDD #1
-    STD RESULT
-CE_151:
-    LDD RESULT
-    LBEQ IF_NEXT_149
-    ; VPy_LINE:225
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_148
-IF_NEXT_149:
-IF_END_148:
-IF_END_140:
-    ; VPy_LINE:227
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-120
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #-80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    ; ===== Const array indexing: location_names =====
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDX #CONST_ARRAY_2
-    LDD TMPPTR
-    LEAX D,X
-    ; String array - load pointer from table
-    LDD ,X
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 227
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:230
-    ; ===== Const array indexing: location_x_coords =====
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDX #CONST_ARRAY_0
-    LDD TMPPTR
-    LEAX D,X
-    LDD ,X
-    STD RESULT
-    LDX RESULT
-    STX 0 ,S
-    ; VPy_LINE:231
-    ; ===== Const array indexing: location_y_coords =====
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDX #CONST_ARRAY_1
-    LDD TMPPTR
-    LEAX D,X
-    LDD ,X
-    STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    ; VPy_LINE:233
-; DRAW_VECTOR_EX("location_marker", x, y, mirror) - 1 path(s), width=22, center_x=0
-    LDD 2 ,S
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD 0 ,S
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD #0
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_152
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_152:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_153
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_153:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_154
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_154:
-    ; Set intensity override for drawing
-    LDD VAR_LOCATION_GLOW_INTENSITY
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_LOCATION_MARKER_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    LEAS 4,S ; free locals
-    RTS
 
-    ; VPy_LINE:236
-DRAW_TITLE_SCREEN: ; function
-; --- function draw_title_screen ---
-    ; VPy_LINE:238
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 238
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:239
-; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #70
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_LOGO_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LOGO_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    ; VPy_LINE:241
-    LDD VAR_TITLE_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 241
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:242
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-90
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_16
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 242
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:243
-; PRINT_TEXT(x, y, text) - uses BIOS defaults
-    LDD #-50
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD #-20
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDX #STR_19
-    STX RESULT
-    LDD RESULT
-    STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 243
-    JSR VECTREX_PRINT_TEXT
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:245
-    LDD VAR_TITLE_STATE
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_157
-    LDD #0
-    STD RESULT
-    BRA CE_158
-CT_157:
-    LDD #1
-    STD RESULT
-CE_158:
-    LDD RESULT
-    LBEQ IF_NEXT_156
-    ; VPy_LINE:246
-    LDD VAR_TITLE_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_TITLE_INTENSITY
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_155
-IF_NEXT_156:
-IF_END_155:
-    ; VPy_LINE:248
-    LDD VAR_TITLE_STATE
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_161
-    LDD #0
-    STD RESULT
-    BRA CE_162
-CT_161:
-    LDD #1
-    STD RESULT
-CE_162:
-    LDD RESULT
-    LBEQ IF_NEXT_160
-    ; VPy_LINE:249
-    LDD VAR_TITLE_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_TITLE_INTENSITY
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_159
-IF_NEXT_160:
-IF_END_159:
-    ; VPy_LINE:251
-    LDD VAR_TITLE_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_165
-    LDD #0
-    STD RESULT
-    BRA CE_166
-CT_165:
-    LDD #1
-    STD RESULT
-CE_166:
-    LDD RESULT
-    LBEQ IF_NEXT_164
-    ; VPy_LINE:252
-    LDD #1
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_TITLE_STATE
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_163
-IF_NEXT_164:
-IF_END_163:
-    ; VPy_LINE:254
-    LDD VAR_TITLE_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #30
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_169
-    LDD #0
-    STD RESULT
-    BRA CE_170
-CT_169:
-    LDD #1
-    STD RESULT
-CE_170:
-    LDD RESULT
-    LBEQ IF_NEXT_168
-    ; VPy_LINE:255
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_TITLE_STATE
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_167
-IF_NEXT_168:
-IF_END_167:
-    RTS
-
-    ; VPy_LINE:257
-DRAW_LEVEL_BACKGROUND: ; function
-; --- function draw_level_background ---
-    ; VPy_LINE:259
-    LDD #60
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 259
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:262
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_173
-    LDD #0
-    STD RESULT
-    BRA CE_174
-CT_173:
-    LDD #1
-    STD RESULT
-CE_174:
-    LDD RESULT
-    LBEQ IF_NEXT_172
-    ; VPy_LINE:263
-; DRAW_VECTOR("fuji_bg", x, y) - 6 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_FUJI_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_FUJI_BG_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_172:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_176
-    LDD #0
-    STD RESULT
-    BRA CE_177
-CT_176:
-    LDD #1
-    STD RESULT
-CE_177:
-    LDD RESULT
-    LBEQ IF_NEXT_175
-    ; VPy_LINE:265
-; DRAW_VECTOR("keirin_bg", x, y) - 3 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_KEIRIN_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_KEIRIN_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_KEIRIN_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_175:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #2
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_179
-    LDD #0
-    STD RESULT
-    BRA CE_180
-CT_179:
-    LDD #1
-    STD RESULT
-CE_180:
-    LDD RESULT
-    LBEQ IF_NEXT_178
-    ; VPy_LINE:267
-; DRAW_VECTOR("buddha_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_BUDDHA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BUDDHA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BUDDHA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BUDDHA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_178:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_182
-    LDD #0
-    STD RESULT
-    BRA CE_183
-CT_182:
-    LDD #1
-    STD RESULT
-CE_183:
-    LDD RESULT
-    LBEQ IF_NEXT_181
-    ; VPy_LINE:269
-; DRAW_VECTOR("angkor_bg", x, y) - 3 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ANGKOR_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ANGKOR_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ANGKOR_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_181:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #4
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_185
-    LDD #0
-    STD RESULT
-    BRA CE_186
-CT_185:
-    LDD #1
-    STD RESULT
-CE_186:
-    LDD RESULT
-    LBEQ IF_NEXT_184
-    ; VPy_LINE:271
-; DRAW_VECTOR("ayers_bg", x, y) - 3 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_AYERS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_AYERS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_AYERS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_184:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #5
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_188
-    LDD #0
-    STD RESULT
-    BRA CE_189
-CT_188:
-    LDD #1
-    STD RESULT
-CE_189:
-    LDD RESULT
-    LBEQ IF_NEXT_187
-    ; VPy_LINE:273
-; DRAW_VECTOR("taj_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_TAJ_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_TAJ_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_TAJ_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_TAJ_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_187:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #6
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_191
-    LDD #0
-    STD RESULT
-    BRA CE_192
-CT_191:
-    LDD #1
-    STD RESULT
-CE_192:
-    LDD RESULT
-    LBEQ IF_NEXT_190
-    ; VPy_LINE:275
-; DRAW_VECTOR("leningrad_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_LENINGRAD_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LENINGRAD_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LENINGRAD_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LENINGRAD_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LENINGRAD_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_190:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #7
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_194
-    LDD #0
-    STD RESULT
-    BRA CE_195
-CT_194:
-    LDD #1
-    STD RESULT
-CE_195:
-    LDD RESULT
-    LBEQ IF_NEXT_193
-    ; VPy_LINE:277
-; DRAW_VECTOR("paris_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PARIS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PARIS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PARIS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PARIS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PARIS_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_193:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #8
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_197
-    LDD #0
-    STD RESULT
-    BRA CE_198
-CT_197:
-    LDD #1
-    STD RESULT
-CE_198:
-    LDD RESULT
-    LBEQ IF_NEXT_196
-    ; VPy_LINE:279
-; DRAW_VECTOR("london_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_LONDON_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LONDON_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LONDON_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_LONDON_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_196:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #9
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_200
-    LDD #0
-    STD RESULT
-    BRA CE_201
-CT_200:
-    LDD #1
-    STD RESULT
-CE_201:
-    LDD RESULT
-    LBEQ IF_NEXT_199
-    ; VPy_LINE:281
-; DRAW_VECTOR("barcelona_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_BARCELONA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BARCELONA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BARCELONA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_BARCELONA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_199:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_203
-    LDD #0
-    STD RESULT
-    BRA CE_204
-CT_203:
-    LDD #1
-    STD RESULT
-CE_204:
-    LDD RESULT
-    LBEQ IF_NEXT_202
-    ; VPy_LINE:283
-; DRAW_VECTOR("athens_bg", x, y) - 7 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ATHENS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ATHENS_BG_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_202:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #11
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_206
-    LDD #0
-    STD RESULT
-    BRA CE_207
-CT_206:
-    LDD #1
-    STD RESULT
-CE_207:
-    LDD RESULT
-    LBEQ IF_NEXT_205
-    ; VPy_LINE:285
-; DRAW_VECTOR("pyramids_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PYRAMIDS_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PYRAMIDS_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PYRAMIDS_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_PYRAMIDS_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_205:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #12
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_209
-    LDD #0
-    STD RESULT
-    BRA CE_210
-CT_209:
-    LDD #1
-    STD RESULT
-CE_210:
-    LDD RESULT
-    LBEQ IF_NEXT_208
-    ; VPy_LINE:287
-; DRAW_VECTOR("kilimanjaro_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_KILIMANJARO_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_KILIMANJARO_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_KILIMANJARO_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_KILIMANJARO_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_208:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #13
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_212
-    LDD #0
-    STD RESULT
-    BRA CE_213
-CT_212:
-    LDD #1
-    STD RESULT
-CE_213:
-    LDD RESULT
-    LBEQ IF_NEXT_211
-    ; VPy_LINE:289
-; DRAW_VECTOR("newyork_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_NEWYORK_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_NEWYORK_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_NEWYORK_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_NEWYORK_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_NEWYORK_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_211:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #14
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_215
-    LDD #0
-    STD RESULT
-    BRA CE_216
-CT_215:
-    LDD #1
-    STD RESULT
-CE_216:
-    LDD RESULT
-    LBEQ IF_NEXT_214
-    ; VPy_LINE:291
-; DRAW_VECTOR("mayan_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_MAYAN_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_MAYAN_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_MAYAN_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_MAYAN_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_MAYAN_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_214:
-    LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #15
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_218
-    LDD #0
-    STD RESULT
-    BRA CE_219
-CT_218:
-    LDD #1
-    STD RESULT
-CE_219:
-    LDD RESULT
-    LBEQ IF_NEXT_217
-    ; VPy_LINE:293
-; DRAW_VECTOR("antarctica_bg", x, y) - 4 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_ANTARCTICA_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ANTARCTICA_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ANTARCTICA_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_ANTARCTICA_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-    LBRA IF_END_171
-IF_NEXT_217:
-    ; VPy_LINE:295
-; DRAW_VECTOR("easter_bg", x, y) - 5 path(s) at position
-    LDD #0
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD #50
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_EASTER_BG_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_EASTER_BG_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_EASTER_BG_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_EASTER_BG_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    LDX #_EASTER_BG_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    LDD #0
-    STD RESULT
-IF_END_171:
-    RTS
+; ================================================
+; BANK #0 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
 
     ; VPy_LINE:297
 DRAW_GAME_LEVEL: ; function
 ; --- function draw_game_level ---
     LEAS -8,S ; allocate locals
     ; VPy_LINE:299
-    JSR DRAW_LEVEL_BACKGROUND
+    JSR draw_level_background_BANK_WRAPPER
     ; VPy_LINE:302
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
@@ -4603,16 +3177,16 @@ DRAW_GAME_LEVEL: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_224
+    BLT CT_141
     LDD #0
     STD RESULT
-    BRA CE_225
-CT_224:
+    BRA CE_142
+CT_141:
     LDD #1
     STD RESULT
-CE_225:
+CE_142:
     LDD RESULT
-    BNE OR_TRUE_222
+    BNE OR_TRUE_139
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4623,25 +3197,25 @@ CE_225:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_226
+    BGT CT_143
     LDD #0
     STD RESULT
-    BRA CE_227
-CT_226:
+    BRA CE_144
+CT_143:
     LDD #1
     STD RESULT
-CE_227:
+CE_144:
     LDD RESULT
-    BNE OR_TRUE_222
+    BNE OR_TRUE_139
     LDD #0
     STD RESULT
-    BRA OR_END_223
-OR_TRUE_222:
+    BRA OR_END_140
+OR_TRUE_139:
     LDD #1
     STD RESULT
-OR_END_223:
+OR_END_140:
     LDD RESULT
-    LBEQ IF_NEXT_221
+    LBEQ IF_NEXT_138
     ; VPy_LINE:309
     LDD VAR_JOY_X
     STD RESULT
@@ -4660,16 +3234,16 @@ OR_END_223:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_230
+    BLT CT_147
     LDD #0
     STD RESULT
-    BRA CE_231
-CT_230:
+    BRA CE_148
+CT_147:
     LDD #1
     STD RESULT
-CE_231:
+CE_148:
     LDD RESULT
-    LBEQ IF_NEXT_229
+    LBEQ IF_NEXT_146
     ; VPy_LINE:311
     LDD #0
     STD RESULT
@@ -4689,9 +3263,9 @@ CE_231:
     LDU #VAR_ABS_JOY
     STU TMPPTR
     STX ,U
-    LBRA IF_END_228
-IF_NEXT_229:
-IF_END_228:
+    LBRA IF_END_145
+IF_NEXT_146:
+IF_END_145:
     ; VPy_LINE:316
     LDD VAR_ABS_JOY
     STD RESULT
@@ -4703,16 +3277,16 @@ IF_END_228:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_234
+    BLT CT_151
     LDD #0
     STD RESULT
-    BRA CE_235
-CT_234:
+    BRA CE_152
+CT_151:
     LDD #1
     STD RESULT
-CE_235:
+CE_152:
     LDD RESULT
-    LBEQ IF_NEXT_233
+    LBEQ IF_NEXT_150
     ; VPy_LINE:317
     LDD #1
     STD RESULT
@@ -4720,8 +3294,8 @@ CE_235:
     LDU #VAR_MOVE_SPEED
     STU TMPPTR
     STX ,U
-    LBRA IF_END_232
-IF_NEXT_233:
+    LBRA IF_END_149
+IF_NEXT_150:
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4732,16 +3306,16 @@ IF_NEXT_233:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_237
+    BLT CT_154
     LDD #0
     STD RESULT
-    BRA CE_238
-CT_237:
+    BRA CE_155
+CT_154:
     LDD #1
     STD RESULT
-CE_238:
+CE_155:
     LDD RESULT
-    LBEQ IF_NEXT_236
+    LBEQ IF_NEXT_153
     ; VPy_LINE:319
     LDD #2
     STD RESULT
@@ -4749,8 +3323,8 @@ CE_238:
     LDU #VAR_MOVE_SPEED
     STU TMPPTR
     STX ,U
-    LBRA IF_END_232
-IF_NEXT_236:
+    LBRA IF_END_149
+IF_NEXT_153:
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4761,16 +3335,16 @@ IF_NEXT_236:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_240
+    BLT CT_157
     LDD #0
     STD RESULT
-    BRA CE_241
-CT_240:
+    BRA CE_158
+CT_157:
     LDD #1
     STD RESULT
-CE_241:
+CE_158:
     LDD RESULT
-    LBEQ IF_NEXT_239
+    LBEQ IF_NEXT_156
     ; VPy_LINE:321
     LDD #3
     STD RESULT
@@ -4778,8 +3352,8 @@ CE_241:
     LDU #VAR_MOVE_SPEED
     STU TMPPTR
     STX ,U
-    LBRA IF_END_232
-IF_NEXT_239:
+    LBRA IF_END_149
+IF_NEXT_156:
     ; VPy_LINE:323
     LDD #4
     STD RESULT
@@ -4787,7 +3361,7 @@ IF_NEXT_239:
     LDU #VAR_MOVE_SPEED
     STU TMPPTR
     STX ,U
-IF_END_232:
+IF_END_149:
     ; VPy_LINE:326
     LDD VAR_JOY_X
     STD RESULT
@@ -4799,16 +3373,16 @@ IF_END_232:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_244
+    BLT CT_161
     LDD #0
     STD RESULT
-    BRA CE_245
-CT_244:
+    BRA CE_162
+CT_161:
     LDD #1
     STD RESULT
-CE_245:
+CE_162:
     LDD RESULT
-    LBEQ IF_NEXT_243
+    LBEQ IF_NEXT_160
     ; VPy_LINE:327
     LDD #0
     STD RESULT
@@ -4828,9 +3402,9 @@ CE_245:
     LDU #VAR_MOVE_SPEED
     STU TMPPTR
     STX ,U
-    LBRA IF_END_242
-IF_NEXT_243:
-IF_END_242:
+    LBRA IF_END_159
+IF_NEXT_160:
+IF_END_159:
     ; VPy_LINE:329
     LDD VAR_PLAYER_X
     STD RESULT
@@ -4861,16 +3435,16 @@ IF_END_242:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_248
+    BLT CT_165
     LDD #0
     STD RESULT
-    BRA CE_249
-CT_248:
+    BRA CE_166
+CT_165:
     LDD #1
     STD RESULT
-CE_249:
+CE_166:
     LDD RESULT
-    LBEQ IF_NEXT_247
+    LBEQ IF_NEXT_164
     ; VPy_LINE:333
     LDD #-110
     STD RESULT
@@ -4878,9 +3452,9 @@ CE_249:
     LDU #VAR_PLAYER_X
     STU TMPPTR
     STX ,U
-    LBRA IF_END_246
-IF_NEXT_247:
-IF_END_246:
+    LBRA IF_END_163
+IF_NEXT_164:
+IF_END_163:
     ; VPy_LINE:334
     LDD VAR_PLAYER_X
     STD RESULT
@@ -4892,16 +3466,16 @@ IF_END_246:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_252
+    BGT CT_169
     LDD #0
     STD RESULT
-    BRA CE_253
-CT_252:
+    BRA CE_170
+CT_169:
     LDD #1
     STD RESULT
-CE_253:
+CE_170:
     LDD RESULT
-    LBEQ IF_NEXT_251
+    LBEQ IF_NEXT_168
     ; VPy_LINE:335
     LDD #110
     STD RESULT
@@ -4909,9 +3483,9 @@ CE_253:
     LDU #VAR_PLAYER_X
     STU TMPPTR
     STX ,U
-    LBRA IF_END_250
-IF_NEXT_251:
-IF_END_250:
+    LBRA IF_END_167
+IF_NEXT_168:
+IF_END_167:
     ; VPy_LINE:338
     LDD VAR_JOY_X
     STD RESULT
@@ -4923,16 +3497,16 @@ IF_END_250:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_256
+    BLT CT_173
     LDD #0
     STD RESULT
-    BRA CE_257
-CT_256:
+    BRA CE_174
+CT_173:
     LDD #1
     STD RESULT
-CE_257:
+CE_174:
     LDD RESULT
-    LBEQ IF_NEXT_255
+    LBEQ IF_NEXT_172
     ; VPy_LINE:339
     LDD #-1
     STD RESULT
@@ -4940,8 +3514,8 @@ CE_257:
     LDU #VAR_PLAYER_FACING
     STU TMPPTR
     STX ,U
-    LBRA IF_END_254
-IF_NEXT_255:
+    LBRA IF_END_171
+IF_NEXT_172:
     ; VPy_LINE:341
     LDD #1
     STD RESULT
@@ -4949,7 +3523,7 @@ IF_NEXT_255:
     LDU #VAR_PLAYER_FACING
     STU TMPPTR
     STX ,U
-IF_END_254:
+IF_END_171:
     ; VPy_LINE:344
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
@@ -4985,16 +3559,16 @@ IF_END_254:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_262
+    BLT CT_179
     LDD #0
     STD RESULT
-    BRA CE_263
-CT_262:
+    BRA CE_180
+CT_179:
     LDD #1
     STD RESULT
-CE_263:
+CE_180:
     LDD RESULT
-    BNE OR_TRUE_260
+    BNE OR_TRUE_177
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -5005,25 +3579,25 @@ CE_263:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_264
+    BGT CT_181
     LDD #0
     STD RESULT
-    BRA CE_265
-CT_264:
+    BRA CE_182
+CT_181:
     LDD #1
     STD RESULT
-CE_265:
+CE_182:
     LDD RESULT
-    BNE OR_TRUE_260
+    BNE OR_TRUE_177
     LDD #0
     STD RESULT
-    BRA OR_END_261
-OR_TRUE_260:
+    BRA OR_END_178
+OR_TRUE_177:
     LDD #1
     STD RESULT
-OR_END_261:
+OR_END_178:
     LDD RESULT
-    LBEQ IF_NEXT_259
+    LBEQ IF_NEXT_176
     ; VPy_LINE:348
     LDD #5
     STD RESULT
@@ -5033,9 +3607,9 @@ OR_END_261:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA IF_END_258
-IF_NEXT_259:
-IF_END_258:
+    LBRA IF_END_175
+IF_NEXT_176:
+IF_END_175:
     ; VPy_LINE:350
     LDD VAR_PLAYER_ANIM_COUNTER
     STD RESULT
@@ -5047,16 +3621,16 @@ IF_END_258:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGE CT_268
+    BGE CT_185
     LDD #0
     STD RESULT
-    BRA CE_269
-CT_268:
+    BRA CE_186
+CT_185:
     LDD #1
     STD RESULT
-CE_269:
+CE_186:
     LDD RESULT
-    LBEQ IF_NEXT_267
+    LBEQ IF_NEXT_184
     ; VPy_LINE:351
     LDD #0
     STD RESULT
@@ -5094,16 +3668,16 @@ CE_269:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_272
+    BGT CT_189
     LDD #0
     STD RESULT
-    BRA CE_273
-CT_272:
+    BRA CE_190
+CT_189:
     LDD #1
     STD RESULT
-CE_273:
+CE_190:
     LDD RESULT
-    LBEQ IF_NEXT_271
+    LBEQ IF_NEXT_188
     ; VPy_LINE:354
     LDD #1
     STD RESULT
@@ -5111,14 +3685,14 @@ CE_273:
     LDU #VAR_PLAYER_ANIM_FRAME
     STU TMPPTR
     STX ,U
-    LBRA IF_END_270
-IF_NEXT_271:
-IF_END_270:
-    LBRA IF_END_266
-IF_NEXT_267:
-IF_END_266:
-    LBRA IF_END_220
-IF_NEXT_221:
+    LBRA IF_END_187
+IF_NEXT_188:
+IF_END_187:
+    LBRA IF_END_183
+IF_NEXT_184:
+IF_END_183:
+    LBRA IF_END_137
+IF_NEXT_138:
     ; VPy_LINE:357
     LDD #1
     STD RESULT
@@ -5133,7 +3707,7 @@ IF_NEXT_221:
     LDU #VAR_PLAYER_ANIM_COUNTER
     STU TMPPTR
     STX ,U
-IF_END_220:
+IF_END_137:
     ; VPy_LINE:361
     LDD #0
     STD RESULT
@@ -5150,24 +3724,24 @@ IF_END_220:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_276
+    BEQ CT_193
     LDD #0
     STD RESULT
-    BRA CE_277
-CT_276:
+    BRA CE_194
+CT_193:
     LDD #1
     STD RESULT
-CE_277:
+CE_194:
     LDD RESULT
-    LBEQ IF_NEXT_275
+    LBEQ IF_NEXT_192
     ; VPy_LINE:363
     LDD #1
     STD RESULT
     LDX RESULT
     STX 6 ,S
-    LBRA IF_END_274
-IF_NEXT_275:
-IF_END_274:
+    LBRA IF_END_191
+IF_NEXT_192:
+IF_END_191:
     ; VPy_LINE:366
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
@@ -5179,16 +3753,16 @@ IF_END_274:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_280
+    BEQ CT_197
     LDD #0
     STD RESULT
-    BRA CE_281
-CT_280:
+    BRA CE_198
+CT_197:
     LDD #1
     STD RESULT
-CE_281:
+CE_198:
     LDD RESULT
-    LBEQ IF_NEXT_279
+    LBEQ IF_NEXT_196
     ; VPy_LINE:367
 ; DRAW_VECTOR_EX("player_walk_1", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
@@ -5206,21 +3780,21 @@ CE_281:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_282
+    BNE DSVEX_CHK_Y_199
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_282:
+DSVEX_CHK_Y_199:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_283
+    BNE DSVEX_CHK_XY_200
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_283:
+DSVEX_CHK_XY_200:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_284
+    BNE DSVEX_CALL_201
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_284:
+DSVEX_CALL_201:
     ; Set intensity override for drawing
     LDD #80
     STD RESULT
@@ -5265,8 +3839,8 @@ DSVEX_CALL_284:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_278
-IF_NEXT_279:
+    LBRA IF_END_195
+IF_NEXT_196:
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -5277,16 +3851,16 @@ IF_NEXT_279:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_286
+    BEQ CT_203
     LDD #0
     STD RESULT
-    BRA CE_287
-CT_286:
+    BRA CE_204
+CT_203:
     LDD #1
     STD RESULT
-CE_287:
+CE_204:
     LDD RESULT
-    LBEQ IF_NEXT_285
+    LBEQ IF_NEXT_202
     ; VPy_LINE:369
 ; DRAW_VECTOR_EX("player_walk_2", x, y, mirror) - 17 path(s), width=21, center_x=0
     LDD VAR_PLAYER_X
@@ -5304,21 +3878,21 @@ CE_287:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_288
+    BNE DSVEX_CHK_Y_205
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_288:
+DSVEX_CHK_Y_205:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_289
+    BNE DSVEX_CHK_XY_206
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_289:
+DSVEX_CHK_XY_206:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_290
+    BNE DSVEX_CALL_207
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_290:
+DSVEX_CALL_207:
     ; Set intensity override for drawing
     LDD #80
     STD RESULT
@@ -5363,8 +3937,8 @@ DSVEX_CALL_290:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_278
-IF_NEXT_285:
+    LBRA IF_END_195
+IF_NEXT_202:
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -5375,16 +3949,16 @@ IF_NEXT_285:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_292
+    BEQ CT_209
     LDD #0
     STD RESULT
-    BRA CE_293
-CT_292:
+    BRA CE_210
+CT_209:
     LDD #1
     STD RESULT
-CE_293:
+CE_210:
     LDD RESULT
-    LBEQ IF_NEXT_291
+    LBEQ IF_NEXT_208
     ; VPy_LINE:371
 ; DRAW_VECTOR_EX("player_walk_3", x, y, mirror) - 17 path(s), width=20, center_x=1
     LDD VAR_PLAYER_X
@@ -5402,21 +3976,21 @@ CE_293:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_294
+    BNE DSVEX_CHK_Y_211
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_294:
+DSVEX_CHK_Y_211:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_295
+    BNE DSVEX_CHK_XY_212
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_295:
+DSVEX_CHK_XY_212:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_296
+    BNE DSVEX_CALL_213
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_296:
+DSVEX_CALL_213:
     ; Set intensity override for drawing
     LDD #80
     STD RESULT
@@ -5461,8 +4035,8 @@ DSVEX_CALL_296:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_278
-IF_NEXT_291:
+    LBRA IF_END_195
+IF_NEXT_208:
     LDD VAR_PLAYER_ANIM_FRAME
     STD RESULT
     LDD RESULT
@@ -5473,16 +4047,16 @@ IF_NEXT_291:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_298
+    BEQ CT_215
     LDD #0
     STD RESULT
-    BRA CE_299
-CT_298:
+    BRA CE_216
+CT_215:
     LDD #1
     STD RESULT
-CE_299:
+CE_216:
     LDD RESULT
-    LBEQ IF_NEXT_297
+    LBEQ IF_NEXT_214
     ; VPy_LINE:373
 ; DRAW_VECTOR_EX("player_walk_4", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
@@ -5500,21 +4074,21 @@ CE_299:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_300
+    BNE DSVEX_CHK_Y_217
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_300:
+DSVEX_CHK_Y_217:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_301
+    BNE DSVEX_CHK_XY_218
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_301:
+DSVEX_CHK_XY_218:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_302
+    BNE DSVEX_CALL_219
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_302:
+DSVEX_CALL_219:
     ; Set intensity override for drawing
     LDD #80
     STD RESULT
@@ -5559,8 +4133,8 @@ DSVEX_CALL_302:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_278
-IF_NEXT_297:
+    LBRA IF_END_195
+IF_NEXT_214:
     ; VPy_LINE:375
 ; DRAW_VECTOR_EX("player_walk_5", x, y, mirror) - 17 path(s), width=19, center_x=1
     LDD VAR_PLAYER_X
@@ -5578,21 +4152,21 @@ IF_NEXT_297:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_303
+    BNE DSVEX_CHK_Y_220
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_303:
+DSVEX_CHK_Y_220:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_304
+    BNE DSVEX_CHK_XY_221
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_304:
+DSVEX_CHK_XY_221:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_305
+    BNE DSVEX_CALL_222
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_305:
+DSVEX_CALL_222:
     ; Set intensity override for drawing
     LDD #80
     STD RESULT
@@ -5637,11 +4211,11 @@ DSVEX_CALL_305:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-IF_END_278:
+IF_END_195:
     ; VPy_LINE:378
-    JSR UPDATE_ENEMIES
+    JSR update_enemies_BANK_WRAPPER
     ; VPy_LINE:379
-    JSR DRAW_ENEMIES
+    JSR draw_enemies_BANK_WRAPPER
     ; VPy_LINE:382
     LDD VAR_HOOK_ACTIVE
     STD RESULT
@@ -5653,16 +4227,16 @@ IF_END_278:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_308
+    BEQ CT_225
     LDD #0
     STD RESULT
-    BRA CE_309
-CT_308:
+    BRA CE_226
+CT_225:
     LDD #1
     STD RESULT
-CE_309:
+CE_226:
     LDD RESULT
-    LBEQ IF_NEXT_307
+    LBEQ IF_NEXT_224
     ; VPy_LINE:385
     LDD VAR_HOOK_GUN_X
     STD RESULT
@@ -5680,7 +4254,7 @@ CE_309:
     STD RESULT
     LDD RESULT
     STD VAR_ARG3
-    JSR DRAW_HOOK_ROPE
+    JSR draw_hook_rope_BANK_WRAPPER
     ; VPy_LINE:387
     LDD #100
     STD RESULT
@@ -5708,21 +4282,21 @@ CE_309:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_310
+    BNE DSVEX_CHK_Y_227
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_310:
+DSVEX_CHK_Y_227:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_311
+    BNE DSVEX_CHK_XY_228
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_311:
+DSVEX_CHK_XY_228:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_312
+    BNE DSVEX_CALL_229
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_312:
+DSVEX_CALL_229:
     ; Set intensity override for drawing
     LDD #100
     STD RESULT
@@ -5735,9 +4309,9 @@ DSVEX_CALL_312:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_306
-IF_NEXT_307:
-IF_END_306:
+    LBRA IF_END_223
+IF_NEXT_224:
+IF_END_223:
     ; VPy_LINE:392
     LDD #0
     STD RESULT
@@ -5749,7 +4323,7 @@ IF_END_306:
     LDX RESULT
     STX 4 ,S
     ; VPy_LINE:394
-WH_313: ; while start
+WH_230: ; while start
     LDD 4 ,S
     STD RESULT
     LDD RESULT
@@ -5760,16 +4334,16 @@ WH_313: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_315
+    BLT CT_232
     LDD #0
     STD RESULT
-    BRA CE_316
-CT_315:
+    BRA CE_233
+CT_232:
     LDD #1
     STD RESULT
-CE_316:
+CE_233:
     LDD RESULT
-    LBEQ WH_END_314
+    LBEQ WH_END_231
     ; VPy_LINE:395
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
@@ -5792,16 +4366,16 @@ CE_316:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_319
+    BEQ CT_236
     LDD #0
     STD RESULT
-    BRA CE_320
-CT_319:
+    BRA CE_237
+CT_236:
     LDD #1
     STD RESULT
-CE_320:
+CE_237:
     LDD RESULT
-    LBEQ IF_NEXT_318
+    LBEQ IF_NEXT_235
     ; VPy_LINE:396
     LDD 0 ,S
     STD RESULT
@@ -5819,9 +4393,9 @@ CE_320:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA IF_END_317
-IF_NEXT_318:
-IF_END_317:
+    LBRA IF_END_234
+IF_NEXT_235:
+IF_END_234:
     ; VPy_LINE:397
     LDD 4 ,S
     STD RESULT
@@ -5839,300 +4413,898 @@ IF_END_317:
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    LBRA WH_313
-WH_END_314: ; while end
+    LBRA WH_230
+WH_END_231: ; while end
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:401
-SPAWN_ENEMIES: ; function
-; --- function spawn_enemies ---
-    LEAS -6,S ; allocate locals
-    ; VPy_LINE:403
-    ; ===== Const array indexing: level_enemy_count =====
-    LDD VAR_CURRENT_LOCATION
+
+; ================================================
+; BANK #1 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:257
+DRAW_LEVEL_BACKGROUND: ; function
+; --- function draw_level_background ---
+    ; VPy_LINE:259
+    LDD #60
     STD RESULT
     LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDX #CONST_ARRAY_4
-    LDD TMPPTR
-    LEAX D,X
-    LDD ,X
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 259
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
     STD RESULT
-    LDX RESULT
-    STX 0 ,S
-    ; VPy_LINE:404
-    ; ===== Const array indexing: level_enemy_speed =====
+    ; VPy_LINE:262
     LDD VAR_CURRENT_LOCATION
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDX #CONST_ARRAY_5
-    LDD TMPPTR
-    LEAX D,X
-    LDD ,X
-    STD RESULT
-    LDX RESULT
-    STX 4 ,S
-    ; VPy_LINE:406
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    ; VPy_LINE:407
-WH_321: ; while start
-    LDD 2 ,S
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD 0 ,S
+    LDD #0
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_323
+    BEQ CT_240
     LDD #0
     STD RESULT
-    BRA CE_324
-CT_323:
+    BRA CE_241
+CT_240:
     LDD #1
     STD RESULT
-CE_324:
+CE_241:
     LDD RESULT
-    LBEQ WH_END_322
-    ; VPy_LINE:408
-    LDD 2 ,S
+    LBEQ IF_NEXT_239
+    ; VPy_LINE:263
+; DRAW_VECTOR("fuji_bg", x, y) - 6 path(s) at position
+    LDD #0
     STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_ACTIVE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #1
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:409
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_SIZE_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #4
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:410
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_X_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #-80
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
     LDD #50
     STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_FUJI_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_FUJI_BG_PATH5  ; Path 5
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_239:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
     LDD RESULT
     STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
     LDD TMPLEFT
-    STD MUL_A
-    LDD TMPRIGHT
-    STD MUL_B
-    JSR MUL16
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
+    SUBD TMPRIGHT
+    BEQ CT_243
+    LDD #0
     STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:411
-    LDD 2 ,S
+    BRA CE_244
+CT_243:
+    LDD #1
     STD RESULT
+CE_244:
     LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_Y_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD #60
+    LBEQ IF_NEXT_242
+    ; VPy_LINE:265
+; DRAW_VECTOR("keirin_bg", x, y) - 3 path(s) at position
+    LDD #0
     STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:412
-    LDD 2 ,S
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
     STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VX_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD 4 ,S
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_KEIRIN_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_KEIRIN_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_KEIRIN_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
     STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    ; VPy_LINE:413
-    LDD 2 ,S
+    LBRA IF_END_238
+IF_NEXT_242:
+    LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    PSHS D
     LDD #2
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
     LDD TMPLEFT
-    STD DIV_A
-    LDD TMPRIGHT
-    STD DIV_B
-    JSR DIV16
-    ; quotient in RESULT, need remainder: A - Q*B
-    LDD DIV_A
-    STD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_246
+    LDD #0
+    STD RESULT
+    BRA CE_247
+CT_246:
+    LDD #1
+    STD RESULT
+CE_247:
     LDD RESULT
-    STD MUL_A
-    LDD DIV_B
-    STD MUL_B
-    JSR MUL16
-    ; product in RESULT, subtract from original A (TMPLEFT)
-    LDD TMPLEFT
-    SUBD RESULT
+    LBEQ IF_NEXT_245
+    ; VPy_LINE:267
+; DRAW_VECTOR("buddha_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_BUDDHA_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BUDDHA_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BUDDHA_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BUDDHA_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_245:
+    LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    LDD #1
+    LDD #3
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_327
+    BEQ CT_249
     LDD #0
     STD RESULT
-    BRA CE_328
-CT_327:
+    BRA CE_250
+CT_249:
     LDD #1
     STD RESULT
-CE_328:
+CE_250:
     LDD RESULT
-    LBEQ IF_NEXT_326
-    ; VPy_LINE:414
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VX_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
+    LBEQ IF_NEXT_248
+    ; VPy_LINE:269
+; DRAW_VECTOR("angkor_bg", x, y) - 3 path(s) at position
     LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ANGKOR_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ANGKOR_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ANGKOR_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_248:
+    LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    PSHS D
-    LDD 6 ,S
+    LDD #4
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    STD RESULT
-    LDX TMPPTR2
-    LDD RESULT
-    STD ,X
-    LBRA IF_END_325
-IF_NEXT_326:
-IF_END_325:
-    ; VPy_LINE:415
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD TMPPTR
-    LDD #VAR_ENEMY_VY_DATA
-    TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
+    BEQ CT_252
     LDD #0
     STD RESULT
-    LDX TMPPTR2
+    BRA CE_253
+CT_252:
+    LDD #1
+    STD RESULT
+CE_253:
     LDD RESULT
-    STD ,X
-    ; VPy_LINE:416
-    LDD 2 ,S
+    LBEQ IF_NEXT_251
+    ; VPy_LINE:271
+; DRAW_VECTOR("ayers_bg", x, y) - 3 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_AYERS_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_AYERS_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_AYERS_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_251:
+    LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
     STD TMPLEFT
-    PSHS D
-    LDD #1
+    LDD #5
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
     LDD TMPLEFT
-    ADDD TMPRIGHT
+    SUBD TMPRIGHT
+    BEQ CT_255
+    LDD #0
     STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    LBRA WH_321
-WH_END_322: ; while end
-    LEAS 6,S ; free locals
+    BRA CE_256
+CT_255:
+    LDD #1
+    STD RESULT
+CE_256:
+    LDD RESULT
+    LBEQ IF_NEXT_254
+    ; VPy_LINE:273
+; DRAW_VECTOR("taj_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_TAJ_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_TAJ_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_TAJ_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_TAJ_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_254:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #6
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_258
+    LDD #0
+    STD RESULT
+    BRA CE_259
+CT_258:
+    LDD #1
+    STD RESULT
+CE_259:
+    LDD RESULT
+    LBEQ IF_NEXT_257
+    ; VPy_LINE:275
+; DRAW_VECTOR("leningrad_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_LENINGRAD_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LENINGRAD_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LENINGRAD_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LENINGRAD_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LENINGRAD_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_257:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #7
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_261
+    LDD #0
+    STD RESULT
+    BRA CE_262
+CT_261:
+    LDD #1
+    STD RESULT
+CE_262:
+    LDD RESULT
+    LBEQ IF_NEXT_260
+    ; VPy_LINE:277
+; DRAW_VECTOR("paris_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_PARIS_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PARIS_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PARIS_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PARIS_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PARIS_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_260:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #8
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_264
+    LDD #0
+    STD RESULT
+    BRA CE_265
+CT_264:
+    LDD #1
+    STD RESULT
+CE_265:
+    LDD RESULT
+    LBEQ IF_NEXT_263
+    ; VPy_LINE:279
+; DRAW_VECTOR("london_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_LONDON_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LONDON_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LONDON_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LONDON_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_263:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #9
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_267
+    LDD #0
+    STD RESULT
+    BRA CE_268
+CT_267:
+    LDD #1
+    STD RESULT
+CE_268:
+    LDD RESULT
+    LBEQ IF_NEXT_266
+    ; VPy_LINE:281
+; DRAW_VECTOR("barcelona_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_BARCELONA_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BARCELONA_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BARCELONA_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_BARCELONA_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_266:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_270
+    LDD #0
+    STD RESULT
+    BRA CE_271
+CT_270:
+    LDD #1
+    STD RESULT
+CE_271:
+    LDD RESULT
+    LBEQ IF_NEXT_269
+    ; VPy_LINE:283
+; DRAW_VECTOR("athens_bg", x, y) - 7 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ATHENS_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH5  ; Path 5
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ATHENS_BG_PATH6  ; Path 6
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_269:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #11
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_273
+    LDD #0
+    STD RESULT
+    BRA CE_274
+CT_273:
+    LDD #1
+    STD RESULT
+CE_274:
+    LDD RESULT
+    LBEQ IF_NEXT_272
+    ; VPy_LINE:285
+; DRAW_VECTOR("pyramids_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_PYRAMIDS_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PYRAMIDS_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PYRAMIDS_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_PYRAMIDS_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_272:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #12
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_276
+    LDD #0
+    STD RESULT
+    BRA CE_277
+CT_276:
+    LDD #1
+    STD RESULT
+CE_277:
+    LDD RESULT
+    LBEQ IF_NEXT_275
+    ; VPy_LINE:287
+; DRAW_VECTOR("kilimanjaro_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_KILIMANJARO_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_KILIMANJARO_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_KILIMANJARO_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_KILIMANJARO_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_275:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #13
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_279
+    LDD #0
+    STD RESULT
+    BRA CE_280
+CT_279:
+    LDD #1
+    STD RESULT
+CE_280:
+    LDD RESULT
+    LBEQ IF_NEXT_278
+    ; VPy_LINE:289
+; DRAW_VECTOR("newyork_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_NEWYORK_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_NEWYORK_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_NEWYORK_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_NEWYORK_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_NEWYORK_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_278:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #14
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_282
+    LDD #0
+    STD RESULT
+    BRA CE_283
+CT_282:
+    LDD #1
+    STD RESULT
+CE_283:
+    LDD RESULT
+    LBEQ IF_NEXT_281
+    ; VPy_LINE:291
+; DRAW_VECTOR("mayan_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_MAYAN_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_MAYAN_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_MAYAN_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_MAYAN_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_MAYAN_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_281:
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #15
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_285
+    LDD #0
+    STD RESULT
+    BRA CE_286
+CT_285:
+    LDD #1
+    STD RESULT
+CE_286:
+    LDD RESULT
+    LBEQ IF_NEXT_284
+    ; VPy_LINE:293
+; DRAW_VECTOR("antarctica_bg", x, y) - 4 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_ANTARCTICA_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ANTARCTICA_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ANTARCTICA_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_ANTARCTICA_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    LBRA IF_END_238
+IF_NEXT_284:
+    ; VPy_LINE:295
+; DRAW_VECTOR("easter_bg", x, y) - 5 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_EASTER_BG_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_EASTER_BG_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_EASTER_BG_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_EASTER_BG_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_EASTER_BG_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+IF_END_238:
     RTS
+
+
+; ================================================
+; BANK #2 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
 
     ; VPy_LINE:418
 UPDATE_ENEMIES: ; function
@@ -6144,7 +5316,7 @@ UPDATE_ENEMIES: ; function
     LDX RESULT
     STX 0 ,S
     ; VPy_LINE:421
-WH_329: ; while start
+WH_287: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6155,16 +5327,16 @@ WH_329: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_331
+    BLT CT_289
     LDD #0
     STD RESULT
-    BRA CE_332
-CT_331:
+    BRA CE_290
+CT_289:
     LDD #1
     STD RESULT
-CE_332:
+CE_290:
     LDD RESULT
-    LBEQ WH_END_330
+    LBEQ WH_END_288
     ; VPy_LINE:422
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
@@ -6187,16 +5359,16 @@ CE_332:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_335
+    BEQ CT_293
     LDD #0
     STD RESULT
-    BRA CE_336
-CT_335:
+    BRA CE_294
+CT_293:
     LDD #1
     STD RESULT
-CE_336:
+CE_294:
     LDD RESULT
-    LBEQ IF_NEXT_334
+    LBEQ IF_NEXT_292
     ; VPy_LINE:424
     LDD 0 ,S
     STD RESULT
@@ -6361,16 +5533,16 @@ CE_336:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLE CT_339
+    BLE CT_297
     LDD #0
     STD RESULT
-    BRA CE_340
-CT_339:
+    BRA CE_298
+CT_297:
     LDD #1
     STD RESULT
-CE_340:
+CE_298:
     LDD RESULT
-    LBEQ IF_NEXT_338
+    LBEQ IF_NEXT_296
     ; VPy_LINE:432
     LDD 0 ,S
     STD RESULT
@@ -6506,16 +5678,16 @@ CE_340:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_343
+    BLT CT_301
     LDD #0
     STD RESULT
-    BRA CE_344
-CT_343:
+    BRA CE_302
+CT_301:
     LDD #1
     STD RESULT
-CE_344:
+CE_302:
     LDD RESULT
-    LBEQ IF_NEXT_342
+    LBEQ IF_NEXT_300
     ; VPy_LINE:437
     LDD 0 ,S
     STD RESULT
@@ -6533,12 +5705,12 @@ CE_344:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_341
-IF_NEXT_342:
-IF_END_341:
-    LBRA IF_END_337
-IF_NEXT_338:
-IF_END_337:
+    LBRA IF_END_299
+IF_NEXT_300:
+IF_END_299:
+    LBRA IF_END_295
+IF_NEXT_296:
+IF_END_295:
     ; VPy_LINE:440
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6561,16 +5733,16 @@ IF_END_337:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLE CT_347
+    BLE CT_305
     LDD #0
     STD RESULT
-    BRA CE_348
-CT_347:
+    BRA CE_306
+CT_305:
     LDD #1
     STD RESULT
-CE_348:
+CE_306:
     LDD RESULT
-    LBEQ IF_NEXT_346
+    LBEQ IF_NEXT_304
     ; VPy_LINE:441
     LDD 0 ,S
     STD RESULT
@@ -6628,9 +5800,9 @@ CE_348:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_345
-IF_NEXT_346:
-IF_END_345:
+    LBRA IF_END_303
+IF_NEXT_304:
+IF_END_303:
     ; VPy_LINE:443
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6653,16 +5825,16 @@ IF_END_345:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGE CT_351
+    BGE CT_309
     LDD #0
     STD RESULT
-    BRA CE_352
-CT_351:
+    BRA CE_310
+CT_309:
     LDD #1
     STD RESULT
-CE_352:
+CE_310:
     LDD RESULT
-    LBEQ IF_NEXT_350
+    LBEQ IF_NEXT_308
     ; VPy_LINE:444
     LDD 0 ,S
     STD RESULT
@@ -6720,12 +5892,12 @@ CE_352:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_349
-IF_NEXT_350:
-IF_END_349:
-    LBRA IF_END_333
-IF_NEXT_334:
-IF_END_333:
+    LBRA IF_END_307
+IF_NEXT_308:
+IF_END_307:
+    LBRA IF_END_291
+IF_NEXT_292:
+IF_END_291:
     ; VPy_LINE:447
     LDD 0 ,S
     STD RESULT
@@ -6743,10 +5915,887 @@ IF_END_333:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_329
-WH_END_330: ; while end
+    LBRA WH_287
+WH_END_288: ; while end
     LEAS 2,S ; free locals
     RTS
+
+
+; ================================================
+; BANK #3 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:401
+SPAWN_ENEMIES: ; function
+; --- function spawn_enemies ---
+    LEAS -6,S ; allocate locals
+    ; VPy_LINE:403
+    ; ===== Const array indexing: level_enemy_count =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_LEVEL_ENEMY_COUNT
+    LDD TMPPTR
+    LEAX D,X
+    LDD ,X
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:404
+    ; ===== Const array indexing: level_enemy_speed =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_LEVEL_ENEMY_SPEED
+    LDD TMPPTR
+    LEAX D,X
+    LDD ,X
+    STD RESULT
+    LDX RESULT
+    STX 4 ,S
+    ; VPy_LINE:406
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; VPy_LINE:407
+WH_311: ; while start
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD 0 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_313
+    LDD #0
+    STD RESULT
+    BRA CE_314
+CT_313:
+    LDD #1
+    STD RESULT
+CE_314:
+    LDD RESULT
+    LBEQ WH_END_312
+    ; VPy_LINE:408
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_ACTIVE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #1
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:409
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_SIZE_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #4
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:410
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_X_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #-80
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #50
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    STD MUL_A
+    LDD TMPRIGHT
+    STD MUL_B
+    JSR MUL16
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:411
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_Y_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #60
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:412
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VX_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD 4 ,S
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:413
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #2
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    STD DIV_A
+    LDD TMPRIGHT
+    STD DIV_B
+    JSR DIV16
+    ; quotient in RESULT, need remainder: A - Q*B
+    LDD DIV_A
+    STD TMPLEFT
+    LDD RESULT
+    STD MUL_A
+    LDD DIV_B
+    STD MUL_B
+    JSR MUL16
+    ; product in RESULT, subtract from original A (TMPLEFT)
+    LDD TMPLEFT
+    SUBD RESULT
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_317
+    LDD #0
+    STD RESULT
+    BRA CE_318
+CT_317:
+    LDD #1
+    STD RESULT
+CE_318:
+    LDD RESULT
+    LBEQ IF_NEXT_316
+    ; VPy_LINE:414
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VX_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 6 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    LBRA IF_END_315
+IF_NEXT_316:
+IF_END_315:
+    ; VPy_LINE:415
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_ENEMY_VY_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD #0
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:416
+    LDD 2 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    LBRA WH_311
+WH_END_312: ; while end
+    LEAS 6,S ; free locals
+    RTS
+
+
+; ================================================
+; BANK #4 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:212
+DRAW_MAP_SCREEN: ; function
+; --- function draw_map_screen ---
+    LEAS -4,S ; allocate locals
+    ; VPy_LINE:214
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 214
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:215
+; DRAW_VECTOR_EX("map", x, y, mirror) - 15 path(s), width=242, center_x=-6
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD #20
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDD #0
+    STD RESULT
+    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
+    ; Decode mirror mode into separate flags:
+    CLR MIRROR_X  ; Clear X flag
+    CLR MIRROR_Y  ; Clear Y flag
+    CMPB #1       ; Check if X-mirror (mode 1)
+    BNE DSVEX_CHK_Y_319
+    LDA #1
+    STA MIRROR_X
+DSVEX_CHK_Y_319:
+    CMPB #2       ; Check if Y-mirror (mode 2)
+    BNE DSVEX_CHK_XY_320
+    LDA #1
+    STA MIRROR_Y
+DSVEX_CHK_XY_320:
+    CMPB #3       ; Check if both-mirror (mode 3)
+    BNE DSVEX_CALL_321
+    LDA #1
+    STA MIRROR_X
+    STA MIRROR_Y
+DSVEX_CALL_321:
+    ; Set intensity override for drawing
+    LDD #50
+    STD RESULT
+    LDA RESULT+1  ; Intensity (0-127)
+    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_MAP_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH5  ; Path 5
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH6  ; Path 6
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH7  ; Path 7
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH8  ; Path 8
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH9  ; Path 9
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH10  ; Path 10
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH11  ; Path 11
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH12  ; Path 12
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH13  ; Path 13
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    LDX #_MAP_PATH14  ; Path 14
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:218
+    LDD VAR_LOCATION_GLOW_DIRECTION
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_324
+    LDD #0
+    STD RESULT
+    BRA CE_325
+CT_324:
+    LDD #1
+    STD RESULT
+CE_325:
+    LDD RESULT
+    LBEQ IF_NEXT_323
+    ; VPy_LINE:219
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_INTENSITY
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:220
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #127
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGE CT_328
+    LDD #0
+    STD RESULT
+    BRA CE_329
+CT_328:
+    LDD #1
+    STD RESULT
+CE_329:
+    LDD RESULT
+    LBEQ IF_NEXT_327
+    ; VPy_LINE:221
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_DIRECTION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_326
+IF_NEXT_327:
+IF_END_326:
+    LBRA IF_END_322
+IF_NEXT_323:
+    ; VPy_LINE:223
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #3
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_INTENSITY
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:224
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLE CT_332
+    LDD #0
+    STD RESULT
+    BRA CE_333
+CT_332:
+    LDD #1
+    STD RESULT
+CE_333:
+    LDD RESULT
+    LBEQ IF_NEXT_331
+    ; VPy_LINE:225
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_LOCATION_GLOW_DIRECTION
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_330
+IF_NEXT_331:
+IF_END_330:
+IF_END_322:
+    ; VPy_LINE:227
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-120
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    ; ===== Const array indexing: location_names =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_LOCATION_NAMES
+    LDD TMPPTR
+    LEAX D,X
+    ; String array - load pointer from table
+    LDD ,X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 227
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:230
+    ; ===== Const array indexing: location_x_coords =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_LOCATION_X_COORDS
+    LDD TMPPTR
+    LEAX D,X
+    LDD ,X
+    STD RESULT
+    LDX RESULT
+    STX 0 ,S
+    ; VPy_LINE:231
+    ; ===== Const array indexing: location_y_coords =====
+    LDD VAR_CURRENT_LOCATION
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDX #CONST_ARRAY_LOCATION_Y_COORDS
+    LDD TMPPTR
+    LEAX D,X
+    LDD ,X
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; VPy_LINE:233
+; DRAW_VECTOR_EX("location_marker", x, y, mirror) - 1 path(s), width=22, center_x=0
+    LDD 2 ,S
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA DRAW_VEC_X
+    LDD 0 ,S
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA DRAW_VEC_Y
+    LDD #0
+    STD RESULT
+    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
+    ; Decode mirror mode into separate flags:
+    CLR MIRROR_X  ; Clear X flag
+    CLR MIRROR_Y  ; Clear Y flag
+    CMPB #1       ; Check if X-mirror (mode 1)
+    BNE DSVEX_CHK_Y_334
+    LDA #1
+    STA MIRROR_X
+DSVEX_CHK_Y_334:
+    CMPB #2       ; Check if Y-mirror (mode 2)
+    BNE DSVEX_CHK_XY_335
+    LDA #1
+    STA MIRROR_Y
+DSVEX_CHK_XY_335:
+    CMPB #3       ; Check if both-mirror (mode 3)
+    BNE DSVEX_CALL_336
+    LDA #1
+    STA MIRROR_X
+    STA MIRROR_Y
+DSVEX_CALL_336:
+    ; Set intensity override for drawing
+    LDD VAR_LOCATION_GLOW_INTENSITY
+    STD RESULT
+    LDA RESULT+1  ; Intensity (0-127)
+    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_LOCATION_MARKER_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
+    LDD #0
+    STD RESULT
+    LEAS 4,S ; free locals
+    RTS
+
+
+; ================================================
+; BANK #5 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:236
+DRAW_TITLE_SCREEN: ; function
+; --- function draw_title_screen ---
+    ; VPy_LINE:238
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 238
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:239
+; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
+    LDD #0
+    STD RESULT
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD #70
+    STD RESULT
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_LOGO_PATH0  ; Path 0
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH1  ; Path 1
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH2  ; Path 2
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH3  ; Path 3
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH4  ; Path 4
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH5  ; Path 5
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    LDX #_LOGO_PATH6  ; Path 6
+    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDD #0
+    STD RESULT
+    ; VPy_LINE:241
+    LDD VAR_TITLE_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 241
+    JSR VECTREX_SET_INTENSITY
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:242
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-90
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_16
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 242
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:243
+; PRINT_TEXT(x, y, text) - uses BIOS defaults
+    LDD #-50
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #-20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #STR_19
+    STX RESULT
+    LDD RESULT
+    STD VAR_ARG2
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 243
+    JSR VECTREX_PRINT_TEXT
+    CLRA
+    CLRB
+    STD RESULT
+    ; VPy_LINE:245
+    LDD VAR_TITLE_STATE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_339
+    LDD #0
+    STD RESULT
+    BRA CE_340
+CT_339:
+    LDD #1
+    STD RESULT
+CE_340:
+    LDD RESULT
+    LBEQ IF_NEXT_338
+    ; VPy_LINE:246
+    LDD VAR_TITLE_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_TITLE_INTENSITY
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_337
+IF_NEXT_338:
+IF_END_337:
+    ; VPy_LINE:248
+    LDD VAR_TITLE_STATE
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_343
+    LDD #0
+    STD RESULT
+    BRA CE_344
+CT_343:
+    LDD #1
+    STD RESULT
+CE_344:
+    LDD RESULT
+    LBEQ IF_NEXT_342
+    ; VPy_LINE:249
+    LDD VAR_TITLE_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_TITLE_INTENSITY
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_341
+IF_NEXT_342:
+IF_END_341:
+    ; VPy_LINE:251
+    LDD VAR_TITLE_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_347
+    LDD #0
+    STD RESULT
+    BRA CE_348
+CT_347:
+    LDD #1
+    STD RESULT
+CE_348:
+    LDD RESULT
+    LBEQ IF_NEXT_346
+    ; VPy_LINE:252
+    LDD #1
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_TITLE_STATE
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_345
+IF_NEXT_346:
+IF_END_345:
+    ; VPy_LINE:254
+    LDD VAR_TITLE_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #30
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_351
+    LDD #0
+    STD RESULT
+    BRA CE_352
+CT_351:
+    LDD #1
+    STD RESULT
+CE_352:
+    LDD RESULT
+    LBEQ IF_NEXT_350
+    ; VPy_LINE:255
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_TITLE_STATE
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_349
+IF_NEXT_350:
+IF_END_349:
+    RTS
+
+
+; ================================================
+; BANK #6 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
 
     ; VPy_LINE:451
 DRAW_ENEMIES: ; function
@@ -7127,48 +7176,11 @@ WH_END_354: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:469
-DRAW_HOOK_ROPE: ; function
-; --- function draw_hook_rope ---
-    LEAS -8,S ; allocate locals
-    LDD VAR_ARG0
-    STD 0,S ; param 0
-    LDD VAR_ARG1
-    STD 2,S ; param 1
-    LDD VAR_ARG2
-    STD 4,S ; param 2
-    LDD VAR_ARG3
-    STD 6,S ; param 3
-    ; VPy_LINE:471
-    LDD 0 ,S
-    STD RESULT
-    STD TMPPTR+0
-    LDD 2 ,S
-    STD RESULT
-    STD TMPPTR+2
-    LDD 4 ,S
-    STD RESULT
-    STD TMPPTR+4
-    LDD 6 ,S
-    STD RESULT
-    STD TMPPTR+6
-    LDD #127
-    STD TMPPTR+8
-    LDD TMPPTR+0
-    STD RESULT+0
-    LDD TMPPTR+2
-    STD RESULT+2
-    LDD TMPPTR+4
-    STD RESULT+4
-    LDD TMPPTR+6
-    STD RESULT+6
-    LDD TMPPTR+8
-    STD RESULT+8
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
-    LEAS 8,S ; free locals
-    RTS
+
+; ================================================
+; BANK #7 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
 
     ; VPy_LINE:473
 READ_JOYSTICK1_STATE: ; function
@@ -7283,6 +7295,67 @@ READ_JOYSTICK1_STATE: ; function
     STD ,X
     RTS
 
+
+; ================================================
+; BANK #8 - 1 function(s)
+; ================================================
+    ORG $0000  ; Banked window (switchable)
+
+    ; VPy_LINE:469
+DRAW_HOOK_ROPE: ; function
+; --- function draw_hook_rope ---
+    LEAS -8,S ; allocate locals
+    LDD VAR_ARG0
+    STD 0,S ; param 0
+    LDD VAR_ARG1
+    STD 2,S ; param 1
+    LDD VAR_ARG2
+    STD 4,S ; param 2
+    LDD VAR_ARG3
+    STD 6,S ; param 3
+    ; VPy_LINE:471
+    LDD 0 ,S
+    STD RESULT
+    STD TMPPTR+0
+    LDD 2 ,S
+    STD RESULT
+    STD TMPPTR+2
+    LDD 4 ,S
+    STD RESULT
+    STD TMPPTR+4
+    LDD 6 ,S
+    STD RESULT
+    STD TMPPTR+6
+    LDD #127
+    STD TMPPTR+8
+    LDD TMPPTR+0
+    STD RESULT+0
+    LDD TMPPTR+2
+    STD RESULT+2
+    LDD TMPPTR+4
+    STD RESULT+4
+    LDD TMPPTR+6
+    STD RESULT+6
+    LDD TMPPTR+8
+    STD RESULT+8
+    JSR DRAW_LINE_WRAPPER
+    LDD #0
+    STD RESULT
+    LEAS 8,S ; free locals
+    RTS
+
+STATE_TITLE EQU 0
+STATE_MAP EQU 1
+STATE_GAME EQU 2
+NUM_LOCATIONS EQU 17
+HOOK_MAX_Y EQU 127
+PLAYER_Y EQU 65466
+PLAYER_ANIM_SPEED EQU 5
+MAX_ENEMIES EQU 8
+GRAVITY EQU 1
+BOUNCE_DAMPING EQU 17
+MIN_BOUNCE_VY EQU 10
+GROUND_Y EQU 65466
 MUL16:
     LDD MUL_A
     STD MUL_RES
@@ -7334,6 +7407,129 @@ DIV16_DONE:
     LDD DIV_Q
     STD RESULT
     RTS
+
+
+; ===== CROSS-BANK CALL WRAPPERS =====
+; Auto-generated wrappers for bank switching
+
+
+; Cross-bank wrapper for update_enemies (Bank #2)
+update_enemies_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #2             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR UPDATE_ENEMIES              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for spawn_enemies (Bank #3)
+spawn_enemies_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #3             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR SPAWN_ENEMIES              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_map_screen (Bank #4)
+draw_map_screen_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #4             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_MAP_SCREEN              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for read_joystick1_state (Bank #7)
+read_joystick1_state_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #7             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR READ_JOYSTICK1_STATE              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_enemies (Bank #6)
+draw_enemies_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #6             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_ENEMIES              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_hook_rope (Bank #8)
+draw_hook_rope_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #8             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_HOOK_ROPE              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_level_background (Bank #1)
+draw_level_background_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #1             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_LEVEL_BACKGROUND              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_title_screen (Bank #5)
+draw_title_screen_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #5             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_TITLE_SCREEN              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for draw_game_level (Bank #0)
+draw_game_level_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR DRAW_GAME_LEVEL              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+; ===== END CROSS-BANK WRAPPERS =====
 
 ;***************************************************************************
 ; DATA SECTION
@@ -11082,7 +11278,7 @@ _FUJI_LEVEL1_V2_FG_OBJECTS:
 
 
 ; Array literal for variable 'joystick1_state' (6 elements)
-ARRAY_0:
+ARRAY_JOYSTICK1_STATE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11091,7 +11287,7 @@ ARRAY_0:
     FDB 0   ; Element 5
 
 ; Array literal for variable 'enemy_active' (8 elements)
-ARRAY_1:
+ARRAY_ENEMY_ACTIVE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11102,7 +11298,7 @@ ARRAY_1:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_x' (8 elements)
-ARRAY_2:
+ARRAY_ENEMY_X:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11113,7 +11309,7 @@ ARRAY_2:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_y' (8 elements)
-ARRAY_3:
+ARRAY_ENEMY_Y:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11124,7 +11320,7 @@ ARRAY_3:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_vx' (8 elements)
-ARRAY_4:
+ARRAY_ENEMY_VX:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11135,7 +11331,7 @@ ARRAY_4:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_vy' (8 elements)
-ARRAY_5:
+ARRAY_ENEMY_VY:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11146,7 +11342,7 @@ ARRAY_5:
     FDB 0   ; Element 7
 
 ; Array literal for variable 'enemy_size' (8 elements)
-ARRAY_6:
+ARRAY_ENEMY_SIZE:
     FDB 0   ; Element 0
     FDB 0   ; Element 1
     FDB 0   ; Element 2
@@ -11156,9 +11352,10 @@ ARRAY_6:
     FDB 0   ; Element 6
     FDB 0   ; Element 7
 
+; === INLINE ARRAY LITERALS (from function bodies) ===
 ; VPy_LINE:19
 ; Const array literal for 'location_x_coords' (17 elements)
-CONST_ARRAY_0:
+CONST_ARRAY_LOCATION_X_COORDS:
     FDB 40   ; Element 0
     FDB 40   ; Element 1
     FDB -40   ; Element 2
@@ -11179,7 +11376,7 @@ CONST_ARRAY_0:
 
 ; VPy_LINE:20
 ; Const array literal for 'location_y_coords' (17 elements)
-CONST_ARRAY_1:
+CONST_ARRAY_LOCATION_Y_COORDS:
     FDB 110   ; Element 0
     FDB 79   ; Element 1
     FDB -20   ; Element 2
@@ -11200,151 +11397,151 @@ CONST_ARRAY_1:
 
 ; VPy_LINE:21
 ; Const string array for 'location_names' (17 strings)
-CONST_ARRAY_2_STR_0:
+CONST_ARRAY_LOCATION_NAMES_STR_0:
     FCC "MOUNT FUJI (JP)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_1:
+CONST_ARRAY_LOCATION_NAMES_STR_1:
     FCC "MOUNT KEIRIN (CN)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_2:
+CONST_ARRAY_LOCATION_NAMES_STR_2:
     FCC "EMERALD BUDDHA TEMPLE (TH)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_3:
+CONST_ARRAY_LOCATION_NAMES_STR_3:
     FCC "ANGKOR WAT (KH)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_4:
+CONST_ARRAY_LOCATION_NAMES_STR_4:
     FCC "AYERS ROCK (AU)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_5:
+CONST_ARRAY_LOCATION_NAMES_STR_5:
     FCC "TAJ MAHAL (IN)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_6:
+CONST_ARRAY_LOCATION_NAMES_STR_6:
     FCC "LENINGRAD (RU)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_7:
+CONST_ARRAY_LOCATION_NAMES_STR_7:
     FCC "PARIS (FR)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_8:
+CONST_ARRAY_LOCATION_NAMES_STR_8:
     FCC "LONDON (UK)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_9:
+CONST_ARRAY_LOCATION_NAMES_STR_9:
     FCC "BARCELONA (ES)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_10:
+CONST_ARRAY_LOCATION_NAMES_STR_10:
     FCC "ATHENS (GR)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_11:
+CONST_ARRAY_LOCATION_NAMES_STR_11:
     FCC "PYRAMIDS (EG)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_12:
+CONST_ARRAY_LOCATION_NAMES_STR_12:
     FCC "MOUNT KILIMANJARO (TZ)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_13:
+CONST_ARRAY_LOCATION_NAMES_STR_13:
     FCC "NEW YORK (US)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_14:
+CONST_ARRAY_LOCATION_NAMES_STR_14:
     FCC "MAYAN RUINS (MX)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_15:
+CONST_ARRAY_LOCATION_NAMES_STR_15:
     FCC "ANTARCTICA (AQ)"
     FCB $80   ; String terminator
-CONST_ARRAY_2_STR_16:
+CONST_ARRAY_LOCATION_NAMES_STR_16:
     FCC "EASTER ISLAND (CL)"
     FCB $80   ; String terminator
-CONST_ARRAY_2:  ; Pointer table for location_names
-    FDB CONST_ARRAY_2_STR_0  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_1  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_2  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_3  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_4  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_5  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_6  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_7  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_8  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_9  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_10  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_11  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_12  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_13  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_14  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_15  ; Pointer to string
-    FDB CONST_ARRAY_2_STR_16  ; Pointer to string
+CONST_ARRAY_LOCATION_NAMES:  ; Pointer table for location_names
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_0  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_1  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_2  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_3  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_4  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_5  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_6  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_7  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_8  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_9  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_10  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_11  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_12  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_13  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_14  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_15  ; Pointer to string
+    FDB CONST_ARRAY_LOCATION_NAMES_STR_16  ; Pointer to string
 
 ; VPy_LINE:24
 ; Const string array for 'level_backgrounds' (17 strings)
-CONST_ARRAY_3_STR_0:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_0:
     FCC "FUJI_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_1:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_1:
     FCC "KEIRIN_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_2:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_2:
     FCC "BUDDHA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_3:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_3:
     FCC "ANGKOR_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_4:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_4:
     FCC "AYERS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_5:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_5:
     FCC "TAJ_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_6:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_6:
     FCC "LENINGRAD_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_7:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_7:
     FCC "PARIS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_8:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_8:
     FCC "LONDON_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_9:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_9:
     FCC "BARCELONA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_10:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_10:
     FCC "ATHENS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_11:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_11:
     FCC "PYRAMIDS_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_12:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_12:
     FCC "KILIMANJARO_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_13:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_13:
     FCC "NEWYORK_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_14:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_14:
     FCC "MAYAN_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_15:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_15:
     FCC "ANTARCTICA_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3_STR_16:
+CONST_ARRAY_LEVEL_BACKGROUNDS_STR_16:
     FCC "EASTER_BG"
     FCB $80   ; String terminator
-CONST_ARRAY_3:  ; Pointer table for level_backgrounds
-    FDB CONST_ARRAY_3_STR_0  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_1  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_2  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_3  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_4  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_5  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_6  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_7  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_8  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_9  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_10  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_11  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_12  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_13  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_14  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_15  ; Pointer to string
-    FDB CONST_ARRAY_3_STR_16  ; Pointer to string
+CONST_ARRAY_LEVEL_BACKGROUNDS:  ; Pointer table for level_backgrounds
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_0  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_1  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_2  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_3  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_4  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_5  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_6  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_7  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_8  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_9  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_10  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_11  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_12  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_13  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_14  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_15  ; Pointer to string
+    FDB CONST_ARRAY_LEVEL_BACKGROUNDS_STR_16  ; Pointer to string
 
 ; VPy_LINE:26
 ; Const array literal for 'level_enemy_count' (17 elements)
-CONST_ARRAY_4:
+CONST_ARRAY_LEVEL_ENEMY_COUNT:
     FDB 1   ; Element 0
     FDB 1   ; Element 1
     FDB 2   ; Element 2
@@ -11365,7 +11562,7 @@ CONST_ARRAY_4:
 
 ; VPy_LINE:27
 ; Const array literal for 'level_enemy_speed' (17 elements)
-CONST_ARRAY_5:
+CONST_ARRAY_LEVEL_ENEMY_SPEED:
     FDB 1   ; Element 0
     FDB 1   ; Element 1
     FDB 1   ; Element 2

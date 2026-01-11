@@ -315,6 +315,7 @@ pub struct CodegenOptions {
     pub bank_config: Option<BankConfig>, // Bank switching configuration (automatic bank assignment)
     pub function_bank_map: HashMap<String, u8>, // Maps function name → bank ID (automatic assignment result)
     pub emit_sections: bool, // Emit section markers for linker (.vo generation)
+    pub skip_builtins: bool, // Skip emitting builtin helpers (for per-module .vo files)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
