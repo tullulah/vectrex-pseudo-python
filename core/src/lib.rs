@@ -1,3 +1,6 @@
+// Suppress warnings for infrastructure code (Phase 6.5+) that will be used in the future
+#![allow(dead_code, unused_variables, unused_imports, unused_mut)]
+
 pub mod lexer;
 pub mod ast;
 pub mod parser;
