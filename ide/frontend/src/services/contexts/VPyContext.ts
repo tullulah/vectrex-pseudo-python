@@ -822,6 +822,93 @@ Refer to docs/ folder for comprehensive documentation.
 - Music files: assets/music/*.vmus (JSON)
 - Access: DRAW_VECTOR("name"), PLAY_MUSIC("name")
 
+### Multi-Module System (Phase 6.3 COMPLETE):
+**IMPORTANT: VPy now supports multi-file projects with import statements!**
+
+#### Import Syntax:
+- **Simple import**: \`import module_name\` (imports entire module)
+- **From import**: \`from module_name import func1, func2\` (NOT SUPPORTED YET - use simple import)
+
+#### Dot Notation:
+- **Access module members**: \`module_name.function_name()\`
+- **Access module variables**: \`module_name.variable_name\`
+- **Auto-complete**: Type \`module_name.\` and LSP suggests available members
+
+#### Example Multi-Module Project:
+**Project structure**:
+\`\`\`
+src/
+  ├── main.vpy      # Entry point (has main() and loop())
+  ├── input.vpy     # Input handling
+  └── graphics.vpy  # Graphics utilities
+\`\`\`
+
+**input.vpy** - Input handling module:
+\`\`\`python
+input_result = [0, 0]  # Global variable (exported automatically)
+
+def get_input():       # Function (exported automatically)
+    input_result[0] = J1_X()
+    input_result[1] = J1_Y()
+\`\`\`
+
+**graphics.vpy** - Graphics utilities:
+\`\`\`python
+def draw_square(x, y, size):  # Function (exported automatically)
+    DRAW_LINE(x, y, x+size, y, 127)
+    DRAW_LINE(x+size, y, x+size, y+size, 127)
+    DRAW_LINE(x+size, y+size, x, y+size, 127)
+    DRAW_LINE(x, y+size, x, y, 127)
+\`\`\`
+
+**main.vpy** - Entry point:
+\`\`\`python
+import input      # Import input module
+import graphics   # Import graphics module
+
+player_x = 0
+player_y = 0
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    
+    # Call imported function with dot notation
+    input.get_input()
+    
+    # Access imported variables with dot notation
+    dx = input.input_result[0]
+    dy = input.input_result[1]
+    
+    player_x = player_x + dx
+    player_y = player_y + dy
+    
+    # Call another imported function
+    graphics.draw_square(player_x, player_y, 10)
+\`\`\`
+
+#### Compilation:
+- **Build command**: \`vectrexc build src/main.vpy --bin\`
+- **Architecture**: Unified compilation (all modules merged before codegen)
+- **Runtime helpers**: Auto-deduplicated (no duplicate builtins)
+- **Symbol names**: Auto-prefixed to avoid collisions (e.g., \`INPUT_GET_INPUT\`)
+
+#### Rules:
+- ✅ **Only main.vpy** needs \`main()\` and \`loop()\` functions
+- ✅ **Imported modules** only export functions and global variables
+- ✅ **Circular imports** not yet supported (avoid A imports B, B imports A)
+- ✅ **Dot notation** works for both functions and variables
+- ✅ **Auto-complete** suggests module members after typing \`module.\`
+
+#### LSP Support (IMPLEMENTED 2026-01-11):
+- **Import validation**: Errors if module file not found
+- **Module suggestions**: "Did you mean: input, graphics?" if typo detected
+- **Dot completion**: Auto-complete module members after \`module.\`
+- **Hover info**: Shows which file a symbol comes from
+- **Go to definition**: Jump to imported function/variable definition
+
 ### META Fields (ROM Header):
 **SYNTAX: Use assignment, NOT function call**
 ✅ CORRECT:
