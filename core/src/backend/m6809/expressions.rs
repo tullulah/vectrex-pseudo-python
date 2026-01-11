@@ -256,23 +256,40 @@ pub fn emit_expr_depth(
         }
         Expr::List(elements) => {
             // Array literal: load address of array data
-            // The array data is generated in the DATA section at the end
-            let array_label = fresh_label("ARRAY");
+            // Find this array in opts.inline_arrays (by matching element count and values)
+            let mut found_label: Option<String> = None;
+            for (label, inline_elements) in &opts.inline_arrays {
+                if inline_elements.len() == elements.len() {
+                    // Simple heuristic: match by element count and first element
+                    // TODO: More robust matching (by AST ptr comparison or unique ID)
+                    let match_first = if elements.is_empty() {
+                        true
+                    } else {
+                        format!("{:?}", elements[0]) == format!("{:?}", inline_elements[0])
+                    };
+                    if match_first {
+                        found_label = Some(label.clone());
+                        break;
+                    }
+                }
+            }
+            
+            let array_label = found_label.unwrap_or_else(|| {
+                // Fallback: generate fresh label (shouldn't happen if collector works)
+                fresh_label("ARRAY")
+            });
             
             // Register this array for later data generation
             // The label will be resolved when we emit the DATA section
             out.push_str(&format!("; Array literal: {} elements at {}\n", elements.len(), array_label));
             out.push_str(&format!("    LDX #{}\n", array_label));
             out.push_str("    STX RESULT\n");
-            
-            // Store array info in global context for DATA section generation
-            // This will be handled by collect_array_literals function
         }
         Expr::Index { target, index } => {
             // Array indexing: arr[index]
             // Special handling for const arrays (ROM-only data)
             if let Expr::Ident(target_name) = target.as_ref() {
-                if let Some(&const_array_idx) = opts.const_arrays.get(&target_name.name) {
+                if let Some(const_array_label_suffix) = opts.const_arrays.get(&target_name.name) {
                     // This is a const array in ROM - generate special code
                     out.push_str(&format!("    ; ===== Const array indexing: {} =====\n", target_name.name));
                     
@@ -284,8 +301,8 @@ pub fn emit_expr_depth(
                     out.push_str("    STD TMPPTR\n"); // Save offset temporarily
                     
                     // 3. Load const array base address and add offset
-                    let const_array_label = format!("CONST_ARRAY_{}", const_array_idx);
-                    out.push_str(&format!("    LDX #{}\n", const_array_label)); // X = CONST_ARRAY_n address
+                    let const_array_label = format!("CONST_ARRAY_{}", const_array_label_suffix);
+                    out.push_str(&format!("    LDX #{}\n", const_array_label)); // X = CONST_ARRAY_NAME address
                     out.push_str("    LDD TMPPTR\n"); // D = offset (index * 2)
                     
                     // 4. Add offset to base address

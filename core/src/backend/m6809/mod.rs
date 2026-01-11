@@ -290,6 +290,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let const_vars = collect_const_vars(module);
     let const_vars_with_line = collect_const_vars_with_line(module); // WITH line numbers for PDB
     
+    // Collect inline array literals from function bodies
+    let inline_arrays = collect_inline_array_literals(module);
+    
     // Phase 3.8: Cross-bank call wrapper generation (TODO #8)
     // Initialize wrapper generator if bank switching is enabled
     let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
@@ -348,11 +351,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     
     // Poblar const_arrays map para indexación en tiempo de compilación
-    let mut const_array_index = 0;
+    // Store variable name (uppercase) as value instead of index to avoid collisions
     for (name, value) in &const_vars {
         if matches!(value, Expr::List(_)) {
-            opts_with_consts.const_arrays.insert(name.clone(), const_array_index);
-            const_array_index += 1;
+            // Map const array name to its uppercase version (used for label generation)
+            opts_with_consts.const_arrays.insert(name.clone(), name.to_uppercase());
         }
     }
     
@@ -373,6 +376,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             opts_with_consts.mutable_arrays.insert(name.clone());
         }
     }
+    
+    // Add inline array literals to opts
+    opts_with_consts.inline_arrays = inline_arrays;
     
     let opts = &opts_with_consts; // Use the modified opts
     
@@ -761,6 +767,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Emit section marker for main initialization code
         emit_main_section(&mut out, opts);
         
+        // ===================================================================
+        // PROGRAM CODE SECTION - User code and initialization
+        // ===================================================================
+        out.push_str(";\n");
+        out.push_str("; ┌─────────────────────────────────────────────────────────────────┐\n");
+        out.push_str("; │ PROGRAM CODE SECTION - User VPy Code                            │\n");
+        out.push_str("; │ This section contains the compiled user program logic.          │\n");
+        out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
+        out.push_str(";\n\n");
+        
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
@@ -820,18 +836,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 out.push_str(&format!("    ; VPy_LINE:{}\n", source_line));
                 
                 if let Expr::List(elements) = value {
-                    // Mutable array: copy from ROM (ARRAY_N) to RAM (VAR_NAME_DATA)
-                    let array_label = format!("ARRAY_{}", array_counter);
+                    // Mutable array: copy from ROM (ARRAY_VARNAME) to RAM (VAR_NAME_DATA)
+                    // Use variable name instead of counter to avoid collisions in multi-module builds
+                    let array_label = format!("ARRAY_{}", name.to_uppercase());
                     let array_len = elements.len();
                     out.push_str(&format!("    ; Copy array '{}' from ROM to RAM ({} elements)\n", name, array_len));
                     out.push_str(&format!("    LDX #{}       ; Source: ROM array data\n", array_label));
                     out.push_str(&format!("    LDU #VAR_{}_DATA ; Dest: RAM array space\n", name.to_uppercase()));
                     out.push_str(&format!("    LDD #{}        ; Number of elements\n", array_len));
-                    out.push_str(&format!("COPY_LOOP_{}:\n", array_counter));
+                    out.push_str(&format!("COPY_LOOP_{}:\n", name.to_uppercase()));
                     out.push_str("    LDY ,X++        ; Load word from ROM, increment source\n");
                     out.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
                     out.push_str("    SUBD #1         ; Decrement counter\n");
-                    out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", array_counter));
+                    out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", name.to_uppercase()));
                     array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     // Emit numbers as decimal (assembler interprets negatives as signed)
@@ -1353,6 +1370,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Emit section marker for RAM variables
         emit_bss_section(&mut out, opts);
         
+        // ===================================================================
+        // DATA SECTION - Variables, Arrays, Constants
+        // ===================================================================
+        out.push_str(";\n");
+        out.push_str("; ┌─────────────────────────────────────────────────────────────────┐\n");
+        out.push_str("; │ DATA SECTION - RAM Variables & ROM Constants                    │\n");
+        out.push_str("; │ This section defines all variables, arrays, and const data.     │\n");
+        out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
+        out.push_str(";\n\n");
+        
         out.push_str("; Variables (in RAM)\n");
         out.push_str(&ram.emit_storage_allocations());
     }
@@ -1449,10 +1476,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // ✅ ARRAY LITERAL DATA SECTION
     // Collect all array literals from NON-CONST global variables and generate data
     // (Const arrays are emitted separately in CONST ARRAY DATA SECTION)
-    let mut array_counter = 0;
+    // Use variable names instead of counters to avoid label collisions in multi-module builds
     for (name, value) in &non_const_vars {
         if let Expr::List(elements) = value {
-            let array_label = format!("ARRAY_{}", array_counter);
+            let array_label = format!("ARRAY_{}", name.to_uppercase());
             out.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
             out.push_str(&format!("{}:\n", array_label));
             for (i, elem) in elements.iter().enumerate() {
@@ -1463,8 +1490,27 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 }
             }
             out.push_str("\n");
-            array_counter += 1;
         }
+    }
+    
+    // ✅ INLINE ARRAY LITERAL DATA SECTION
+    // Emit array literals from function bodies (collected during pre-pass)
+    out.push_str("; === INLINE ARRAY LITERALS (from function bodies) ===\n");
+    for (label, elements) in &opts.inline_arrays {
+        out.push_str(&format!("; Inline array '{}' ({} elements)\n", label, elements.len()));
+        out.push_str(&format!("{}:\n", label));
+        for (i, elem) in elements.iter().enumerate() {
+            if let Expr::Number(n) = elem {
+                out.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+            } else if let Expr::Ident(id) = elem {
+                // Variable reference - emit as variable name
+                out.push_str(&format!("    FDB VAR_{}   ; Element {} (variable '{}')\n", id.name.to_uppercase(), i, id.name));
+            } else {
+                // Non-constant - emit as 0 (will be initialized at runtime if needed)
+                out.push_str(&format!("    FDB 0    ; Element {} (non-constant)\n", i));
+            }
+        }
+        out.push_str("\n");
     }
     
     // ✅ CONST ARRAY DATA SECTION
@@ -1498,7 +1544,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     };
     
-    let mut const_array_counter = 0;
+    // Use variable names instead of counters to avoid label collisions in multi-module builds
     for (name, value, source_line) in &const_vars_with_line {
         if let Expr::List(elements) = value {
             // ✅ Register const array definition line in .pdb
@@ -1510,7 +1556,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             
             if is_string_array {
                 // String array: emit strings first, then pointer table
-                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
+                let const_array_label = format!("CONST_ARRAY_{}", name.to_uppercase());
                 out.push_str(&format!("; Const string array for '{}' ({} strings)\n", name, elements.len()));
                 
                 // Emit individual strings
@@ -1533,7 +1579,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 out.push_str("\n");
             } else {
                 // Number array (original code)
-                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
+                let const_array_label = format!("CONST_ARRAY_{}", name.to_uppercase());
                 out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
                 out.push_str(&format!("{}:\n", const_array_label));
                 for (i, elem) in elements.iter().enumerate() {
@@ -1542,7 +1588,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 }
                 out.push_str("\n");
             }
-            const_array_counter += 1;
         }
     }
     

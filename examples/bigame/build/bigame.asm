@@ -60,6 +60,14 @@ VAR_ARG5             EQU $C880+$33   ; Function argument 5 (2 bytes)
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
 
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
+; │ This section contains reusable code shared across all VPy       │
+; │ programs. These helpers are emitted once per compilation unit.  │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
 ; Returns: D = raw value from $C81B after Joy_Analog call
@@ -282,6 +290,13 @@ JMP Moveto_d    ; JMP (not JSR) - BIOS returns to original caller
 __Draw_Line_d:
 LDA 2,S         ; Get dy from stack (after return address)
 JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller
+;
+; ┌─────────────────────────────────────────────────────────────────┐
+; │ PROGRAM CODE SECTION - User VPy Code                            │
+; │ This section contains the compiled user program logic.          │
+; └─────────────────────────────────────────────────────────────────┘
+;
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1259,32 +1274,6 @@ HUD_DRAW_LEVEL: ; function
 ; Auto-generated wrappers for bank switching
 
 
-; Cross-bank wrapper for level1_render (Bank #0)
-level1_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL1_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
-; Cross-bank wrapper for level2_render (Bank #0)
-level2_render_BANK_WRAPPER:
-    PSHS A              ; Save A register
-    LDA $4000         ; Read current bank register
-    PSHS A              ; Save current bank on stack
-    LDA #0             ; Load target bank ID
-    STA $4000         ; Switch to target bank
-    JSR LEVEL2_RENDER              ; Call real function
-    PULS A              ; Restore original bank from stack
-    STA $4000         ; Switch back to original bank
-    PULS A              ; Restore A register
-    RTS
-
 ; Cross-bank wrapper for level2_init (Bank #0)
 level2_init_BANK_WRAPPER:
     PSHS A              ; Save A register
@@ -1293,6 +1282,19 @@ level2_init_BANK_WRAPPER:
     LDA #0             ; Load target bank ID
     STA $4000         ; Switch to target bank
     JSR LEVEL2_INIT              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
+
+; Cross-bank wrapper for level1_render (Bank #0)
+level1_render_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL1_RENDER              ; Call real function
     PULS A              ; Restore original bank from stack
     STA $4000         ; Switch back to original bank
     PULS A              ; Restore A register
@@ -1310,11 +1312,25 @@ level1_init_BANK_WRAPPER:
     STA $4000         ; Switch back to original bank
     PULS A              ; Restore A register
     RTS
+
+; Cross-bank wrapper for level2_render (Bank #0)
+level2_render_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA $4000         ; Read current bank register
+    PSHS A              ; Save current bank on stack
+    LDA #0             ; Load target bank ID
+    STA $4000         ; Switch to target bank
+    JSR LEVEL2_RENDER              ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA $4000         ; Switch back to original bank
+    PULS A              ; Restore A register
+    RTS
 ; ===== END CROSS-BANK WRAPPERS =====
 
 ;***************************************************************************
 ; DATA SECTION
 ;***************************************************************************
+; === INLINE ARRAY LITERALS (from function bodies) ===
 ; String literals (classic FCC + $80 terminator)
 STR_0:
     FCC "BIG GAME TEST"
