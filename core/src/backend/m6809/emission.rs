@@ -75,6 +75,17 @@ pub fn emit_function(f: &Function, out: &mut String, string_map: &std::collectio
 pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &CodegenOptions, module: &Module, debug_info: &mut DebugInfo) {
     let w = &usage.wrappers_used;
     
+    // ===================================================================
+    // RUNTIME SECTION - Shared builtin helpers and wrappers
+    // ===================================================================
+    out.push_str(";\n");
+    out.push_str("; ┌─────────────────────────────────────────────────────────────────┐\n");
+    out.push_str("; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │\n");
+    out.push_str("; │ This section contains reusable code shared across all VPy       │\n");
+    out.push_str("; │ programs. These helpers are emitted once per compilation unit.  │\n");
+    out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
+    out.push_str(";\n\n");
+    
     // Joystick builtins (always emit since they're commonly used)
     out.push_str("; === JOYSTICK BUILTIN SUBROUTINES ===\n");
     out.push_str("; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)\n");

@@ -100,6 +100,7 @@ mod tests {
             const_arrays: std::collections::BTreeMap::new(),
             const_string_arrays: std::collections::BTreeSet::new(),
             mutable_arrays: std::collections::BTreeSet::new(),
+            inline_arrays: Vec::new(),
             structs: std::collections::HashMap::new(),
             type_context: std::collections::HashMap::new(),
             bank_config: None,

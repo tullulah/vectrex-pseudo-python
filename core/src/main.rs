@@ -167,6 +167,7 @@ enum Commands {
         #[arg(short = 'p', long, help="Compilar proyecto .vpyproj (ignora -f si se especifica)")] project: bool,
         #[arg(short = 'f', long, help="Compilar archivo .vpy individual (default)")] file: bool,
         #[arg(long = "include-dir", help="Directorio con archivos include (VECTREX.I, etc)")] include_dir: Option<PathBuf>,
+        #[arg(long, help="Compilar cada módulo a .vo separado y luego enlazar (compilación incremental)")] separate_modules: bool,
     },
     Lex { input: PathBuf },
     Ast { input: PathBuf },
@@ -236,10 +237,13 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Build { input, out, target, title, bin, use_lwasm, dual, project, file: _, include_dir } => {
+        Commands::Build { input, out, target, title, bin, use_lwasm, dual, project, file: _, include_dir, separate_modules } => {
             // Si -p está especificado o el input es .vpyproj, compilar como proyecto
             if project || input.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
                 build_project_cmd(&input, bin, use_lwasm, dual, include_dir.as_ref())
+            } else if separate_modules {
+                // Compilación modular: compile cada .vpy a .vo, luego link
+                build_separate_modules(&input, out.as_ref(), &title, bin)
             } else {
                 build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual, include_dir.as_ref(), None)
             }
@@ -667,6 +671,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
                 const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
                 mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
+                inline_arrays: Vec::new(), // Will be populated by backend (inline array literals)
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
                 type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
                 buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
@@ -751,6 +756,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
             const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
             mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
+            inline_arrays: Vec::new(), // Will be populated by backend (inline array literals)
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
             type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
             buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
@@ -1464,6 +1470,7 @@ fn compile_object_cmd(input: &Path, output: Option<&PathBuf>, title: &str) -> Re
         const_arrays: std::collections::BTreeMap::new(),
         const_string_arrays: std::collections::BTreeSet::new(),
         mutable_arrays: std::collections::BTreeSet::new(),
+        inline_arrays: Vec::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
         buffer_requirements: None,
@@ -1633,6 +1640,136 @@ fn link_cmd(inputs: &[PathBuf], output: &Path, base_address: u16, title: &str) -
     eprintln!("  End: 0x{:04X}", current_address);
     eprintln!("  Objects linked: {}", objects.len());
     eprintln!("  Total symbols: {}", global.symbols.len());
+    
+    Ok(())
+}// build_separate_modules: Compile each module to .vo, then link (Phase 6.5)
+fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &str, _generate_bin: bool) -> Result<()> {
+    eprintln!("=== SEPARATE MODULE COMPILATION (Phase 6.5) ===");
+    eprintln!("Entry: {}", entry_path.display());
+    
+    // Phase 1: Load all modules using resolver
+    eprintln!("\nPhase 1: Loading modules...");
+    let project_root = entry_path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let mut resolver = resolver::ModuleResolver::new(project_root.clone());
+    resolver.load_project(entry_path)?;
+    
+    let loaded_modules = resolver.get_all_modules();
+    eprintln!("  ✓ Loaded {} modules", loaded_modules.len());
+    
+    // Phase 2: Compile each module to .vo (WITHOUT unifier)
+    eprintln!("\nPhase 2: Compiling modules to object files...");
+    let mut vo_files = Vec::new();
+    let output_dir = entry_path.parent().unwrap_or(Path::new("."));
+    let num_modules = loaded_modules.len();
+    
+    for loaded_mod in loaded_modules {
+        // Extract module name from path (filename without extension)
+        let module_name = loaded_mod.path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let module_path = output_dir.join(format!("{}.vo", module_name));
+        eprintln!("  Compiling {} → {}", module_name, module_path.display());
+        
+        // Determine if this is the entry module (has main/loop)
+        let is_entry = loaded_mod.path == entry_path;
+        
+        // TODO: Transform cross-module references (currently not implemented)
+        // The unifier is needed for symbol resolution, which creates a chicken-and-egg problem.
+        // Alternative approach: Use unifier THEN extract sections per module.
+        // See PHASE6_FUTURE_WORK.md for details.
+        
+        // Generate ASM for THIS MODULE (NOTE: Will have semantic errors without unifier)
+        let assets = if is_entry { discover_assets(entry_path) } else { Vec::new() };
+        
+        let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(&loaded_mod.module, target::Target::Vectrex, &codegen::CodegenOptions {
+            title: title.to_string(),
+            auto_loop: is_entry, // Only entry module has auto-loop
+            diag_freeze: false,
+            force_extended_jsr: false,
+            _bank_size: 0,
+            per_frame_silence: false,
+            debug_init_draw: false,
+            blink_intensity: false,
+            exclude_ram_org: true,
+            fast_wait: false,
+            emit_sections: true,
+            source_path: Some(loaded_mod.path.to_string_lossy().to_string()),
+            output_name: Some(module_name.clone()),
+            assets,
+            const_values: std::collections::BTreeMap::new(),
+            const_arrays: std::collections::BTreeMap::new(),
+            const_string_arrays: std::collections::BTreeSet::new(),
+            mutable_arrays: std::collections::BTreeSet::new(),
+            inline_arrays: Vec::new(),
+            structs: std::collections::HashMap::new(),
+            type_context: std::collections::HashMap::new(),
+            buffer_requirements: None,
+            bank_config: None,
+            function_bank_map: std::collections::HashMap::new(),
+        });
+        
+        if !diagnostics.is_empty() {
+            eprintln!("    ❌ Errors in {}", module_name);
+            for diag in &diagnostics {
+                eprintln!("       {}", diag.message);
+            }
+            return Err(anyhow::anyhow!("Module {} failed to compile", module_name));
+        }
+        
+        // Parse ASM to object file
+        use crate::linker::{VectrexObject, ObjectHeader, TargetArch, ObjectFlags, DebugInfo};
+        use crate::linker::{extract_sections_with_binary, build_symbol_table, collect_relocations};
+        
+        let sections = extract_sections_with_binary(&asm, 0x0000)
+            .map_err(|e| anyhow::anyhow!("Section extraction failed for {}: {}", module_name, e))?;
+        let symbols = build_symbol_table(&sections, &asm)
+            .map_err(|e| anyhow::anyhow!("Symbol table failed for {}: {}", module_name, e))?;
+        let relocations = collect_relocations(&sections, &symbols, &asm)
+            .map_err(|e| anyhow::anyhow!("Relocations failed for {}: {}", module_name, e))?;
+        
+        let object = VectrexObject {
+            header: ObjectHeader {
+                magic: crate::linker::OBJECT_MAGIC,
+                version: crate::linker::OBJECT_FORMAT_VERSION,
+                target: TargetArch::M6809,
+                flags: ObjectFlags {
+                    position_independent: true,
+                    contains_bank_hints: false,
+                },
+                source_file: module_name.clone(),
+            },
+            sections,
+            symbols,
+            relocations,
+            debug_info: DebugInfo::default(),
+        };
+        
+        // Write .vo file
+        object.save(&module_path)?;
+        eprintln!("    ✓ {}: {} sections, {} exports, {} imports, {} relocations", 
+            module_name, 
+            object.sections.len(), 
+            object.symbols.exports.len(),
+            object.symbols.imports.len(),
+            object.relocations.len());
+        
+        vo_files.push(module_path);
+    }
+    
+    // Phase 3: Link all .vo files
+    eprintln!("\nPhase 3: Linking {} object files...", vo_files.len());
+    let final_output = output.cloned().unwrap_or_else(|| {
+        entry_path.with_extension("bin")
+    });
+    
+    link_cmd(&vo_files, &final_output, 0xC880, title)?;
+    
+    eprintln!("\n✅ SEPARATE MODULE COMPILATION COMPLETE");
+    eprintln!("  Modules: {}", num_modules);
+    eprintln!("  Object files: {}", vo_files.len());
+    eprintln!("  Final binary: {}", final_output.display());
     
     Ok(())
 }

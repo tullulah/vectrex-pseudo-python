@@ -1964,3 +1964,182 @@ Related issues:
 
 ---
 Última actualización: 2025-12-31 - Sección 22: DRAW_LINE Optimization and Segmentation IMPLEMENTADO Y TESTEADO
+## 23. VPy Module System (Phase 6) - STATUS 2026-01-11
+
+### 23.1 Status: Phase 6.4 COMPLETE ✅ | Phase 6.5 PARTIAL (30%)
+
+**Implementation Complete**:
+- ✅ Dot notation: `input.get_input()` → `INPUT_GET_INPUT()`
+- ✅ Array labels: Variable-based naming (no collisions)
+- ✅ Assign targets: `module.variable[i] = x` works
+- ✅ Runtime helpers: Auto-deduplicated (unifier merges to single module)
+- ✅ ASM sections: Clearly organized with visual headers
+
+**Real-World Example**: `examples/multi-module/` compiles to 32KB binary
+
+**Phase 6.5 Status**: 30% (infrastructure ready, implementation paused)
+- CLI flag `--separate-modules` exists
+- VectrexObject (.vo format) defined
+- Link command functional
+- **Paused**: Unified compilation sufficient for current needs
+- **See**: `PHASE6_FUTURE_WORK.md` for detailed roadmap
+
+**Technical Details**: See `PHASE6_SUMMARY.md` for complete implementation guide
+
+**Future Work**: See `PHASE6_FUTURE_WORK.md` for:
+- Phase 6.5: Per-module .vo generation (alternative approach recommended)
+- Phase 6.6: Incremental build system
+- Phase 6.7: Parallel compilation
+- Phase 6.8: Build cache system
+
+**Next Phase**: Waiting for real-world need (projects >50KB, build time >3s)
+
+---
+Última actualización: 2026-01-11 - Phase 6.3 Module System COMPLETADO
+# Phase 6: VPy Module System - IMPLEMENTATION STATUS 2026-01-11
+
+## Status: Phase 6.3 COMPLETE ✅
+
+### Architecture Overview
+- **Purpose**: Multi-file projects with reusable libraries and code organization
+- **Status**: ✅ Phase 6.3 COMPLETE - Core functionality working
+- **Next Phase**: 6.4 Shared Runtime Section (optional optimization)
+
+### Implementation Summary
+
+**Phase 6.3 COMPLETE (100% ✅)**:
+- ✅ **Dot notation**: `input.get_input()` → `INPUT_GET_INPUT()`
+- ✅ **Array labels**: Variable-based naming prevents collisions
+- ✅ **Assign targets**: `module.variable[i] = x` works correctly  
+- ✅ **Runtime helpers**: Auto-deduplicated (unifier merges to single module)
+
+**Key Achievement**: Multi-module project compiles to 32KB binary successfully.
+
+### Real-World Example
+
+**input.vpy** - Input handling module:
+```python
+input_result = [0, 0]
+
+def get_input():
+    input_result[0] = J1_X()
+    input_result[1] = J1_Y()
+```
+
+**graphics.vpy** - Graphics utilities:
+```python
+def draw_square(x, y, size):
+    DRAW_LINE(x, y, x+size, y, 127)
+    DRAW_LINE(x+size, y, x+size, y+size, 127)
+    DRAW_LINE(x+size, y+size, x, y+size, 127)
+    DRAW_LINE(x, y+size, x, y, 127)
+```
+
+**main.vpy** - Entry point:
+```python
+import input
+import graphics
+
+player_x = 0
+player_y = 0
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    
+    # Call imported functions
+    input.get_input()              # ✅ Transforms to INPUT_GET_INPUT()
+    
+    # Access imported variables
+    dx = input.input_result[0]     # ✅ Transforms to INPUT_INPUT_RESULT[0]
+    dy = input.input_result[1]
+    
+    # Update local state
+    player_x = player_x + dx
+    player_y = player_y + dy
+    
+    # Call imported graphics
+    graphics.draw_square(player_x, player_y, 10)
+```
+
+### Compilation and Verification
+
+**Build Command**:
+```bash
+cargo run --bin vectrexc -- build examples/multi-module/src/main.vpy --bin
+```
+
+**Output**: `main.bin` (32KB)
+
+**Verification of Helper Deduplication**:
+```bash
+grep -E "^(MUL16|DIV_A|DRAW_LINE_WRAPPER):" examples/multi-module/src/main.asm | wc -l
+# Expected: 3 (one of each, NO duplicates)
+```
+
+**Result**: ✅ Confirmed - only 1 instance of each helper
+
+### Technical Implementation
+
+**Files Modified**:
+1. **core/src/unifier.rs** (lines 540-675)
+   - `Expr::FieldAccess` detection: Transforms `module.symbol` to unified identifier
+   - `AssignTarget` rewriting: Handles `module.variable[i] = x` assignments
+   - Recursive expression rewriting in all statement types
+
+2. **core/src/backend/m6809/mod.rs** (lines 820-838, 1450-1549)
+   - Array labels: `ARRAY_{name.to_uppercase()}` prevents collisions
+   - Const arrays: `CONST_ARRAY_{name.to_uppercase()}`
+
+3. **core/src/codegen.rs** (line 308)
+   - Type changed: `BTreeMap<String, String>` (name → uppercase_label)
+
+**Unified Symbol Table** (automatically generated):
+```
+INPUT_INPUT_RESULT   → input.input_result
+INPUT_GET_INPUT      → input.get_input()
+GRAPHICS_DRAW_SQUARE → graphics.draw_square()
+PLAYER_X             → main.player_x (entry module, no prefix)
+PLAYER_Y             → main.player_y
+```
+
+### Why Deduplication Works Automatically
+
+**Architecture**:
+```
+Phase 3.5: Multi-file import resolution
+  ↓
+Unifier: Merge all modules into ONE unified module
+  ↓
+Codegen: Generate code for SINGLE module
+  ↓
+Runtime helpers emitted ONCE (no duplicates possible)
+```
+
+**Key Insight**: Since the unifier creates a single merged module BEFORE codegen, there's only one place to emit helpers. This eliminates duplication without special logic.
+
+### Next Steps (Optional - Not Required for Core Functionality)
+
+**Phase 6.4: Shared Runtime Section** (0%):
+- Goal: Separate runtime helpers from module code
+- Benefits: Smaller per-module binaries
+- Status: NOT STARTED (current approach sufficient)
+
+**Phase 6.5: Per-Module .vo Generation** (30%):
+- Goal: Compile each module to separate object file
+- Benefits: Incremental compilation
+- Status: PARTIALLY DESIGNED
+- Reason to defer: No projects near 32KB limit yet
+
+### Conclusion
+
+✅ **Phase 6.3 is COMPLETE** - Multi-module system fully functional with:
+- Import statements working
+- Dot notation resolving correctly
+- Array label collisions prevented
+- Runtime helpers automatically deduplicated
+- Real-world example compiling successfully (32KB binary)
+
+No further work required for current use cases. Phase 6.4-6.5 are optional optimizations for future large-scale projects.

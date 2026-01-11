@@ -160,6 +160,12 @@ impl VectrexObject {
         writer.write_all(&bytes)?;
         Ok(())
     }
+    
+    /// Save object to file (.vo)
+    pub fn save(&self, path: &std::path::Path) -> io::Result<()> {
+        let mut file = std::fs::File::create(path)?;
+        self.write(&mut file)
+    }
 
     /// Read object from binary format
     pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {

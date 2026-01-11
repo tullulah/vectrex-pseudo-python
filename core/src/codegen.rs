@@ -305,9 +305,10 @@ pub struct CodegenOptions {
     pub output_name: Option<String>, // nombre base del output (ej: "test_bp_min") para PDB correcto
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
-    pub const_arrays: std::collections::BTreeMap<String, usize>, // Maps const array name -> CONST_ARRAY_N index for ROM-only data
+    pub const_arrays: std::collections::BTreeMap<String, String>, // Maps const array name -> label suffix (uppercase name) for ROM-only data
     pub const_string_arrays: std::collections::BTreeSet<String>, // Set of const array names that are string arrays (not number arrays)
     pub mutable_arrays: std::collections::BTreeSet<String>, // Set of mutable (non-const) array names that need RAM allocation
+    pub inline_arrays: Vec<(String, Vec<crate::ast::Expr>)>, // Inline array literals from function bodies (label, elements)
     pub structs: StructRegistry, // Struct layout information (Phase 2)
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     pub buffer_requirements: Option<BufferRequirements>, // Dynamic buffer sizing from .vplay analysis
@@ -678,6 +679,7 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
+        inline_arrays: Vec::new(), // Initialize empty (will be populated in backend)
         // NOTE: emit_sections now comes from opts.clone() - don't override here
         // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
