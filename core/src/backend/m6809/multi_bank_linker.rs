@@ -77,11 +77,24 @@ impl MultiBankLinker {
         let mut current_org: Option<u16> = None;
         let mut current_code = String::new();
         let mut header = String::new();
+        let mut include_directives = String::new(); // INCLUDE directives - needed by ALL banks
         let mut definitions = String::new(); // EQU definitions - needed by ALL banks
+        let mut runtime_helpers = String::new(); // Runtime helper functions - needed by ALL banks
         let mut in_bank_section = false;
         let mut in_definitions = false;
+        let mut definitions_ended = false;  // Track when EQU section ends
         
         for line in asm_content.lines() {
+            // Collect INCLUDE directives (before bank sections)
+            if !in_bank_section {
+                let trimmed = line.trim();
+                if trimmed.to_uppercase().starts_with("INCLUDE") {
+                    include_directives.push_str(line);
+                    include_directives.push('\n');
+                    continue;
+                }
+            }
+            
             // Detect RAM definitions section
             if line.contains("=== RAM VARIABLE DEFINITIONS") {
                 in_definitions = true;
@@ -97,6 +110,19 @@ impl MultiBankLinker {
                 // End of definitions when we hit empty line or non-EQU line
                 if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
                     in_definitions = false;
+                    definitions_ended = true;  // Mark that definitions section has ended
+                }
+                continue;
+            }
+            
+            // ONLY capture runtime helpers AFTER definitions have ended
+            // This includes VECTREX_*, PLAY_*, AUDIO_*, sfx_*, music1, MAIN, etc.
+            if definitions_ended && !in_bank_section {
+                let trimmed = line.trim();
+                // Skip empty lines and ORG directives
+                if !trimmed.is_empty() && !trimmed.starts_with("ORG") {
+                    runtime_helpers.push_str(line);
+                    runtime_helpers.push('\n');
                 }
                 continue;
             }
@@ -106,8 +132,8 @@ impl MultiBankLinker {
             if line.starts_with("; BANK #") {
                 // Save previous bank if exists
                 if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
-                    // Prepend definitions to bank code (ALL banks need EQU definitions)
-                    let full_code = format!("{}\n{}", definitions, current_code);
+                    // Prepend INCLUDE + definitions + runtime helpers to bank code (ALL banks need them)
+                    let full_code = format!("{}\n{}\n{}\n{}", include_directives, definitions, runtime_helpers, current_code);
                     sections.insert(bank_id, BankSection {
                         bank_id,
                         org,
@@ -156,8 +182,8 @@ impl MultiBankLinker {
         
         // Save last bank
         if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
-            // Prepend definitions to bank code
-            let full_code = format!("{}\n{}", definitions, current_code);
+            // Prepend INCLUDE + definitions + runtime helpers to bank code
+            let full_code = format!("{}\n{}\n{}\n{}", include_directives, definitions, runtime_helpers, current_code);
             let size = full_code.len();
             sections.insert(bank_id, BankSection {
                 bank_id,
@@ -169,15 +195,21 @@ impl MultiBankLinker {
         
         // CRITICAL: Header (code before first bank) belongs to Bank #31 (fixed bank)
         // The header contains START, strings, constants - all must be in fixed bank
-        // Prepend header to Bank #31's code
+        // Prepend header to Bank #31's code (but AFTER INCLUDE, definitions and runtime helpers)
         if !header.is_empty() {
             if let Some(bank31) = sections.get_mut(&31) {
-                // Bank #31 already has definitions prepended, now add header between definitions and code
-                // Structure: [definitions] + [header] + [Bank #31 code]
+                // Bank #31 already has INCLUDE + definitions + runtime_helpers prepended
+                // Structure: [INCLUDE] + [definitions] + [runtime_helpers] + [header] + [Bank #31 code]
                 let existing_code = bank31.asm_code.clone();
-                // Remove definitions from existing code (they're already there)
-                let code_without_defs = existing_code.trim_start_matches(&definitions);
-                let combined = format!("{}\n{}\n{}", definitions, header, code_without_defs);
+                // Remove prefix from existing code
+                let code_without_prefix = existing_code
+                    .trim_start_matches(&include_directives)
+                    .trim_start_matches('\n')
+                    .trim_start_matches(&definitions)
+                    .trim_start_matches('\n')
+                    .trim_start_matches(&runtime_helpers)
+                    .trim_start_matches('\n');
+                let combined = format!("{}\n{}\n{}\n{}\n{}", include_directives, definitions, runtime_helpers, header, code_without_prefix);
                 bank31.asm_code = combined;
                 bank31.size_estimate += header.len();
             } else {
