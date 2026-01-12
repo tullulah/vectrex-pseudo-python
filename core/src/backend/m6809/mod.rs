@@ -818,7 +818,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
             // Default to bank 0 for the banked window
             // Use CURRENT_ROM_BANK (allocated by variable allocator) as both tracker AND hardware register
-            out.push_str("    LDA #0\n    STA CURRENT_ROM_BANK ; Initialize to bank 0 (hardware register + RAM tracker)\n");
+            // CRITICAL: Use extended mode (>) because DP=$D0 at this point (not $C8)
+            out.push_str("    LDA #0\n    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (MUST use > because DP=$D0)\n");
         }
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
