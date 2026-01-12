@@ -664,16 +664,6 @@ function VecX()
                 window.g_currentPC = currentPC;
             }
             
-            // TEMP DEBUG: Log when PC passes through breakpoint addresses
-            if (this.breakpoints.size > 0 && (currentPC === 0x193 || currentPC === 0x1d3 || currentPC === 0x48e || currentPC === 0x4a2 || currentPC === 0x4db || currentPC === 0x3638 || currentPC === 0x2e67 || currentPC === 0x2b5b || currentPC === 0x29e8)) {
-                console.log('[JSVecx Debug] 🎯 PC at breakpoint address: 0x' + currentPC.toString(16).toUpperCase() + 
-                           ', debugState=' + this.debugState + 
-                           ', stepMode=' + this.stepMode + 
-                           ', breakpoints.size=' + this.breakpoints.size +
-                           ', breakpoints=' + Array.from(this.breakpoints).map(b => '0x' + b.toString(16)).join(',') +
-                           ', hasBreakpoint=' + this.breakpoints.has(currentPC));
-            }
-            
             if (this.debugState === 'running' && this.breakpoints.has(currentPC)) {
                 // Skip breakpoint if flag is set (stepping from breakpoint)
                 if (this.skipNextBreakpoint) {

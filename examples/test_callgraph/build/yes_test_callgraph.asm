@@ -1017,7 +1017,7 @@ _ENEMY_PATH0:    ; Path 0
 
 ; === INLINE ARRAY LITERALS (from function bodies) ===
 
-; === 6809 Interrupt Vectors (MUST be at 0xFFF0-0xFFFF) ===
+; === 6809 Interrupt Vectors (copied to 0xFFF0-0xFFFF by linker) ===
     ORG $FFF0
     FDB $0000    ; Reserved
     FDB $0000    ; SWI3
