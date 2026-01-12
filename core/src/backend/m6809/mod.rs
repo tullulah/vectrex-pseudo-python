@@ -808,16 +808,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
         out.push_str("\n");
         
-        // Emit section marker for helper functions
-        emit_helpers_section(&mut out, opts);
-        
-        // Emit builtin helpers BEFORE program code (fixes forward reference issues)
-        // Skip if building separate modules (skip_builtins=true) to avoid duplicate symbols
-        if !suppress_runtime && !opts.skip_builtins {
-            emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
-        }
-        
         // Emit section marker for main initialization code
+        // NOTE: Builtin helpers now emitted AFTER user code for cleaner organization
         emit_main_section(&mut out, opts);
         
         // ===================================================================
@@ -1402,10 +1394,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         let runtime_path = calculate_runtime_path(opts);
         out.push_str(&format!("    INCLUDE \"{}\"\n", runtime_path));
     }
+    
+    // Emit builtin helpers AFTER all user code (cleaner organization)
+    // Emit section marker for helper functions
+    emit_helpers_section(&mut out, opts);
+    
     if !suppress_runtime {
+        // Emit builtin helpers AFTER user code but before DATA section
+        if !opts.skip_builtins {
+            emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
+        }
+        
         if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
         if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-        // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
     
     // Phase 3.8: Cross-bank wrappers are emitted inside fixed bank section above
