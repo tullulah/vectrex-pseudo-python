@@ -25,36 +25,36 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 48 bytes
-RESULT               EQU $C880+$01   ; Main result temporary (2 bytes)
-TMPLEFT              EQU $C880+$03   ; Left operand temp (2 bytes)
-TMPLEFT2             EQU $C880+$05   ; Left operand temp 2 (for nested operations) (2 bytes)
-TMPRIGHT             EQU $C880+$07   ; Right operand temp (2 bytes)
-TMPRIGHT2            EQU $C880+$09   ; Right operand temp 2 (for nested operations) (2 bytes)
-TMPPTR               EQU $C880+$0B   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
-TMPPTR2              EQU $C880+$0D   ; Pointer temp 2 (for nested array operations) (2 bytes)
-TEMP_YX              EQU $C880+$0F   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$11   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$12   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$13   ; String buffer for PRINT_NUMBER (2 bytes)
-DRAW_VEC_X           EQU $C880+$15   ; X position offset for vector drawing (1 bytes)
-DRAW_VEC_Y           EQU $C880+$16   ; Y position offset for vector drawing (1 bytes)
-MIRROR_X             EQU $C880+$17   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
-MIRROR_Y             EQU $C880+$18   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
-DRAW_VEC_INTENSITY   EQU $C880+$19   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-VAR_ENEMY1_X         EQU $C880+$1A   ; User variable (2 bytes)
-VAR_ENEMY1_Y         EQU $C880+$1C   ; User variable (2 bytes)
-VAR_ENEMY2_X         EQU $C880+$1E   ; User variable (2 bytes)
-VAR_ENEMY2_Y         EQU $C880+$20   ; User variable (2 bytes)
-VAR_ENEMY3_X         EQU $C880+$22   ; User variable (2 bytes)
-VAR_ENEMY3_Y         EQU $C880+$24   ; User variable (2 bytes)
-VAR_FRAME_COUNT      EQU $C880+$26   ; User variable (2 bytes)
-VAR_ARG0             EQU $C880+$28   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$2A   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$2C   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$2E   ; Function argument 3 (2 bytes)
-CURRENT_ROM_BANK     EQU $C880   ; Current ROM bank tracker (1 byte, FIXED at first RAM byte)
+; Total RAM used: 47 bytes
+RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
+TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
+TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
+TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
+TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
+TMPPTR               EQU $C880+$0A   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
+TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
+NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
+DRAW_VEC_X           EQU $C880+$14   ; X position offset for vector drawing (1 bytes)
+DRAW_VEC_Y           EQU $C880+$15   ; Y position offset for vector drawing (1 bytes)
+MIRROR_X             EQU $C880+$16   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
+MIRROR_Y             EQU $C880+$17   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
+DRAW_VEC_INTENSITY   EQU $C880+$18   ; Intensity override (0=use vector's, >0=override) (1 bytes)
+VAR_ENEMY1_X         EQU $C880+$19   ; User variable (2 bytes)
+VAR_ENEMY1_Y         EQU $C880+$1B   ; User variable (2 bytes)
+VAR_ENEMY2_X         EQU $C880+$1D   ; User variable (2 bytes)
+VAR_ENEMY2_Y         EQU $C880+$1F   ; User variable (2 bytes)
+VAR_ENEMY3_X         EQU $C880+$21   ; User variable (2 bytes)
+VAR_ENEMY3_Y         EQU $C880+$23   ; User variable (2 bytes)
+VAR_FRAME_COUNT      EQU $C880+$25   ; User variable (2 bytes)
+VAR_ARG0             EQU $C880+$27   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$29   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$2B   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$2D   ; Function argument 3 (2 bytes)
 
+    JMP START
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
 
@@ -72,8 +72,6 @@ START:
     LDA #$80
     STA VIA_t1_cnt_lo
     LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)
-    LDA #0
-    STA CURRENT_ROM_BANK ; Initialize to bank 0 (hardware register + RAM tracker)
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:19
@@ -131,12 +129,6 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-
-; ================================================
-; BANK #0 - 9 function(s)
-; ================================================
-    ORG $0000  ; Sequential bank model
-
     ; VPy_LINE:24
 LOOP_BODY:
     LEAS -2,S ; allocate locals
@@ -144,11 +136,13 @@ LOOP_BODY:
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
+    ; DEBUG: Statement 0 - Discriminant(0)
     ; VPy_LINE:25
     LDD #12
     STD RESULT
     LDX RESULT
     STX 0 ,S
+    ; DEBUG: Statement 1 - Discriminant(0)
     ; VPy_LINE:26
     LDD 0 ,S
     STD RESULT
@@ -166,6 +160,7 @@ LOOP_BODY:
     STD RESULT
     LDX RESULT
     STX 0 ,S
+    ; DEBUG: Statement 2 - Discriminant(8)
     ; VPy_LINE:28
     LDD #100
     STD RESULT
@@ -176,12 +171,16 @@ LOOP_BODY:
     CLRA
     CLRB
     STD RESULT
+    ; DEBUG: Statement 3 - Discriminant(8)
     ; VPy_LINE:31
     JSR UPDATE_PLAYER
+    ; DEBUG: Statement 4 - Discriminant(8)
     ; VPy_LINE:32
     JSR UPDATE_ENEMIES
+    ; DEBUG: Statement 5 - Discriminant(8)
     ; VPy_LINE:33
     JSR DRAW_ALL
+    ; DEBUG: Statement 6 - Discriminant(0)
     ; VPy_LINE:34
     LDD 0 ,S
     STD RESULT
@@ -199,6 +198,7 @@ LOOP_BODY:
     STD RESULT
     LDX RESULT
     STX 0 ,S
+    ; DEBUG: Statement 7 - Discriminant(0)
     ; VPy_LINE:35
     LDD VAR_FRAME_COUNT
     STD RESULT
@@ -1019,7 +1019,7 @@ _ENEMY_PATH0:    ; Path 0
 ; === INLINE ARRAY LITERALS (from function bodies) ===
 
 ; === 6809 Interrupt Vectors (copied to 0xFFF0-0xFFFF by linker) ===
-    ORG $5FF0
+    ORG $FFF0
     FDB $0000    ; Reserved
     FDB $0000    ; SWI3
     FDB $0000    ; SWI2
