@@ -2,8 +2,9 @@
 # CORRECTED STRUCTURE: main() runs once, loop() runs every frame
 
 META TITLE = "Call Graph Test"
-META ROM_TOTAL_SIZE = 524288
-META ROM_BANK_SIZE = 16384
+META MUSIC = "0"
+# META ROM_TOTAL_SIZE = 524288
+# META ROM_BANK_SIZE = 16384
 
 # Game state - shared across frames
 enemy1_x = -50
@@ -21,14 +22,17 @@ def main():
 
 # ==================== LOOP (runs every frame) ====================
 def loop():
+    a = 12
+    a = a + 15
+
     SET_INTENSITY(100)
     
     # Update game logic
     update_player()
-    # update_enemies()
-    # draw_all()
-    
-    # frame_count = frame_count + 1
+    update_enemies()
+    draw_all()
+    a = a + 15
+    frame_count = frame_count + 1
 
 # ==================== GAME LOGIC ====================
 

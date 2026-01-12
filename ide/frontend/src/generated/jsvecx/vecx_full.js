@@ -4777,8 +4777,8 @@ function VecX()
         else if( address < 0x8000 )
         {
             /* cartridge - bank switching register */
-            // Write to 0x4000 switches the current bank (0x0000-0x3FFF window)
-            if (address == 0x4000) {
+            // Write to 0xD000 switches the current bank (0x0000-0x3FFF window)
+            if (address == 0xD000) {
                 this.current_bank = data & 0xff; // Bank number (0-255)
                 // console.log('[JSVecx] Bank switch to:', this.current_bank);
             }

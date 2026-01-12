@@ -148,9 +148,9 @@ impl BankWrapperGenerator {
         
         self.generated_wrappers.insert(wrapper_name.clone());
         
-        // Generate wrapper ASM (use CURRENT_ROM_BANK RAM variable to track current bank)
-        // NOTE: The hardware ROM bank register at ${:04X} is write-only; do not attempt to read it.
-        //       We maintain CURRENT_ROM_BANK in RAM for correct restore.
+        // Generate wrapper ASM (CURRENT_ROM_BANK = RAM tracker, $D000 = hardware register)
+        // NOTE: Hardware intercepts writes to $D000 to perform actual bank switching
+        //       CURRENT_ROM_BANK keeps RAM copy for debugging/inspection
         
         // Get source line number for debugging (if available)
         let line_marker = if let Some(&line) = self.function_lines.get(func_name) {
@@ -164,24 +164,23 @@ r#"
 ; Cross-bank wrapper for {fname} (Bank #{tbank})
 {wname}:
     PSHS A              ; Save A register
-    LDA CURRENT_ROM_BANK ; Read tracked current bank from RAM
+    LDA CURRENT_ROM_BANK ; Read current bank from RAM
     PSHS A              ; Save current bank on stack
     LDA #{tbank}             ; Load target bank ID
-    STA ${bankreg:04X}         ; Switch to target bank (write-only register)
-    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    STA CURRENT_ROM_BANK ; Switch to target bank (RAM tracker)
+    STA $D000            ; Hardware bank switch register (cartucho intercepts)
 {line_marker}    JSR {upper_fname}              ; Call real function
     PULS A              ; Restore original bank from stack
-    STA ${bankreg:04X}         ; Switch back to original bank
-    STA CURRENT_ROM_BANK ; Update tracked current bank in RAM
+    STA CURRENT_ROM_BANK ; Switch back to original bank (RAM tracker)
+    STA $D000            ; Hardware bank switch register (cartucho intercepts)
     PULS A              ; Restore A register
     RTS
 "#,
             fname=func_name,
             tbank=target_bank,
-            line_marker=line_marker,
             wname=wrapper_name,
-            bankreg=self.bank_register,
             upper_fname=func_name.to_uppercase(),
+            line_marker=line_marker,
         )
     }
     
@@ -271,7 +270,7 @@ mod tests {
         // Verify wrapper contains expected elements
         assert!(wrapper.contains("target_func_BANK_WRAPPER:"));
         assert!(wrapper.contains("LDA #31"));
-        assert!(wrapper.contains("STA $4000"));
+        assert!(wrapper.contains("STA CURRENT_ROM_BANK"));
         assert!(wrapper.contains("JSR target_func"));
         
         // Second generation should return empty (already generated)
