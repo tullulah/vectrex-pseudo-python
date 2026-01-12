@@ -778,13 +778,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if main_has_content {
         // main() has real content - use START structure
-        // CRITICAL: Always emit JMP START as first executable instruction
-        // Sequential Bank Model (2025-01-02):
-        // - Bank #0 code starts at $0000 with JMP START
-        // - Overflow fills banks #1, #2, ..., #N-2
-        // - Bank #N-1 reserved for runtime helpers
-        // - BIOS loads from bank #0 naturally via reset vector
-        out.push_str("    JMP START\n\n");
+        // Sequential Bank Model: START label immediately follows header
+        // No JMP needed - execution flows naturally from ORG $0000 to START
+        out.push_str("\n");
         
         // ✅ Emit line markers for const NUMBER declarations (not arrays)
         // These are inlined in expressions, so we need to record them for PDB coverage
@@ -1028,19 +1024,24 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         });
         
         // Emit each bank section
+        let num_banks = sorted_banks.len();
         for bank_id in sorted_banks {
             let functions = functions_by_bank.get(&bank_id).unwrap();
             
-            // Emit bank header
-            out.push_str(&format!("\n; ================================================\n"));
-            out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
-            out.push_str(&format!("; ================================================\n"));
-            
-            // Sequential Bank Model: ALL banks use ORG $0000
-            // - Bank #0: Code starts at $0000 (header + main)
-            // - Banks #1-#(N-2): Overflow code at $0000
-            // - Bank #(N-1): Helpers at $0000
-            out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
+            // Only emit bank markers for true multibank (more than one bank)
+            // Bank #0 with all code doesn't need marker (code flows naturally after header)
+            if num_banks > 1 {
+                // Emit bank header
+                out.push_str(&format!("\n; ================================================\n"));
+                out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
+                out.push_str(&format!("; ================================================\n"));
+                
+                // Sequential Bank Model: ALL banks use ORG $0000
+                // - Bank #0: Code starts at $0000 (header + main)
+                // - Banks #1-#(N-2): Overflow code at $0000
+                // - Bank #(N-1): Helpers at $0000
+                out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
+            }
             
             // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
             for f in functions {
