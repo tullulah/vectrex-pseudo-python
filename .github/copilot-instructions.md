@@ -2143,3 +2143,152 @@ Runtime helpers emitted ONCE (no duplicates possible)
 - Real-world example compiling successfully (32KB binary)
 
 No further work required for current use cases. Phase 6.4-6.5 are optional optimizations for future large-scale projects.
+
+## 24. Multibank ROM Architecture & Bank Switching (2026-01-02)
+
+### 24.1 Memory Map - Vectrex Hardware
+- **$0000-$3FFF**: Cartridge banked window (switchable, 16KB)
+- **$4000-$7FFF**: Cartridge fixed bank #31 (always visible, 16KB)
+- **$8000-$83FF**: RAM (1KB only)
+- **$8400-$CBFF**: Unmapped (available for cartucho expansion - future RAM area)
+- **$CC00-$CFFF**: VIA 6522 I/O registers (16 bytes, mirrored 256x)
+- **$D000-$DFFF**: Unmapped (available for cartucho I/O - **BANK SWITCH REGISTER**)
+- **$E000-$FFFF**: BIOS ROM (8KB)
+
+### 24.2 Bank Switching Register
+- **Location**: `$D000` (unmapped, cartucho hardware intercepts writes)
+- **Purpose**: Select which bank is visible in $0000-$3FFF window
+- **Format**: Write 8-bit bank ID (0-31) to $D000
+- **Hardware**: Cartucho ROM decoder switches address map based on bank ID
+
+**Memory Layout for Multibank**:
+- Total: 32 banks × 16KB = 512KB max cartridge ROM
+- Bank #0-#30: Switchable in $0000-$3FFF window (via $D000 writes)
+- Bank #31: Fixed at $4000-$7FFF (always visible)
+- Boot sequence: CPU RESET → BIOS detects cartridge at $0000 → jumps to Bank #0 → Bank #0 boot stub switches to Bank #31 and jumps to START
+
+### 24.3 Compiler Implementation
+
+#### File: `core/src/backend/m6809/mod.rs`
+- **Lines 784**: Boot stub emits `STA $D000` to switch to fixed bank #31
+- **Line 300**: Bank register constant set to `0xD000`
+- **Lines 838**: Initialize `CURRENT_ROM_BANK` RAM tracker on startup
+
+#### File: `core/src/backend/m6809/bank_wrappers.rs`
+- **Purpose**: Auto-generate cross-bank call wrappers
+- **Structure**: Each wrapper:
+  1. Saves current bank ID to stack
+  2. Writes new bank ID to `CURRENT_ROM_BANK` (RAM tracker) 
+  3. Writes new bank ID to `$D000` (hardware register)
+  4. Calls target function
+  5. Restores original bank ID to both locations
+  6. Returns to caller
+
+**Generated Wrapper Example**:
+```asm
+func_b_BANK_WRAPPER:
+    PSHS A              ; Save A register
+    LDA CURRENT_ROM_BANK ; Read current bank from RAM
+    PSHS A              ; Save current bank on stack
+    LDA #5              ; Load target bank ID
+    STA CURRENT_ROM_BANK ; Switch to target bank (RAM tracker)
+    STA $D000           ; Hardware bank switch register (cartucho intercepts)
+    JSR FUNC_B          ; Call real function
+    PULS A              ; Restore original bank from stack
+    STA CURRENT_ROM_BANK ; Switch back to original bank (RAM tracker)
+    STA $D000           ; Hardware bank switch register (cartucho intercepts)
+    PULS A              ; Restore A register
+    RTS
+```
+
+#### File: `ide/frontend/src/generated/jsvecx/vecx_full.js`
+- **Lines 4779-4783**: Emulator intercepts writes to `$D000`
+- **Logic**: `this.current_bank = data & 0xff` when address == 0xD000
+- **Purpose**: Maps $0000-$3FFF reads to correct bank: `cart[addr + (current_bank * 0x4000)]`
+
+### 24.4 Dual-Level Banking
+**Two independent tracking systems**:
+1. **CURRENT_ROM_BANK** (RAM address $C880):
+   - Software-writable variable for debugging/inspection
+   - Read by wrappers to save/restore state
+   - Updated on every bank switch
+
+2. **$D000 Hardware Register**:
+   - Write-only cartucho intercept point
+   - Actual hardware bank switching mechanism
+   - Intercepted by JSVecx emulator for simulation
+
+**Why Both**:
+- RAM tracker allows BIOS/user code to read current bank if needed
+- Hardware register triggers actual bank switching in cartucho
+- Keeps both synchronized: every write goes to both locations
+
+### 24.5 Cartridge RAM (Future Planning)
+
+**Available Space for Cartridge RAM**:
+- **$8400-$CBFF**: 2.5KB unmapped region
+- **$D000-$DFFF**: 4KB unmapped region (currently bank switch register at $D000)
+
+**Possible Future Layout**:
+- $8400-$CBFF: 2.5KB cartridge RAM (expansion memory)
+- $D000: Bank switch register (write-only)
+- $D001-$DFFF: 4KB additional cartridge I/O if needed
+
+### 24.6 Boot Sequence (Multibank)
+
+```
+RESET (0xFFFE vector) → BIOS ($E000+)
+  ↓
+BIOS detects cartridge at $0000
+  ↓
+Jumps to $0000 (Bank #0 code)
+  ↓
+Bank #0 Boot Stub:
+  LDA #31           ; Load fixed bank ID
+  STA $D000         ; Switch cartridge ROM to Bank #31
+  JMP $4000+START   ; Jump to START in fixed bank
+  ↓
+START in Bank #31:
+  - Initialize BIOS ($D0 direct page)
+  - Initialize stack ($CBFF)
+  - Initialize CURRENT_ROM_BANK = 0
+  - Run main() initialization
+  - Loop LOOP_BODY forever
+```
+
+### 24.7 Key Design Decisions
+
+**Why $D000 (not $4000)**:
+- $4000 is part of Fixed Bank #31 ROM (read-only, cannot write)
+- $D000 is unmapped - cartucho can intercept writes
+- Leaves $8400-$CBFF available for future cartridge RAM
+
+**Why write BOTH CURRENT_ROM_BANK and $D000**:
+- CURRENT_ROM_BANK provides software state tracking (debuggable)
+- $D000 triggers actual hardware switching (required for emulator/hardware)
+- Zero cost - both writes are single STA instructions
+
+**Why cross-bank wrappers**:
+- Automatic bank switching on function calls (no manual management)
+- Handles recursion correctly (saves/restores bank stack)
+- Enables linking functions across 32 separate 16KB banks
+- Total code: up to 512KB (32 banks × 16KB)
+
+### 24.8 Testing & Validation
+
+**Checklist for Multibank Programs**:
+- ✅ Boot stub emits `STA $D000` (not $4000)
+- ✅ CURRENT_ROM_BANK initialized to 0 in START
+- ✅ Cross-bank wrappers write to both CURRENT_ROM_BANK and $D000
+- ✅ JSVecx emulator intercepts writes at $D000
+- ✅ Bank switches happen BEFORE function calls (no stale state)
+- ✅ Bank restored AFTER function returns (caller sees correct window)
+- ✅ RESET vector points to $4000+START (Bank #31 entry point)
+
+**Known Limitations**:
+- ⚠️ Direct branches within Bank #0 code must use `BRA`/`LBRA` (no cross-bank branches)
+- ⚠️ Recursive calls are safe (stack handles multiple bank context saves)
+- ⚠️ Global variables only visible in Bank #31 (other banks get wrappers for access)
+
+---
+Última actualización: 2026-01-02 - Bank Switching Register changed from $4000 to $D000

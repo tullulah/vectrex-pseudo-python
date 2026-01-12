@@ -297,7 +297,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Initialize wrapper generator if bank switching is enabled
     let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
         eprintln!("   [Phase 3.8] Analyzing cross-bank calls...");
-        let bank_register = 0x4000; // TODO: Make this configurable via BankConfig
+        let bank_register = 0xD000; // Bank register at 0xD000 (unmapped I/O space where cartridge hardware intercepts writes)
         let mut gen = bank_wrappers::BankWrapperGenerator::new(
             opts.function_bank_map.clone(),
             bank_register
@@ -426,11 +426,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
     // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
     // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
-    // Origin is fixed at $0000 for Vectrex cartridge space. Using a configurable origin caused
-    // loader mismatches with the emulator; keep this constant and adjust the emulator loader base
-    // instead of relocating here.
-    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=$0000 ---\n", ti.name, opts.title));
-    out.push_str("        ORG $0000\n");
+    // Origin depends on multi-bank mode:
+    // - Single-bank: ORG $0000 (standard Vectrex cartridge)
+    // - Multi-bank: ORG $4000 (fixed bank #31)
+    let is_multibank = opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled());
+    let origin_addr = if is_multibank { 0x4000 } else { 0x0000 };
+    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=${:04X} ---\n", ti.name, opts.title, origin_addr));
+    out.push_str(&format!("        ORG ${:04X}\n", origin_addr));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // Classic include; no manual EQU needed.
     let include_path = calculate_include_path(opts);
@@ -439,6 +441,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // NOTE: BIOS symbols (Vec_Music_Flag, etc.) are defined in VECTREX.I
     // Do NOT duplicate them here to maintain lwasm compatibility
     
+    // HEADER SECTION - ALWAYS generate (single-bank and multi-bank)
+    // In multi-bank mode, header goes to Bank #31 and linker copies to Bank #0
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Emit section marker for header (if linker mode enabled)
     emit_header_section(&mut out, opts);
@@ -473,6 +477,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if title.is_empty() { title.push(' '); }
     out.push_str(&format!("    FCC \"{}\"\n", title));
     out.push_str("    FCB $80\n    FCB 0\n\n");
+    
     out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
     // Check for music/sfx assets (needed for RAM allocation)
@@ -489,8 +494,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // ========================================================================
     // AUTOMATIC RAM LAYOUT - Calculates all offsets automatically
     // No more hardcoded offsets, no collisions, always compact
+    // If multibank: reserve first byte (0xC880) for CURRENT_ROM_BANK
     // ========================================================================
-    let mut ram = RamLayout::new(0xC880);
+    // is_multibank already defined earlier for ORG calculation
+    let mut ram = if is_multibank {
+        RamLayout::new_with_reserved_first_byte(0xC880) // Skip first byte for CURRENT_ROM_BANK
+    } else {
+        RamLayout::new(0xC880) // Standard Vectrex RAM start
+    };
     
     // 1. RESULT (always needed)
     ram.allocate("RESULT", 2, "Main result temporary");
@@ -650,11 +661,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
 
     // 12.1 Bank switching runtime tracking (current bank in RAM)
-    // IMPORTANT: Place CURRENT_ROM_BANK outside scratch region to avoid collisions.
-    // Fixed high-RAM address chosen to be collision-safe with VAR_* and temporaries.
-    if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
-        // Allocate CURRENT_ROM_BANK at fixed high-RAM address via allocator
-        ram.allocate_fixed("CURRENT_ROM_BANK", 0xCF02, 1, "Current ROM bank tracker (1 byte)");
+    // CRITICAL: Must use fixed address because multi-bank linker compiles each bank separately
+    // and they ALL need to reference the SAME RAM address. Dynamic allocation would give
+    // different addresses per bank.
+    // Using 0xC880 (FIRST byte of RAM) - allocator skips this byte in multibank mode.
+    if is_multibank {
+        ram.allocate_fixed("CURRENT_ROM_BANK", 0xC880, 1, "Current ROM bank tracker (1 byte, FIXED at first RAM byte)");
     }
     
     // 13. VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
@@ -698,6 +710,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("; AUTO-GENERATED - All offsets calculated automatically\n");
     out.push_str(&format!("; Total RAM used: {} bytes\n", ram.total_size()));
     out.push_str(&ram.emit_equ_definitions());
+    
+    // Export ALL RAM variables to debug_info for .pdb generation
+    // This includes CURRENT_ROM_BANK, VAR_*, runtime helpers, etc.
+    for (name, offset) in ram.iter_variables() {
+        let address = ram.base_address() + (offset as u16);
+        debug_info.add_symbol(name.to_string(), address);
+    }
+    // Also export fixed-address variables (like CURRENT_ROM_BANK)
+    for (name, address) in ram.iter_fixed_variables() {
+        debug_info.add_symbol(name.to_string(), address);
+    }
     
     // DP-relative offsets for PSG (lwasm compatibility)
     if has_music_assets {
@@ -752,7 +775,21 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if main_has_content {
         // main() has real content - use START structure
-        out.push_str("    JMP START\n\n");
+        // Multi-bank boot stub: Bank #0 header must switch to Bank #31 before jumping to START
+        if is_multibank {
+            if let Some(bank_cfg) = &opts.bank_config {
+                out.push_str("\n");
+                out.push_str("    ; Boot stub for Bank #0: Switch to fixed bank then jump to START\n");
+                out.push_str(&format!("    LDA #{}          ; Fixed bank ID\n", bank_cfg.fixed_bank));
+                out.push_str("    STA $D000        ; Bank switch register (cartucho intercepts)\n");
+                out.push_str("    JMP START        ; Jump to START in fixed bank\n\n");
+            } else {
+                // Fallback if bank_config missing (should not happen)
+                out.push_str("    JMP START\n\n");
+            }
+        } else {
+            out.push_str("    JMP START\n\n");
+        }
         
         // ✅ Emit line markers for const NUMBER declarations (not arrays)
         // These are inlined in expressions, so we need to record them for PDB coverage
@@ -793,11 +830,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
         out.push_str(";\n\n");
         
-        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
+        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)\n");
         // Initialize bank switching state if enabled
         if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
             // Default to bank 0 for the banked window
-            out.push_str("    LDA #0\n    STA $4000         ; Initialize banked window to bank 0\n    STA CURRENT_ROM_BANK ; Track current bank in RAM\n");
+            // Use CURRENT_ROM_BANK (allocated by variable allocator) as both tracker AND hardware register
+            out.push_str("    LDA #0\n    STA CURRENT_ROM_BANK ; Initialize to bank 0 (hardware register + RAM tracker)\n");
         }
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
@@ -972,7 +1010,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
-    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    CLR $C80E ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
+    out.push_str(&format!("ENTRY_START: LDS #$CBFF ; Initialize stack at top of RAM\n    CLR $C80E ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
     let mut global_mutables: Vec<(String,i32)> = Vec::new();
@@ -993,12 +1031,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             }
         }
         
-        // Sort banks for consistent output (fixed bank #31 first, then others)
+        // Sort banks for consistent output (fixed bank #31 LAST, then others ascending)
         let mut sorted_banks: Vec<u8> = functions_by_bank.keys().copied().collect();
         sorted_banks.sort_by(|a, b| {
-            // Fixed bank (#31) comes first, then others in ascending order
-            if *a == 31 { std::cmp::Ordering::Less }
-            else if *b == 31 { std::cmp::Ordering::Greater }
+            // Fixed bank (#31) should be emitted last so following data lives in fixed bank
+            if *a == 31 { std::cmp::Ordering::Greater }
+            else if *b == 31 { std::cmp::Ordering::Less }
             else { a.cmp(b) }
         });
         
@@ -1075,6 +1113,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 } else {
                     // Normal function
                     emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
+                }
+            }
+
+            // If this is the fixed bank, emit cross-bank wrappers here so they execute from non-switchable ROM
+            if bank_id == 31 {
+                if let Some(ref mut generator) = wrapper_generator {
+                    let wrappers = generator.generate_all_wrappers();
+                    if !wrappers.is_empty() {
+                        out.push_str(&wrappers);
+                    }
                 }
             }
         }
@@ -1363,13 +1411,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
     
-    // Phase 3.8: Generate cross-bank call wrappers (TODO #8)
-    if let Some(ref mut generator) = wrapper_generator {
-        let wrappers = generator.generate_all_wrappers();
-        if !wrappers.is_empty() {
-            out.push_str(&wrappers);
-        }
-    }
+    // Phase 3.8: Cross-bank wrappers are emitted inside fixed bank section above
     
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     
@@ -1672,7 +1714,21 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Cleanup: Clear global wrapper generator
     bank_wrappers::clear_global_generator();
     
-    // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
+    // ===== INTERRUPT VECTORS TABLE =====
+    // Generate 6809 interrupt vectors at end of ROM
+    // In single-bank mode, vectors at 0xFFF0-0xFFFF
+    // In multi-bank mode, linker will copy these to ROM end
+    out.push_str("\n; === 6809 Interrupt Vectors (copied to 0xFFF0-0xFFFF by linker) ===\n");
+    out.push_str(&format!("    ORG ${:04X}\n", if is_multibank { 0x5FF0 } else { 0xFFF0 }));
+    out.push_str("    FDB $0000    ; Reserved\n");
+    out.push_str("    FDB $0000    ; SWI3\n");
+    out.push_str("    FDB $0000    ; SWI2\n");
+    out.push_str("    FDB $0000    ; FIRQ\n");
+    out.push_str("    FDB $0000    ; IRQ\n");
+    out.push_str("    FDB $0000    ; SWI\n");
+    out.push_str("    FDB $0000    ; NMI\n");
+    out.push_str("    FDB START    ; RESET vector (entry point)\n");
+    
     (out, debug_info)
 }
 // collect_stmt_syms: process statement symbols.
