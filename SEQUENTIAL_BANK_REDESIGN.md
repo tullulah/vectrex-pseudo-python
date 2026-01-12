@@ -43,14 +43,18 @@ Updated logging in bank switching section:
 
 **Impact**: Clearer user feedback about bank allocation
 
-### 3. **core/src/backend/m6809/mod.rs** (Lines 780-792)
-Removed boot stub generation:
+### 3. **core/src/backend/m6809/mod.rs** (Lines 780-792, 426-437, 1045-1054)
+Removed boot stub generation and updated ORG directives:
 - ❌ Deleted: `ORG $0000` directive for bank #0
 - ❌ Deleted: `STA $D000` bank switching instruction
 - ❌ Deleted: `JMP START` branch
 - ❌ Deleted: `ORG $4000` return directive
+- ✅ Changed: Main header ORG from `if is_multibank { $4000 } else { $0000 }` to **always $0000**
+- ✅ Changed: Per-bank ORG from `if bank_id == 31 { $4000 } else { $0000 }` to **always $0000**
 - ✅ Added: Clarifying comment about sequential model
-- **Result**: Code now starts directly at $0000 without artificial stub
+- **Result**: Code now starts cleanly at $0000 without artificial stub or bank discrimination
+
+**Critical Fix (2026-01-12)**: ORG directive was initially still using $4000 for multibank mode. This was corrected to **always use $0000** for all banks (single and multibank) to match the sequential model.
 
 ### 4. **core/src/backend/m6809/bank_optimizer.rs** (Complete rewrite, Lines 1-202)
 Fundamental algorithm change:
