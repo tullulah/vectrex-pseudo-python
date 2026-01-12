@@ -1710,10 +1710,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     // ===== INTERRUPT VECTORS TABLE =====
     // Generate 6809 interrupt vectors at end of ROM
-    // In single-bank mode, vectors at 0xFFF0-0xFFFF
-    // In multi-bank mode, linker will copy these to ROM end
-    out.push_str("\n; === 6809 Interrupt Vectors (copied to 0xFFF0-0xFFFF by linker) ===\n");
-    out.push_str(&format!("    ORG ${:04X}\n", if is_multibank { 0x5FF0 } else { 0xFFF0 }));
+    // CRITICAL: Vectors ALWAYS at 0xFFF0-0xFFFF (hardware requirement)
+    // Sequential bank model: Each bank has vectors at its local 0xFFF0
+    out.push_str("\n; === 6809 Interrupt Vectors (MUST be at 0xFFF0-0xFFFF) ===\n");
+    out.push_str("    ORG $FFF0\n");
     out.push_str("    FDB $0000    ; Reserved\n");
     out.push_str("    FDB $0000    ; SWI3\n");
     out.push_str("    FDB $0000    ; SWI2\n");

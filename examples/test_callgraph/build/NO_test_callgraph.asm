@@ -10,7 +10,7 @@
 ;***************************************************************************
     FCC "g GCE 1982"
     FCB $80
-    FDB $0000
+    FDB music1
     FCB $F8
     FCB $50
     FCB $20
@@ -130,12 +130,6 @@ MAIN:
     ; *** Call loop() as subroutine (executed every frame)
     JSR LOOP_BODY
     BRA MAIN
-
-
-; ================================================
-; BANK #0 - 9 function(s)
-; ================================================
-    ORG $0000  ; Sequential bank model
 
     ; VPy_LINE:24
 LOOP_BODY:
