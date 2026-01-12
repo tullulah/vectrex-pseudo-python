@@ -778,18 +778,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if main_has_content {
         // main() has real content - use START structure
-        // Multi-bank boot stub: Bank #0 header must switch to Bank #31 before jumping to START
-        if is_multibank {
-            // Sequential Bank Model (2025-01-02):
-            // - No boot stub needed
-            // - Bank #0 code starts at $0000 directly
-            // - Overflow fills banks #1, #2, ..., #N-2
-            // - Bank #N-1 reserved for runtime helpers
-            // - BIOS loads from bank #0 naturally via reset vector
-            out.push_str("\n");
-        } else {
-            out.push_str("    JMP START\n\n");
-        }
+        // CRITICAL: Always emit JMP START as first executable instruction
+        // Sequential Bank Model (2025-01-02):
+        // - Bank #0 code starts at $0000 with JMP START
+        // - Overflow fills banks #1, #2, ..., #N-2
+        // - Bank #N-1 reserved for runtime helpers
+        // - BIOS loads from bank #0 naturally via reset vector
+        out.push_str("    JMP START\n\n");
         
         // ✅ Emit line markers for const NUMBER declarations (not arrays)
         // These are inlined in expressions, so we need to record them for PDB coverage
