@@ -1,18 +1,11 @@
 /// Multi-Bank Linker - Generate 512KB multi-bank ROM from sectioned ASM
 ///
-/// This module processes ASM files with multiple ORG directives (one per bank)
-/// and generates a single multi-bank ROM file with all banks concatenated.
+/// Sequential Bank Model (2025-01-02):
+/// - Banks #0 to #(N-2): Code fills sequentially (address $0000 per bank)
+/// - Bank #(N-1): Reserved for runtime helpers (address $0000)
 ///
-/// Bank Layout:
-/// - Bank #0:  Offset 0x00000 (16KB) - ORG $0000 (banked window)
-/// - Bank #1:  Offset 0x04000 (16KB) - ORG $0000 (banked window)
-/// - ...
-/// - Bank #30: Offset 0x78000 (16KB) - ORG $0000 (banked window)
-/// - Bank #31: Offset 0x7C000 (16KB) - ORG $4000 (fixed bank)
-///
-/// Each bank is assembled separately with its ORG directive, then concatenated
-/// to form the final ROM. The Vectrex hardware uses register $4000 to switch
-/// between banks in the 0x0000-0x3FFF window.
+/// Each bank is assembled with ORG $0000, then concatenated to form final ROM.
+/// No "fixed bank" concept - all banks have same addressing model.
 
 use std::collections::HashMap;
 use std::fs;
@@ -33,7 +26,6 @@ pub struct BankSection {
 pub struct MultiBankLinker {
     pub rom_bank_size: u32,      // 16KB per bank
     pub rom_bank_count: u8,       // 32 banks total
-    pub fixed_bank_id: u8,        // Bank #31 (fixed)
     pub use_native_assembler: bool, // Use vecasm vs lwasm
 }
 
@@ -42,7 +34,6 @@ impl MultiBankLinker {
         MultiBankLinker {
             rom_bank_size,
             rom_bank_count,
-            fixed_bank_id: rom_bank_count.saturating_sub(1),
             use_native_assembler,
         }
     }
@@ -347,19 +338,16 @@ impl MultiBankLinker {
         &self,
         bank_section: &BankSection,
         temp_dir: &Path,
-        fixed_bank_symbols: &HashMap<String, u16>,
+        helper_symbols: &HashMap<String, u16>,
     ) -> Result<Vec<u8>, String> {
-        // Bank ASM already contains everything (header prepended for Bank #31)
+        // Bank ASM already contains everything
         let mut full_asm = bank_section.asm_code.clone();
         
-        // Prepend external symbol definitions from all banks
-        // This is needed for:
-        // 1. Non-fixed banks: to reference symbols from the fixed bank
-        // 2. Fixed bank: to reference symbols from wrapper functions that call other banks
-        let fixed_bank_id = (self.rom_bank_count - 1) as u8;
-        if !fixed_bank_symbols.is_empty() {
-            let mut external_symbols = String::from("; External symbols from all banks\n");
-            for (symbol, address) in fixed_bank_symbols {
+        // Prepend external symbol definitions from helper bank and shared data
+        // This is needed for all banks to reference symbols from helpers and arrays/consts
+        if !helper_symbols.is_empty() {
+            let mut external_symbols = String::from("; External symbols (helpers and shared data)\n");
+            for (symbol, address) in helper_symbols {
                 external_symbols.push_str(&format!("{} EQU ${:04X}\n", symbol, address));
             }
             external_symbols.push_str("\n");
@@ -446,8 +434,8 @@ impl MultiBankLinker {
         }
         
         // Extract symbols from fixed bank for cross-bank references
-        let fixed_bank_id = (self.rom_bank_count - 1) as u8;
-        let mut fixed_bank_symbols = HashMap::new();
+        let _helper_bank_id = (self.rom_bank_count - 1) as u8;
+        let mut helper_bank_symbols = HashMap::new();
         
         // ALSO extract symbols from FULL ASM (includes arrays, consts, runtime helpers)
         // This is needed because arrays/data are defined OUTSIDE bank sections
@@ -464,15 +452,15 @@ impl MultiBankLinker {
                     && !label.starts_with("DSL_")  // Skip Draw Sync List internal labels
                     && !label.starts_with("PMUSIC_")  // Skip music player internal labels
                 {
-                    // Store with placeholder address 0x4000 (Fixed Bank start)
+                    // Store with placeholder address 0x0000 (Helper bank start)
                     // Actual address will be resolved during linking
-                    fixed_bank_symbols.insert(label.to_string(), 0x4000);
+                    helper_bank_symbols.insert(label.to_string(), 0x0000);
                 }
             }
         }
         
         eprintln!("     - Found {} external symbols for cross-bank references", 
-            fixed_bank_symbols.len());
+            helper_bank_symbols.len());
         
         // Create temp directory for bank assemblies
         let temp_dir = output_rom_path.parent()
@@ -486,9 +474,8 @@ impl MultiBankLinker {
         for bank_id in 0..self.rom_bank_count {
             if let Some(section) = sections.get(&bank_id) {
                 eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
-                // IMPORTANT: Pass external symbols to ALL banks, including the fixed bank
-                // The fixed bank contains wrapper functions that reference symbols from other banks
-                let binary = self.assemble_bank(section, &temp_dir, &fixed_bank_symbols)?;
+                // IMPORTANT: Pass external symbols to ALL banks (helpers available everywhere)
+                let binary = self.assemble_bank(section, &temp_dir, &helper_bank_symbols)?;
                 rom_data.extend_from_slice(&binary);
             } else {
                 // Empty bank - fill with 0xFF

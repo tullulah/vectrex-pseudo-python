@@ -230,14 +230,18 @@ pub struct BankConfig {
     pub rom_bank_size: u32,
     /// Number of banks (calculated: rom_total_size / rom_bank_size)
     pub rom_bank_count: u8,
-    /// Fixed bank ID (last bank, always visible at 0x4000-0x7FFF)
-    pub fixed_bank: u8,
-    /// ROM bank register address (hardware, default: 0x4000)
-    pub rom_bank_reg: u16,
+    /// Helpers bank ID (last bank, holds DRAW_LINE_WRAPPER, MUL16, etc.)
+    /// Sequential model: Banks #0-(N-2) = VPy code, Bank #(N-1) = helpers
+    pub helpers_bank: u8,
 }
 
 impl BankConfig {
     /// Create BankConfig from META directives (with defaults)
+    /// 
+    /// Sequential bank layout:
+    /// - Bank #0: Header + main() + loop() + Code (fills from 0x0000)
+    /// - Bank #1-#N-2: Additional VPy code (if code overflows bank #0)
+    /// - Bank #N-1: Runtime helpers (DRAW_LINE_WRAPPER, MUL16, DIV_A, etc.)
     pub fn from_meta(meta: &ModuleMeta) -> Option<Self> {
         let rom_total_size = meta.rom_total_size?;
         let rom_bank_size = meta.rom_bank_size.unwrap_or(16384); // Default 16KB
@@ -255,14 +259,13 @@ impl BankConfig {
             return None;
         }
         
-        let fixed_bank = rom_bank_count.saturating_sub(1);
+        let helpers_bank = rom_bank_count.saturating_sub(1);
         
         Some(BankConfig {
             rom_total_size,
             rom_bank_size,
             rom_bank_count,
-            fixed_bank,
-            rom_bank_reg: 0x4000,
+            helpers_bank,
         })
     }
     
@@ -276,14 +279,14 @@ impl BankConfig {
         self.rom_bank_count as usize
     }
     
-    /// Get size of banked window (0x0000-0x3FFF typically)
-    pub fn banked_window_size(&self) -> u32 {
-        self.rom_bank_size
+    /// Get ID of the last bank (reserved for helpers)
+    pub fn last_bank_id(&self) -> u8 {
+        self.helpers_bank
     }
     
-    /// Get size of fixed bank window (0x4000-0x7FFF typically)
-    pub fn fixed_window_size(&self) -> u32 {
-        8192 // 8KB fixed (rest of 16KB bank at 0x4000-0x5FFF)
+    /// Get number of banks available for VPy code (excludes helpers bank)
+    pub fn code_banks(&self) -> u8 {
+        self.rom_bank_count.saturating_sub(1)
     }
 }
 

@@ -518,9 +518,8 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             bank_config.rom_total_size / 1024, bank_config.rom_total_size);
         eprintln!("     - Bank size: {} KB ({} bytes)", 
             bank_config.rom_bank_size / 1024, bank_config.rom_bank_size);
-        eprintln!("     - Banked window: 0x0000-0x{:04X} ({} banks swappable)", 
-            bank_config.banked_window_size() - 1, bank_config.rom_bank_count - 1);
-        eprintln!("     - Fixed bank #{}: Always at 0x4000-0x5FFF", bank_config.fixed_bank);
+        eprintln!("     - Sequential model: Banks #0-#{} for code, bank #{} for helpers", 
+            bank_config.last_bank_id() - 1, bank_config.last_bank_id());
         
         // Phase 3.6: Call graph analysis (if bank switching enabled)
         eprintln!("   [Call Graph] Analyzing function calls...");

@@ -30,6 +30,17 @@ impl RamLayout {
         }
     }
     
+    /// Create RamLayout with first byte reserved (for multibank CURRENT_ROM_BANK)
+    pub fn new_with_reserved_first_byte(base_address: u16) -> Self {
+        Self {
+            base_address,
+            current_offset: 1, // Skip first byte
+            vars: Vec::new(),
+            offsets: HashMap::new(),
+            fixed_vars: Vec::new(),
+        }
+    }
+    
     /// Allocate a variable in RAM, returning its offset from base
     pub fn allocate(&mut self, name: impl Into<String>, size: usize, comment: impl Into<String>) -> usize {
         let name = name.into();
@@ -115,6 +126,21 @@ impl RamLayout {
             ));
         }
         out
+    }
+    
+    /// Get base address
+    pub fn base_address(&self) -> u16 {
+        self.base_address
+    }
+    
+    /// Iterator over all variables (name, offset)
+    pub fn iter_variables(&self) -> impl Iterator<Item = (&String, &usize)> {
+        self.offsets.iter()
+    }
+    
+    /// Iterator over fixed-address variables (name, address)
+    pub fn iter_fixed_variables(&self) -> impl Iterator<Item = (&String, &u16)> + '_ {
+        self.fixed_vars.iter().map(|(name, addr, _, _)| (name, addr))
     }
 }
 

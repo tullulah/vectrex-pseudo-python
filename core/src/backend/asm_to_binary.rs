@@ -637,6 +637,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "LDX" => emit_ldx(emitter, operand, equates),
         "LDY" => emit_ldy(emitter, operand, equates),
         "LDU" => emit_ldu(emitter, operand, equates),
+        "LDS" => emit_lds(emitter, operand, equates),
         "STX" => emit_stx(emitter, operand, equates),
         "STY" => emit_sty(emitter, operand, equates),
         "STU" => emit_stu(emitter, operand, equates),
@@ -2827,6 +2828,50 @@ fn emit_stu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     } else {
         let addr = parse_address(operand)?;
         emitter.stu_extended(addr);
+    }
+    Ok(())
+}
+
+fn emit_lds(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        // Immediate mode (LDS #$CBFF)
+        let value_part = &operand[1..];
+
+        // Try equates first (fast path)
+        let upper = value_part.to_uppercase();
+        if let Some(&value) = equates.get(&upper) {
+            emitter.lds_immediate(value);
+        } else {
+            match evaluate_expression(value_part, equates) {
+                Ok(value) => emitter.lds_immediate(value),
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    emitter.emit_immediate16_symbol_ref(&[0x10, 0xCE], &symbol, addend);
+                }
+                Err(_) => {
+                    let value = parse_immediate_16(value_part)?;
+                    emitter.lds_immediate(value);
+                }
+            }
+        }
+    } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
+        // Indexed mode: ,X  X++  ,X++  5,X  A,X  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.lds_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+    } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        // Symbol reference
+        let upper = operand.to_uppercase();
+        if let Some(&value) = equates.get(&upper) {
+            emitter.lds_extended(value);
+        } else {
+            emitter.lds_extended_sym(operand);
+        }
+    } else {
+        let addr = parse_address(operand)?;
+        emitter.lds_extended(addr);
     }
     Ok(())
 }

@@ -714,12 +714,12 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Export ALL RAM variables to debug_info for .pdb generation
     // This includes CURRENT_ROM_BANK, VAR_*, runtime helpers, etc.
     for (name, offset) in ram.iter_variables() {
-        let address = ram.base_address() + (offset as u16);
+        let address = ram.base_address() + (*offset as u16);
         debug_info.add_symbol(name.to_string(), address);
     }
     // Also export fixed-address variables (like CURRENT_ROM_BANK)
     for (name, address) in ram.iter_fixed_variables() {
-        debug_info.add_symbol(name.to_string(), address);
+        debug_info.add_symbol(name.to_string(), *address);
     }
     
     // DP-relative offsets for PSG (lwasm compatibility)
@@ -777,16 +777,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // main() has real content - use START structure
         // Multi-bank boot stub: Bank #0 header must switch to Bank #31 before jumping to START
         if is_multibank {
-            if let Some(bank_cfg) = &opts.bank_config {
-                out.push_str("\n");
-                out.push_str("    ; Boot stub for Bank #0: Switch to fixed bank then jump to START\n");
-                out.push_str(&format!("    LDA #{}          ; Fixed bank ID\n", bank_cfg.fixed_bank));
-                out.push_str("    STA $D000        ; Bank switch register (cartucho intercepts)\n");
-                out.push_str("    JMP START        ; Jump to START in fixed bank\n\n");
-            } else {
-                // Fallback if bank_config missing (should not happen)
-                out.push_str("    JMP START\n\n");
-            }
+            // Sequential Bank Model (2025-01-02):
+            // - No boot stub needed
+            // - Bank #0 code starts at $0000 directly
+            // - Overflow fills banks #1, #2, ..., #N-2
+            // - Bank #N-1 reserved for runtime helpers
+            // - BIOS loads from bank #0 naturally via reset vector
+            out.push_str("\n");
         } else {
             out.push_str("    JMP START\n\n");
         }
