@@ -54,7 +54,6 @@ VAR_ARG1             EQU $C880+$29   ; Function argument 1 (2 bytes)
 VAR_ARG2             EQU $C880+$2B   ; Function argument 2 (2 bytes)
 VAR_ARG3             EQU $C880+$2D   ; Function argument 3 (2 bytes)
 
-    JMP START
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
 
