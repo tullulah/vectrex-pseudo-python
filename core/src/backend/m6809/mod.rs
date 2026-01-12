@@ -426,11 +426,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
     // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
     // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
-    // Origin depends on multi-bank mode:
-    // - Single-bank: ORG $0000 (standard Vectrex cartridge)
-    // - Multi-bank: ORG $4000 (fixed bank #31)
+    
+    // Sequential Bank Model (2025-01-02):
+    // - ALL banks use ORG $0000 (no special fixed bank at $4000)
+    // - Bank #0 starts at $0000 with header
+    // - Banks #1-#(N-2) overflow code, also at $0000
+    // - Bank #(N-1) contains helpers, also at $0000
     let is_multibank = opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled());
-    let origin_addr = if is_multibank { 0x4000 } else { 0x0000 };
+    let origin_addr = 0x0000; // Always $0000 in sequential model
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=${:04X} ---\n", ti.name, opts.title, origin_addr));
     out.push_str(&format!("        ORG ${:04X}\n", origin_addr));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
@@ -1046,14 +1049,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
             out.push_str(&format!("; ================================================\n"));
             
-            // Set ORG based on bank type
-            if bank_id == 31 {
-                // Fixed bank - always at $4000-$5FFF
-                out.push_str(&format!("    ORG $4000  ; Fixed bank (always visible)\n\n"));
-            } else {
-                // Banked window - $0000-$3FFF (will be mapped based on bank register)
-                out.push_str(&format!("    ORG $0000  ; Banked window (switchable)\n\n"));
-            }
+            // Sequential Bank Model: ALL banks use ORG $0000
+            // - Bank #0: Code starts at $0000 (header + main)
+            // - Banks #1-#(N-2): Overflow code at $0000
+            // - Bank #(N-1): Helpers at $0000
+            out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
             
             // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
             for f in functions {
