@@ -5,3960 +5,4694 @@
   "binary": "test_callgraph.bin",
   "entryPoint": "0x02DC",
   "symbols": {
-    "__Reset0Ref": "0x00A0",
-    "IF_END_4": "0x0476",
-    "IF_END_8": "0x0525",
-    "DSWM_NO_NEGATE_Y": "0x01BF",
-    "_PLAYER_VECTORS": "0x070E",
-    "IF_NEXT_13": "0x056E",
-    "IF_NEXT_1": "0x03FA",
-    "DSWM_LOOP": "0x0215",
-    "J1B4_BUILTIN": "0x007C",
-    "START": "0x02DC",
-    "Draw_Sync_List_At_With_Mirrors": "0x01A9",
-    "DSWM_NEXT_PATH": "0x025A",
-    "__Moveto_d": "0x00A3",
-    "LOOP_BODY": "0x035A",
-    "__Intensity_a": "0x009B",
-    "J1X_BUILTIN": "0x0025",
-    "MOVE_PLAYER": "0x063B",
-    "IF_NEXT_5": "0x0476",
-    "Draw_Sync_List": "0x00AD",
-    "CHECK_INPUT": "0x067C",
-    "DSWM_NO_NEGATE_X": "0x01CA",
-    "DRAW_PLAYER": "0x063C",
-    "DSL_LOOP": "0x00FE",
-    "CE_15": "0x0553",
-    "DSWM_NO_NEGATE_DX": "0x0233",
-    "DSWM_NEXT_NO_NEGATE_X": "0x027E",
-    "CT_10": "0x0504",
-    "draw_player_BANK_WRAPPER": "0x067D",
-    "CT_2": "0x03D9",
-    "DSWM_W3": "0x02CE",
-    "J1Y_BUILTIN": "0x003A",
-    "DSWM_NO_NEGATE_DY": "0x022B",
-    "check_input_BANK_WRAPPER": "0x06B7",
-    "CE_11": "0x050A",
-    "DSWM_NEXT_SET_INTENSITY": "0x0269",
-    "UPDATE_PLAYER": "0x0634",
-    "__Draw_Line_d": "0x00A8",
-    "_PLAYER_PATH0": "0x0711",
-    "IF_NEXT_9": "0x0525",
-    "J1B3_BUILTIN": "0x006D",
-    "CT_14": "0x054D",
-    "DSWM_W2": "0x024D",
-    "J1B1_BUILTIN": "0x004F",
-    "DSWM_W1": "0x020E",
     "J1B2_BUILTIN": "0x005E",
-    "draw_enemies_BANK_WRAPPER": "0x06F1",
-    "DRAW_ALL": "0x062D",
-    "_ENEMY_VECTORS": "0x0720",
-    "J1B2_BUILTIN.J1B2_OFF": "0x0069",
-    "DSWM_NEXT_NO_NEGATE_Y": "0x0273",
-    "DSL_W2": "0x012D",
-    "move_player_BANK_WRAPPER": "0x06D4",
-    "DRAW_ENEMIES": "0x056F",
-    "DSWM_DONE": "0x02DB",
-    "J1B4_BUILTIN.J1B4_OFF": "0x0087",
-    "DSWM_NEXT_USE_OVERRIDE": "0x0267",
-    "UPDATE_ENEMIES": "0x037E",
-    "DSWM_USE_OVERRIDE": "0x01B2",
-    "MAIN": "0x0333",
-    "_ENEMY_PATH0": "0x0723",
-    "CE_3": "0x03DF",
-    "J1B1_BUILTIN.J1B1_OFF": "0x005A",
-    "IF_END_12": "0x056E",
-    "CE_7": "0x045B",
-    "CT_6": "0x0455",
+    "TMPPTR": "0xC88A",
+    "VAR_ENEMY3_Y": "0xC8A3",
+    "IF_NEXT_1": "0x049A",
+    "_PLAYER_PATH0": "0x0717",
+    "DSWM_LOOP": "0x0215",
     "DSL_W1": "0x00F7",
-    "DSL_NEXT_PATH": "0x013A",
-    "IF_END_0": "0x03FA",
-    "J1B3_BUILTIN.J1B3_OFF": "0x0078",
-    "update_player_BANK_WRAPPER": "0x069A",
+    "VECTREX_SET_INTENSITY": "0x008B",
+    "VAR_ARG0": "0xC8A7",
+    "VAR_ENEMY2_X": "0xC89D",
+    "TEMP_X": "0xC890",
     "DSWM_SET_INTENSITY": "0x01B4",
+    "CE_15": "0x05F3",
+    "__Reset0Ref": "0x00A0",
+    "DSWM_NEXT_NO_NEGATE_X": "0x027E",
+    "IF_END_0": "0x049A",
+    "DRAW_VEC_X": "0xC894",
+    "DSWM_NEXT_NO_NEGATE_Y": "0x0273",
+    "J1Y_BUILTIN": "0x003A",
+    "DRAW_ALL": "0x060F",
+    "_ENEMY_PATH0": "0x0729",
+    "DSWM_NO_NEGATE_Y": "0x01BF",
+    "J1X_BUILTIN": "0x0025",
+    "_ENEMY_VECTORS": "0x0726",
+    "CE_7": "0x04FB",
+    "VAR_ARG2": "0xC8AB",
+    "MAIN": "0x032A",
+    "__Moveto_d": "0x00A3",
+    "__Draw_Line_d": "0x00A8",
+    "DSL_W2": "0x012D",
+    "TEMP_YX": "0xC88E",
+    "DSWM_USE_OVERRIDE": "0x01B2",
+    "NUM_STR": "0xC892",
+    "DSL_NEXT_PATH": "0x013A",
+    "VAR_ENEMY3_X": "0xC8A1",
+    "J1B4_BUILTIN": "0x007C",
+    "DSWM_NEXT_SET_INTENSITY": "0x0269",
+    "DRAW_VEC_INTENSITY": "0xC898",
+    "DSL_LOOP": "0x00FE",
+    "CT_6": "0x04F5",
+    "DSWM_DONE": "0x02DB",
+    "VAR_ENEMY1_X": "0xC899",
+    "DSWM_NO_NEGATE_DX": "0x0233",
+    "CT_10": "0x05A4",
+    "UPDATE_PLAYER": "0x0415",
+    "DSWM_NEXT_PATH": "0x025A",
+    "__Intensity_a": "0x009B",
+    "TMPPTR2": "0xC88C",
+    "VAR_ARG1": "0xC8A9",
+    "CE_11": "0x05AA",
+    "Draw_Sync_List_At_With_Mirrors": "0x01A9",
+    "VAR_ENEMY2_Y": "0xC89F",
+    "VAR_FRAME_COUNT": "0xC8A5",
+    "TMPLEFT": "0xC882",
+    "_PLAYER_VECTORS": "0x0714",
+    "DSWM_NO_NEGATE_DY": "0x022B",
+    "IF_END_12": "0x060E",
+    "IF_END_4": "0x0516",
+    "LOOP_BODY": "0x0351",
+    "IF_NEXT_5": "0x0516",
+    "MOVE_PLAYER": "0x041D",
+    "CHECK_INPUT": "0x041C",
+    "RESULT": "0xC880",
+    "IF_END_8": "0x05C5",
+    "J1B2_BUILTIN.J1B2_OFF": "0x0069",
+    "DRAW_ENEMIES": "0x0656",
     "DSL_DONE": "0x01A8",
+    "UPDATE_ENEMIES": "0x041E",
+    "CE_3": "0x047F",
+    "START": "0x02DC",
+    "DSWM_NO_NEGATE_X": "0x01CA",
     "DSL_W3": "0x019B",
-    "VECTREX_SET_INTENSITY": "0x008B"
+    "DSWM_W3": "0x02CE",
+    "J1B4_BUILTIN.J1B4_OFF": "0x0087",
+    "IF_NEXT_13": "0x060E",
+    "Draw_Sync_List": "0x00AD",
+    "DSWM_W1": "0x020E",
+    "DSWM_W2": "0x024D",
+    "DSWM_NEXT_USE_OVERRIDE": "0x0267",
+    "J1B3_BUILTIN": "0x006D",
+    "CT_14": "0x05ED",
+    "J1B3_BUILTIN.J1B3_OFF": "0x0078",
+    "DRAW_VEC_Y": "0xC895",
+    "CT_2": "0x0479",
+    "MIRROR_X": "0xC896",
+    "J1B1_BUILTIN": "0x004F",
+    "VAR_ENEMY1_Y": "0xC89B",
+    "TEMP_Y": "0xC891",
+    "TMPLEFT2": "0xC884",
+    "MIRROR_Y": "0xC897",
+    "J1B1_BUILTIN.J1B1_OFF": "0x005A",
+    "VAR_ARG3": "0xC8AD",
+    "DRAW_PLAYER": "0x0616",
+    "TMPRIGHT": "0xC886",
+    "TMPRIGHT2": "0xC888",
+    "IF_NEXT_9": "0x05C5"
   },
   "lineMap": {
-    "52": "0x03E5",
-    "13": "0x030D",
-    "37": "0x02DE",
-    "60": "0x0476",
-    "15": "0x0319",
-    "56": "0x0425",
-    "81": "0x0319",
-    "46": "0x02DE",
-    "76": "0x02DE",
-    "14": "0x0313",
-    "51": "0x0310",
-    "44": "0x06E3",
-    "74": "0x068C",
-    "40": "0x06C6",
-    "57": "0x0461",
-    "82": "0x0350",
-    "65": "0x0559",
-    "19": "0x031F",
-    "62": "0x04CF",
-    "50": "0x02DE",
-    "42": "0x02DE",
-    "78": "0x0700",
-    "63": "0x0510",
-    "12": "0x0307",
-    "11": "0x0301",
-    "35": "0x06A9",
-    "38": "0x02E0",
-    "48": "0x02DC",
-    "64": "0x0525",
-    "9": "0x02F5",
-    "24": "0x0366",
-    "80": "0x02DE",
-    "61": "0x04A1",
-    "10": "0x02FB",
-    "27": "0x037A",
-    "55": "0x03FA",
-    "71": "0x02DE",
-    "72": "0x02E0",
-    "69": "0x02DC"
+    "46": "0x0407",
+    "50": "0x040D",
+    "80": "0x061C",
+    "26": "0x0365",
+    "78": "0x0619",
+    "82": "0x065C",
+    "85": "0x069E",
+    "73": "0x060F",
+    "86": "0x06DD",
+    "12": "0x02F5",
+    "56": "0x0485",
+    "34": "0x03A6",
+    "42": "0x0403",
+    "64": "0x0516",
+    "32": "0x03A2",
+    "84": "0x065F",
+    "10": "0x02EB",
+    "35": "0x03D1",
+    "41": "0x0402",
+    "65": "0x0541",
+    "67": "0x05B0",
+    "25": "0x0359",
+    "54": "0x0412",
+    "66": "0x056F",
+    "61": "0x0501",
+    "28": "0x038D",
+    "33": "0x03A5",
+    "16": "0x030D",
+    "31": "0x039F",
+    "39": "0x0401",
+    "59": "0x049A",
+    "68": "0x05C5",
+    "20": "0x0313",
+    "15": "0x0307",
+    "44": "0x0406",
+    "75": "0x0612",
+    "11": "0x02F1",
+    "13": "0x02FB",
+    "14": "0x0301",
+    "52": "0x0410",
+    "55": "0x043D",
+    "69": "0x05F9",
+    "60": "0x04C5",
+    "76": "0x0615",
+    "48": "0x040A"
   },
   "vpyLineMap": {
-    "0x0301": {
+    "0x0485": {
       "file": "main.vpy",
-      "address": "0x0301",
-      "line": 11
-    },
-    "0x0476": {
-      "file": "main.vpy",
-      "address": "0x0476",
-      "line": 60
-    },
-    "0x0461": {
-      "file": "main.vpy",
-      "address": "0x0461",
-      "line": 57
-    },
-    "0x0559": {
-      "file": "main.vpy",
-      "address": "0x0559",
-      "line": 65
-    },
-    "0x0350": {
-      "file": "main.vpy",
-      "address": "0x0350",
-      "line": 82
-    },
-    "0x0700": {
-      "file": "main.vpy",
-      "address": "0x0700",
-      "line": 78
-    },
-    "0x06A9": {
-      "file": "main.vpy",
-      "address": "0x06A9",
-      "line": 35
-    },
-    "0x0310": {
-      "file": "main.vpy",
-      "address": "0x0310",
-      "line": 51
-    },
-    "0x03E5": {
-      "file": "main.vpy",
-      "address": "0x03E5",
-      "line": 52
-    },
-    "0x02DC": {
-      "file": "main.vpy",
-      "address": "0x02DC",
-      "line": 40
-    },
-    "0x0307": {
-      "file": "main.vpy",
-      "address": "0x0307",
-      "line": 12
-    },
-    "0x030D": {
-      "file": "main.vpy",
-      "address": "0x030D",
-      "line": 13
-    },
-    "0x037A": {
-      "file": "main.vpy",
-      "address": "0x037A",
-      "line": 27
-    },
-    "0x02F5": {
-      "file": "main.vpy",
-      "address": "0x02F5",
-      "line": 9
-    },
-    "0x04CF": {
-      "file": "main.vpy",
-      "address": "0x04CF",
-      "line": 62
-    },
-    "0x068C": {
-      "file": "main.vpy",
-      "address": "0x068C",
-      "line": 74
-    },
-    "0x0510": {
-      "file": "main.vpy",
-      "address": "0x0510",
-      "line": 63
-    },
-    "0x0313": {
-      "file": "main.vpy",
-      "address": "0x0313",
-      "line": 14
-    },
-    "0x03FA": {
-      "file": "main.vpy",
-      "address": "0x03FA",
-      "line": 55
+      "address": "0x0485",
+      "line": 56
     },
     "0x02FB": {
       "file": "main.vpy",
       "address": "0x02FB",
-      "line": 10
+      "line": 13
     },
-    "0x06C6": {
+    "0x0402": {
       "file": "main.vpy",
-      "address": "0x06C6",
-      "line": 40
+      "address": "0x0402",
+      "line": 41
     },
-    "0x0319": {
+    "0x061C": {
       "file": "main.vpy",
-      "address": "0x0319",
-      "line": 81
+      "address": "0x061C",
+      "line": 80
     },
-    "0x031F": {
+    "0x065C": {
       "file": "main.vpy",
-      "address": "0x031F",
-      "line": 19
+      "address": "0x065C",
+      "line": 82
     },
-    "0x02DE": {
+    "0x039F": {
       "file": "main.vpy",
-      "address": "0x02DE",
-      "line": 42
+      "address": "0x039F",
+      "line": 31
     },
-    "0x06E3": {
+    "0x0406": {
       "file": "main.vpy",
-      "address": "0x06E3",
+      "address": "0x0406",
       "line": 44
     },
-    "0x0366": {
+    "0x03A6": {
       "file": "main.vpy",
-      "address": "0x0366",
-      "line": 24
+      "address": "0x03A6",
+      "line": 34
     },
-    "0x04A1": {
+    "0x0615": {
       "file": "main.vpy",
-      "address": "0x04A1",
+      "address": "0x0615",
+      "line": 76
+    },
+    "0x02EB": {
+      "file": "main.vpy",
+      "address": "0x02EB",
+      "line": 10
+    },
+    "0x0403": {
+      "file": "main.vpy",
+      "address": "0x0403",
+      "line": 42
+    },
+    "0x0365": {
+      "file": "main.vpy",
+      "address": "0x0365",
+      "line": 26
+    },
+    "0x0407": {
+      "file": "main.vpy",
+      "address": "0x0407",
+      "line": 46
+    },
+    "0x065F": {
+      "file": "main.vpy",
+      "address": "0x065F",
+      "line": 84
+    },
+    "0x02F1": {
+      "file": "main.vpy",
+      "address": "0x02F1",
+      "line": 11
+    },
+    "0x049A": {
+      "file": "main.vpy",
+      "address": "0x049A",
+      "line": 59
+    },
+    "0x0313": {
+      "file": "main.vpy",
+      "address": "0x0313",
+      "line": 20
+    },
+    "0x0301": {
+      "file": "main.vpy",
+      "address": "0x0301",
+      "line": 14
+    },
+    "0x038D": {
+      "file": "main.vpy",
+      "address": "0x038D",
+      "line": 28
+    },
+    "0x03D1": {
+      "file": "main.vpy",
+      "address": "0x03D1",
+      "line": 35
+    },
+    "0x0516": {
+      "file": "main.vpy",
+      "address": "0x0516",
+      "line": 64
+    },
+    "0x0412": {
+      "file": "main.vpy",
+      "address": "0x0412",
+      "line": 54
+    },
+    "0x043D": {
+      "file": "main.vpy",
+      "address": "0x043D",
+      "line": 55
+    },
+    "0x040D": {
+      "file": "main.vpy",
+      "address": "0x040D",
+      "line": 50
+    },
+    "0x05C5": {
+      "file": "main.vpy",
+      "address": "0x05C5",
+      "line": 68
+    },
+    "0x05F9": {
+      "file": "main.vpy",
+      "address": "0x05F9",
+      "line": 69
+    },
+    "0x0359": {
+      "file": "main.vpy",
+      "address": "0x0359",
+      "line": 25
+    },
+    "0x0410": {
+      "file": "main.vpy",
+      "address": "0x0410",
+      "line": 52
+    },
+    "0x06DD": {
+      "file": "main.vpy",
+      "address": "0x06DD",
+      "line": 86
+    },
+    "0x03A5": {
+      "file": "main.vpy",
+      "address": "0x03A5",
+      "line": 33
+    },
+    "0x0612": {
+      "file": "main.vpy",
+      "address": "0x0612",
+      "line": 75
+    },
+    "0x05B0": {
+      "file": "main.vpy",
+      "address": "0x05B0",
+      "line": 67
+    },
+    "0x030D": {
+      "file": "main.vpy",
+      "address": "0x030D",
+      "line": 16
+    },
+    "0x0401": {
+      "file": "main.vpy",
+      "address": "0x0401",
+      "line": 39
+    },
+    "0x040A": {
+      "file": "main.vpy",
+      "address": "0x040A",
+      "line": 48
+    },
+    "0x0541": {
+      "file": "main.vpy",
+      "address": "0x0541",
+      "line": 65
+    },
+    "0x0619": {
+      "file": "main.vpy",
+      "address": "0x0619",
+      "line": 78
+    },
+    "0x069E": {
+      "file": "main.vpy",
+      "address": "0x069E",
+      "line": 85
+    },
+    "0x02F5": {
+      "file": "main.vpy",
+      "address": "0x02F5",
+      "line": 12
+    },
+    "0x03A2": {
+      "file": "main.vpy",
+      "address": "0x03A2",
+      "line": 32
+    },
+    "0x060F": {
+      "file": "main.vpy",
+      "address": "0x060F",
+      "line": 73
+    },
+    "0x04C5": {
+      "file": "main.vpy",
+      "address": "0x04C5",
+      "line": 60
+    },
+    "0x0307": {
+      "file": "main.vpy",
+      "address": "0x0307",
+      "line": 15
+    },
+    "0x0501": {
+      "file": "main.vpy",
+      "address": "0x0501",
       "line": 61
     },
-    "0x02E0": {
+    "0x056F": {
       "file": "main.vpy",
-      "address": "0x02E0",
-      "line": 38
-    },
-    "0x0425": {
-      "file": "main.vpy",
-      "address": "0x0425",
-      "line": 56
-    },
-    "0x0525": {
-      "file": "main.vpy",
-      "address": "0x0525",
-      "line": 64
+      "address": "0x056F",
+      "line": 66
     }
   },
   "asmLineMap": {
-    "0x0025": {
+    "0x05B4": {
       "file": "test_callgraph.asm",
-      "address": "0x0025",
-      "line": 74
+      "address": "0x05B4",
+      "line": 814
     },
-    "0x0461": {
+    "0x070A": {
       "file": "test_callgraph.asm",
-      "address": "0x0461",
-      "line": 665
+      "address": "0x070A",
+      "line": 957
     },
-    "0x01F7": {
+    "0x0582": {
       "file": "test_callgraph.asm",
-      "address": "0x01F7",
-      "line": 345
+      "address": "0x0582",
+      "line": 799
     },
-    "0x0056": {
+    "0x0344": {
       "file": "test_callgraph.asm",
-      "address": "0x0056",
-      "line": 108
+      "address": "0x0344",
+      "line": 524
     },
-    "0x070F": {
+    "0x009B": {
       "file": "test_callgraph.asm",
-      "address": "0x070F",
-      "line": 1053
+      "address": "0x009B",
+      "line": 153
     },
-    "0x0201": {
+    "0x0655": {
       "file": "test_callgraph.asm",
-      "address": "0x0201",
-      "line": 350
+      "address": "0x0655",
+      "line": 887
     },
-    "0x0061": {
+    "0x06DA": {
       "file": "test_callgraph.asm",
-      "address": "0x0061",
-      "line": 115
+      "address": "0x06DA",
+      "line": 939
     },
-    "0x0184": {
+    "0x0042": {
       "file": "test_callgraph.asm",
-      "address": "0x0184",
-      "line": 280
+      "address": "0x0042",
+      "line": 89
     },
-    "0x0181": {
+    "0x0069": {
       "file": "test_callgraph.asm",
-      "address": "0x0181",
-      "line": 279
+      "address": "0x0069",
+      "line": 120
     },
-    "0x00A3": {
+    "0x0391": {
       "file": "test_callgraph.asm",
-      "address": "0x00A3",
-      "line": 159
+      "address": "0x0391",
+      "line": 570
     },
-    "0x030A": {
+    "0x0728": {
       "file": "test_callgraph.asm",
-      "address": "0x030A",
-      "line": 591
+      "address": "0x0728",
+      "line": 1008
     },
-    "0x016F": {
+    "0x027F": {
       "file": "test_callgraph.asm",
-      "address": "0x016F",
-      "line": 269
+      "address": "0x027F",
+      "line": 419
     },
-    "0x022D": {
+    "0x017A": {
       "file": "test_callgraph.asm",
-      "address": "0x022D",
-      "line": 374
+      "address": "0x017A",
+      "line": 275
     },
-    "0x00FE": {
+    "0x0275": {
       "file": "test_callgraph.asm",
-      "address": "0x00FE",
-      "line": 212
+      "address": "0x0275",
+      "line": 414
     },
-    "0x02A4": {
+    "0x0541": {
       "file": "test_callgraph.asm",
-      "address": "0x02A4",
-      "line": 442
+      "address": "0x0541",
+      "line": 772
+    },
+    "0x00BE": {
+      "file": "test_callgraph.asm",
+      "address": "0x00BE",
+      "line": 177
+    },
+    "0x01F2": {
+      "file": "test_callgraph.asm",
+      "address": "0x01F2",
+      "line": 342
+    },
+    "0x04AE": {
+      "file": "test_callgraph.asm",
+      "address": "0x04AE",
+      "line": 710
+    },
+    "0x069E": {
+      "file": "test_callgraph.asm",
+      "address": "0x069E",
+      "line": 919
+    },
+    "0x0449": {
+      "file": "test_callgraph.asm",
+      "address": "0x0449",
+      "line": 679
+    },
+    "0x053D": {
+      "file": "test_callgraph.asm",
+      "address": "0x053D",
+      "line": 769
+    },
+    "0x006D": {
+      "file": "test_callgraph.asm",
+      "address": "0x006D",
+      "line": 123
+    },
+    "0x01A0": {
+      "file": "test_callgraph.asm",
+      "address": "0x01A0",
+      "line": 291
+    },
+    "0x062B": {
+      "file": "test_callgraph.asm",
+      "address": "0x062B",
+      "line": 873
+    },
+    "0x00D0": {
+      "file": "test_callgraph.asm",
+      "address": "0x00D0",
+      "line": 187
+    },
+    "0x0719": {
+      "file": "test_callgraph.asm",
+      "address": "0x0719",
+      "line": 985
     },
     "0x06E6": {
       "file": "test_callgraph.asm",
       "address": "0x06E6",
-      "line": 1009
+      "line": 945
     },
-    "0x0108": {
+    "0x0215": {
       "file": "test_callgraph.asm",
-      "address": "0x0108",
-      "line": 219
+      "address": "0x0215",
+      "line": 359
     },
-    "0x013C": {
+    "0x0701": {
       "file": "test_callgraph.asm",
-      "address": "0x013C",
-      "line": 242
+      "address": "0x0701",
+      "line": 954
     },
-    "0x050D": {
+    "0x021C": {
       "file": "test_callgraph.asm",
-      "address": "0x050D",
-      "line": 732
+      "address": "0x021C",
+      "line": 363
     },
-    "0x0699": {
+    "0x005E": {
       "file": "test_callgraph.asm",
-      "address": "0x0699",
-      "line": 965
+      "address": "0x005E",
+      "line": 113
     },
-    "0x01F4": {
+    "0x0710": {
       "file": "test_callgraph.asm",
-      "address": "0x01F4",
-      "line": 344
+      "address": "0x0710",
+      "line": 959
     },
-    "0x0433": {
+    "0x02BC": {
       "file": "test_callgraph.asm",
-      "address": "0x0433",
-      "line": 649
+      "address": "0x02BC",
+      "line": 451
     },
-    "0x035A": {
+    "0x033F": {
       "file": "test_callgraph.asm",
-      "address": "0x035A",
-      "line": 837
+      "address": "0x033F",
+      "line": 55
     },
-    "0x02A0": {
+    "0x0354": {
       "file": "test_callgraph.asm",
-      "address": "0x02A0",
-      "line": 437
+      "address": "0x0354",
+      "line": 538
     },
-    "0x04D1": {
+    "0x023D": {
       "file": "test_callgraph.asm",
-      "address": "0x04D1",
-      "line": 715
+      "address": "0x023D",
+      "line": 381
     },
-    "0x0421": {
+    "0x02F5": {
       "file": "test_callgraph.asm",
-      "address": "0x0421",
-      "line": 641
+      "address": "0x02F5",
+      "line": 20
     },
-    "0x011B": {
+    "0x0168": {
       "file": "test_callgraph.asm",
-      "address": "0x011B",
-      "line": 228
+      "address": "0x0168",
+      "line": 264
     },
-    "0x0211": {
+    "0x05F6": {
       "file": "test_callgraph.asm",
-      "address": "0x0211",
-      "line": 356
+      "address": "0x05F6",
+      "line": 841
     },
-    "0x02A5": {
+    "0x016F": {
       "file": "test_callgraph.asm",
-      "address": "0x02A5",
-      "line": 443
+      "address": "0x016F",
+      "line": 268
     },
-    "0x01C4": {
+    "0x014D": {
       "file": "test_callgraph.asm",
-      "address": "0x01C4",
-      "line": 319
+      "address": "0x014D",
+      "line": 249
     },
-    "0x0193": {
+    "0x0591": {
       "file": "test_callgraph.asm",
-      "address": "0x0193",
-      "line": 286
+      "address": "0x0591",
+      "line": 804
     },
-    "0x04B7": {
+    "0x061C": {
       "file": "test_callgraph.asm",
-      "address": "0x04B7",
-      "line": 702
+      "address": "0x061C",
+      "line": 868
     },
-    "0x050A": {
+    "0x0424": {
       "file": "test_callgraph.asm",
-      "address": "0x050A",
-      "line": 731
+      "address": "0x0424",
+      "line": 662
     },
-    "0x026F": {
+    "0x0033": {
       "file": "test_callgraph.asm",
-      "address": "0x026F",
-      "line": 411
-    },
-    "0x03E9": {
-      "file": "test_callgraph.asm",
-      "address": "0x03E9",
-      "line": 617
-    },
-    "0x00ED": {
-      "file": "test_callgraph.asm",
-      "address": "0x00ED",
-      "line": 201
-    },
-    "0x037A": {
-      "file": "test_callgraph.asm",
-      "address": "0x037A",
-      "line": 849
-    },
-    "0x0030": {
-      "file": "test_callgraph.asm",
-      "address": "0x0030",
+      "address": "0x0033",
       "line": 78
-    },
-    "0x0102": {
-      "file": "test_callgraph.asm",
-      "address": "0x0102",
-      "line": 215
-    },
-    "0x0212": {
-      "file": "test_callgraph.asm",
-      "address": "0x0212",
-      "line": 357
-    },
-    "0x0439": {
-      "file": "test_callgraph.asm",
-      "address": "0x0439",
-      "line": 651
     },
     "0x02E8": {
       "file": "test_callgraph.asm",
       "address": "0x02E8",
       "line": 15
     },
-    "0x032B": {
+    "0x022D": {
       "file": "test_callgraph.asm",
-      "address": "0x032B",
-      "line": 816
+      "address": "0x022D",
+      "line": 373
     },
-    "0x0280": {
+    "0x03A5": {
       "file": "test_callgraph.asm",
-      "address": "0x0280",
-      "line": 421
+      "address": "0x03A5",
+      "line": 584
     },
-    "0x071F": {
+    "0x0319": {
       "file": "test_callgraph.asm",
-      "address": "0x071F",
-      "line": 1075
+      "address": "0x0319",
+      "line": 504
     },
-    "0x041C": {
+    "0x005A": {
       "file": "test_callgraph.asm",
-      "address": "0x041C",
-      "line": 637
+      "address": "0x005A",
+      "line": 110
     },
-    "0x02EB": {
+    "0x02DE": {
       "file": "test_callgraph.asm",
-      "address": "0x02EB",
-      "line": 478
+      "address": "0x02DE",
+      "line": 11
     },
-    "0x04F1": {
+    "0x003F": {
       "file": "test_callgraph.asm",
-      "address": "0x04F1",
-      "line": 726
+      "address": "0x003F",
+      "line": 88
     },
-    "0x0537": {
+    "0x05C5": {
       "file": "test_callgraph.asm",
-      "address": "0x0537",
-      "line": 750
-    },
-    "0x03EF": {
-      "file": "test_callgraph.asm",
-      "address": "0x03EF",
-      "line": 619
-    },
-    "0x0455": {
-      "file": "test_callgraph.asm",
-      "address": "0x0455",
-      "line": 659
-    },
-    "0x0448": {
-      "file": "test_callgraph.asm",
-      "address": "0x0448",
-      "line": 656
-    },
-    "0x0684": {
-      "file": "test_callgraph.asm",
-      "address": "0x0684",
-      "line": 956
-    },
-    "0x032E": {
-      "file": "test_callgraph.asm",
-      "address": "0x032E",
-      "line": 513
-    },
-    "0x02D2": {
-      "file": "test_callgraph.asm",
-      "address": "0x02D2",
-      "line": 459
-    },
-    "0x01D8": {
-      "file": "test_callgraph.asm",
-      "address": "0x01D8",
-      "line": 329
-    },
-    "0x02F8": {
-      "file": "test_callgraph.asm",
-      "address": "0x02F8",
-      "line": 797
-    },
-    "0x01BF": {
-      "file": "test_callgraph.asm",
-      "address": "0x01BF",
-      "line": 314
-    },
-    "0x02D5": {
-      "file": "test_callgraph.asm",
-      "address": "0x02D5",
-      "line": 461
-    },
-    "0x008D": {
-      "file": "test_callgraph.asm",
-      "address": "0x008D",
-      "line": 146
-    },
-    "0x0316": {
-      "file": "test_callgraph.asm",
-      "address": "0x0316",
-      "line": 930
-    },
-    "0x01A2": {
-      "file": "test_callgraph.asm",
-      "address": "0x01A2",
-      "line": 293
-    },
-    "0x0068": {
-      "file": "test_callgraph.asm",
-      "address": "0x0068",
-      "line": 120
-    },
-    "0x00BC": {
-      "file": "test_callgraph.asm",
-      "address": "0x00BC",
-      "line": 177
-    },
-    "0x0553": {
-      "file": "test_callgraph.asm",
-      "address": "0x0553",
-      "line": 762
-    },
-    "0x0251": {
-      "file": "test_callgraph.asm",
-      "address": "0x0251",
-      "line": 392
-    },
-    "0x015A": {
-      "file": "test_callgraph.asm",
-      "address": "0x015A",
-      "line": 259
-    },
-    "0x0725": {
-      "file": "test_callgraph.asm",
-      "address": "0x0725",
-      "line": 1082
-    },
-    "0x010E": {
-      "file": "test_callgraph.asm",
-      "address": "0x010E",
-      "line": 222
-    },
-    "0x0105": {
-      "file": "test_callgraph.asm",
-      "address": "0x0105",
-      "line": 216
-    },
-    "0x006D": {
-      "file": "test_callgraph.asm",
-      "address": "0x006D",
-      "line": 124
-    },
-    "0x02C1": {
-      "file": "test_callgraph.asm",
-      "address": "0x02C1",
-      "line": 454
-    },
-    "0x04C8": {
-      "file": "test_callgraph.asm",
-      "address": "0x04C8",
-      "line": 708
-    },
-    "0x02A3": {
-      "file": "test_callgraph.asm",
-      "address": "0x02A3",
-      "line": 441
-    },
-    "0x0187": {
-      "file": "test_callgraph.asm",
-      "address": "0x0187",
-      "line": 281
-    },
-    "0x03D9": {
-      "file": "test_callgraph.asm",
-      "address": "0x03D9",
-      "line": 609
-    },
-    "0x04E2": {
-      "file": "test_callgraph.asm",
-      "address": "0x04E2",
-      "line": 721
-    },
-    "0x042B": {
-      "file": "test_callgraph.asm",
-      "address": "0x042B",
-      "line": 646
-    },
-    "0x015D": {
-      "file": "test_callgraph.asm",
-      "address": "0x015D",
-      "line": 261
-    },
-    "0x019F": {
-      "file": "test_callgraph.asm",
-      "address": "0x019F",
-      "line": 291
-    },
-    "0x06F1": {
-      "file": "test_callgraph.asm",
-      "address": "0x06F1",
-      "line": 1017
-    },
-    "0x06F6": {
-      "file": "test_callgraph.asm",
-      "address": "0x06F6",
-      "line": 1019
-    },
-    "0x06B9": {
-      "file": "test_callgraph.asm",
-      "address": "0x06B9",
-      "line": 986
-    },
-    "0x024D": {
-      "file": "test_callgraph.asm",
-      "address": "0x024D",
-      "line": 390
-    },
-    "0x0278": {
-      "file": "test_callgraph.asm",
-      "address": "0x0278",
-      "line": 417
-    },
-    "0x01A8": {
-      "file": "test_callgraph.asm",
-      "address": "0x01A8",
-      "line": 295
-    },
-    "0x06FA": {
-      "file": "test_callgraph.asm",
-      "address": "0x06FA",
-      "line": 1021
-    },
-    "0x04E8": {
-      "file": "test_callgraph.asm",
-      "address": "0x04E8",
-      "line": 723
-    },
-    "0x04D7": {
-      "file": "test_callgraph.asm",
-      "address": "0x04D7",
-      "line": 717
-    },
-    "0x01A9": {
-      "file": "test_callgraph.asm",
-      "address": "0x01A9",
-      "line": 300
-    },
-    "0x01C1": {
-      "file": "test_callgraph.asm",
-      "address": "0x01C1",
-      "line": 317
-    },
-    "0x0177": {
-      "file": "test_callgraph.asm",
-      "address": "0x0177",
-      "line": 275
-    },
-    "0x00F2": {
-      "file": "test_callgraph.asm",
-      "address": "0x00F2",
-      "line": 203
-    },
-    "0x011D": {
-      "file": "test_callgraph.asm",
-      "address": "0x011D",
-      "line": 229
-    },
-    "0x02BC": {
-      "file": "test_callgraph.asm",
-      "address": "0x02BC",
-      "line": 452
-    },
-    "0x045B": {
-      "file": "test_callgraph.asm",
-      "address": "0x045B",
-      "line": 662
-    },
-    "0x04BA": {
-      "file": "test_callgraph.asm",
-      "address": "0x04BA",
-      "line": 703
-    },
-    "0x0156": {
-      "file": "test_callgraph.asm",
-      "address": "0x0156",
-      "line": 255
-    },
-    "0x049E": {
-      "file": "test_callgraph.asm",
-      "address": "0x049E",
-      "line": 692
-    },
-    "0x027F": {
-      "file": "test_callgraph.asm",
-      "address": "0x027F",
-      "line": 420
-    },
-    "0x0162": {
-      "file": "test_callgraph.asm",
-      "address": "0x0162",
-      "line": 263
-    },
-    "0x02B7": {
-      "file": "test_callgraph.asm",
-      "address": "0x02B7",
-      "line": 450
-    },
-    "0x06B4": {
-      "file": "test_callgraph.asm",
-      "address": "0x06B4",
-      "line": 980
-    },
-    "0x067F": {
-      "file": "test_callgraph.asm",
-      "address": "0x067F",
-      "line": 954
-    },
-    "0x0153": {
-      "file": "test_callgraph.asm",
-      "address": "0x0153",
-      "line": 253
-    },
-    "0x0540": {
-      "file": "test_callgraph.asm",
-      "address": "0x0540",
-      "line": 753
-    },
-    "0x0498": {
-      "file": "test_callgraph.asm",
-      "address": "0x0498",
-      "line": 687
-    },
-    "0x049C": {
-      "file": "test_callgraph.asm",
-      "address": "0x049C",
-      "line": 690
-    },
-    "0x06AC": {
-      "file": "test_callgraph.asm",
-      "address": "0x06AC",
-      "line": 977
-    },
-    "0x028C": {
-      "file": "test_callgraph.asm",
-      "address": "0x028C",
-      "line": 428
-    },
-    "0x06C0": {
-      "file": "test_callgraph.asm",
-      "address": "0x06C0",
-      "line": 989
-    },
-    "0x035D": {
-      "file": "test_callgraph.asm",
-      "address": "0x035D",
-      "line": 838
-    },
-    "0x01AE": {
-      "file": "test_callgraph.asm",
-      "address": "0x01AE",
-      "line": 302
-    },
-    "0x0705": {
-      "file": "test_callgraph.asm",
-      "address": "0x0705",
-      "line": 1026
-    },
-    "0x0219": {
-      "file": "test_callgraph.asm",
-      "address": "0x0219",
-      "line": 363
-    },
-    "0x03DF": {
-      "file": "test_callgraph.asm",
-      "address": "0x03DF",
-      "line": 612
-    },
-    "0x0170": {
-      "file": "test_callgraph.asm",
-      "address": "0x0170",
-      "line": 270
-    },
-    "0x0350": {
-      "file": "test_callgraph.asm",
-      "address": "0x0350",
-      "line": 533
-    },
-    "0x06F0": {
-      "file": "test_callgraph.asm",
-      "address": "0x06F0",
-      "line": 1013
-    },
-    "0x02D1": {
-      "file": "test_callgraph.asm",
-      "address": "0x02D1",
-      "line": 458
-    },
-    "0x01B0": {
-      "file": "test_callgraph.asm",
-      "address": "0x01B0",
-      "line": 303
-    },
-    "0x0110": {
-      "file": "test_callgraph.asm",
-      "address": "0x0110",
-      "line": 223
-    },
-    "0x0330": {
-      "file": "test_callgraph.asm",
-      "address": "0x0330",
-      "line": 606
-    },
-    "0x0430": {
-      "file": "test_callgraph.asm",
-      "address": "0x0430",
-      "line": 648
-    },
-    "0x0708": {
-      "file": "test_callgraph.asm",
-      "address": "0x0708",
-      "line": 1027
-    },
-    "0x03F2": {
-      "file": "test_callgraph.asm",
-      "address": "0x03F2",
-      "line": 620
-    },
-    "0x052B": {
-      "file": "test_callgraph.asm",
-      "address": "0x052B",
-      "line": 746
-    },
-    "0x0065": {
-      "file": "test_callgraph.asm",
-      "address": "0x0065",
-      "line": 118
-    },
-    "0x025A": {
-      "file": "test_callgraph.asm",
-      "address": "0x025A",
-      "line": 397
-    },
-    "0x004A": {
-      "file": "test_callgraph.asm",
-      "address": "0x004A",
-      "line": 94
-    },
-    "0x055D": {
-      "file": "test_callgraph.asm",
-      "address": "0x055D",
-      "line": 767
-    },
-    "0x00C1": {
-      "file": "test_callgraph.asm",
-      "address": "0x00C1",
-      "line": 179
-    },
-    "0x012D": {
-      "file": "test_callgraph.asm",
-      "address": "0x012D",
-      "line": 233
-    },
-    "0x015B": {
-      "file": "test_callgraph.asm",
-      "address": "0x015B",
-      "line": 260
-    },
-    "0x013A": {
-      "file": "test_callgraph.asm",
-      "address": "0x013A",
-      "line": 241
-    },
-    "0x0700": {
-      "file": "test_callgraph.asm",
-      "address": "0x0700",
-      "line": 1024
+      "address": "0x05C5",
+      "line": 822
     },
     "0x02BA": {
       "file": "test_callgraph.asm",
       "address": "0x02BA",
-      "line": 451
+      "line": 450
     },
-    "0x04A1": {
+    "0x057A": {
       "file": "test_callgraph.asm",
-      "address": "0x04A1",
-      "line": 694
+      "address": "0x057A",
+      "line": 796
     },
-    "0x06C6": {
+    "0x04DF": {
       "file": "test_callgraph.asm",
-      "address": "0x06C6",
-      "line": 992
+      "address": "0x04DF",
+      "line": 731
     },
-    "0x0686": {
+    "0x0056": {
       "file": "test_callgraph.asm",
-      "address": "0x0686",
-      "line": 957
+      "address": "0x0056",
+      "line": 107
     },
-    "0x0035": {
+    "0x03A7": {
       "file": "test_callgraph.asm",
-      "address": "0x0035",
-      "line": 81
+      "address": "0x03A7",
+      "line": 588
     },
-    "0x00C4": {
+    "0x071A": {
       "file": "test_callgraph.asm",
-      "address": "0x00C4",
-      "line": 180
+      "address": "0x071A",
+      "line": 986
     },
-    "0x028B": {
+    "0x04D0": {
       "file": "test_callgraph.asm",
-      "address": "0x028B",
-      "line": 427
+      "address": "0x04D0",
+      "line": 726
     },
-    "0x033B": {
+    "0x0261": {
       "file": "test_callgraph.asm",
-      "address": "0x033B",
-      "line": 53
+      "address": "0x0261",
+      "line": 400
+    },
+    "0x01E4": {
+      "file": "test_callgraph.asm",
+      "address": "0x01E4",
+      "line": 335
+    },
+    "0x068C": {
+      "file": "test_callgraph.asm",
+      "address": "0x068C",
+      "line": 911
+    },
+    "0x0274": {
+      "file": "test_callgraph.asm",
+      "address": "0x0274",
+      "line": 413
+    },
+    "0x0538": {
+      "file": "test_callgraph.asm",
+      "address": "0x0538",
+      "line": 765
+    },
+    "0x03C0": {
+      "file": "test_callgraph.asm",
+      "address": "0x03C0",
+      "line": 597
+    },
+    "0x02D2": {
+      "file": "test_callgraph.asm",
+      "address": "0x02D2",
+      "line": 458
+    },
+    "0x01ED": {
+      "file": "test_callgraph.asm",
+      "address": "0x01ED",
+      "line": 340
+    },
+    "0x013A": {
+      "file": "test_callgraph.asm",
+      "address": "0x013A",
+      "line": 240
+    },
+    "0x05B0": {
+      "file": "test_callgraph.asm",
+      "address": "0x05B0",
+      "line": 812
+    },
+    "0x064C": {
+      "file": "test_callgraph.asm",
+      "address": "0x064C",
+      "line": 884
+    },
+    "0x05D1": {
+      "file": "test_callgraph.asm",
+      "address": "0x05D1",
+      "line": 826
+    },
+    "0x055A": {
+      "file": "test_callgraph.asm",
+      "address": "0x055A",
+      "line": 781
+    },
+    "0x00D6": {
+      "file": "test_callgraph.asm",
+      "address": "0x00D6",
+      "line": 190
+    },
+    "0x007F": {
+      "file": "test_callgraph.asm",
+      "address": "0x007F",
+      "line": 134
+    },
+    "0x011B": {
+      "file": "test_callgraph.asm",
+      "address": "0x011B",
+      "line": 227
+    },
+    "0x00CE": {
+      "file": "test_callgraph.asm",
+      "address": "0x00CE",
+      "line": 186
+    },
+    "0x0399": {
+      "file": "test_callgraph.asm",
+      "address": "0x0399",
+      "line": 574
+    },
+    "0x05DA": {
+      "file": "test_callgraph.asm",
+      "address": "0x05DA",
+      "line": 829
+    },
+    "0x0115": {
+      "file": "test_callgraph.asm",
+      "address": "0x0115",
+      "line": 225
+    },
+    "0x0130": {
+      "file": "test_callgraph.asm",
+      "address": "0x0130",
+      "line": 233
+    },
+    "0x030D": {
+      "file": "test_callgraph.asm",
+      "address": "0x030D",
+      "line": 36
+    },
+    "0x04A0": {
+      "file": "test_callgraph.asm",
+      "address": "0x04A0",
+      "line": 705
+    },
+    "0x037A": {
+      "file": "test_callgraph.asm",
+      "address": "0x037A",
+      "line": 557
+    },
+    "0x06E0": {
+      "file": "test_callgraph.asm",
+      "address": "0x06E0",
+      "line": 943
+    },
+    "0x00B4": {
+      "file": "test_callgraph.asm",
+      "address": "0x00B4",
+      "line": 172
+    },
+    "0x00AA": {
+      "file": "test_callgraph.asm",
+      "address": "0x00AA",
+      "line": 162
     },
     "0x03E5": {
       "file": "test_callgraph.asm",
       "address": "0x03E5",
       "line": 615
     },
-    "0x06D6": {
+    "0x0335": {
       "file": "test_callgraph.asm",
-      "address": "0x06D6",
-      "line": 1002
+      "address": "0x0335",
+      "line": 518
     },
-    "0x0090": {
+    "0x0077": {
       "file": "test_callgraph.asm",
-      "address": "0x0090",
-      "line": 147
+      "address": "0x0077",
+      "line": 129
     },
-    "0x00CE": {
+    "0x0508": {
       "file": "test_callgraph.asm",
-      "address": "0x00CE",
-      "line": 187
+      "address": "0x0508",
+      "line": 746
     },
-    "0x0720": {
+    "0x02CC": {
       "file": "test_callgraph.asm",
-      "address": "0x0720",
-      "line": 1078
+      "address": "0x02CC",
+      "line": 1023
     },
-    "0x016E": {
+    "0x0619": {
       "file": "test_callgraph.asm",
-      "address": "0x016E",
-      "line": 268
+      "address": "0x0619",
+      "line": 864
     },
-    "0x0471": {
+    "0x04D6": {
       "file": "test_callgraph.asm",
-      "address": "0x0471",
-      "line": 671
+      "address": "0x04D6",
+      "line": 728
     },
-    "0x0411": {
+    "0x0267": {
       "file": "test_callgraph.asm",
-      "address": "0x0411",
-      "line": 633
+      "address": "0x0267",
+      "line": 404
     },
-    "0x01BA": {
+    "0x0726": {
       "file": "test_callgraph.asm",
-      "address": "0x01BA",
-      "line": 311
+      "address": "0x0726",
+      "line": 994
     },
-    "0x0728": {
+    "0x05CB": {
       "file": "test_callgraph.asm",
-      "address": "0x0728",
-      "line": 1083
+      "address": "0x05CB",
+      "line": 824
     },
-    "0x04D4": {
+    "0x0549": {
       "file": "test_callgraph.asm",
-      "address": "0x04D4",
-      "line": 716
+      "address": "0x0549",
+      "line": 775
     },
-    "0x070B": {
+    "0x02FE": {
       "file": "test_callgraph.asm",
-      "address": "0x070B",
-      "line": 1028
+      "address": "0x02FE",
+      "line": 491
     },
-    "0x01F2": {
+    "0x0248": {
       "file": "test_callgraph.asm",
-      "address": "0x01F2",
-      "line": 343
+      "address": "0x0248",
+      "line": 385
     },
-    "0x02AD": {
+    "0x0068": {
       "file": "test_callgraph.asm",
-      "address": "0x02AD",
-      "line": 446
+      "address": "0x0068",
+      "line": 119
     },
-    "0x04D0": {
+    "0x0072": {
       "file": "test_callgraph.asm",
-      "address": "0x04D0",
-      "line": 714
+      "address": "0x0072",
+      "line": 126
     },
-    "0x0376": {
+    "0x0385": {
       "file": "test_callgraph.asm",
-      "address": "0x0376",
-      "line": 559
+      "address": "0x0385",
+      "line": 561
     },
-    "0x02DC": {
+    "0x00CC": {
       "file": "test_callgraph.asm",
-      "address": "0x02DC",
-      "line": 890
+      "address": "0x00CC",
+      "line": 184
     },
-    "0x0694": {
+    "0x0160": {
       "file": "test_callgraph.asm",
-      "address": "0x0694",
-      "line": 963
+      "address": "0x0160",
+      "line": 261
     },
-    "0x02E0": {
+    "0x03BB": {
       "file": "test_callgraph.asm",
-      "address": "0x02E0",
-      "line": 911
+      "address": "0x03BB",
+      "line": 595
     },
-    "0x049A": {
+    "0x03B0": {
       "file": "test_callgraph.asm",
-      "address": "0x049A",
-      "line": 689
+      "address": "0x03B0",
+      "line": 591
     },
-    "0x00A5": {
+    "0x06C2": {
       "file": "test_callgraph.asm",
-      "address": "0x00A5",
-      "line": 160
+      "address": "0x06C2",
+      "line": 931
     },
-    "0x0713": {
+    "0x06D7": {
       "file": "test_callgraph.asm",
-      "address": "0x0713",
-      "line": 1057
+      "address": "0x06D7",
+      "line": 938
     },
-    "0x01FF": {
+    "0x019F": {
       "file": "test_callgraph.asm",
-      "address": "0x01FF",
-      "line": 349
+      "address": "0x019F",
+      "line": 290
     },
-    "0x023B": {
+    "0x0327": {
       "file": "test_callgraph.asm",
-      "address": "0x023B",
-      "line": 381
+      "address": "0x0327",
+      "line": 46
     },
-    "0x00FA": {
+    "0x05F9": {
       "file": "test_callgraph.asm",
-      "address": "0x00FA",
-      "line": 208
+      "address": "0x05F9",
+      "line": 843
     },
-    "0x007C": {
+    "0x00A3": {
       "file": "test_callgraph.asm",
-      "address": "0x007C",
-      "line": 134
-    },
-    "0x0036": {
-      "file": "test_callgraph.asm",
-      "address": "0x0036",
-      "line": 82
-    },
-    "0x03E6": {
-      "file": "test_callgraph.asm",
-      "address": "0x03E6",
-      "line": 616
-    },
-    "0x0235": {
-      "file": "test_callgraph.asm",
-      "address": "0x0235",
-      "line": 379
-    },
-    "0x01B9": {
-      "file": "test_callgraph.asm",
-      "address": "0x01B9",
-      "line": 310
-    },
-    "0x02E3": {
-      "file": "test_callgraph.asm",
-      "address": "0x02E3",
-      "line": 869
-    },
-    "0x00BE": {
-      "file": "test_callgraph.asm",
-      "address": "0x00BE",
-      "line": 178
-    },
-    "0x0499": {
-      "file": "test_callgraph.asm",
-      "address": "0x0499",
-      "line": 688
-    },
-    "0x02F2": {
-      "file": "test_callgraph.asm",
-      "address": "0x02F2",
-      "line": 19
-    },
-    "0x0048": {
-      "file": "test_callgraph.asm",
-      "address": "0x0048",
-      "line": 92
-    },
-    "0x005A": {
-      "file": "test_callgraph.asm",
-      "address": "0x005A",
-      "line": 111
-    },
-    "0x009A": {
-      "file": "test_callgraph.asm",
-      "address": "0x009A",
-      "line": 151
-    },
-    "0x06CE": {
-      "file": "test_callgraph.asm",
-      "address": "0x06CE",
-      "line": 995
-    },
-    "0x0419": {
-      "file": "test_callgraph.asm",
-      "address": "0x0419",
-      "line": 636
-    },
-    "0x0377": {
-      "file": "test_callgraph.asm",
-      "address": "0x0377",
-      "line": 560
-    },
-    "0x06A1": {
-      "file": "test_callgraph.asm",
-      "address": "0x06A1",
-      "line": 972
-    },
-    "0x0142": {
-      "file": "test_callgraph.asm",
-      "address": "0x0142",
-      "line": 245
-    },
-    "0x0144": {
-      "file": "test_callgraph.asm",
-      "address": "0x0144",
-      "line": 246
-    },
-    "0x0358": {
-      "file": "test_callgraph.asm",
-      "address": "0x0358",
-      "line": 836
-    },
-    "0x0355": {
-      "file": "test_callgraph.asm",
-      "address": "0x0355",
-      "line": 536
-    },
-    "0x021C": {
-      "file": "test_callgraph.asm",
-      "address": "0x021C",
-      "line": 364
-    },
-    "0x002A": {
-      "file": "test_callgraph.asm",
-      "address": "0x002A",
-      "line": 76
-    },
-    "0x021F": {
-      "file": "test_callgraph.asm",
-      "address": "0x021F",
-      "line": 366
-    },
-    "0x0689": {
-      "file": "test_callgraph.asm",
-      "address": "0x0689",
-      "line": 958
-    },
-    "0x0289": {
-      "file": "test_callgraph.asm",
-      "address": "0x0289",
-      "line": 425
-    },
-    "0x0560": {
-      "file": "test_callgraph.asm",
-      "address": "0x0560",
-      "line": 768
-    },
-    "0x02B2": {
-      "file": "test_callgraph.asm",
-      "address": "0x02B2",
-      "line": 448
-    },
-    "0x055A": {
-      "file": "test_callgraph.asm",
-      "address": "0x055A",
-      "line": 766
-    },
-    "0x06DB": {
-      "file": "test_callgraph.asm",
-      "address": "0x06DB",
-      "line": 1004
-    },
-    "0x00D6": {
-      "file": "test_callgraph.asm",
-      "address": "0x00D6",
-      "line": 191
-    },
-    "0x00D3": {
-      "file": "test_callgraph.asm",
-      "address": "0x00D3",
-      "line": 190
-    },
-    "0x017A": {
-      "file": "test_callgraph.asm",
-      "address": "0x017A",
-      "line": 276
-    },
-    "0x0465": {
-      "file": "test_callgraph.asm",
-      "address": "0x0465",
-      "line": 667
-    },
-    "0x028D": {
-      "file": "test_callgraph.asm",
-      "address": "0x028D",
-      "line": 429
-    },
-    "0x02B0": {
-      "file": "test_callgraph.asm",
-      "address": "0x02B0",
-      "line": 447
-    },
-    "0x017D": {
-      "file": "test_callgraph.asm",
-      "address": "0x017D",
-      "line": 277
-    },
-    "0x0286": {
-      "file": "test_callgraph.asm",
-      "address": "0x0286",
-      "line": 424
-    },
-    "0x010B": {
-      "file": "test_callgraph.asm",
-      "address": "0x010B",
-      "line": 220
-    },
-    "0x0092": {
-      "file": "test_callgraph.asm",
-      "address": "0x0092",
-      "line": 148
+      "address": "0x00A3",
+      "line": 158
     },
     "0x01F0": {
       "file": "test_callgraph.asm",
       "address": "0x01F0",
-      "line": 342
+      "line": 341
     },
-    "0x029D": {
+    "0x052D": {
       "file": "test_callgraph.asm",
-      "address": "0x029D",
-      "line": 436
+      "address": "0x052D",
+      "line": 761
     },
-    "0x00AF": {
+    "0x04BD": {
       "file": "test_callgraph.asm",
-      "address": "0x00AF",
-      "line": 171
+      "address": "0x04BD",
+      "line": 716
     },
-    "0x0027": {
+    "0x0092": {
       "file": "test_callgraph.asm",
-      "address": "0x0027",
-      "line": 75
+      "address": "0x0092",
+      "line": 147
     },
-    "0x0436": {
+    "0x0574": {
       "file": "test_callgraph.asm",
-      "address": "0x0436",
-      "line": 650
+      "address": "0x0574",
+      "line": 794
     },
-    "0x00E8": {
+    "0x036F": {
       "file": "test_callgraph.asm",
-      "address": "0x00E8",
-      "line": 198
+      "address": "0x036F",
+      "line": 553
     },
-    "0x0511": {
+    "0x0637": {
       "file": "test_callgraph.asm",
-      "address": "0x0511",
-      "line": 735
+      "address": "0x0637",
+      "line": 877
     },
-    "0x0366": {
+    "0x057F": {
       "file": "test_callgraph.asm",
-      "address": "0x0366",
-      "line": 552
+      "address": "0x057F",
+      "line": 798
     },
-    "0x026D": {
+    "0x053A": {
       "file": "test_callgraph.asm",
-      "address": "0x026D",
-      "line": 409
+      "address": "0x053A",
+      "line": 767
     },
-    "0x0206": {
+    "0x017F": {
       "file": "test_callgraph.asm",
-      "address": "0x0206",
-      "line": 352
+      "address": "0x017F",
+      "line": 277
     },
-    "0x0265": {
+    "0x06DD": {
       "file": "test_callgraph.asm",
-      "address": "0x0265",
-      "line": 403
+      "address": "0x06DD",
+      "line": 942
     },
-    "0x0507": {
+    "0x03F3": {
       "file": "test_callgraph.asm",
-      "address": "0x0507",
-      "line": 729
+      "address": "0x03F3",
+      "line": 620
     },
-    "0x048A": {
+    "0x02CE": {
       "file": "test_callgraph.asm",
-      "address": "0x048A",
-      "line": 682
+      "address": "0x02CE",
+      "line": 1024
     },
-    "0x04E5": {
+    "0x0090": {
       "file": "test_callgraph.asm",
-      "address": "0x04E5",
-      "line": 722
+      "address": "0x0090",
+      "line": 146
     },
-    "0x0703": {
+    "0x0563": {
       "file": "test_callgraph.asm",
-      "address": "0x0703",
-      "line": 1025
+      "address": "0x0563",
+      "line": 784
     },
-    "0x01B2": {
+    "0x0698": {
       "file": "test_callgraph.asm",
-      "address": "0x01B2",
-      "line": 305
+      "address": "0x0698",
+      "line": 915
     },
-    "0x04DC": {
+    "0x01E2": {
       "file": "test_callgraph.asm",
-      "address": "0x04DC",
-      "line": 719
+      "address": "0x01E2",
+      "line": 333
     },
-    "0x0313": {
+    "0x02D1": {
       "file": "test_callgraph.asm",
-      "address": "0x0313",
-      "line": 929
+      "address": "0x02D1",
+      "line": 457
     },
-    "0x06BC": {
+    "0x01AC": {
       "file": "test_callgraph.asm",
-      "address": "0x06BC",
-      "line": 987
+      "address": "0x01AC",
+      "line": 300
     },
-    "0x0531": {
+    "0x0110": {
       "file": "test_callgraph.asm",
-      "address": "0x0531",
-      "line": 748
+      "address": "0x0110",
+      "line": 222
     },
-    "0x02AA": {
+    "0x031F": {
       "file": "test_callgraph.asm",
-      "address": "0x02AA",
-      "line": 445
+      "address": "0x031F",
+      "line": 507
+    },
+    "0x0191": {
+      "file": "test_callgraph.asm",
+      "address": "0x0191",
+      "line": 284
+    },
+    "0x0479": {
+      "file": "test_callgraph.asm",
+      "address": "0x0479",
+      "line": 687
+    },
+    "0x042F": {
+      "file": "test_callgraph.asm",
+      "address": "0x042F",
+      "line": 666
+    },
+    "0x0522": {
+      "file": "test_callgraph.asm",
+      "address": "0x0522",
+      "line": 757
+    },
+    "0x01CC": {
+      "file": "test_callgraph.asm",
+      "address": "0x01CC",
+      "line": 323
+    },
+    "0x065C": {
+      "file": "test_callgraph.asm",
+      "address": "0x065C",
+      "line": 892
+    },
+    "0x0457": {
+      "file": "test_callgraph.asm",
+      "address": "0x0457",
+      "line": 684
+    },
+    "0x06F8": {
+      "file": "test_callgraph.asm",
+      "address": "0x06F8",
+      "line": 951
+    },
+    "0x01C4": {
+      "file": "test_callgraph.asm",
+      "address": "0x01C4",
+      "line": 318
+    },
+    "0x01BB": {
+      "file": "test_callgraph.asm",
+      "address": "0x01BB",
+      "line": 311
+    },
+    "0x043D": {
+      "file": "test_callgraph.asm",
+      "address": "0x043D",
+      "line": 672
+    },
+    "0x0048": {
+      "file": "test_callgraph.asm",
+      "address": "0x0048",
+      "line": 91
+    },
+    "0x0052": {
+      "file": "test_callgraph.asm",
+      "address": "0x0052",
+      "line": 104
+    },
+    "0x023B": {
+      "file": "test_callgraph.asm",
+      "address": "0x023B",
+      "line": 380
+    },
+    "0x06A1": {
+      "file": "test_callgraph.asm",
+      "address": "0x06A1",
+      "line": 920
+    },
+    "0x01E5": {
+      "file": "test_callgraph.asm",
+      "address": "0x01E5",
+      "line": 337
+    },
+    "0x05F3": {
+      "file": "test_callgraph.asm",
+      "address": "0x05F3",
+      "line": 840
+    },
+    "0x0131": {
+      "file": "test_callgraph.asm",
+      "address": "0x0131",
+      "line": 234
+    },
+    "0x02A1": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A1",
+      "line": 437
+    },
+    "0x063A": {
+      "file": "test_callgraph.asm",
+      "address": "0x063A",
+      "line": 878
+    },
+    "0x0349": {
+      "file": "test_callgraph.asm",
+      "address": "0x0349",
+      "line": 529
+    },
+    "0x0295": {
+      "file": "test_callgraph.asm",
+      "address": "0x0295",
+      "line": 432
+    },
+    "0x04B9": {
+      "file": "test_callgraph.asm",
+      "address": "0x04B9",
+      "line": 714
+    },
+    "0x04CB": {
+      "file": "test_callgraph.asm",
+      "address": "0x04CB",
+      "line": 724
+    },
+    "0x0184": {
+      "file": "test_callgraph.asm",
+      "address": "0x0184",
+      "line": 279
+    },
+    "0x0380": {
+      "file": "test_callgraph.asm",
+      "address": "0x0380",
+      "line": 559
+    },
+    "0x01CB": {
+      "file": "test_callgraph.asm",
+      "address": "0x01CB",
+      "line": 321
+    },
+    "0x0171": {
+      "file": "test_callgraph.asm",
+      "address": "0x0171",
+      "line": 270
+    },
+    "0x06C8": {
+      "file": "test_callgraph.asm",
+      "address": "0x06C8",
+      "line": 933
+    },
+    "0x0326": {
+      "file": "test_callgraph.asm",
+      "address": "0x0326",
+      "line": 510
+    },
+    "0x06A7": {
+      "file": "test_callgraph.asm",
+      "address": "0x06A7",
+      "line": 922
+    },
+    "0x0646": {
+      "file": "test_callgraph.asm",
+      "address": "0x0646",
+      "line": 882
+    },
+    "0x0301": {
+      "file": "test_callgraph.asm",
+      "address": "0x0301",
+      "line": 32
+    },
+    "0x0692": {
+      "file": "test_callgraph.asm",
+      "address": "0x0692",
+      "line": 913
+    },
+    "0x0280": {
+      "file": "test_callgraph.asm",
+      "address": "0x0280",
+      "line": 420
+    },
+    "0x0304": {
+      "file": "test_callgraph.asm",
+      "address": "0x0304",
+      "line": 33
+    },
+    "0x0322": {
+      "file": "test_callgraph.asm",
+      "address": "0x0322",
+      "line": 508
+    },
+    "0x0351": {
+      "file": "test_callgraph.asm",
+      "address": "0x0351",
+      "line": 536
+    },
+    "0x04C2": {
+      "file": "test_callgraph.asm",
+      "address": "0x04C2",
+      "line": 720
+    },
+    "0x004F": {
+      "file": "test_callgraph.asm",
+      "address": "0x004F",
+      "line": 103
+    },
+    "0x0204": {
+      "file": "test_callgraph.asm",
+      "address": "0x0204",
+      "line": 350
+    },
+    "0x01FC": {
+      "file": "test_callgraph.asm",
+      "address": "0x01FC",
+      "line": 346
+    },
+    "0x0415": {
+      "file": "test_callgraph.asm",
+      "address": "0x0415",
+      "line": 655
+    },
+    "0x0250": {
+      "file": "test_callgraph.asm",
+      "address": "0x0250",
+      "line": 390
+    },
+    "0x0242": {
+      "file": "test_callgraph.asm",
+      "address": "0x0242",
+      "line": 383
+    },
+    "0x0588": {
+      "file": "test_callgraph.asm",
+      "address": "0x0588",
+      "line": 801
+    },
+    "0x0225": {
+      "file": "test_callgraph.asm",
+      "address": "0x0225",
+      "line": 369
+    },
+    "0x06A4": {
+      "file": "test_callgraph.asm",
+      "address": "0x06A4",
+      "line": 921
+    },
+    "0x04C8": {
+      "file": "test_callgraph.asm",
+      "address": "0x04C8",
+      "line": 723
+    },
+    "0x04D3": {
+      "file": "test_callgraph.asm",
+      "address": "0x04D3",
+      "line": 727
+    },
+    "0x05CE": {
+      "file": "test_callgraph.asm",
+      "address": "0x05CE",
+      "line": 825
+    },
+    "0x04AB": {
+      "file": "test_callgraph.asm",
+      "address": "0x04AB",
+      "line": 709
+    },
+    "0x071F": {
+      "file": "test_callgraph.asm",
+      "address": "0x071F",
+      "line": 991
+    },
+    "0x00DD": {
+      "file": "test_callgraph.asm",
+      "address": "0x00DD",
+      "line": 193
+    },
+    "0x054C": {
+      "file": "test_callgraph.asm",
+      "address": "0x054C",
+      "line": 776
+    },
+    "0x0634": {
+      "file": "test_callgraph.asm",
+      "address": "0x0634",
+      "line": 876
+    },
+    "0x0372": {
+      "file": "test_callgraph.asm",
+      "address": "0x0372",
+      "line": 554
+    },
+    "0x069B": {
+      "file": "test_callgraph.asm",
+      "address": "0x069B",
+      "line": 916
+    },
+    "0x0273": {
+      "file": "test_callgraph.asm",
+      "address": "0x0273",
+      "line": 412
+    },
+    "0x035C": {
+      "file": "test_callgraph.asm",
+      "address": "0x035C",
+      "line": 544
     },
     "0x00CA": {
       "file": "test_callgraph.asm",
       "address": "0x00CA",
-      "line": 183
+      "line": 182
     },
-    "0x0238": {
+    "0x034C": {
       "file": "test_callgraph.asm",
-      "address": "0x0238",
-      "line": 380
+      "address": "0x034C",
+      "line": 531
     },
-    "0x0517": {
+    "0x026F": {
       "file": "test_callgraph.asm",
-      "address": "0x0517",
-      "line": 737
+      "address": "0x026F",
+      "line": 410
+    },
+    "0x0643": {
+      "file": "test_callgraph.asm",
+      "address": "0x0643",
+      "line": 881
+    },
+    "0x0142": {
+      "file": "test_callgraph.asm",
+      "address": "0x0142",
+      "line": 244
+    },
+    "0x0170": {
+      "file": "test_callgraph.asm",
+      "address": "0x0170",
+      "line": 269
+    },
+    "0x00DB": {
+      "file": "test_callgraph.asm",
+      "address": "0x00DB",
+      "line": 192
+    },
+    "0x044C": {
+      "file": "test_callgraph.asm",
+      "address": "0x044C",
+      "line": 680
+    },
+    "0x0235": {
+      "file": "test_callgraph.asm",
+      "address": "0x0235",
+      "line": 378
+    },
+    "0x0403": {
+      "file": "test_callgraph.asm",
+      "address": "0x0403",
+      "line": 632
+    },
+    "0x0714": {
+      "file": "test_callgraph.asm",
+      "address": "0x0714",
+      "line": 961
+    },
+    "0x04FE": {
+      "file": "test_callgraph.asm",
+      "address": "0x04FE",
+      "line": 741
+    },
+    "0x05ED": {
+      "file": "test_callgraph.asm",
+      "address": "0x05ED",
+      "line": 837
+    },
+    "0x0332": {
+      "file": "test_callgraph.asm",
+      "address": "0x0332",
+      "line": 50
+    },
+    "0x05FD": {
+      "file": "test_callgraph.asm",
+      "address": "0x05FD",
+      "line": 845
+    },
+    "0x0668": {
+      "file": "test_callgraph.asm",
+      "address": "0x0668",
+      "line": 899
+    },
+    "0x0059": {
+      "file": "test_callgraph.asm",
+      "address": "0x0059",
+      "line": 109
+    },
+    "0x05FA": {
+      "file": "test_callgraph.asm",
+      "address": "0x05FA",
+      "line": 844
+    },
+    "0x0224": {
+      "file": "test_callgraph.asm",
+      "address": "0x0224",
+      "line": 368
+    },
+    "0x02DB": {
+      "file": "test_callgraph.asm",
+      "address": "0x02DB",
+      "line": 1029
+    },
+    "0x060F": {
+      "file": "test_callgraph.asm",
+      "address": "0x060F",
+      "line": 855
+    },
+    "0x0557": {
+      "file": "test_callgraph.asm",
+      "address": "0x0557",
+      "line": 780
+    },
+    "0x0677": {
+      "file": "test_callgraph.asm",
+      "address": "0x0677",
+      "line": 904
+    },
+    "0x06B3": {
+      "file": "test_callgraph.asm",
+      "address": "0x06B3",
+      "line": 926
+    },
+    "0x056C": {
+      "file": "test_callgraph.asm",
+      "address": "0x056C",
+      "line": 788
+    },
+    "0x02AA": {
+      "file": "test_callgraph.asm",
+      "address": "0x02AA",
+      "line": 444
+    },
+    "0x03EB": {
+      "file": "test_callgraph.asm",
+      "address": "0x03EB",
+      "line": 617
+    },
+    "0x0108": {
+      "file": "test_callgraph.asm",
+      "address": "0x0108",
+      "line": 218
+    },
+    "0x0310": {
+      "file": "test_callgraph.asm",
+      "address": "0x0310",
+      "line": 500
+    },
+    "0x0737": {
+      "file": "test_callgraph.asm",
+      "address": "0x0737",
+      "line": 1016
+    },
+    "0x04C0": {
+      "file": "test_callgraph.asm",
+      "address": "0x04C0",
+      "line": 718
+    },
+    "0x049D": {
+      "file": "test_callgraph.asm",
+      "address": "0x049D",
+      "line": 704
+    },
+    "0x0552": {
+      "file": "test_callgraph.asm",
+      "address": "0x0552",
+      "line": 778
+    },
+    "0x0495": {
+      "file": "test_callgraph.asm",
+      "address": "0x0495",
+      "line": 699
+    },
+    "0x0547": {
+      "file": "test_callgraph.asm",
+      "address": "0x0547",
+      "line": 774
+    },
+    "0x0140": {
+      "file": "test_callgraph.asm",
+      "address": "0x0140",
+      "line": 243
+    },
+    "0x02D8": {
+      "file": "test_callgraph.asm",
+      "address": "0x02D8",
+      "line": 1028
+    },
+    "0x0222": {
+      "file": "test_callgraph.asm",
+      "address": "0x0222",
+      "line": 367
+    },
+    "0x01C0": {
+      "file": "test_callgraph.asm",
+      "address": "0x01C0",
+      "line": 314
+    },
+    "0x02EB": {
+      "file": "test_callgraph.asm",
+      "address": "0x02EB",
+      "line": 16
+    },
+    "0x00F7": {
+      "file": "test_callgraph.asm",
+      "address": "0x00F7",
+      "line": 206
+    },
+    "0x021F": {
+      "file": "test_callgraph.asm",
+      "address": "0x021F",
+      "line": 365
+    },
+    "0x029B": {
+      "file": "test_callgraph.asm",
+      "address": "0x029B",
+      "line": 434
+    },
+    "0x026E": {
+      "file": "test_callgraph.asm",
+      "address": "0x026E",
+      "line": 409
+    },
+    "0x0083": {
+      "file": "test_callgraph.asm",
+      "address": "0x0083",
+      "line": 137
+    },
+    "0x03D1": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D1",
+      "line": 605
+    },
+    "0x04F8": {
+      "file": "test_callgraph.asm",
+      "address": "0x04F8",
+      "line": 738
+    },
+    "0x055D": {
+      "file": "test_callgraph.asm",
+      "address": "0x055D",
+      "line": 782
+    },
+    "0x0105": {
+      "file": "test_callgraph.asm",
+      "address": "0x0105",
+      "line": 215
+    },
+    "0x039F": {
+      "file": "test_callgraph.asm",
+      "address": "0x039F",
+      "line": 578
+    },
+    "0x02E0": {
+      "file": "test_callgraph.asm",
+      "address": "0x02E0",
+      "line": 473
+    },
+    "0x05E2": {
+      "file": "test_callgraph.asm",
+      "address": "0x05E2",
+      "line": 833
+    },
+    "0x0432": {
+      "file": "test_callgraph.asm",
+      "address": "0x0432",
+      "line": 667
+    },
+    "0x0356": {
+      "file": "test_callgraph.asm",
+      "address": "0x0356",
+      "line": 540
+    },
+    "0x0396": {
+      "file": "test_callgraph.asm",
+      "address": "0x0396",
+      "line": 573
+    },
+    "0x04B6": {
+      "file": "test_callgraph.asm",
+      "address": "0x04B6",
+      "line": 713
+    },
+    "0x02BF": {
+      "file": "test_callgraph.asm",
+      "address": "0x02BF",
+      "line": 452
+    },
+    "0x0065": {
+      "file": "test_callgraph.asm",
+      "address": "0x0065",
+      "line": 117
+    },
+    "0x0053": {
+      "file": "test_callgraph.asm",
+      "address": "0x0053",
+      "line": 105
+    },
+    "0x00F2": {
+      "file": "test_callgraph.asm",
+      "address": "0x00F2",
+      "line": 202
+    },
+    "0x0086": {
+      "file": "test_callgraph.asm",
+      "address": "0x0086",
+      "line": 139
+    },
+    "0x00EA": {
+      "file": "test_callgraph.asm",
+      "address": "0x00EA",
+      "line": 198
+    },
+    "0x009D": {
+      "file": "test_callgraph.asm",
+      "address": "0x009D",
+      "line": 154
+    },
+    "0x00B6": {
+      "file": "test_callgraph.asm",
+      "address": "0x00B6",
+      "line": 173
+    },
+    "0x053C": {
+      "file": "test_callgraph.asm",
+      "address": "0x053C",
+      "line": 768
+    },
+    "0x0628": {
+      "file": "test_callgraph.asm",
+      "address": "0x0628",
+      "line": 872
+    },
+    "0x02A7": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A7",
+      "line": 443
+    },
+    "0x05DD": {
+      "file": "test_callgraph.asm",
+      "address": "0x05DD",
+      "line": 830
+    },
+    "0x0734": {
+      "file": "test_callgraph.asm",
+      "address": "0x0734",
+      "line": 1015
+    },
+    "0x020E": {
+      "file": "test_callgraph.asm",
+      "address": "0x020E",
+      "line": 354
+    },
+    "0x004B": {
+      "file": "test_callgraph.asm",
+      "address": "0x004B",
+      "line": 94
+    },
+    "0x0555": {
+      "file": "test_callgraph.asm",
+      "address": "0x0555",
+      "line": 779
+    },
+    "0x05D7": {
+      "file": "test_callgraph.asm",
+      "address": "0x05D7",
+      "line": 828
+    },
+    "0x05E0": {
+      "file": "test_callgraph.asm",
+      "address": "0x05E0",
+      "line": 831
+    },
+    "0x062E": {
+      "file": "test_callgraph.asm",
+      "address": "0x062E",
+      "line": 874
+    },
+    "0x041E": {
+      "file": "test_callgraph.asm",
+      "address": "0x041E",
+      "line": 660
+    },
+    "0x0401": {
+      "file": "test_callgraph.asm",
+      "address": "0x0401",
+      "line": 627
+    },
+    "0x0211": {
+      "file": "test_callgraph.asm",
+      "address": "0x0211",
+      "line": 355
+    },
+    "0x00D9": {
+      "file": "test_callgraph.asm",
+      "address": "0x00D9",
+      "line": 191
+    },
+    "0x0337": {
+      "file": "test_callgraph.asm",
+      "address": "0x0337",
+      "line": 52
+    },
+    "0x072E": {
+      "file": "test_callgraph.asm",
+      "address": "0x072E",
+      "line": 1013
+    },
+    "0x004A": {
+      "file": "test_callgraph.asm",
+      "address": "0x004A",
+      "line": 93
+    },
+    "0x05E1": {
+      "file": "test_callgraph.asm",
+      "address": "0x05E1",
+      "line": 832
+    },
+    "0x06D1": {
+      "file": "test_callgraph.asm",
+      "address": "0x06D1",
+      "line": 936
+    },
+    "0x01D5": {
+      "file": "test_callgraph.asm",
+      "address": "0x01D5",
+      "line": 327
+    },
+    "0x038D": {
+      "file": "test_callgraph.asm",
+      "address": "0x038D",
+      "line": 567
+    },
+    "0x0622": {
+      "file": "test_callgraph.asm",
+      "address": "0x0622",
+      "line": 870
+    },
+    "0x0240": {
+      "file": "test_callgraph.asm",
+      "address": "0x0240",
+      "line": 382
+    },
+    "0x0625": {
+      "file": "test_callgraph.asm",
+      "address": "0x0625",
+      "line": 871
+    },
+    "0x051F": {
+      "file": "test_callgraph.asm",
+      "address": "0x051F",
+      "line": 756
+    },
+    "0x0074": {
+      "file": "test_callgraph.asm",
+      "address": "0x0074",
+      "line": 127
+    },
+    "0x03A2": {
+      "file": "test_callgraph.asm",
+      "address": "0x03A2",
+      "line": 581
+    },
+    "0x010D": {
+      "file": "test_callgraph.asm",
+      "address": "0x010D",
+      "line": 220
+    },
+    "0x038B": {
+      "file": "test_callgraph.asm",
+      "address": "0x038B",
+      "line": 563
+    },
+    "0x0132": {
+      "file": "test_callgraph.asm",
+      "address": "0x0132",
+      "line": 235
+    },
+    "0x0486": {
+      "file": "test_callgraph.asm",
+      "address": "0x0486",
+      "line": 694
+    },
+    "0x035F": {
+      "file": "test_callgraph.asm",
+      "address": "0x035F",
+      "line": 545
+    },
+    "0x01A8": {
+      "file": "test_callgraph.asm",
+      "address": "0x01A8",
+      "line": 294
+    },
+    "0x060E": {
+      "file": "test_callgraph.asm",
+      "address": "0x060E",
+      "line": 852
+    },
+    "0x0394": {
+      "file": "test_callgraph.asm",
+      "address": "0x0394",
+      "line": 572
+    },
+    "0x0427": {
+      "file": "test_callgraph.asm",
+      "address": "0x0427",
+      "line": 663
+    },
+    "0x0070": {
+      "file": "test_callgraph.asm",
+      "address": "0x0070",
+      "line": 124
+    },
+    "0x04A3": {
+      "file": "test_callgraph.asm",
+      "address": "0x04A3",
+      "line": 706
+    },
+    "0x01B9": {
+      "file": "test_callgraph.asm",
+      "address": "0x01B9",
+      "line": 309
+    },
+    "0x00BC": {
+      "file": "test_callgraph.asm",
+      "address": "0x00BC",
+      "line": 176
+    },
+    "0x040D": {
+      "file": "test_callgraph.asm",
+      "address": "0x040D",
+      "line": 647
+    },
+    "0x0219": {
+      "file": "test_callgraph.asm",
+      "address": "0x0219",
+      "line": 362
+    },
+    "0x0276": {
+      "file": "test_callgraph.asm",
+      "address": "0x0276",
+      "line": 415
+    },
+    "0x05B7": {
+      "file": "test_callgraph.asm",
+      "address": "0x05B7",
+      "line": 815
+    },
+    "0x0665": {
+      "file": "test_callgraph.asm",
+      "address": "0x0665",
+      "line": 898
+    },
+    "0x026B": {
+      "file": "test_callgraph.asm",
+      "address": "0x026B",
+      "line": 407
+    },
+    "0x00E8": {
+      "file": "test_callgraph.asm",
+      "address": "0x00E8",
+      "line": 197
+    },
+    "0x04E2": {
+      "file": "test_callgraph.asm",
+      "address": "0x04E2",
+      "line": 732
+    },
+    "0x0359": {
+      "file": "test_callgraph.asm",
+      "address": "0x0359",
+      "line": 543
+    },
+    "0x04D9": {
+      "file": "test_callgraph.asm",
+      "address": "0x04D9",
+      "line": 729
+    },
+    "0x002A": {
+      "file": "test_callgraph.asm",
+      "address": "0x002A",
+      "line": 75
+    },
+    "0x015D": {
+      "file": "test_callgraph.asm",
+      "address": "0x015D",
+      "line": 260
+    },
+    "0x016A": {
+      "file": "test_callgraph.asm",
+      "address": "0x016A",
+      "line": 265
+    },
+    "0x016D": {
+      "file": "test_callgraph.asm",
+      "address": "0x016D",
+      "line": 266
+    },
+    "0x02F8": {
+      "file": "test_callgraph.asm",
+      "address": "0x02F8",
+      "line": 488
+    },
+    "0x0695": {
+      "file": "test_callgraph.asm",
+      "address": "0x0695",
+      "line": 914
+    },
+    "0x01CD": {
+      "file": "test_callgraph.asm",
+      "address": "0x01CD",
+      "line": 324
+    },
+    "0x00F5": {
+      "file": "test_callgraph.asm",
+      "address": "0x00F5",
+      "line": 203
+    },
+    "0x06FE": {
+      "file": "test_callgraph.asm",
+      "address": "0x06FE",
+      "line": 953
+    },
+    "0x0485": {
+      "file": "test_callgraph.asm",
+      "address": "0x0485",
+      "line": 693
+    },
+    "0x02AD": {
+      "file": "test_callgraph.asm",
+      "address": "0x02AD",
+      "line": 445
+    },
+    "0x0144": {
+      "file": "test_callgraph.asm",
+      "address": "0x0144",
+      "line": 245
+    },
+    "0x02E3": {
+      "file": "test_callgraph.asm",
+      "address": "0x02E3",
+      "line": 13
+    },
+    "0x0524": {
+      "file": "test_callgraph.asm",
+      "address": "0x0524",
+      "line": 758
+    },
+    "0x0489": {
+      "file": "test_callgraph.asm",
+      "address": "0x0489",
+      "line": 695
+    },
+    "0x04C5": {
+      "file": "test_callgraph.asm",
+      "address": "0x04C5",
+      "line": 722
+    },
+    "0x010B": {
+      "file": "test_callgraph.asm",
+      "address": "0x010B",
+      "line": 219
+    },
+    "0x03BE": {
+      "file": "test_callgraph.asm",
+      "address": "0x03BE",
+      "line": 596
+    },
+    "0x0284": {
+      "file": "test_callgraph.asm",
+      "address": "0x0284",
+      "line": 422
+    },
+    "0x04CD": {
+      "file": "test_callgraph.asm",
+      "address": "0x04CD",
+      "line": 725
+    },
+    "0x0704": {
+      "file": "test_callgraph.asm",
+      "address": "0x0704",
+      "line": 955
+    },
+    "0x025A": {
+      "file": "test_callgraph.asm",
+      "address": "0x025A",
+      "line": 396
     },
     "0x0325": {
       "file": "test_callgraph.asm",
       "address": "0x0325",
       "line": 44
     },
-    "0x0520": {
-      "file": "test_callgraph.asm",
-      "address": "0x0520",
-      "line": 740
-    },
-    "0x06F3": {
-      "file": "test_callgraph.asm",
-      "address": "0x06F3",
-      "line": 1018
-    },
-    "0x00DD": {
-      "file": "test_callgraph.asm",
-      "address": "0x00DD",
-      "line": 194
-    },
-    "0x0131": {
-      "file": "test_callgraph.asm",
-      "address": "0x0131",
-      "line": 235
-    },
-    "0x06A6": {
-      "file": "test_callgraph.asm",
-      "address": "0x06A6",
-      "line": 974
-    },
-    "0x046E": {
-      "file": "test_callgraph.asm",
-      "address": "0x046E",
-      "line": 670
-    },
-    "0x0045": {
-      "file": "test_callgraph.asm",
-      "address": "0x0045",
-      "line": 91
-    },
-    "0x06FD": {
-      "file": "test_callgraph.asm",
-      "address": "0x06FD",
-      "line": 1022
-    },
-    "0x01DD": {
-      "file": "test_callgraph.asm",
-      "address": "0x01DD",
-      "line": 331
-    },
-    "0x01E4": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E4",
-      "line": 336
-    },
-    "0x00DB": {
-      "file": "test_callgraph.asm",
-      "address": "0x00DB",
-      "line": 193
-    },
-    "0x040B": {
-      "file": "test_callgraph.asm",
-      "address": "0x040B",
-      "line": 631
-    },
-    "0x0242": {
-      "file": "test_callgraph.asm",
-      "address": "0x0242",
-      "line": 384
-    },
-    "0x02D3": {
-      "file": "test_callgraph.asm",
-      "address": "0x02D3",
-      "line": 460
-    },
-    "0x0328": {
-      "file": "test_callgraph.asm",
-      "address": "0x0328",
-      "line": 602
-    },
-    "0x024A": {
-      "file": "test_callgraph.asm",
-      "address": "0x024A",
-      "line": 387
-    },
-    "0x0484": {
-      "file": "test_callgraph.asm",
-      "address": "0x0484",
-      "line": 680
-    },
-    "0x0033": {
-      "file": "test_callgraph.asm",
-      "address": "0x0033",
-      "line": 79
-    },
-    "0x009D": {
-      "file": "test_callgraph.asm",
-      "address": "0x009D",
-      "line": 155
-    },
-    "0x0295": {
-      "file": "test_callgraph.asm",
-      "address": "0x0295",
-      "line": 433
-    },
-    "0x0107": {
-      "file": "test_callgraph.asm",
-      "address": "0x0107",
-      "line": 218
-    },
     "0x0078": {
       "file": "test_callgraph.asm",
       "address": "0x0078",
-      "line": 131
-    },
-    "0x06D4": {
-      "file": "test_callgraph.asm",
-      "address": "0x06D4",
-      "line": 1001
-    },
-    "0x047C": {
-      "file": "test_callgraph.asm",
-      "address": "0x047C",
-      "line": 677
-    },
-    "0x0406": {
-      "file": "test_callgraph.asm",
-      "address": "0x0406",
-      "line": 629
-    },
-    "0x0158": {
-      "file": "test_callgraph.asm",
-      "address": "0x0158",
-      "line": 256
-    },
-    "0x01B4": {
-      "file": "test_callgraph.asm",
-      "address": "0x01B4",
-      "line": 307
-    },
-    "0x0504": {
-      "file": "test_callgraph.asm",
-      "address": "0x0504",
-      "line": 728
-    },
-    "0x0059": {
-      "file": "test_callgraph.asm",
-      "address": "0x0059",
-      "line": 110
-    },
-    "0x06AE": {
-      "file": "test_callgraph.asm",
-      "address": "0x06AE",
-      "line": 978
-    },
-    "0x048D": {
-      "file": "test_callgraph.asm",
-      "address": "0x048D",
-      "line": 683
-    },
-    "0x01C2": {
-      "file": "test_callgraph.asm",
-      "address": "0x01C2",
-      "line": 318
-    },
-    "0x0171": {
-      "file": "test_callgraph.asm",
-      "address": "0x0171",
-      "line": 271
-    },
-    "0x0204": {
-      "file": "test_callgraph.asm",
-      "address": "0x0204",
-      "line": 351
-    },
-    "0x037E": {
-      "file": "test_callgraph.asm",
-      "address": "0x037E",
-      "line": 851
-    },
-    "0x0168": {
-      "file": "test_callgraph.asm",
-      "address": "0x0168",
-      "line": 265
-    },
-    "0x0307": {
-      "file": "test_callgraph.asm",
-      "address": "0x0307",
-      "line": 495
-    },
-    "0x0151": {
-      "file": "test_callgraph.asm",
-      "address": "0x0151",
-      "line": 252
-    },
-    "0x027E": {
-      "file": "test_callgraph.asm",
-      "address": "0x027E",
-      "line": 419
-    },
-    "0x0172": {
-      "file": "test_callgraph.asm",
-      "address": "0x0172",
-      "line": 273
-    },
-    "0x041E": {
-      "file": "test_callgraph.asm",
-      "address": "0x041E",
-      "line": 639
-    },
-    "0x00EF": {
-      "file": "test_callgraph.asm",
-      "address": "0x00EF",
-      "line": 202
-    },
-    "0x018C": {
-      "file": "test_callgraph.asm",
-      "address": "0x018C",
-      "line": 283
-    },
-    "0x0174": {
-      "file": "test_callgraph.asm",
-      "address": "0x0174",
-      "line": 274
-    },
-    "0x0482": {
-      "file": "test_callgraph.asm",
-      "address": "0x0482",
-      "line": 679
-    },
-    "0x00D0": {
-      "file": "test_callgraph.asm",
-      "address": "0x00D0",
-      "line": 188
-    },
-    "0x0290": {
-      "file": "test_callgraph.asm",
-      "address": "0x0290",
-      "line": 431
-    },
-    "0x0113": {
-      "file": "test_callgraph.asm",
-      "address": "0x0113",
-      "line": 225
-    },
-    "0x023D": {
-      "file": "test_callgraph.asm",
-      "address": "0x023D",
-      "line": 382
-    },
-    "0x0269": {
-      "file": "test_callgraph.asm",
-      "address": "0x0269",
-      "line": 407
-    },
-    "0x0569": {
-      "file": "test_callgraph.asm",
-      "address": "0x0569",
-      "line": 771
-    },
-    "0x016D": {
-      "file": "test_callgraph.asm",
-      "address": "0x016D",
-      "line": 267
-    },
-    "0x0071": {
-      "file": "test_callgraph.asm",
-      "address": "0x0071",
-      "line": 126
-    },
-    "0x018E": {
-      "file": "test_callgraph.asm",
-      "address": "0x018E",
-      "line": 284
-    },
-    "0x026E": {
-      "file": "test_callgraph.asm",
-      "address": "0x026E",
-      "line": 410
-    },
-    "0x06EB": {
-      "file": "test_callgraph.asm",
-      "address": "0x06EB",
-      "line": 1011
-    },
-    "0x02CE": {
-      "file": "test_callgraph.asm",
-      "address": "0x02CE",
-      "line": 457
-    },
-    "0x071C": {
-      "file": "test_callgraph.asm",
-      "address": "0x071C",
-      "line": 1074
-    },
-    "0x0070": {
-      "file": "test_callgraph.asm",
-      "address": "0x0070",
-      "line": 125
-    },
-    "0x0544": {
-      "file": "test_callgraph.asm",
-      "address": "0x0544",
-      "line": 756
-    },
-    "0x01BB": {
-      "file": "test_callgraph.asm",
-      "address": "0x01BB",
-      "line": 312
-    },
-    "0x04A4": {
-      "file": "test_callgraph.asm",
-      "address": "0x04A4",
-      "line": 695
-    },
-    "0x0710": {
-      "file": "test_callgraph.asm",
-      "address": "0x0710",
-      "line": 1056
-    },
-    "0x0273": {
-      "file": "test_callgraph.asm",
-      "address": "0x0273",
-      "line": 413
-    },
-    "0x0525": {
-      "file": "test_callgraph.asm",
-      "address": "0x0525",
-      "line": 744
-    },
-    "0x0252": {
-      "file": "test_callgraph.asm",
-      "address": "0x0252",
-      "line": 393
-    },
-    "0x0682": {
-      "file": "test_callgraph.asm",
-      "address": "0x0682",
-      "line": 955
-    },
-    "0x04CD": {
-      "file": "test_callgraph.asm",
-      "address": "0x04CD",
-      "line": 711
-    },
-    "0x0217": {
-      "file": "test_callgraph.asm",
-      "address": "0x0217",
-      "line": 361
-    },
-    "0x01B7": {
-      "file": "test_callgraph.asm",
-      "address": "0x01B7",
-      "line": 308
-    },
-    "0x06D3": {
-      "file": "test_callgraph.asm",
-      "address": "0x06D3",
-      "line": 997
-    },
-    "0x032F": {
-      "file": "test_callgraph.asm",
-      "address": "0x032F",
-      "line": 605
-    },
-    "0x0381": {
-      "file": "test_callgraph.asm",
-      "address": "0x0381",
-      "line": 852
-    },
-    "0x0034": {
-      "file": "test_callgraph.asm",
-      "address": "0x0034",
-      "line": 80
-    },
-    "0x04BD": {
-      "file": "test_callgraph.asm",
-      "address": "0x04BD",
-      "line": 704
-    },
-    "0x01EA": {
-      "file": "test_callgraph.asm",
-      "address": "0x01EA",
-      "line": 340
-    },
-    "0x0049": {
-      "file": "test_callgraph.asm",
-      "address": "0x0049",
-      "line": 93
-    },
-    "0x046B": {
-      "file": "test_callgraph.asm",
-      "address": "0x046B",
-      "line": 669
-    },
-    "0x00AD": {
-      "file": "test_callgraph.asm",
-      "address": "0x00AD",
-      "line": 170
-    },
-    "0x00D9": {
-      "file": "test_callgraph.asm",
-      "address": "0x00D9",
-      "line": 192
-    },
-    "0x0233": {
-      "file": "test_callgraph.asm",
-      "address": "0x0233",
-      "line": 378
-    },
-    "0x0101": {
-      "file": "test_callgraph.asm",
-      "address": "0x0101",
-      "line": 214
-    },
-    "0x043F": {
-      "file": "test_callgraph.asm",
-      "address": "0x043F",
-      "line": 653
-    },
-    "0x0052": {
-      "file": "test_callgraph.asm",
-      "address": "0x0052",
-      "line": 105
-    },
-    "0x0245": {
-      "file": "test_callgraph.asm",
-      "address": "0x0245",
-      "line": 385
-    },
-    "0x0541": {
-      "file": "test_callgraph.asm",
-      "address": "0x0541",
-      "line": 754
-    },
-    "0x04CC": {
-      "file": "test_callgraph.asm",
-      "address": "0x04CC",
-      "line": 710
-    },
-    "0x01CB": {
-      "file": "test_callgraph.asm",
-      "address": "0x01CB",
-      "line": 322
-    },
-    "0x0550": {
-      "file": "test_callgraph.asm",
-      "address": "0x0550",
-      "line": 760
-    },
-    "0x00C6": {
-      "file": "test_callgraph.asm",
-      "address": "0x00C6",
-      "line": 181
-    },
-    "0x049D": {
-      "file": "test_callgraph.asm",
-      "address": "0x049D",
-      "line": 691
-    },
-    "0x070E": {
-      "file": "test_callgraph.asm",
-      "address": "0x070E",
-      "line": 1052
-    },
-    "0x01CC": {
-      "file": "test_callgraph.asm",
-      "address": "0x01CC",
-      "line": 324
-    },
-    "0x06D1": {
-      "file": "test_callgraph.asm",
-      "address": "0x06D1",
-      "line": 996
-    },
-    "0x06B1": {
-      "file": "test_callgraph.asm",
-      "address": "0x06B1",
-      "line": 979
-    },
-    "0x004B": {
-      "file": "test_callgraph.asm",
-      "address": "0x004B",
-      "line": 95
-    },
-    "0x009B": {
-      "file": "test_callgraph.asm",
-      "address": "0x009B",
-      "line": 154
-    },
-    "0x0225": {
-      "file": "test_callgraph.asm",
-      "address": "0x0225",
-      "line": 370
-    },
-    "0x06C3": {
-      "file": "test_callgraph.asm",
-      "address": "0x06C3",
-      "line": 990
-    },
-    "0x0240": {
-      "file": "test_callgraph.asm",
-      "address": "0x0240",
-      "line": 383
-    },
-    "0x005E": {
-      "file": "test_callgraph.asm",
-      "address": "0x005E",
-      "line": 114
-    },
-    "0x0479": {
-      "file": "test_callgraph.asm",
-      "address": "0x0479",
-      "line": 676
-    },
-    "0x06B6": {
-      "file": "test_callgraph.asm",
-      "address": "0x06B6",
-      "line": 981
-    },
-    "0x0348": {
-      "file": "test_callgraph.asm",
-      "address": "0x0348",
-      "line": 527
-    },
-    "0x0490": {
-      "file": "test_callgraph.asm",
-      "address": "0x0490",
-      "line": 684
-    },
-    "0x06BE": {
-      "file": "test_callgraph.asm",
-      "address": "0x06BE",
-      "line": 988
-    },
-    "0x037D": {
-      "file": "test_callgraph.asm",
-      "address": "0x037D",
-      "line": 850
-    },
-    "0x0053": {
-      "file": "test_callgraph.asm",
-      "address": "0x0053",
-      "line": 106
-    },
-    "0x04B2": {
-      "file": "test_callgraph.asm",
-      "address": "0x04B2",
-      "line": 700
-    },
-    "0x068F": {
-      "file": "test_callgraph.asm",
-      "address": "0x068F",
-      "line": 961
-    },
-    "0x0336": {
-      "file": "test_callgraph.asm",
-      "address": "0x0336",
-      "line": 520
-    },
-    "0x0566": {
-      "file": "test_callgraph.asm",
-      "address": "0x0566",
-      "line": 770
-    },
-    "0x056E": {
-      "file": "test_callgraph.asm",
-      "address": "0x056E",
-      "line": 774
-    },
-    "0x01D3": {
-      "file": "test_callgraph.asm",
-      "address": "0x01D3",
-      "line": 327
-    },
-    "0x04CB": {
-      "file": "test_callgraph.asm",
-      "address": "0x04CB",
-      "line": 709
-    },
-    "0x0375": {
-      "file": "test_callgraph.asm",
-      "address": "0x0375",
-      "line": 846
-    },
-    "0x034D": {
-      "file": "test_callgraph.asm",
-      "address": "0x034D",
-      "line": 830
-    },
-    "0x014F": {
-      "file": "test_callgraph.asm",
-      "address": "0x014F",
-      "line": 251
-    },
-    "0x030D": {
-      "file": "test_callgraph.asm",
-      "address": "0x030D",
-      "line": 927
-    },
-    "0x0369": {
-      "file": "test_callgraph.asm",
-      "address": "0x0369",
-      "line": 842
-    },
-    "0x02A2": {
-      "file": "test_callgraph.asm",
-      "address": "0x02A2",
-      "line": 439
-    },
-    "0x0301": {
-      "file": "test_callgraph.asm",
-      "address": "0x0301",
-      "line": 588
-    },
-    "0x043C": {
-      "file": "test_callgraph.asm",
-      "address": "0x043C",
-      "line": 652
-    },
-    "0x045E": {
-      "file": "test_callgraph.asm",
-      "address": "0x045E",
-      "line": 663
-    },
-    "0x019E": {
-      "file": "test_callgraph.asm",
-      "address": "0x019E",
-      "line": 290
-    },
-    "0x051A": {
-      "file": "test_callgraph.asm",
-      "address": "0x051A",
-      "line": 738
-    },
-    "0x0304": {
-      "file": "test_callgraph.asm",
-      "address": "0x0304",
-      "line": 589
-    },
-    "0x042D": {
-      "file": "test_callgraph.asm",
-      "address": "0x042D",
-      "line": 647
+      "line": 130
     },
     "0x003A": {
       "file": "test_callgraph.asm",
       "address": "0x003A",
-      "line": 87
+      "line": 86
     },
-    "0x04EE": {
+    "0x072B": {
       "file": "test_callgraph.asm",
-      "address": "0x04EE",
-      "line": 725
+      "address": "0x072B",
+      "line": 1012
     },
-    "0x0333": {
+    "0x0134": {
       "file": "test_callgraph.asm",
-      "address": "0x0333",
-      "line": 607
+      "address": "0x0134",
+      "line": 236
     },
-    "0x0719": {
+    "0x0615": {
       "file": "test_callgraph.asm",
-      "address": "0x0719",
-      "line": 1061
+      "address": "0x0615",
+      "line": 860
     },
-    "0x00EA": {
+    "0x03F0": {
       "file": "test_callgraph.asm",
-      "address": "0x00EA",
-      "line": 199
+      "address": "0x03F0",
+      "line": 619
     },
-    "0x0510": {
+    "0x0181": {
       "file": "test_callgraph.asm",
-      "address": "0x0510",
-      "line": 734
+      "address": "0x0181",
+      "line": 278
     },
-    "0x0416": {
+    "0x00CD": {
       "file": "test_callgraph.asm",
-      "address": "0x0416",
-      "line": 635
+      "address": "0x00CD",
+      "line": 185
     },
-    "0x003F": {
+    "0x0120": {
       "file": "test_callgraph.asm",
-      "address": "0x003F",
-      "line": 89
+      "address": "0x0120",
+      "line": 229
     },
-    "0x0495": {
+    "0x06AA": {
       "file": "test_callgraph.asm",
-      "address": "0x0495",
-      "line": 686
+      "address": "0x06AA",
+      "line": 923
     },
-    "0x0716": {
+    "0x0722": {
       "file": "test_callgraph.asm",
-      "address": "0x0716",
-      "line": 1060
+      "address": "0x0722",
+      "line": 992
     },
-    "0x04AC": {
+    "0x0251": {
       "file": "test_callgraph.asm",
-      "address": "0x04AC",
-      "line": 698
+      "address": "0x0251",
+      "line": 391
     },
-    "0x06D9": {
+    "0x05E4": {
       "file": "test_callgraph.asm",
-      "address": "0x06D9",
-      "line": 1003
+      "address": "0x05E4",
+      "line": 834
     },
-    "0x0534": {
+    "0x03C9": {
       "file": "test_callgraph.asm",
-      "address": "0x0534",
-      "line": 749
+      "address": "0x03C9",
+      "line": 600
     },
-    "0x0224": {
+    "0x01E7": {
       "file": "test_callgraph.asm",
-      "address": "0x0224",
-      "line": 369
+      "address": "0x01E7",
+      "line": 338
     },
-    "0x008B": {
+    "0x0441": {
       "file": "test_callgraph.asm",
-      "address": "0x008B",
-      "line": 145
+      "address": "0x0441",
+      "line": 674
     },
-    "0x0545": {
+    "0x032A": {
       "file": "test_callgraph.asm",
-      "address": "0x0545",
-      "line": 757
-    },
-    "0x053A": {
-      "file": "test_callgraph.asm",
-      "address": "0x053A",
-      "line": 751
+      "address": "0x032A",
+      "line": 47
     },
     "0x01D0": {
       "file": "test_callgraph.asm",
       "address": "0x01D0",
-      "line": 326
+      "line": 325
     },
-    "0x00B4": {
+    "0x0539": {
       "file": "test_callgraph.asm",
-      "address": "0x00B4",
-      "line": 173
+      "address": "0x0539",
+      "line": 766
     },
-    "0x01ED": {
+    "0x0388": {
       "file": "test_callgraph.asm",
-      "address": "0x01ED",
-      "line": 341
+      "address": "0x0388",
+      "line": 562
     },
-    "0x0425": {
+    "0x04E5": {
       "file": "test_callgraph.asm",
-      "address": "0x0425",
-      "line": 644
+      "address": "0x04E5",
+      "line": 733
     },
-    "0x007F": {
+    "0x0254": {
       "file": "test_callgraph.asm",
-      "address": "0x007F",
-      "line": 135
+      "address": "0x0254",
+      "line": 393
     },
-    "0x010D": {
+    "0x019E": {
       "file": "test_callgraph.asm",
-      "address": "0x010D",
-      "line": 221
-    },
-    "0x02DE": {
-      "file": "test_callgraph.asm",
-      "address": "0x02DE",
-      "line": 881
-    },
-    "0x0077": {
-      "file": "test_callgraph.asm",
-      "address": "0x0077",
-      "line": 130
-    },
-    "0x01E0": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E0",
-      "line": 332
-    },
-    "0x06E3": {
-      "file": "test_callgraph.asm",
-      "address": "0x06E3",
-      "line": 1008
-    },
-    "0x003C": {
-      "file": "test_callgraph.asm",
-      "address": "0x003C",
-      "line": 88
-    },
-    "0x03E2": {
-      "file": "test_callgraph.asm",
-      "address": "0x03E2",
-      "line": 613
-    },
-    "0x06B7": {
-      "file": "test_callgraph.asm",
-      "address": "0x06B7",
-      "line": 985
-    },
-    "0x0559": {
-      "file": "test_callgraph.asm",
-      "address": "0x0559",
-      "line": 765
-    },
-    "0x02DB": {
-      "file": "test_callgraph.asm",
-      "address": "0x02DB",
-      "line": 463
-    },
-    "0x00C9": {
-      "file": "test_callgraph.asm",
-      "address": "0x00C9",
-      "line": 182
-    },
-    "0x02ED": {
-      "file": "test_callgraph.asm",
-      "address": "0x02ED",
-      "line": 793
-    },
-    "0x022B": {
-      "file": "test_callgraph.asm",
-      "address": "0x022B",
-      "line": 372
-    },
-    "0x0420": {
-      "file": "test_callgraph.asm",
-      "address": "0x0420",
-      "line": 640
-    },
-    "0x01AC": {
-      "file": "test_callgraph.asm",
-      "address": "0x01AC",
-      "line": 301
-    },
-    "0x053D": {
-      "file": "test_callgraph.asm",
-      "address": "0x053D",
-      "line": 752
-    },
-    "0x0132": {
-      "file": "test_callgraph.asm",
-      "address": "0x0132",
-      "line": 236
-    },
-    "0x036F": {
-      "file": "test_callgraph.asm",
-      "address": "0x036F",
-      "line": 844
-    },
-    "0x0449": {
-      "file": "test_callgraph.asm",
-      "address": "0x0449",
-      "line": 657
-    },
-    "0x06E8": {
-      "file": "test_callgraph.asm",
-      "address": "0x06E8",
-      "line": 1010
-    },
-    "0x070D": {
-      "file": "test_callgraph.asm",
-      "address": "0x070D",
-      "line": 1029
-    },
-    "0x01C0": {
-      "file": "test_callgraph.asm",
-      "address": "0x01C0",
-      "line": 315
-    },
-    "0x0087": {
-      "file": "test_callgraph.asm",
-      "address": "0x0087",
-      "line": 141
-    },
-    "0x036C": {
-      "file": "test_callgraph.asm",
-      "address": "0x036C",
-      "line": 843
-    },
-    "0x0458": {
-      "file": "test_callgraph.asm",
-      "address": "0x0458",
-      "line": 660
-    },
-    "0x00A0": {
-      "file": "test_callgraph.asm",
-      "address": "0x00A0",
-      "line": 157
-    },
-    "0x0724": {
-      "file": "test_callgraph.asm",
-      "address": "0x0724",
-      "line": 1081
-    },
-    "0x029B": {
-      "file": "test_callgraph.asm",
-      "address": "0x029B",
-      "line": 435
-    },
-    "0x0715": {
-      "file": "test_callgraph.asm",
-      "address": "0x0715",
-      "line": 1059
-    },
-    "0x0062": {
-      "file": "test_callgraph.asm",
-      "address": "0x0062",
-      "line": 116
-    },
-    "0x022E": {
-      "file": "test_callgraph.asm",
-      "address": "0x022E",
-      "line": 375
-    },
-    "0x0281": {
-      "file": "test_callgraph.asm",
-      "address": "0x0281",
-      "line": 422
-    },
-    "0x00B9": {
-      "file": "test_callgraph.asm",
-      "address": "0x00B9",
-      "line": 176
-    },
-    "0x0528": {
-      "file": "test_callgraph.asm",
-      "address": "0x0528",
-      "line": 745
-    },
-    "0x0339": {
-      "file": "test_callgraph.asm",
-      "address": "0x0339",
-      "line": 822
-    },
-    "0x0343": {
-      "file": "test_callgraph.asm",
-      "address": "0x0343",
-      "line": 826
-    },
-    "0x02A7": {
-      "file": "test_callgraph.asm",
-      "address": "0x02A7",
-      "line": 444
-    },
-    "0x0074": {
-      "file": "test_callgraph.asm",
-      "address": "0x0074",
-      "line": 128
-    },
-    "0x0384": {
-      "file": "test_callgraph.asm",
-      "address": "0x0384",
-      "line": 853
-    },
-    "0x025C": {
-      "file": "test_callgraph.asm",
-      "address": "0x025C",
-      "line": 398
-    },
-    "0x04DA": {
-      "file": "test_callgraph.asm",
-      "address": "0x04DA",
-      "line": 718
-    },
-    "0x06EE": {
-      "file": "test_callgraph.asm",
-      "address": "0x06EE",
-      "line": 1012
-    },
-    "0x04EB": {
-      "file": "test_callgraph.asm",
-      "address": "0x04EB",
-      "line": 724
-    },
-    "0x0149": {
-      "file": "test_callgraph.asm",
-      "address": "0x0149",
-      "line": 248
-    },
-    "0x06A3": {
-      "file": "test_callgraph.asm",
-      "address": "0x06A3",
-      "line": 973
-    },
-    "0x00F5": {
-      "file": "test_callgraph.asm",
-      "address": "0x00F5",
-      "line": 204
-    },
-    "0x016A": {
-      "file": "test_callgraph.asm",
-      "address": "0x016A",
-      "line": 266
-    },
-    "0x00FB": {
-      "file": "test_callgraph.asm",
-      "address": "0x00FB",
-      "line": 209
-    },
-    "0x002D": {
-      "file": "test_callgraph.asm",
-      "address": "0x002D",
-      "line": 77
-    },
-    "0x0714": {
-      "file": "test_callgraph.asm",
-      "address": "0x0714",
-      "line": 1058
-    },
-    "0x03FA": {
-      "file": "test_callgraph.asm",
-      "address": "0x03FA",
-      "line": 625
-    },
-    "0x0042": {
-      "file": "test_callgraph.asm",
-      "address": "0x0042",
-      "line": 90
-    },
-    "0x04DF": {
-      "file": "test_callgraph.asm",
-      "address": "0x04DF",
-      "line": 720
-    },
-    "0x052E": {
-      "file": "test_callgraph.asm",
-      "address": "0x052E",
-      "line": 747
-    },
-    "0x01A0": {
-      "file": "test_callgraph.asm",
-      "address": "0x01A0",
-      "line": 292
-    },
-    "0x0408": {
-      "file": "test_callgraph.asm",
-      "address": "0x0408",
-      "line": 630
-    },
-    "0x0115": {
-      "file": "test_callgraph.asm",
-      "address": "0x0115",
-      "line": 226
-    },
-    "0x0100": {
-      "file": "test_callgraph.asm",
-      "address": "0x0100",
-      "line": 213
-    },
-    "0x0086": {
-      "file": "test_callgraph.asm",
-      "address": "0x0086",
-      "line": 140
-    },
-    "0x0274": {
-      "file": "test_callgraph.asm",
-      "address": "0x0274",
-      "line": 414
-    },
-    "0x01E5": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E5",
-      "line": 338
-    },
-    "0x03FD": {
-      "file": "test_callgraph.asm",
-      "address": "0x03FD",
-      "line": 626
-    },
-    "0x0691": {
-      "file": "test_callgraph.asm",
-      "address": "0x0691",
-      "line": 962
-    },
-    "0x0222": {
-      "file": "test_callgraph.asm",
-      "address": "0x0222",
-      "line": 368
-    },
-    "0x014D": {
-      "file": "test_callgraph.asm",
-      "address": "0x014D",
-      "line": 250
-    },
-    "0x019B": {
-      "file": "test_callgraph.asm",
-      "address": "0x019B",
+      "address": "0x019E",
       "line": 289
     },
-    "0x00CC": {
+    "0x0571": {
       "file": "test_callgraph.asm",
-      "address": "0x00CC",
-      "line": 185
+      "address": "0x0571",
+      "line": 793
     },
-    "0x0250": {
+    "0x0501": {
       "file": "test_callgraph.asm",
-      "address": "0x0250",
-      "line": 391
+      "address": "0x0501",
+      "line": 743
     },
-    "0x01D5": {
+    "0x0659": {
       "file": "test_callgraph.asm",
-      "address": "0x01D5",
-      "line": 328
+      "address": "0x0659",
+      "line": 889
     },
-    "0x02A1": {
+    "0x03F9": {
       "file": "test_callgraph.asm",
-      "address": "0x02A1",
-      "line": 438
+      "address": "0x03F9",
+      "line": 622
     },
-    "0x014B": {
+    "0x01E1": {
       "file": "test_callgraph.asm",
-      "address": "0x014B",
-      "line": 249
+      "address": "0x01E1",
+      "line": 332
     },
-    "0x00E3": {
+    "0x0435": {
       "file": "test_callgraph.asm",
-      "address": "0x00E3",
-      "line": 196
+      "address": "0x0435",
+      "line": 668
     },
-    "0x42DC": {
+    "0x01F7": {
       "file": "test_callgraph.asm",
-      "address": "0x42DC",
-      "line": 543
+      "address": "0x01F7",
+      "line": 344
     },
-    "0x06CB": {
+    "0x0265": {
       "file": "test_callgraph.asm",
-      "address": "0x06CB",
-      "line": 994
+      "address": "0x0265",
+      "line": 402
     },
-    "0x0442": {
+    "0x0725": {
       "file": "test_callgraph.asm",
-      "address": "0x0442",
-      "line": 654
+      "address": "0x0725",
+      "line": 993
     },
-    "0x0340": {
+    "0x0102": {
       "file": "test_callgraph.asm",
-      "address": "0x0340",
-      "line": 55
+      "address": "0x0102",
+      "line": 214
     },
-    "0x04AF": {
+    "0x025E": {
       "file": "test_callgraph.asm",
-      "address": "0x04AF",
-      "line": 699
+      "address": "0x025E",
+      "line": 399
     },
-    "0x0487": {
+    "0x0362": {
       "file": "test_callgraph.asm",
-      "address": "0x0487",
-      "line": 681
+      "address": "0x0362",
+      "line": 546
     },
-    "0x0072": {
+    "0x03DA": {
       "file": "test_callgraph.asm",
-      "address": "0x0072",
-      "line": 127
-    },
-    "0x0542": {
-      "file": "test_callgraph.asm",
-      "address": "0x0542",
-      "line": 755
-    },
-    "0x0160": {
-      "file": "test_callgraph.asm",
-      "address": "0x0160",
-      "line": 262
-    },
-    "0x0372": {
-      "file": "test_callgraph.asm",
-      "address": "0x0372",
-      "line": 557
-    },
-    "0x00CB": {
-      "file": "test_callgraph.asm",
-      "address": "0x00CB",
-      "line": 184
-    },
-    "0x0428": {
-      "file": "test_callgraph.asm",
-      "address": "0x0428",
-      "line": 645
+      "address": "0x03DA",
+      "line": 611
     },
     "0x0063": {
       "file": "test_callgraph.asm",
       "address": "0x0063",
-      "line": 117
+      "line": 116
+    },
+    "0x00E3": {
+      "file": "test_callgraph.asm",
+      "address": "0x00E3",
+      "line": 195
+    },
+    "0x063D": {
+      "file": "test_callgraph.asm",
+      "address": "0x063D",
+      "line": 879
+    },
+    "0x04B4": {
+      "file": "test_callgraph.asm",
+      "address": "0x04B4",
+      "line": 712
+    },
+    "0x06FB": {
+      "file": "test_callgraph.asm",
+      "address": "0x06FB",
+      "line": 952
+    },
+    "0x0281": {
+      "file": "test_callgraph.asm",
+      "address": "0x0281",
+      "line": 421
+    },
+    "0x06F5": {
+      "file": "test_callgraph.asm",
+      "address": "0x06F5",
+      "line": 950
+    },
+    "0x05C0": {
+      "file": "test_callgraph.asm",
+      "address": "0x05C0",
+      "line": 818
+    },
+    "0x02B0": {
+      "file": "test_callgraph.asm",
+      "address": "0x02B0",
+      "line": 446
+    },
+    "0x036C": {
+      "file": "test_callgraph.asm",
+      "address": "0x036C",
+      "line": 552
+    },
+    "0x0187": {
+      "file": "test_callgraph.asm",
+      "address": "0x0187",
+      "line": 280
+    },
+    "0x0054": {
+      "file": "test_callgraph.asm",
+      "address": "0x0054",
+      "line": 106
+    },
+    "0x0600": {
+      "file": "test_callgraph.asm",
+      "address": "0x0600",
+      "line": 846
+    },
+    "0x0585": {
+      "file": "test_callgraph.asm",
+      "address": "0x0585",
+      "line": 800
+    },
+    "0x02EE": {
+      "file": "test_callgraph.asm",
+      "address": "0x02EE",
+      "line": 482
+    },
+    "0x01B0": {
+      "file": "test_callgraph.asm",
+      "address": "0x01B0",
+      "line": 302
+    },
+    "0x018C": {
+      "file": "test_callgraph.asm",
+      "address": "0x018C",
+      "line": 282
+    },
+    "0x065F": {
+      "file": "test_callgraph.asm",
+      "address": "0x065F",
+      "line": 896
+    },
+    "0x03DF": {
+      "file": "test_callgraph.asm",
+      "address": "0x03DF",
+      "line": 613
+    },
+    "0x034F": {
+      "file": "test_callgraph.asm",
+      "address": "0x034F",
+      "line": 532
+    },
+    "0x03B5": {
+      "file": "test_callgraph.asm",
+      "address": "0x03B5",
+      "line": 593
+    },
+    "0x0233": {
+      "file": "test_callgraph.asm",
+      "address": "0x0233",
+      "line": 377
+    },
+    "0x00AF": {
+      "file": "test_callgraph.asm",
+      "address": "0x00AF",
+      "line": 170
+    },
+    "0x0444": {
+      "file": "test_callgraph.asm",
+      "address": "0x0444",
+      "line": 676
+    },
+    "0x0061": {
+      "file": "test_callgraph.asm",
+      "address": "0x0061",
+      "line": 114
+    },
+    "0x028D": {
+      "file": "test_callgraph.asm",
+      "address": "0x028D",
+      "line": 428
+    },
+    "0x043A": {
+      "file": "test_callgraph.asm",
+      "address": "0x043A",
+      "line": 670
+    },
+    "0x022E": {
+      "file": "test_callgraph.asm",
+      "address": "0x022E",
+      "line": 374
+    },
+    "0x04FB": {
+      "file": "test_callgraph.asm",
+      "address": "0x04FB",
+      "line": 740
+    },
+    "0x04E9": {
+      "file": "test_callgraph.asm",
+      "address": "0x04E9",
+      "line": 735
+    },
+    "0x02D5": {
+      "file": "test_callgraph.asm",
+      "address": "0x02D5",
+      "line": 460
+    },
+    "0x0049": {
+      "file": "test_callgraph.asm",
+      "address": "0x0049",
+      "line": 92
+    },
+    "0x0146": {
+      "file": "test_callgraph.asm",
+      "address": "0x0146",
+      "line": 246
+    },
+    "0x01D3": {
+      "file": "test_callgraph.asm",
+      "address": "0x01D3",
+      "line": 326
+    },
+    "0x03C3": {
+      "file": "test_callgraph.asm",
+      "address": "0x03C3",
+      "line": 598
+    },
+    "0x067D": {
+      "file": "test_callgraph.asm",
+      "address": "0x067D",
+      "line": 906
+    },
+    "0x02A0": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A0",
+      "line": 436
+    },
+    "0x04BE": {
+      "file": "test_callgraph.asm",
+      "address": "0x04BE",
+      "line": 717
+    },
+    "0x068F": {
+      "file": "test_callgraph.asm",
+      "address": "0x068F",
+      "line": 912
+    },
+    "0x0649": {
+      "file": "test_callgraph.asm",
+      "address": "0x0649",
+      "line": 883
+    },
+    "0x061F": {
+      "file": "test_callgraph.asm",
+      "address": "0x061F",
+      "line": 869
+    },
+    "0x0101": {
+      "file": "test_callgraph.asm",
+      "address": "0x0101",
+      "line": 213
+    },
+    "0x05B1": {
+      "file": "test_callgraph.asm",
+      "address": "0x05B1",
+      "line": 813
+    },
+    "0x0570": {
+      "file": "test_callgraph.asm",
+      "address": "0x0570",
+      "line": 792
+    },
+    "0x06F2": {
+      "file": "test_callgraph.asm",
+      "address": "0x06F2",
+      "line": 949
+    },
+    "0x00FA": {
+      "file": "test_callgraph.asm",
+      "address": "0x00FA",
+      "line": 207
+    },
+    "0x05AA": {
+      "file": "test_callgraph.asm",
+      "address": "0x05AA",
+      "line": 809
+    },
+    "0x0502": {
+      "file": "test_callgraph.asm",
+      "address": "0x0502",
+      "line": 744
+    },
+    "0x045A": {
+      "file": "test_callgraph.asm",
+      "address": "0x045A",
+      "line": 685
+    },
+    "0x03E8": {
+      "file": "test_callgraph.asm",
+      "address": "0x03E8",
+      "line": 616
+    },
+    "0x0413": {
+      "file": "test_callgraph.asm",
+      "address": "0x0413",
+      "line": 654
+    },
+    "0x0406": {
+      "file": "test_callgraph.asm",
+      "address": "0x0406",
+      "line": 636
+    },
+    "0x0111": {
+      "file": "test_callgraph.asm",
+      "address": "0x0111",
+      "line": 223
+    },
+    "0x03C6": {
+      "file": "test_callgraph.asm",
+      "address": "0x03C6",
+      "line": 599
+    },
+    "0x031C": {
+      "file": "test_callgraph.asm",
+      "address": "0x031C",
+      "line": 41
+    },
+    "0x0656": {
+      "file": "test_callgraph.asm",
+      "address": "0x0656",
+      "line": 888
+    },
+    "0x01F4": {
+      "file": "test_callgraph.asm",
+      "address": "0x01F4",
+      "line": 343
+    },
+    "0x0544": {
+      "file": "test_callgraph.asm",
+      "address": "0x0544",
+      "line": 773
+    },
+    "0x01B2": {
+      "file": "test_callgraph.asm",
+      "address": "0x01B2",
+      "line": 304
+    },
+    "0x0603": {
+      "file": "test_callgraph.asm",
+      "address": "0x0603",
+      "line": 847
+    },
+    "0x0451": {
+      "file": "test_callgraph.asm",
+      "address": "0x0451",
+      "line": 682
+    },
+    "0x01DD": {
+      "file": "test_callgraph.asm",
+      "address": "0x01DD",
+      "line": 330
+    },
+    "0x0298": {
+      "file": "test_callgraph.asm",
+      "address": "0x0298",
+      "line": 433
+    },
+    "0x037D": {
+      "file": "test_callgraph.asm",
+      "address": "0x037D",
+      "line": 558
+    },
+    "0x02B7": {
+      "file": "test_callgraph.asm",
+      "address": "0x02B7",
+      "line": 449
+    },
+    "0x0025": {
+      "file": "test_callgraph.asm",
+      "address": "0x0025",
+      "line": 73
+    },
+    "0x01AE": {
+      "file": "test_callgraph.asm",
+      "address": "0x01AE",
+      "line": 301
+    },
+    "0x038C": {
+      "file": "test_callgraph.asm",
+      "address": "0x038C",
+      "line": 564
+    },
+    "0x0689": {
+      "file": "test_callgraph.asm",
+      "address": "0x0689",
+      "line": 910
+    },
+    "0x0165": {
+      "file": "test_callgraph.asm",
+      "address": "0x0165",
+      "line": 263
+    },
+    "0x0454": {
+      "file": "test_callgraph.asm",
+      "address": "0x0454",
+      "line": 683
+    },
+    "0x0686": {
+      "file": "test_callgraph.asm",
+      "address": "0x0686",
+      "line": 909
+    },
+    "0x038F": {
+      "file": "test_callgraph.asm",
+      "address": "0x038F",
+      "line": 568
+    },
+    "0x022F": {
+      "file": "test_callgraph.asm",
+      "address": "0x022F",
+      "line": 375
+    },
+    "0x0307": {
+      "file": "test_callgraph.asm",
+      "address": "0x0307",
+      "line": 496
+    },
+    "0x01E3": {
+      "file": "test_callgraph.asm",
+      "address": "0x01E3",
+      "line": 334
+    },
+    "0x0097": {
+      "file": "test_callgraph.asm",
+      "address": "0x0097",
+      "line": 149
+    },
+    "0x058E": {
+      "file": "test_callgraph.asm",
+      "address": "0x058E",
+      "line": 803
+    },
+    "0x014F": {
+      "file": "test_callgraph.asm",
+      "address": "0x014F",
+      "line": 250
+    },
+    "0x054F": {
+      "file": "test_callgraph.asm",
+      "address": "0x054F",
+      "line": 777
+    },
+    "0x0412": {
+      "file": "test_callgraph.asm",
+      "address": "0x0412",
+      "line": 653
+    },
+    "0x008D": {
+      "file": "test_callgraph.asm",
+      "address": "0x008D",
+      "line": 145
+    },
+    "0x0218": {
+      "file": "test_callgraph.asm",
+      "address": "0x0218",
+      "line": 361
+    },
+    "0x0511": {
+      "file": "test_callgraph.asm",
+      "address": "0x0511",
+      "line": 749
+    },
+    "0x00C4": {
+      "file": "test_callgraph.asm",
+      "address": "0x00C4",
+      "line": 179
+    },
+    "0x05BD": {
+      "file": "test_callgraph.asm",
+      "address": "0x05BD",
+      "line": 817
+    },
+    "0x0405": {
+      "file": "test_callgraph.asm",
+      "address": "0x0405",
+      "line": 633
+    },
+    "0x067A": {
+      "file": "test_callgraph.asm",
+      "address": "0x067A",
+      "line": 905
+    },
+    "0x0293": {
+      "file": "test_callgraph.asm",
+      "address": "0x0293",
+      "line": 431
+    },
+    "0x0707": {
+      "file": "test_callgraph.asm",
+      "address": "0x0707",
+      "line": 956
+    },
+    "0x05F0": {
+      "file": "test_callgraph.asm",
+      "address": "0x05F0",
+      "line": 838
+    },
+    "0x011D": {
+      "file": "test_callgraph.asm",
+      "address": "0x011D",
+      "line": 228
+    },
+    "0x00A0": {
+      "file": "test_callgraph.asm",
+      "address": "0x00A0",
+      "line": 156
+    },
+    "0x00AD": {
+      "file": "test_callgraph.asm",
+      "address": "0x00AD",
+      "line": 169
+    },
+    "0x0440": {
+      "file": "test_callgraph.asm",
+      "address": "0x0440",
+      "line": 673
+    },
+    "0x0206": {
+      "file": "test_callgraph.asm",
+      "address": "0x0206",
+      "line": 351
+    },
+    "0x047F": {
+      "file": "test_callgraph.asm",
+      "address": "0x047F",
+      "line": 690
+    },
+    "0x0149": {
+      "file": "test_callgraph.asm",
+      "address": "0x0149",
+      "line": 247
+    },
+    "0x0212": {
+      "file": "test_callgraph.asm",
+      "address": "0x0212",
+      "line": 356
+    },
+    "0x03CC": {
+      "file": "test_callgraph.asm",
+      "address": "0x03CC",
+      "line": 601
+    },
+    "0x00C1": {
+      "file": "test_callgraph.asm",
+      "address": "0x00C1",
+      "line": 178
+    },
+    "0x0263": {
+      "file": "test_callgraph.asm",
+      "address": "0x0263",
+      "line": 401
+    },
+    "0x01CA": {
+      "file": "test_callgraph.asm",
+      "address": "0x01CA",
+      "line": 320
+    },
+    "0x007C": {
+      "file": "test_callgraph.asm",
+      "address": "0x007C",
+      "line": 133
+    },
+    "0x056D": {
+      "file": "test_callgraph.asm",
+      "address": "0x056D",
+      "line": 789
+    },
+    "0x0652": {
+      "file": "test_callgraph.asm",
+      "address": "0x0652",
+      "line": 886
+    },
+    "0x0313": {
+      "file": "test_callgraph.asm",
+      "address": "0x0313",
+      "line": 38
+    },
+    "0x04B1": {
+      "file": "test_callgraph.asm",
+      "address": "0x04B1",
+      "line": 711
+    },
+    "0x048C": {
+      "file": "test_callgraph.asm",
+      "address": "0x048C",
+      "line": 696
+    },
+    "0x013C": {
+      "file": "test_callgraph.asm",
+      "address": "0x013C",
+      "line": 241
+    },
+    "0x0532": {
+      "file": "test_callgraph.asm",
+      "address": "0x0532",
+      "line": 763
+    },
+    "0x016E": {
+      "file": "test_callgraph.asm",
+      "address": "0x016E",
+      "line": 267
+    },
+    "0x056B": {
+      "file": "test_callgraph.asm",
+      "address": "0x056B",
+      "line": 787
+    },
+    "0x03D6": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D6",
+      "line": 608
+    },
+    "0x0118": {
+      "file": "test_callgraph.asm",
+      "address": "0x0118",
+      "line": 226
+    },
+    "0x030A": {
+      "file": "test_callgraph.asm",
+      "address": "0x030A",
+      "line": 497
+    },
+    "0x026D": {
+      "file": "test_callgraph.asm",
+      "address": "0x026D",
+      "line": 408
+    },
+    "0x0151": {
+      "file": "test_callgraph.asm",
+      "address": "0x0151",
+      "line": 251
+    },
+    "0x01DB": {
+      "file": "test_callgraph.asm",
+      "address": "0x01DB",
+      "line": 329
+    },
+    "0x0062": {
+      "file": "test_callgraph.asm",
+      "address": "0x0062",
+      "line": 115
+    },
+    "0x0252": {
+      "file": "test_callgraph.asm",
+      "address": "0x0252",
+      "line": 392
+    },
+    "0x02F2": {
+      "file": "test_callgraph.asm",
+      "address": "0x02F2",
+      "line": 485
+    },
+    "0x073A": {
+      "file": "test_callgraph.asm",
+      "address": "0x073A",
+      "line": 1017
+    },
+    "0x01D8": {
+      "file": "test_callgraph.asm",
+      "address": "0x01D8",
+      "line": 328
+    },
+    "0x00FB": {
+      "file": "test_callgraph.asm",
+      "address": "0x00FB",
+      "line": 208
+    },
+    "0x0172": {
+      "file": "test_callgraph.asm",
+      "address": "0x0172",
+      "line": 272
+    },
+    "0x05D4": {
+      "file": "test_callgraph.asm",
+      "address": "0x05D4",
+      "line": 827
+    },
+    "0x0505": {
+      "file": "test_callgraph.asm",
+      "address": "0x0505",
+      "line": 745
+    },
+    "0x01C2": {
+      "file": "test_callgraph.asm",
+      "address": "0x01C2",
+      "line": 317
+    },
+    "0x03AA": {
+      "file": "test_callgraph.asm",
+      "address": "0x03AA",
+      "line": 589
+    },
+    "0x01E0": {
+      "file": "test_callgraph.asm",
+      "address": "0x01E0",
+      "line": 331
+    },
+    "0x025C": {
+      "file": "test_callgraph.asm",
+      "address": "0x025C",
+      "line": 397
+    },
+    "0x0535": {
+      "file": "test_callgraph.asm",
+      "address": "0x0535",
+      "line": 764
+    },
+    "0x0631": {
+      "file": "test_callgraph.asm",
+      "address": "0x0631",
+      "line": 875
+    },
+    "0x0568": {
+      "file": "test_callgraph.asm",
+      "address": "0x0568",
+      "line": 786
+    },
+    "0x0640": {
+      "file": "test_callgraph.asm",
+      "address": "0x0640",
+      "line": 880
+    },
+    "0x022B": {
+      "file": "test_callgraph.asm",
+      "address": "0x022B",
+      "line": 371
+    },
+    "0x00A8": {
+      "file": "test_callgraph.asm",
+      "address": "0x00A8",
+      "line": 161
+    },
+    "0x00EF": {
+      "file": "test_callgraph.asm",
+      "address": "0x00EF",
+      "line": 201
+    },
+    "0x0527": {
+      "file": "test_callgraph.asm",
+      "address": "0x0527",
+      "line": 759
+    },
+    "0x0713": {
+      "file": "test_callgraph.asm",
+      "address": "0x0713",
+      "line": 960
+    },
+    "0x0612": {
+      "file": "test_callgraph.asm",
+      "address": "0x0612",
+      "line": 858
+    },
+    "0x0286": {
+      "file": "test_callgraph.asm",
+      "address": "0x0286",
+      "line": 423
+    },
+    "0x056F": {
+      "file": "test_callgraph.asm",
+      "address": "0x056F",
+      "line": 791
+    },
+    "0x0156": {
+      "file": "test_callgraph.asm",
+      "address": "0x0156",
+      "line": 254
+    },
+    "0x0036": {
+      "file": "test_callgraph.asm",
+      "address": "0x0036",
+      "line": 81
+    },
+    "0x052A": {
+      "file": "test_callgraph.asm",
+      "address": "0x052A",
+      "line": 760
+    },
+    "0x0418": {
+      "file": "test_callgraph.asm",
+      "address": "0x0418",
+      "line": 656
+    },
+    "0x014B": {
+      "file": "test_callgraph.asm",
+      "address": "0x014B",
+      "line": 248
+    },
+    "0x04A8": {
+      "file": "test_callgraph.asm",
+      "address": "0x04A8",
+      "line": 708
+    },
+    "0x0341": {
+      "file": "test_callgraph.asm",
+      "address": "0x0341",
+      "line": 523
+    },
+    "0x00FE": {
+      "file": "test_callgraph.asm",
+      "address": "0x00FE",
+      "line": 211
+    },
+    "0x0560": {
+      "file": "test_callgraph.asm",
+      "address": "0x0560",
+      "line": 783
+    },
+    "0x00A5": {
+      "file": "test_callgraph.asm",
+      "address": "0x00A5",
+      "line": 159
+    },
+    "0x04BC": {
+      "file": "test_callgraph.asm",
+      "address": "0x04BC",
+      "line": 715
+    },
+    "0x01A9": {
+      "file": "test_callgraph.asm",
+      "address": "0x01A9",
+      "line": 299
+    },
+    "0x010E": {
+      "file": "test_callgraph.asm",
+      "address": "0x010E",
+      "line": 221
+    },
+    "0x033A": {
+      "file": "test_callgraph.asm",
+      "address": "0x033A",
+      "line": 520
+    },
+    "0x049A": {
+      "file": "test_callgraph.asm",
+      "address": "0x049A",
+      "line": 703
+    },
+    "0x04C1": {
+      "file": "test_callgraph.asm",
+      "address": "0x04C1",
+      "line": 719
+    },
+    "0x02DC": {
+      "file": "test_callgraph.asm",
+      "address": "0x02DC",
+      "line": 2
+    },
+    "0x015A": {
+      "file": "test_callgraph.asm",
+      "address": "0x015A",
+      "line": 258
+    },
+    "0x0671": {
+      "file": "test_callgraph.asm",
+      "address": "0x0671",
+      "line": 902
+    },
+    "0x008B": {
+      "file": "test_callgraph.asm",
+      "address": "0x008B",
+      "line": 144
+    },
+    "0x040A": {
+      "file": "test_callgraph.asm",
+      "address": "0x040A",
+      "line": 643
+    },
+    "0x0352": {
+      "file": "test_callgraph.asm",
+      "address": "0x0352",
+      "line": 537
+    },
+    "0x0383": {
+      "file": "test_callgraph.asm",
+      "address": "0x0383",
+      "line": 560
+    },
+    "0x02A4": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A4",
+      "line": 441
+    },
+    "0x027E": {
+      "file": "test_callgraph.asm",
+      "address": "0x027E",
+      "line": 418
+    },
+    "0x041C": {
+      "file": "test_callgraph.asm",
+      "address": "0x041C",
+      "line": 658
+    },
+    "0x03CE": {
+      "file": "test_callgraph.asm",
+      "address": "0x03CE",
+      "line": 602
+    },
+    "0x0410": {
+      "file": "test_callgraph.asm",
+      "address": "0x0410",
+      "line": 650
+    },
+    "0x0081": {
+      "file": "test_callgraph.asm",
+      "address": "0x0081",
+      "line": 136
+    },
+    "0x0162": {
+      "file": "test_callgraph.asm",
+      "address": "0x0162",
+      "line": 262
+    },
+    "0x039C": {
+      "file": "test_callgraph.asm",
+      "address": "0x039C",
+      "line": 575
+    },
+    "0x0530": {
+      "file": "test_callgraph.asm",
+      "address": "0x0530",
+      "line": 762
+    },
+    "0x06E3": {
+      "file": "test_callgraph.asm",
+      "address": "0x06E3",
+      "line": 944
+    },
+    "0x0174": {
+      "file": "test_callgraph.asm",
+      "address": "0x0174",
+      "line": 273
+    },
+    "0x064F": {
+      "file": "test_callgraph.asm",
+      "address": "0x064F",
+      "line": 885
+    },
+    "0x05A4": {
+      "file": "test_callgraph.asm",
+      "address": "0x05A4",
+      "line": 806
+    },
+    "0x05AD": {
+      "file": "test_callgraph.asm",
+      "address": "0x05AD",
+      "line": 810
+    },
+    "0x01FF": {
+      "file": "test_callgraph.asm",
+      "address": "0x01FF",
+      "line": 348
+    },
+    "0x0177": {
+      "file": "test_callgraph.asm",
+      "address": "0x0177",
+      "line": 274
+    },
+    "0x00C6": {
+      "file": "test_callgraph.asm",
+      "address": "0x00C6",
+      "line": 180
+    },
+    "0x0407": {
+      "file": "test_callgraph.asm",
+      "address": "0x0407",
+      "line": 640
+    },
+    "0x0158": {
+      "file": "test_callgraph.asm",
+      "address": "0x0158",
+      "line": 255
+    },
+    "0x06CB": {
+      "file": "test_callgraph.asm",
+      "address": "0x06CB",
+      "line": 934
+    },
+    "0x018E": {
+      "file": "test_callgraph.asm",
+      "address": "0x018E",
+      "line": 283
+    },
+    "0x053E": {
+      "file": "test_callgraph.asm",
+      "address": "0x053E",
+      "line": 770
+    },
+    "0x06AD": {
+      "file": "test_callgraph.asm",
+      "address": "0x06AD",
+      "line": 924
+    },
+    "0x0616": {
+      "file": "test_callgraph.asm",
+      "address": "0x0616",
+      "line": 861
+    },
+    "0x06BC": {
+      "file": "test_callgraph.asm",
+      "address": "0x06BC",
+      "line": 929
+    },
+    "0x0519": {
+      "file": "test_callgraph.asm",
+      "address": "0x0519",
+      "line": 754
+    },
+    "0x0189": {
+      "file": "test_callgraph.asm",
+      "address": "0x0189",
+      "line": 281
+    },
+    "0x0680": {
+      "file": "test_callgraph.asm",
+      "address": "0x0680",
+      "line": 907
+    },
+    "0x03B8": {
+      "file": "test_callgraph.asm",
+      "address": "0x03B8",
+      "line": 594
+    },
+    "0x05BA": {
+      "file": "test_callgraph.asm",
+      "address": "0x05BA",
+      "line": 816
+    },
+    "0x0606": {
+      "file": "test_callgraph.asm",
+      "address": "0x0606",
+      "line": 848
+    },
+    "0x0492": {
+      "file": "test_callgraph.asm",
+      "address": "0x0492",
+      "line": 698
+    },
+    "0x0100": {
+      "file": "test_callgraph.asm",
+      "address": "0x0100",
+      "line": 212
+    },
+    "0x0030": {
+      "file": "test_callgraph.asm",
+      "address": "0x0030",
+      "line": 77
+    },
+    "0x0027": {
+      "file": "test_callgraph.asm",
+      "address": "0x0027",
+      "line": 74
+    },
+    "0x06EC": {
+      "file": "test_callgraph.asm",
+      "address": "0x06EC",
+      "line": 947
+    },
+    "0x0377": {
+      "file": "test_callgraph.asm",
+      "address": "0x0377",
+      "line": 556
+    },
+    "0x06BF": {
+      "file": "test_callgraph.asm",
+      "address": "0x06BF",
+      "line": 930
+    },
+    "0x032D": {
+      "file": "test_callgraph.asm",
+      "address": "0x032D",
+      "line": 515
+    },
+    "0x0565": {
+      "file": "test_callgraph.asm",
+      "address": "0x0565",
+      "line": 785
+    },
+    "0x02F1": {
+      "file": "test_callgraph.asm",
+      "address": "0x02F1",
+      "line": 18
+    },
+    "0x00E5": {
+      "file": "test_callgraph.asm",
+      "address": "0x00E5",
+      "line": 196
+    },
+    "0x071C": {
+      "file": "test_callgraph.asm",
+      "address": "0x071C",
+      "line": 990
+    },
+    "0x01A2": {
+      "file": "test_callgraph.asm",
+      "address": "0x01A2",
+      "line": 292
+    },
+    "0x02B4": {
+      "file": "test_callgraph.asm",
+      "address": "0x02B4",
+      "line": 448
+    },
+    "0x028E": {
+      "file": "test_callgraph.asm",
+      "address": "0x028E",
+      "line": 429
+    },
+    "0x01C1": {
+      "file": "test_callgraph.asm",
+      "address": "0x01C1",
+      "line": 316
+    },
+    "0x0071": {
+      "file": "test_callgraph.asm",
+      "address": "0x0071",
+      "line": 125
+    },
+    "0x05A7": {
+      "file": "test_callgraph.asm",
+      "address": "0x05A7",
+      "line": 807
+    },
+    "0x00CB": {
+      "file": "test_callgraph.asm",
+      "address": "0x00CB",
+      "line": 183
+    },
+    "0x01BF": {
+      "file": "test_callgraph.asm",
+      "address": "0x01BF",
+      "line": 313
+    },
+    "0x04F5": {
+      "file": "test_callgraph.asm",
+      "address": "0x04F5",
+      "line": 737
+    },
+    "0x00D3": {
+      "file": "test_callgraph.asm",
+      "address": "0x00D3",
+      "line": 189
+    },
+    "0x01B4": {
+      "file": "test_callgraph.asm",
+      "address": "0x01B4",
+      "line": 306
+    },
+    "0x0368": {
+      "file": "test_callgraph.asm",
+      "address": "0x0368",
+      "line": 550
+    },
+    "0x0217": {
+      "file": "test_callgraph.asm",
+      "address": "0x0217",
+      "line": 360
+    },
+    "0x033C": {
+      "file": "test_callgraph.asm",
+      "address": "0x033C",
+      "line": 54
+    },
+    "0x04A6": {
+      "file": "test_callgraph.asm",
+      "address": "0x04A6",
+      "line": 707
+    },
+    "0x00ED": {
+      "file": "test_callgraph.asm",
+      "address": "0x00ED",
+      "line": 200
+    },
+    "0x072A": {
+      "file": "test_callgraph.asm",
+      "address": "0x072A",
+      "line": 1011
+    },
+    "0x0330": {
+      "file": "test_callgraph.asm",
+      "address": "0x0330",
+      "line": 516
+    },
+    "0x070D": {
+      "file": "test_callgraph.asm",
+      "address": "0x070D",
+      "line": 958
+    },
+    "0x047C": {
+      "file": "test_callgraph.asm",
+      "address": "0x047C",
+      "line": 688
+    },
+    "0x00E0": {
+      "file": "test_callgraph.asm",
+      "address": "0x00E0",
+      "line": 194
+    },
+    "0x06D4": {
+      "file": "test_callgraph.asm",
+      "address": "0x06D4",
+      "line": 937
+    },
+    "0x044F": {
+      "file": "test_callgraph.asm",
+      "address": "0x044F",
+      "line": 681
+    },
+    "0x0153": {
+      "file": "test_callgraph.asm",
+      "address": "0x0153",
+      "line": 252
+    },
+    "0x0094": {
+      "file": "test_callgraph.asm",
+      "address": "0x0094",
+      "line": 148
+    },
+    "0x00B9": {
+      "file": "test_callgraph.asm",
+      "address": "0x00B9",
+      "line": 175
+    },
+    "0x0402": {
+      "file": "test_callgraph.asm",
+      "address": "0x0402",
+      "line": 630
+    },
+    "0x02D0": {
+      "file": "test_callgraph.asm",
+      "address": "0x02D0",
+      "line": 1025
+    },
+    "0x0290": {
+      "file": "test_callgraph.asm",
+      "address": "0x0290",
+      "line": 430
+    },
+    "0x00B2": {
+      "file": "test_callgraph.asm",
+      "address": "0x00B2",
+      "line": 171
+    },
+    "0x06C5": {
+      "file": "test_callgraph.asm",
+      "address": "0x06C5",
+      "line": 932
+    },
+    "0x019B": {
+      "file": "test_callgraph.asm",
+      "address": "0x019B",
+      "line": 288
+    },
+    "0x01FA": {
+      "file": "test_callgraph.asm",
+      "address": "0x01FA",
+      "line": 345
+    },
+    "0x05C8": {
+      "file": "test_callgraph.asm",
+      "address": "0x05C8",
+      "line": 823
+    },
+    "0x024A": {
+      "file": "test_callgraph.asm",
+      "address": "0x024A",
+      "line": 386
+    },
+    "0x0727": {
+      "file": "test_callgraph.asm",
+      "address": "0x0727",
+      "line": 1007
+    },
+    "0x028B": {
+      "file": "test_callgraph.asm",
+      "address": "0x028B",
+      "line": 426
+    },
+    "0x0289": {
+      "file": "test_callgraph.asm",
+      "address": "0x0289",
+      "line": 424
+    },
+    "0x03D8": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D8",
+      "line": 609
+    },
+    "0x0035": {
+      "file": "test_callgraph.asm",
+      "address": "0x0035",
+      "line": 80
+    },
+    "0x02A3": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A3",
+      "line": 440
+    },
+    "0x0355": {
+      "file": "test_callgraph.asm",
+      "address": "0x0355",
+      "line": 539
+    },
+    "0x036A": {
+      "file": "test_callgraph.asm",
+      "address": "0x036A",
+      "line": 551
+    },
+    "0x02D3": {
+      "file": "test_callgraph.asm",
+      "address": "0x02D3",
+      "line": 1026
+    },
+    "0x03FE": {
+      "file": "test_callgraph.asm",
+      "address": "0x03FE",
+      "line": 624
+    },
+    "0x057C": {
+      "file": "test_callgraph.asm",
+      "address": "0x057C",
+      "line": 797
+    },
+    "0x013E": {
+      "file": "test_callgraph.asm",
+      "address": "0x013E",
+      "line": 242
+    },
+    "0x029D": {
+      "file": "test_callgraph.asm",
+      "address": "0x029D",
+      "line": 435
+    },
+    "0x03AD": {
+      "file": "test_callgraph.asm",
+      "address": "0x03AD",
+      "line": 590
+    },
+    "0x0365": {
+      "file": "test_callgraph.asm",
+      "address": "0x0365",
+      "line": 549
+    },
+    "0x050E": {
+      "file": "test_callgraph.asm",
+      "address": "0x050E",
+      "line": 748
+    },
+    "0x03FB": {
+      "file": "test_callgraph.asm",
+      "address": "0x03FB",
+      "line": 623
+    },
+    "0x03D9": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D9",
+      "line": 610
+    },
+    "0x0087": {
+      "file": "test_callgraph.asm",
+      "address": "0x0087",
+      "line": 140
+    },
+    "0x0715": {
+      "file": "test_callgraph.asm",
+      "address": "0x0715",
+      "line": 962
+    },
+    "0x06B0": {
+      "file": "test_callgraph.asm",
+      "address": "0x06B0",
+      "line": 925
+    },
+    "0x041D": {
+      "file": "test_callgraph.asm",
+      "address": "0x041D",
+      "line": 659
+    },
+    "0x02FB": {
+      "file": "test_callgraph.asm",
+      "address": "0x02FB",
+      "line": 30
+    },
+    "0x0446": {
+      "file": "test_callgraph.asm",
+      "address": "0x0446",
+      "line": 678
+    },
+    "0x0113": {
+      "file": "test_callgraph.asm",
+      "address": "0x0113",
+      "line": 224
+    },
+    "0x03B3": {
+      "file": "test_callgraph.asm",
+      "address": "0x03B3",
+      "line": 592
+    },
+    "0x0375": {
+      "file": "test_callgraph.asm",
+      "address": "0x0375",
+      "line": 555
+    },
+    "0x03D4": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D4",
+      "line": 606
+    },
+    "0x06CE": {
+      "file": "test_callgraph.asm",
+      "address": "0x06CE",
+      "line": 935
+    },
+    "0x0421": {
+      "file": "test_callgraph.asm",
+      "address": "0x0421",
+      "line": 661
+    },
+    "0x02C1": {
+      "file": "test_callgraph.asm",
+      "address": "0x02C1",
+      "line": 453
+    },
+    "0x0347": {
+      "file": "test_callgraph.asm",
+      "address": "0x0347",
+      "line": 528
+    },
+    "0x02A2": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A2",
+      "line": 438
+    },
+    "0x02A5": {
+      "file": "test_callgraph.asm",
+      "address": "0x02A5",
+      "line": 442
+    },
+    "0x0438": {
+      "file": "test_callgraph.asm",
+      "address": "0x0438",
+      "line": 669
     },
     "0x02E5": {
       "file": "test_callgraph.asm",
       "address": "0x02E5",
       "line": 14
     },
-    "0x03F5": {
+    "0x01EA": {
       "file": "test_callgraph.asm",
-      "address": "0x03F5",
-      "line": 621
-    },
-    "0x0094": {
-      "file": "test_callgraph.asm",
-      "address": "0x0094",
-      "line": 149
-    },
-    "0x03DC": {
-      "file": "test_callgraph.asm",
-      "address": "0x03DC",
-      "line": 610
-    },
-    "0x04A7": {
-      "file": "test_callgraph.asm",
-      "address": "0x04A7",
-      "line": 696
-    },
-    "0x017F": {
-      "file": "test_callgraph.asm",
-      "address": "0x017F",
-      "line": 278
-    },
-    "0x051D": {
-      "file": "test_callgraph.asm",
-      "address": "0x051D",
-      "line": 739
-    },
-    "0x00CD": {
-      "file": "test_callgraph.asm",
-      "address": "0x00CD",
-      "line": 186
-    },
-    "0x06C9": {
-      "file": "test_callgraph.asm",
-      "address": "0x06C9",
-      "line": 993
-    },
-    "0x067D": {
-      "file": "test_callgraph.asm",
-      "address": "0x067D",
-      "line": 953
-    },
-    "0x068C": {
-      "file": "test_callgraph.asm",
-      "address": "0x068C",
-      "line": 960
-    },
-    "0x0191": {
-      "file": "test_callgraph.asm",
-      "address": "0x0191",
-      "line": 285
-    },
-    "0x0414": {
-      "file": "test_callgraph.asm",
-      "address": "0x0414",
-      "line": 634
-    },
-    "0x00B6": {
-      "file": "test_callgraph.asm",
-      "address": "0x00B6",
-      "line": 174
-    },
-    "0x0468": {
-      "file": "test_callgraph.asm",
-      "address": "0x0468",
-      "line": 668
-    },
-    "0x040E": {
-      "file": "test_callgraph.asm",
-      "address": "0x040E",
-      "line": 632
-    },
-    "0x0400": {
-      "file": "test_callgraph.asm",
-      "address": "0x0400",
-      "line": 627
-    },
-    "0x04C5": {
-      "file": "test_callgraph.asm",
-      "address": "0x04C5",
-      "line": 707
-    },
-    "0x069A": {
-      "file": "test_callgraph.asm",
-      "address": "0x069A",
-      "line": 969
-    },
-    "0x0363": {
-      "file": "test_callgraph.asm",
-      "address": "0x0363",
-      "line": 550
-    },
-    "0x0284": {
-      "file": "test_callgraph.asm",
-      "address": "0x0284",
-      "line": 423
-    },
-    "0x028E": {
-      "file": "test_callgraph.asm",
-      "address": "0x028E",
-      "line": 430
-    },
-    "0x022F": {
-      "file": "test_callgraph.asm",
-      "address": "0x022F",
-      "line": 376
-    },
-    "0x0120": {
-      "file": "test_callgraph.asm",
-      "address": "0x0120",
-      "line": 230
-    },
-    "0x0083": {
-      "file": "test_callgraph.asm",
-      "address": "0x0083",
-      "line": 138
-    },
-    "0x0345": {
-      "file": "test_callgraph.asm",
-      "address": "0x0345",
-      "line": 58
-    },
-    "0x0189": {
-      "file": "test_callgraph.asm",
-      "address": "0x0189",
-      "line": 282
-    },
-    "0x0721": {
-      "file": "test_callgraph.asm",
-      "address": "0x0721",
-      "line": 1079
-    },
-    "0x0563": {
-      "file": "test_callgraph.asm",
-      "address": "0x0563",
-      "line": 769
-    },
-    "0x0263": {
-      "file": "test_callgraph.asm",
-      "address": "0x0263",
-      "line": 402
-    },
-    "0x026B": {
-      "file": "test_callgraph.asm",
-      "address": "0x026B",
-      "line": 408
-    },
-    "0x00A8": {
-      "file": "test_callgraph.asm",
-      "address": "0x00A8",
-      "line": 162
-    },
-    "0x0462": {
-      "file": "test_callgraph.asm",
-      "address": "0x0462",
-      "line": 666
-    },
-    "0x01E3": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E3",
-      "line": 335
-    },
-    "0x0276": {
-      "file": "test_callgraph.asm",
-      "address": "0x0276",
-      "line": 416
-    },
-    "0x04C0": {
-      "file": "test_callgraph.asm",
-      "address": "0x04C0",
-      "line": 705
-    },
-    "0x004F": {
-      "file": "test_callgraph.asm",
-      "address": "0x004F",
-      "line": 104
-    },
-    "0x00E0": {
-      "file": "test_callgraph.asm",
-      "address": "0x00E0",
-      "line": 195
-    },
-    "0x0352": {
-      "file": "test_callgraph.asm",
-      "address": "0x0352",
-      "line": 534
-    },
-    "0x06DD": {
-      "file": "test_callgraph.asm",
-      "address": "0x06DD",
-      "line": 1005
-    },
-    "0x01CD": {
-      "file": "test_callgraph.asm",
-      "address": "0x01CD",
-      "line": 325
-    },
-    "0x00B2": {
-      "file": "test_callgraph.asm",
-      "address": "0x00B2",
-      "line": 172
-    },
-    "0x04B5": {
-      "file": "test_callgraph.asm",
-      "address": "0x04B5",
-      "line": 701
-    },
-    "0x0476": {
-      "file": "test_callgraph.asm",
-      "address": "0x0476",
-      "line": 675
-    },
-    "0x0081": {
-      "file": "test_callgraph.asm",
-      "address": "0x0081",
-      "line": 137
-    },
-    "0x033E": {
-      "file": "test_callgraph.asm",
-      "address": "0x033E",
-      "line": 824
-    },
-    "0x0360": {
-      "file": "test_callgraph.asm",
-      "address": "0x0360",
-      "line": 549
-    },
-    "0x013E": {
-      "file": "test_callgraph.asm",
-      "address": "0x013E",
-      "line": 243
-    },
-    "0x06F8": {
-      "file": "test_callgraph.asm",
-      "address": "0x06F8",
-      "line": 1020
-    },
-    "0x04CF": {
-      "file": "test_callgraph.asm",
-      "address": "0x04CF",
-      "line": 713
-    },
-    "0x0118": {
-      "file": "test_callgraph.asm",
-      "address": "0x0118",
-      "line": 227
-    },
-    "0x0293": {
-      "file": "test_callgraph.asm",
-      "address": "0x0293",
-      "line": 432
-    },
-    "0x0261": {
-      "file": "test_callgraph.asm",
-      "address": "0x0261",
-      "line": 401
-    },
-    "0x01E7": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E7",
+      "address": "0x01EA",
       "line": 339
     },
-    "0x01CA": {
+    "0x048F": {
       "file": "test_callgraph.asm",
-      "address": "0x01CA",
-      "line": 321
-    },
-    "0x0146": {
-      "file": "test_callgraph.asm",
-      "address": "0x0146",
-      "line": 247
-    },
-    "0x0159": {
-      "file": "test_callgraph.asm",
-      "address": "0x0159",
-      "line": 257
-    },
-    "0x0134": {
-      "file": "test_callgraph.asm",
-      "address": "0x0134",
-      "line": 237
-    },
-    "0x020E": {
-      "file": "test_callgraph.asm",
-      "address": "0x020E",
-      "line": 355
-    },
-    "0x01DB": {
-      "file": "test_callgraph.asm",
-      "address": "0x01DB",
-      "line": 330
-    },
-    "0x0254": {
-      "file": "test_callgraph.asm",
-      "address": "0x0254",
-      "line": 394
-    },
-    "0x0492": {
-      "file": "test_callgraph.asm",
-      "address": "0x0492",
-      "line": 685
-    },
-    "0x02F5": {
-      "file": "test_callgraph.asm",
-      "address": "0x02F5",
-      "line": 919
-    },
-    "0x0322": {
-      "file": "test_callgraph.asm",
-      "address": "0x0322",
-      "line": 600
-    },
-    "0x041D": {
-      "file": "test_callgraph.asm",
-      "address": "0x041D",
-      "line": 638
-    },
-    "0x0218": {
-      "file": "test_callgraph.asm",
-      "address": "0x0218",
-      "line": 362
-    },
-    "0x0310": {
-      "file": "test_callgraph.asm",
-      "address": "0x0310",
-      "line": 928
-    },
-    "0x01E1": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E1",
-      "line": 333
-    },
-    "0x04A9": {
-      "file": "test_callgraph.asm",
-      "address": "0x04A9",
+      "address": "0x048F",
       "line": 697
     },
-    "0x02FE": {
+    "0x0238": {
       "file": "test_callgraph.asm",
-      "address": "0x02FE",
-      "line": 490
+      "address": "0x0238",
+      "line": 379
     },
-    "0x0130": {
+    "0x06E9": {
       "file": "test_callgraph.asm",
-      "address": "0x0130",
-      "line": 234
+      "address": "0x06E9",
+      "line": 946
     },
-    "0x0069": {
+    "0x041B": {
       "file": "test_callgraph.asm",
-      "address": "0x0069",
-      "line": 121
-    },
-    "0x00E5": {
-      "file": "test_callgraph.asm",
-      "address": "0x00E5",
-      "line": 197
-    },
-    "0x0722": {
-      "file": "test_callgraph.asm",
-      "address": "0x0722",
-      "line": 1080
-    },
-    "0x02B4": {
-      "file": "test_callgraph.asm",
-      "address": "0x02B4",
-      "line": 449
-    },
-    "0x02FB": {
-      "file": "test_callgraph.asm",
-      "address": "0x02FB",
-      "line": 798
-    },
-    "0x0275": {
-      "file": "test_callgraph.asm",
-      "address": "0x0275",
-      "line": 415
-    },
-    "0x0387": {
-      "file": "test_callgraph.asm",
-      "address": "0x0387",
-      "line": 854
-    },
-    "0x047F": {
-      "file": "test_callgraph.asm",
-      "address": "0x047F",
-      "line": 678
-    },
-    "0x00AA": {
-      "file": "test_callgraph.asm",
-      "address": "0x00AA",
-      "line": 163
-    },
-    "0x01E2": {
-      "file": "test_callgraph.asm",
-      "address": "0x01E2",
-      "line": 334
-    },
-    "0x00F7": {
-      "file": "test_callgraph.asm",
-      "address": "0x00F7",
-      "line": 207
-    },
-    "0x0215": {
-      "file": "test_callgraph.asm",
-      "address": "0x0215",
-      "line": 360
-    },
-    "0x0514": {
-      "file": "test_callgraph.asm",
-      "address": "0x0514",
-      "line": 736
-    },
-    "0x0298": {
-      "file": "test_callgraph.asm",
-      "address": "0x0298",
-      "line": 434
-    },
-    "0x0422": {
-      "file": "test_callgraph.asm",
-      "address": "0x0422",
-      "line": 642
-    },
-    "0x0556": {
-      "file": "test_callgraph.asm",
-      "address": "0x0556",
-      "line": 763
-    },
-    "0x054D": {
-      "file": "test_callgraph.asm",
-      "address": "0x054D",
-      "line": 759
-    },
-    "0x072B": {
-      "file": "test_callgraph.asm",
-      "address": "0x072B",
-      "line": 1084
-    },
-    "0x0403": {
-      "file": "test_callgraph.asm",
-      "address": "0x0403",
-      "line": 628
-    },
-    "0x0054": {
-      "file": "test_callgraph.asm",
-      "address": "0x0054",
-      "line": 107
-    },
-    "0x06A9": {
-      "file": "test_callgraph.asm",
-      "address": "0x06A9",
-      "line": 976
-    },
-    "0x031F": {
-      "file": "test_callgraph.asm",
-      "address": "0x031F",
-      "line": 812
-    },
-    "0x034A": {
-      "file": "test_callgraph.asm",
-      "address": "0x034A",
-      "line": 829
-    },
-    "0x0111": {
-      "file": "test_callgraph.asm",
-      "address": "0x0111",
-      "line": 224
-    },
-    "0x031C": {
-      "file": "test_callgraph.asm",
-      "address": "0x031C",
-      "line": 505
-    },
-    "0x0140": {
-      "file": "test_callgraph.asm",
-      "address": "0x0140",
-      "line": 244
-    },
-    "0x02BF": {
-      "file": "test_callgraph.asm",
-      "address": "0x02BF",
-      "line": 453
-    },
-    "0x04C3": {
-      "file": "test_callgraph.asm",
-      "address": "0x04C3",
-      "line": 706
-    },
-    "0x0165": {
-      "file": "test_callgraph.asm",
-      "address": "0x0165",
-      "line": 264
-    },
-    "0x069C": {
-      "file": "test_callgraph.asm",
-      "address": "0x069C",
-      "line": 970
+      "address": "0x041B",
+      "line": 657
     },
     "0x0080": {
       "file": "test_callgraph.asm",
       "address": "0x0080",
-      "line": 136
+      "line": 135
     },
-    "0x02EF": {
+    "0x051C": {
       "file": "test_callgraph.asm",
-      "address": "0x02EF",
-      "line": 917
+      "address": "0x051C",
+      "line": 755
     },
-    "0x01FA": {
+    "0x071B": {
       "file": "test_callgraph.asm",
-      "address": "0x01FA",
-      "line": 346
+      "address": "0x071B",
+      "line": 989
     },
-    "0x06E0": {
+    "0x0201": {
       "file": "test_callgraph.asm",
-      "address": "0x06E0",
-      "line": 1006
+      "address": "0x0201",
+      "line": 349
     },
-    "0x025E": {
+    "0x050B": {
       "file": "test_callgraph.asm",
-      "address": "0x025E",
-      "line": 400
+      "address": "0x050B",
+      "line": 747
     },
-    "0x0248": {
+    "0x02B2": {
       "file": "test_callgraph.asm",
-      "address": "0x0248",
-      "line": 386
+      "address": "0x02B2",
+      "line": 447
     },
-    "0x0097": {
+    "0x0034": {
       "file": "test_callgraph.asm",
-      "address": "0x0097",
-      "line": 150
+      "address": "0x0034",
+      "line": 79
+    },
+    "0x0683": {
+      "file": "test_callgraph.asm",
+      "address": "0x0683",
+      "line": 908
+    },
+    "0x03ED": {
+      "file": "test_callgraph.asm",
+      "address": "0x03ED",
+      "line": 618
+    },
+    "0x0662": {
+      "file": "test_callgraph.asm",
+      "address": "0x0662",
+      "line": 897
+    },
+    "0x03DD": {
+      "file": "test_callgraph.asm",
+      "address": "0x03DD",
+      "line": 612
+    },
+    "0x066B": {
+      "file": "test_callgraph.asm",
+      "address": "0x066B",
+      "line": 900
+    },
+    "0x017D": {
+      "file": "test_callgraph.asm",
+      "address": "0x017D",
+      "line": 276
+    },
+    "0x04E8": {
+      "file": "test_callgraph.asm",
+      "address": "0x04E8",
+      "line": 734
+    },
+    "0x0731": {
+      "file": "test_callgraph.asm",
+      "address": "0x0731",
+      "line": 1014
+    },
+    "0x01BA": {
+      "file": "test_callgraph.asm",
+      "address": "0x01BA",
+      "line": 310
+    },
+    "0x0159": {
+      "file": "test_callgraph.asm",
+      "address": "0x0159",
+      "line": 256
+    },
+    "0x0193": {
+      "file": "test_callgraph.asm",
+      "address": "0x0193",
+      "line": 285
+    },
+    "0x0278": {
+      "file": "test_callgraph.asm",
+      "address": "0x0278",
+      "line": 416
+    },
+    "0x028C": {
+      "file": "test_callgraph.asm",
+      "address": "0x028C",
+      "line": 427
+    },
+    "0x0674": {
+      "file": "test_callgraph.asm",
+      "address": "0x0674",
+      "line": 903
+    },
+    "0x0269": {
+      "file": "test_callgraph.asm",
+      "address": "0x0269",
+      "line": 406
+    },
+    "0x03A6": {
+      "file": "test_callgraph.asm",
+      "address": "0x03A6",
+      "line": 587
+    },
+    "0x01B7": {
+      "file": "test_callgraph.asm",
+      "address": "0x01B7",
+      "line": 307
+    },
+    "0x0390": {
+      "file": "test_callgraph.asm",
+      "address": "0x0390",
+      "line": 569
+    },
+    "0x0716": {
+      "file": "test_callgraph.asm",
+      "address": "0x0716",
+      "line": 963
+    },
+    "0x003C": {
+      "file": "test_callgraph.asm",
+      "address": "0x003C",
+      "line": 87
+    },
+    "0x058B": {
+      "file": "test_callgraph.asm",
+      "address": "0x058B",
+      "line": 802
+    },
+    "0x04DC": {
+      "file": "test_callgraph.asm",
+      "address": "0x04DC",
+      "line": 730
     },
     "0x0445": {
       "file": "test_callgraph.asm",
       "address": "0x0445",
-      "line": 655
+      "line": 677
     },
-    "0x0319": {
+    "0x0516": {
       "file": "test_callgraph.asm",
-      "address": "0x0319",
-      "line": 810
+      "address": "0x0516",
+      "line": 753
     },
-    "0x0697": {
+    "0x015B": {
       "file": "test_callgraph.asm",
-      "address": "0x0697",
-      "line": 964
+      "address": "0x015B",
+      "line": 259
     },
-    "0x03EC": {
+    "0x0609": {
       "file": "test_callgraph.asm",
-      "address": "0x03EC",
-      "line": 618
+      "address": "0x0609",
+      "line": 849
     },
-    "0x0267": {
+    "0x0442": {
       "file": "test_callgraph.asm",
-      "address": "0x0267",
-      "line": 405
+      "address": "0x0442",
+      "line": 675
     },
-    "0x01FC": {
+    "0x03E2": {
       "file": "test_callgraph.asm",
-      "address": "0x01FC",
-      "line": 347
+      "address": "0x03E2",
+      "line": 614
     },
-    "0x069F": {
+    "0x0577": {
       "file": "test_callgraph.asm",
-      "address": "0x069F",
-      "line": 971
+      "address": "0x0577",
+      "line": 795
+    },
+    "0x0107": {
+      "file": "test_callgraph.asm",
+      "address": "0x0107",
+      "line": 217
+    },
+    "0x06B6": {
+      "file": "test_callgraph.asm",
+      "address": "0x06B6",
+      "line": 927
+    },
+    "0x05E5": {
+      "file": "test_callgraph.asm",
+      "address": "0x05E5",
+      "line": 835
+    },
+    "0x042A": {
+      "file": "test_callgraph.asm",
+      "address": "0x042A",
+      "line": 664
+    },
+    "0x002D": {
+      "file": "test_callgraph.asm",
+      "address": "0x002D",
+      "line": 76
+    },
+    "0x012D": {
+      "file": "test_callgraph.asm",
+      "address": "0x012D",
+      "line": 232
+    },
+    "0x03D5": {
+      "file": "test_callgraph.asm",
+      "address": "0x03D5",
+      "line": 607
+    },
+    "0x0316": {
+      "file": "test_callgraph.asm",
+      "address": "0x0316",
+      "line": 503
+    },
+    "0x06EF": {
+      "file": "test_callgraph.asm",
+      "address": "0x06EF",
+      "line": 948
+    },
+    "0x024D": {
+      "file": "test_callgraph.asm",
+      "address": "0x024D",
+      "line": 389
+    },
+    "0x0045": {
+      "file": "test_callgraph.asm",
+      "address": "0x0045",
+      "line": 90
+    },
+    "0x042C": {
+      "file": "test_callgraph.asm",
+      "address": "0x042C",
+      "line": 665
+    },
+    "0x06B9": {
+      "file": "test_callgraph.asm",
+      "address": "0x06B9",
+      "line": 928
+    },
+    "0x0482": {
+      "file": "test_callgraph.asm",
+      "address": "0x0482",
+      "line": 691
+    },
+    "0x03F6": {
+      "file": "test_callgraph.asm",
+      "address": "0x03F6",
+      "line": 621
+    },
+    "0x00C9": {
+      "file": "test_callgraph.asm",
+      "address": "0x00C9",
+      "line": 181
+    },
+    "0x0245": {
+      "file": "test_callgraph.asm",
+      "address": "0x0245",
+      "line": 384
+    },
+    "0x066E": {
+      "file": "test_callgraph.asm",
+      "address": "0x066E",
+      "line": 901
+    },
+    "0x009A": {
+      "file": "test_callgraph.asm",
+      "address": "0x009A",
+      "line": 150
     }
   },
   "functions": {},
   "nativeCalls": {
-    "24": "VECTREX_SET_INTENSITY",
-    "19": "VECTREX_SET_INTENSITY"
+    "28": "VECTREX_SET_INTENSITY",
+    "20": "VECTREX_SET_INTENSITY"
   },
   "asmFunctions": {},
   "asmAddressMap": {
-    "704": "0x04BD",
-    "710": "0x04CC",
-    "734": "0x0510",
-    "46": "0x032B",
-    "514": "0x032F",
-    "220": "0x010B",
-    "130": "0x0077",
-    "609": "0x03D9",
-    "20": "0x02F5",
-    "45": "0x0328",
-    "459": "0x02D2",
-    "689": "0x049A",
-    "250": "0x014D",
-    "818": "0x032F",
-    "114": "0x005E",
-    "765": "0x0559",
-    "215": "0x0102",
-    "174": "0x00B6",
-    "598": "0x031C",
-    "823": "0x033B",
-    "303": "0x01B0",
-    "425": "0x0289",
-    "146": "0x008D",
-    "182": "0x00C9",
-    "329": "0x01D8",
-    "443": "0x02A5",
-    "612": "0x03DF",
-    "729": "0x0507",
-    "986": "0x06B9",
-    "961": "0x068F",
-    "811": "0x031C",
-    "267": "0x016D",
-    "18": "0x02EF",
-    "54": "0x033E",
-    "724": "0x04EB",
-    "578": "0x02E5",
-    "680": "0x0484",
-    "201": "0x00ED",
-    "920": "0x02F8",
-    "548": "0x035D",
-    "344": "0x01F4",
-    "1060": "0x0716",
-    "619": "0x03EF",
-    "415": "0x0275",
-    "257": "0x0159",
-    "931": "0x0319",
-    "235": "0x0131",
-    "915": "0x02EB",
-    "376": "0x022F",
-    "442": "0x02A4",
-    "841": "0x0366",
-    "790": "0x02E5",
-    "997": "0x06D3",
-    "279": "0x0181",
-    "364": "0x021C",
-    "393": "0x0252",
-    "676": "0x0479",
-    "428": "0x028C",
-    "32": "0x0301",
-    "226": "0x0115",
-    "964": "0x0697",
-    "180": "0x00C4",
-    "93": "0x0049",
-    "422": "0x0281",
-    "276": "0x017A",
-    "866": "0x02DE",
-    "651": "0x0439",
-    "617": "0x03E9",
-    "56": "0x0343",
-    "629": "0x0406",
-    "263": "0x0162",
-    "601": "0x0325",
-    "954": "0x067F",
-    "230": "0x0120",
-    "763": "0x0556",
-    "639": "0x041E",
-    "334": "0x01E2",
-    "526": "0x0345",
-    "159": "0x00A3",
-    "965": "0x0699",
-    "525": "0x0343",
-    "11": "0x02DE",
-    "543": "0x42DC",
-    "95": "0x004B",
-    "1013": "0x06F0",
-    "402": "0x0263",
-    "838": "0x035D",
-    "993": "0x06C9",
-    "184": "0x00CB",
-    "563": "0x037D",
-    "981": "0x06B6",
-    "845": "0x0372",
-    "914": "0x02E8",
-    "992": "0x06C6",
-    "208": "0x00FA",
-    "921": "0x02FB",
-    "416": "0x0276",
-    "642": "0x0422",
-    "361": "0x0217",
-    "620": "0x03F2",
-    "251": "0x014F",
-    "716": "0x04D4",
-    "668": "0x0468",
-    "923": "0x0301",
-    "826": "0x0343",
-    "115": "0x0061",
-    "302": "0x01AE",
-    "363": "0x0219",
-    "126": "0x0071",
-    "940": "0x02DC",
-    "558": "0x0375",
-    "685": "0x0492",
-    "278": "0x017F",
-    "270": "0x0170",
-    "30": "0x02FB",
-    "247": "0x0146",
-    "319": "0x01C4",
-    "994": "0x06CB",
-    "154": "0x009B",
-    "476": "0x02E5",
-    "136": "0x0080",
-    "791": "0x02E8",
-    "77": "0x002D",
-    "883": "0x02E0",
-    "803": "0x030A",
-    "657": "0x0449",
-    "547": "0x035A",
-    "572": "0x02DC",
-    "854": "0x0387",
-    "868": "0x02E0",
-    "435": "0x029B",
-    "1026": "0x0705",
-    "690": "0x049C",
-    "300": "0x01A9",
-    "179": "0x00C1",
-    "280": "0x0184",
-    "80": "0x0034",
-    "2": "0x02DC",
-    "151": "0x009A",
-    "669": "0x046B",
-    "510": "0x0328",
-    "985": "0x06B7",
-    "1052": "0x070E",
-    "185": "0x00CC",
-    "747": "0x052E",
-    "652": "0x043C",
-    "429": "0x028D",
-    "1002": "0x06D6",
-    "91": "0x0045",
-    "665": "0x0461",
-    "555": "0x036F",
-    "848": "0x0377",
-    "51": "0x0336",
-    "815": "0x0328",
-    "421": "0x0280",
-    "840": "0x0363",
-    "1057": "0x0713",
-    "81": "0x0035",
-    "660": "0x0458",
-    "698": "0x04AC",
-    "990": "0x06C3",
-    "562": "0x037A",
-    "219": "0x0108",
-    "138": "0x0083",
-    "976": "0x06A9",
-    "12": "0x02E0",
-    "245": "0x0142",
-    "978": "0x06AE",
-    "913": "0x02E5",
-    "331": "0x01DD",
-    "382": "0x023D",
-    "318": "0x01C2",
-    "241": "0x013A",
-    "863": "0x02DC",
-    "970": "0x069C",
-    "385": "0x0245",
-    "768": "0x0560",
-    "626": "0x03FD",
-    "995": "0x06CE",
-    "487": "0x02F8",
-    "522": "0x033B",
-    "749": "0x0534",
-    "770": "0x0566",
-    "974": "0x06A6",
-    "524": "0x0340",
-    "492": "0x0301",
-    "454": "0x02C1",
-    "432": "0x0293",
-    "256": "0x0158",
-    "604": "0x032E",
-    "956": "0x0684",
-    "631": "0x040B",
-    "48": "0x032F",
-    "726": "0x04F1",
-    "269": "0x016F",
-    "584": "0x02F5",
-    "1059": "0x0715",
-    "523": "0x033E",
-    "282": "0x0189",
-    "746": "0x052B",
-    "800": "0x0301",
-    "420": "0x027F",
-    "518": "0x0333",
-    "140": "0x0086",
-    "1075": "0x071F",
-    "740": "0x0520",
-    "1074": "0x071C",
-    "47": "0x032E",
-    "988": "0x06BE",
-    "1079": "0x0721",
-    "356": "0x0211",
-    "504": "0x0319",
-    "1020": "0x06F8",
-    "769": "0x0563",
-    "508": "0x0322",
-    "697": "0x04A9",
-    "339": "0x01E7",
-    "1001": "0x06D4",
-    "663": "0x045E",
-    "408": "0x026B",
-    "157": "0x00A0",
-    "457": "0x02CE",
-    "817": "0x032E",
-    "834": "0x0352",
-    "1004": "0x06DB",
-    "49": "0x0330",
-    "835": "0x0355",
-    "595": "0x0313",
-    "926": "0x030A",
-    "379": "0x0235",
-    "972": "0x06A1",
-    "271": "0x0171",
-    "739": "0x051D",
-    "799": "0x02FE",
-    "307": "0x01B4",
-    "261": "0x015D",
-    "195": "0x00E0",
-    "417": "0x0278",
-    "223": "0x0110",
-    "925": "0x0307",
-    "493": "0x0304",
-    "692": "0x049E",
-    "937": "0x02DC",
-    "1028": "0x070B",
-    "411": "0x026F",
-    "162": "0x00A8",
+    "598": "0x03C3",
+    "913": "0x0692",
+    "959": "0x0710",
+    "472": "0x02DE",
+    "344": "0x01F7",
+    "521": "0x033C",
+    "885": "0x064F",
+    "957": "0x070A",
+    "814": "0x05B4",
+    "990": "0x071C",
     "43": "0x0322",
-    "662": "0x045B",
-    "719": "0x04DC",
-    "688": "0x0499",
-    "703": "0x04BA",
-    "1056": "0x0710",
-    "448": "0x02B2",
-    "585": "0x02F8",
-    "409": "0x026D",
-    "962": "0x0691",
-    "221": "0x010D",
-    "963": "0x0694",
-    "605": "0x032F",
-    "754": "0x0541",
-    "16": "0x02EB",
-    "714": "0x04D0",
-    "148": "0x0092",
-    "602": "0x0328",
-    "1018": "0x06F3",
-    "477": "0x02E8",
-    "586": "0x02FB",
-    "700": "0x04B2",
-    "486": "0x02F5",
-    "648": "0x0430",
-    "687": "0x0498",
-    "821": "0x0336",
-    "750": "0x0537",
-    "352": "0x0206",
-    "322": "0x01CB",
-    "684": "0x0490",
-    "173": "0x00B4",
-    "599": "0x031F",
-    "944": "0x02DE",
-    "638": "0x041D",
-    "340": "0x01EA",
-    "682": "0x048A",
-    "314": "0x01BF",
-    "172": "0x00B2",
-    "274": "0x0174",
-    "291": "0x019F",
-    "268": "0x016E",
-    "111": "0x005A",
-    "362": "0x0218",
-    "958": "0x0689",
-    "253": "0x0153",
-    "13": "0x02E3",
-    "82": "0x0036",
-    "332": "0x01E0",
-    "458": "0x02D1",
-    "191": "0x00D6",
-    "529": "0x034D",
-    "644": "0x0425",
-    "618": "0x03EC",
-    "407": "0x0269",
-    "918": "0x02F2",
-    "29": "0x02F8",
-    "849": "0x037A",
-    "850": "0x037D",
-    "446": "0x02AD",
-    "789": "0x02E3",
-    "342": "0x01F0",
-    "1084": "0x072B",
-    "94": "0x004A",
-    "569": "0x02DC",
-    "171": "0x00AF",
-    "391": "0x0250",
-    "74": "0x0025",
-    "694": "0x04A1",
-    "580": "0x02EB",
-    "248": "0x0149",
-    "438": "0x02A1",
-    "387": "0x024A",
-    "134": "0x007C",
-    "310": "0x01B9",
-    "293": "0x01A2",
-    "110": "0x0059",
-    "1061": "0x0719",
-    "369": "0x0224",
-    "127": "0x0072",
-    "708": "0x04C8",
-    "42": "0x031F",
-    "401": "0x0261",
-    "437": "0x02A0",
-    "163": "0x00AA",
-    "960": "0x068C",
-    "386": "0x0248",
-    "501": "0x0313",
-    "1005": "0x06DD",
-    "705": "0x04C0",
-    "234": "0x0130",
-    "916": "0x02ED",
-    "199": "0x00EA",
-    "266": "0x016A",
-    "38": "0x0313",
-    "645": "0x0428",
-    "875": "0x02DC",
-    "757": "0x0545",
-    "824": "0x033E",
-    "577": "0x02E3",
-    "507": "0x031F",
-    "650": "0x0436",
-    "117": "0x0063",
-    "106": "0x0053",
-    "349": "0x01FF",
-    "39": "0x0316",
-    "1025": "0x0703",
-    "796": "0x02F5",
-    "40": "0x0319",
-    "597": "0x0319",
-    "590": "0x0307",
-    "265": "0x0168",
-    "327": "0x01D3",
-    "41": "0x031C",
-    "35": "0x030A",
-    "1008": "0x06E3",
-    "678": "0x047F",
-    "666": "0x0462",
-    "897": "0x02DE",
-    "147": "0x0090",
-    "804": "0x030D",
-    "105": "0x0052",
-    "285": "0x0191",
-    "214": "0x0101",
-    "852": "0x0381",
-    "509": "0x0325",
-    "120": "0x0068",
-    "505": "0x031C",
-    "460": "0x02D3",
-    "969": "0x069A",
-    "513": "0x032E",
-    "655": "0x0445",
-    "583": "0x02F2",
-    "594": "0x0310",
-    "1083": "0x0728",
-    "430": "0x028E",
-    "720": "0x04DF",
-    "286": "0x0193",
-    "244": "0x0140",
-    "640": "0x0420",
-    "424": "0x0286",
-    "903": "0x02DC",
-    "78": "0x0030",
-    "820": "0x0333",
-    "311": "0x01BA",
-    "780": "0x02DC",
-    "833": "0x0350",
-    "635": "0x0416",
-    "718": "0x04DA",
-    "400": "0x025E",
-    "207": "0x00F7",
-    "1017": "0x06F1",
-    "683": "0x048D",
-    "679": "0x0482",
-    "802": "0x0307",
-    "194": "0x00DD",
-    "515": "0x0330",
-    "825": "0x0340",
-    "1024": "0x0700",
-    "275": "0x0177",
-    "550": "0x0363",
-    "783": "0x02DC",
-    "744": "0x0525",
-    "118": "0x0065",
-    "893": "0x02DC",
-    "839": "0x0360",
-    "745": "0x0528",
-    "819": "0x0330",
-    "150": "0x0097",
-    "203": "0x00F2",
-    "433": "0x0295",
-    "209": "0x00FB",
-    "1058": "0x0714",
-    "603": "0x032B",
-    "419": "0x027E",
-    "667": "0x0465",
-    "615": "0x03E5",
-    "957": "0x0686",
-    "375": "0x022E",
-    "325": "0x01CD",
-    "670": "0x046E",
-    "797": "0x02F8",
-    "996": "0x06D1",
-    "760": "0x0550",
-    "52": "0x0339",
-    "398": "0x025C",
-    "625": "0x03FA",
-    "588": "0x0301",
-    "436": "0x029D",
-    "473": "0x02DE",
-    "351": "0x0204",
-    "579": "0x02E8",
-    "787": "0x02DE",
-    "634": "0x0414",
-    "723": "0x04E8",
-    "553": "0x0369",
-    "842": "0x0369",
-    "1011": "0x06EB",
-    "805": "0x0310",
-    "1003": "0x06D9",
-    "759": "0x054D",
-    "149": "0x0094",
-    "707": "0x04C5",
-    "264": "0x0165",
-    "394": "0x0254",
-    "1010": "0x06E8",
-    "977": "0x06AC",
-    "671": "0x0471",
-    "587": "0x02FE",
-    "696": "0x04A7",
-    "812": "0x031F",
-    "187": "0x00CE",
-    "360": "0x0215",
-    "912": "0x02E3",
-    "616": "0x03E6",
-    "737": "0x0517",
-    "301": "0x01AC",
-    "659": "0x0455",
-    "528": "0x034A",
-    "317": "0x01C1",
-    "181": "0x00C6",
-    "1082": "0x0725",
-    "177": "0x00BC",
-    "575": "0x02DE",
-    "246": "0x0144",
-    "851": "0x037E",
-    "686": "0x0495",
-    "305": "0x01B2",
-    "34": "0x0307",
-    "955": "0x0682",
-    "953": "0x067D",
-    "131": "0x0078",
-    "481": "0x02F2",
-    "610": "0x03DC",
-    "108": "0x0056",
-    "771": "0x0569",
-    "636": "0x0419",
-    "479": "0x02ED",
-    "794": "0x02EF",
-    "50": "0x0333",
-    "242": "0x013C",
-    "204": "0x00F5",
-    "813": "0x0322",
-    "853": "0x0384",
-    "289": "0x019B",
-    "36": "0x030D",
-    "224": "0x0111",
-    "987": "0x06BC",
-    "499": "0x0310",
-    "600": "0x0322",
-    "236": "0x0132",
-    "557": "0x0372",
-    "178": "0x00BE",
-    "37": "0x0310",
-    "552": "0x0366",
-    "715": "0x04D1",
-    "89": "0x003F",
-    "675": "0x0476",
-    "141": "0x0087",
-    "439": "0x02A2",
-    "489": "0x02FB",
-    "405": "0x0267",
-    "846": "0x0375",
-    "343": "0x01F2",
-    "722": "0x04E5",
-    "774": "0x056E",
-    "249": "0x014B",
-    "441": "0x02A3",
-    "17": "0x02ED",
-    "766": "0x055A",
-    "989": "0x06C0",
-    "79": "0x0033",
-    "284": "0x018E",
-    "922": "0x02FE",
-    "453": "0x02BF",
-    "801": "0x0304",
-    "1022": "0x06FD",
-    "366": "0x021F",
-    "125": "0x0070",
-    "290": "0x019E",
-    "495": "0x0307",
-    "346": "0x01FA",
-    "592": "0x030D",
-    "392": "0x0251",
-    "480": "0x02EF",
-    "910": "0x02DE",
-    "6": "0x02DC",
-    "792": "0x02EB",
-    "450": "0x02B7",
-    "752": "0x053D",
-    "1009": "0x06E6",
-    "410": "0x026E",
-    "333": "0x01E1",
-    "295": "0x01A8",
-    "521": "0x0339",
-    "699": "0x04AF",
-    "502": "0x0316",
-    "243": "0x013E",
-    "229": "0x011D",
-    "735": "0x0511",
-    "581": "0x02ED",
-    "330": "0x01DB",
-    "732": "0x050D",
-    "810": "0x0319",
-    "273": "0x0172",
-    "390": "0x024D",
-    "372": "0x022B",
-    "701": "0x04B5",
-    "260": "0x015B",
+    "407": "0x026B",
+    "767": "0x053A",
+    "945": "0x06E6",
+    "737": "0x04F5",
+    "593": "0x03B5",
+    "490": "0x02FB",
+    "221": "0x010E",
+    "755": "0x051C",
+    "680": "0x044C",
     "31": "0x02FE",
-    "107": "0x0054",
-    "33": "0x0304",
-    "728": "0x0504",
-    "216": "0x0105",
-    "478": "0x02EB",
-    "315": "0x01C0",
-    "633": "0x0411",
-    "738": "0x051A",
-    "186": "0x00CD",
-    "549": "0x0360",
-    "336": "0x01E4",
-    "338": "0x01E5",
-    "1027": "0x0708",
-    "1080": "0x0722",
-    "345": "0x01F7",
-    "472": "0x02DC",
-    "928": "0x0310",
-    "88": "0x003C",
-    "190": "0x00D3",
-    "973": "0x06A3",
-    "1012": "0x06EE",
-    "252": "0x0151",
-    "807": "0x0316",
-    "347": "0x01FC",
-    "906": "0x02DC",
-    "202": "0x00EF",
-    "554": "0x036C",
-    "681": "0x0487",
-    "328": "0x01D5",
-    "828": "0x0348",
-    "451": "0x02BA",
-    "878": "0x02DC",
-    "397": "0x025A",
-    "637": "0x041C",
-    "444": "0x02A7",
-    "413": "0x0273",
-    "691": "0x049D",
-    "512": "0x032B",
-    "520": "0x0336",
-    "170": "0x00AD",
-    "198": "0x00E8",
-    "762": "0x0553",
-    "649": "0x0433",
-    "374": "0x022D",
-    "324": "0x01CC",
-    "225": "0x0113",
-    "537": "0x0358",
-    "75": "0x0027",
-    "711": "0x04CD",
-    "731": "0x050A",
-    "576": "0x02E0",
-    "560": "0x0377",
-    "596": "0x0316",
-    "368": "0x0222",
-    "607": "0x0333",
-    "795": "0x02F2",
-    "90": "0x0042",
-    "1081": "0x0724",
-    "135": "0x007F",
-    "447": "0x02B0",
-    "121": "0x0069",
-    "233": "0x012D",
-    "756": "0x0544",
-    "498": "0x030D",
-    "533": "0x0350",
-    "427": "0x028B",
-    "627": "0x0400",
-    "751": "0x053A",
+    "114": "0x0061",
+    "471": "0x02DC",
+    "823": "0x05C8",
+    "608": "0x03D6",
+    "48": "0x032D",
+    "992": "0x0722",
+    "494": "0x0304",
+    "223": "0x0111",
+    "350": "0x0204",
+    "385": "0x0248",
+    "691": "0x0482",
+    "551": "0x036A",
+    "91": "0x0048",
+    "946": "0x06E9",
+    "481": "0x02EB",
+    "944": "0x06E3",
+    "732": "0x04E2",
+    "868": "0x061C",
+    "12": "0x02E0",
+    "522": "0x033F",
+    "570": "0x0391",
+    "703": "0x049A",
+    "300": "0x01AC",
+    "309": "0x01B9",
+    "224": "0x0113",
+    "538": "0x0354",
+    "462": "0x02DB",
+    "843": "0x05F9",
+    "45": "0x0326",
+    "753": "0x0516",
+    "601": "0x03CC",
+    "232": "0x012D",
+    "989": "0x071B",
+    "545": "0x035F",
+    "679": "0x0449",
+    "334": "0x01E3",
+    "575": "0x039C",
+    "827": "0x05D4",
+    "781": "0x055A",
+    "861": "0x0616",
+    "694": "0x0486",
     "19": "0x02F2",
-    "717": "0x04D7",
-    "350": "0x0201",
-    "709": "0x04CB",
-    "695": "0x04A4",
-    "755": "0x0542",
-    "979": "0x06B1",
-    "816": "0x032B",
-    "128": "0x0074",
-    "793": "0x02ED",
-    "884": "0x02E3",
-    "423": "0x0284",
-    "55": "0x0340",
-    "806": "0x0313",
-    "53": "0x033B",
-    "1021": "0x06FA",
-    "713": "0x04CF",
-    "212": "0x00FE",
-    "196": "0x00E3",
-    "335": "0x01E3",
-    "431": "0x0290",
-    "1029": "0x070D",
-    "930": "0x0316",
-    "218": "0x0107",
-    "414": "0x0274",
-    "1006": "0x06E0",
-    "798": "0x02FB",
-    "193": "0x00DB",
-    "1053": "0x070F",
-    "341": "0x01ED",
-    "475": "0x02E3",
-    "357": "0x0212",
-    "980": "0x06B4",
-    "378": "0x0233",
-    "384": "0x0242",
-    "847": "0x0376",
-    "844": "0x036F",
-    "380": "0x0238",
-    "748": "0x0531",
-    "449": "0x02B4",
-    "837": "0x035A",
-    "355": "0x020E",
-    "197": "0x00E5",
-    "677": "0x047C",
-    "767": "0x055D",
-    "192": "0x00D9",
-    "559": "0x0376",
-    "788": "0x02E0",
-    "647": "0x042D",
-    "222": "0x010E",
-    "87": "0x003A",
-    "924": "0x0304",
-    "92": "0x0048",
-    "445": "0x02AA",
-    "843": "0x036C",
-    "822": "0x0339",
-    "321": "0x01CA",
-    "971": "0x069F",
-    "308": "0x01B7",
-    "827": "0x0345",
-    "237": "0x0134",
-    "536": "0x0355",
-    "292": "0x01A0",
-    "753": "0x0540",
-    "370": "0x0225",
-    "656": "0x0448",
-    "403": "0x0265",
-    "582": "0x02EF",
-    "255": "0x0156",
-    "836": "0x0358",
-    "461": "0x02D5",
-    "145": "0x008B",
-    "1019": "0x06F6",
-    "104": "0x004F",
-    "736": "0x0514",
-    "155": "0x009D",
-    "1078": "0x0720",
-    "814": "0x0325",
-    "606": "0x0330",
-    "176": "0x00B9",
-    "702": "0x04B7",
-    "58": "0x0345",
-    "183": "0x00CA",
-    "283": "0x018C",
-    "383": "0x0240",
+    "589": "0x03AA",
+    "182": "0x00CA",
+    "922": "0x06A7",
+    "414": "0x0275",
+    "963": "0x0716",
+    "942": "0x06DD",
+    "158": "0x00A3",
+    "227": "0x011B",
+    "176": "0x00BC",
+    "954": "0x0701",
+    "791": "0x056F",
+    "225": "0x0115",
+    "402": "0x0265",
+    "567": "0x038D",
+    "932": "0x06C5",
+    "274": "0x0177",
+    "519": "0x0337",
+    "667": "0x0432",
+    "877": "0x0637",
+    "618": "0x03ED",
+    "955": "0x0704",
+    "619": "0x03F0",
+    "201": "0x00EF",
+    "189": "0x00D3",
+    "513": "0x032A",
+    "725": "0x04CD",
+    "949": "0x06F2",
+    "664": "0x042A",
+    "450": "0x02BA",
+    "756": "0x051F",
+    "697": "0x048F",
+    "632": "0x0403",
+    "267": "0x016E",
+    "248": "0x014B",
+    "785": "0x0565",
+    "773": "0x0544",
+    "1028": "0x02D8",
+    "746": "0x0508",
+    "1025": "0x02D0",
+    "809": "0x05AA",
+    "393": "0x0254",
+    "331": "0x01E0",
+    "368": "0x0224",
+    "833": "0x05E2",
+    "268": "0x016F",
+    "560": "0x0383",
+    "318": "0x01C4",
+    "930": "0x06BF",
+    "822": "0x05C5",
+    "733": "0x04E5",
+    "341": "0x01F0",
+    "110": "0x005A",
+    "106": "0x0054",
+    "116": "0x0063",
+    "510": "0x0326",
+    "858": "0x0612",
+    "310": "0x01BA",
+    "206": "0x00F7",
+    "273": "0x0174",
+    "829": "0x05DA",
+    "133": "0x007C",
+    "474": "0x02E3",
+    "994": "0x0726",
+    "764": "0x0535",
+    "623": "0x03FB",
+    "149": "0x0097",
+    "681": "0x044F",
+    "572": "0x0394",
+    "657": "0x041B",
+    "960": "0x0713",
+    "342": "0x01F2",
+    "531": "0x034C",
+    "682": "0x0451",
+    "401": "0x0263",
+    "135": "0x0080",
+    "294": "0x01A8",
+    "432": "0x0295",
+    "897": "0x0662",
+    "830": "0x05DD",
+    "276": "0x017D",
+    "711": "0x04B1",
+    "1014": "0x0731",
+    "203": "0x00F5",
+    "1011": "0x072A",
+    "848": "0x0606",
+    "769": "0x053D",
+    "655": "0x0415",
+    "768": "0x053C",
+    "456": "0x02CE",
+    "139": "0x0086",
+    "502": "0x0313",
+    "245": "0x0144",
+    "938": "0x06D7",
+    "443": "0x02A7",
+    "806": "0x05A4",
+    "291": "0x01A0",
+    "650": "0x0410",
+    "215": "0x0105",
+    "1012": "0x072B",
+    "79": "0x0034",
+    "661": "0x0421",
+    "418": "0x027E",
+    "562": "0x0388",
+    "888": "0x0656",
+    "184": "0x00CC",
+    "386": "0x024A",
+    "444": "0x02AA",
+    "717": "0x04BE",
+    "939": "0x06DA",
+    "459": "0x02D3",
+    "876": "0x0634",
+    "818": "0x05C0",
+    "730": "0x04DC",
+    "156": "0x00A0",
+    "622": "0x03F9",
+    "1030": "0x02DE",
+    "1027": "0x02D5",
+    "889": "0x0659",
+    "214": "0x0102",
+    "660": "0x041E",
+    "599": "0x03C6",
+    "536": "0x0351",
+    "316": "0x01C1",
+    "636": "0x0406",
+    "409": "0x026E",
+    "103": "0x004F",
+    "57": "0x0341",
+    "427": "0x028C",
+    "378": "0x0235",
+    "6": "0x02DC",
+    "240": "0x013A",
+    "795": "0x0577",
+    "832": "0x05E1",
+    "422": "0x0284",
+    "799": "0x0582",
+    "532": "0x034F",
+    "553": "0x036F",
+    "816": "0x05BA",
+    "677": "0x0445",
+    "46": "0x0327",
+    "744": "0x0502",
+    "93": "0x004A",
+    "798": "0x057F",
+    "332": "0x01E1",
+    "852": "0x060E",
+    "505": "0x031C",
+    "864": "0x0619",
+    "243": "0x0140",
+    "1022": "0x02CC",
+    "284": "0x0191",
+    "217": "0x0107",
+    "936": "0x06D1",
+    "929": "0x06BC",
+    "590": "0x03AD",
+    "910": "0x0689",
+    "696": "0x048C",
+    "115": "0x0062",
+    "242": "0x013E",
+    "375": "0x022F",
+    "187": "0x00D0",
+    "90": "0x0045",
+    "762": "0x0530",
+    "42": "0x031F",
+    "783": "0x0560",
+    "277": "0x017F",
+    "712": "0x04B4",
+    "666": "0x042F",
+    "37": "0x0310",
+    "772": "0x0541",
+    "962": "0x0715",
+    "438": "0x02A2",
+    "855": "0x060F",
+    "302": "0x01B0",
+    "793": "0x0571",
+    "377": "0x0233",
+    "349": "0x0201",
+    "788": "0x056C",
+    "633": "0x0405",
+    "678": "0x0446",
+    "17": "0x02EE",
+    "49": "0x0330",
+    "288": "0x019B",
+    "247": "0x0149",
+    "920": "0x06A1",
+    "924": "0x06AD",
+    "77": "0x0030",
+    "473": "0x02E0",
+    "313": "0x01BF",
+    "780": "0x0557",
+    "264": "0x0168",
+    "119": "0x0068",
+    "250": "0x014F",
+    "663": "0x0427",
+    "654": "0x0413",
+    "935": "0x06CE",
+    "758": "0x0524",
+    "824": "0x05CB",
+    "784": "0x0563",
+    "872": "0x0628",
+    "903": "0x0674",
+    "228": "0x011D",
+    "452": "0x02BF",
+    "290": "0x019F",
+    "726": "0x04D0",
+    "763": "0x0532",
+    "794": "0x0574",
+    "241": "0x013C",
+    "270": "0x0171",
+    "421": "0x0281",
+    "515": "0x032D",
+    "81": "0x0036",
+    "285": "0x0193",
+    "698": "0x0492",
+    "258": "0x015A",
+    "194": "0x00E0",
+    "748": "0x050E",
+    "266": "0x016D",
+    "78": "0x0033",
+    "233": "0x0130",
+    "948": "0x06EF",
+    "729": "0x04D9",
+    "337": "0x01E5",
+    "249": "0x014D",
+    "279": "0x0184",
+    "882": "0x0646",
+    "735": "0x04E9",
+    "841": "0x05F6",
+    "765": "0x0538",
+    "170": "0x00AF",
+    "546": "0x0362",
+    "396": "0x025A",
+    "719": "0x04C1",
+    "212": "0x0100",
+    "540": "0x0356",
+    "602": "0x03CE",
+    "281": "0x0189",
+    "813": "0x05B1",
+    "196": "0x00E5",
+    "902": "0x0671",
+    "159": "0x00A5",
+    "34": "0x0307",
+    "509": "0x0325",
+    "363": "0x021C",
+    "881": "0x0643",
+    "662": "0x0424",
+    "124": "0x0070",
+    "905": "0x067A",
+    "430": "0x0290",
+    "130": "0x0078",
+    "643": "0x040A",
+    "647": "0x040D",
+    "627": "0x0401",
+    "192": "0x00DB",
+    "937": "0x06D4",
+    "162": "0x00AA",
+    "484": "0x02F1",
+    "299": "0x01A9",
+    "1016": "0x0737",
+    "346": "0x01FC",
+    "747": "0x050B",
+    "51": "0x0335",
+    "706": "0x04A3",
+    "262": "0x0162",
+    "219": "0x010B",
+    "129": "0x0077",
+    "840": "0x05F3",
+    "323": "0x01CC",
+    "202": "0x00F2",
+    "359": "0x0215",
+    "676": "0x0444",
+    "993": "0x0725",
+    "88": "0x003F",
+    "906": "0x067D",
+    "847": "0x0603",
+    "745": "0x0505",
+    "901": "0x066E",
+    "177": "0x00BE",
+    "778": "0x0552",
+    "713": "0x04B6",
+    "453": "0x02C1",
+    "55": "0x033F",
+    "301": "0x01AE",
+    "161": "0x00A8",
+    "731": "0x04DF",
+    "620": "0x03F3",
+    "406": "0x0269",
+    "13": "0x02E3",
+    "835": "0x05E5",
+    "329": "0x01DB",
+    "413": "0x0274",
+    "39": "0x0316",
+    "252": "0x0153",
+    "220": "0x010D",
+    "29": "0x02F8",
+    "911": "0x068C",
+    "928": "0x06B9",
+    "400": "0x0261",
+    "47": "0x032A",
+    "126": "0x0072",
+    "986": "0x071A",
+    "207": "0x00FA",
+    "292": "0x01A2",
+    "624": "0x03FE",
+    "451": "0x02BC",
+    "659": "0x041D",
+    "40": "0x0319",
+    "426": "0x028B",
+    "606": "0x03D4",
+    "424": "0x0289",
+    "759": "0x0527",
+    "434": "0x029B",
+    "951": "0x06F8",
+    "382": "0x0240",
+    "475": "0x02E5",
+    "321": "0x01CB",
+    "716": "0x04BD",
+    "927": "0x06B6",
+    "261": "0x0160",
+    "607": "0x03D5",
+    "320": "0x01CA",
+    "190": "0x00D6",
+    "330": "0x01DD",
+    "674": "0x0441",
+    "410": "0x026F",
+    "306": "0x01B4",
+    "476": "0x02E8",
+    "708": "0x04A8",
+    "828": "0x05D7",
+    "448": "0x02B4",
+    "743": "0x0501",
+    "912": "0x068F",
+    "35": "0x030A",
+    "908": "0x0683",
+    "517": "0x0332",
+    "760": "0x052A",
+    "612": "0x03DD",
+    "900": "0x066B",
+    "670": "0x043A",
+    "500": "0x0310",
+    "259": "0x015B",
+    "496": "0x0307",
+    "597": "0x03C0",
+    "640": "0x0407",
+    "265": "0x016A",
+    "435": "0x029D",
+    "487": "0x02F5",
+    "573": "0x0396",
+    "574": "0x0399",
+    "1023": "0x02CC",
+    "169": "0x00AD",
+    "669": "0x0438",
+    "704": "0x049D",
+    "311": "0x01BB",
+    "356": "0x0212",
+    "653": "0x0412",
+    "140": "0x0087",
+    "845": "0x05FD",
+    "1015": "0x0734",
+    "437": "0x02A1",
+    "449": "0x02B7",
+    "482": "0x02EE",
+    "787": "0x056B",
+    "391": "0x0251",
+    "399": "0x025E",
+    "127": "0x0074",
+    "718": "0x04C0",
+    "335": "0x01E4",
+    "87": "0x003C",
+    "148": "0x0094",
+    "797": "0x057C",
+    "436": "0x02A0",
+    "52": "0x0337",
+    "389": "0x024D",
+    "715": "0x04BC",
+    "524": "0x0344",
+    "53": "0x033A",
+    "390": "0x0250",
+    "672": "0x043D",
+    "197": "0x00E8",
+    "208": "0x00FB",
+    "757": "0x0522",
+    "870": "0x0622",
+    "616": "0x03E8",
+    "497": "0x030A",
+    "714": "0x04B9",
+    "557": "0x037A",
+    "104": "0x0052",
+    "384": "0x0245",
+    "246": "0x0146",
+    "1029": "0x02DB",
+    "431": "0x0293",
+    "804": "0x0591",
+    "668": "0x0435",
+    "117": "0x0065",
+    "782": "0x055D",
+    "503": "0x0316",
+    "766": "0x0539",
+    "445": "0x02AD",
+    "441": "0x02A4",
+    "367": "0x0222",
+    "304": "0x01B2",
+    "499": "0x030D",
+    "105": "0x0053",
+    "146": "0x0090",
+    "339": "0x01EA",
+    "898": "0x0665",
+    "838": "0x05F0",
+    "507": "0x031F",
+    "229": "0x0120",
+    "289": "0x019E",
+    "109": "0x0059",
+    "429": "0x028E",
+    "493": "0x0301",
+    "578": "0x039F",
+    "415": "0x0276",
+    "581": "0x03A2",
+    "956": "0x0707",
+    "875": "0x0631",
+    "314": "0x01C0",
+    "699": "0x0495",
+    "914": "0x0695",
+    "392": "0x0252",
+    "20": "0x02F5",
+    "433": "0x0298",
+    "154": "0x009D",
+    "558": "0x037D",
+    "873": "0x062B",
+    "812": "0x05B0",
+    "338": "0x01E7",
+    "365": "0x021F",
+    "658": "0x041C",
+    "523": "0x0341",
+    "137": "0x0083",
+    "74": "0x0027",
+    "673": "0x0440",
+    "458": "0x02D2",
+    "136": "0x0081",
+    "550": "0x0368",
+    "707": "0x04A6",
+    "915": "0x0698",
+    "76": "0x002D",
+    "613": "0x03DF",
+    "373": "0x022D",
+    "985": "0x0719",
+    "172": "0x00B4",
+    "383": "0x0242",
+    "879": "0x063D",
+    "552": "0x036C",
+    "685": "0x045A",
+    "621": "0x03F6",
+    "211": "0x00FE",
+    "792": "0x0570",
     "15": "0x02E8",
-    "881": "0x02DE",
-    "706": "0x04C3",
-    "917": "0x02EF",
-    "277": "0x017D",
-    "534": "0x0352",
-    "434": "0x0298",
-    "721": "0x04E2",
-    "630": "0x0408",
-    "869": "0x02E3",
-    "641": "0x0421",
-    "116": "0x0062",
-    "725": "0x04EE",
-    "259": "0x015A",
-    "326": "0x01D0",
-    "628": "0x0403",
-    "381": "0x023B",
-    "860": "0x02DC",
-    "621": "0x03F5",
-    "829": "0x034A",
-    "188": "0x00D0",
-    "890": "0x02DC",
-    "654": "0x0442",
-    "527": "0x0348",
-    "474": "0x02E0",
-    "227": "0x0118",
-    "262": "0x0160",
-    "911": "0x02E0",
-    "646": "0x042B",
-    "830": "0x034D",
-    "281": "0x0187",
-    "653": "0x043F",
-    "589": "0x0304",
-    "929": "0x0313",
-    "76": "0x002A",
-    "463": "0x02DB",
-    "452": "0x02BC",
-    "927": "0x030D",
-    "613": "0x03E2",
-    "496": "0x030A",
-    "632": "0x040E",
-    "919": "0x02F5",
+    "171": "0x00B2",
+    "235": "0x0132",
+    "727": "0x04D3",
+    "584": "0x03A5",
+    "485": "0x02F2",
+    "251": "0x0151",
+    "559": "0x0380",
+    "801": "0x0588",
+    "741": "0x04FE",
+    "380": "0x023B",
+    "317": "0x01C2",
+    "611": "0x03DA",
+    "892": "0x065C",
+    "789": "0x056D",
+    "150": "0x009A",
+    "921": "0x06A4",
+    "397": "0x025C",
+    "931": "0x06C2",
+    "605": "0x03D1",
+    "690": "0x047F",
+    "786": "0x0568",
+    "544": "0x035C",
+    "343": "0x01F4",
+    "675": "0x0442",
+    "883": "0x0649",
+    "874": "0x062E",
+    "369": "0x0225",
+    "779": "0x0555",
+    "416": "0x0278",
+    "904": "0x0677",
+    "491": "0x02FE",
+    "961": "0x0714",
+    "33": "0x0304",
+    "1008": "0x0728",
+    "549": "0x0365",
+    "869": "0x061F",
+    "89": "0x0042",
+    "720": "0x04C2",
+    "880": "0x0640",
+    "195": "0x00E3",
+    "537": "0x0352",
+    "761": "0x052D",
+    "254": "0x0156",
+    "73": "0x0025",
+    "1007": "0x0727",
+    "728": "0x04D6",
+    "345": "0x01FA",
+    "280": "0x0187",
+    "926": "0x06B3",
+    "36": "0x030D",
+    "86": "0x003A",
+    "592": "0x03B3",
+    "120": "0x0069",
+    "255": "0x0158",
+    "796": "0x057A",
+    "198": "0x00EA",
+    "446": "0x02B0",
+    "175": "0x00B9",
+    "815": "0x05B7",
+    "423": "0x0286",
+    "218": "0x0108",
+    "381": "0x023D",
+    "1017": "0x073A",
+    "518": "0x0335",
+    "41": "0x031C",
+    "234": "0x0131",
+    "886": "0x0652",
+    "723": "0x04C8",
+    "360": "0x0217",
+    "404": "0x0267",
+    "107": "0x0056",
+    "260": "0x015D",
+    "896": "0x065F",
+    "272": "0x0172",
+    "834": "0x05E4",
+    "236": "0x0134",
+    "80": "0x0035",
+    "125": "0x0071",
+    "825": "0x05CE",
+    "884": "0x064C",
+    "770": "0x053E",
+    "185": "0x00CD",
+    "817": "0x05BD",
+    "563": "0x038B",
+    "709": "0x04AB",
+    "94": "0x004B",
+    "630": "0x0402",
+    "516": "0x0330",
+    "710": "0x04AE",
+    "351": "0x0206",
+    "16": "0x02EB",
+    "543": "0x0359",
+    "943": "0x06E0",
+    "810": "0x05AD",
+    "695": "0x0489",
+    "529": "0x0349",
+    "113": "0x005E",
+    "991": "0x071F",
+    "213": "0x0101",
+    "615": "0x03E5",
+    "564": "0x038C",
+    "749": "0x0511",
+    "520": "0x033A",
+    "1026": "0x02D3",
+    "844": "0x05FA",
+    "348": "0x01FF",
+    "683": "0x0454",
+    "54": "0x033C",
+    "878": "0x063A",
+    "488": "0x02F8",
+    "32": "0x0301",
+    "665": "0x042C",
+    "933": "0x06C8",
+    "193": "0x00DD",
+    "419": "0x027F",
+    "269": "0x0170",
+    "278": "0x0181",
+    "11": "0x02DE",
+    "614": "0x03E2",
+    "447": "0x02B2",
+    "687": "0x0479",
+    "554": "0x0372",
+    "925": "0x06B0",
+    "556": "0x0377",
+    "263": "0x0165",
+    "2": "0x02DC",
+    "180": "0x00C6",
+    "934": "0x06CB",
+    "656": "0x0418",
+    "153": "0x009B",
+    "181": "0x00C9",
+    "555": "0x0375",
+    "776": "0x054C",
+    "275": "0x017A",
+    "355": "0x0211",
+    "18": "0x02F1",
+    "775": "0x0549",
+    "200": "0x00ED",
+    "528": "0x0347",
+    "947": "0x06EC",
+    "609": "0x03D8",
+    "909": "0x0686",
+    "596": "0x03BE",
+    "734": "0x04E8",
+    "75": "0x002A",
+    "362": "0x0219",
+    "361": "0x0218",
+    "428": "0x028D",
+    "134": "0x007F",
+    "561": "0x0385",
+    "508": "0x0322",
+    "693": "0x0485",
+    "50": "0x0332",
+    "958": "0x070D",
+    "374": "0x022E",
+    "30": "0x02FB",
+    "846": "0x0600",
+    "588": "0x03A7",
+    "371": "0x022B",
+    "186": "0x00CE",
+    "244": "0x0142",
+    "92": "0x0049",
+    "457": "0x02D1",
+    "860": "0x0615",
+    "705": "0x04A0",
+    "191": "0x00D9",
+    "738": "0x04F8",
+    "807": "0x05A7",
+    "803": "0x058E",
+    "953": "0x06FE",
+    "600": "0x03C9",
+    "144": "0x008B",
+    "684": "0x0457",
+    "326": "0x01D3",
+    "724": "0x04CB",
+    "442": "0x02A5",
+    "722": "0x04C5",
+    "568": "0x038F",
+    "38": "0x0313",
+    "324": "0x01CD",
+    "919": "0x069E",
+    "591": "0x03B0",
+    "831": "0x05E0",
+    "871": "0x0625",
+    "740": "0x04FB",
+    "952": "0x06FB",
+    "123": "0x006D",
+    "328": "0x01D8",
     "44": "0x0325",
-    "591": "0x030A",
-    "228": "0x011B",
-    "312": "0x01BB",
+    "283": "0x018E",
+    "777": "0x054F",
+    "460": "0x02D5",
+    "145": "0x008D",
+    "800": "0x0585",
+    "950": "0x06F5",
+    "307": "0x01B7",
+    "916": "0x069B",
+    "379": "0x0238",
+    "179": "0x00C4",
+    "826": "0x05D1",
+    "178": "0x00C1",
+    "340": "0x01ED",
+    "887": "0x0655",
+    "147": "0x0092",
+    "354": "0x020E",
+    "774": "0x0547",
+    "595": "0x03BB",
+    "226": "0x0118",
+    "688": "0x047C",
+    "594": "0x03B8",
+    "256": "0x0159",
+    "173": "0x00B6",
+    "802": "0x058B",
     "14": "0x02E5",
-    "137": "0x0081",
-    "160": "0x00A5",
-    "213": "0x0100",
-    "490": "0x02FE",
-    "124": "0x006D"
+    "420": "0x0280",
+    "587": "0x03A6",
+    "327": "0x01D5",
+    "504": "0x0319",
+    "617": "0x03EB",
+    "183": "0x00CB",
+    "837": "0x05ED",
+    "282": "0x018C",
+    "333": "0x01E2",
+    "754": "0x0519",
+    "412": "0x0273",
+    "1024": "0x02CE",
+    "923": "0x06AA",
+    "1013": "0x072E",
+    "610": "0x03D9",
+    "899": "0x0668",
+    "222": "0x0110",
+    "849": "0x0609",
+    "539": "0x0355",
+    "408": "0x026D",
+    "907": "0x0680",
+    "440": "0x02A3",
+    "325": "0x01D0",
+    "569": "0x0390"
   },
   "variables": {
+    "_PLAYER_WIDTH": {
+      "name": "_PLAYER_WIDTH",
+      "address": "0x001E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
     "TEMP_Y": {
       "name": "TEMP_Y",
       "address": "0xC891",
@@ -3966,23 +4700,16 @@
       "type": "unknown",
       "declLine": null
     },
-    "DRAW_VEC_X": {
-      "name": "DRAW_VEC_X",
-      "address": "0xC894",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy1_y": {
-      "name": "enemy1_y",
-      "address": "0xC89B",
+    "enemy1_x": {
+      "name": "enemy1_x",
+      "address": "0xC899",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC892",
+    "_ENEMY_CENTER_X": {
+      "name": "_ENEMY_CENTER_X",
+      "address": "0x0000",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -3994,9 +4721,86 @@
       "type": "unknown",
       "declLine": null
     },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC88A",
+    "TMPLEFT": {
+      "name": "TMPLEFT",
+      "address": "0xC882",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0xC895",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8AB",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy2_x": {
+      "name": "enemy2_x",
+      "address": "0xC89D",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0xC894",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_PLAYER_CENTER_X": {
+      "name": "_PLAYER_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "frame_count": {
+      "name": "frame_count",
+      "address": "0xC8A5",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_ENEMY_WIDTH": {
+      "name": "_ENEMY_WIDTH",
+      "address": "0x0014",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC892",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC8A7",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy1_y": {
+      "name": "enemy1_y",
+      "address": "0xC89B",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -4008,8 +4812,29 @@
       "type": "unknown",
       "declLine": null
     },
-    "_ENEMY_CENTER_X": {
-      "name": "_ENEMY_CENTER_X",
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC88E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC88C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC8A9",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_ENEMY_CENTER_Y": {
+      "name": "_ENEMY_CENTER_Y",
       "address": "0x0000",
       "size": 2,
       "type": "unknown",
@@ -4022,100 +4847,9 @@
       "type": "unknown",
       "declLine": null
     },
-    "CURRENT_ROM_BANK": {
-      "name": "CURRENT_ROM_BANK",
-      "address": "0xCF02",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC8A9",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC8A7",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC8AD",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_ENEMY_CENTER_Y": {
-      "name": "_ENEMY_CENTER_Y",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPRIGHT2": {
-      "name": "TMPRIGHT2",
-      "address": "0xC888",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_PLAYER_CENTER_X": {
-      "name": "_PLAYER_CENTER_X",
-      "address": "0x0000",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "DRAW_VEC_INTENSITY": {
-      "name": "DRAW_VEC_INTENSITY",
-      "address": "0xC898",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "MIRROR_Y": {
-      "name": "MIRROR_Y",
-      "address": "0xC897",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPLEFT": {
-      "name": "TMPLEFT",
-      "address": "0xC882",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "RESULT": {
-      "name": "RESULT",
-      "address": "0xC880",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy3_x": {
-      "name": "enemy3_x",
-      "address": "0xC8A1",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC88E",
+    "TMPLEFT2": {
+      "name": "TMPLEFT2",
+      "address": "0xC884",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -4127,16 +4861,37 @@
       "type": "unknown",
       "declLine": null
     },
-    "DRAW_VEC_Y": {
-      "name": "DRAW_VEC_Y",
-      "address": "0xC895",
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0xC897",
       "size": 1,
       "type": "unknown",
       "declLine": null
     },
-    "TMPLEFT2": {
-      "name": "TMPLEFT2",
-      "address": "0xC884",
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0xC898",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy2_y": {
+      "name": "enemy2_y",
+      "address": "0xC89F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "enemy3_x": {
+      "name": "enemy3_x",
+      "address": "0xC8A1",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC88A",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -4148,51 +4903,16 @@
       "type": "unknown",
       "declLine": null
     },
-    "_PLAYER_WIDTH": {
-      "name": "_PLAYER_WIDTH",
-      "address": "0x001E",
+    "TMPRIGHT2": {
+      "name": "TMPRIGHT2",
+      "address": "0xC888",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "arg2": {
-      "name": "arg2",
-      "address": "0xC8AB",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "_ENEMY_WIDTH": {
-      "name": "_ENEMY_WIDTH",
-      "address": "0x0014",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy1_x": {
-      "name": "enemy1_x",
-      "address": "0xC899",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "frame_count": {
-      "name": "frame_count",
-      "address": "0xC8A5",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy2_x": {
-      "name": "enemy2_x",
-      "address": "0xC89D",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "enemy2_y": {
-      "name": "enemy2_y",
-      "address": "0xC89F",
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8AD",
       "size": 2,
       "type": "unknown",
       "declLine": null

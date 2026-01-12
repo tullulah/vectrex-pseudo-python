@@ -44,6 +44,7 @@ pub fn generate_asm_address_map(
     let mut current_address = 0u16; // Will be set by ORG directive
     let mut bin_offset = 0usize; // Offset into binary data
     let mut last_valid_address = 0u16; // Track last address for non-code lines
+    let mut seen_org = false; // Track if we've seen the first ORG (skip boot stub lines)
     
     for (line_idx, line) in asm_lines.iter().enumerate() {
         let line_number = (line_idx + 1) as u32;
@@ -52,6 +53,7 @@ pub fn generate_asm_address_map(
         // Handle ORG directive
         if let Some(org_addr) = parse_org_directive(trimmed) {
             current_address = org_addr;
+            seen_org = true; // Mark that we've seen ORG - start mapping from here
             // CRITICAL FIX: bin_offset must start at header_offset, not org_addr
             // The binary file has header at 0x00-0xBD, code starts at header_offset
             bin_offset = header_offset as usize; // Physical offset in binary file
@@ -63,6 +65,12 @@ pub fn generate_asm_address_map(
                 address: last_valid_address,
                 instruction: trimmed.to_string(),
             });
+            continue;
+        }
+        
+        // Skip all lines before the first ORG (boot stub, headers, early EQUs)
+        // These lines are part of the cartridge header/boot and don't have valid runtime addresses
+        if !seen_org {
             continue;
         }
         

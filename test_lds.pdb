@@ -1,0 +1,713 @@
+{
+  "version": "1.0",
+  "source": "test_lds.vpy",
+  "asm": "test_lds.asm",
+  "binary": "test_lds.bin",
+  "entryPoint": "0x009A",
+  "symbols": {
+    "J1B4_BUILTIN.J1B4_OFF": "0x0080",
+    "START": "0x009A",
+    "J1Y_BUILTIN": "0x0033",
+    "LOOP_BODY": "0x00D1",
+    "J1B3_BUILTIN.J1B3_OFF": "0x0071",
+    "TEMP_X": "0xC888",
+    "RESULT": "0xC880",
+    "__Intensity_a": "0x0088",
+    "NUM_STR": "0xC88A",
+    "J1B1_BUILTIN": "0x0048",
+    "J1B2_BUILTIN.J1B2_OFF": "0x0062",
+    "TMPPTR": "0xC882",
+    "__Moveto_d": "0x0090",
+    "J1B4_BUILTIN": "0x0075",
+    "MAIN": "0x00AA",
+    "TMPPTR2": "0xC884",
+    "__Reset0Ref": "0x008D",
+    "VAR_ARG0": "0xC88C",
+    "__Draw_Line_d": "0x0095",
+    "J1B1_BUILTIN.J1B1_OFF": "0x0053",
+    "TEMP_Y": "0xC889",
+    "TEMP_YX": "0xC886",
+    "J1B2_BUILTIN": "0x0057",
+    "J1B3_BUILTIN": "0x0066",
+    "VECTREX_WAIT_RECAL": "0x0084",
+    "J1X_BUILTIN": "0x001E"
+  },
+  "lineMap": {
+    "7": "0x00DD",
+    "8": "0x00E5"
+  },
+  "vpyLineMap": {
+    "0x00DD": {
+      "file": "test_lds.vpy",
+      "address": "0x00DD",
+      "line": 7
+    },
+    "0x00E5": {
+      "file": "test_lds.vpy",
+      "address": "0x00E5",
+      "line": 8
+    }
+  },
+  "asmLineMap": {
+    "0x0096": {
+      "file": "test_lds.asm",
+      "address": "0x0096",
+      "line": 210
+    },
+    "0x0099": {
+      "file": "test_lds.asm",
+      "address": "0x0099",
+      "line": 211
+    },
+    "0x0075": {
+      "file": "test_lds.asm",
+      "address": "0x0075",
+      "line": 114
+    },
+    "0x00AF": {
+      "file": "test_lds.asm",
+      "address": "0x00AF",
+      "line": 19
+    },
+    "0x0084": {
+      "file": "test_lds.asm",
+      "address": "0x0084",
+      "line": 124
+    },
+    "0x00C1": {
+      "file": "test_lds.asm",
+      "address": "0x00C1",
+      "line": 169
+    },
+    "0x0079": {
+      "file": "test_lds.asm",
+      "address": "0x0079",
+      "line": 116
+    },
+    "0x008E": {
+      "file": "test_lds.asm",
+      "address": "0x008E",
+      "line": 207
+    },
+    "0x0048": {
+      "file": "test_lds.asm",
+      "address": "0x0048",
+      "line": 84
+    },
+    "0x00AA": {
+      "file": "test_lds.asm",
+      "address": "0x00AA",
+      "line": 159
+    },
+    "0x007F": {
+      "file": "test_lds.asm",
+      "address": "0x007F",
+      "line": 120
+    },
+    "0x00C9": {
+      "file": "test_lds.asm",
+      "address": "0x00C9",
+      "line": 175
+    },
+    "0x00CF": {
+      "file": "test_lds.asm",
+      "address": "0x00CF",
+      "line": 178
+    },
+    "0x0062": {
+      "file": "test_lds.asm",
+      "address": "0x0062",
+      "line": 101
+    },
+    "0x0087": {
+      "file": "test_lds.asm",
+      "address": "0x0087",
+      "line": 125
+    },
+    "0x0057": {
+      "file": "test_lds.asm",
+      "address": "0x0057",
+      "line": 94
+    },
+    "0x0091": {
+      "file": "test_lds.asm",
+      "address": "0x0091",
+      "line": 208
+    },
+    "0x009E": {
+      "file": "test_lds.asm",
+      "address": "0x009E",
+      "line": 148
+    },
+    "0x0029": {
+      "file": "test_lds.asm",
+      "address": "0x0029",
+      "line": 58
+    },
+    "0x006D": {
+      "file": "test_lds.asm",
+      "address": "0x006D",
+      "line": 108
+    },
+    "0x00B7": {
+      "file": "test_lds.asm",
+      "address": "0x00B7",
+      "line": 165
+    },
+    "0x004D": {
+      "file": "test_lds.asm",
+      "address": "0x004D",
+      "line": 87
+    },
+    "0x0035": {
+      "file": "test_lds.asm",
+      "address": "0x0035",
+      "line": 68
+    },
+    "0x00CC": {
+      "file": "test_lds.asm",
+      "address": "0x00CC",
+      "line": 177
+    },
+    "0x0044": {
+      "file": "test_lds.asm",
+      "address": "0x0044",
+      "line": 75
+    },
+    "0x0020": {
+      "file": "test_lds.asm",
+      "address": "0x0020",
+      "line": 55
+    },
+    "0x00AC": {
+      "file": "test_lds.asm",
+      "address": "0x00AC",
+      "line": 17
+    },
+    "0x0069": {
+      "file": "test_lds.asm",
+      "address": "0x0069",
+      "line": 105
+    },
+    "0x0095": {
+      "file": "test_lds.asm",
+      "address": "0x0095",
+      "line": 136
+    },
+    "0x002D": {
+      "file": "test_lds.asm",
+      "address": "0x002D",
+      "line": 60
+    },
+    "0x004B": {
+      "file": "test_lds.asm",
+      "address": "0x004B",
+      "line": 85
+    },
+    "0x002F": {
+      "file": "test_lds.asm",
+      "address": "0x002F",
+      "line": 62
+    },
+    "0x00E1": {
+      "file": "test_lds.asm",
+      "address": "0x00E1",
+      "line": 191
+    },
+    "0x00C4": {
+      "file": "test_lds.asm",
+      "address": "0x00C4",
+      "line": 36
+    },
+    "0x004F": {
+      "file": "test_lds.asm",
+      "address": "0x004F",
+      "line": 88
+    },
+    "0x00AE": {
+      "file": "test_lds.asm",
+      "address": "0x00AE",
+      "line": 18
+    },
+    "0x0053": {
+      "file": "test_lds.asm",
+      "address": "0x0053",
+      "line": 91
+    },
+    "0x005B": {
+      "file": "test_lds.asm",
+      "address": "0x005B",
+      "line": 96
+    },
+    "0x009C": {
+      "file": "test_lds.asm",
+      "address": "0x009C",
+      "line": 147
+    },
+    "0x00A1": {
+      "file": "test_lds.asm",
+      "address": "0x00A1",
+      "line": 149
+    },
+    "0x0097": {
+      "file": "test_lds.asm",
+      "address": "0x0097",
+      "line": 137
+    },
+    "0x008C": {
+      "file": "test_lds.asm",
+      "address": "0x008C",
+      "line": 206
+    },
+    "0x0066": {
+      "file": "test_lds.asm",
+      "address": "0x0066",
+      "line": 104
+    },
+    "0x00B0": {
+      "file": "test_lds.asm",
+      "address": "0x00B0",
+      "line": 162
+    },
+    "0x006B": {
+      "file": "test_lds.asm",
+      "address": "0x006B",
+      "line": 107
+    },
+    "0x0070": {
+      "file": "test_lds.asm",
+      "address": "0x0070",
+      "line": 110
+    },
+    "0x00BF": {
+      "file": "test_lds.asm",
+      "address": "0x00BF",
+      "line": 168
+    },
+    "0x00DA": {
+      "file": "test_lds.asm",
+      "address": "0x00DA",
+      "line": 185
+    },
+    "0x00BC": {
+      "file": "test_lds.asm",
+      "address": "0x00BC",
+      "line": 33
+    },
+    "0x00A6": {
+      "file": "test_lds.asm",
+      "address": "0x00A6",
+      "line": 151
+    },
+    "0x00A3": {
+      "file": "test_lds.asm",
+      "address": "0x00A3",
+      "line": 14
+    },
+    "0x003E": {
+      "file": "test_lds.asm",
+      "address": "0x003E",
+      "line": 71
+    },
+    "0x005C": {
+      "file": "test_lds.asm",
+      "address": "0x005C",
+      "line": 97
+    },
+    "0x00A9": {
+      "file": "test_lds.asm",
+      "address": "0x00A9",
+      "line": 16
+    },
+    "0x00AD": {
+      "file": "test_lds.asm",
+      "address": "0x00AD",
+      "line": 161
+    },
+    "0x005A": {
+      "file": "test_lds.asm",
+      "address": "0x005A",
+      "line": 95
+    },
+    "0x002C": {
+      "file": "test_lds.asm",
+      "address": "0x002C",
+      "line": 59
+    },
+    "0x00D7": {
+      "file": "test_lds.asm",
+      "address": "0x00D7",
+      "line": 184
+    },
+    "0x00E0": {
+      "file": "test_lds.asm",
+      "address": "0x00E0",
+      "line": 190
+    },
+    "0x008A": {
+      "file": "test_lds.asm",
+      "address": "0x008A",
+      "line": 204
+    },
+    "0x0033": {
+      "file": "test_lds.asm",
+      "address": "0x0033",
+      "line": 67
+    },
+    "0x00B5": {
+      "file": "test_lds.asm",
+      "address": "0x00B5",
+      "line": 30
+    },
+    "0x005E": {
+      "file": "test_lds.asm",
+      "address": "0x005E",
+      "line": 98
+    },
+    "0x004C": {
+      "file": "test_lds.asm",
+      "address": "0x004C",
+      "line": 86
+    },
+    "0x0038": {
+      "file": "test_lds.asm",
+      "address": "0x0038",
+      "line": 69
+    },
+    "0x00E2": {
+      "file": "test_lds.asm",
+      "address": "0x00E2",
+      "line": 192
+    },
+    "0x00DD": {
+      "file": "test_lds.asm",
+      "address": "0x00DD",
+      "line": 189
+    },
+    "0x0043": {
+      "file": "test_lds.asm",
+      "address": "0x0043",
+      "line": 74
+    },
+    "0x00D1": {
+      "file": "test_lds.asm",
+      "address": "0x00D1",
+      "line": 182
+    },
+    "0x00BA": {
+      "file": "test_lds.asm",
+      "address": "0x00BA",
+      "line": 32
+    },
+    "0x007C": {
+      "file": "test_lds.asm",
+      "address": "0x007C",
+      "line": 118
+    },
+    "0x0090": {
+      "file": "test_lds.asm",
+      "address": "0x0090",
+      "line": 133
+    },
+    "0x0023": {
+      "file": "test_lds.asm",
+      "address": "0x0023",
+      "line": 56
+    },
+    "0x00D4": {
+      "file": "test_lds.asm",
+      "address": "0x00D4",
+      "line": 183
+    },
+    "0x003B": {
+      "file": "test_lds.asm",
+      "address": "0x003B",
+      "line": 70
+    },
+    "0x0078": {
+      "file": "test_lds.asm",
+      "address": "0x0078",
+      "line": 115
+    },
+    "0x002E": {
+      "file": "test_lds.asm",
+      "address": "0x002E",
+      "line": 61
+    },
+    "0x0061": {
+      "file": "test_lds.asm",
+      "address": "0x0061",
+      "line": 100
+    },
+    "0x007A": {
+      "file": "test_lds.asm",
+      "address": "0x007A",
+      "line": 117
+    },
+    "0x0093": {
+      "file": "test_lds.asm",
+      "address": "0x0093",
+      "line": 209
+    },
+    "0x0092": {
+      "file": "test_lds.asm",
+      "address": "0x0092",
+      "line": 134
+    },
+    "0x009A": {
+      "file": "test_lds.asm",
+      "address": "0x009A",
+      "line": 2
+    },
+    "0x0042": {
+      "file": "test_lds.asm",
+      "address": "0x0042",
+      "line": 73
+    },
+    "0x0088": {
+      "file": "test_lds.asm",
+      "address": "0x0088",
+      "line": 128
+    },
+    "0x00C7": {
+      "file": "test_lds.asm",
+      "address": "0x00C7",
+      "line": 38
+    },
+    "0x006A": {
+      "file": "test_lds.asm",
+      "address": "0x006A",
+      "line": 106
+    },
+    "0x0052": {
+      "file": "test_lds.asm",
+      "address": "0x0052",
+      "line": 90
+    },
+    "0x00E5": {
+      "file": "test_lds.asm",
+      "address": "0x00E5",
+      "line": 196
+    },
+    "0x0080": {
+      "file": "test_lds.asm",
+      "address": "0x0080",
+      "line": 121
+    },
+    "0x008D": {
+      "file": "test_lds.asm",
+      "address": "0x008D",
+      "line": 131
+    },
+    "0x0041": {
+      "file": "test_lds.asm",
+      "address": "0x0041",
+      "line": 72
+    },
+    "0x0026": {
+      "file": "test_lds.asm",
+      "address": "0x0026",
+      "line": 57
+    },
+    "0x0071": {
+      "file": "test_lds.asm",
+      "address": "0x0071",
+      "line": 111
+    },
+    "0x00B1": {
+      "file": "test_lds.asm",
+      "address": "0x00B1",
+      "line": 20
+    },
+    "0x00B2": {
+      "file": "test_lds.asm",
+      "address": "0x00B2",
+      "line": 29
+    },
+    "0x001E": {
+      "file": "test_lds.asm",
+      "address": "0x001E",
+      "line": 54
+    }
+  },
+  "functions": {},
+  "nativeCalls": {
+    "7": "VECTREX_WAIT_RECAL"
+  },
+  "asmFunctions": {},
+  "asmAddressMap": {
+    "161": "0x00AD",
+    "71": "0x003E",
+    "167": "0x00BC",
+    "105": "0x0069",
+    "90": "0x0052",
+    "150": "0x00A3",
+    "120": "0x007F",
+    "57": "0x0026",
+    "95": "0x005A",
+    "111": "0x0071",
+    "196": "0x00E5",
+    "110": "0x0070",
+    "159": "0x00AA",
+    "20": "0x00B1",
+    "174": "0x00C7",
+    "13": "0x00A1",
+    "137": "0x0097",
+    "121": "0x0080",
+    "114": "0x0075",
+    "124": "0x0084",
+    "170": "0x00C4",
+    "35": "0x00C1",
+    "15": "0x00A6",
+    "85": "0x004B",
+    "116": "0x0079",
+    "207": "0x008E",
+    "31": "0x00B7",
+    "206": "0x008C",
+    "129": "0x008A",
+    "108": "0x006D",
+    "69": "0x0038",
+    "88": "0x004F",
+    "163": "0x00B2",
+    "104": "0x0066",
+    "54": "0x001E",
+    "56": "0x0023",
+    "128": "0x0088",
+    "59": "0x002C",
+    "107": "0x006B",
+    "166": "0x00BA",
+    "190": "0x00E0",
+    "162": "0x00B0",
+    "19": "0x00AF",
+    "146": "0x009A",
+    "151": "0x00A6",
+    "205": "0x008A",
+    "204": "0x008A",
+    "212": "0x009C",
+    "33": "0x00BC",
+    "73": "0x0042",
+    "38": "0x00C7",
+    "136": "0x0095",
+    "133": "0x0090",
+    "34": "0x00BF",
+    "68": "0x0035",
+    "11": "0x009C",
+    "164": "0x00B5",
+    "185": "0x00DA",
+    "36": "0x00C4",
+    "117": "0x007A",
+    "12": "0x009E",
+    "147": "0x009C",
+    "178": "0x00CF",
+    "182": "0x00D1",
+    "210": "0x0096",
+    "67": "0x0033",
+    "74": "0x0043",
+    "87": "0x004D",
+    "6": "0x009A",
+    "115": "0x0078",
+    "101": "0x0062",
+    "97": "0x005C",
+    "106": "0x006A",
+    "168": "0x00BF",
+    "16": "0x00A9",
+    "62": "0x002F",
+    "18": "0x00AE",
+    "169": "0x00C1",
+    "184": "0x00D7",
+    "208": "0x0091",
+    "191": "0x00E1",
+    "98": "0x005E",
+    "14": "0x00A3",
+    "177": "0x00CC",
+    "86": "0x004C",
+    "189": "0x00DD",
+    "165": "0x00B7",
+    "58": "0x0029",
+    "149": "0x00A1",
+    "192": "0x00E2",
+    "30": "0x00B5",
+    "60": "0x002D",
+    "84": "0x0048",
+    "131": "0x008D",
+    "118": "0x007C",
+    "211": "0x0099",
+    "75": "0x0044",
+    "183": "0x00D4",
+    "134": "0x0092",
+    "209": "0x0093",
+    "61": "0x002E",
+    "29": "0x00B2",
+    "70": "0x003B",
+    "148": "0x009E",
+    "94": "0x0057",
+    "91": "0x0053",
+    "125": "0x0087",
+    "32": "0x00BA",
+    "100": "0x0061",
+    "72": "0x0041",
+    "55": "0x0020",
+    "17": "0x00AC",
+    "96": "0x005B",
+    "175": "0x00C9",
+    "2": "0x009A"
+  },
+  "variables": {
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC882",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC889",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC88C",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC88A",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC884",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC886",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC888",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC880",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    }
+  }
+}

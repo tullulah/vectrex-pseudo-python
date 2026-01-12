@@ -1049,6 +1049,56 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
+    /// LDS #immediate (opcode 0x10CE) - Load Stack Pointer
+    pub fn lds_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xCE);
+        self.emit_word(value);
+    }
+
+    /// LDS #immediate con símbolo (opcode 0x10CE + symbol ref)
+    pub fn lds_immediate_sym(&mut self, symbol: &str) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xCE);
+        self.add_symbol_ref(symbol, false, 2);
+        self.emit_word(0); // Placeholder for symbol resolution
+    }
+
+    /// LDS direct (opcode 0x10DE)
+    pub fn lds_direct(&mut self, addr: u8) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xDE);
+        self.emit(addr);
+    }
+
+    /// LDS indexed (opcode 0x10EE + postbyte)
+    pub fn lds_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xEE);
+        self.emit(postbyte);
+    }
+
+    /// LDS extended (opcode 0x10FE)
+    pub fn lds_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xFE);
+        self.emit_word(addr);
+    }
+
+    /// LDS extended con símbolo
+    pub fn lds_extended_sym(&mut self, symbol: &str) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xFE);
+        self.add_symbol_ref(symbol, false, 2);
+        self.emit_word(0x0000);
+    }
+
     /// LEAX indexed (opcode 0x30 + postbyte)
     pub fn leax_indexed(&mut self, postbyte: u8) {
         self.record_line_mapping();

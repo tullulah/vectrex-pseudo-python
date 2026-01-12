@@ -1,7 +1,11 @@
-/// Bank Optimizer - Automatic bank assignment using First-Fit Decreasing bin packing
+/// Bank Optimizer - Sequential bank assignment for multi-bank ROM
 /// 
-/// This module implements the automatic bank assignment algorithm for multi-bank ROMs.
-/// It uses a First-Fit Decreasing (FFD) strategy to pack functions into banks efficiently.
+/// Sequential Model (2025-01-02):
+/// - Banks #0 to #(N-2): Code fills sequentially (fill #0 first, overflow to #1, etc.)
+/// - Bank #(N-1): Reserved for runtime helpers (DRAW_LINE_WRAPPER, MUL16, DIV_A, etc.)
+/// 
+/// This eliminates the complexity of "fixed bank" concept and matches how Vectrex BIOS
+/// actually works: it boots from bank #0, loads header there, and code continues naturally.
 
 use crate::codegen::BankConfig;
 use super::call_graph::{CallGraph, FunctionNode};
@@ -49,88 +53,63 @@ impl BankOptimizer {
         BankOptimizer { config, graph }
     }
     
-    /// Assign functions to banks using First-Fit Decreasing algorithm
+    /// Assign functions to banks using sequential model
     /// 
-    /// Algorithm steps:
-    /// 1. Identify critical functions (main, loop) → assign to fixed bank
-    /// 2. Sort remaining functions by size (largest first)
-    /// 3. For each function, find first bank with enough space
-    /// 4. Validate all functions fit within available banks
+    /// Sequential Model Algorithm:
+    /// 1. Sort functions by size (largest first) - helps pack efficiently
+    /// 2. Fill banks sequentially: Bank #0 first, then #1, #2, etc.
+    /// 3. NEVER touch bank #(N-1) - reserved for runtime helpers
+    /// 4. Assign each function to first bank with available space
+    /// 5. If function doesn't fit anywhere, error
+    /// 
+    /// Benefits:
+    /// - No artificial "fixed bank" concept
+    /// - Code fills naturally from beginning
+    /// - Helpers in predictable last location
+    /// - Matches hardware boot sequence (BIOS loads from bank #0)
     /// 
     /// Returns: HashMap<function_name, bank_id>
     pub fn assign_banks(&self) -> Result<HashMap<String, u8>, String> {
         let bank_size = self.config.rom_bank_size;
         let total_banks = self.config.num_banks();
-        let fixed_bank = (total_banks - 1) as u8;
         
-        // Initialize banks (bank 0 to bank N-1)
-        let mut banks: Vec<BankInfo> = (0..total_banks)
+        // Code banks: #0 to #(N-2)
+        // Helper bank: #(N-1) - reserved, don't allocate here
+        let code_banks_count = (total_banks as u8).saturating_sub(1);
+        
+        if code_banks_count == 0 {
+            return Err("Need at least 2 banks (1 for code, 1 for helpers)".to_string());
+        }
+        
+        // Initialize banks (code banks #0 to #(N-2))
+        let mut banks: Vec<BankInfo> = (0..code_banks_count as usize)
             .map(|i| BankInfo::new(i as u8))
             .collect();
         
         let mut assignments: HashMap<String, u8> = HashMap::new();
         
-        // Step 1: Assign critical functions to fixed bank
-        let critical_functions: Vec<_> = self.graph.nodes.values()
-            .filter(|n| n.is_critical)
-            .collect();
+        // Sort all functions by size (largest first) - helps pack efficiently
+        let mut all_functions: Vec<_> = self.graph.nodes.values().collect();
+        all_functions.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
         
-        for func in &critical_functions {
-            banks[fixed_bank as usize].add_function(func.name.clone(), func.size_bytes);
-            assignments.insert(func.name.clone(), fixed_bank);
-        }
-        
-        // Step 2: Sort non-critical functions by size (largest first)
-        let mut remaining_functions: Vec<_> = self.graph.nodes.values()
-            .filter(|n| !n.is_critical)
-            .collect();
-        remaining_functions.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
-        
-        // Step 3: First-Fit Decreasing assignment with load balancing
-        // Use round-robin to distribute functions across banks instead of cramming into Bank #0
-        let mut current_bank = 0usize;
-        
-        for func in remaining_functions {
+        // Sequential assignment: fill banks in order
+        for func in all_functions {
             let mut assigned = false;
-            let start_bank = current_bank;
             
-            // Try to fit starting from current_bank, wrapping around
-            loop {
-                if current_bank >= (total_banks - 1) as usize {
-                    current_bank = 0;
-                }
-                
-                let bank = &mut banks[current_bank];
+            // Try to fit in each bank sequentially (starting from bank #0)
+            for bank in &mut banks {
                 if bank.can_fit(func.size_bytes, bank_size) {
                     bank.add_function(func.name.clone(), func.size_bytes);
                     assignments.insert(func.name.clone(), bank.id);
                     assigned = true;
-                    current_bank = (current_bank + 1) % ((total_banks - 1) as usize); // Move to next bank
-                    break;
-                }
-                
-                current_bank = (current_bank + 1) % ((total_banks - 1) as usize);
-                
-                // If we've checked all banks, break
-                if current_bank == start_bank {
-                    break;
-                }
-            }
-            
-            // If no space in swappable banks, try fixed bank (as last resort)
-            if !assigned {
-                let fixed = &mut banks[fixed_bank as usize];
-                if fixed.can_fit(func.size_bytes, bank_size) {
-                    fixed.add_function(func.name.clone(), func.size_bytes);
-                    assignments.insert(func.name.clone(), fixed_bank);
-                    assigned = true;
+                    break; // Found a home, move to next function
                 }
             }
             
             if !assigned {
                 return Err(format!(
-                    "Function '{}' ({} bytes) doesn't fit in any bank (bank size: {} bytes)",
-                    func.name, func.size_bytes, bank_size
+                    "Function '{}' ({} bytes) doesn't fit in any code bank (bank size: {} bytes, available code banks: {})",
+                    func.name, func.size_bytes, bank_size, code_banks_count
                 ));
             }
         }
@@ -162,14 +141,19 @@ impl BankOptimizer {
         let bank_size = self.config.rom_bank_size as usize;
         let total_banks = self.config.num_banks();
         
+        // Code banks: #0 to #(N-2)
+        let code_banks_count = total_banks.saturating_sub(1);
+        
         // Calculate per-bank statistics
-        let mut banks: Vec<BankInfo> = (0..total_banks)
+        let mut banks: Vec<BankInfo> = (0..code_banks_count)
             .map(|i| BankInfo::new(i as u8))
             .collect();
         
         for (func_name, bank_id) in assignments {
             if let Some(node) = self.graph.nodes.get(func_name) {
-                banks[*bank_id as usize].add_function(func_name.clone(), node.size_bytes);
+                if (*bank_id as usize) < code_banks_count {
+                    banks[*bank_id as usize].add_function(func_name.clone(), node.size_bytes);
+                }
             }
         }
         
@@ -181,11 +165,13 @@ impl BankOptimizer {
             .map(|b| b.used_bytes)
             .sum();
         
-        let total_available_bytes = bank_size * total_banks as usize;
+        let total_available_bytes = bank_size * code_banks_count;
         let utilization = (total_used_bytes as f64 / total_available_bytes as f64) * 100.0;
         
         BankStats {
             total_banks: total_banks as usize,
+            code_banks: code_banks_count,
+            helper_bank: (total_banks - 1) as u8,
             used_banks,
             total_functions: assignments.len(),
             total_used_bytes,
@@ -202,6 +188,8 @@ impl BankOptimizer {
 #[derive(Debug)]
 pub struct BankStats {
     pub total_banks: usize,
+    pub code_banks: usize,          // Code banks #0 to #(N-2)
+    pub helper_bank: u8,             // Helper bank #(N-1)
     pub used_banks: usize,
     pub total_functions: usize,
     pub total_used_bytes: usize,
@@ -213,8 +201,10 @@ pub struct BankStats {
 impl BankStats {
     /// Print bank statistics in a human-readable format
     pub fn print(&self) {
-        eprintln!("   [Bank Assignment] Statistics:");
+        eprintln!("   [Bank Assignment] Sequential Model Statistics:");
         eprintln!("     - Total banks: {}", self.total_banks);
+        eprintln!("     - Code banks: #0-#{}", self.code_banks - 1);
+        eprintln!("     - Helper bank: #{}", self.helper_bank);
         eprintln!("     - Used banks: {}", self.used_banks);
         eprintln!("     - Total functions: {}", self.total_functions);
         eprintln!("     - Total used: {} bytes ({:.1} KB)", 
@@ -233,5 +223,6 @@ impl BankStats {
                 eprintln!("         - {}", func);
             }
         }
+        eprintln!("     - Bank #{} (helpers): [Reserved for DRAW_LINE_WRAPPER, MUL16, etc.]", self.helper_bank);
     }
 }
