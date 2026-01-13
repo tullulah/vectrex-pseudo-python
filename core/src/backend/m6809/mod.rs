@@ -832,9 +832,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             //   1. CURRENT_ROM_BANK ($C880): RAM tracker for debugging (so code/debugger knows current bank)
             //   2. Bank register (hardware latch) that actually switches the bank
             // CRITICAL: Use extended mode (>) because DP=$D0 at this point (not $C8)
+            // NOTE: In sequential model, START is always in Bank #0, so we're already there.
+            //       Don't write to hardware register during startup as it has no effect.
+            //       Only user code that switches banks should write to this register.
             out.push_str(&format!(
-                "    LDA #0\n    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (RAM tracker for debugging)\n    STA >${:04X}            ; Switch bank in hardware cartridge IC\n",
-                bank_register
+                "    LDA #0\n    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (RAM tracker for debugging)\n    ; Note: NOT writing to hardware bank register - already in Bank #0\n"
             ));
         }
         
