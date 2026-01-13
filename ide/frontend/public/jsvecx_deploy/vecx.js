@@ -336,8 +336,10 @@ function VecX()
             const bankSize = 0x4000;
             const numBanks = Math.floor(this.multibankRom.length / bankSize);
             const maxBankId = numBanks - 1;
+            const oldBank = this.currentBank;
             this.currentBank = data & maxBankId; // Mask to valid bank range
-            console.log('[JSVecx Multi-bank] Bank switched to: ' + this.currentBank + '/' + maxBankId);
+            const pcStr = '0x' + (this.e6809.reg_pc & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+            console.log('[JSVecx Multi-bank] Bank switched at PC=' + pcStr + ': ' + oldBank + ' -> ' + this.currentBank + '/' + maxBankId);
             return;
         }
         

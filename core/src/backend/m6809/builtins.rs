@@ -697,10 +697,10 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("VL_LOOP_START:\n");
         
         // Frame initialization sequence (Malban lines 13-43 from VIDE ASM)
-        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (blank beam)\n");
+        out.push_str("    CLR $D00A           ; VIA_shift_reg = 0 (blank beam)\n");
         out.push_str("    LDA #$CC\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCC (zero integrators)\n");
-        out.push_str("    CLR $D000           ; VIA_port_a = 0 (reset offset)\n");
+        out.push_str("    CLR $D001           ; VIA_port_a = 0 (reset offset)\n");
         out.push_str("    LDA #$82\n");
         out.push_str("    STA $D002           ; VIA_port_b = 0x82\n");
         out.push_str("    LDA VL_SCALE\n");
@@ -717,14 +717,14 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         
         // Move to initial position (y, x)
         out.push_str("    LDA VL_Y\n");
-        out.push_str("    STA $D000           ; VIA_port_a = y\n");
+        out.push_str("    STA $D001           ; VIA_port_a = y\n");
         out.push_str("    LDA #$CE\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCE (integrator mode)\n");
         out.push_str("    CLR $D002           ; VIA_port_b = 0 (mux enable)\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002           ; VIA_port_b = 1 (mux disable)\n");
         out.push_str("    LDA VL_X\n");
-        out.push_str("    STA $D000           ; VIA_port_a = x\n");
+        out.push_str("    STA $D001           ; VIA_port_a = x\n");
         out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0 (start timer)\n");
         
         // Set scale for vector drawing
@@ -752,20 +752,20 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         // DRAW LINE (*u < 0)
         out.push_str("VL_DRAW:\n");
         out.push_str("    LDA 1,X             ; dy\n");
-        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
+        out.push_str("    STA $D001           ; VIA_port_a = dy\n");
         out.push_str("    CLR $D002           ; VIA_port_b = 0\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002           ; VIA_port_b = 1\n");
         out.push_str("    LDA 2,X             ; dx\n");
-        out.push_str("    STA $D000           ; VIA_port_a = dx\n");
+        out.push_str("    STA $D001           ; VIA_port_a = dx\n");
         out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0\n");
         out.push_str("    LDA #$FF\n");
-        out.push_str("    STA $D05A           ; VIA_shift_reg = 0xFF (beam ON)\n");
+        out.push_str("    STA $D00A           ; VIA_shift_reg = 0xFF (beam ON)\n");
         out.push_str("VL_WAIT_DRAW:\n");
         out.push_str("    LDA $D00D\n");
         out.push_str("    ANDA #$40\n");
         out.push_str("    BEQ VL_WAIT_DRAW\n");
-        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (beam OFF)\n");
+        out.push_str("    CLR $D00A           ; VIA_shift_reg = 0 (beam OFF)\n");
         out.push_str("    BRA VL_CONTINUE\n");
         
         // MOVE TO (*u == 0)
@@ -776,14 +776,14 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    LDA 1,X             ; dy\n");
         out.push_str("    BEQ VL_CHECK_DX\n");
         out.push_str("VL_DO_MOVE:\n");
-        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
+        out.push_str("    STA $D001           ; VIA_port_a = dy\n");
         out.push_str("    LDA #$CE\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCE\n");
         out.push_str("    CLR $D002\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002\n");
         out.push_str("    LDA 2,X             ; dx\n");
-        out.push_str("    STA $D000\n");
+        out.push_str("    STA $D001\n");
         out.push_str("    CLR $D005\n");
         out.push_str("VL_WAIT_MOVE2:\n");
         out.push_str("    LDA $D00D\n");
