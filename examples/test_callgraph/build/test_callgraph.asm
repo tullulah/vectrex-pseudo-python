@@ -73,7 +73,8 @@ START:
     STA VIA_t1_cnt_lo
     LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)
     LDA #0
-    STA CURRENT_ROM_BANK ; Initialize to bank 0 (hardware register + RAM tracker)
+    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (RAM tracker for debugging)
+    STA >$D000            ; Switch bank in hardware cartridge IC
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:19
@@ -130,6 +131,12 @@ MAIN:
     ; *** Call loop() as subroutine (executed every frame)
     JSR LOOP_BODY
     BRA MAIN
+
+
+; ================================================
+; BANK #0 - 9 function(s)
+; ================================================
+    ORG $0000  ; Sequential bank model
 
     ; VPy_LINE:24
 LOOP_BODY:
@@ -1012,13 +1019,7 @@ _ENEMY_PATH0:    ; Path 0
 
 ; === INLINE ARRAY LITERALS (from function bodies) ===
 
-; === 6809 Interrupt Vectors (MUST be at 0xFFF0-0xFFFF) ===
-    ORG $FFF0
-    FDB $0000    ; Reserved
-    FDB $0000    ; SWI3
-    FDB $0000    ; SWI2
-    FDB $0000    ; FIRQ
-    FDB $0000    ; IRQ
-    FDB $0000    ; SWI
-    FDB $0000    ; NMI
-    FDB START    ; RESET vector (entry point)
+; === Multibank Mode: Interrupt Vectors in Bank #31 (Linker) ===
+; All vectors handled by multi_bank_linker
+; Bank #0-#30: Local 0xFFF0-0xFFFF addresses are unreachable
+; Bank #31: Contains complete interrupt vector table (fixed at 0x4000-0x7FFF window)

@@ -202,12 +202,20 @@ impl MultiBankLinker {
                 current_code.push_str(line);
                 current_code.push('\n');
             } else if definitions_ended {
-                // After definitions end, before first bank - this is runtime helpers
-                // Or after last bank section ends - this is also runtime helpers (wrappers, etc.)
-                post_bank_code.push_str(line);
-                post_bank_code.push('\n');
+                // Sequential Model: After definitions, BEFORE first bank - this is HEADER (START/MAIN)
+                // AFTER all banks - this is runtime helpers (wrappers, etc.)
+                // We distinguish by checking if we've seen at least one bank section
+                if sections.is_empty() {
+                    // No banks seen yet - this is header (START/MAIN initialization code)
+                    header.push_str(line);
+                    header.push('\n');
+                } else {
+                    // Banks already processed - this is runtime helpers
+                    post_bank_code.push_str(line);
+                    post_bank_code.push('\n');
+                }
             } else {
-                // Before definitions - this is header
+                // Before definitions - this is header (includes, comments, title)
                 header.push_str(line);
                 header.push('\n');
             }
@@ -269,14 +277,16 @@ impl MultiBankLinker {
                 section.size_estimate = section.asm_code.len();
             }
         }
-        // CRITICAL: Header (code before first bank) belongs to Bank #31 (fixed bank)
-        // The header contains START, strings, constants - all must be in fixed bank
-        // Insert header at the BEGINNING of Bank #31's code (before ORG directive)
+        // Sequential Model (2025-01-12): Header belongs to FIRST bank (Bank #0)
+        // The header contains Vectrex magic bytes, START, MAIN, strings, constants
+        // All must be in Bank #0 (the boot bank in sequential model)
+        // Insert header at the BEGINNING of first bank's code (before ORG directive)
         if !header.is_empty() {
-            if let Some(bank31) = sections.get_mut(&31) {
-                // Bank #31's asm_code has: [INCLUDE] + [definitions] + [runtime_helpers] + [bank code with ORG]
+            let first_bank = 0u8;  // Bank #0 is the first/primary bank
+            if let Some(bank0) = sections.get_mut(&first_bank) {
+                // Bank #0's asm_code has: [INCLUDE] + [definitions] + [runtime_helpers] + [bank code with ORG]
                 // We need to insert header BEFORE the ORG line
-                let lines: Vec<&str> = bank31.asm_code.lines().collect();
+                let lines: Vec<&str> = bank0.asm_code.lines().collect();
                 let mut new_code = String::new();
                 let mut org_found = false;
                 
@@ -291,20 +301,20 @@ impl MultiBankLinker {
                     new_code.push('\n');
                 }
                 
-                bank31.asm_code = new_code;
-                bank31.size_estimate += header.len();
+                bank0.asm_code = new_code;
+                bank0.size_estimate += header.len();
             } else {
-                // No Bank #31 section found - create one with header
-                let full_code = format!("{}\n{}\n{}\n{}", 
+                // No first bank section found - create one with header
+                let full_code = format!("{}\n{}\n{}\n{}\n        ORG $0000\n", 
                     include_directives,
                     definitions,
                     runtime_helpers,
                     header
                 );
                 let size = full_code.len();
-                sections.insert(31, BankSection {
-                    bank_id: 31,
-                    org: 0x4000,
+                sections.insert(first_bank, BankSection {
+                    bank_id: first_bank,
+                    org: 0x0000,
                     asm_code: full_code,
                     size_estimate: size,
                 });
@@ -321,7 +331,11 @@ impl MultiBankLinker {
                 }
             }
         }
-        
+
+        // Add interrupt vectors to last bank (fixed bank)
+        // NOTE: Vectors are added in generate_multibank_rom after binary assembly, not here
+        // This ensures they're placed at the correct ROM offset without ORG conflicts
+
         Ok(sections)
     }
     
@@ -377,6 +391,16 @@ impl MultiBankLinker {
         // in banks beyond #0. The assembler cannot emit long branches based on final
         // offsets (they're not known yet), so we convert at codegen time.
         let full_asm_longbranch = convert_short_to_long_branches(full_asm);
+        
+        // DEBUG: Write ASM to temp file for inspection
+        {
+            use std::fs::File;
+            use std::io::Write;
+            let temp_asm_path = temp_dir.join(format!("bank_{:02}.asm", bank_section.bank_id));
+            if let Ok(mut file) = File::create(&temp_asm_path) {
+                let _ = file.write_all(full_asm_longbranch.as_bytes());
+            }
+        }
         
         // CRITICAL: Assemble with ORG $0000 for multi-bank
         // The bank's actual ORG ($0000 or $4000) is just for logical addressing
@@ -490,6 +514,13 @@ impl MultiBankLinker {
             return Err(format!("ROM size mismatch: {} bytes (expected {} bytes)", 
                 rom_data.len(), expected_size));
         }
+        
+        // Vectrex BIOS owns all interrupt vectors ($FFF0–$FFFF), including RESET at $FFFE.
+        // Multibank cartridges MUST NOT override BIOS vectors within the cart image.
+        // Boot flow: BIOS reset → detects cartridge → jumps to $0000 in current window.
+        // Our Bank #0 boot stub is responsible for switching to the fixed bank via $D000 and
+        // then jumping to the entry at $4000+START. Therefore, we intentionally do NOT patch
+        // any vector bytes in the generated ROM.
         
         // Patch header: copy header bytes from single-bank .bin so ROM starts with valid Vectrex header
         // Derive .bin path next to the .rom
@@ -678,11 +709,12 @@ INIT_GAME:
         let sections = linker.split_asm_by_bank(asm).unwrap();
         
         assert_eq!(sections.len(), 3); // 2 banks + 1 header
-        assert!(sections.contains_key(&31));
+        let last_bank = linker.rom_bank_count - 1;
+        assert!(sections.contains_key(&last_bank));
         assert!(sections.contains_key(&0));
         assert!(sections.contains_key(&255)); // header
         
-        let bank31 = sections.get(&31).unwrap();
+        let bank31 = sections.get(&last_bank).unwrap();
         assert_eq!(bank31.org, 0x4000);
         assert!(bank31.asm_code.contains("LOOP_BODY"));
         

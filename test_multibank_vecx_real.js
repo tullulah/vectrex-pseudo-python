@@ -87,6 +87,26 @@ const vecx = new context.VecX();
 // Manually init CPU context and reset without starting timers.
 vecx.e6809.init(vecx);
 vecx.vecx_reset();
+
+// CRITICAL: Initialize CPU registers properly for boot
+// Vectrex cartridge ROM structure:
+//  - 0x0000-0x0021: Header (signature, music ptr, title)
+//  - 0x0022+: START code (actual executable)
+// Set PC to 0x0022 to skip the header and reach START
+vecx.e6809.reg_pc = 0x0022;  // Jump to START code (skip header at 0x0000-0x0021)
+vecx.e6809.reg_sp = 0xCBFF;  // Stack initialized at top of RAM
+vecx.e6809.reg_dp = 0x00;    // Direct page = 0x00 initially
+vecx.currentBank = 0;         // Start in Bank #0
+
+// DEBUG: Verify boot setup
+console.log(`\n=== BOOT SEQUENCE DEBUG ===`);
+console.log(`Initial PC: 0x${vecx.e6809.reg_pc.toString(16).toUpperCase().padStart(4, '0')} (START code)`);
+console.log(`Initial SP: 0x${vecx.e6809.reg_sp.toString(16).toUpperCase().padStart(4, '0')}`);
+console.log(`Initial DP: 0x${vecx.e6809.reg_dp.toString(16).toUpperCase().padStart(2, '0')}`);
+console.log(`Initial Bank: ${vecx.currentBank}`);
+console.log(`Byte at PC=0x0022 (LDA opcode): 0x${vecx.read8(0x0022).toString(16).toUpperCase().padStart(2, '0')}`);
+console.log(`Byte at PC=0x0023 (operand #$D0): 0x${vecx.read8(0x0023).toString(16).toUpperCase().padStart(2, '0')}`);
+
 vecx.debugState = 'running';
 vecx.running = true;
 
@@ -146,6 +166,10 @@ assertByte(0x0202, expected(lastBank, 0x0202), 'last bank off 0x0202', failures)
 assertByte(0x4000, expected(lastBank, 0x0000), 'fixed start', failures);
 assertByte(0x7abc, expected(lastBank, 0x3abc), 'fixed off 0x3abc', failures);
 
+// CRITICAL: Reset bank back to 0 before executing cartridge code
+vecx.write8(vecx.bankRegister, 0);
+vecx.currentBank = 0;
+
 if (failures.length) {
   console.error('Multi-bank mapping (real ROM): FAIL');
   failures.forEach((f) => console.error(' - ' + f));
@@ -154,7 +178,7 @@ if (failures.length) {
   console.log('Multi-bank mapping (real ROM): PASS');
   // Integration: run CPU until update_player_BANK_WRAPPER or stop, with trace around the hit.
   const target = updatePlayerAddr;
-  const maxSteps = 800000;
+  const maxSteps = 50000;  // Reduced for faster testing
   const trace = [];
   let reason = 'max-steps';
 

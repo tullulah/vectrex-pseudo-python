@@ -2,7 +2,7 @@
 # CORRECTED STRUCTURE: main() runs once, loop() runs every frame
 
 META TITLE = "Call Graph Test"
-META MUSIC = 0
+META MUSIC = 1
 META ROM_TOTAL_SIZE = 524288
 META ROM_BANK_SIZE = 16384
 
