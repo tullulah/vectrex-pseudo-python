@@ -1,9 +1,106 @@
+    INCLUDE "VECTREX.I"
+; External symbols (helpers and shared data)
+MOVE_PLAYER EQU $0000
+IF_NEXT_13 EQU $0000
+DSWM_W1 EQU $0000
+DSWM_NEXT_NO_NEGATE_Y EQU $0000
+CT_10 EQU $0000
+IF_END_0 EQU $0000
+DSWM_NO_NEGATE_DX EQU $0000
+CE_15 EQU $0000
+CE_7 EQU $0000
+J1B3_BUILTIN EQU $0000
+__Intensity_a EQU $0000
+J1Y_BUILTIN EQU $0000
+MAIN EQU $0000
+IF_NEXT_5 EQU $0000
+DSWM_USE_OVERRIDE EQU $0000
+DSWM_W2 EQU $0000
+DSWM_NEXT_NO_NEGATE_X EQU $0000
+J1B1_BUILTIN EQU $0000
+__Reset0Ref EQU $0000
+DSWM_SET_INTENSITY EQU $0000
+IF_END_8 EQU $0000
+IF_NEXT_9 EQU $0000
+LOOP_BODY EQU $0000
+DSWM_NEXT_USE_OVERRIDE EQU $0000
+J1B2_BUILTIN EQU $0000
+DSWM_NO_NEGATE_DY EQU $0000
+CT_2 EQU $0000
+UPDATE_PLAYER EQU $0000
+VECTREX_SET_INTENSITY EQU $0000
+J1B4_BUILTIN EQU $0000
+DSWM_NEXT_SET_INTENSITY EQU $0000
+Draw_Sync_List_At_With_Mirrors EQU $0000
+START EQU $0000
+DRAW_ALL EQU $0000
+DRAW_ENEMIES EQU $0000
+_ENEMY_VECTORS EQU $0000
+UPDATE_ENEMIES EQU $0000
+Draw_Sync_List EQU $0000
+_ENEMY_PATH0 EQU $0000
+__Draw_Line_d EQU $0000
+DSWM_DONE EQU $0000
+DRAW_PLAYER EQU $0000
+DSWM_LOOP EQU $0000
+CT_14 EQU $0000
+CE_3 EQU $0000
+J1X_BUILTIN EQU $0000
+DSWM_NO_NEGATE_Y EQU $0000
+DSWM_W3 EQU $0000
+_PLAYER_PATH0 EQU $0000
+IF_END_4 EQU $0000
+DSWM_NO_NEGATE_X EQU $0000
+__Moveto_d EQU $0000
+DSWM_NEXT_PATH EQU $0000
+IF_END_12 EQU $0000
+_PLAYER_VECTORS EQU $0000
+IF_NEXT_1 EQU $0000
+CT_6 EQU $0000
+CE_11 EQU $0000
+CHECK_INPUT EQU $0000
+
+
+; === RAM VARIABLE DEFINITIONS (EQU) ===
+; AUTO-GENERATED - All offsets calculated automatically
+; Total RAM used: 48 bytes
+RESULT               EQU $C880+$01   ; Main result temporary (2 bytes)
+TMPLEFT              EQU $C880+$03   ; Left operand temp (2 bytes)
+TMPLEFT2             EQU $C880+$05   ; Left operand temp 2 (for nested operations) (2 bytes)
+TMPRIGHT             EQU $C880+$07   ; Right operand temp (2 bytes)
+TMPRIGHT2            EQU $C880+$09   ; Right operand temp 2 (for nested operations) (2 bytes)
+TMPPTR               EQU $C880+$0B   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
+TMPPTR2              EQU $C880+$0D   ; Pointer temp 2 (for nested array operations) (2 bytes)
+TEMP_YX              EQU $C880+$0F   ; Temporary y,x storage (2 bytes)
+TEMP_X               EQU $C880+$11   ; Temporary x storage (1 bytes)
+TEMP_Y               EQU $C880+$12   ; Temporary y storage (1 bytes)
+NUM_STR              EQU $C880+$13   ; String buffer for PRINT_NUMBER (2 bytes)
+DRAW_VEC_X           EQU $C880+$15   ; X position offset for vector drawing (1 bytes)
+DRAW_VEC_Y           EQU $C880+$16   ; Y position offset for vector drawing (1 bytes)
+MIRROR_X             EQU $C880+$17   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
+MIRROR_Y             EQU $C880+$18   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
+DRAW_VEC_INTENSITY   EQU $C880+$19   ; Intensity override (0=use vector's, >0=override) (1 bytes)
+VAR_ENEMY1_X         EQU $C880+$1A   ; User variable (2 bytes)
+VAR_ENEMY1_Y         EQU $C880+$1C   ; User variable (2 bytes)
+VAR_ENEMY2_X         EQU $C880+$1E   ; User variable (2 bytes)
+VAR_ENEMY2_Y         EQU $C880+$20   ; User variable (2 bytes)
+VAR_ENEMY3_X         EQU $C880+$22   ; User variable (2 bytes)
+VAR_ENEMY3_Y         EQU $C880+$24   ; User variable (2 bytes)
+VAR_FRAME_COUNT      EQU $C880+$26   ; User variable (2 bytes)
+VAR_ARG0             EQU $C880+$28   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$2A   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$2C   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$2E   ; Function argument 3 (2 bytes)
+CURRENT_ROM_BANK     EQU $C880   ; Current ROM bank tracker (1 byte, FIXED at first RAM byte)
+
+
+
+; ================================================
 ; --- Motorola 6809 backend (Vectrex) title='Call Graph Test' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
 ;***************************************************************************
-    INCLUDE "VECTREX.I"
 
 ;***************************************************************************
 ; HEADER SECTION
@@ -23,37 +120,6 @@
 ; CODE SECTION
 ;***************************************************************************
 
-; === RAM VARIABLE DEFINITIONS (EQU) ===
-; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 47 bytes
-RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
-TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
-TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
-TMPRIGHT             EQU $C880+$06   ; Right operand temp (2 bytes)
-TMPRIGHT2            EQU $C880+$08   ; Right operand temp 2 (for nested operations) (2 bytes)
-TMPPTR               EQU $C880+$0A   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
-TMPPTR2              EQU $C880+$0C   ; Pointer temp 2 (for nested array operations) (2 bytes)
-TEMP_YX              EQU $C880+$0E   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$10   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$11   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$12   ; String buffer for PRINT_NUMBER (2 bytes)
-DRAW_VEC_X           EQU $C880+$14   ; X position offset for vector drawing (1 bytes)
-DRAW_VEC_Y           EQU $C880+$15   ; Y position offset for vector drawing (1 bytes)
-MIRROR_X             EQU $C880+$16   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
-MIRROR_Y             EQU $C880+$17   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
-DRAW_VEC_INTENSITY   EQU $C880+$18   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-VAR_ENEMY1_X         EQU $C880+$19   ; User variable (2 bytes)
-VAR_ENEMY1_Y         EQU $C880+$1B   ; User variable (2 bytes)
-VAR_ENEMY2_X         EQU $C880+$1D   ; User variable (2 bytes)
-VAR_ENEMY2_Y         EQU $C880+$1F   ; User variable (2 bytes)
-VAR_ENEMY3_X         EQU $C880+$21   ; User variable (2 bytes)
-VAR_ENEMY3_Y         EQU $C880+$23   ; User variable (2 bytes)
-VAR_FRAME_COUNT      EQU $C880+$25   ; User variable (2 bytes)
-VAR_ARG0             EQU $C880+$27   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$29   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$2B   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$2D   ; Function argument 3 (2 bytes)
-
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
 
@@ -71,6 +137,9 @@ START:
     LDA #$80
     STA VIA_t1_cnt_lo
     LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)
+    LDA #0
+    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (RAM tracker for debugging)
+    STA >$D000            ; Switch bank in hardware cartridge IC
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:19
@@ -126,7 +195,12 @@ MAIN:
     STA VIA_t1_cnt_lo
     ; *** Call loop() as subroutine (executed every frame)
     JSR LOOP_BODY
-    BRA MAIN
+    LBRA MAIN
+
+
+; ================================================
+
+    ORG $0000  ; Sequential bank model
 
     ; VPy_LINE:24
 LOOP_BODY:
@@ -135,13 +209,11 @@ LOOP_BODY:
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; DEBUG: Statement 0 - Discriminant(0)
     ; VPy_LINE:25
     LDD #12
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; DEBUG: Statement 1 - Discriminant(0)
     ; VPy_LINE:26
     LDD 0 ,S
     STD RESULT
@@ -159,7 +231,6 @@ LOOP_BODY:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; DEBUG: Statement 2 - Discriminant(8)
     ; VPy_LINE:28
     LDD #100
     STD RESULT
@@ -170,16 +241,12 @@ LOOP_BODY:
     CLRA
     CLRB
     STD RESULT
-    ; DEBUG: Statement 3 - Discriminant(8)
     ; VPy_LINE:31
     JSR UPDATE_PLAYER
-    ; DEBUG: Statement 4 - Discriminant(8)
     ; VPy_LINE:32
     JSR UPDATE_ENEMIES
-    ; DEBUG: Statement 5 - Discriminant(8)
     ; VPy_LINE:33
     JSR DRAW_ALL
-    ; DEBUG: Statement 6 - Discriminant(0)
     ; VPy_LINE:34
     LDD 0 ,S
     STD RESULT
@@ -197,7 +264,6 @@ LOOP_BODY:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; DEBUG: Statement 7 - Discriminant(0)
     ; VPy_LINE:35
     LDD VAR_FRAME_COUNT
     STD RESULT
@@ -276,10 +342,10 @@ UPDATE_ENEMIES: ; function
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_2
+    LBGT CT_2
     LDD #0
     STD RESULT
-    BRA CE_3
+    LBRA CE_3
 CT_2:
     LDD #1
     STD RESULT
@@ -326,10 +392,10 @@ IF_END_0:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGT CT_6
+    LBGT CT_6
     LDD #0
     STD RESULT
-    BRA CE_7
+    LBRA CE_7
 CT_6:
     LDD #1
     STD RESULT
@@ -395,10 +461,10 @@ IF_END_4:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_10
+    LBLT CT_10
     LDD #0
     STD RESULT
-    BRA CE_11
+    LBRA CE_11
 CT_10:
     LDD #1
     STD RESULT
@@ -426,10 +492,10 @@ IF_END_8:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_14
+    LBLT CT_14
     LDD #0
     STD RESULT
-    BRA CE_15
+    LBRA CE_15
 CT_14:
     LDD #1
     STD RESULT
@@ -603,7 +669,7 @@ J1Y_BUILTIN:
 J1B1_BUILTIN:
     LDA $C811      ; Read transition bits (Vec_Button_1_1)
     ANDA #$01      ; Test bit 0 (Button 1)
-    BEQ .J1B1_OFF
+    LBEQ .J1B1_OFF
     LDD #1         ; Return pressed (rising edge)
     RTS
 .J1B1_OFF:
@@ -613,7 +679,7 @@ J1B1_BUILTIN:
 J1B2_BUILTIN:
     LDA $C811
     ANDA #$02      ; Test bit 1 (Button 2)
-    BEQ .J1B2_OFF
+    LBEQ .J1B2_OFF
     LDD #1
     RTS
 .J1B2_OFF:
@@ -623,7 +689,7 @@ J1B2_BUILTIN:
 J1B3_BUILTIN:
     LDA $C811
     ANDA #$04      ; Test bit 2 (Button 3)
-    BEQ .J1B3_OFF
+    LBEQ .J1B3_OFF
     LDD #1
     RTS
 .J1B3_OFF:
@@ -633,7 +699,7 @@ J1B3_BUILTIN:
 J1B4_BUILTIN:
     LDA $C811
     ANDA #$08      ; Test bit 3 (Button 4)
-    BEQ .J1B4_OFF
+    LBEQ .J1B4_OFF
     LDD #1
     RTS
 .J1B4_OFF:
@@ -706,7 +772,7 @@ LEAX 2,X                ; Skip next_y, next_x
 DSL_W1:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSL_W1
+LBEQ DSL_W1
 ; Loop de dibujo
 DSL_LOOP:
 LDA ,X+                 ; Read flag
@@ -732,7 +798,7 @@ STA VIA_shift_reg
 DSL_W2:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSL_W2
+LBEQ DSL_W2
 CLR VIA_shift_reg
 LBRA DSL_LOOP            ; Long branch back to loop start
 ; Next path: read new intensity and header, then continue drawing
@@ -788,7 +854,7 @@ LEAX 2,X                ; Skip next_y, next_x
 DSL_W3:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSL_W3
+LBEQ DSL_W3
 CLR VIA_shift_reg       ; Clear before continuing
 LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH
 DSL_DONE:
@@ -798,9 +864,9 @@ Draw_Sync_List_At_With_Mirrors:
 ; Conditionally negates X and/or Y coordinates and deltas
 ; NOTE: Caller must ensure DP=$D0 for VIA access
 LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
+LBNE DSWM_USE_OVERRIDE   ; If non-zero, use override
 LDA ,X+                 ; Otherwise, read intensity from vector data
-BRA DSWM_SET_INTENSITY
+LBRA DSWM_SET_INTENSITY
 DSWM_USE_OVERRIDE:
 LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_SET_INTENSITY:
@@ -808,14 +874,14 @@ JSR $F2AB               ; BIOS Intensity_a
 LDB ,X+                 ; y_start from .vec (already relative to center)
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
-BEQ DSWM_NO_NEGATE_Y
+LBEQ DSWM_NO_NEGATE_Y
 NEGB                    ; ← Negate Y if flag set
 DSWM_NO_NEGATE_Y:
 ADDB DRAW_VEC_Y         ; Add Y offset
 LDA ,X+                 ; x_start from .vec (already relative to center)
 ; Check if X mirroring is enabled
 TST MIRROR_X
-BEQ DSWM_NO_NEGATE_X
+LBEQ DSWM_NO_NEGATE_X
 NEGA                    ; ← Negate X if flag set
 DSWM_NO_NEGATE_X:
 ADDA DRAW_VEC_X         ; Add X offset
@@ -854,7 +920,7 @@ LEAX 2,X                ; Skip next_y, next_x
 DSWM_W1:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSWM_W1
+LBEQ DSWM_W1
 ; Loop de dibujo (conditional mirrors)
 DSWM_LOOP:
 LDA ,X+                 ; Read flag
@@ -866,13 +932,13 @@ LBEQ DSWM_NEXT_PATH
 LDB ,X+                 ; dy
 ; Check if Y mirroring is enabled
 TST MIRROR_Y
-BEQ DSWM_NO_NEGATE_DY
+LBEQ DSWM_NO_NEGATE_DY
 NEGB                    ; ← Negate dy if flag set
 DSWM_NO_NEGATE_DY:
 LDA ,X+                 ; dx
 ; Check if X mirroring is enabled
 TST MIRROR_X
-BEQ DSWM_NO_NEGATE_DX
+LBEQ DSWM_NO_NEGATE_DX
 NEGA                    ; ← Negate dx if flag set
 DSWM_NO_NEGATE_DX:
 PSHS A                  ; Save final dx
@@ -889,7 +955,7 @@ STA VIA_shift_reg
 DSWM_W2:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSWM_W2
+LBEQ DSWM_W2
 CLR VIA_shift_reg
 LBRA DSWM_LOOP          ; Long branch
 ; Next path: repeat mirror logic for new path header
@@ -898,22 +964,22 @@ TFR X,D
 PSHS D
 ; Check intensity override (same logic as start)
 LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
+LBNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
 LDA ,X+                 ; Otherwise, read intensity from vector data
-BRA DSWM_NEXT_SET_INTENSITY
+LBRA DSWM_NEXT_SET_INTENSITY
 DSWM_NEXT_USE_OVERRIDE:
 LEAX 1,X                ; Skip intensity byte in vector data
 DSWM_NEXT_SET_INTENSITY:
 PSHS A
 LDB ,X+                 ; y_start
 TST MIRROR_Y
-BEQ DSWM_NEXT_NO_NEGATE_Y
+LBEQ DSWM_NEXT_NO_NEGATE_Y
 NEGB
 DSWM_NEXT_NO_NEGATE_Y:
 ADDB DRAW_VEC_Y         ; Add Y offset
 LDA ,X+                 ; x_start
 TST MIRROR_X
-BEQ DSWM_NEXT_NO_NEGATE_X
+LBEQ DSWM_NEXT_NO_NEGATE_X
 NEGA
 DSWM_NEXT_NO_NEGATE_X:
 ADDA DRAW_VEC_X         ; Add X offset
@@ -956,7 +1022,7 @@ LEAX 2,X
 DSWM_W3:
 LDA VIA_int_flags
 ANDA #$40
-BEQ DSWM_W3
+LBEQ DSWM_W3
 CLR VIA_shift_reg
 LBRA DSWM_LOOP          ; Long branch
 DSWM_DONE:
@@ -1017,13 +1083,7 @@ _ENEMY_PATH0:    ; Path 0
 
 ; === INLINE ARRAY LITERALS (from function bodies) ===
 
-; === 6809 Interrupt Vectors (copied to 0xFFF0-0xFFFF by linker) ===
-    ORG $FFF0
-    FDB $0000    ; Reserved
-    FDB $0000    ; SWI3
-    FDB $0000    ; SWI2
-    FDB $0000    ; FIRQ
-    FDB $0000    ; IRQ
-    FDB $0000    ; SWI
-    FDB $0000    ; NMI
-    FDB START    ; RESET vector (entry point)
+; === Multibank Mode: Interrupt Vectors in Bank #31 (Linker) ===
+; All vectors handled by multi_bank_linker
+; Bank #0-#30: Local 0xFFF0-0xFFFF addresses are unreachable
+; Bank #31: Contains complete interrupt vector table (fixed at 0x4000-0x7FFF window)

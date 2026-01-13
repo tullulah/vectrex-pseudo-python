@@ -31,7 +31,7 @@ function VecX()
     // Multi-bank ROM support (512KB ROM with 32 banks of 16KB)
     this.multibankRom = null;     // Full 512KB ROM data
     this.currentBank = 0;         // Current bank number (0-31)
-    this.bankRegister = 0x4000;   // Bank register address
+    this.bankRegister = 0xD000;   // Bank register (write-only, cartucho I/O, outside both ROM windows and VIA)
     this.isMultibank = false;     // Flag if multi-bank ROM loaded
     
     // Debug system - Estado del debugger
@@ -306,6 +306,22 @@ function VecX()
         }
         if( address < 0x8000 )
         {
+            // Multi-bank ROM support
+            if (this.isMultibank) {
+                // Banked window: 0x0000-0x3FFF (16KB) → select bank via currentBank
+                if (address < 0x4000) {
+                    const bankSize = 0x4000; // 16KB per bank
+                    const romOffset = (this.currentBank * bankSize) + address;
+                    return this.multibankRom[romOffset] & 0xff;
+                }
+                // Fixed window: 0x4000-0x7FFF (16KB) → always bank #31
+                else {
+                    const bankSize = 0x4000;
+                    const romOffset = (31 * bankSize) + (address - 0x4000);
+                    return this.multibankRom[romOffset] & 0xff;
+                }
+            }
+            // Single-bank cartridge
             return this.cart[address] & 0xff;
         }
         return 0xff;
@@ -314,8 +330,8 @@ function VecX()
     {
         address &= 0xffff;
         data &= 0xff;
-        
-        // Multi-bank ROM support: Bank register at 0x4000
+
+        // Multi-bank ROM bank switch register (write-only, single address intercept)
         if (this.isMultibank && address === this.bankRegister) {
             const bankSize = 0x4000;
             const numBanks = Math.floor(this.multibankRom.length / bankSize);

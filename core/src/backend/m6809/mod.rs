@@ -277,6 +277,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let start_address = u16::from_str_radix(ti.origin.trim_start_matches("0x").trim_start_matches("$"), 16)
         .unwrap_or(0xC800);
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
+
+    // Bank register address used by compiler and wrappers (keep in sync with emulator)
+    let bank_register = 0xD000; // Bank register at 0xD000 (unmapped cartucho I/O, outside VIA and ROM windows)
     
     // Initialize address tracker for ASM listing generation
     AddressTracker::init_global(start_address);
@@ -297,7 +300,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Initialize wrapper generator if bank switching is enabled
     let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
         eprintln!("   [Phase 3.8] Analyzing cross-bank calls...");
-        let bank_register = 0xD000; // Bank register at 0xD000 (unmapped I/O space where cartridge hardware intercepts writes)
         let mut gen = bank_wrappers::BankWrapperGenerator::new(
             opts.function_bank_map.clone(),
             bank_register
@@ -433,7 +435,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // - Banks #1-#(N-2) overflow code, also at $0000
     // - Bank #(N-1) contains helpers, also at $0000
     let is_multibank = opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled());
-    let origin_addr = 0x0000; // Always $0000 in sequential model
+    
+    // Sequential Model: ALL code (header, START, MAIN, LOOP_BODY) goes to Bank #0 at $0000
+    // The linker multibank later redistributes into banks #0-#31 as needed
+    let origin_addr = 0x0000;
     out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=${:04X} ---\n", ti.name, opts.title, origin_addr));
     out.push_str(&format!("        ORG ${:04X}\n", origin_addr));
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
@@ -813,13 +818,24 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
         out.push_str(";\n\n");
         
+        // Single-bank: emit CUSTOM_RESET label before START
+        // Multibank: CUSTOM_RESET will be emitted in Bank #31 by linker
+        if !opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
+            out.push_str("CUSTOM_RESET:\n    ; RESET vector handler - entry point from $FFFE\n");
+        }
+        
         out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)\n");
         // Initialize bank switching state if enabled
         if opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled()) {
             // Default to bank 0 for the banked window
-            // Use CURRENT_ROM_BANK (allocated by variable allocator) as both tracker AND hardware register
+            // Write to TWO locations:
+            //   1. CURRENT_ROM_BANK ($C880): RAM tracker for debugging (so code/debugger knows current bank)
+            //   2. Bank register (hardware latch) that actually switches the bank
             // CRITICAL: Use extended mode (>) because DP=$D0 at this point (not $C8)
-            out.push_str("    LDA #0\n    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (MUST use > because DP=$D0)\n");
+            out.push_str(&format!(
+                "    LDA #0\n    STA >CURRENT_ROM_BANK ; Initialize to bank 0 (RAM tracker for debugging)\n    STA >${:04X}            ; Switch bank in hardware cartridge IC\n",
+                bank_register
+            ));
         }
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
@@ -1029,20 +1045,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         for bank_id in sorted_banks {
             let functions = functions_by_bank.get(&bank_id).unwrap();
             
-            // Only emit bank markers for true multibank (more than one bank)
-            // Bank #0 with all code doesn't need marker (code flows naturally after header)
-            if num_banks > 1 {
-                // Emit bank header
-                out.push_str(&format!("\n; ================================================\n"));
-                out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
-                out.push_str(&format!("; ================================================\n"));
-                
-                // Sequential Bank Model: ALL banks use ORG $0000
-                // - Bank #0: Code starts at $0000 (header + main)
-                // - Banks #1-#(N-2): Overflow code at $0000
-                // - Bank #(N-1): Helpers at $0000
-                out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
-            }
+            // ALWAYS emit bank markers (even for single bank) so linker can split correctly
+            // Bank markers are required for multi_bank_linker::split_asm_by_bank to detect bank sections
+            out.push_str(&format!("\n; ================================================\n"));
+            out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
+            out.push_str(&format!("; ================================================\n"));
+            
+            // Sequential Bank Model: ALL banks use ORG $0000
+            // - Bank #0: Code starts at $0000 (header + main)
+            // - Banks #1-#(N-2): Overflow code at $0000
+            // - Bank #(N-1): Helpers at $0000
+            out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
             
             // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
             for f in functions {
@@ -1710,19 +1723,21 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     bank_wrappers::clear_global_generator();
     
     // ===== INTERRUPT VECTORS TABLE =====
-    // Generate 6809 interrupt vectors at end of ROM
-    // CRITICAL: Vectors ALWAYS at 0xFFF0-0xFFFF (hardware requirement)
-    // Sequential bank model: Each bank has vectors at its local 0xFFF0
-    out.push_str("\n; === 6809 Interrupt Vectors (MUST be at 0xFFF0-0xFFFF) ===\n");
-    out.push_str("    ORG $FFF0\n");
-    out.push_str("    FDB $0000    ; Reserved\n");
-    out.push_str("    FDB $0000    ; SWI3\n");
-    out.push_str("    FDB $0000    ; SWI2\n");
-    out.push_str("    FDB $0000    ; FIRQ\n");
-    out.push_str("    FDB $0000    ; IRQ\n");
-    out.push_str("    FDB $0000    ; SWI\n");
-    out.push_str("    FDB $0000    ; NMI\n");
-    out.push_str("    FDB START    ; RESET vector (entry point)\n");
+    // Generate ONLY the RESET vector in single-bank mode
+    // CRITICAL: Other interrupt vectors ($FFF0-$FFFC) are provided by BIOS ROM (fixed bank)
+    // Multibank: All vectors handled by linker as part of Bank #31
+    // Single-bank: Only need RESET vector at $FFFE (entry point)
+    if !is_multibank {
+        out.push_str("\n; === RESET Vector (Entry Point) ===\n");
+        out.push_str("; Other vectors ($FFF0-$FFFC) provided by BIOS ROM\n");
+        out.push_str("    ORG $FFFE\n");
+        out.push_str("    FDB CUSTOM_RESET    ; RESET vector (entry point)\n");
+    } else {
+        out.push_str("\n; === Multibank Mode: Interrupt Vectors in Bank #31 (Linker) ===\n");
+        out.push_str("; All vectors handled by multi_bank_linker\n");
+        out.push_str("; Bank #0-#30: Local 0xFFF0-0xFFFF addresses are unreachable\n");
+        out.push_str("; Bank #31: Contains complete interrupt vector table (fixed at 0x4000-0x7FFF window)\n");
+    }
     
     (out, debug_info)
 }

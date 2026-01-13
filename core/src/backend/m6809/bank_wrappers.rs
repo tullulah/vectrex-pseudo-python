@@ -148,8 +148,8 @@ impl BankWrapperGenerator {
         
         self.generated_wrappers.insert(wrapper_name.clone());
         
-        // Generate wrapper ASM (CURRENT_ROM_BANK = RAM tracker, $D000 = hardware register)
-        // NOTE: Hardware intercepts writes to $D000 to perform actual bank switching
+        // Generate wrapper ASM (CURRENT_ROM_BANK = RAM tracker, bank_register = hardware latch)
+        // NOTE: Hardware intercepts writes to bank_register to perform actual bank switching
         //       CURRENT_ROM_BANK keeps RAM copy for debugging/inspection
         
         // Get source line number for debugging (if available)
@@ -168,11 +168,11 @@ r#"
     PSHS A              ; Save current bank on stack
     LDA #{tbank}             ; Load target bank ID
     STA CURRENT_ROM_BANK ; Switch to target bank (RAM tracker)
-    STA $D000            ; Hardware bank switch register (cartucho intercepts)
+    STA ${bank_reg:04X}            ; Hardware bank switch register (cartucho intercepts)
 {line_marker}    JSR {upper_fname}              ; Call real function
     PULS A              ; Restore original bank from stack
     STA CURRENT_ROM_BANK ; Switch back to original bank (RAM tracker)
-    STA $D000            ; Hardware bank switch register (cartucho intercepts)
+    STA ${bank_reg:04X}            ; Hardware bank switch register (cartucho intercepts)
     PULS A              ; Restore A register
     RTS
 "#,
@@ -180,6 +180,7 @@ r#"
             tbank=target_bank,
             wname=wrapper_name,
             upper_fname=func_name.to_uppercase(),
+            bank_reg=self.bank_register,
             line_marker=line_marker,
         )
     }

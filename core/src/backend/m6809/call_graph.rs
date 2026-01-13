@@ -160,10 +160,14 @@ pub fn build_call_graph(module: &Module) -> CallGraph {
 }
 
 /// Check if a function is critical (must be in fixed bank)
+/// In sequential model, NOTHING is critical - all code goes to Bank #0
+/// Return false always for sequential model (no critical functions)
 fn is_critical_function(name: &str) -> bool {
-    // Critical functions must be in fixed bank (Bank #31)
-    // These are entry points and functions called from multiple banks
-    matches!(name, "main" | "loop" | "LOOP_BODY" | "MAIN")
+    // Sequential Model (2025-01-12):
+    // - NO functions are "critical"
+    // - ALL code goes to Bank #0 and linker distributes as needed
+    // - Returning false allows sequential bank assignment
+    false
 }
 
 /// Estimate function size in bytes (rough approximation)
