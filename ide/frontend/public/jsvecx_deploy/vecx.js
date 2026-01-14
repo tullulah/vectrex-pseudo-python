@@ -31,7 +31,7 @@ function VecX()
     // Multi-bank ROM support (512KB ROM with 32 banks of 16KB)
     this.multibankRom = null;     // Full 512KB ROM data
     this.currentBank = 0;         // Current bank number (0-31)
-    this.bankRegister = 0xD000;   // Bank register (write-only, cartucho I/O, outside both ROM windows and VIA)
+    this.bankRegister = 0xDF00;   // Bank register (write-only, cartucho I/O at $DF00 - avoids VIA DP collision)
     this.isMultibank = false;     // Flag if multi-bank ROM loaded
     
     // Debug system - Estado del debugger

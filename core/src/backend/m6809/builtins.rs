@@ -1,7 +1,27 @@
 // Builtins - Implementation of built-in functions for M6809 backend
-use crate::ast::{Expr, Stmt};
+use crate::ast::Expr;
 use crate::codegen::CodegenOptions;
 use super::{FuncCtx, emit_expr, fresh_label};
+
+/// Generate JSR to helper function (with bank wrapper if in multibank mode)
+fn emit_jsr_to_helper(helper_name: &str, opts: &CodegenOptions) -> String {
+    // BIOS functions ($F000-$FFFF) are always accessible, don't need wrappers
+    const BIOS_FUNCTIONS: &[&str] = &[
+        "Wait_Recal", "Intensity_a", "Reset0Ref", "Moveto_d", "Draw_Line_d",
+        "Draw_VL", "Draw_VLc", "Print_Str_d", "DP_to_D0", "DP_to_C8", "Read_Btns"
+    ];
+    
+    if BIOS_FUNCTIONS.contains(&helper_name) {
+        // BIOS functions: always direct JSR (no wrapper needed)
+        format!("    JSR {}\n", helper_name)
+    } else if opts.bank_config.is_some() {
+        // Multibank mode: use bank wrapper for cross-bank calls to our helpers
+        format!("    JSR {}_BANK_WRAPPER  ; Cross-bank call to helper in bank #31\n", helper_name)
+    } else {
+        // Single bank mode: direct JSR
+        format!("    JSR {}\n", helper_name)
+    }
+}
 
 pub fn resolve_function_name(name: &str) -> Option<String> {
     let map = [
@@ -99,7 +119,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function\n");
+                    out.push_str(&emit_jsr_to_helper("Draw_Sync_List_At_With_Mirrors", opts));
                 }
                 out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
@@ -217,7 +237,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY\n");
+                    out.push_str(&emit_jsr_to_helper("Draw_Sync_List_At_With_Mirrors", opts));
                 }
                 out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
@@ -700,7 +720,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    CLR $D00A           ; VIA_shift_reg = 0 (blank beam)\n");
         out.push_str("    LDA #$CC\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCC (zero integrators)\n");
-        out.push_str("    CLR $D001           ; VIA_port_a = 0 (reset offset)\n");
+        out.push_str("    CLR $D000           ; VIA_port_a = 0 (reset offset)\n");
         out.push_str("    LDA #$82\n");
         out.push_str("    STA $D002           ; VIA_port_b = 0x82\n");
         out.push_str("    LDA VL_SCALE\n");
@@ -717,14 +737,14 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         
         // Move to initial position (y, x)
         out.push_str("    LDA VL_Y\n");
-        out.push_str("    STA $D001           ; VIA_port_a = y\n");
+        out.push_str("    STA $D000           ; VIA_port_a = y\n");
         out.push_str("    LDA #$CE\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCE (integrator mode)\n");
         out.push_str("    CLR $D002           ; VIA_port_b = 0 (mux enable)\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002           ; VIA_port_b = 1 (mux disable)\n");
         out.push_str("    LDA VL_X\n");
-        out.push_str("    STA $D001           ; VIA_port_a = x\n");
+        out.push_str("    STA $D000           ; VIA_port_a = x\n");
         out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0 (start timer)\n");
         
         // Set scale for vector drawing
@@ -752,12 +772,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         // DRAW LINE (*u < 0)
         out.push_str("VL_DRAW:\n");
         out.push_str("    LDA 1,X             ; dy\n");
-        out.push_str("    STA $D001           ; VIA_port_a = dy\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
         out.push_str("    CLR $D002           ; VIA_port_b = 0\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002           ; VIA_port_b = 1\n");
         out.push_str("    LDA 2,X             ; dx\n");
-        out.push_str("    STA $D001           ; VIA_port_a = dx\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dx\n");
         out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0\n");
         out.push_str("    LDA #$FF\n");
         out.push_str("    STA $D00A           ; VIA_shift_reg = 0xFF (beam ON)\n");
@@ -776,14 +796,14 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    LDA 1,X             ; dy\n");
         out.push_str("    BEQ VL_CHECK_DX\n");
         out.push_str("VL_DO_MOVE:\n");
-        out.push_str("    STA $D001           ; VIA_port_a = dy\n");
+        out.push_str("    STA $D000           ; VIA_port_a = dy\n");
         out.push_str("    LDA #$CE\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCE\n");
         out.push_str("    CLR $D002\n");
         out.push_str("    LDA #1\n");
         out.push_str("    STA $D002\n");
         out.push_str("    LDA 2,X             ; dx\n");
-        out.push_str("    STA $D001\n");
+        out.push_str("    STA $D000\n");
         out.push_str("    CLR $D005\n");
         out.push_str("VL_WAIT_MOVE2:\n");
         out.push_str("    LDA $D00D\n");
@@ -1399,11 +1419,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
             }
             
             add_native_call_comment(out, "VECTREX_PRINT_TEXT");
-            if opts.force_extended_jsr {
-                out.push_str("    JSR >VECTREX_PRINT_TEXT\n");
-            } else {
-                out.push_str("    JSR VECTREX_PRINT_TEXT\n");
-            }
+            out.push_str(&emit_jsr_to_helper("VECTREX_PRINT_TEXT", opts));
             
             // CRITICAL: Restore BIOS default values after rendering
             out.push_str("    LDA #$F8      ; Default height (-8 in two's complement)\n");

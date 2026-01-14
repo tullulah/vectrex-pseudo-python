@@ -279,7 +279,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
 
     // Bank register address used by compiler and wrappers (keep in sync with emulator)
-    let bank_register = 0xD000; // Bank register at 0xD000 (unmapped cartucho I/O, outside VIA and ROM windows)
+    let bank_register = 0xDF00; // Bank register at $DF00 (unmapped cartucho I/O - avoids VIA DP collision at $D000)
     
     // Initialize address tracker for ASM listing generation
     AddressTracker::init_global(start_address);
@@ -300,9 +300,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Initialize wrapper generator if bank switching is enabled
     let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
         eprintln!("   [Phase 3.8] Analyzing cross-bank calls...");
+        let rom_bank_count = opts.bank_config.as_ref().map(|bc| bc.rom_bank_count).unwrap_or(1);
         let mut gen = bank_wrappers::BankWrapperGenerator::new(
             opts.function_bank_map.clone(),
-            bank_register
+            bank_register,
+            rom_bank_count
         );
         
         // Register function line numbers for debugging (wrapper line markers)
@@ -391,7 +393,15 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     let opts = &opts_with_consts; // Use the modified opts
     
-        let rt_usage = analyze_runtime_usage(module);
+        let mut rt_usage = analyze_runtime_usage(module);
+    
+    // CRITICAL FIX (2026-01-14): In multibank mode, runtime helper wrappers are ALWAYS generated
+    // (see bank_wrappers.rs line 189-230), so we must force corresponding RAM variable allocation.
+    // Without this, DRAW_LINE_WRAPPER references undefined VLINE_DY_16, etc.
+    if opts.bank_config.is_some() {
+        rt_usage.needs_line_vars = true;  // DRAW_LINE_WRAPPER uses VLINE_* variables
+        rt_usage.uses_draw_circle = true; // DRAW_CIRCLE_RUNTIME uses DRAW_CIRCLE_TEMP variables
+    }
     
     // Locate required 'main' and 'loop' functions
     let mut user_main: Option<&Function> = None;
@@ -449,8 +459,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // NOTE: BIOS symbols (Vec_Music_Flag, etc.) are defined in VECTREX.I
     // Do NOT duplicate them here to maintain lwasm compatibility
     
-    // HEADER SECTION - ALWAYS generate (single-bank and multi-bank)
-    // In multi-bank mode, header goes to Bank #31 and linker copies to Bank #0
+    // HEADER SECTION - Always generate (single-bank and multi-bank)
+    // In multi-bank mode, linker will extract and place in Bank #0
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
     // Emit section marker for header (if linker mode enabled)
     emit_header_section(&mut out, opts);
@@ -717,7 +727,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
     out.push_str("; AUTO-GENERATED - All offsets calculated automatically\n");
     out.push_str(&format!("; Total RAM used: {} bytes\n", ram.total_size()));
-    out.push_str(&ram.emit_equ_definitions());
+    let ram_definitions = ram.emit_equ_definitions(); // Store for reuse in bank_31
+    out.push_str(&ram_definitions);
     
     // Export ALL RAM variables to debug_info for .pdb generation
     // This includes CURRENT_ROM_BANK, VAR_*, runtime helpers, etc.
@@ -843,7 +854,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
         let has_music_calls = rt_usage.wrappers_used.contains("PLAY_MUSIC_RUNTIME");
         let has_sfx_calls = rt_usage.wrappers_used.contains("PLAY_SFX_RUNTIME");
-        let has_audio_calls = has_music_calls || has_sfx_calls;
+        let _has_audio_calls = has_music_calls || has_sfx_calls;
         
         // BIOS music system: Initialize music buffer to silence
         if has_music_calls {
@@ -885,7 +896,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             
             // Initialize global variables with their initial values (ONCE at startup)
             // Use global_vars_with_line to emit line markers for PDB coverage
-            let mut array_counter = 0;
+            let mut _array_counter = 0;
             for (name, value, source_line) in &global_vars_with_line {
                 // Skip const arrays (they're already in ROM)
                 if const_array_names.contains(name) {
@@ -910,7 +921,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
                     out.push_str("    SUBD #1         ; Decrement counter\n");
                     out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", name.to_uppercase()));
-                    array_counter += 1;
+                    _array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     // Emit numbers as decimal (assembler interprets negatives as signed)
                     out.push_str(&format!("    LDD #{}\n", n));
@@ -1019,6 +1030,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     use std::collections::BTreeSet;
     let mut emitted_consts: BTreeSet<String> = BTreeSet::new();
     
+    // Track if we already emitted the CUSTOM_RESET handler (only once in fixed bank)
+    let mut custom_reset_emitted = false;
+
     // Group functions by bank if bank switching is enabled
     if !opts.function_bank_map.is_empty() {
         use std::collections::HashMap;
@@ -1057,7 +1071,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             // - Bank #0: Code starts at $0000 (header + main)
             // - Banks #1-#(N-2): Overflow code at $0000
             // - Bank #(N-1): Helpers at $0000
-            out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
+            // EXCEPTION: Bank #0 already has ORG in the header section (FCC/FCB)
+            // so skip emitting ORG again to avoid resetting PC
+            if bank_id != 0 {
+                out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
+            }
             
             // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
             for f in functions {
@@ -1119,11 +1137,83 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
 
             // If this is the fixed bank, emit cross-bank wrappers here so they execute from non-switchable ROM
             if bank_id == 31 {
+                // Emit custom reset handler once (even if bank 31 already has functions)
+                if !custom_reset_emitted {
+                    out.push_str("CUSTOM_RESET:\n");
+                    out.push_str("    LDA #0\n");
+                    out.push_str("    STA $DF00           ; Switch hardware bank to #0 (cart register)\n");
+                    out.push_str("    STA >CURRENT_ROM_BANK ; Keep RAM tracker in sync\n");
+                    out.push_str("    JMP START           ; Jump to program entry in Bank #0\n\n");
+                    custom_reset_emitted = true;
+                }
+
                 if let Some(ref mut generator) = wrapper_generator {
                     let wrappers = generator.generate_all_wrappers();
                     if !wrappers.is_empty() {
                         out.push_str(&wrappers);
                     }
+                }
+            }
+        }
+        
+        // CRITICAL FIX (2026-01-14): Emit empty bank placeholders for multibank splitting
+        // split_asm_by_bank() requires ALL 32 banks to be marked (even if empty)
+        // otherwise it only detects banks that have functions and fails to split correctly
+        // Emit if we have multibank (ROM size configured via META)
+        let has_multibank = opts.bank_config.is_some();
+        if has_multibank {
+            let max_bank_id = 31u8;
+            for bank_id in 0..=max_bank_id {
+                // Skip banks that were already emitted above
+                if functions_by_bank.contains_key(&bank_id) || bank_id == 31 {
+                    continue;  // Will be handled below
+                }
+                // Emit placeholder for empty bank
+                out.push_str(&format!("\n; ================================================\n"));
+                out.push_str(&format!("; BANK #{} - 0 function(s) [EMPTY]\n", bank_id));
+                out.push_str(&format!("; ================================================\n"));
+                out.push_str(&format!("    ORG $0000\n\n"));
+            }
+        }
+        
+        // CRITICAL FIX (2026-01-14): Force Bank #31 generation if multibank AND no VPy functions assigned to it
+        // Bank #31 must exist for runtime helpers (DRAW_LINE_WRAPPER, MUL16, etc.) and interrupt vectors
+        // Detect multibank by checking if there are multiple banks OR if ROM size is set
+        let is_multibank = opts.bank_config.is_some();
+        if is_multibank && !functions_by_bank.contains_key(&31) {
+            // CRITICAL: Emit Bank #31 marker in the EXACT format split_asm_by_bank() expects
+            // Format: "; BANK #N - M function(s)" (no ===== - that's added by linker)
+            out.push_str("; BANK #31 - 0 function(s) [HELPERS ONLY]\n");
+            
+            // Custom reset handler: ensure we always switch to Bank #0 then jump to START
+            // This label must be the target of the RESET vector in the fixed bank
+            out.push_str("CUSTOM_RESET:\n");
+            out.push_str("    LDA #0\n");
+            out.push_str("    STA $DF00           ; Switch hardware bank to #0 (cart register)\n");
+            out.push_str("    STA >CURRENT_ROM_BANK ; Keep RAM tracker in sync\n");
+            out.push_str("    JMP START           ; Jump to program entry in Bank #0\n\n");
+            custom_reset_emitted = true;
+            
+            // NO RE-EMIT RAM DEFINITIONS - they were already emitted at line 727
+            // RAM definitions (EQU) must appear ONCE in the ASM before any code uses them
+            // Emitting them again here causes duplicates and misaligns the bank assembly
+            
+            // Emit runtime helpers in fixed bank (always visible, not switchable)
+            emit_helpers_section(&mut out, opts);
+            
+            if !suppress_runtime {
+                if !opts.skip_builtins {
+                    emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
+                }
+                if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
+                if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
+            }
+            
+            // Emit cross-bank wrappers if needed
+            if let Some(ref mut generator) = wrapper_generator {
+                let wrappers = generator.generate_all_wrappers();
+                if !wrappers.is_empty() {
+                    out.push_str(&wrappers);
                 }
             }
         }

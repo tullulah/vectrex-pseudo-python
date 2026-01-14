@@ -84,17 +84,21 @@ pub struct BankWrapperGenerator {
     
     /// Bank register address (hardware-dependent)
     bank_register: u16,
+    
+    /// Total number of ROM banks (e.g., 32 for 512KB ROM)
+    rom_bank_count: u8,
 }
 
 impl BankWrapperGenerator {
     /// Create new wrapper generator with function→bank mapping
-    pub fn new(function_banks: HashMap<String, u8>, bank_register: u16) -> Self {
+    pub fn new(function_banks: HashMap<String, u8>, bank_register: u16, rom_bank_count: u8) -> Self {
         Self {
             function_banks,
             function_lines: HashMap::new(),
             cross_bank_calls: Vec::new(),
             generated_wrappers: HashSet::new(),
             bank_register,
+            rom_bank_count,
         }
     }
     
@@ -185,16 +189,37 @@ r#"
         )
     }
     
-    /// Generate all wrapper functions for detected cross-bank calls
+    /// Generate all wrapper functions for detected cross-bank calls AND runtime helpers
     pub fn generate_all_wrappers(&mut self) -> String {
         let mut output = String::new();
         
-        if self.cross_bank_calls.is_empty() {
-            return output;
-        }
+        // Always generate wrappers for runtime helpers in multibank mode
+        // These helpers are in bank #31 but called from user code in other banks
+        let runtime_helpers = vec![
+            "Draw_Sync_List_At_With_Mirrors",
+            "VECTREX_PRINT_TEXT",
+            "VECTREX_SET_INTENSITY",
+            "DRAW_LINE_WRAPPER",
+            "DRAW_CIRCLE_RUNTIME",
+        ];
+        
+        let helper_bank_id = (self.rom_bank_count - 1) as u8; // Bank #31 for helpers
         
         output.push_str("\n; ===== CROSS-BANK CALL WRAPPERS =====\n");
         output.push_str("; Auto-generated wrappers for bank switching\n\n");
+        
+        // Generate wrappers for runtime helpers (always needed in multibank)
+        for helper_name in runtime_helpers {
+            let wrapper = self.generate_wrapper(helper_name, helper_bank_id);
+            if !wrapper.is_empty() {
+                output.push_str(&wrapper);
+            }
+        }
+        
+        if self.cross_bank_calls.is_empty() {
+            output.push_str("; ===== END CROSS-BANK WRAPPERS (helpers only) =====\n\n");
+            return output;
+        }
         
         // Collect unique callee functions
         let mut unique_callees: HashMap<String, u8> = HashMap::new();
@@ -247,7 +272,7 @@ mod tests {
         function_banks.insert("func_b".to_string(), 31);
         function_banks.insert("func_c".to_string(), 0);
         
-        let generator = BankWrapperGenerator::new(function_banks, 0x4000);
+        let generator = BankWrapperGenerator::new(function_banks, 0x4000, 32);
         
         // Cross-bank call (Bank 0 → Bank 31)
         assert_eq!(generator.is_cross_bank_call("func_a", "func_b"), Some(31));
@@ -264,7 +289,7 @@ mod tests {
         let mut function_banks = HashMap::new();
         function_banks.insert("target_func".to_string(), 31);
         
-        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000);
+        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000, 32);
         
         let wrapper = generator.generate_wrapper("target_func", 31);
         
@@ -285,7 +310,7 @@ mod tests {
         function_banks.insert("caller".to_string(), 0);
         function_banks.insert("callee".to_string(), 31);
         
-        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000);
+        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000, 32);
         
         generator.record_cross_bank_call("caller".to_string(), "callee".to_string());
         

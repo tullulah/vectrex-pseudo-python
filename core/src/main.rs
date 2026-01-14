@@ -679,7 +679,17 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     needs_buffer: r.needs_buffer,
                     analyzed_files: r.analyzed_files.clone(),
                 }),
-                bank_config: codegen::BankConfig::from_meta(&final_module.meta),
+                bank_config: {
+                    let cfg = codegen::BankConfig::from_meta(&final_module.meta);
+                    if cfg.is_some() {
+                        eprintln!("✓ Bank config created from META");
+                    } else if final_module.meta.rom_total_size.is_some() {
+                        eprintln!("! rom_total_size is Some but BankConfig::from_meta returned None");
+                    } else {
+                        eprintln!("✗ No rom_total_size in META (multibank disabled)");
+                    }
+                    cfg
+                },
                 function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
@@ -765,7 +775,17 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 needs_buffer: r.needs_buffer,
                 analyzed_files: r.analyzed_files.clone(),
             }),
-            bank_config: codegen::BankConfig::from_meta(&final_module.meta),
+            bank_config: {
+                let cfg = codegen::BankConfig::from_meta(&final_module.meta);
+                if cfg.is_some() {
+                    eprintln!("✓ Bank config created from META (build command)");
+                } else if final_module.meta.rom_total_size.is_some() {
+                    eprintln!("! rom_total_size is Some but BankConfig::from_meta returned None");
+                } else {
+                    eprintln!("✗ No rom_total_size in META (build command, multibank disabled)");
+                }
+                cfg
+            },
             function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
         });
         
@@ -854,40 +874,54 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 6: Binary assembly (if requested)
         if bin && tgt == target::Target::Vectrex { 
             eprintln!("Phase 6: Binary assembly requested...");
-            if dual {
-                assemble_dual(&out_path, include_dir).map_err(|e| {
-                    eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
-                    eprintln!("   Error: {}", e);
-                    e
-                })?;
+            let phase6_success = if dual {
+                match assemble_dual(&out_path, include_dir) {
+                    Ok(_) => {
+                        eprintln!("✓ Phase 6 SUCCESS: Dual assembly complete");
+                        true
+                    },
+                    Err(e) => {
+                        eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
+                        eprintln!("   Error: {}", e);
+                        false
+                    }
+                }
             } else {
                 // CRITICAL: Store symbol_table from binary for accurate header offset calculation
                 let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
-                let (binary_symbol_table, line_map, org) = assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()).map_err(|e| {
-                    eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
-                    eprintln!("   Error: {}", e);
-                    e
-                })?;
-                
-                // Store binary_symbol_table in debug_info for Phase 6.6
-                if let Some(ref mut dbg) = debug_info_mut {
-                    // Add ALL symbols from binary_symbol_table (single source of truth)
-                    for (symbol_name, &address) in &binary_symbol_table {
-                        dbg.add_symbol(symbol_name.clone(), address);
-                    }
-                    
-                    // Set entryPoint to START address from binary (real address)
-                    if let Some(&start_addr) = binary_symbol_table.get("START") {
-                        dbg.set_entry_point(start_addr);
-                        eprintln!("✓ Using START from binary symbol table: 0x{:04X}", start_addr);
-                    } else {
-                        eprintln!("⚠ Warning: START symbol not found in binary symbol table");
+                match assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()) {
+                    Ok((binary_symbol_table, line_map, org)) => {
+                        // Store binary_symbol_table in debug_info for Phase 6.6
+                        if let Some(ref mut dbg) = debug_info_mut {
+                            // Add ALL symbols from binary_symbol_table (single source of truth)
+                            for (symbol_name, &address) in &binary_symbol_table {
+                                dbg.add_symbol(symbol_name.clone(), address);
+                            }
+                            
+                            // Set entryPoint to START address from binary (real address)
+                            if let Some(&start_addr) = binary_symbol_table.get("START") {
+                                dbg.set_entry_point(start_addr);
+                                eprintln!("✓ Using START from binary symbol table: 0x{:04X}", start_addr);
+                            } else {
+                                eprintln!("⚠ Warning: START symbol not found in binary symbol table");
+                            }
+                        }
+                        eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
+                        true
+                    },
+                    Err(e) => {
+                        eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
+                        eprintln!("   Error: {}", e);
+                        eprintln!("   Continuing to Phase 6.7 (multibank) which only needs .asm file...");
+                        false
                     }
                 }
-            }
+            };
                 
-            eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
-            
+            // Only proceed with Phase 6.5-6.6 if Phase 6 succeeded (needs .bin file)
+            if !phase6_success {
+                eprintln!("⚠ Skipping Phase 6.5-6.6 (debug symbol mapping) due to Phase 6 failure");
+            } else {
             // Phase 6.5: Generate ASM address mapping
             if let Some(ref mut dbg) = debug_info_mut {
                 eprintln!("Phase 6.5: Generating ASM address mapping...");
@@ -1060,6 +1094,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             } else {
                 eprintln!("Phase 6.5/6.6: Debug symbols generation skipped (no debug info available)");
             }
+            } // End of phase6_success check
             
             // Phase 6.7: Multi-bank binary generation (unified format: always .bin)
             if let Some(ref bank_config) = codegen::BankConfig::from_meta(&final_module.meta) {

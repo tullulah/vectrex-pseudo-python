@@ -85,7 +85,7 @@ fn analyze_expr_calls(expr: &Expr, caller_func: &str, generator: &mut BankWrappe
             let callee_func = &call_info.name;
             
             // Check if both functions have bank assignments
-            if let Some(target_bank) = generator.is_cross_bank_call(caller_func, callee_func) {
+            if let Some(_target_bank) = generator.is_cross_bank_call(caller_func, callee_func) {
                 // Cross-bank call detected!
                 generator.record_cross_bank_call(
                     caller_func.to_string(),
@@ -169,7 +169,7 @@ mod tests {
         function_banks.insert("caller".to_string(), 0);
         function_banks.insert("target".to_string(), 31);
         
-        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000);
+        let mut generator = BankWrapperGenerator::new(function_banks, 0x4000, 32);
         
         // Create function that calls target
         let func = create_test_function("caller", vec!["target"]);

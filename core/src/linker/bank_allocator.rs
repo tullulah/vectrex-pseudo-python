@@ -37,10 +37,10 @@ impl BankAllocator {
 
     pub fn allocate_sections(
         &mut self,
-        sections: &[Section],
-        script: &LinkerScript,
+        _sections: &[Section],
+        _script: &LinkerScript,
     ) -> Result<HashMap<usize, u8>, String> {
-        let mut assignments: HashMap<usize, u8> = HashMap::new();
+        let assignments: HashMap<usize, u8> = HashMap::new();
         
         // TODO: Implement best-fit decreasing algorithm
         // For now, simple sequential assignment

@@ -177,8 +177,6 @@ pub fn scan_expr_args(e: &Expr) -> usize {
     }
 }
 
-use std::collections::HashSet;
-
 pub fn analyze_runtime_usage(module: &Module) -> RuntimeUsage {
     let mut usage = RuntimeUsage::default();
     for item in &module.items {
