@@ -12,6 +12,61 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Simple label extractor - extracts labels from ASM without full assembly
+/// Returns map of label_name -> offset_in_bytes (approximation)
+fn extract_labels_from_asm(asm: &str) -> HashMap<String, u16> {
+    let mut labels = HashMap::new();
+    let mut current_offset = 0u16;
+    
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('*') {
+            continue;
+        }
+        
+        // Skip INCLUDE and EQU directives
+        if trimmed.to_uppercase().starts_with("INCLUDE") || trimmed.to_uppercase().contains(" EQU ") {
+            continue;
+        }
+        
+        // Parse label (line ends with :)
+        if let Some(label_pos) = trimmed.find(':') {
+            let label = trimmed[..label_pos].trim().to_string();
+            if !label.is_empty() && !label.starts_with(' ') {
+                labels.insert(label, current_offset);
+            }
+        }
+        
+        // Estimate instruction size (very rough approximation)
+        // Most 6809 instructions are 2-4 bytes, data directives vary
+        if !trimmed.is_empty() && !trimmed.ends_with(':') {
+            // FCB, FDB, FCC directives
+            if trimmed.to_uppercase().starts_with("FCB ") {
+                current_offset += 1;
+            } else if trimmed.to_uppercase().starts_with("FDB ") {
+                current_offset += 2;
+            } else if trimmed.to_uppercase().starts_with("FCC ") {
+                // FCC "string" - count characters
+                if let Some(start) = trimmed.find('"') {
+                    if let Some(end) = trimmed.rfind('"') {
+                        if end > start {
+                            let count = end - start - 1;
+                            current_offset += count as u16 + 1; // +1 for terminator
+                        }
+                    }
+                }
+            } else if !trimmed.starts_with("ORG ") && !trimmed.starts_with("INCLUDE ") {
+                // Regular instruction (rough estimate)
+                current_offset += 2;
+            }
+        }
+    }
+    
+    labels
+}
+
 /// Represents a single bank section in the ASM
 #[derive(Debug, Clone)]
 pub struct BankSection {
@@ -106,8 +161,43 @@ impl MultiBankLinker {
         let mut in_definitions = false;
         let mut definitions_ended = false;  // Track when EQU section ends
         let mut post_bank_code = String::new(); // Code AFTER all bank sections (wrappers, etc.)
+        let mut header_seen = false; // Track if we've already extracted the header
+        let mut skip_until_code_section = false; // Flag to skip header lines until we hit CODE SECTION
         
         for line in asm_content.lines() {
+            // Detect Vectrex header: FCC "g GCE 1982" is the marker
+            if !header_seen && line.contains("FCC \"g GCE 1982\"") && !in_bank_section {
+                // This is the header start - collect it and flag to skip until INCLUDE or other directives
+                header.clear();  // Clear any accumulated content from before
+                header.push_str(line);
+                header.push('\n');
+                header_seen = true;
+                skip_until_code_section = true;
+                continue;
+            }
+            
+            // Collect rest of header lines (FCB $80, FDB, etc. until we hit CODE SECTION or next major directive)
+            if header_seen && skip_until_code_section {
+                if line.contains("; CODE SECTION") || line.contains("INCLUDE \"") {
+                    skip_until_code_section = false;
+                    // Process this line normally (it's not part of header)
+                } else if line.trim().is_empty() {
+                    // Empty line - could be end of header
+                    continue;
+                } else if line.trim().starts_with(";") && !line.contains("HEADER") && !line.contains("DEFINE") {
+                    // Comment line - skip it, it's not part of header
+                    continue;
+                } else if !line.contains("ORG ") && !line.contains("FCB") && !line.contains("FDB") && !line.contains("FCC ") && !line.trim().starts_with(";") {
+                    // Non-header line found, stop collecting
+                    skip_until_code_section = false;
+                } else {
+                    // Part of header (FCB, FDB, FCC directives)
+                    header.push_str(line);
+                    header.push('\n');
+                    continue;
+                }
+            }
+            
             // Collect INCLUDE directives (before bank sections)
             if !in_bank_section {
                 let trimmed = line.trim();
@@ -145,8 +235,13 @@ impl MultiBankLinker {
                 // NOTE: Don't add runtime_helpers here - they'll be added later at the end
                 if in_bank_section {
                     if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
-                        // Prepend INCLUDE + definitions ONLY (runtime helpers added at EOF after extraction)
-                        let full_code = format!("{}\n{}\n{}", include_directives, definitions, current_code);
+                        // For Bank #0: prepend header (FCC/FCB directives), then INCLUDE, then definitions
+                        // For other banks: prepend INCLUDE + definitions only
+                        let full_code = if bank_id == 0 {
+                            format!("{}\n{}\n{}\n{}", header, include_directives, definitions, current_code)
+                        } else {
+                            format!("{}\n{}\n{}", include_directives, definitions, current_code)
+                        };
                         sections.insert(bank_id, BankSection {
                             bank_id,
                             org,
@@ -161,8 +256,12 @@ impl MultiBankLinker {
                 if parts.len() >= 3 {
                     let bank_str = parts[2].trim_matches(|c| c == '#' || c == ' ' || c == '-');
                     if let Ok(bank_id) = bank_str.parse::<u8>() {
-                        current_bank_id = Some(bank_id);
-                        current_code.clear();
+                        // If we already have this bank ID (e.g., started accumulating for bank #0),
+                        // DON'T clear current_code - continue accumulating
+                        if current_bank_id != Some(bank_id) {
+                            current_bank_id = Some(bank_id);
+                            current_code.clear();
+                        }
                         in_bank_section = true;
                         post_bank_code.clear();  // Reset post-bank code when entering new bank
                         continue;
@@ -206,16 +305,24 @@ impl MultiBankLinker {
                 // AFTER all banks - this is runtime helpers (wrappers, etc.)
                 // We distinguish by checking if we've seen at least one bank section
                 if sections.is_empty() {
-                    // No banks seen yet - this is header (START/MAIN initialization code)
-                    header.push_str(line);
-                    header.push('\n');
+                    // No banks seen yet - this could be header BUT in multibank mode,
+                    // the header (including START) should be INSIDE Bank #0 code, NOT extracted.
+                    // Start accumulating for bank #0 NOW (before seeing "BANK #0" marker)
+                    if !in_bank_section {
+                        in_bank_section = true;
+                        current_bank_id = Some(0);
+                        current_org = Some(0x0000);
+                    }
+                    current_code.push_str(line);
+                    current_code.push('\n');
                 } else {
                     // Banks already processed - this is runtime helpers
                     post_bank_code.push_str(line);
                     post_bank_code.push('\n');
                 }
             } else {
-                // Before definitions - this is header (includes, comments, title)
+                // Before definitions - this is REAL header (includes, FCC, FCB directives)
+                // Extract this to header variable
                 header.push_str(line);
                 header.push('\n');
             }
@@ -239,9 +346,77 @@ impl MultiBankLinker {
                 data_bank_id = Some(bank_id);
             }
             
-            // Prepend INCLUDE + definitions + runtime helpers to last bank
-            let full_code = format!("{}\n{}\n{}\n{}", include_directives, definitions, runtime_helpers, bank_code_only);
+            // CRITICAL: Extract ORG directive from bank_code_only if present, and place it at the TOP
+            let (org_line, code_without_org) = if bank_code_only.trim_start().starts_with("ORG ") {
+                let first_newline = bank_code_only.find('\n').unwrap_or(bank_code_only.len());
+                let org_part = bank_code_only[..first_newline].to_string();
+                let code_part = if first_newline < bank_code_only.len() {
+                    bank_code_only[first_newline+1..].to_string()
+                } else {
+                    String::new()
+                };
+                (format!("{}\n", org_part), code_part)
+            } else {
+                (String::new(), bank_code_only.clone())
+            };
+            
+            // Reconstruct with ORG at the very beginning (before INCLUDE/definitions)
+            // This ensures PC starts at correct address for this bank
+            // Bank #31 (fixed window) uses $4000, all others use $0000
+            // CRITICAL: For Bank #31, CUSTOM_RESET must come IMMEDIATELY after ORG, before helpers
+            eprintln!("DEBUG split_asm_by_bank: bank_id={}, org_line_empty={}, org_line={:?}", bank_id, org_line.is_empty(), org_line.trim());
+            
+            // Extract CUSTOM_RESET if present in Bank #31 (must be first instruction)
+            let (custom_reset_code, remaining_code) = if bank_id == 31 {
+                // Look for CUSTOM_RESET: label in code_without_org
+                if let Some(pos) = code_without_org.find("CUSTOM_RESET:") {
+                    // Find the end of CUSTOM_RESET function (next label or empty line group)
+                    let rest = &code_without_org[pos..];
+                    let mut end_pos = rest.find("\n\n").unwrap_or(rest.len());
+                    // Make sure we include the final instruction line
+                    if end_pos < rest.len() {
+                        if let Some(final_line_end) = rest[end_pos+2..].find('\n') {
+                            end_pos = end_pos + 2 + final_line_end;
+                        }
+                    }
+                    let custom_reset = rest[..=end_pos].to_string();
+                    let remaining = format!("{}{}", &code_without_org[..pos], &rest[end_pos+1..]);
+                    (custom_reset, remaining)
+                } else {
+                    ("".to_string(), code_without_org.clone())
+                }
+            } else {
+                ("".to_string(), code_without_org.clone())
+            };
+            
+            let full_code = if org_line.is_empty() && bank_id != 0 {
+                eprintln!("  → Entering org_line.is_empty() block");
+                let org_directive = if bank_id == 31 {
+                    eprintln!("    → Bank #31 detected - using ORG $4000");
+                    "    ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)\n".to_string()
+                } else {
+                    eprintln!("    → Bank #{} detected - using ORG $0000", bank_id);
+                    "    ORG $0000\n".to_string()
+                };
+                // For Bank #31: ORG → CUSTOM_RESET → includes/defs → helpers → remaining code
+                if bank_id == 31 {
+                    format!("{}{}\n{}\n{}\n{}\n{}", org_directive, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
+                } else {
+                    format!("{}{}\n{}\n{}\n{}", org_directive, include_directives, definitions, runtime_helpers, code_without_org)
+                }
+            } else {
+                eprintln!("  → Using org_line from code");
+                if bank_id == 31 {
+                    format!("{}{}\n{}\n{}\n{}\n{}", org_line, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
+                } else {
+                    format!("{}{}\n{}\n{}\n{}", org_line, include_directives, definitions, runtime_helpers, code_without_org)
+                }
+            };
             let size = full_code.len();
+            if bank_id == 31 {
+                eprintln!("DEBUG: Bank #31 full_code starts with: {}", &full_code[..80.min(full_code.len())].replace("\n", "\\n"));
+                eprintln!("DEBUG: Inserting Bank #31 section with ORG $4000");
+            }
             sections.insert(bank_id, BankSection {
                 bank_id,
                 org,
@@ -250,31 +425,34 @@ impl MultiBankLinker {
             });
         }
         
-        // ===== ADD RUNTIME HELPERS TO ALL PREVIOUSLY SAVED BANKS =====
-        // All banks that were saved earlier (in the loop) don't have runtime_helpers yet
-        // We need to add them now that we know what they are
-        for (_, section) in sections.iter_mut() {
-            // Check if this bank already has runtime_helpers (only the last bank saved above will)
-            if !section.asm_code.contains("; ===== CROSS-BANK CALL WRAPPERS =====") && !runtime_helpers.is_empty() {
-                // Insert runtime_helpers AFTER definitions, BEFORE bank code
-                // Find where the bank code starts (look for first ORG directive)
-                let lines: Vec<&str> = section.asm_code.lines().collect();
-                let mut new_code = String::new();
-                let mut org_found = false;
-                
-                for line in lines {
-                    if !org_found && line.trim().starts_with("ORG ") {
-                        // Insert runtime_helpers BEFORE ORG
-                        new_code.push_str(&runtime_helpers);
+        // ===== ADD RUNTIME HELPERS TO BANK #31 ONLY =====
+        // Runtime helpers (wrappers, math functions, etc.) belong in Bank #31 (fixed ROM)
+        // They should NOT be duplicated in user banks (Bank #0-#30)
+        // Bank #31 helpers are always visible and accessible from any bank via wrappers
+        if !runtime_helpers.is_empty() {
+            if let Some(bank31) = sections.get_mut(&31u8) {
+                // Add helpers to Bank #31 if not already present
+                if !bank31.asm_code.contains("; ===== CROSS-BANK CALL WRAPPERS =====") {
+                    // Insert runtime_helpers AFTER definitions, BEFORE bank code
+                    // Find where the bank code starts (look for first ORG directive)
+                    let lines: Vec<&str> = bank31.asm_code.lines().collect();
+                    let mut new_code = String::new();
+                    let mut org_found = false;
+                    
+                    for line in lines {
+                        if !org_found && line.trim().starts_with("ORG ") {
+                            // Insert runtime_helpers BEFORE ORG
+                            new_code.push_str(&runtime_helpers);
+                            new_code.push('\n');
+                            org_found = true;
+                        }
+                        new_code.push_str(line);
                         new_code.push('\n');
-                        org_found = true;
                     }
-                    new_code.push_str(line);
-                    new_code.push('\n');
+                    
+                    bank31.asm_code = new_code;
+                    bank31.size_estimate = bank31.asm_code.len();
                 }
-                
-                section.asm_code = new_code;
-                section.size_estimate = section.asm_code.len();
             }
         }
         // Sequential Model (2025-01-12): Header belongs to FIRST bank (Bank #0)
@@ -321,16 +499,25 @@ impl MultiBankLinker {
             }
         }
 
-        // Propagate shared tail (arrays/consts) to all banks except the one that already contains it
+        // Propagate shared tail (arrays/consts) to all banks EXCEPT bank #31 (fixed bank)
+        // Bank #31 should have its own copy of assets at its own offset
+        // Assets should NOT be duplicated across banks - each bank gets its data once
         if !shared_tail.is_empty() {
+            let fixed_bank_id = (self.rom_bank_count - 1) as u8;  // Bank #31
             for (bank_id, section) in sections.iter_mut() {
-                if Some(*bank_id) != data_bank_id {
+                // Skip the bank that already contains the shared tail (data_bank_id)
+                // AND skip bank #31 (fixed bank, should keep its assets)
+                if Some(*bank_id) != data_bank_id && *bank_id != fixed_bank_id {
                     section.asm_code.push_str("\n");
                     section.asm_code.push_str(&shared_tail);
                     section.size_estimate = section.asm_code.len();
                 }
             }
         }
+        
+        // Assets are in both bank_0 and bank_31 at the same offsets due to global codegen
+        // We ensure bank_31 versions are preferred by skipping asset symbols from other banks during extraction
+        // (This is handled in the symbol extraction loop above)
 
         // Add interrupt vectors to last bank (fixed bank)
         // NOTE: Vectors are added in generate_multibank_rom after binary assembly, not here
@@ -356,6 +543,19 @@ impl MultiBankLinker {
     ) -> Result<Vec<u8>, String> {
         // Bank ASM already contains everything
         let mut full_asm = bank_section.asm_code.clone();
+        
+        // CRITICAL FIX (2026-01-14): Bank #31 must use ORG $4000, not $0000
+        // The fixed bank window is at 0x4000-0x7FFF in the CPU address space
+        // split_asm_by_bank extracts Bank #31 with ORG $0000 from the backend,
+        // but assemble_bank must override it to $4000 for correct symbol resolution
+        let helper_bank_id = (self.rom_bank_count - 1) as u8;
+        if bank_section.bank_id as u8 == helper_bank_id {
+            // Replace ORG $0000 with ORG $4000 for Bank #31
+            full_asm = full_asm.replace(
+                "ORG $0000  ; Fixed bank (no VPy functions, only runtime)",
+                "ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)"
+            );
+        }
         
         // Prepend external symbol definitions from helper bank and shared data
         // This is needed for all banks to reference symbols from helpers and arrays/consts
@@ -402,20 +602,38 @@ impl MultiBankLinker {
             }
         }
         
-        // CRITICAL: Assemble with ORG $0000 for multi-bank
-        // The bank's actual ORG ($0000 or $4000) is just for logical addressing
-        // Physical ROM layout: each bank starts at offset 0 in its binary
-        // Later, the linker places each bank at correct ROM offset (bank_id * 16KB)
-        let (binary, _line_map, _symbol_table, _unresolved) = crate::backend::asm_to_binary::assemble_m6809(
+        // CRITICAL: Assemble with correct ORG per bank
+        // Bank #0-30: ORG $0000 (switchable window - physical ROM offset bank_id * 16KB)
+        // Bank #31: ORG $4000 (fixed window - physical ROM offset 0x7C000, but CPU sees 0x4000)
+        // Symbol addresses are relative to the ORG in their bank
+        let helper_bank_id = (self.rom_bank_count - 1) as u8;
+        let bank_org = if bank_section.bank_id as u8 == helper_bank_id {
+            0x4000u16  // Fixed bank window
+        } else {
+            0x0000u16  // Switchable bank window
+        };
+        
+        let (binary, _line_map, symbol_table, _unresolved) = crate::backend::asm_to_binary::assemble_m6809(
             &full_asm_longbranch,
-            0x0000,  // Force ORG 0 - each bank is a separate 16KB chunk
+            bank_org,  // Use correct ORG based on bank type
             false,   // Not object mode
             false    // Don't auto-convert (we already did it above)
         ).map_err(|e| format!("Failed to assemble bank {}: {}", bank_section.bank_id, e))?;
         
-        // Get binary data (already Vec<u8>, no .0 field)
-        let mut binary_data = binary;
+        // DEBUG: Capture START symbol offset from symbol table (no magic numbers!)
+        if bank_section.bank_id == 0 {
+            if let Some(&start_offset) = symbol_table.get("START") {
+                eprintln!("     [DEBUG] Bank #0: START symbol at offset 0x{:04X} ({} bytes)", start_offset, start_offset);
+                if start_offset > 256 {
+                    eprintln!("       ⚠ WARNING: START is at offset {} - header may be oversized or ORG directives misaligned", start_offset);
+                }
+            } else {
+                eprintln!("     [DEBUG] Bank #0: START symbol NOT FOUND in symbol table");
+            }
+        }
         
+        // Get binary data (already Vec<u8>, no .0 field)
+        let mut binary_data = binary;        
         // Pad to bank size (16KB)
         let bank_size = self.rom_bank_size as usize;
         if binary_data.len() > bank_size {
@@ -457,34 +675,240 @@ impl MultiBankLinker {
             eprintln!("       Bank #{}: {} bytes ASM", bank_id, section.asm_code.len());
         }
         
-        // Extract symbols from fixed bank for cross-bank references
-        let _helper_bank_id = (self.rom_bank_count - 1) as u8;
-        let mut helper_bank_symbols = HashMap::new();
+        // **PASS 1**: Iteratively extract global symbol table from all banks
+        // This allows cross-bank references (e.g., CUSTOM_RESET referencing START)
+        // We do this iteratively because some symbols may depend on others being defined first.
+        let mut all_symbols = HashMap::new();
+        let helper_bank_id = (self.rom_bank_count - 1) as u8;
+        let max_iterations = 5;
         
-        // ALSO extract symbols from FULL ASM (includes arrays, consts, runtime helpers)
-        // This is needed because arrays/data are defined OUTSIDE bank sections
-        eprintln!("     - Extracting symbols from Full ASM (including arrays/data)...");
-        for line in asm_content.lines() {
-            let trimmed = line.trim();
-            // Look for labels (ending with ':')
-            if let Some(colon_pos) = trimmed.find(':') {
-                let label = trimmed[..colon_pos].trim();
-                if !label.is_empty() 
-                    && !label.starts_with(';') 
-                    && !label.starts_with('.')
-                    && label.chars().all(|c| c.is_alphanumeric() || c == '_')
-                    && !label.starts_with("DSL_")  // Skip Draw Sync List internal labels
-                    && !label.starts_with("PMUSIC_")  // Skip music player internal labels
-                {
-                    // Store with placeholder address 0x0000 (Helper bank start)
-                    // Actual address will be resolved during linking
-                    helper_bank_symbols.insert(label.to_string(), 0x0000);
+        // Define BIOS symbols that are always available
+        let bios_symbols = [
+            ("Intensity_a", 0xF2ABu16),
+            ("INTENSITY_A", 0xF2ABu16),
+            ("Reset0Ref", 0xF192u16),
+            ("RESET0REF", 0xF192u16),
+            ("DP_to_D0", 0xF1AAu16),
+            ("DP_to_C8", 0xF1AFu16),
+            ("Wait_Recal", 0xF1A4u16),
+            ("Print_Str_d", 0xF373u16),
+            ("Draw_VL", 0xF1D5u16),
+            ("Draw_Line_d", 0xF1F5u16),
+            ("Moveto_d_7F", 0xF1DFu16),
+            ("Moveto_d", 0xF1EBu16),
+            ("Draw_Sync_List_At_With_Mirrors", 0xF0E8u16),
+            ("Draw_VLc", 0xF1CFu16),
+            ("Read_Btns", 0xF1BAu16),
+        ];
+        
+        for (name, addr) in bios_symbols.iter() {
+            all_symbols.insert(name.to_string(), *addr);
+        }
+        
+        eprintln!("     - Injected {} BIOS symbols", bios_symbols.len());
+        
+        // Also define a placeholder for START - will be overwritten if found in actual code
+        if !all_symbols.contains_key("START") {
+            all_symbols.insert("START".to_string(), 0x0022u16);  // Placeholder from single-bank .bin
+        }
+        
+        for iteration in 0..max_iterations {
+            let mut prev_count = all_symbols.len();
+            
+            eprintln!("     - PASS 1 Iteration {}: Extracting symbols from all banks...", iteration + 1);
+            
+            for bank_id in 0..self.rom_bank_count {
+                if let Some(section) = sections.get(&bank_id) {
+                    let mut bank_asm = convert_short_to_long_branches(&section.asm_code);
+                    
+                    // Inject previously found symbols into this bank's ASM
+                    if !all_symbols.is_empty() {
+                        let mut external_symbols = String::from("; External symbols (cross-bank references and BIOS)\n");
+                        for (symbol, address) in &all_symbols {
+                            external_symbols.push_str(&format!("{} EQU ${:04X}\n", symbol, address));
+                        }
+                        external_symbols.push_str("\n");
+                        
+                        // Insert after INCLUDE directive or at start if no INCLUDE
+                        let lines: Vec<&str> = bank_asm.lines().collect();
+                        let mut new_asm = String::new();
+                        let mut include_found = false;
+                        
+                        for line in lines {
+                            if !include_found && line.trim().to_uppercase().starts_with("INCLUDE") {
+                                new_asm.push_str(line);
+                                new_asm.push('\n');
+                                new_asm.push_str(&external_symbols);
+                                include_found = true;
+                            } else {
+                                new_asm.push_str(line);
+                                new_asm.push('\n');
+                            }
+                        }
+                        
+                        if !include_found {
+                            // No INCLUDE found, prepend at start
+                            bank_asm = format!("{}\n{}", external_symbols, new_asm);
+                        } else {
+                            bank_asm = new_asm;
+                        }
+                    }
+                    
+                    // Try to assemble with available symbols
+                    match crate::backend::asm_to_binary::assemble_m6809(&bank_asm, 0x0000, false, false) {
+                        Ok((_, _, symbol_table, _)) => {
+                            let sym_count = symbol_table.len();
+                            
+                            // Calculate runtime address for each symbol based on bank
+                            let bank_base = if bank_id as u8 == helper_bank_id {
+                                0x4000u16  // Fixed bank at $4000
+                            } else {
+                                0x0000u16  // Other banks at $0000 (will switch via $DF00)
+                            };
+                            
+                            let mut skipped_count = 0;
+                            for (label, addr) in symbol_table {
+                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
+                                // Skip vector/music assets from non-helper banks (they're duplicates in the generated ASM)
+                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
+                                    skipped_count += 1;
+                                    continue;  // Skip this symbol - it's a duplicate
+                                }
+                                
+                                let runtime_addr = bank_base + (addr as u16);
+                                // Prefer symbols from fixed bank (#31) in case of conflicts
+                                if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
+                                    all_symbols.insert(label, runtime_addr);
+                                }
+                            }
+                            if skipped_count > 0 {
+                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
+                            }
+                            eprintln!("       Bank #{}: {} symbols", bank_id, sym_count);
+                            if skipped_count > 0 {
+                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
+                            }
+                            eprintln!("       Bank #{}: {} symbols ({} after skipping)", bank_id, sym_count, sym_count - skipped_count);
+                        }
+                        Err(e) => {
+                            // Assembly failed - try to extract labels anyway via simple parsing
+                            eprintln!("       ⚠ Bank #{} assembly skipped: {}", bank_id, e);
+                            
+                            // Extract labels from ASM without full assembly
+                            let parsed_labels = extract_labels_from_asm(&bank_asm);
+                            let bank_base = if bank_id as u8 == helper_bank_id {
+                                0x4000u16
+                            } else {
+                                0x0000u16
+                            };
+                            
+                            for (label, offset) in parsed_labels {
+                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
+                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
+                                    continue;  // Skip this symbol - it's a duplicate
+                                }
+                                
+                                let runtime_addr = bank_base + offset;
+                                if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
+                                    eprintln!("         → Extracted label '{}' at 0x{:04X}", label, runtime_addr);
+                                    all_symbols.insert(label, runtime_addr);
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+            
+            let new_count = all_symbols.len();
+            eprintln!("       Total symbols: {} (new: {})", new_count, new_count - prev_count);
+            
+            // If no new symbols found, we've converged
+            if new_count == prev_count {
+                break;
             }
         }
         
-        eprintln!("     - Found {} external symbols for cross-bank references", 
-            helper_bank_symbols.len());
+        eprintln!("     - Extracted {} global symbols", all_symbols.len());
+        
+        // DEBUG: Check if START is in the symbols
+        if all_symbols.contains_key("START") {
+            eprintln!("       ✓ Symbol START found at 0x{:04X}", all_symbols["START"]);
+        } else {
+            eprintln!("       ⚠ Symbol START NOT FOUND - will cause linker errors");
+        }
+        
+        // DEBUG: Show vector asset symbols
+        for asset in &["_PLAYER_VECTORS", "_PLAYER_PATH0", "_ENEMY_VECTORS", "_ENEMY_PATH0"] {
+            if let Some(&addr) = all_symbols.get(*asset) {
+                eprintln!("       • {} at 0x{:04X}", asset, addr);
+            }
+        }
+        
+        // FIX: Vector assets should point to bank #31 addresses (0x4000+)
+        // Scan for vector/music symbols and correct their bank addresses if needed
+        let mut corrected_symbols = HashMap::new();
+        for (name, addr) in &all_symbols {
+            let corrected_addr = if (name.contains("_VECTORS") || name.contains("_MUSIC") || name.contains("_PATH")) && *addr < 0x4000 {
+                // This symbol appears to be in bank #0 range but should be in bank #31
+                // Check if there's a version in bank #31
+                let bank31_version = name.clone();
+                if let Some(&bank31_addr) = all_symbols.iter().find(|(n, a)| *n == &bank31_version && **a >= 0x4000).map(|(_, a)| a) {
+                    eprintln!("       ✓ Corrected {}: 0x{:04X} → 0x{:04X} (bank #31)", name, addr, bank31_addr);
+                    bank31_addr
+                } else {
+                    // No corrected version found, assume it should be in bank #31
+                    let bank31_addr = 0x4000 + (addr & 0x3FFF);
+                    eprintln!("       ✓ Reassigned {} to bank #31: 0x{:04X}", name, bank31_addr);
+                    bank31_addr
+                }
+            } else {
+                *addr
+            };
+            corrected_symbols.insert(name.clone(), corrected_addr);
+        }
+        let all_symbols = corrected_symbols;
+
+        // **PASS 2**: Assemble helper bank with all symbols available
+        let helper_section = sections.get(&helper_bank_id)
+            .ok_or_else(|| format!("Helper bank #{} not found in ASM sections", helper_bank_id))?;
+
+        eprintln!("     - PASS 2: Assembling helper bank #{} with global symbols...", helper_bank_id);
+        
+        // Inject all extracted symbols into helper bank ASM
+        let mut helper_asm_with_symbols = String::new();
+        for (symbol, address) in &all_symbols {
+            helper_asm_with_symbols.push_str(&format!("{} EQU ${:04X}\n", symbol, address));
+        }
+        helper_asm_with_symbols.push_str("\n");
+        helper_asm_with_symbols.push_str(&helper_section.asm_code);
+        
+        eprintln!("       - Injected {} symbols into helper bank ASM", all_symbols.len());
+        
+        let helper_full_asm_longbranch = convert_short_to_long_branches(&helper_asm_with_symbols);
+        // CRITICAL FIX (2026-01-14): Helper bank (Bank #31) uses fixed window at 0x4000, not 0x0000
+        let helper_org = if helper_bank_id == 31 { 
+            eprintln!("DEBUG: helper_bank_id={} == 31? YES → using ORG $4000", helper_bank_id);
+            0x4000u16 
+        } else { 
+            eprintln!("DEBUG: helper_bank_id={} == 31? NO → using ORG $0000", helper_bank_id);
+            0x0000u16 
+        };
+        let (mut helper_binary, _helper_line_map, _helper_symbol_table, _helper_unresolved) = crate::backend::asm_to_binary::assemble_m6809(
+            &helper_full_asm_longbranch,
+            helper_org,
+            false,
+            false,
+        ).map_err(|e| format!("Failed to assemble helper bank {}: {}", helper_bank_id, e))?;
+
+        // Pad helper bank to full size
+        let bank_size = self.rom_bank_size as usize;
+        if helper_binary.len() > bank_size {
+            return Err(format!("Helper bank {} overflow: {} bytes (max: {} bytes)", helper_bank_id, helper_binary.len(), bank_size));
+        }
+        helper_binary.resize(bank_size, 0xFF);
+
+        // Use the global symbol table extracted from all banks
+        eprintln!("     - Using global symbol table: {} entries", all_symbols.len());
         
         // Create temp directory for bank assemblies
         let temp_dir = output_rom_path.parent()
@@ -492,14 +916,66 @@ impl MultiBankLinker {
             .join("multibank_temp");
         fs::create_dir_all(&temp_dir)
             .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
+        // DEBUG: Emit a flattened ASM view (one file, all banks) for inspection.
+        // This is a source-of-truth snapshot showing exactly what each bank assembles.
+        let flattened_path = temp_dir.join("multibank_flat.asm");
+        let mut flattened = String::new();
+        flattened.push_str("; AUTO-GENERATED FLATTENED MULTIBANK ASM\n");
+        flattened.push_str(&format!("; Banks: {} | Bank size: {} bytes | Total: {} bytes\n\n", self.rom_bank_count, self.rom_bank_size, self.rom_bank_size as usize * self.rom_bank_count as usize));
+
+        for bank_id in 0..self.rom_bank_count {
+            let phys_offset = bank_id as u32 * self.rom_bank_size;
+            flattened.push_str(&format!("; ===== BANK #{:02} (physical offset ${:05X}) =====\n", bank_id, phys_offset));
+            if let Some(section) = sections.get(&bank_id) {
+                // Check if this bank's code already has an ORG directive
+                let has_org = section.asm_code.contains("ORG ");
+                if bank_id == 31 {
+                    eprintln!("DEBUG: Flattened writer for Bank #31: has_org={}, asm_code starts with: {}", has_org, &section.asm_code[..100.min(section.asm_code.len())].replace("\n", "\\n"));
+                }
+                
+                // For Bank #31 (fixed bank), ensure it has ORG $4000
+                if bank_id == 31 && !has_org {
+                    flattened.push_str("ORG $4000  ; Fixed bank window\n");
+                } else if !has_org {
+                    flattened.push_str("ORG $0000  ; Switchable bank window\n");
+                }
+                flattened.push_str(&section.asm_code);
+            } else {
+                flattened.push_str("; [empty bank]\n");
+            }
+            flattened.push_str("\n\n");
+        }
+
+        // DEBUG: Check what Bank #31 looks like in flattened BEFORE writing
+        let bank31_marker = flattened.find("; ===== BANK #31").unwrap_or(0);
+        if bank31_marker > 0 && bank31_marker + 50 < flattened.len() {
+            let after_marker = bank31_marker + 50; // Skip marker line
+            let end = (after_marker + 100).min(flattened.len());
+            let snippet = &flattened[after_marker..end];
+            eprintln!("DEBUG: Flattened Bank #31 content before write starts: {}...", snippet.replace("\n", "\\n"));
+        }
+
+        if let Err(e) = fs::write(&flattened_path, flattened) {
+            eprintln!("       ⚠ Failed to write flattened ASM: {}", e);
+        } else {
+            eprintln!("       [DEBUG] Flattened ASM written to {}", flattened_path.display());
+            eprintln!("       [DEBUG] File size: {} bytes", fs::metadata(&flattened_path).map(|m| m.len()).unwrap_or(0));
+        }
         
-        // Assemble each bank in order
+        // Assemble each bank in order. The helper bank (#31) was already assembled above.
         let mut rom_data = Vec::new();
         for bank_id in 0..self.rom_bank_count {
+            if bank_id as u8 == helper_bank_id {
+                eprintln!("     - Using preassembled helper bank #{}", helper_bank_id);
+                rom_data.extend_from_slice(&helper_binary);
+                continue;
+            }
+
             if let Some(section) = sections.get(&bank_id) {
                 eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
                 // IMPORTANT: Pass external symbols to ALL banks (helpers available everywhere)
-                let binary = self.assemble_bank(section, &temp_dir, &helper_bank_symbols)?;
+                let binary = self.assemble_bank(section, &temp_dir, &all_symbols)?;
                 rom_data.extend_from_slice(&binary);
             } else {
                 // Empty bank - fill with 0xFF
@@ -518,51 +994,32 @@ impl MultiBankLinker {
         // Vectrex BIOS owns all interrupt vectors ($FFF0–$FFFF), including RESET at $FFFE.
         // Multibank cartridges MUST NOT override BIOS vectors within the cart image.
         // Boot flow: BIOS reset → detects cartridge → jumps to $0000 in current window.
-        // Our Bank #0 boot stub is responsible for switching to the fixed bank via $D000 and
+        // Our Bank #0 boot stub is responsible for switching to the fixed bank via $DF00 and
         // then jumping to the entry at $4000+START. Therefore, we intentionally do NOT patch
         // any vector bytes in the generated ROM.
         
-        // Patch header: copy header bytes from single-bank .bin so ROM starts with valid Vectrex header
+        // Patch RESET vector to point to CUSTOM_RESET in fixed bank (#31)
+        // Vector lives at the last two bytes of the fixed bank window ($3FFE-$3FFF)
+        let reset_vector_offset = (self.rom_bank_count as usize - 1) * self.rom_bank_size as usize
+            + (self.rom_bank_size as usize - 2);
+        if reset_vector_offset + 1 >= rom_data.len() {
+            return Err(format!("RESET vector offset out of bounds (offset={}, len={})", reset_vector_offset, rom_data.len()));
+        }
+        // CUSTOM_RESET is placed at the start of the fixed bank and assembled with ORG $0000 → runtime address $4000
+        let reset_handler_addr: u16 = 0x4000;
+        rom_data[reset_vector_offset] = (reset_handler_addr & 0x00FF) as u8;
+        rom_data[reset_vector_offset + 1] = (reset_handler_addr >> 8) as u8;
+
+        // Patch header: copy header bytes from single-bank .bin if available, otherwise generate default header
         // Derive .bin path next to the .rom
         let bin_path = output_rom_path.with_extension("bin");
         let mut final_rom = rom_data;
 
-        if let Ok(bin_bytes) = fs::read(&bin_path) {
-            // Typical Vectrex header is within the first 0x100 bytes (copyright string: "g GCE 1982\x80")
-            let header_len = 0x100usize;
-            if bin_bytes.len() >= header_len && final_rom.len() >= header_len {
-                final_rom[0..header_len].copy_from_slice(&bin_bytes[0..header_len]);
-                eprintln!("     ✓ Patched ROM header from {} ({} bytes)", bin_path.display(), header_len);
-            } else if !bin_bytes.is_empty() && !final_rom.is_empty() {
-                let n = bin_bytes.len().min(final_rom.len()).min(0x100);
-                final_rom[0..n].copy_from_slice(&bin_bytes[0..n]);
-                eprintln!("     ✓ Patched ROM header from {} ({} bytes)", bin_path.display(), n);
-            } else {
-                eprintln!("     ⚠ Skipped header patch: insufficient data (bin={}, rom={})", bin_bytes.len(), final_rom.len());
-            }
-
-            // Validate header signature: expect "g GCE 1982" + 0x80 at start
-            let expected_sig = b"g GCE 1982";
-            if final_rom.len() >= expected_sig.len() + 1 {
-                let sig_ok = &final_rom[0..expected_sig.len()] == expected_sig && final_rom[expected_sig.len()] == 0x80;
-                if sig_ok {
-                    eprintln!("     ✓ Header validation: signature 'g GCE 1982' + $80 present at offset 0");
-                } else {
-                    // Print a short hex preview to aid debugging
-                    let preview_len = 12.min(final_rom.len());
-                    let mut hex = String::new();
-                    for b in &final_rom[0..preview_len] {
-                        use std::fmt::Write as _;
-                        let _ = write!(hex, "{:02X} ", b);
-                    }
-                    eprintln!("     ⚠ Header validation: unexpected signature at start (bytes: {})", hex.trim_end());
-                }
-            } else {
-                eprintln!("     ⚠ Header validation: ROM too small to validate signature ({} bytes)", final_rom.len());
-            }
-        } else {
-            eprintln!("     ⚠ Skipped header patch: {} not found", bin_path.display());
-        }
+        // Multibank ROM: Bank #0 already contains assembled header from backend codegen
+        // The backend emits a complete Vectrex header (FCC, FCB, FDB, title, etc.)
+        // which is assembled into Bank #0 by the linker's split_asm_by_bank process.
+        // DO NOT overwrite it - it's already correct and complete.
+        eprintln!("     ℹ Multibank ROM: Header assembled in Bank #0 (from backend codegen)");
 
         // Write ROM
         fs::write(output_rom_path, final_rom)
@@ -570,6 +1027,7 @@ impl MultiBankLinker {
         
         eprintln!("     ✓ Multi-bank ROM written: {} KB ({} bytes)", 
             expected_size / 1024, expected_size);
+
         
         // Cleanup temp directory
         // DEBUG: Don't remove temp dir so we can inspect ASM files

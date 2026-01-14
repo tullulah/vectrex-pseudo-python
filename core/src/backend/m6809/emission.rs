@@ -127,7 +127,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("J1B1_BUILTIN:\n");
     out.push_str("    LDA $C811      ; Read transition bits (Vec_Button_1_1)\n");
     out.push_str("    ANDA #$01      ; Test bit 0 (Button 1)\n");
-    out.push_str("    BEQ .J1B1_OFF\n");
+    out.push_str("    LBEQ .J1B1_OFF ; Long branch (helpers may be >127 bytes away)\n");
     out.push_str("    LDD #1         ; Return pressed (rising edge)\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B1_OFF:\n");
@@ -137,7 +137,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("J1B2_BUILTIN:\n");
     out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$02      ; Test bit 1 (Button 2)\n");
-    out.push_str("    BEQ .J1B2_OFF\n");
+    out.push_str("    LBEQ .J1B2_OFF ; Long branch\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B2_OFF:\n");
@@ -147,7 +147,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("J1B3_BUILTIN:\n");
     out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$04      ; Test bit 2 (Button 3)\n");
-    out.push_str("    BEQ .J1B3_OFF\n");
+    out.push_str("    LBEQ .J1B3_OFF ; Long branch\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B3_OFF:\n");
@@ -157,7 +157,7 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
     out.push_str("J1B4_BUILTIN:\n");
     out.push_str("    LDA $C811\n");
     out.push_str("    ANDA #$08      ; Test bit 3 (Button 4)\n");
-    out.push_str("    BEQ .J1B4_OFF\n");
+    out.push_str("    LBEQ .J1B4_OFF ; Long branch\n");
     out.push_str("    LDD #1\n");
     out.push_str("    RTS\n");
     out.push_str(".J1B4_OFF:\n");
@@ -182,9 +182,24 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
         out.push_str("VECTREX_DEBUG_DRAW:\n    JSR DP_to_C8\n    LDU #DEBUG_DRAW_LIST\n    LDA #$40\n    JSR Intensity_a\n    JSR Draw_VL\n    RTS\nDEBUG_DRAW_LIST:\n    FCB $80,$40\n");
     }
     if opts.per_frame_silence {
-        out.push_str("VECTREX_SILENCE:\n    LDA #0\n    STA $D001\n    CLR $D000\n    LDA #1\n    STA $D001\n    CLR $D000\n    LDA #2\n    STA $D001\n    CLR $D000\n    LDA #3\n    STA $D001\n    CLR $D000\n    LDA #4\n    STA $D001\n    CLR $D000\n    LDA #5\n    STA $D001\n    CLR $D000\n    LDA #6\n    STA $D001\n    CLR $D000\n    LDA #7\n    STA $D001\n    LDA #$3F\n    STA $D000\n    LDA #8\n    STA $D001\n    CLR $D000\n    LDA #9\n    STA $D001\n    CLR $D000\n    LDA #10\n    STA $D001\n    CLR $D000\n    RTS\n");
+        // VECTREX_SILENCE: Silence all PSG channels using BIOS Sound_Byte
+        // Sound_Byte at $F256 - signature: A=register, B=value
+        // Channels A/B/C amplitude registers: 8, 9, 10 - set to 0 for silence
+        out.push_str("VECTREX_SILENCE:\n");
+        out.push_str("    LDA #8        ; Channel A amplitude register\n");
+        out.push_str("    LDB #0        ; Volume = 0 (silent)\n");
+        out.push_str("    JSR $F256     ; Sound_Byte (BIOS)\n");
+        out.push_str("    LDA #9        ; Channel B amplitude register\n");
+        out.push_str("    LDB #0        ; Volume = 0 (silent)\n");
+        out.push_str("    JSR $F256     ; Sound_Byte (BIOS)\n");
+        out.push_str("    LDA #10       ; Channel C amplitude register\n");
+        out.push_str("    LDB #0        ; Volume = 0 (silent)\n");
+        out.push_str("    JSR $F256     ; Sound_Byte (BIOS)\n");
+        out.push_str("    RTS\n");
     }
-    if w.contains("VECTREX_PRINT_TEXT") {
+    // Check for both direct usage and wrapper usage (multibank)
+    // In multibank mode, always emit if bank_config exists (wrappers may reference it)
+    if w.contains("VECTREX_PRINT_TEXT") || w.contains("VECTREX_PRINT_TEXT_BANK_WRAPPER") || opts.bank_config.is_some() {
         let start_line = out.lines().count() + 1;
         let function_code = "VECTREX_PRINT_TEXT:\n    ; CRITICAL: Print_Str_d requires DP=$D0 and signature is (Y, X, string)\n    ; VPy signature: PRINT_TEXT(x, y, string) -> args (ARG0=x, ARG1=y, ARG2=string)\n    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDU VAR_ARG2   ; string pointer (ARG2 = third param)\n    LDA VAR_ARG1+1 ; Y (ARG1 = second param)\n    LDB VAR_ARG0+1 ; X (ARG0 = first param)\n    JSR Print_Str_d\n    JSR $F1AF      ; DP_to_C8 (restore before return - CRITICAL for TMPPTR access)\n    RTS\n";
         out.push_str(function_code);
@@ -244,7 +259,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             "; Draw from current (VCUR_X,VCUR_Y) to new (x,y) provided in low bytes VAR_ARG0/1.\n; Semántica: igual a MOVE_TO seguido de línea, pero preserva origen previo como punto inicial.\n; Deltas pueden ser ±127 (hardware Vectrex soporta rango completo).\nVECTREX_DRAW_TO:\n    ; Cargar destino (x,y)\n    LDA VAR_ARG0+1  ; Xdest en A temporalmente\n    STA VLINE_DX    ; reutilizar buffer temporal (bajo) para Xdest\n    LDA VAR_ARG1+1  ; Ydest en A\n    STA VLINE_DY    ; reutilizar buffer temporal para Ydest\n    ; Calcular dx = Xdest - VCUR_X\n    LDA VLINE_DX\n    SUBA VCUR_X\n    STA VLINE_DX\n    ; Calcular dy = Ydest - VCUR_Y\n    LDA VLINE_DY\n    SUBA VCUR_Y\n    STA VLINE_DY\n    ; No clamping needed - signed byte arithmetic handles ±127 correctly\n    ; Mover haz al origen previo (VCUR_Y en A, VCUR_X en B)\n    LDA VCUR_Y\n    LDB VCUR_X\n    JSR Moveto_d\n    ; Dibujar línea usando deltas (A=dy, B=dx)\n    LDA VLINE_DY\n    LDB VLINE_DX\n    JSR Draw_Line_d\n    ; Actualizar posición actual al destino exacto original\n    LDA VAR_ARG0+1\n    STA VCUR_X\n    LDA VAR_ARG1+1\n    STA VCUR_Y\n    RTS\n"
         );
     }
-    if w.contains("DRAW_LINE_WRAPPER") {
+    // Check for both direct usage and wrapper usage (multibank)
+    // In multibank mode, always emit if bank_config exists (wrappers may reference it)
+    if w.contains("DRAW_LINE_WRAPPER") || w.contains("DRAW_LINE_WRAPPER_BANK_WRAPPER") || opts.bank_config.is_some() {
         // Header and setup
         out.push_str("; DRAW_LINE unified wrapper - handles 16-bit signed coordinates\n");
         out.push_str("; Args: (x0,y0,x1,y1,intensity) as 16-bit words\n");
@@ -403,7 +420,9 @@ pub fn emit_builtin_helpers(out: &mut String, usage: &RuntimeUsage, opts: &Codeg
             out.push_str("VECTREX_SET_ORIGIN:\n    JSR Reset0Ref\n    RTS\n");
         }
     }
-    if w.contains("VECTREX_SET_INTENSITY") {
+    // Check for both direct usage and wrapper usage (multibank)
+    // In multibank mode, always emit if bank_config exists (wrappers may reference it)
+    if w.contains("VECTREX_SET_INTENSITY") || w.contains("VECTREX_SET_INTENSITY_BANK_WRAPPER") || opts.bank_config.is_some() {
     out.push_str("VECTREX_SET_INTENSITY:\n    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n    LDA #$98       ; VIA_cntl = $98 (DAC mode)\n    STA >$D00C     ; VIA_cntl\n    LDA #$D0\n    TFR A,DP       ; Set Direct Page to $D0 for BIOS\n    LDA VAR_ARG0+1\n    JSR __Intensity_a\n    RTS\n");
     }
     if w.contains("SETUP_DRAW_COMMON") {
@@ -885,7 +904,7 @@ sfx_doframe:
         DSL_W1:\n\
         LDA VIA_int_flags\n\
         ANDA #$40\n\
-        BEQ DSL_W1\n\
+        LBEQ DSL_W1             ; Long branch (helpers may be far)\n\
         ; Loop de dibujo\n\
         DSL_LOOP:\n\
         LDA ,X+                 ; Read flag\n\

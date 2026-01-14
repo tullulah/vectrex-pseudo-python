@@ -3,7 +3,7 @@ use crate::target::{info, CpuArch, Target};
 use std::collections::{HashSet, HashMap};
 use std::cell::RefCell;
 
-use crate::struct_layout::{StructRegistry, build_struct_registry, StructLayout};
+use crate::struct_layout::{StructRegistry, build_struct_registry};
 
 // ---------------- Diagnostics (S8) ----------------
 // Canal estructurado para warnings (y pronto errores S9).

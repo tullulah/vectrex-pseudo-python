@@ -166,7 +166,7 @@ fn parse_flags(flags_str: &str) -> u32 {
 /// Build symbol table from sections
 /// 
 /// Scans all sections for labels (exports) and external references (imports)
-pub fn build_symbol_table(sections: &[Section], asm: &str) -> Result<SymbolTable, String> {
+pub fn build_symbol_table(_sections: &[Section], asm: &str) -> Result<SymbolTable, String> {
     let mut exports = Vec::new();
     let mut imports = Vec::new();
     let mut seen_exports = HashMap::new();
@@ -294,7 +294,7 @@ fn estimate_bss_size(lines: &[String]) -> usize {
 /// 
 /// Scans for references to external symbols that need patching during linking
 pub fn collect_relocations(
-    sections: &[Section],
+    _sections: &[Section],
     symbols: &SymbolTable,
     asm: &str
 ) -> Result<Vec<Relocation>, String> {

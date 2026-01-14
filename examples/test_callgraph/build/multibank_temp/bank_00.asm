@@ -1,69 +1,152 @@
+    FCC "g GCE 1982"
+    FCB $80
+    FDB music1
+    FCB $F8
+    FCB $50
+    FCB $20
+    FCB $BB
+    FCC "CALL GRAPH TEST"
+    FCB $80
+    FCB 0
+; CODE SECTION
+;***************************************************************************
+
+
     INCLUDE "VECTREX.I"
 ; External symbols (helpers and shared data)
-DSWM_W2 EQU $0000
-DSWM_NEXT_NO_NEGATE_X EQU $0000
-_PLAYER_PATH0 EQU $0000
-Draw_Sync_List_At_With_Mirrors EQU $0000
-DSWM_NEXT_NO_NEGATE_Y EQU $0000
-DSWM_NO_NEGATE_X EQU $0000
-IF_NEXT_9 EQU $0000
-CT_14 EQU $0000
-DSWM_NO_NEGATE_DY EQU $0000
-J1B2_BUILTIN EQU $0000
-__Reset0Ref EQU $0000
-J1B1_BUILTIN EQU $0000
-UPDATE_ENEMIES EQU $0000
-CE_15 EQU $0000
-J1B3_BUILTIN EQU $0000
-DSWM_LOOP EQU $0000
-DRAW_ALL EQU $0000
-CT_6 EQU $0000
-__Draw_Line_d EQU $0000
-J1B4_BUILTIN EQU $0000
-__Moveto_d EQU $0000
-DSWM_W3 EQU $0000
-VECTREX_SET_INTENSITY EQU $0000
-CE_11 EQU $0000
-DSWM_NEXT_PATH EQU $0000
-UPDATE_PLAYER EQU $0000
-DSWM_NEXT_USE_OVERRIDE EQU $0000
-IF_NEXT_13 EQU $0000
-START EQU $0000
-DSWM_NO_NEGATE_DX EQU $0000
-CT_10 EQU $0000
-CE_3 EQU $0000
-DSWM_W1 EQU $0000
-CT_2 EQU $0000
-CE_7 EQU $0000
-J1X_BUILTIN EQU $0000
-_ENEMY_VECTORS EQU $0000
-_PLAYER_VECTORS EQU $0000
-IF_NEXT_5 EQU $0000
-DSWM_NO_NEGATE_Y EQU $0000
-IF_END_8 EQU $0000
-MAIN EQU $0000
-__Intensity_a EQU $0000
-DRAW_ENEMIES EQU $0000
-DSWM_SET_INTENSITY EQU $0000
-DSWM_DONE EQU $0000
-LOOP_BODY EQU $0000
-DSWM_USE_OVERRIDE EQU $0000
-CHECK_INPUT EQU $0000
-J1Y_BUILTIN EQU $0000
-IF_NEXT_1 EQU $0000
-Draw_Sync_List EQU $0000
-DSWM_NEXT_SET_INTENSITY EQU $0000
-IF_END_12 EQU $0000
-IF_END_0 EQU $0000
-DRAW_PLAYER EQU $0000
-IF_END_4 EQU $0000
-_ENEMY_PATH0 EQU $0000
-MOVE_PLAYER EQU $0000
+Moveto_d EQU $F1EB
+CT_11 EQU $024B
+Draw_Sync_List_At_With_Mirrors EQU $484E
+DCR_DELTA_TABLE EQU $4A91
+DRAW_CIRCLE_RUNTIME_BANK_WRAPPER EQU $4074
+IF_END_9 EQU $0261
+MAIN EQU $0060
+DSWM_LOOP EQU $48C3
+JSR $F1AF  ; DP_to_C8 EQU $0086
+DEBUG_LABEL_A EQU $00D4
+DLW_NEED_SEG2 EQU $46DD
+DCR_dy_half EQU $4A1F
+LDA #$01     ; CRITICAL EQU $0064
+DSL_LOOP EQU $479F
+IF_NEXT_2 EQU $0191
+JSR $F1BA  ; Read_Btns EQU $0084
+DCR_dy_neg_half EQU $4A27
+DSWM_W1 EQU $48BA
+DLW_SEG1_DY_READY EQU $4695
+DRAW_LINE_WRAPPER_BANK_WRAPPER EQU $4057
+DSWM_NEXT_NO_NEGATE_X EQU $4939
+Wait_Recal EQU $F1A4
+IF_END_5 EQU $01E7
+IF_END_1 EQU $0191
+DSL_W3 EQU $483E
+DLW_SEG2_DX_CHECK_NEG EQU $4705
+J1B3_BUILTIN.J1B3_OFF EQU $460B
+DLW_SEG2_DY_POS EQU $46EE
+J1B1_BUILTIN.J1B1_OFF EQU $45E9
+CE_16 EQU $0281
+DSWM_NEXT_PATH EQU $490E
+DCR_dy_done EQU $4A36
+VECTREX_PRINT_TEXT EQU $4620
+IF_NEXT_6 EQU $01E7
+DEBUG_SKIP_DATA_0 EQU $00D7
+_PLAYER_PATH0 EQU $4583
+Draw_VL EQU $F1D5
+IF_NEXT_14 EQU $0293
+LOOP_BODY EQU $007E
+DCR_dx_done EQU $4A7A
+_PLAYER_VECTORS EQU $4580
+DSWM_NEXT_NO_NEGATE_Y EQU $492C
+Intensity_a EQU $F2AB
+J1B4_BUILTIN EQU $460F
+__Moveto_d EQU $4742
+CT_15 EQU $027D
+_ENEMY_PATH0 EQU $4595
+DCR_dx_half EQU $4A63
+VECTREX_SET_INTENSITY EQU $472A
+DSL_NEXT_PATH EQU $47DD
+DP_to_C8 EQU $F1AF
+DSWM_NEXT_USE_OVERRIDE EQU $491E
+DLW_SEG1_DX_READY EQU $46B8
+J1Y_BUILTIN EQU $45C7
+MOVE_PLAYER EQU $0135
+J1B2_BUILTIN.J1B2_OFF EQU $45FA
+DLW_SEG2_DX_DONE EQU $4716
+J1B1_BUILTIN EQU $45DC
+DCR_LOOP EQU $49E8
+CT_3 EQU $017B
+Reset0Ref EQU $F192
+Draw_VLc EQU $F1CF
+DSWM_NO_NEGATE_Y EQU $4869
+DRAW_LINE_WRAPPER EQU $464B
+DRAW_PLAYER EQU $029D
+DRAW_ENEMIES EQU $02CB
+JSR Wait_Recal  ; CRITICAL EQU $0080
+VECTREX_PRINT_TEXT_BANK_WRAPPER EQU $401D
+Draw_Line_d EQU $F1F5
+_ENEMY_VECTORS EQU $4592
+Print_Str_d EQU $F373
+DLW_DONE EQU $4725
+UPDATE_ENEMIES EQU $0139
+INTENSITY_A EQU $F2AB
+DRAW_CIRCLE_RUNTIME EQU $4999
+Read_Btns EQU $F1BA
+CE_8 EQU $01D5
+DSWM_DONE EQU $4998
+DCR_intensity_5F EQU $49CA
+DSL_W1 EQU $4796
+IF_END_13 EQU $0293
+DLW_SEG1_DY_NO_CLAMP EQU $4692
+__Draw_Line_d EQU $4747
+DSL_DONE EQU $484D
+DLW_SEG1_DY_LO EQU $4685
+DLW_SEG2_DX_NO_REMAIN EQU $4713
+J1B2_BUILTIN EQU $45ED
+DSWM_NO_NEGATE_DX EQU $48E5
+__Intensity_a EQU $473A
+DCR_dx_zero EQU $4A5D
+J1B3_BUILTIN EQU $45FE
+DLW_SEG2_DY_DONE EQU $46F1
+Draw_Sync_List_At_With_Mirrors_BANK_WRAPPER EQU $4000
+J1X_BUILTIN EQU $45B2
+CHECK_INPUT EQU $0131
+CE_4 EQU $017F
+START EQU $0022
+DCR_dy_pos EQU $4A33
+DP_to_D0 EQU $F1AA
+CT_7 EQU $01D1
+DSL_W2 EQU $47CE
+UPDATE_PLAYER EQU $0129
+DLW_SEG1_DX_NO_CLAMP EQU $46B5
+DSWM_SET_INTENSITY EQU $485C
+Draw_Sync_List EQU $474C
+DRAW_ALL EQU $0295
+CE_12 EQU $024F
+VECTREX_DEBUG_PRINT EQU $4639
+J1B4_BUILTIN.J1B4_OFF EQU $461C
+DSWM_NO_NEGATE_DY EQU $48DB
+DSWM_NO_NEGATE_X EQU $4876
+DCR_dy_zero EQU $4A19
+CLR $C823    ; CRITICAL EQU $0062
+DLW_SEG1_DX_LO EQU $46A8
+__Reset0Ref EQU $473F
+DSWM_W2 EQU $48FF
+DCR_after_intensity EQU $49CD
+DSWM_W3 EQU $4989
+CUSTOM_RESET EQU $45A7
+RESET0REF EQU $F192
+DCR_dx_neg_half EQU $4A6B
+DSWM_USE_OVERRIDE EQU $485A
+Moveto_d_7F EQU $F1DF
+DCR_dx_pos EQU $4A77
+VECTREX_SET_INTENSITY_BANK_WRAPPER EQU $403A
+DSWM_NEXT_SET_INTENSITY EQU $4920
+JSR $F1AA  ; DP_to_D0 EQU $0082
+IF_NEXT_10 EQU $0261
 
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 48 bytes
+; Total RAM used: 73 bytes
 RESULT               EQU $C880+$01   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$03   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$05   ; Left operand temp 2 (for nested operations) (2 bytes)
@@ -80,45 +163,32 @@ DRAW_VEC_Y           EQU $C880+$16   ; Y position offset for vector drawing (1 b
 MIRROR_X             EQU $C880+$17   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
 MIRROR_Y             EQU $C880+$18   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
 DRAW_VEC_INTENSITY   EQU $C880+$19   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-VAR_ENEMY1_X         EQU $C880+$1A   ; User variable (2 bytes)
-VAR_ENEMY1_Y         EQU $C880+$1C   ; User variable (2 bytes)
-VAR_ENEMY2_X         EQU $C880+$1E   ; User variable (2 bytes)
-VAR_ENEMY2_Y         EQU $C880+$20   ; User variable (2 bytes)
-VAR_ENEMY3_X         EQU $C880+$22   ; User variable (2 bytes)
-VAR_ENEMY3_Y         EQU $C880+$24   ; User variable (2 bytes)
-VAR_FRAME_COUNT      EQU $C880+$26   ; User variable (2 bytes)
-VAR_ARG0             EQU $C880+$28   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$2A   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$2C   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$2E   ; Function argument 3 (2 bytes)
+VLINE_DX_16          EQU $C880+$1A   ; x1-x0 (16-bit) for line drawing (2 bytes)
+VLINE_DY_16          EQU $C880+$1C   ; y1-y0 (16-bit) for line drawing (2 bytes)
+VLINE_DX             EQU $C880+$1E   ; Clamped dx (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$1F   ; Clamped dy (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$20   ; Remaining dy for segment 2 (16-bit) (2 bytes)
+VLINE_DX_REMAINING   EQU $C880+$22   ; Remaining dx for segment 2 (16-bit) (2 bytes)
+VLINE_STEPS          EQU $C880+$24   ; Line drawing step counter (1 bytes)
+VLINE_LIST           EQU $C880+$25   ; 2-byte vector list (Y|endbit, X) (2 bytes)
+DRAW_CIRCLE_XC       EQU $C880+$27   ; Circle center X (byte) (1 bytes)
+DRAW_CIRCLE_YC       EQU $C880+$28   ; Circle center Y (byte) (1 bytes)
+DRAW_CIRCLE_DIAM     EQU $C880+$29   ; Circle diameter (byte) (1 bytes)
+DRAW_CIRCLE_INTENSITY EQU $C880+$2A   ; Circle intensity (byte) (1 bytes)
+DRAW_CIRCLE_TEMP     EQU $C880+$2B   ; Circle drawing temporaries (radius=2, xc=2, yc=2, spare=2) (8 bytes)
+VAR_ENEMY1_X         EQU $C880+$33   ; User variable (2 bytes)
+VAR_ENEMY1_Y         EQU $C880+$35   ; User variable (2 bytes)
+VAR_ENEMY2_X         EQU $C880+$37   ; User variable (2 bytes)
+VAR_ENEMY2_Y         EQU $C880+$39   ; User variable (2 bytes)
+VAR_ENEMY3_X         EQU $C880+$3B   ; User variable (2 bytes)
+VAR_ENEMY3_Y         EQU $C880+$3D   ; User variable (2 bytes)
+VAR_FRAME_COUNT      EQU $C880+$3F   ; User variable (2 bytes)
+VAR_ARG0             EQU $C880+$41   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$43   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$45   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$47   ; Function argument 3 (2 bytes)
 CURRENT_ROM_BANK     EQU $C880   ; Current ROM bank tracker (1 byte, FIXED at first RAM byte)
 
-
-
-; ================================================
-; --- Motorola 6809 backend (Vectrex) title='Call Graph Test' origin=$0000 ---
-        ORG $0000
-;***************************************************************************
-; DEFINE SECTION
-;***************************************************************************
-
-;***************************************************************************
-; HEADER SECTION
-;***************************************************************************
-    FCC "g GCE 1982"
-    FCB $80
-    FDB music1
-    FCB $F8
-    FCB $50
-    FCB $20
-    FCB $BB
-    FCC "CALL GRAPH TEST"
-    FCB $80
-    FCB 0
-
-;***************************************************************************
-; CODE SECTION
-;***************************************************************************
 
 
 ;**** CONST DECLARATIONS (NUMBER-ONLY) ****
@@ -199,9 +269,7 @@ MAIN:
 
 
 ; ================================================
-
-    ORG $0000  ; Sequential bank model
-
+; ================================================
     ; VPy_LINE:24
 LOOP_BODY:
     LEAS -2,S ; allocate locals
@@ -241,13 +309,31 @@ LOOP_BODY:
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:31
-    JSR UPDATE_PLAYER
+    ; VPy_LINE:30
+    LDD 0 ,S
+    STD RESULT
+; NATIVE_CALL: DEBUG_PRINT(a) at line 30
+    LDD RESULT
+    STA $C002
+    STB $C000
+    LDA #$FE
+    STA $C001
+    LDX #DEBUG_LABEL_A
+    STX $C004
+    LBRA DEBUG_SKIP_DATA_0
+DEBUG_LABEL_A:
+    FCC "a"
+    FCB $00
+DEBUG_SKIP_DATA_0:
+    LDD #0
+    STD RESULT
     ; VPy_LINE:32
-    JSR UPDATE_ENEMIES
+    JSR UPDATE_PLAYER
     ; VPy_LINE:33
-    JSR DRAW_ALL
+    JSR UPDATE_ENEMIES
     ; VPy_LINE:34
+    JSR DRAW_ALL
+    ; VPy_LINE:35
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -264,7 +350,7 @@ LOOP_BODY:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:35
+    ; VPy_LINE:36
     LDD VAR_FRAME_COUNT
     STD RESULT
     LDD RESULT
@@ -286,83 +372,83 @@ LOOP_BODY:
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:39
+    ; VPy_LINE:40
 UPDATE_PLAYER: ; function
 ; --- function update_player ---
-    ; VPy_LINE:41
-    JSR CHECK_INPUT
     ; VPy_LINE:42
+    JSR CHECK_INPUT
+    ; VPy_LINE:43
     JSR MOVE_PLAYER
     RTS
 
-    ; VPy_LINE:44
+    ; VPy_LINE:45
 CHECK_INPUT: ; function
 ; --- function check_input ---
-    ; VPy_LINE:46
+    ; VPy_LINE:47
     ; pass (no-op)
     RTS
 
-    ; VPy_LINE:48
+    ; VPy_LINE:49
 MOVE_PLAYER: ; function
 ; --- function move_player ---
-    ; VPy_LINE:50
+    ; VPy_LINE:51
     ; pass (no-op)
     RTS
 
-    ; VPy_LINE:52
+    ; VPy_LINE:53
 UPDATE_ENEMIES: ; function
 ; --- function update_enemies ---
-    ; VPy_LINE:54
-    LDD VAR_ENEMY1_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_ENEMY1_X
-    STU TMPPTR
-    STX ,U
     ; VPy_LINE:55
     LDD VAR_ENEMY1_X
     STD RESULT
     LDD RESULT
     STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_ENEMY1_X
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:56
+    LDD VAR_ENEMY1_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
     LDD #100
     STD RESULT
     LDD RESULT
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    LBGT CT_2
+    LBGT CT_3
     LDD #0
     STD RESULT
-    LBRA CE_3
-CT_2:
+    LBRA CE_4
+CT_3:
     LDD #1
     STD RESULT
-CE_3:
+CE_4:
     LDD RESULT
-    LBEQ IF_NEXT_1
-    ; VPy_LINE:56
+    LBEQ IF_NEXT_2
+    ; VPy_LINE:57
     LDD #-100
     STD RESULT
     LDX RESULT
     LDU #VAR_ENEMY1_X
     STU TMPPTR
     STX ,U
-    LBRA IF_END_0
-IF_NEXT_1:
-IF_END_0:
-    ; VPy_LINE:59
+    LBRA IF_END_1
+IF_NEXT_2:
+IF_END_1:
+    ; VPy_LINE:60
     LDD VAR_ENEMY2_Y
     STD RESULT
     LDD RESULT
@@ -381,7 +467,7 @@ IF_END_0:
     LDU #VAR_ENEMY2_Y
     STU TMPPTR
     STX ,U
-    ; VPy_LINE:60
+    ; VPy_LINE:61
     LDD VAR_ENEMY2_Y
     STD RESULT
     LDD RESULT
@@ -392,27 +478,27 @@ IF_END_0:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    LBGT CT_6
+    LBGT CT_7
     LDD #0
     STD RESULT
-    LBRA CE_7
-CT_6:
+    LBRA CE_8
+CT_7:
     LDD #1
     STD RESULT
-CE_7:
+CE_8:
     LDD RESULT
-    LBEQ IF_NEXT_5
-    ; VPy_LINE:61
+    LBEQ IF_NEXT_6
+    ; VPy_LINE:62
     LDD #-100
     STD RESULT
     LDX RESULT
     LDU #VAR_ENEMY2_Y
     STU TMPPTR
     STX ,U
-    LBRA IF_END_4
-IF_NEXT_5:
-IF_END_4:
-    ; VPy_LINE:64
+    LBRA IF_END_5
+IF_NEXT_6:
+IF_END_5:
+    ; VPy_LINE:65
     LDD VAR_ENEMY3_X
     STD RESULT
     LDD RESULT
@@ -429,28 +515,28 @@ IF_END_4:
     STD RESULT
     LDX RESULT
     LDU #VAR_ENEMY3_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:65
-    LDD VAR_ENEMY3_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_ENEMY3_Y
     STU TMPPTR
     STX ,U
     ; VPy_LINE:66
+    LDD VAR_ENEMY3_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_ENEMY3_Y
+    STU TMPPTR
+    STX ,U
+    ; VPy_LINE:67
     LDD VAR_ENEMY3_X
     STD RESULT
     LDD RESULT
@@ -461,27 +547,27 @@ IF_END_4:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    LBLT CT_10
+    LBLT CT_11
     LDD #0
     STD RESULT
-    LBRA CE_11
-CT_10:
+    LBRA CE_12
+CT_11:
     LDD #1
     STD RESULT
-CE_11:
+CE_12:
     LDD RESULT
-    LBEQ IF_NEXT_9
-    ; VPy_LINE:67
+    LBEQ IF_NEXT_10
+    ; VPy_LINE:68
     LDD #100
     STD RESULT
     LDX RESULT
     LDU #VAR_ENEMY3_X
     STU TMPPTR
     STX ,U
-    LBRA IF_END_8
-IF_NEXT_9:
-IF_END_8:
-    ; VPy_LINE:68
+    LBRA IF_END_9
+IF_NEXT_10:
+IF_END_9:
+    ; VPy_LINE:69
     LDD VAR_ENEMY3_Y
     STD RESULT
     LDD RESULT
@@ -492,41 +578,41 @@ IF_END_8:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    LBLT CT_14
+    LBLT CT_15
     LDD #0
     STD RESULT
-    LBRA CE_15
-CT_14:
+    LBRA CE_16
+CT_15:
     LDD #1
     STD RESULT
-CE_15:
+CE_16:
     LDD RESULT
-    LBEQ IF_NEXT_13
-    ; VPy_LINE:69
+    LBEQ IF_NEXT_14
+    ; VPy_LINE:70
     LDD #100
     STD RESULT
     LDX RESULT
     LDU #VAR_ENEMY3_Y
     STU TMPPTR
     STX ,U
-    LBRA IF_END_12
-IF_NEXT_13:
-IF_END_12:
+    LBRA IF_END_13
+IF_NEXT_14:
+IF_END_13:
     RTS
 
-    ; VPy_LINE:73
+    ; VPy_LINE:74
 DRAW_ALL: ; function
 ; --- function draw_all ---
-    ; VPy_LINE:75
-    JSR DRAW_PLAYER
     ; VPy_LINE:76
+    JSR DRAW_PLAYER
+    ; VPy_LINE:77
     JSR DRAW_ENEMIES
     RTS
 
-    ; VPy_LINE:78
+    ; VPy_LINE:79
 DRAW_PLAYER: ; function
 ; --- function draw_player ---
-    ; VPy_LINE:80
+    ; VPy_LINE:81
 ; DRAW_VECTOR("player", x, y) - 1 path(s) at position
     LDD #0
     STD RESULT
@@ -545,16 +631,16 @@ DRAW_PLAYER: ; function
     CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_PLAYER_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR Draw_Sync_List_At_With_Mirrors_BANK_WRAPPER  ; Cross-bank call to helper in bank #31
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     RTS
 
-    ; VPy_LINE:82
+    ; VPy_LINE:83
 DRAW_ENEMIES: ; function
 ; --- function draw_enemies ---
-    ; VPy_LINE:84
+    ; VPy_LINE:85
 ; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
     LDD VAR_ENEMY1_X
     STD RESULT
@@ -573,11 +659,11 @@ DRAW_ENEMIES: ; function
     CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR Draw_Sync_List_At_With_Mirrors_BANK_WRAPPER  ; Cross-bank call to helper in bank #31
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    ; VPy_LINE:85
+    ; VPy_LINE:86
 ; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
     LDD VAR_ENEMY2_X
     STD RESULT
@@ -596,11 +682,11 @@ DRAW_ENEMIES: ; function
     CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR Draw_Sync_List_At_With_Mirrors_BANK_WRAPPER  ; Cross-bank call to helper in bank #31
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    ; VPy_LINE:86
+    ; VPy_LINE:87
 ; DRAW_VECTOR("enemy", x, y) - 1 path(s) at position
     LDD VAR_ENEMY3_X
     STD RESULT
@@ -619,471 +705,11 @@ DRAW_ENEMIES: ; function
     CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
     JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
     LDX #_ENEMY_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function
+    JSR Draw_Sync_List_At_With_Mirrors_BANK_WRAPPER  ; Cross-bank call to helper in bank #31
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
     RTS
 
-;
-; ┌─────────────────────────────────────────────────────────────────┐
-; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
-; │ This section contains reusable code shared across all VPy       │
-; │ programs. These helpers are emitted once per compilation unit.  │
-; └─────────────────────────────────────────────────────────────────┘
-;
 
-; === JOYSTICK BUILTIN SUBROUTINES ===
-; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
-; Returns: D = raw value from $C81B after Joy_Analog call
-J1X_BUILTIN:
-    PSHS X       ; Save X (Joy_Analog uses it)
-    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
-    JSR $F1F5    ; Joy_Analog (updates $C81B from hardware)
-    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81B)
-    LDB $C81B    ; Vec_Joy_1_X (BIOS writes ~$FE at center)
-    SEX          ; Sign-extend B to D
-    ADDD #2      ; Calibrate center offset
-    PULS X       ; Restore X
-    RTS
-
-; J1_Y() - Read Joystick 1 Y axis (INCREMENTAL - with state preservation)
-; Returns: D = raw value from $C81C after Joy_Analog call
-J1Y_BUILTIN:
-    PSHS X       ; Save X (Joy_Analog uses it)
-    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
-    JSR $F1F5    ; Joy_Analog (updates $C81C from hardware)
-    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81C)
-    LDB $C81C    ; Vec_Joy_1_Y (BIOS writes ~$FE at center)
-    SEX          ; Sign-extend B to D
-    ADDD #2      ; Calibrate center offset
-    PULS X       ; Restore X
-    RTS
-
-; === BUTTON SYSTEM - BIOS TRANSITIONS ===
-; J1_BUTTON_1-4() - Read transition bits from $C811
-; Read_Btns (auto-injected) calculates: ~(new) OR Vec_Prev_Btns
-; Result: bit=1 ONLY on rising edge (0→1 transition)
-; Returns: D = 1 (just pressed), 0 (not pressed or still held)
-
-J1B1_BUILTIN:
-    LDA $C811      ; Read transition bits (Vec_Button_1_1)
-    ANDA #$01      ; Test bit 0 (Button 1)
-    LBEQ .J1B1_OFF
-    LDD #1         ; Return pressed (rising edge)
-    RTS
-.J1B1_OFF:
-    LDD #0         ; Return not pressed
-    RTS
-
-J1B2_BUILTIN:
-    LDA $C811
-    ANDA #$02      ; Test bit 1 (Button 2)
-    LBEQ .J1B2_OFF
-    LDD #1
-    RTS
-.J1B2_OFF:
-    LDD #0
-    RTS
-
-J1B3_BUILTIN:
-    LDA $C811
-    ANDA #$04      ; Test bit 2 (Button 3)
-    LBEQ .J1B3_OFF
-    LDD #1
-    RTS
-.J1B3_OFF:
-    LDD #0
-    RTS
-
-J1B4_BUILTIN:
-    LDA $C811
-    ANDA #$08      ; Test bit 3 (Button 4)
-    LBEQ .J1B4_OFF
-    LDD #1
-    RTS
-.J1B4_OFF:
-    LDD #0
-    RTS
-
-VECTREX_SET_INTENSITY:
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode)
-    STA >$D00C     ; VIA_cntl
-    LDA #$D0
-    TFR A,DP       ; Set Direct Page to $D0 for BIOS
-    LDA VAR_ARG0+1
-    JSR __Intensity_a
-    RTS
-; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
-__Intensity_a:
-TFR B,A         ; Move B to A (BIOS expects intensity in A)
-JMP Intensity_a ; JMP (not JSR) - BIOS returns to original caller
-__Reset0Ref:
-JMP Reset0Ref   ; JMP (not JSR) - BIOS returns to original caller
-__Moveto_d:
-LDA 2,S         ; Get Y from stack (after return address)
-JMP Moveto_d    ; JMP (not JSR) - BIOS returns to original caller
-__Draw_Line_d:
-LDA 2,S         ; Get dy from stack (after return address)
-JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller
-; ============================================================================
-; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c
-; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
-; ============================================================================
-Draw_Sync_List:
-; ITERACIÓN 11: Loop completo dentro (bug assembler arreglado, datos embebidos OK)
-LDA ,X+                 ; intensity
-JSR $F2AB               ; BIOS Intensity_a (expects value in A)
-LDB ,X+                 ; y_start
-LDA ,X+                 ; x_start
-STD TEMP_YX             ; Guardar en variable temporal (evita stack)
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX             ; Recuperar y,x
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSL_W1:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSL_W1
-; Loop de dibujo
-DSL_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-LBEQ DSL_DONE           ; Exit if end (long branch)
-CMPA #1                 ; Check next path marker
-LBEQ DSL_NEXT_PATH      ; Process next path (long branch)
-; Draw line
-CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)
-LDB ,X+                 ; dy
-LDA ,X+                 ; dx
-PSHS A                  ; Save dx
-STB VIA_port_a          ; dy to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore dx
-STA VIA_port_a          ; dx to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSL_W2:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSL_W2
-CLR VIA_shift_reg
-LBRA DSL_LOOP            ; Long branch back to loop start
-; Next path: read new intensity and header, then continue drawing
-DSL_NEXT_PATH:
-; Save current X position before reading anything
-TFR X,D                 ; D = X (current position)
-PSHS D                  ; Save X address
-LDA ,X+                 ; Read intensity (X now points to y_start)
-PSHS A                  ; Save intensity
-LDB ,X+                 ; y_start
-LDA ,X+                 ; x_start (X now points to next_y)
-STD TEMP_YX             ; Save y,x
-PULS A                  ; Get intensity back
-PSHS A                  ; Save intensity again
-LDA #$D0
-TFR A,DP                ; Set DP=$D0 (BIOS requirement)
-PULS A                  ; Restore intensity
-JSR $F2AB               ; BIOS Intensity_a (may corrupt X!)
-; Restore X to point to next_y,next_x (after the 3 bytes we read)
-PULS D                  ; Get original X
-ADDD #3                 ; Skip intensity, y_start, x_start
-TFR D,X                 ; X now points to next_y
-; Reset to zero (same as Draw_Sync_List start)
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move to new start position
-LDD TEMP_YX
-STB VIA_port_a          ; y to DAC
-PSHS A
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A
-STA VIA_port_a          ; x to DAC
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move
-DSL_W3:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSL_W3
-CLR VIA_shift_reg       ; Clear before continuing
-LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH
-DSL_DONE:
-RTS
-Draw_Sync_List_At_With_Mirrors:
-; Unified mirror support using flags: MIRROR_X and MIRROR_Y
-; Conditionally negates X and/or Y coordinates and deltas
-; NOTE: Caller must ensure DP=$D0 for VIA access
-LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-LBNE DSWM_USE_OVERRIDE   ; If non-zero, use override
-LDA ,X+                 ; Otherwise, read intensity from vector data
-LBRA DSWM_SET_INTENSITY
-DSWM_USE_OVERRIDE:
-LEAX 1,X                ; Skip intensity byte in vector data
-DSWM_SET_INTENSITY:
-JSR $F2AB               ; BIOS Intensity_a
-LDB ,X+                 ; y_start from .vec (already relative to center)
-; Check if Y mirroring is enabled
-TST MIRROR_Y
-LBEQ DSWM_NO_NEGATE_Y
-NEGB                    ; ← Negate Y if flag set
-DSWM_NO_NEGATE_Y:
-ADDB DRAW_VEC_Y         ; Add Y offset
-LDA ,X+                 ; x_start from .vec (already relative to center)
-; Check if X mirroring is enabled
-TST MIRROR_X
-LBEQ DSWM_NO_NEGATE_X
-NEGA                    ; ← Negate X if flag set
-DSWM_NO_NEGATE_X:
-ADDA DRAW_VEC_X         ; Add X offset
-STD TEMP_YX             ; Save adjusted position
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSWM_W1:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSWM_W1
-; Loop de dibujo (conditional mirrors)
-DSWM_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-LBEQ DSWM_DONE
-CMPA #1                 ; Check next path marker
-LBEQ DSWM_NEXT_PATH
-; Draw line with conditional negations
-LDB ,X+                 ; dy
-; Check if Y mirroring is enabled
-TST MIRROR_Y
-LBEQ DSWM_NO_NEGATE_DY
-NEGB                    ; ← Negate dy if flag set
-DSWM_NO_NEGATE_DY:
-LDA ,X+                 ; dx
-; Check if X mirroring is enabled
-TST MIRROR_X
-LBEQ DSWM_NO_NEGATE_DX
-NEGA                    ; ← Negate dx if flag set
-DSWM_NO_NEGATE_DX:
-PSHS A                  ; Save final dx
-STB VIA_port_a          ; dy (possibly negated) to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore final dx
-STA VIA_port_a          ; dx (possibly negated) to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSWM_W2:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSWM_W2
-CLR VIA_shift_reg
-LBRA DSWM_LOOP          ; Long branch
-; Next path: repeat mirror logic for new path header
-DSWM_NEXT_PATH:
-TFR X,D
-PSHS D
-; Check intensity override (same logic as start)
-LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-LBNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
-LDA ,X+                 ; Otherwise, read intensity from vector data
-LBRA DSWM_NEXT_SET_INTENSITY
-DSWM_NEXT_USE_OVERRIDE:
-LEAX 1,X                ; Skip intensity byte in vector data
-DSWM_NEXT_SET_INTENSITY:
-PSHS A
-LDB ,X+                 ; y_start
-TST MIRROR_Y
-LBEQ DSWM_NEXT_NO_NEGATE_Y
-NEGB
-DSWM_NEXT_NO_NEGATE_Y:
-ADDB DRAW_VEC_Y         ; Add Y offset
-LDA ,X+                 ; x_start
-TST MIRROR_X
-LBEQ DSWM_NEXT_NO_NEGATE_X
-NEGA
-DSWM_NEXT_NO_NEGATE_X:
-ADDA DRAW_VEC_X         ; Add X offset
-STD TEMP_YX
-PULS A                  ; Get intensity back
-JSR $F2AB
-PULS D
-ADDD #3
-TFR D,X
-; Reset to zero
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move to new start position
-LDD TEMP_YX
-STB VIA_port_a
-PSHS A
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A
-STA VIA_port_a
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X
-; Wait for move
-DSWM_W3:
-LDA VIA_int_flags
-ANDA #$40
-LBEQ DSWM_W3
-CLR VIA_shift_reg
-LBRA DSWM_LOOP          ; Long branch
-DSWM_DONE:
-RTS
-;***************************************************************************
-; DATA SECTION
-;***************************************************************************
-
-; ========================================
-; ASSET DATA SECTION
-; Embedded 2 of 2 assets (unused assets excluded)
-; ========================================
-
-; Vector asset: player
-; Generated from player.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 3
-; X bounds: min=-15, max=15, width=30
-; Center: (0, 5)
-
-_PLAYER_WIDTH EQU 30
-_PLAYER_CENTER_X EQU 0
-_PLAYER_CENTER_Y EQU 5
-
-_PLAYER_VECTORS:  ; Main entry (header + 1 path(s))
-    FCB 1               ; path_count (runtime metadata)
-    FDB _PLAYER_PATH0        ; pointer to path 0
-
-_PLAYER_PATH0:    ; Path 0
-    FCB 127              ; path0: intensity
-    FCB $0F,$00,0,0        ; path0: header (y=15, x=0, relative to center)
-    FCB $FF,$E2,$F1          ; line 0: flag=-1, dy=-30, dx=-15
-    FCB $FF,$00,$1E          ; line 1: flag=-1, dy=0, dx=30
-    FCB $FF,$1E,$F1          ; closing line: flag=-1, dy=30, dx=-15
-    FCB 2                ; End marker (path complete)
-
-; Vector asset: enemy
-; Generated from enemy.vec (Malban Draw_Sync_List format)
-; Total paths: 1, points: 4
-; X bounds: min=-10, max=10, width=20
-; Center: (0, 0)
-
-_ENEMY_WIDTH EQU 20
-_ENEMY_CENTER_X EQU 0
-_ENEMY_CENTER_Y EQU 0
-
-_ENEMY_VECTORS:  ; Main entry (header + 1 path(s))
-    FCB 1               ; path_count (runtime metadata)
-    FDB _ENEMY_PATH0        ; pointer to path 0
-
-_ENEMY_PATH0:    ; Path 0
-    FCB 100              ; path0: intensity
-    FCB $0A,$F6,0,0        ; path0: header (y=10, x=-10, relative to center)
-    FCB $FF,$00,$14          ; line 0: flag=-1, dy=0, dx=20
-    FCB $FF,$EC,$00          ; line 1: flag=-1, dy=-20, dx=0
-    FCB $FF,$00,$EC          ; line 2: flag=-1, dy=0, dx=-20
-    FCB $FF,$14,$00          ; closing line: flag=-1, dy=20, dx=0
-    FCB 2                ; End marker (path complete)
-
-; === INLINE ARRAY LITERALS (from function bodies) ===
-
-; === Multibank Mode: Interrupt Vectors in Bank #31 (Linker) ===
-; All vectors handled by multi_bank_linker
-; Bank #0-#30: Local 0xFFF0-0xFFFF addresses are unreachable
-; Bank #31: Contains complete interrupt vector table (fixed at 0x4000-0x7FFF window)
+; ================================================

@@ -3,8 +3,8 @@
 
 META TITLE = "Call Graph Test"
 META MUSIC = 1
-# META ROM_TOTAL_SIZE = 524288
-# META ROM_BANK_SIZE = 16384
+META ROM_TOTAL_SIZE = 524288
+META ROM_BANK_SIZE = 16384
 
 # Game state - shared across frames
 enemy1_x = -50
@@ -27,6 +27,7 @@ def loop():
 
     SET_INTENSITY(100)
     
+    DEBUG_PRINT(a)
     # Update game logic
     update_player()
     update_enemies()
