@@ -19,6 +19,7 @@ pub mod debug;
 pub mod math_extended;
 pub mod drawing;
 pub mod level;
+pub mod utilities;
 
 use vpy_parser::Module;
 
@@ -96,6 +97,11 @@ pub fn generate_m6809_asm(
     asm.push_str("LEVEL_WIDTH EQU $CF22          ; Level width in tiles (1 byte)\n");
     asm.push_str("LEVEL_HEIGHT EQU $CF23         ; Level height in tiles (1 byte)\n");
     asm.push_str("LEVEL_TILE_SIZE EQU $CF24      ; Tile size in pixels (1 byte)\n\n");
+    
+    // Utilities variables
+    asm.push_str("; Utilities variables\n");
+    asm.push_str("FRAME_COUNTER EQU $CF26        ; Frame counter (2 bytes)\n");
+    asm.push_str("CURRENT_INTENSITY EQU $CF28    ; Current intensity for fade effects (1 byte)\n\n");
     
     // Generate user variables
     let vars_asm = variables::generate_variables(module)?;

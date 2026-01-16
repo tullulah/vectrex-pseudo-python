@@ -567,6 +567,57 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str("    \n");
     asm.push_str("    RTS\n\n");
     
+    // FADE_IN_RUNTIME - Gradual intensity increase
+    asm.push_str("; === FADE_IN_RUNTIME - Gradual intensity increase ===\n");
+    asm.push_str("FADE_IN_RUNTIME:\n");
+    asm.push_str("    LDA CURRENT_INTENSITY\n");
+    asm.push_str("    PSHS A                 ; Save target intensity\n");
+    asm.push_str("    LDA #8                 ; 8 steps\n");
+    asm.push_str("    STA TMPPTR\n");
+    asm.push_str("FADE_IN_LOOP:\n");
+    asm.push_str("    LDA ,S                 ; Get target\n");
+    asm.push_str("    LDB TMPPTR             ; Steps remaining\n");
+    asm.push_str("    MUL                    ; D = target * steps / 8\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB                   ; Divide by 8\n");
+    asm.push_str("    TFR B,A\n");
+    asm.push_str("    JSR Intensity_a\n");
+    asm.push_str("    JSR Wait_Recal\n");
+    asm.push_str("    DEC TMPPTR\n");
+    asm.push_str("    BNE FADE_IN_LOOP\n");
+    asm.push_str("    PULS A                 ; Clean stack\n");
+    asm.push_str("    RTS\n\n");
+    
+    // FADE_OUT_RUNTIME - Gradual intensity decrease
+    asm.push_str("; === FADE_OUT_RUNTIME - Gradual intensity decrease ===\n");
+    asm.push_str("FADE_OUT_RUNTIME:\n");
+    asm.push_str("    LDA CURRENT_INTENSITY\n");
+    asm.push_str("    PSHS A\n");
+    asm.push_str("    LDA #8\n");
+    asm.push_str("    STA TMPPTR\n");
+    asm.push_str("FADE_OUT_LOOP:\n");
+    asm.push_str("    LDA ,S\n");
+    asm.push_str("    LDB #8\n");
+    asm.push_str("    SUBB TMPPTR            ; 8 - steps_remaining\n");
+    asm.push_str("    MUL\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    LSRA\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    TFR B,A\n");
+    asm.push_str("    JSR Intensity_a\n");
+    asm.push_str("    JSR Wait_Recal\n");
+    asm.push_str("    DEC TMPPTR\n");
+    asm.push_str("    BNE FADE_OUT_LOOP\n");
+    asm.push_str("    PULS A\n");
+    asm.push_str("    RTS\n\n");
+    
     eprintln!("[DEBUG HELPERS] ASM length after MOD16: {}", asm.len());
     
     Ok(asm)
