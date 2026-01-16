@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "vpy_loader",
+    "vpy_parser",
+    "vpy_unifier",
+    "vpy_bank_allocator",
+    "vpy_codegen",
+    "vpy_assembler",
+    "vpy_linker",
+    "vpy_binary_writer",
+    "vpy_debug_gen",
+    "vpy_cli",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["Vectrex Dev"]
+
+[workspace.lints.rust]
+warnings = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+dead_code = "deny"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

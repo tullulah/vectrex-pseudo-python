@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use clap::{Parser, Subcommand};
 use toml;
+use walkdir;
 
 #[allow(dead_code)]
 fn find_project_root() -> anyhow::Result<PathBuf> {
@@ -419,15 +420,69 @@ fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: b
     
     let entry_file = project_root.join(entry_relative);
     
+    // Find all .vpy files in src/ directory
+    let mut vpy_files = Vec::new();
+    let src_dir = project_root.join("src");
+    if src_dir.is_dir() {
+        for entry in walkdir::WalkDir::new(&src_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("vpy"))
+        {
+            vpy_files.push(entry.path().to_path_buf());
+        }
+    }
+    
+    let project_name = project_toml.get("project")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("unknown");
+    
+    eprintln!("✓ Project: {}", project_name);
+    eprintln!("✓ Entry file: {}", entry_file.display());
+    
+    // Parse ALL modules and unify if multi-module
+    let final_module = if vpy_files.len() > 1 {
+        eprintln!("✓ Multi-module project: {} source files", vpy_files.len());
+        
+        // Use ModuleResolver for proper multi-module compilation
+        let mut resolver = resolver::ModuleResolver::new(project_root.to_path_buf());
+        resolver.load_project(&entry_file).map_err(|e| {
+            anyhow::anyhow!("Failed to load project modules: {}", e)
+        })?;
+        
+        eprintln!("✓ Loaded {} modules", resolver.get_all_modules().len());
+        
+        // Get entry module name
+        let entry_module_name = entry_file.file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow::anyhow!("Invalid entry module name"))?
+            .to_string();
+        
+        eprintln!("✓ Unifying modules (entry: {})...", entry_module_name);
+        
+        // Unify all modules into one
+        let options = unifier::UnifyOptions::default();
+        let unified = unifier::unify_modules(&resolver, &entry_module_name, &options)
+            .map_err(|e| anyhow::anyhow!("Unification failed: {}", e))?;
+        
+        eprintln!("✓ Unified module: {} items total", unified.module.items.len());
+        unified.module
+    } else {
+        // Single file project - just parse entry file
+        eprintln!("✓ Single-file project");
+        let src = fs::read_to_string(&entry_file)?;
+        let tokens = lexer::lex(&src)?;
+        parser::parse_with_filename(&tokens, &entry_file.display().to_string())?
+    };
+    
     // Extract output path from [build] section
-    // Note: .vpyproj defines bin path, but build_cmd expects ASM path
     let output_relative = project_toml.get("build")
         .and_then(|b| b.get("output"))
         .and_then(|o| o.as_str());
     
     let output_path = output_relative.map(|o| {
         let bin_path = project_root.join(o);
-        // Derive ASM path from bin path (change .bin to .asm)
         bin_path.with_extension("asm")
     });
     
@@ -446,30 +501,185 @@ fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: b
         _ => target::Target::Vectrex,
     };
     
-    // Extract title from [project] section
     let title = project_toml.get("project")
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
         .unwrap_or("UNTITLED");
     
-    eprintln!("✓ Project: {}", title);
-    eprintln!("✓ Entry file: {}", entry_file.display());
     if let Some(ref out) = output_path {
         eprintln!("✓ Output: {}", out.display());
     }
     
-    // Extract output base name (without extension) for PDB generation
+    // Extract output base name for PDB
     let output_name = output_relative.and_then(|o| {
         let path = PathBuf::from(o);
         path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
     });
     
-    // Call regular build_cmd with project-resolved paths and output name
-    build_cmd(&entry_file, output_path.as_ref(), target, title, bin, use_lwasm, dual, include_dir, output_name.as_deref())
+    // Phase 4: Asset discovery
+    eprintln!("Phase 4: Asset discovery...");
+    let assets = discover_assets(&project_root);
+    eprintln!("✓ Phase 4 SUCCESS: Discovered {} assets", assets.len());
+    
+    // Phase 5: Code generation
+    eprintln!("Phase 5: Code generation (VPy → M6809 assembly)...");
+    let opts = codegen::CodegenOptions {
+        title: title.to_string(),
+        auto_loop: true,
+        diag_freeze: false,
+        force_extended_jsr: false,
+        _bank_size: 0,
+        per_frame_silence: false,
+        debug_init_draw: false,
+        blink_intensity: false,
+        exclude_ram_org: true,
+        fast_wait: false,
+        emit_sections: false,
+        skip_builtins: false,
+        source_path: Some(entry_file.canonicalize().unwrap_or_else(|_| entry_file.clone()).display().to_string()),
+        output_name: output_name.clone(),
+        assets,
+        const_values: std::collections::BTreeMap::new(),
+        const_arrays: std::collections::BTreeMap::new(),
+        const_string_arrays: std::collections::BTreeSet::new(),
+        mutable_arrays: std::collections::BTreeSet::new(),
+        inline_arrays: Vec::new(),
+        structs: std::collections::HashMap::new(),
+        type_context: std::collections::HashMap::new(),
+        buffer_requirements: None,
+        bank_config: codegen::BankConfig::from_meta(&final_module.meta),
+        function_bank_map: std::collections::HashMap::new(),
+    };
+    
+    let (asm, debug_info, diagnostics) = codegen::emit_asm_with_debug(&final_module, target, &opts);
+    
+    // Check for ERRORS only (not warnings/suggestions)
+    let errors: Vec<_> = diagnostics.iter().filter(|d| {
+        matches!(d.severity, codegen::DiagnosticSeverity::Error)
+    }).collect();
+    
+    if !errors.is_empty() {
+        eprintln!("❌ PHASE 5 FAILED: Semantic errors detected:");
+        for diag in &errors {
+            if let (Some(line), Some(col)) = (diag.line, diag.col) {
+                eprintln!("   error {}:{} - {:?}: {}", line, col, diag.code, diag.message);
+            } else {
+                eprintln!("   error - {:?}: {}", diag.code, diag.message);
+            }
+        }
+        return Err(anyhow::anyhow!("Semantic validation failed"));
+    }
+    
+    // Show warnings/suggestions but don't fail
+    let warnings: Vec<_> = diagnostics.iter().filter(|d| {
+        !matches!(d.severity, codegen::DiagnosticSeverity::Error)
+    }).collect();
+    
+    if !warnings.is_empty() {
+        eprintln!("⚠ {} warning(s)/suggestion(s):", warnings.len());
+        for diag in &warnings {
+            if let (Some(line), Some(col)) = (diag.line, diag.col) {
+                eprintln!("   {}:{} - {:?}: {}", line, col, diag.code, diag.message);
+            } else {
+                eprintln!("   {:?}: {}", diag.code, diag.message);
+            }
+        }
+    }
+    
+    if asm.is_empty() {
+        eprintln!("❌ PHASE 5 FAILED: Generated empty assembly");
+        return Err(anyhow::anyhow!("Empty assembly generated"));
+    }
+    
+    let asm_len = asm.lines().count();
+    let code_size = asm.len();
+    eprintln!("✓ Phase 5 SUCCESS: Generated {} lines ({} bytes)", asm_len, code_size);
+    
+    // Write assembly to output path
+    if let Some(out_path) = &output_path {
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        
+        fs::write(out_path, &asm)?;
+        eprintln!("✓ Assembly written to: {}", out_path.display());
+        
+        // Phase 6: Binary generation (if requested)
+        if bin {
+            eprintln!("Phase 6: Binary generation...");
+            
+            // Use native M6809 assembler through assemble_bin()
+            let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
+            match assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()) {
+                Ok((binary_symbol_table, _line_map, _org)) => {
+                    let bin_path = out_path.with_extension("bin");
+                    let size = fs::metadata(&bin_path)?.len();
+                    eprintln!("✓ Phase 6 SUCCESS: Binary written to {} ({} bytes)", 
+                             bin_path.display(), size);
+                    
+                    // Phase 5.5: Debug symbols (PDB)
+                    if let Some(mut debug_info) = debug_info {
+                        let pdb_path = out_path.with_extension("pdb");
+                        eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
+                        
+                        // Add symbols from binary
+                        for (symbol_name, &address) in &binary_symbol_table {
+                            debug_info.add_symbol(symbol_name.clone(), address);
+                        }
+                        
+                        // Set entry point
+                        if let Some(&start_addr) = binary_symbol_table.get("START") {
+                            debug_info.set_entry_point(start_addr);
+                        }
+                        
+                        // Write PDB
+                        match debug_info.to_json() {
+                            Ok(json) => {
+                                fs::write(&pdb_path, json)?;
+                                eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                            },
+                            Err(e) => {
+                                eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ PHASE 6 FAILED: Assembly error");
+                    eprintln!("   Error: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+    }
+    
+    eprintln!("=== COMPILATION COMPLETE ===");
+    Ok(())
 }
 
 // build_cmd: run full pipeline (lex/parse/opt/codegen) and write assembly.
 fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>, output_name: Option<&str>) -> Result<()> {
+    // If this is a .vpyproj file, redirect to build_project_cmd
+    if path.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
+        return build_project_cmd(path, bin, use_lwasm, dual, include_dir);
+    }
+    
+    // REJECT .vpy files - only .vpyproj is supported
+    if path.extension().and_then(|e| e.to_str()) == Some("vpy") {
+        eprintln!("❌ ERROR: Cannot compile .vpy files directly");
+        eprintln!("   vectrexc only accepts .vpyproj project files.");
+        eprintln!("   ");
+        eprintln!("   If you want to compile a single file, create a .vpyproj:");
+        eprintln!("   1. vectrexc init myproject");
+        eprintln!("   2. Move your .vpy to myproject/src/main.vpy");
+        eprintln!("   3. vectrexc build myproject/myproject.vpyproj --bin");
+        eprintln!("   ");
+        eprintln!("   Direct .vpy compilation is not supported to avoid");
+        eprintln!("   confusion with multi-module projects.");
+        return Err(anyhow::anyhow!("Use .vpyproj instead of .vpy"));
+    }
+    
     eprintln!("=== COMPILATION PIPELINE START ===");
     eprintln!("Input file: {}", path.display());
     eprintln!("Target: {:?}", tgt);

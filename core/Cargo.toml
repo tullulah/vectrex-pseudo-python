@@ -19,6 +19,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"  # For .vpyproj files
 bincode = "1.3"  # For .vo object files
+walkdir = "2.5"  # For .vpyproj source file discovery
 
 [features]
 default = []

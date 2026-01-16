@@ -1,0 +1,13 @@
+[package]
+name = "vpy_parser"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = "1.0"
+
+[dev-dependencies]

@@ -166,6 +166,7 @@ pub fn generate_unified_asm(
     asm.push_str("CURRENT_ROM_BANK EQU $C880\n");
     asm.push_str("RESULT EQU $CF00\n");
     asm.push_str("TMPPTR EQU $CF02\n");
+    asm.push_str("TMPPTR2 EQU $CF04\n");  // For array indexed assignments
     asm.push_str("\n");
     
     // Generate Bank 0 (boot + main code)

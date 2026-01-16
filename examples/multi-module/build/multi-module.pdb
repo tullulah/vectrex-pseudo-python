@@ -1,0 +1,460 @@
+{
+  "version": "1.0",
+  "source": "main.vpy",
+  "asm": "multi-module.asm",
+  "binary": "multi-module.bin",
+  "entryPoint": "0x0017",
+  "symbols": {
+    "IF_NEXT_17": "0x03E3",
+    "CT_14": "0x02C7",
+    "DLW_SEG1_DX_NO_CLAMP": "0x0660",
+    "VLINE_DX_REMAINING": "0xC8AC",
+    "DSWM_NEXT_PATH": "0x0898",
+    "DRAW_VEC_X": "0xC89F",
+    "DSWM_USE_OVERRIDE": "0x07F0",
+    "DLW_SEG1_DY_NO_CLAMP": "0x0643",
+    "CE_11": "0x0284",
+    "TMPPTR2": "0xC88D",
+    "DSWM_W3": "0x090C",
+    "DSWM_NEXT_NO_NEGATE_Y": "0x08B1",
+    "CT_18": "0x03A0",
+    "Draw_Sync_List_At_With_Mirrors": "0x07E7",
+    "NUM_STR": "0xC89D",
+    "DSL_W2": "0x076B",
+    "VLINE_DY_REMAINING": "0xC8AA",
+    "CE_3": "0x01F2",
+    "VAR_INPUT_INPUT_RESULT_DATA": "0xC8B1",
+    "J1B4_BUILTIN.J1B4_OFF": "0x05E5",
+    "_BOX_PATH0": "0x0961",
+    "TMPLEFT2": "0xC885",
+    "J1B2_BUILTIN.J1B2_OFF": "0x05C3",
+    "DLW_SEG2_DX_CHECK_NEG": "0x06A5",
+    "MUL_CNT": "0xC897",
+    "VAR_ARG2": "0xC8BF",
+    "VAR_ARG4": "0xC8C3",
+    "DSWM_NEXT_USE_OVERRIDE": "0x08A5",
+    "_BOX_VECTORS": "0x095E",
+    "MAIN": "0x0061",
+    "DSWM_NEXT_SET_INTENSITY": "0x08A7",
+    "MUL_RES": "0xC893",
+    "RESULT": "0xC881",
+    "MUL16_DONE": "0x0957",
+    "Draw_Sync_List": "0x06E9",
+    "TMPRIGHT2": "0xC889",
+    "DLW_NEED_SEG2": "0x0683",
+    "DSWM_LOOP": "0x0853",
+    "DSWM_DONE": "0x0919",
+    "INPUT_CHECK_FIRE": "0x00F9",
+    "J1B1_BUILTIN.J1B1_OFF": "0x05B2",
+    "DLW_DONE": "0x06C2",
+    "TEMP_Y": "0xC89C",
+    "VAR_ARG5": "0xC8C5",
+    "CURRENT_ROM_BANK": "0xC880",
+    "DSL_DONE": "0x07E6",
+    "J1B4_BUILTIN": "0x05D8",
+    "J1B2_BUILTIN": "0x05B6",
+    "TMPPTR": "0xC88B",
+    "__Draw_Line_d": "0x06E4",
+    "DSWM_NO_NEGATE_DX": "0x0871",
+    "CE_7": "0x023B",
+    "GRAPHICS_DRAW_CROSS": "0x043C",
+    "DRAW_LINE_WRAPPER": "0x0602",
+    "IF_END_12": "0x02E8",
+    "J1B3_BUILTIN": "0x05C7",
+    "DLW_SEG1_DX_LO": "0x0656",
+    "__Intensity_a": "0x06D7",
+    "DSWM_SET_INTENSITY": "0x07F2",
+    "__Reset0Ref": "0x06DC",
+    "DSWM_W1": "0x084C",
+    "IF_NEXT_13": "0x02E8",
+    "MUL16_SKIP": "0x0945",
+    "DLW_SEG2_DY_POS": "0x0691",
+    "MIRROR_Y": "0xC8A2",
+    "J1Y_BUILTIN": "0x0590",
+    "VLINE_DY": "0xC8A9",
+    "DSL_W3": "0x07D9",
+    "VAR_PLAYER_SIZE": "0xC8B9",
+    "DSL_LOOP": "0x073C",
+    "IF_END_4": "0x0256",
+    "MUL16": "0x091E",
+    "DLW_SEG1_DY_LO": "0x0639",
+    "VAR_PLAYER_X": "0xC8B5",
+    "J1B3_BUILTIN.J1B3_OFF": "0x05D4",
+    "DSL_NEXT_PATH": "0x0778",
+    "DSWM_NEXT_NO_NEGATE_X": "0x08BC",
+    "CT_6": "0x0235",
+    "VAR_ARG3": "0xC8C1",
+    "IF_END_8": "0x029F",
+    "VECTREX_PRINT_TEXT": "0x05E9",
+    "DSWM_NO_NEGATE_X": "0x0808",
+    "VAR_ARG0": "0xC8BB",
+    "VECTREX_SET_INTENSITY": "0x06C7",
+    "J1B1_BUILTIN": "0x05A5",
+    "START": "0x0017",
+    "CE_15": "0x02CD",
+    "MUL_B": "0xC891",
+    "DSWM_NO_NEGATE_Y": "0x07FD",
+    "DLW_SEG1_DY_READY": "0x0646",
+    "MUL_A": "0xC88F",
+    "DSWM_NO_NEGATE_DY": "0x0869",
+    "IF_NEXT_9": "0x029F",
+    "DLW_SEG1_DX_READY": "0x0663",
+    "TMPLEFT": "0xC883",
+    "IF_NEXT_1": "0x020D",
+    "DSL_W1": "0x0733",
+    "MIRROR_X": "0xC8A1",
+    "VLINE_DX_16": "0xC8A4",
+    "IF_NEXT_5": "0x0256",
+    "TEMP_YX": "0xC899",
+    "DRAW_VEC_INTENSITY": "0xC8A3",
+    "VLINE_LIST": "0xC8AF",
+    "IF_END_0": "0x020D",
+    "DSWM_W2": "0x088B",
+    "DLW_SEG2_DX_NO_REMAIN": "0x06B0",
+    "IF_END_16": "0x03E3",
+    "LOOP_BODY": "0x0100",
+    "DLW_SEG2_DY_DONE": "0x0694",
+    "DLW_SEG2_DX_DONE": "0x06B3",
+    "VLINE_STEPS": "0xC8AE",
+    "DRAW_VEC_Y": "0xC8A0",
+    "VAR_PLAYER_Y": "0xC8B7",
+    "TEMP_X": "0xC89B",
+    "VLINE_DX": "0xC8A8",
+    "TMPRIGHT": "0xC887",
+    "COPY_LOOP_INPUT_INPUT_RESULT": "0x0030",
+    "CE_19": "0x03A6",
+    "GRAPHICS_DRAW_BOX": "0x03E6",
+    "CT_10": "0x027E",
+    "INPUT_GET_INPUT": "0x0088",
+    "J1X_BUILTIN": "0x057B",
+    "MUL_TMP": "0xC895",
+    "MUL16_LOOP": "0x0930",
+    "VAR_ARG1": "0xC8BD",
+    "VLINE_DY_16": "0xC8A6",
+    "ARRAY_INPUT_INPUT_RESULT": "0x0973",
+    "__Moveto_d": "0x06DF",
+    "CT_2": "0x01EC"
+  },
+  "lineMap": {},
+  "vpyLineMap": {},
+  "asmLineMap": {},
+  "functions": {},
+  "nativeCalls": {
+    "9": "J1_Y",
+    "16": "J1_BUTTON_1",
+    "8": "J1_X"
+  },
+  "asmFunctions": {
+    "VECTREX_PRINT_TEXT": {
+      "name": "VECTREX_PRINT_TEXT",
+      "file": "multi-module.asm",
+      "startLine": 760,
+      "endLine": 774,
+      "type": "native"
+    }
+  },
+  "asmAddressMap": {},
+  "variables": {
+    "VLINE_STEPS": {
+      "name": "VLINE_STEPS",
+      "address": "0xC8AE",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_B": {
+      "name": "MUL_B",
+      "address": "0xC891",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DX_16": {
+      "name": "VLINE_DX_16",
+      "address": "0xC8A4",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_Y": {
+      "name": "MIRROR_Y",
+      "address": "0xC8A2",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_INTENSITY": {
+      "name": "DRAW_VEC_INTENSITY",
+      "address": "0xC8A3",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPLEFT": {
+      "name": "TMPLEFT",
+      "address": "0xC883",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_CNT": {
+      "name": "MUL_CNT",
+      "address": "0xC897",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC89C",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "DRAW_VEC_X": {
+      "name": "DRAW_VEC_X",
+      "address": "0xC89F",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPRIGHT": {
+      "name": "TMPRIGHT",
+      "address": "0xC887",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BOX_WIDTH": {
+      "name": "_BOX_WIDTH",
+      "address": "0x0035",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg2": {
+      "name": "arg2",
+      "address": "0xC8BF",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_LIST": {
+      "name": "VLINE_LIST",
+      "address": "0xC8AF",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPLEFT2": {
+      "name": "TMPLEFT2",
+      "address": "0xC885",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC8BB",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC88D",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MIRROR_X": {
+      "name": "MIRROR_X",
+      "address": "0xC8A1",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DX_REMAINING": {
+      "name": "VLINE_DX_REMAINING",
+      "address": "0xC8AC",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "RESULT": {
+      "name": "RESULT",
+      "address": "0xC881",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPRIGHT2": {
+      "name": "TMPRIGHT2",
+      "address": "0xC889",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC88B",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_RES": {
+      "name": "MUL_RES",
+      "address": "0xC893",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DX": {
+      "name": "VLINE_DX",
+      "address": "0xC8A8",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg4": {
+      "name": "arg4",
+      "address": "0xC8C3",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "CURRENT_ROM_BANK": {
+      "name": "CURRENT_ROM_BANK",
+      "address": "0xC880",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BOX_CENTER_X": {
+      "name": "_BOX_CENTER_X",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DY_16": {
+      "name": "VLINE_DY_16",
+      "address": "0xC8A6",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC8BD",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC8C1",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "_BOX_CENTER_Y": {
+      "name": "_BOX_CENTER_Y",
+      "address": "0x0000",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DY": {
+      "name": "VLINE_DY",
+      "address": "0xC8A9",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg5": {
+      "name": "arg5",
+      "address": "0xC8C5",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_A": {
+      "name": "MUL_A",
+      "address": "0xC88F",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "MUL_TMP": {
+      "name": "MUL_TMP",
+      "address": "0xC895",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "input_input_result": {
+      "name": "input_input_result",
+      "address": "0xC8B1",
+      "size": 4,
+      "type": "array",
+      "declLine": null
+    },
+    "DRAW_VEC_Y": {
+      "name": "DRAW_VEC_Y",
+      "address": "0xC8A0",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC89D",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "player_x": {
+      "name": "player_x",
+      "address": "0xC8B5",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "player_y": {
+      "name": "player_y",
+      "address": "0xC8B7",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC899",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "VLINE_DY_REMAINING": {
+      "name": "VLINE_DY_REMAINING",
+      "address": "0xC8AA",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC89B",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "player_size": {
+      "name": "player_size",
+      "address": "0xC8B9",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    }
+  }
+}

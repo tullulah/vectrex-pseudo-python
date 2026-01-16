@@ -1,4 +1,7 @@
 # Main game - demonstrates multi-module imports with dot notation
+META TITLE = "TEST"
+META ROM_TOTAL_SIZE = 524288  # 512 KB total ROM
+META ROM_BANK_SIZE = 16384    # 16 KB per bank (32 banks)
 
 import graphics
 import input
@@ -13,9 +16,6 @@ def main():
     SET_INTENSITY(127)
 
 def loop():
-    # Main game loop
-    WAIT_RECAL()
-    
     # Get input using module (stores in global input.input_result)
     input.get_input()
     dx = input.input_result[0]
@@ -35,6 +35,8 @@ def loop():
     
     # Draw player using module.function() notation
     graphics.draw_box(player_x - player_size, player_y - player_size, player_size * 2, player_size * 2, 127)
+
+    # DRAW_VECTOR(0,0,"box")  # TODO: need to create box.vec asset
     
     # Draw crosshair if fire button pressed
     if input.check_fire() == 1:

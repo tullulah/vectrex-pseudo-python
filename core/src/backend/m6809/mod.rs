@@ -497,8 +497,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str(&format!("    FCC \"{}\"\n", title));
     out.push_str("    FCB $80\n    FCB 0\n\n");
     
-    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
-    
     // Check for music/sfx assets (needed for RAM allocation)
     let has_music_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Music)
@@ -506,6 +504,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let has_sfx_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
+    
+    // NOTE: music1 is defined in VECTREX.I ($FD0D) - assembler loads it automatically
+    // No need to generate placeholder - FDB music1 resolves to BIOS symbol
+    
+    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
     // Calculate max args needed (for VAR_ARG* allocation)
     let max_args = compute_max_args_used(module);
@@ -1103,8 +1106,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
                     }
                     
-                    // Auto-inject WAIT_RECAL, UPDATE_BUTTONS
+                    // Auto-inject WAIT_RECAL, Reset0Ref, UPDATE_BUTTONS
                     out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
+                    out.push_str("    JSR Reset0Ref   ; CRITICAL: Center beam at (0,0) before drawing\n");
                     out.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
                     out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
                     out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
@@ -1299,6 +1303,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     
                     // Auto-inject WAIT_RECAL at START of every frame (MANDATORY for Vectrex synchronization)
                     out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
+                    out.push_str("    JSR Reset0Ref   ; CRITICAL: Center beam at (0,0) before drawing\n");
                     
                     // Auto-inject UPDATE_BUTTONS at START of loop (before user code)
                     // This calls Read_Btns once per frame, populating $C80F from PSG register 14
