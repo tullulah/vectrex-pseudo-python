@@ -37,11 +37,13 @@ def loop():
         const_arrays: std::collections::BTreeMap::new(),
         const_string_arrays: std::collections::BTreeSet::new(),
         mutable_arrays: std::collections::BTreeSet::new(),
+        inline_arrays: vec![],
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
         bank_config: None,
         buffer_requirements: None,
         function_bank_map: std::collections::HashMap::new(),
+        skip_builtins: false,
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
     // The main loop is generated with label "MAIN:" when auto_loop is enabled

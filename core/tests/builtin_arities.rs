@@ -31,16 +31,18 @@ fn builtin_arities_stable() {
         let ok_module = Module { items: vec![Item::Function(Function { name: "main".into(), line: 0, params: vec![], body: vec![
             Stmt::Expr(Expr::Call(CallInfo { name: c.name.into(), source_line: 0, col: 0, args: ok_args }), 0)
         ]})], imports: vec![], meta: ModuleMeta::default() };
-        let (_asm, diags) = emit_asm_with_diagnostics(&ok_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, emit_sections: false, source_path: None, assets: vec![],
+        let (_asm, diags) = emit_asm_with_diagnostics(&ok_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, emit_sections: false, source_path: None, output_name: None, assets: vec![],
             const_values: std::collections::BTreeMap::new(),
             const_arrays: std::collections::BTreeMap::new(),
             const_string_arrays: std::collections::BTreeSet::new(),
             mutable_arrays: std::collections::BTreeSet::new(),
+            inline_arrays: vec![],
             structs: std::collections::HashMap::new(),
             type_context: std::collections::HashMap::new(),
             bank_config: None,
             buffer_requirements: None,
             function_bank_map: std::collections::HashMap::new(),
+            skip_builtins: false,
         });
         assert!(diags.iter().all(|d| d.code != DiagnosticCode::ArityMismatch), "{} deberia aceptar {} args: {:?}", c.name, c.ok_arity, diags);
 
@@ -49,16 +51,18 @@ fn builtin_arities_stable() {
         let bad_module = Module { items: vec![Item::Function(Function { name: "main".into(), line: 0, params: vec![], body: vec![
             Stmt::Expr(Expr::Call(CallInfo { name: c.name.into(), source_line: 0, col: 0, args: bad_args }), 0)
         ]})], imports: vec![], meta: ModuleMeta::default() };
-        let (_asm_bad, diags_bad) = emit_asm_with_diagnostics(&bad_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, emit_sections: false, source_path: None, assets: vec![],
+        let (_asm_bad, diags_bad) = emit_asm_with_diagnostics(&bad_module, Target::Vectrex, &CodegenOptions { title: "t".into(), auto_loop: false, diag_freeze: false, force_extended_jsr: false, _bank_size: 0, per_frame_silence: false, debug_init_draw: false, blink_intensity: false, exclude_ram_org: false, fast_wait: false, emit_sections: false, source_path: None, output_name: None, assets: vec![],
             const_values: std::collections::BTreeMap::new(),
             const_arrays: std::collections::BTreeMap::new(),
             const_string_arrays: std::collections::BTreeSet::new(),
             mutable_arrays: std::collections::BTreeSet::new(),
+            inline_arrays: vec![],
             structs: std::collections::HashMap::new(),
             type_context: std::collections::HashMap::new(),
             bank_config: None,
             buffer_requirements: None,
             function_bank_map: std::collections::HashMap::new(),
+            skip_builtins: false,
         });
         assert!(diags_bad.iter().any(|d| d.code == DiagnosticCode::ArityMismatch), "{} deberia rechazar {} args (tabla espera {}): {:?}", c.name, c.bad_arity, c.ok_arity, diags_bad);
     }

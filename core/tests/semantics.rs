@@ -22,11 +22,13 @@ fn test_opts() -> vectrex_lang::codegen::CodegenOptions {
         const_arrays: std::collections::BTreeMap::new(),
         const_string_arrays: std::collections::BTreeSet::new(),
         mutable_arrays: std::collections::BTreeSet::new(),
+        inline_arrays: vec![],
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
         bank_config: None,
         buffer_requirements: None,
         function_bank_map: std::collections::HashMap::new(),
+        skip_builtins: false,
     }
 }
 
