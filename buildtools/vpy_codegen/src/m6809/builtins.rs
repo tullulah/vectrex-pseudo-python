@@ -9,6 +9,7 @@
 use vpy_parser::{Expr, Module};
 use super::expressions;
 use super::math;
+use super::debug;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -308,6 +309,21 @@ pub fn emit_builtin(
             math::emit_clamp(args, out);
             true
         }
+        
+        // ===== Debug Tools =====
+        "DEBUG_PRINT" => {
+            debug::emit_debug_print(args, out);
+            true
+        }
+        "DEBUG_PRINT_STR" => {
+            debug::emit_debug_print_str(args, out);
+            true
+        }
+        "PRINT_NUMBER" => {
+            debug::emit_print_number(args, out);
+            true
+        }
+        
         "LEN" => {
             out.push_str("    ; LEN: Get array/string length\n");
             expressions::emit_simple_expr(&args[0], out);
