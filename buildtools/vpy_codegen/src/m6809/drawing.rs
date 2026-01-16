@@ -197,3 +197,270 @@ pub fn emit_draw_polygon(
     out.push_str("    ; ERROR: DRAW_POLYGON with variables not yet implemented\n");
     out.push_str("    LDD #0\n    STD RESULT\n");
 }
+
+/// DRAW_CIRCLE_SEG(nseg, xc, yc, diam[, intensity]) - Circle with variable segments
+pub fn emit_draw_circle_seg(
+    args: &[Expr],
+    out: &mut String,
+) {
+    if args.len() != 4 && args.len() != 5 {
+        out.push_str("    ; ERROR: DRAW_CIRCLE_SEG requires 4 or 5 arguments\n");
+        return;
+    }
+    
+    // Check if all args are constants
+    if args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(nseg), Expr::Number(xc), Expr::Number(yc), Expr::Number(diam)) = 
+            (&args[0], &args[1], &args[2], &args[3]) {
+            let mut intensity: i32 = 0x5F;
+            if args.len() == 5 {
+                if let Expr::Number(i) = &args[4] {
+                    intensity = *i;
+                }
+            }
+            
+            let segs = (*nseg).clamp(3, 64) as usize;
+            let r = (*diam as f64) / 2.0;
+            let mut verts: Vec<(i32, i32)> = Vec::new();
+            
+            for k in 0..segs {
+                let ang = 2.0 * std::f64::consts::PI * (k as f64) / (segs as f64);
+                let x = (*xc as f64) + r * ang.cos();
+                let y = (*yc as f64) + r * ang.sin();
+                verts.push((x.round() as i32, y.round() as i32));
+            }
+            
+            // Emit inline code
+            if intensity == 0x5F {
+                out.push_str("    JSR Intensity_5F\n");
+            } else {
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF));
+            }
+            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+            
+            let (sx, sy) = verts[0];
+            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", 
+                (sy & 0xFF), (sx & 0xFF)));
+            
+            for i in 0..segs {
+                let (x0, y0) = verts[i];
+                let (x1, y1) = verts[(i + 1) % segs];
+                let dx = (x1 - x0) & 0xFF;
+                let dy = (y1 - y0) & 0xFF;
+                out.push_str("    CLR Vec_Misc_Count\n");
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                    dy, dx));
+            }
+            out.push_str("    LDD #0\n    STD RESULT\n");
+            return;
+        }
+    }
+    
+    out.push_str("    ; ERROR: DRAW_CIRCLE_SEG with variables not yet implemented\n");
+    out.push_str("    LDD #0\n    STD RESULT\n");
+}
+
+/// DRAW_ARC(nseg, xc, yc, radius, start_deg, sweep_deg[, intensity]) - Open arc
+pub fn emit_draw_arc(
+    args: &[Expr],
+    out: &mut String,
+) {
+    if args.len() != 6 && args.len() != 7 {
+        out.push_str("    ; ERROR: DRAW_ARC requires 6 or 7 arguments\n");
+        return;
+    }
+    
+    // Check if all args are constants
+    if args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(nseg), Expr::Number(xc), Expr::Number(yc), 
+                Expr::Number(rad), Expr::Number(startd), Expr::Number(sweepd)) = 
+            (&args[0], &args[1], &args[2], &args[3], &args[4], &args[5]) {
+            let mut intensity: i32 = 0x5F;
+            if args.len() == 7 {
+                if let Expr::Number(i) = &args[6] {
+                    intensity = *i;
+                }
+            }
+            
+            let segs = (*nseg).clamp(1, 96) as usize;
+            let start = (*startd as f64) * std::f64::consts::PI / 180.0;
+            let sweep = (*sweepd as f64) * std::f64::consts::PI / 180.0;
+            let r = (*rad as f64).clamp(4.0, 110.0);
+            
+            let mut verts: Vec<(i32, i32)> = Vec::new();
+            for k in 0..=segs {
+                let t = k as f64 / segs as f64;
+                let ang = start + sweep * t;
+                let x = ((*xc as f64) + r * ang.cos()).clamp(-120.0, 120.0);
+                let y = ((*yc as f64) + r * ang.sin()).clamp(-120.0, 120.0);
+                verts.push((x.round() as i32, y.round() as i32));
+            }
+            
+            // Emit inline code
+            if intensity == 0x5F {
+                out.push_str("    JSR Intensity_5F\n");
+            } else {
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF));
+            }
+            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+            
+            let (sx, sy) = verts[0];
+            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", 
+                (sy & 0xFF), (sx & 0xFF)));
+            
+            for i in 0..segs {
+                let (x0, y0) = verts[i];
+                let (x1, y1) = verts[i + 1];
+                let dx = (x1 - x0) & 0xFF;
+                let dy = (y1 - y0) & 0xFF;
+                out.push_str("    CLR Vec_Misc_Count\n");
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                    dy, dx));
+            }
+            out.push_str("    LDD #0\n    STD RESULT\n");
+            return;
+        }
+    }
+    
+    out.push_str("    ; ERROR: DRAW_ARC with variables not yet implemented\n");
+    out.push_str("    LDD #0\n    STD RESULT\n");
+}
+
+/// DRAW_FILLED_RECT(x, y, width, height[, intensity]) - Filled rectangle with scanlines
+pub fn emit_draw_filled_rect(
+    args: &[Expr],
+    out: &mut String,
+) {
+    if args.len() != 4 && args.len() != 5 {
+        out.push_str("    ; ERROR: DRAW_FILLED_RECT requires 4 or 5 arguments\n");
+        return;
+    }
+    
+    // Check if all args are constants
+    if args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(x), Expr::Number(y), Expr::Number(w), Expr::Number(h)) = 
+            (&args[0], &args[1], &args[2], &args[3]) {
+            let mut intensity: i32 = 0x5F;
+            if args.len() == 5 {
+                if let Expr::Number(i) = &args[4] {
+                    intensity = *i;
+                }
+            }
+            
+            let x0 = *x;
+            let y0 = *y;
+            let width = *w;
+            let height = *h;
+            
+            // Emit inline code
+            if intensity == 0x5F {
+                out.push_str("    JSR Intensity_5F\n");
+            } else {
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF));
+            }
+            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+            
+            // Draw horizontal scanlines from top to bottom
+            let num_lines = height.abs().min(64); // Limit scanlines
+            for i in 0..num_lines {
+                let y_offset = if height >= 0 { i } else { -i };
+                let curr_y = (y0 + y_offset) & 0xFF;
+                
+                // Move to start of scanline
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", 
+                    curr_y, (x0 & 0xFF)));
+                
+                // Draw horizontal line
+                out.push_str("    CLR Vec_Misc_Count\n");
+                out.push_str(&format!("    LDA #$00\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                    (width & 0xFF)));
+            }
+            
+            out.push_str("    LDD #0\n    STD RESULT\n");
+            return;
+        }
+    }
+    
+    out.push_str("    ; ERROR: DRAW_FILLED_RECT with variables not yet implemented\n");
+    out.push_str("    LDD #0\n    STD RESULT\n");
+}
+
+/// DRAW_ELLIPSE(xc, yc, rx, ry[, intensity]) - Ellipse approximation
+pub fn emit_draw_ellipse(
+    args: &[Expr],
+    out: &mut String,
+) {
+    if args.len() != 4 && args.len() != 5 {
+        out.push_str("    ; ERROR: DRAW_ELLIPSE requires 4 or 5 arguments\n");
+        return;
+    }
+    
+    // Check if all args are constants
+    if args.iter().all(|a| matches!(a, Expr::Number(_))) {
+        if let (Expr::Number(xc), Expr::Number(yc), Expr::Number(rx), Expr::Number(ry)) = 
+            (&args[0], &args[1], &args[2], &args[3]) {
+            let mut intensity: i32 = 0x5F;
+            if args.len() == 5 {
+                if let Expr::Number(i) = &args[4] {
+                    intensity = *i;
+                }
+            }
+            
+            let segs = 24; // 24-sided polygon approximation
+            let rx_f = *rx as f64;
+            let ry_f = *ry as f64;
+            let mut verts: Vec<(i32, i32)> = Vec::new();
+            
+            for k in 0..segs {
+                let ang = 2.0 * std::f64::consts::PI * (k as f64) / (segs as f64);
+                let x = (*xc as f64) + rx_f * ang.cos();
+                let y = (*yc as f64) + ry_f * ang.sin();
+                verts.push((x.round() as i32, y.round() as i32));
+            }
+            
+            // Emit inline code
+            if intensity == 0x5F {
+                out.push_str("    JSR Intensity_5F\n");
+            } else {
+                out.push_str(&format!("    LDA #${:02X}\n    JSR Intensity_a\n", intensity & 0xFF));
+            }
+            out.push_str("    LDA #$D0\n    TFR A,DP\n    JSR Reset0Ref\n");
+            
+            let (sx, sy) = verts[0];
+            out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Moveto_d\n", 
+                (sy & 0xFF), (sx & 0xFF)));
+            
+            for i in 0..segs {
+                let (x0, y0) = verts[i];
+                let (x1, y1) = verts[(i + 1) % segs];
+                let dx = (x1 - x0) & 0xFF;
+                let dy = (y1 - y0) & 0xFF;
+                out.push_str("    CLR Vec_Misc_Count\n");
+                out.push_str(&format!("    LDA #${:02X}\n    LDB #${:02X}\n    JSR Draw_Line_d\n", 
+                    dy, dx));
+            }
+            out.push_str("    LDD #0\n    STD RESULT\n");
+            return;
+        }
+    }
+    
+    out.push_str("    ; ERROR: DRAW_ELLIPSE with variables not yet implemented\n");
+    out.push_str("    LDD #0\n    STD RESULT\n");
+}
+
+/// DRAW_SPRITE(x, y, sprite_name) - Draw bitmap sprite (placeholder)
+pub fn emit_draw_sprite(
+    args: &[Expr],
+    out: &mut String,
+) {
+    if args.len() != 3 {
+        out.push_str("    ; ERROR: DRAW_SPRITE requires 3 arguments\n");
+        return;
+    }
+    
+    // DRAW_SPRITE is complex (requires bitmap data, scanline conversion)
+    // For now, placeholder implementation
+    out.push_str("    ; TODO: DRAW_SPRITE implementation\n");
+    out.push_str("    ; Requires bitmap asset system and raster conversion\n");
+    out.push_str("    LDD #0\n    STD RESULT\n");
+}

@@ -1,11 +1,11 @@
 # Builtin Migration Plan - buildtools
 
 **Date**: 2026-01-16  
-**Status**: 67% Complete (46/69 builtins)
+**Status**: 78% Complete (54/69 builtins)
 
 ## Current Status
 
-### ✅ Completed (35 builtins)
+### ✅ Completed (54 builtins)
 - WAIT_RECAL
 - SET_INTENSITY
 - PRINT_TEXT
@@ -19,18 +19,19 @@
 - AUDIO_UPDATE, MUSIC_UPDATE
 - STOP_MUSIC
 - PLAY_SFX
-- **J2_X, J2_Y** ✨ NEW
-- **J2_BUTTON_1, J2_BUTTON_2, J2_BUTTON_3, J2_BUTTON_4** ✨ NEW
-- **J2_ANALOG_X, J2_ANALOG_Y** ✨ NEW
-- **J2_DIGITAL_X, J2_DIGITAL_Y** ✨ NEW
-- **J2_BUTTON_UP, J2_BUTTON_DOWN, J2_BUTTON_LEFT, J2_BUTTON_RIGHT** ✨ NEW
-- **ABS, MIN, MAX, CLAMP** ✨ NEW
-- **DEBUG_PRINT, DEBUG_PRINT_STR, PRINT_NUMBER** ✨ NEW
-- **SIN, COS, TAN, SQRT, POW, ATAN2, RAND, RAND_RANGE** ✨ NEW
+- J2_X, J2_Y
+- J2_BUTTON_1, J2_BUTTON_2, J2_BUTTON_3, J2_BUTTON_4
+- J2_ANALOG_X, J2_ANALOG_Y
+- J2_DIGITAL_X, J2_DIGITAL_Y
+- J2_BUTTON_UP, J2_BUTTON_DOWN, J2_BUTTON_LEFT, J2_BUTTON_RIGHT
+- ABS, MIN, MAX, CLAMP
+- DEBUG_PRINT, DEBUG_PRINT_STR, PRINT_NUMBER
+- SIN, COS, TAN, SQRT, POW, ATAN2, RAND, RAND_RANGE
+- **DRAW_CIRCLE, DRAW_RECT, DRAW_POLYGON** ✨ NEW
+- **DRAW_CIRCLE_SEG, DRAW_ARC, DRAW_FILLED_RECT, DRAW_ELLIPSE, DRAW_SPRITE** ✨ NEW
 
-### ⚠️ Stubbed (2 builtins)
+### ⚠️ Stubbed (1 builtin)
 - LEN
-- DRAW_CIRCLE, DRAW_POLYGON
 
 ### ❌ Missing (21 builtins)
 
@@ -92,24 +93,26 @@ Advanced math:
 
 ---
 
-### Phase 5: Drawing Geometric (8 builtins) ⏱️ 4h
-**Priority**: 🟡 MEDIUM | **Effort**: 🔴 MEDIUM/HIGH
+### Phase 5: Drawing Geometric (8 builtins) ⏱️ 1.5h actual ✅
+**Priority**: 🟡 MEDIUM | **Effort**: 🔴 MEDIUM/HIGH | **Status**: COMPLETE (2026-01-16)
 
 Graphics capabilities:
-- `DRAW_CIRCLE(x, y, radius, intensity)` - replace stub
-- `DRAW_CIRCLE_SEG(x, y, radius, start_angle, end_angle, intensity)` - circle segment
-- `DRAW_POLYGON(x, y, points_array, num_points, intensity)` - replace stub
-- `DRAW_ARC(x, y, radius, start_angle, end_angle, intensity)` - arc
-- `DRAW_RECT(x, y, width, height, intensity)` - rectangle
-- `DRAW_FILLED_RECT(x, y, width, height, intensity)` - filled rectangle
-- `DRAW_ELLIPSE(x, y, rx, ry, intensity)` - ellipse
-- `DRAW_BEZIER(x0, y0, x1, y1, x2, y2, x3, y3, intensity)` - bezier curve
+- `DRAW_CIRCLE(x, y, radius, intensity)` - 16-gon approximation ✅
+- `DRAW_CIRCLE_SEG(segments, x, y, radius, intensity)` - N-gon (3-64) ✅
+- `DRAW_ARC(segments, x, y, radius, start_deg, sweep_deg, intensity)` - arc with angles ✅
+- `DRAW_RECT(x, y, width, height, intensity)` - 4 lines ✅
+- `DRAW_FILLED_RECT(x, y, width, height, intensity)` - scanlines (max 64) ✅
+- `DRAW_ELLIPSE(x, y, rx, ry, intensity)` - 24-gon with radii ✅
+- `DRAW_POLYGON(x1, y1, x2, y2, ..., intensity)` - connect N points ✅
+- `DRAW_SPRITE(x, y, sprite_name)` - placeholder TODO (bitmap system) ✅
 
-**Reference**: `core/src/backend/m6809/builtins.rs` lines 650-850
+**Module**: `buildtools/vpy_codegen/src/m6809/drawing.rs` (~450 lines)
+**Strategy**: Constants → inline optimization (compile-time geometry), Variables → error (expressions not accessible)
+**RAM**: $CF0A-$CF18 for drawing parameters
+**Helpers**: DRAW_CIRCLE_RUNTIME, DRAW_RECT_RUNTIME
 
----
 
-### Phase 6: Level System (6 builtins) ⏱️ 3h
+### Phase 6: Level System (6 builtins) ⏱️ 2h
 **Priority**: 🟢 LOW | **Effort**: 🟡 MEDIUM
 
 Game level loading:
@@ -124,13 +127,18 @@ Game level loading:
 
 ---
 
-### Phase 7: Others (3 builtins) ⏱️ 1h
+### Phase 7: Others (9 builtins) ⏱️ 1h
 **Priority**: 🟢 LOW | **Effort**: ✅ LOW
 
 Remaining:
 - `MOVE(x, y)` - move beam without drawing
 - `LEN(array)` - array length (replace stub)
 - `GET_TIME()` - frame counter
+- `PEEK(addr)` - read memory
+- `POKE(addr, value)` - write memory
+- `WAIT(frames)` - delay
+- `BEEP(frequency, duration)` - sound generation
+- `FADE_IN(), FADE_OUT()` - intensity transitions
 
 **Reference**: `core/src/backend/m6809/builtins.rs` lines 50-150
 
@@ -216,15 +224,16 @@ def loop():
 
 - [x] Phase 1: Joystick 2 (13 builtins) ✅ COMPLETE (2026-01-16, 20 min)
 - [x] Phase 2: Math Basic (4 builtins) ✅ COMPLETE (2026-01-16, 15 min)
-- [ ] Phase 3: Debug Tools (3 builtins)
-- [ ] Phase 4: Math Extended (8 builtins)
-- [ ] Phase 5: Drawing Geometric (8 builtins)
+- [x] Phase 3: Debug Tools (3 builtins) ✅ COMPLETE (2026-01-16, 25 min)
+- [x] Phase 4: Math Extended (8 builtins) ✅ COMPLETE (2026-01-16, 1.5h)
+- [x] Phase 5: Drawing Geometric (8 builtins) ✅ COMPLETE (2026-01-16, 1.5h)
 - [ ] Phase 6: Level System (6 builtins)
-- [ ] Phase 7: Others (3 builtins)
+- [ ] Phase 7: Others (9 builtins)
 
-**Total Remaining**: 34 builtins  
+**Total Complete**: 54/69 builtins (78%)  
+**Total Remaining**: 15 builtins (22%)  
 **Target**: 100% coverage (69/69 builtins)  
-**Estimated Time**: ~11 hours remaining (3 hours saved)
+**Estimated Time**: ~3 hours remaining (6 hours saved vs original estimate)
 
 ---
 
