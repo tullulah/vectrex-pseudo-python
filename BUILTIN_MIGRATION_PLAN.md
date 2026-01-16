@@ -1,11 +1,11 @@
 # Builtin Migration Plan - buildtools
 
 **Date**: 2026-01-16  
-**Status**: 45% Complete (31/69 builtins)
+**Status**: 55% Complete (38/69 builtins)
 
 ## Current Status
 
-### ✅ Completed (31 builtins)
+### ✅ Completed (35 builtins)
 - WAIT_RECAL
 - SET_INTENSITY
 - PRINT_TEXT
@@ -24,12 +24,14 @@
 - **J2_ANALOG_X, J2_ANALOG_Y** ✨ NEW
 - **J2_DIGITAL_X, J2_DIGITAL_Y** ✨ NEW
 - **J2_BUTTON_UP, J2_BUTTON_DOWN, J2_BUTTON_LEFT, J2_BUTTON_RIGHT** ✨ NEW
+- **ABS, MIN, MAX, CLAMP** ✨ NEW
+- **DEBUG_PRINT, DEBUG_PRINT_STR, PRINT_NUMBER** ✨ NEW
 
-### ⚠️ Stubbed (6 builtins)
-- ABS, MIN, MAX, LEN
+### ⚠️ Stubbed (2 builtins)
+- LEN
 - DRAW_CIRCLE, DRAW_POLYGON
 
-### ❌ Missing (32 builtins)
+### ❌ Missing (29 builtins)
 
 ---
 
@@ -62,8 +64,8 @@ Essential game logic:
 
 ---
 
-### Phase 3: Debug Tools (3 builtins) ⏱️ 2h
-**Priority**: 🔴 HIGH | **Effort**: 🟡 MEDIUM
+### Phase 3: Debug Tools (3 builtins) ⏱️ 25min actual ✅
+**Priority**: 🔴 HIGH | **Effort**: 🟡 MEDIUM | **Status**: COMPLETE (2025-01-16)
 
 Development essentials:
 - `DEBUG_PRINT(x, y, msg)` - print debug message
@@ -212,16 +214,16 @@ def loop():
 ## Progress Tracking
 
 - [x] Phase 1: Joystick 2 (13 builtins) ✅ COMPLETE (2026-01-16, 20 min)
-- [ ] Phase 2: Math Basic (4 builtins)
+- [x] Phase 2: Math Basic (4 builtins) ✅ COMPLETE (2026-01-16, 15 min)
 - [ ] Phase 3: Debug Tools (3 builtins)
 - [ ] Phase 4: Math Extended (8 builtins)
 - [ ] Phase 5: Drawing Geometric (8 builtins)
 - [ ] Phase 6: Level System (6 builtins)
 - [ ] Phase 7: Others (3 builtins)
 
-**Total Remaining**: 32 builtins  
+**Total Remaining**: 34 builtins  
 **Target**: 100% coverage (69/69 builtins)  
-**Estimated Time**: ~12 hours remaining (2 hours saved)
+**Estimated Time**: ~11 hours remaining (3 hours saved)
 
 ---
 

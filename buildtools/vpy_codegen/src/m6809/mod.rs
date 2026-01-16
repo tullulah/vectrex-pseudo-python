@@ -15,6 +15,7 @@ pub mod expressions;
 pub mod builtins;
 pub mod helpers;
 pub mod math;
+pub mod debug;
 
 use vpy_parser::Module;
 
@@ -69,7 +70,8 @@ pub fn generate_m6809_asm(
     asm.push_str("CURRENT_ROM_BANK EQU $C880\n");
     asm.push_str("RESULT EQU $CF00\n");
     asm.push_str("TMPPTR EQU $CF02\n");
-    asm.push_str("TMPPTR2 EQU $CF04\n\n");  // For array indexed assignments
+    asm.push_str("TMPPTR2 EQU $CF04\n");
+    asm.push_str("NUM_STR EQU $CF06   ; 2-byte buffer for PRINT_NUMBER hex output\n\n");
     
     // Generate user variables
     let vars_asm = variables::generate_variables(module)?;
