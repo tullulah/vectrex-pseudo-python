@@ -40,7 +40,26 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - Discovers asset files (`.vec`, `.vmus`)
 - **Tests**: 5/5 passing (single-bank, multibank, error cases)
 
-### ⏳ Phase 2-9: In Development
+### ✅ Phase 2: vpy_parser (COMPLETE)
+- Full lexer with 11 tests passing
+- Complete AST types (345 lines)
+- Parser with 41 tests passing (1496 lines)
+- Expression, statement, and module parsing
+
+### ✅ Phase 3: vpy_unifier (COMPLETE)
+- Module dependency graph with cycle detection
+- Topological sorting (Kahn's algorithm)
+- Symbol resolution with MODULE_symbol naming
+- 24 comprehensive tests passing
+
+### ✅ Phase 5: vpy_codegen - Runtime Helper Optimization (COMPLETE)
+- **Tree Shaking System**: Automatic detection and elimination of unused runtime helpers
+- **Modular Architecture**: 5 helper modules (drawing, math, joystick, level, utilities)
+- **Usage Analysis**: AST traversal detects which helpers are actually needed
+- **Results**: Only emits helpers used in code (e.g., joystick_test: 3/17 helpers)
+- **Benefits**: Smaller binaries, zero manual configuration, automatic dependency resolution
+
+### ⏳ Phase 4-9: In Development
 - Placeholders created for all remaining crates
 - Dependencies properly declared
 - All crates compile without errors
