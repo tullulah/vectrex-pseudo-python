@@ -74,13 +74,26 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - **Main module reduced**: 3090 → 2651 lines (-14%)
 - **Tests**: 18 total (15 legacy + 3 new modules)
 - **Maintainability**: Single responsibility per module
-- **Next**: Phase 7 linker (uses assembler output)
+- **Optional**: Could extract `instructions.rs`, `branches.rs` (see REFACTOR_PROGRESS.md)
 
-### ⏳ Phase 7-9: In Development
-- Placeholders created for all remaining crates
-- Dependencies properly declared
-- All crates compile without errors
-- Ready for porting from `core/src/`
+### ✅ Phase 7: vpy_linker (IN PROGRESS - Day 1/5.5 Complete)
+**Purpose**: Links .vo object files into final multibank ROM
+
+**Day 1 Complete** (2026-01-17):
+- ✅ `object.rs`: VectrexObject format (305 lines, 3 tests)
+- ✅ Section/Symbol/Relocation types with serde
+- ✅ Binary serialization with magic number validation
+- ✅ Tests: create_empty, section_size, serialization
+
+**Pending**:
+- Day 2: Symbol resolver (collect, verify, assign)
+- Day 3: Relocation engine
+- Day 4: Integration with bank allocator
+- Day 5: Multibank + polish
+
+### ⏳ Phase 8-9: Planned
+- Phase 8: vpy_binary_writer (trivial ROM assembly)
+- Phase 9: vpy_debug_gen (PDB generation)
 
 ## Getting Started
 
@@ -164,8 +177,9 @@ buildtools/
 │   │   └── mod.rs
 │   ├── REFACTOR_PROGRESS.md (detailed module documentation)
 │   └── Cargo.toml
+│   └── Note: Further refactoring optional (instructions.rs, branches.rs)
 │
-├── vpy_linker/            ⏳ Phase 7 (TODO - CRITICAL)
+├── vpy_linker/            🚀 Phase 7 (IN PROGRESS)
 ├── vpy_binary_writer/     ✅ Complete (Phase 8)
 └── vpy_debug_gen/         ⏳ Phase 9 (TODO)
 ```
