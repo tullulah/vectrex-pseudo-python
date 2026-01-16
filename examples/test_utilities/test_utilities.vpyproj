@@ -1,0 +1,11 @@
+[package]
+name = "test_utilities"
+version = "0.1.0"
+
+[metadata]
+title = "Utilities Test"
+author = "VPy Test"
+description = "Test all 9 utility builtins"
+
+[build]
+entry = "src/main.vpy"

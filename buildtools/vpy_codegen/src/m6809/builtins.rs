@@ -13,6 +13,7 @@ use super::debug;
 use super::math_extended;
 use super::drawing;
 use super::level;
+use super::utilities;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -419,7 +420,45 @@ pub fn emit_builtin(
             true
         }
         
+        // Utilities (9 builtins)
+        "MOVE" => {
+            utilities::emit_move(args, out);
+            true
+        }
         "LEN" => {
+            utilities::emit_len(args, out);
+            true
+        }
+        "GET_TIME" => {
+            utilities::emit_get_time(args, out);
+            true
+        }
+        "PEEK" => {
+            utilities::emit_peek(args, out);
+            true
+        }
+        "POKE" => {
+            utilities::emit_poke(args, out);
+            true
+        }
+        "WAIT" => {
+            utilities::emit_wait(args, out);
+            true
+        }
+        "BEEP" => {
+            utilities::emit_beep(args, out);
+            true
+        }
+        "FADE_IN" => {
+            utilities::emit_fade_in(args, out);
+            true
+        }
+        "FADE_OUT" => {
+            utilities::emit_fade_out(args, out);
+            true
+        }
+        
+        "OLD_LEN" => {
             out.push_str("    ; LEN: Get array/string length\n");
             expressions::emit_simple_expr(&args[0], out);
             out.push_str("    ; TODO: LEN implementation\n");
