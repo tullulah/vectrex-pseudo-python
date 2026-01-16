@@ -48,6 +48,10 @@ LEVEL_WIDTH EQU $CF22          ; Level width in tiles (1 byte)
 LEVEL_HEIGHT EQU $CF23         ; Level height in tiles (1 byte)
 LEVEL_TILE_SIZE EQU $CF24      ; Tile size in pixels (1 byte)
 
+; Utilities variables
+FRAME_COUNTER EQU $CF26        ; Frame counter (2 bytes)
+CURRENT_INTENSITY EQU $CF28    ; Current intensity for fade effects (1 byte)
+
 ; Function argument slots
 VAR_ARG0 EQU $CFE0+0
 VAR_ARG1 EQU $CFE0+2
@@ -572,18 +576,19 @@ DRAW_CIRCLE_RUNTIME:
 
 DRAW_RECT_RUNTIME:
     ; Input: DRAW_RECT_X, DRAW_RECT_Y, DRAW_RECT_WIDTH, DRAW_RECT_HEIGHT, DRAW_RECT_INTENSITY
+    ; Draws 4 sides of rectangle
     
-    ; Read parameters BEFORE DP change
+    ; Save parameters to stack before DP change
     LDB DRAW_RECT_INTENSITY
-    PSHS B              ; Save intensity
-    LDB DRAW_RECT_WIDTH
-    PSHS B              ; Save width
+    PSHS B
     LDB DRAW_RECT_HEIGHT
-    PSHS B              ; Save height
-    LDB DRAW_RECT_X
-    PSHS B              ; Save x
+    PSHS B
+    LDB DRAW_RECT_WIDTH
+    PSHS B
     LDB DRAW_RECT_Y
-    PSHS B              ; Save y
+    PSHS B
+    LDB DRAW_RECT_X
+    PSHS B
     
     ; Setup BIOS
     LDA #$D0
@@ -591,41 +596,35 @@ DRAW_RECT_RUNTIME:
     JSR Reset0Ref
     
     ; Set intensity
-    LDA 4,S             ; Get intensity from stack
-    CMPA #$5F
-    BEQ .DRR_INT_5F
+    LDA 4,S             ; intensity
     JSR Intensity_a
-    BRA .DRR_AFTER_INT
-.DRR_INT_5F:
-    JSR Intensity_5F
-.DRR_AFTER_INT:
     
-    ; Move to start position (x, y)
-    LDA ,S              ; y from stack
-    LDB 1,S             ; x from stack
-    JSR Moveto_d
+    ; Move to starting position (x, y)
+    LDA 1,S             ; y
+    LDB ,S              ; x
+    JSR Moveto_d_7F
     
-    ; Draw 4 sides
-    ; Side 1: Right (width, 0)
+    ; Draw right side
     CLR Vec_Misc_Count
     LDA #0
-    LDB 3,S             ; width
+    LDB 2,S             ; width
     JSR Draw_Line_d
     
-    ; Side 2: Down (0, height)
+    ; Draw down side
     CLR Vec_Misc_Count
-    LDA 2,S             ; height
+    LDA 3,S             ; height
+    NEGA                ; -height
     LDB #0
     JSR Draw_Line_d
     
-    ; Side 3: Left (-width, 0)
+    ; Draw left side
     CLR Vec_Misc_Count
     LDA #0
-    LDB 3,S             ; width
+    LDB 2,S             ; width
     NEGB                ; -width
     JSR Draw_Line_d
     
-    ; Side 4: Up (0, -height)
+    ; Draw up side
     CLR Vec_Misc_Count
     LDA 2,S             ; height
     NEGA                ; -height
@@ -637,67 +636,171 @@ DRAW_RECT_RUNTIME:
 
 ; === SHOW_LEVEL_RUNTIME - Render level tiles ===
 SHOW_LEVEL_RUNTIME:
-    LDA #8
-    STA LEVEL_TILE_SIZE    ; 8x8 pixel tiles
+    ; Input: LEVEL_PTR (pointer to level data)
+    ;        LEVEL_WIDTH, LEVEL_HEIGHT (dimensions)
+    ; Renders 8x8 tiles as rectangles
     
-    ; Calculate starting position (top-left of screen)
-    LDA LEVEL_HEIGHT       ; Y loop counter
-    STA TMPPTR+1           ; Store Y counter
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
     
-SLR_Y_LOOP:
-    LDA LEVEL_WIDTH        ; X loop counter
-    STA TMPPTR             ; Store X counter
+    ; Outer loop: Y (rows)
+    CLR LEVEL_Y_IDX
+.SL_Y_LOOP:
+    LDA LEVEL_Y_IDX
+    CMPA LEVEL_HEIGHT
+    BHS .SL_DONE         ; If Y >= height, done
     
-SLR_X_LOOP:
-    ; Calculate tile offset
-    LDA LEVEL_HEIGHT
-    SUBA TMPPTR+1          ; Y index
+    ; Inner loop: X (columns)
+    CLR LEVEL_X_IDX
+.SL_X_LOOP:
+    LDA LEVEL_X_IDX
+    CMPA LEVEL_WIDTH
+    BHS .SL_NEXT_Y       ; If X >= width, next row
+    
+    ; Calculate tile offset: (Y * width) + X
+    LDA LEVEL_Y_IDX
     LDB LEVEL_WIDTH
-    MUL                    ; D = y * width
-    PSHS D
-    LDA LEVEL_WIDTH
-    SUBA TMPPTR            ; X index
-    CLRB
-    TFR A,B
-    ADDD ,S++              ; D = y*width + x
-    ADDD #2                ; Skip header
+    MUL                  ; D = Y * width
+    ADDB LEVEL_X_IDX     ; D += X
+    ADCA #0
+    
+    ; Add to level pointer (skip 2-byte header)
+    ADDD #2              ; Skip width, height bytes
     ADDD LEVEL_PTR
-    TFR D,X
+    TFR D,X              ; X = address of tile
+    LDA ,X               ; Load tile value
     
-    ; Load tile value
-    LDA ,X
-    BEQ SLR_SKIP_TILE      ; Skip if empty
+    ; If tile is 0 (empty), skip drawing
+    CMPA #0
+    BEQ .SL_SKIP_TILE
     
-    ; Draw tile rectangle
-    LDA LEVEL_WIDTH
-    SUBA TMPPTR
-    LDB LEVEL_TILE_SIZE
-    MUL
-    SUBD #64
-    TFR B,A
-    PSHS A
+    ; Draw tile as 8x8 rectangle
+    ; Calculate screen position
+    LDA LEVEL_X_IDX
+    LDB #8
+    MUL                  ; B = X * 8 (pixel X)
+    SUBB #128            ; Center horizontally
+    STB LEVEL_TEMP       ; Save pixel X
     
-    LDA LEVEL_HEIGHT
-    SUBA TMPPTR+1
-    LDB LEVEL_TILE_SIZE
-    MUL
-    SUBD #64
-    TFR B,A
-    PULS B
+    LDA LEVEL_Y_IDX
+    LDB #8
+    MUL                  ; B = Y * 8 (pixel Y)
+    SUBB #128            ; Center vertically
+    NEGB                 ; Flip Y (screen coords)
+    TFR B,A              ; Y to A
+    LDB LEVEL_TEMP       ; X to B
     
-    JSR Intensity_5F
+    ; Move to tile position
     JSR Moveto_d_7F
-    LDA LEVEL_TILE_SIZE
-    CLRB
-    JSR Draw_Line_d
     
-SLR_SKIP_TILE:
-    DEC TMPPTR
-    BNE SLR_X_LOOP
+    ; Draw 8x8 rectangle
+    LDA #$7F
+    JSR Intensity_a
     
-    DEC TMPPTR+1
-    BNE SLR_Y_LOOP
+    CLR Vec_Misc_Count
+    LDA #0
+    LDB #8
+    JSR Draw_Line_d      ; Right
     
+    CLR Vec_Misc_Count
+    LDA #-8
+    LDB #0
+    JSR Draw_Line_d      ; Down
+    
+    CLR Vec_Misc_Count
+    LDA #0
+    LDB #-8
+    JSR Draw_Line_d      ; Left
+    
+    CLR Vec_Misc_Count
+    LDA #8
+    LDB #0
+    JSR Draw_Line_d      ; Up
+    
+.SL_SKIP_TILE:
+    ; Next column
+    INC LEVEL_X_IDX
+    BRA .SL_X_LOOP
+    
+.SL_NEXT_Y:
+    ; Next row
+    INC LEVEL_Y_IDX
+    BRA .SL_Y_LOOP
+    
+.SL_DONE:
+    RTS
+
+; === FADE_IN_RUNTIME - Gradual intensity increase ===
+FADE_IN_RUNTIME:
+    ; Input: CURRENT_INTENSITY (target intensity)
+    ; Gradually increases from 0 to target in 8 steps
+    
+    LDA CURRENT_INTENSITY
+    STA TMPPTR+1         ; Save target intensity
+    CLR TMPPTR           ; Step counter = 0
+    
+.FI_LOOP:
+    LDA TMPPTR
+    CMPA #8
+    BHS .FI_DONE
+    
+    ; Calculate intensity: (step * target) / 8
+    LDB TMPPTR+1         ; target
+    MUL                  ; D = step * target
+    LSRA                 ; Divide by 8
+    RORB
+    LSRA
+    RORB
+    LSRA
+    RORB
+    
+    ; Set intensity
+    TFR B,A
+    JSR Intensity_a
+    JSR Wait_Recal
+    
+    INC TMPPTR
+    BRA .FI_LOOP
+    
+.FI_DONE:
+    RTS
+
+; === FADE_OUT_RUNTIME - Gradual intensity decrease ===
+FADE_OUT_RUNTIME:
+    ; Input: CURRENT_INTENSITY (starting intensity)
+    ; Gradually decreases from current to 0 in 8 steps
+    
+    LDA CURRENT_INTENSITY
+    STA TMPPTR+1         ; Save starting intensity
+    CLR TMPPTR           ; Step counter = 0
+    
+.FO_LOOP:
+    LDA TMPPTR
+    CMPA #8
+    BHS .FO_DONE
+    
+    ; Calculate intensity: ((8 - step) * target) / 8
+    LDA #8
+    SUBA TMPPTR          ; A = 8 - step
+    LDB TMPPTR+1         ; B = target
+    MUL                  ; D = (8-step) * target
+    LSRA                 ; Divide by 8
+    RORB
+    LSRA
+    RORB
+    LSRA
+    RORB
+    
+    ; Set intensity
+    TFR B,A
+    JSR Intensity_a
+    JSR Wait_Recal
+    
+    INC TMPPTR
+    BRA .FO_LOOP
+    
+.FO_DONE:
     RTS
 
 ;***************************************************************************

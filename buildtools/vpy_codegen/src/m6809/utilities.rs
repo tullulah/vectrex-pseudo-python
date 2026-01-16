@@ -245,3 +245,80 @@ pub fn emit_fade_out(_args: &[Expr], out: &mut String) {
     out.push_str("    LDD #0\n");
     out.push_str("    STD RESULT\n");
 }
+
+/// Emit runtime helpers for utilities builtins
+pub fn emit_runtime_helpers(out: &mut String) {
+    // FADE_IN_RUNTIME: Gradual intensity increase
+    out.push_str("; === FADE_IN_RUNTIME - Gradual intensity increase ===\n");
+    out.push_str("FADE_IN_RUNTIME:\n");
+    out.push_str("    ; Input: CURRENT_INTENSITY (target intensity)\n");
+    out.push_str("    ; Gradually increases from 0 to target in 8 steps\n");
+    out.push_str("    \n");
+    out.push_str("    LDA CURRENT_INTENSITY\n");
+    out.push_str("    STA TMPPTR+1         ; Save target intensity\n");
+    out.push_str("    CLR TMPPTR           ; Step counter = 0\n");
+    out.push_str("    \n");
+    out.push_str(".FI_LOOP:\n");
+    out.push_str("    LDA TMPPTR\n");
+    out.push_str("    CMPA #8\n");
+    out.push_str("    BHS .FI_DONE\n");
+    out.push_str("    \n");
+    out.push_str("    ; Calculate intensity: (step * target) / 8\n");
+    out.push_str("    LDB TMPPTR+1         ; target\n");
+    out.push_str("    MUL                  ; D = step * target\n");
+    out.push_str("    LSRA                 ; Divide by 8\n");
+    out.push_str("    RORB\n");
+    out.push_str("    LSRA\n");
+    out.push_str("    RORB\n");
+    out.push_str("    LSRA\n");
+    out.push_str("    RORB\n");
+    out.push_str("    \n");
+    out.push_str("    ; Set intensity\n");
+    out.push_str("    TFR B,A\n");
+    out.push_str("    JSR Intensity_a\n");
+    out.push_str("    JSR Wait_Recal\n");
+    out.push_str("    \n");
+    out.push_str("    INC TMPPTR\n");
+    out.push_str("    BRA .FI_LOOP\n");
+    out.push_str("    \n");
+    out.push_str(".FI_DONE:\n");
+    out.push_str("    RTS\n\n");
+    
+    // FADE_OUT_RUNTIME: Gradual intensity decrease
+    out.push_str("; === FADE_OUT_RUNTIME - Gradual intensity decrease ===\n");
+    out.push_str("FADE_OUT_RUNTIME:\n");
+    out.push_str("    ; Input: CURRENT_INTENSITY (starting intensity)\n");
+    out.push_str("    ; Gradually decreases from current to 0 in 8 steps\n");
+    out.push_str("    \n");
+    out.push_str("    LDA CURRENT_INTENSITY\n");
+    out.push_str("    STA TMPPTR+1         ; Save starting intensity\n");
+    out.push_str("    CLR TMPPTR           ; Step counter = 0\n");
+    out.push_str("    \n");
+    out.push_str(".FO_LOOP:\n");
+    out.push_str("    LDA TMPPTR\n");
+    out.push_str("    CMPA #8\n");
+    out.push_str("    BHS .FO_DONE\n");
+    out.push_str("    \n");
+    out.push_str("    ; Calculate intensity: ((8 - step) * target) / 8\n");
+    out.push_str("    LDA #8\n");
+    out.push_str("    SUBA TMPPTR          ; A = 8 - step\n");
+    out.push_str("    LDB TMPPTR+1         ; B = target\n");
+    out.push_str("    MUL                  ; D = (8-step) * target\n");
+    out.push_str("    LSRA                 ; Divide by 8\n");
+    out.push_str("    RORB\n");
+    out.push_str("    LSRA\n");
+    out.push_str("    RORB\n");
+    out.push_str("    LSRA\n");
+    out.push_str("    RORB\n");
+    out.push_str("    \n");
+    out.push_str("    ; Set intensity\n");
+    out.push_str("    TFR B,A\n");
+    out.push_str("    JSR Intensity_a\n");
+    out.push_str("    JSR Wait_Recal\n");
+    out.push_str("    \n");
+    out.push_str("    INC TMPPTR\n");
+    out.push_str("    BRA .FO_LOOP\n");
+    out.push_str("    \n");
+    out.push_str(".FO_DONE:\n");
+    out.push_str("    RTS\n\n");
+}
