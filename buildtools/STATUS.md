@@ -1,15 +1,39 @@
 # BuildTools - Modular Compiler Pipeline
 
-## Current Status (Updated 2026-01-17 - Bank Allocator COMPLETE)
+## Current Status (Updated 2026-01-17 - Phase 6 Refactoring COMPLETE)
 
 ✅ **Phase 1 Complete**: vpy_loader crate is ready
 ✅ **Phase 2a Complete**: vpy_parser lexer (11 tests passing)
 ✅ **Phase 2b Complete**: vpy_parser AST types (345 lines, 100% ported)
 ✅ **Phase 2c Complete**: vpy_parser parser (1496 lines ported, entry point wired, 41 tests passing)
-✅ **Phase 3 Complete**: vpy_unifier module resolution (24 tests passing)
+✅ **Phase 3 Complete**: vpy_unifier module resolution (24 tests passing, symbol case fixed)
 ✅ **Phase 4 Complete**: vpy_bank_allocator sequential assignment (12 tests passing)
 ✅ **Phase 5 Optimization Complete**: vpy_codegen tree shaking for runtime helpers
-⏳ **Phase 6 Next**: vpy_assembler (M6809 ASM to object format)
+✅ **Phase 6 Refactoring Complete**: vpy_assembler modular segregation (18 tests passing)
+⏳ **Phase 7 Next**: vpy_linker (real relocation, single source of truth)
+
+### Session 2026-01-17: AST Evolution & Phase 6 Refactoring Complete ✅
+- ✅ **AST Modernization**: Parser AST evolved to separate expression types
+  - `Expr::Binary/Compare/Logic` separate variants (was single BinaryOp)
+  - `Expr::Not/BitNot` separate (was UnaryOp)
+  - `Expr::Call` tuple variant with CallInfo (was struct)
+  - `BinOp/CmpOp/LogicOp` separate enums
+- ✅ **Compilation Fixes**: Updated all dependent crates for new AST
+  - vpy_codegen helpers.rs: 7 pattern updates
+  - vpy_unifier resolver.rs: Symbol case preservation fix
+  - buildtools tests: Updated CodegenOptions constructors
+- ✅ **Phase 6 Assembler Refactoring**: Segregated monolithic file
+  - Created `parser.rs` (130 lines, 4 tests): Directive/label parsing
+  - Created `expression.rs` (180 lines, 5 tests): Arithmetic evaluation
+  - Created `symbols.rs` (170 lines, 3 tests): VECTREX.I loading
+  - Reduced `asm_to_binary.rs`: 3090 → 2651 lines (-14%)
+- ✅ **Test Status**: All 91 buildtools tests passing
+- ✅ **Core Isolation**: Disabled core from workspace (multibank tests failing)
+- ✅ **Git commits**: 
+  - 4628eb25: Phase 6 refactoring (3 modules created)
+  - 2197013a: AST compilation fixes
+  - 1f9efdf6: Symbol resolver case fix
+  - d5a76d2b: Core isolation + buildtools workspace
 
 ### Session 2026-01-17: Bank Allocator Implementation Complete ✅
 - ✅ **CallGraph Analysis**: AST traversal for function size estimation and call detection
