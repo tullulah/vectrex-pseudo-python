@@ -76,7 +76,7 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - **Maintainability**: Single responsibility per module
 - **Optional**: Could extract `instructions.rs`, `branches.rs` (see REFACTOR_PROGRESS.md)
 
-### ✅ Phase 7: vpy_linker (IN PROGRESS - Day 1/5.5 Complete)
+### ✅ Phase 7: vpy_linker (IN PROGRESS - Day 2/5.5 Complete)
 **Purpose**: Links .vo object files into final multibank ROM
 
 **Day 1 Complete** (2026-01-17):
@@ -85,10 +85,18 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - ✅ Binary serialization with magic number validation
 - ✅ Tests: create_empty, section_size, serialization
 
+**Day 2 Complete** (2026-01-17):
+- ✅ `resolver.rs`: 4-step symbol resolution algorithm (441 lines, 5 tests)
+- ✅ Step 1: collect_symbols() - Build global table, detect duplicates
+- ✅ Step 2: verify_imports() - Check for undefined symbols
+- ✅ Step 3: assign_addresses() - Calculate final addresses
+- ✅ Step 4: apply_relocations() - Patch code with 7 relocation types
+- ✅ Tests: collect, duplicate, verify success/fail, assign
+- ✅ Enhanced error.rs with DuplicateSymbol, UndefinedSymbols, etc.
+
 **Pending**:
-- Day 2: Symbol resolver (collect, verify, assign)
-- Day 3: Relocation engine
-- Day 4: Integration with bank allocator
+- Day 3: Integration with bank allocator (multibank ROM layout)
+- Day 4: End-to-end single-bank test
 - Day 5: Multibank + polish
 
 ### ⏳ Phase 8-9: Planned
