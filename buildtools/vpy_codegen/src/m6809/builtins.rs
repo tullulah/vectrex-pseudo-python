@@ -12,6 +12,7 @@ use super::math;
 use super::debug;
 use super::math_extended;
 use super::drawing;
+use super::level;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -389,6 +390,32 @@ pub fn emit_builtin(
         }
         "DRAW_SPRITE" => {
             drawing::emit_draw_sprite(args, out);
+            true
+        }
+        
+        // Level System (6 builtins)
+        "LOAD_LEVEL" => {
+            level::emit_load_level(args, out);
+            true
+        }
+        "SHOW_LEVEL" => {
+            level::emit_show_level(args, out);
+            true
+        }
+        "UPDATE_LEVEL" => {
+            level::emit_update_level(args, out);
+            true
+        }
+        "GET_LEVEL_WIDTH" => {
+            level::emit_get_level_width(args, out);
+            true
+        }
+        "GET_LEVEL_HEIGHT" => {
+            level::emit_get_level_height(args, out);
+            true
+        }
+        "GET_LEVEL_TILE" => {
+            level::emit_get_level_tile(args, out);
             true
         }
         

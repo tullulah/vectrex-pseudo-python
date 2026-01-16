@@ -1,0 +1,11 @@
+[package]
+name = "test_level"
+version = "0.1.0"
+
+[metadata]
+title = "Level System Test"
+author = "VPy Test"
+description = "Test all 6 level system builtins"
+
+[build]
+entry = "src/main.vpy"

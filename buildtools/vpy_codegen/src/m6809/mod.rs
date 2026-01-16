@@ -18,6 +18,7 @@ pub mod math;
 pub mod debug;
 pub mod math_extended;
 pub mod drawing;
+pub mod level;
 
 use vpy_parser::Module;
 
@@ -88,6 +89,13 @@ pub fn generate_m6809_asm(
     asm.push_str("DRAW_RECT_WIDTH EQU $CF16\n");
     asm.push_str("DRAW_RECT_HEIGHT EQU $CF17\n");
     asm.push_str("DRAW_RECT_INTENSITY EQU $CF18\n\n");
+    
+    // Level system variables
+    asm.push_str("; Level system variables\n");
+    asm.push_str("LEVEL_PTR EQU $CF20           ; Pointer to current level data (2 bytes)\n");
+    asm.push_str("LEVEL_WIDTH EQU $CF22          ; Level width in tiles (1 byte)\n");
+    asm.push_str("LEVEL_HEIGHT EQU $CF23         ; Level height in tiles (1 byte)\n");
+    asm.push_str("LEVEL_TILE_SIZE EQU $CF24      ; Tile size in pixels (1 byte)\n\n");
     
     // Generate user variables
     let vars_asm = variables::generate_variables(module)?;

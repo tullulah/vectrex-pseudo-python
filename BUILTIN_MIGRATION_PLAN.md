@@ -1,11 +1,11 @@
 # Builtin Migration Plan - buildtools
 
 **Date**: 2026-01-16  
-**Status**: 78% Complete (54/69 builtins)
+**Status**: 87% Complete (60/69 builtins)
 
 ## Current Status
 
-### ✅ Completed (54 builtins)
+### ✅ Completed (60 builtins)
 - WAIT_RECAL
 - SET_INTENSITY
 - PRINT_TEXT
@@ -27,8 +27,10 @@
 - ABS, MIN, MAX, CLAMP
 - DEBUG_PRINT, DEBUG_PRINT_STR, PRINT_NUMBER
 - SIN, COS, TAN, SQRT, POW, ATAN2, RAND, RAND_RANGE
-- **DRAW_CIRCLE, DRAW_RECT, DRAW_POLYGON** ✨ NEW
-- **DRAW_CIRCLE_SEG, DRAW_ARC, DRAW_FILLED_RECT, DRAW_ELLIPSE, DRAW_SPRITE** ✨ NEW
+- DRAW_CIRCLE, DRAW_RECT, DRAW_POLYGON
+- DRAW_CIRCLE_SEG, DRAW_ARC, DRAW_FILLED_RECT, DRAW_ELLIPSE, DRAW_SPRITE
+- **LOAD_LEVEL, SHOW_LEVEL, UPDATE_LEVEL** ✨ NEW
+- **GET_LEVEL_WIDTH, GET_LEVEL_HEIGHT, GET_LEVEL_TILE** ✨ NEW
 
 ### ⚠️ Stubbed (1 builtin)
 - LEN
@@ -112,18 +114,31 @@ Graphics capabilities:
 **Helpers**: DRAW_CIRCLE_RUNTIME, DRAW_RECT_RUNTIME
 
 
-### Phase 6: Level System (6 builtins) ⏱️ 2h
-**Priority**: 🟢 LOW | **Effort**: 🟡 MEDIUM
+### Phase 6: Level System (6 builtins) ⏱️ 40 min actual ✅
+**Priority**: 🟢 LOW | **Effort**: 🟡 MEDIUM | **Status**: COMPLETE (2026-01-16)
 
 Game level loading:
-- `LOAD_LEVEL(level_name)` - load level data
-- `SHOW_LEVEL()` - render level
-- `UPDATE_LEVEL()` - update level state
-- `GET_LEVEL_WIDTH()` - level width
-- `GET_LEVEL_HEIGHT()` - level height
-- `GET_LEVEL_TILE(x, y)` - get tile at position
+- `LOAD_LEVEL(level_name)` - load level data from ROM ✅
+- `SHOW_LEVEL()` - render level tiles ✅
+- `UPDATE_LEVEL()` - update level state (placeholder) ✅
+- `GET_LEVEL_WIDTH()` - level width in tiles ✅
+- `GET_LEVEL_HEIGHT()` - level height in tiles ✅
+- `GET_LEVEL_TILE(x, y)` - get tile at position ✅
 
-**Reference**: `core/src/backend/m6809/builtins.rs` lines 1350-1500
+**Module**: `buildtools/vpy_codegen/src/m6809/level.rs` (~180 lines)
+**Strategy**: 
+- LOAD_LEVEL: String literal → load pointer to ROM level data
+- SHOW_LEVEL: Call SHOW_LEVEL_RUNTIME (tile rendering)
+- GET_LEVEL_TILE: Constant x,y → calculate offset (y*width + x)
+**RAM**: $CF20-$CF24 for level system (pointer, width, height, tile_size)
+**Helpers**: SHOW_LEVEL_RUNTIME (~80 lines, tile iteration + drawing)
+
+**Level Data Format**:
+```
+LEVEL_TEST_LEVEL:
+    FCB width, height    ; Header (2 bytes)
+    FCB tile_data...     ; width * height bytes
+```
 
 ---
 
@@ -227,13 +242,13 @@ def loop():
 - [x] Phase 3: Debug Tools (3 builtins) ✅ COMPLETE (2026-01-16, 25 min)
 - [x] Phase 4: Math Extended (8 builtins) ✅ COMPLETE (2026-01-16, 1.5h)
 - [x] Phase 5: Drawing Geometric (8 builtins) ✅ COMPLETE (2026-01-16, 1.5h)
-- [ ] Phase 6: Level System (6 builtins)
+- [x] Phase 6: Level System (6 builtins) ✅ COMPLETE (2026-01-16, 40 min)
 - [ ] Phase 7: Others (9 builtins)
 
-**Total Complete**: 54/69 builtins (78%)  
-**Total Remaining**: 15 builtins (22%)  
+**Total Complete**: 60/69 builtins (87%)  
+**Total Remaining**: 9 builtins (13%)  
 **Target**: 100% coverage (69/69 builtins)  
-**Estimated Time**: ~3 hours remaining (6 hours saved vs original estimate)
+**Estimated Time**: ~1h remaining (7.5 hours saved vs original estimate)
 
 ---
 
