@@ -1,14 +1,28 @@
 # BuildTools - Modular Compiler Pipeline
 
-## Current Status (Updated 2026-01-16 - Tree Shaking COMPLETE)
+## Current Status (Updated 2026-01-17 - Bank Allocator COMPLETE)
 
 ✅ **Phase 1 Complete**: vpy_loader crate is ready
 ✅ **Phase 2a Complete**: vpy_parser lexer (11 tests passing)
 ✅ **Phase 2b Complete**: vpy_parser AST types (345 lines, 100% ported)
 ✅ **Phase 2c Complete**: vpy_parser parser (1496 lines ported, entry point wired, 41 tests passing)
 ✅ **Phase 3 Complete**: vpy_unifier module resolution (24 tests passing)
+✅ **Phase 4 Complete**: vpy_bank_allocator sequential assignment (12 tests passing)
 ✅ **Phase 5 Optimization Complete**: vpy_codegen tree shaking for runtime helpers
-⏳ **Phase 4 Next**: vpy_bank_allocator (module merging, reference fixing)
+⏳ **Phase 6 Next**: vpy_assembler (M6809 ASM to object format)
+
+### Session 2026-01-17: Bank Allocator Implementation Complete ✅
+- ✅ **CallGraph Analysis**: AST traversal for function size estimation and call detection
+- ✅ **Sequential Algorithm**: Largest-first packing into banks #0 to #(N-2)
+- ✅ **Helper Bank Reservation**: Bank #(N-1) reserved for runtime helpers
+- ✅ **Size Estimation**: ~10 bytes per statement + 20 bytes overhead per function
+- ✅ **BankLayout Output**: Function-to-bank mapping ready for codegen
+- ✅ **12/12 Tests Passing**: Graph creation, allocation, overflow detection
+- ✅ **Files Implemented**:
+  - `graph.rs`: 270 lines (call graph, size estimation, call analysis)
+  - `allocator.rs`: 329 lines (sequential packing, stats, validation)
+  - `lib.rs`: 177 lines (high-level API, BankLayout)
+- ✅ **Real-World Ready**: Handles single-bank and multibank projects
 
 ### Session 2026-01-16: Tree Shaking Implementation Complete ✅
 - ✅ **Infrastructure**: Conditional emission system for 17 runtime helpers
@@ -33,6 +47,49 @@
 - ✅ Git commit 70281f40 pushed to feature/compiler-optimizations
 
 ### Completed Work
+
+#### vpy_bank_allocator (Phase 4) ✅ COMPLETE
+**Sequential Bank Assignment** (2026-01-17)
+- ✅ **CallGraph Construction**: Analyzes Module AST to build function dependency graph
+  - `FunctionNode`: name, size_bytes (estimated), is_critical flag
+  - `CallEdge`: from → to relationships for cross-function calls
+  - Size estimation: 20 bytes overhead + (statement_count × 10 bytes)
+- ✅ **BankAllocator Algorithm**: Sequential packing strategy
+  - Sort functions by size (largest first)
+  - Fill banks #0 to #(N-2) sequentially
+  - Reserve bank #(N-1) for runtime helpers (DRAW_LINE_WRAPPER, MUL16, etc.)
+  - Validation: Detects overflow if functions don't fit
+- ✅ **BankLayout Output**: Function-to-bank mapping structure
+  - `banks: Vec<Vec<String>>`: Functions per bank
+  - `num_banks: usize`: Total banks needed
+  - `bank_size: usize`: ROM bank size (typically 16384 bytes)
+- ✅ **Configuration Support**:
+  - Single-bank: 32KB cartridge (no bank switching)
+  - Multibank: 512KB (32 banks × 16KB) standard Vectrex
+  - Flexible: Up to 256 banks (4MB) with custom config
+- ✅ **12/12 Tests Passing**:
+  - Graph: creation, add node, add edge, from_module (4 tests)
+  - Allocator: config, bank info, simple allocation, overflow (5 tests)
+  - Integration: single bank layout, from_assignments, allocate module (3 tests)
+- ✅ **Files Implemented**:
+  - `graph.rs`: 270 lines (call graph analysis)
+  - `allocator.rs`: 329 lines (sequential assignment algorithm)
+  - `lib.rs`: 177 lines (high-level API)
+  - `error.rs`: Error types for allocation failures
+
+**Key Interfaces:**
+```rust
+pub fn allocate_banks_from_module(
+    module: &Module, 
+    config: BankConfig
+) -> Result<BankLayout, BankAllocatorError>
+
+pub struct BankLayout {
+    pub banks: Vec<Vec<String>>,
+    pub num_banks: usize,
+    pub bank_size: usize,
+}
+```
 
 #### vpy_codegen Runtime Helper Optimization ✅ COMPLETE
 **Tree Shaking System** (commits 9e885571 + ae998907)
