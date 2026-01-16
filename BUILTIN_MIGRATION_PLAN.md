@@ -1,11 +1,11 @@
 # Builtin Migration Plan - buildtools
 
 **Date**: 2026-01-16  
-**Status**: 26% Complete (18/69 builtins)
+**Status**: 45% Complete (31/69 builtins)
 
 ## Current Status
 
-### ✅ Completed (18 builtins)
+### ✅ Completed (31 builtins)
 - WAIT_RECAL
 - SET_INTENSITY
 - PRINT_TEXT
@@ -19,12 +19,17 @@
 - AUDIO_UPDATE, MUSIC_UPDATE
 - STOP_MUSIC
 - PLAY_SFX
+- **J2_X, J2_Y** ✨ NEW
+- **J2_BUTTON_1, J2_BUTTON_2, J2_BUTTON_3, J2_BUTTON_4** ✨ NEW
+- **J2_ANALOG_X, J2_ANALOG_Y** ✨ NEW
+- **J2_DIGITAL_X, J2_DIGITAL_Y** ✨ NEW
+- **J2_BUTTON_UP, J2_BUTTON_DOWN, J2_BUTTON_LEFT, J2_BUTTON_RIGHT** ✨ NEW
 
 ### ⚠️ Stubbed (6 builtins)
 - ABS, MIN, MAX, LEN
 - DRAW_CIRCLE, DRAW_POLYGON
 
-### ❌ Missing (45 builtins)
+### ❌ Missing (32 builtins)
 
 ---
 
@@ -206,7 +211,7 @@ def loop():
 
 ## Progress Tracking
 
-- [ ] Phase 1: Joystick 2 (13 builtins)
+- [x] Phase 1: Joystick 2 (13 builtins) ✅ COMPLETE (2026-01-16, 20 min)
 - [ ] Phase 2: Math Basic (4 builtins)
 - [ ] Phase 3: Debug Tools (3 builtins)
 - [ ] Phase 4: Math Extended (8 builtins)
@@ -214,9 +219,9 @@ def loop():
 - [ ] Phase 6: Level System (6 builtins)
 - [ ] Phase 7: Others (3 builtins)
 
-**Total Remaining**: 45 builtins  
+**Total Remaining**: 32 builtins  
 **Target**: 100% coverage (69/69 builtins)  
-**Estimated Time**: ~14 hours total
+**Estimated Time**: ~12 hours remaining (2 hours saved)
 
 ---
 
