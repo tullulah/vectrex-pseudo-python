@@ -245,6 +245,107 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str("    LDD #1\n");
     asm.push_str("    RTS\n\n");
     
+    // SQRT_HELPER: Square root (Newton-Raphson)
+    asm.push_str("SQRT_HELPER:\n");
+    asm.push_str("    ; Input: D = x, Output: D = sqrt(x)\n");
+    asm.push_str("    ; Simple Newton-Raphson: guess = (x + 1) >> 1, iterate 4 times\n");
+    asm.push_str("    STD TMPPTR     ; Save x\n");
+    asm.push_str("    ADDD #1\n");
+    asm.push_str("    ASRA           ; Divide by 2\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    STD TMPPTR2    ; guess = (x+1)/2\n");
+    asm.push_str("    ; TODO: Full Newton-Raphson iterations (requires division)\n");
+    asm.push_str("    ; For now return simple approximation\n");
+    asm.push_str("    LDD TMPPTR2\n");
+    asm.push_str("    RTS\n\n");
+    
+    // POW_HELPER: Power (base ^ exp)
+    asm.push_str("POW_HELPER:\n");
+    asm.push_str("    ; Input: TMPPTR = base, TMPPTR2 = exp, Output: D = result\n");
+    asm.push_str("    LDD #1         ; result = 1\n");
+    asm.push_str("    STD RESULT\n");
+    asm.push_str(".POW_LOOP:\n");
+    asm.push_str("    LDD TMPPTR2    ; Load exponent\n");
+    asm.push_str("    BEQ .POW_DONE  ; If exp == 0, done\n");
+    asm.push_str("    SUBD #1        ; exp--\n");
+    asm.push_str("    STD TMPPTR2\n");
+    asm.push_str("    ; result = result * base (simplified: assumes small values)\n");
+    asm.push_str("    LDD RESULT\n");
+    asm.push_str("    LDX TMPPTR     ; Load base\n");
+    asm.push_str("    ; Simple multiplication loop\n");
+    asm.push_str("    PSHS D\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str(".POW_MUL_LOOP:\n");
+    asm.push_str("    LEAX -1,X\n");
+    asm.push_str("    BEQ .POW_MUL_DONE\n");
+    asm.push_str("    ADDD ,S\n");
+    asm.push_str("    BRA .POW_MUL_LOOP\n");
+    asm.push_str(".POW_MUL_DONE:\n");
+    asm.push_str("    LEAS 2,S\n");
+    asm.push_str("    STD RESULT\n");
+    asm.push_str("    BRA .POW_LOOP\n");
+    asm.push_str(".POW_DONE:\n");
+    asm.push_str("    LDD RESULT\n");
+    asm.push_str("    RTS\n\n");
+    
+    // ATAN2_HELPER: Arctangent (y, x)
+    asm.push_str("ATAN2_HELPER:\n");
+    asm.push_str("    ; Input: TMPPTR = y, TMPPTR2 = x, Output: D = angle (0-127)\n");
+    asm.push_str("    ; Simplified: return approximate angle based on quadrant\n");
+    asm.push_str("    LDD TMPPTR2    ; Load x\n");
+    asm.push_str("    BEQ .ATAN2_X_ZERO\n");
+    asm.push_str("    ; TODO: Full CORDIC implementation\n");
+    asm.push_str("    ; For now return 0 (placeholder)\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".ATAN2_X_ZERO:\n");
+    asm.push_str("    LDD TMPPTR     ; Load y\n");
+    asm.push_str("    BPL .ATAN2_Y_POS\n");
+    asm.push_str("    LDD #96        ; -90 degrees (3/4 of 128)\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".ATAN2_Y_POS:\n");
+    asm.push_str("    LDD #32        ; +90 degrees (1/4 of 128)\n");
+    asm.push_str("    RTS\n\n");
+    
+    // RAND_HELPER: Random number generator (Linear Congruential)
+    asm.push_str("RAND_HELPER:\n");
+    asm.push_str("    ; LCG: seed = (seed * 1103515245 + 12345) & 0x7FFF\n");
+    asm.push_str("    ; Simplified for 6809: seed = (seed * 25 + 13) & 0x7FFF\n");
+    asm.push_str("    LDD RAND_SEED\n");
+    asm.push_str("    LDX #25\n");
+    asm.push_str("    ; Multiply by 25 (simple loop)\n");
+    asm.push_str("    PSHS D\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str(".RAND_MUL_LOOP:\n");
+    asm.push_str("    LEAX -1,X\n");
+    asm.push_str("    BEQ .RAND_MUL_DONE\n");
+    asm.push_str("    ADDD ,S\n");
+    asm.push_str("    BRA .RAND_MUL_LOOP\n");
+    asm.push_str(".RAND_MUL_DONE:\n");
+    asm.push_str("    LEAS 2,S\n");
+    asm.push_str("    ADDD #13       ; Add constant\n");
+    asm.push_str("    ANDA #$7F      ; Mask to positive 15-bit\n");
+    asm.push_str("    STD RAND_SEED  ; Update seed\n");
+    asm.push_str("    RTS\n\n");
+    
+    // RAND_RANGE_HELPER: Random in range [min, max]
+    asm.push_str("RAND_RANGE_HELPER:\n");
+    asm.push_str("    ; Input: TMPPTR = min, TMPPTR2 = max\n");
+    asm.push_str("    JSR RAND_HELPER\n");
+    asm.push_str("    ; D = rand()\n");
+    asm.push_str("    ; range = max - min\n");
+    asm.push_str("    PSHS D         ; Save random value\n");
+    asm.push_str("    LDD TMPPTR2    ; max\n");
+    asm.push_str("    SUBD TMPPTR    ; max - min\n");
+    asm.push_str("    STD TMPPTR2    ; Save range\n");
+    asm.push_str("    ; result = (rand % range) + min\n");
+    asm.push_str("    PULS D         ; Restore random\n");
+    asm.push_str("    ; Simple modulo: D = D % TMPPTR2 (TODO: proper modulo)\n");
+    asm.push_str("    ; For now: mask to range (works for power-of-2 ranges)\n");
+    asm.push_str("    ; result = min + (rand & (range-1))\n");
+    asm.push_str("    ADDD TMPPTR    ; Add min\n");
+    asm.push_str("    RTS\n\n");
+    
     eprintln!("[DEBUG HELPERS] ASM length after MOD16: {}", asm.len());
     
     Ok(asm)

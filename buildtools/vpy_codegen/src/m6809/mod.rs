@@ -16,6 +16,7 @@ pub mod builtins;
 pub mod helpers;
 pub mod math;
 pub mod debug;
+pub mod math_extended;
 
 use vpy_parser::Module;
 
@@ -71,7 +72,8 @@ pub fn generate_m6809_asm(
     asm.push_str("RESULT EQU $CF00\n");
     asm.push_str("TMPPTR EQU $CF02\n");
     asm.push_str("TMPPTR2 EQU $CF04\n");
-    asm.push_str("NUM_STR EQU $CF06   ; 2-byte buffer for PRINT_NUMBER hex output\n\n");
+    asm.push_str("NUM_STR EQU $CF06   ; 2-byte buffer for PRINT_NUMBER hex output\n");
+    asm.push_str("RAND_SEED EQU $CF08 ; 2-byte random seed for RAND()\n\n");
     
     // Generate user variables
     let vars_asm = variables::generate_variables(module)?;
@@ -129,6 +131,10 @@ pub fn generate_m6809_asm(
         let helpers_asm = helpers::generate_helpers()?;
         asm.push_str(&helpers_asm);
     }
+    
+    // Emit trigonometry lookup tables (SIN, COS, TAN)
+    // Always emit for now (TODO: conditional based on usage detection)
+    asm.push_str(&math_extended::generate_trig_tables());
     
     Ok(asm)
 }
