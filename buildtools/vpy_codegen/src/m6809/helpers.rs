@@ -245,18 +245,45 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str("    LDD #1\n");
     asm.push_str("    RTS\n\n");
     
-    // SQRT_HELPER: Square root (Newton-Raphson)
+    // SQRT_HELPER: Square root (Newton-Raphson with DIV16)
     asm.push_str("SQRT_HELPER:\n");
     asm.push_str("    ; Input: D = x, Output: D = sqrt(x)\n");
-    asm.push_str("    ; Simple Newton-Raphson: guess = (x + 1) >> 1, iterate 4 times\n");
-    asm.push_str("    STD TMPPTR     ; Save x\n");
+    asm.push_str("    ; Newton-Raphson: guess_new = (guess + x/guess) / 2\n");
+    asm.push_str("    ; Iterate 4 times for convergence\n");
+    asm.push_str("    \n");
+    asm.push_str("    ; Handle edge cases\n");
+    asm.push_str("    CMPD #0\n");
+    asm.push_str("    BEQ .SQRT_DONE  ; sqrt(0) = 0\n");
+    asm.push_str("    CMPD #1\n");
+    asm.push_str("    BEQ .SQRT_DONE  ; sqrt(1) = 1\n");
+    asm.push_str("    \n");
+    asm.push_str("    STD TMPPTR      ; Save x\n");
+    asm.push_str("    ; Initial guess = (x + 1) / 2\n");
     asm.push_str("    ADDD #1\n");
-    asm.push_str("    ASRA           ; Divide by 2\n");
+    asm.push_str("    ASRA            ; Divide by 2\n");
     asm.push_str("    RORB\n");
-    asm.push_str("    STD TMPPTR2    ; guess = (x+1)/2\n");
-    asm.push_str("    ; TODO: Full Newton-Raphson iterations (requires division)\n");
-    asm.push_str("    ; For now return simple approximation\n");
-    asm.push_str("    LDD TMPPTR2\n");
+    asm.push_str("    STD TMPPTR2     ; guess\n");
+    asm.push_str("    \n");
+    asm.push_str("    ; Iterate 4 times\n");
+    asm.push_str("    LDB #4\n");
+    asm.push_str("    STB RESULT+1    ; Counter\n");
+    asm.push_str(".SQRT_LOOP:\n");
+    asm.push_str("    ; Calculate x/guess using DIV16\n");
+    asm.push_str("    LDX TMPPTR      ; X = x (dividend)\n");
+    asm.push_str("    LDD TMPPTR2     ; D = guess (divisor)\n");
+    asm.push_str("    JSR DIV16       ; D = x/guess\n");
+    asm.push_str("    \n");
+    asm.push_str("    ; guess_new = (guess + x/guess) / 2\n");
+    asm.push_str("    ADDD TMPPTR2    ; D = guess + x/guess\n");
+    asm.push_str("    ASRA            ; Divide by 2\n");
+    asm.push_str("    RORB\n");
+    asm.push_str("    STD TMPPTR2     ; Update guess\n");
+    asm.push_str("    \n");
+    asm.push_str("    DEC RESULT+1    ; Decrement counter\n");
+    asm.push_str("    BNE .SQRT_LOOP\n");
+    asm.push_str("    \n");
+    asm.push_str("    LDD TMPPTR2     ; Return final guess\n");
+    asm.push_str(".SQRT_DONE:\n");
     asm.push_str("    RTS\n\n");
     
     // POW_HELPER: Power (base ^ exp)

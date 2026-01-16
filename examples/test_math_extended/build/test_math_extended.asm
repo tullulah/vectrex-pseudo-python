@@ -32,10 +32,10 @@ RAND_SEED EQU $CF08 ; 2-byte random seed for RAND()
 ;***************************************************************************
 ; USER VARIABLES
 ;***************************************************************************
-VAR_RANDOM_VAL EQU $CF10+0
-VAR_BASE EQU $CF10+2
-VAR_ANGLE EQU $CF10+4
-VAR_EXP EQU $CF10+6
+VAR_ANGLE EQU $CF10+0
+VAR_EXP EQU $CF10+2
+VAR_RANDOM_VAL EQU $CF10+4
+VAR_BASE EQU $CF10+6
 
 ; Function argument slots
 VAR_ARG0 EQU $CFE0+0
@@ -504,15 +504,42 @@ J2Y_BUILTIN:
 
 SQRT_HELPER:
     ; Input: D = x, Output: D = sqrt(x)
-    ; Simple Newton-Raphson: guess = (x + 1) >> 1, iterate 4 times
-    STD TMPPTR     ; Save x
+    ; Newton-Raphson: guess_new = (guess + x/guess) / 2
+    ; Iterate 4 times for convergence
+    
+    ; Handle edge cases
+    CMPD #0
+    BEQ .SQRT_DONE  ; sqrt(0) = 0
+    CMPD #1
+    BEQ .SQRT_DONE  ; sqrt(1) = 1
+    
+    STD TMPPTR      ; Save x
+    ; Initial guess = (x + 1) / 2
     ADDD #1
-    ASRA           ; Divide by 2
+    ASRA            ; Divide by 2
     RORB
-    STD TMPPTR2    ; guess = (x+1)/2
-    ; TODO: Full Newton-Raphson iterations (requires division)
-    ; For now return simple approximation
-    LDD TMPPTR2
+    STD TMPPTR2     ; guess
+    
+    ; Iterate 4 times
+    LDB #4
+    STB RESULT+1    ; Counter
+.SQRT_LOOP:
+    ; Calculate x/guess using DIV16
+    LDX TMPPTR      ; X = x (dividend)
+    LDD TMPPTR2     ; D = guess (divisor)
+    JSR DIV16       ; D = x/guess
+    
+    ; guess_new = (guess + x/guess) / 2
+    ADDD TMPPTR2    ; D = guess + x/guess
+    ASRA            ; Divide by 2
+    RORB
+    STD TMPPTR2     ; Update guess
+    
+    DEC RESULT+1    ; Decrement counter
+    BNE .SQRT_LOOP
+    
+    LDD TMPPTR2     ; Return final guess
+.SQRT_DONE:
     RTS
 
 POW_HELPER:
