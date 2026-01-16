@@ -11,6 +11,7 @@ use super::expressions;
 use super::math;
 use super::debug;
 use super::math_extended;
+use super::drawing;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -358,27 +359,23 @@ pub fn emit_builtin(
             math_extended::emit_rand_range(args, out);
             true
         }
+        "DRAW_CIRCLE" => {
+            drawing::emit_draw_circle(args, out);
+            true
+        }
+        "DRAW_RECT" => {
+            drawing::emit_draw_rect(args, out);
+            true
+        }
+        "DRAW_POLYGON" => {
+            drawing::emit_draw_polygon(args, out);
+            true
+        }
         
         "LEN" => {
             out.push_str("    ; LEN: Get array/string length\n");
             expressions::emit_simple_expr(&args[0], out);
             out.push_str("    ; TODO: LEN implementation\n");
-            out.push_str("    STD RESULT\n");
-            true
-        }
-        
-        // ===== Drawing Functions =====
-        "DRAW_CIRCLE" => {
-            out.push_str("    ; DRAW_CIRCLE: Draw circle\n");
-            out.push_str("    JSR DRAW_CIRCLE_RUNTIME\n");
-            out.push_str("    LDD #0\n");
-            out.push_str("    STD RESULT\n");
-            true
-        }
-        "DRAW_POLYGON" => {
-            out.push_str("    ; DRAW_POLYGON: Draw polygon\n");
-            out.push_str("    JSR DRAW_POLYGON_RUNTIME\n");
-            out.push_str("    LDD #0\n");
             out.push_str("    STD RESULT\n");
             true
         }
