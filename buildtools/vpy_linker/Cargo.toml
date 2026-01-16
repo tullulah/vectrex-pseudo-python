@@ -12,5 +12,7 @@ vpy_codegen = { path = "../vpy_codegen" }
 vpy_assembler = { path = "../vpy_assembler" }
 vpy_bank_allocator = { path = "../vpy_bank_allocator" }
 thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
 
 [dev-dependencies]

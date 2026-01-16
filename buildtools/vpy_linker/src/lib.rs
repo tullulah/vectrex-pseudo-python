@@ -2,19 +2,20 @@
 //!
 //! **Single source of truth for final addresses and relocations**
 //!
-//! Combines object files, applies relocations, and produces final binary.
+//! Combines object files (.vo), applies relocations, and produces final binary.
 //! This is the ONLY phase that calculates final addresses - all other phases
 //! use relative references and symbols.
 //!
 //! # Module Structure
 //!
+//! - `object.rs`: Object file format (.vo files)
 //! - `error.rs`: Error types
 //! - `relocation.rs`: Apply relocation records
 //! - `linker.rs`: Main linking algorithm
 //! - `layout.rs`: Memory layout decisions
 //!
 //! # Input
-//! `Vec<ObjectFile>` (object files with relocation tables from Phase 6)
+//! `Vec<VectrexObject>` (object files with relocation tables from Phase 6)
 //!
 //! # Output
 //! `LinkedBinary` (final binary with symbol table and relocation info for PDB)
@@ -22,9 +23,17 @@
 pub mod error;
 pub mod layout;
 pub mod linker;
+pub mod object;      // Object file format (.vo)
 pub mod relocation;
 
 pub use error::{LinkerError, LinkerResult};
+pub use object::{
+    VectrexObject, ObjectHeader, Section, SectionType,
+    Symbol, SymbolScope, SymbolType, SymbolTable,
+    Relocation, RelocationType, DebugInfo,
+    TargetArch, ObjectFlags,
+    OBJECT_MAGIC, OBJECT_FORMAT_VERSION,
+};
 
 /// Multi-bank ROM output
 #[derive(Debug, Clone)]
@@ -98,11 +107,12 @@ pub fn link_unified_asm(
 pub struct LinkedBinary {
     pub binary: Vec<u8>,
     pub symbols: std::collections::HashMap<String, u32>,
-    pub sections: Vec<Section>,
+    pub sections: Vec<LinkedSection>,
 }
 
+/// Section info in linked binary (distinct from object::Section)
 #[derive(Debug, Clone)]
-pub struct Section {
+pub struct LinkedSection {
     pub name: String,
     pub start: u32,
     pub size: usize,
