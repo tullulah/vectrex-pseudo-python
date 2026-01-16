@@ -50,7 +50,14 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - Module dependency graph with cycle detection
 - Topological sorting (Kahn's algorithm)
 - Symbol resolution with MODULE_symbol naming
+- **Symbol case fix**: Preserves lowercase symbols, uppercase prefixes only
 - 24 comprehensive tests passing
+
+### ✅ Phase 4: vpy_bank_allocator (COMPLETE)
+- **Call graph analysis**: Function dependency tracking
+- **Sequential allocation**: First-fit assignment to banks
+- **Tests**: 12 passing (single-bank, multibank, overflow)
+- **Status**: Ready for Phase 7 linker integration
 
 ### ✅ Phase 5: vpy_codegen - Runtime Helper Optimization (COMPLETE)
 - **Tree Shaking System**: Automatic detection and elimination of unused runtime helpers
@@ -59,7 +66,17 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - **Results**: Only emits helpers used in code (e.g., joystick_test: 3/17 helpers)
 - **Benefits**: Smaller binaries, zero manual configuration, automatic dependency resolution
 
-### ⏳ Phase 4-9: In Development
+### ✅ Phase 6: vpy_assembler - Modular Refactoring (COMPLETE)
+- **Segregation Complete**: Extracted 480 lines into 3 focused modules
+  - `parser.rs` (130 lines, 4 tests): Directive/label parsing
+  - `expression.rs` (180 lines, 5 tests): Arithmetic evaluation
+  - `symbols.rs` (170 lines, 3 tests): VECTREX.I loading
+- **Main module reduced**: 3090 → 2651 lines (-14%)
+- **Tests**: 18 total (15 legacy + 3 new modules)
+- **Maintainability**: Single responsibility per module
+- **Next**: Phase 7 linker (uses assembler output)
+
+### ⏳ Phase 7-9: In Development
 - Placeholders created for all remaining crates
 - Dependencies properly declared
 - All crates compile without errors
@@ -127,6 +144,7 @@ buildtools/
 │   │   └── error.rs
 │   ├── Cargo.toml
 │   └── tests/             (12 tests passing)
+│
 ├── vpy_codegen/           ✅ Optimization Complete (Tree Shaking)
 │   ├── src/m6809/
 │   │   ├── helpers.rs     (analysis + coordination)
@@ -136,7 +154,17 @@ buildtools/
 │   │   ├── level.rs       (SHOW_LEVEL)
 │   │   └── utilities.rs   (RAND, FADE_IN/OUT)
 │   └── ...
-├── vpy_assembler/         ⏳ Phase 6 (TODO)
+│
+├── vpy_assembler/         ✅ Refactored (Phase 6)
+│   ├── src/m6809/
+│   │   ├── asm_to_binary.rs (2651 lines, 15 tests)
+│   │   ├── parser.rs        (130 lines, 4 tests - directives)
+│   │   ├── expression.rs    (180 lines, 5 tests - arithmetic)
+│   │   ├── symbols.rs       (170 lines, 3 tests - VECTREX.I)
+│   │   └── mod.rs
+│   ├── REFACTOR_PROGRESS.md (detailed module documentation)
+│   └── Cargo.toml
+│
 ├── vpy_linker/            ⏳ Phase 7 (TODO - CRITICAL)
 ├── vpy_binary_writer/     ✅ Complete (Phase 8)
 └── vpy_debug_gen/         ⏳ Phase 9 (TODO)
