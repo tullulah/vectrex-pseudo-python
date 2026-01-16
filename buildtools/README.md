@@ -94,10 +94,19 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - ✅ Tests: collect, duplicate, verify success/fail, assign
 - ✅ Enhanced error.rs with DuplicateSymbol, UndefinedSymbols, etc.
 
+**Day 3 Complete** (2026-01-17):
+- ✅ `bank_layout.rs`: Multibank ROM integration (356 lines, 3 tests)
+- ✅ BankConfig: vectrex_512kb(), single_bank()
+- ✅ MultibankLayout: Full pipeline (collect → verify → assign → apply → build)
+- ✅ Section assignment algorithm (sequential, respects bank limits)
+- ✅ Address assignment per bank (switchable $0000 / fixed $4000)
+- ✅ Bank data building with symbol tracking
+- ✅ File output: write_banks() (per-bank), write_merged() (single file)
+- ✅ Tests: single_bank, multibank_assignment, section_overflow
+
 **Pending**:
-- Day 3: Integration with bank allocator (multibank ROM layout)
-- Day 4: End-to-end single-bank test
-- Day 5: Multibank + polish
+- Day 4: End-to-end integration test (compile → assemble → link → run)
+- Day 5: Multibank polish + cross-bank call wrappers
 
 ### ⏳ Phase 8-9: Planned
 - Phase 8: vpy_binary_writer (trivial ROM assembly)
