@@ -2,6 +2,159 @@
 //!
 //! Mathematical and utility functions
 
+use vpy_parser::{Module, Item, Stmt, Expr};
+use std::collections::HashSet;
+
+/// Analyze module to detect which runtime helpers are needed
+/// Returns set of helper names that should be emitted
+fn analyze_needed_helpers(module: &Module) -> HashSet<String> {
+    let mut needed = HashSet::new();
+    
+    // Scan all functions in module
+    for item in &module.items {
+        if let Item::Function { body, .. } = item {
+            for stmt in body {
+                analyze_stmt_for_helpers(stmt, &mut needed);
+            }
+        }
+    }
+    
+    needed
+}
+
+/// Recursively analyze statement for helper usage
+fn analyze_stmt_for_helpers(stmt: &Stmt, needed: &mut HashSet<String>) {
+    match stmt {
+        Stmt::Expr(expr) => analyze_expr_for_helpers(expr, needed),
+        Stmt::Assign { value, .. } => analyze_expr_for_helpers(value, needed),
+        Stmt::If { condition, then_block, else_block, .. } => {
+            analyze_expr_for_helpers(condition, needed);
+            for s in then_block {
+                analyze_stmt_for_helpers(s, needed);
+            }
+            if let Some(else_stmts) = else_block {
+                for s in else_stmts {
+                    analyze_stmt_for_helpers(s, needed);
+                }
+            }
+        }
+        Stmt::While { condition, body, .. } => {
+            analyze_expr_for_helpers(condition, needed);
+            for s in body {
+                analyze_stmt_for_helpers(s, needed);
+            }
+        }
+        Stmt::Return(Some(expr)) => analyze_expr_for_helpers(expr, needed),
+        _ => {}
+    }
+}
+
+/// Recursively analyze expression for helper usage
+fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
+    match expr {
+        // Builtin calls that may need runtime helpers
+        Expr::Call { name, args } => {
+            let name_upper = name.to_uppercase();
+            
+            // Drawing helpers: Need runtime if args contain non-constants
+            if name_upper == "DRAW_CIRCLE" && has_variable_args(args) {
+                needed.insert("DRAW_CIRCLE_RUNTIME".to_string());
+            }
+            if name_upper == "DRAW_RECT" && has_variable_args(args) {
+                needed.insert("DRAW_RECT_RUNTIME".to_string());
+            }
+            
+            // Joystick helpers: Always needed when called
+            if name_upper == "J1_X" {
+                needed.insert("J1X_BUILTIN".to_string());
+            }
+            if name_upper == "J1_Y" {
+                needed.insert("J1Y_BUILTIN".to_string());
+            }
+            if name_upper == "J2_X" {
+                needed.insert("J2X_BUILTIN".to_string());
+            }
+            if name_upper == "J2_Y" {
+                needed.insert("J2Y_BUILTIN".to_string());
+            }
+            
+            // Level system helpers
+            if name_upper == "SHOW_LEVEL" {
+                needed.insert("SHOW_LEVEL_RUNTIME".to_string());
+            }
+            
+            // Utility helpers
+            if name_upper == "FADE_IN" {
+                needed.insert("FADE_IN_RUNTIME".to_string());
+            }
+            if name_upper == "FADE_OUT" {
+                needed.insert("FADE_OUT_RUNTIME".to_string());
+            }
+            
+            // Math helpers: Need runtime if operands contain variables
+            if name_upper == "SQRT" && has_variable_args(args) {
+                needed.insert("SQRT_HELPER".to_string());
+                needed.insert("DIV16".to_string()); // SQRT uses DIV16
+            }
+            if name_upper == "POW" && has_variable_args(args) {
+                needed.insert("POW_HELPER".to_string());
+            }
+            if name_upper == "ATAN2" && has_variable_args(args) {
+                needed.insert("ATAN2_HELPER".to_string());
+            }
+            if name_upper == "RAND" {
+                needed.insert("RAND_HELPER".to_string());
+            }
+            if name_upper == "RAND_RANGE" {
+                needed.insert("RAND_RANGE_HELPER".to_string());
+                needed.insert("RAND_HELPER".to_string()); // RAND_RANGE uses RAND
+            }
+            
+            // Recursively analyze arguments
+            for arg in args {
+                analyze_expr_for_helpers(arg, needed);
+            }
+        }
+        
+        // Binary operations that may need math helpers
+        Expr::BinaryOp { left, op, right } => {
+            // Check if operands are variables (not constants)
+            let left_is_const = matches!(**left, Expr::Number(_));
+            let right_is_const = matches!(**right, Expr::Number(_));
+            
+            if !left_is_const || !right_is_const {
+                match op.as_str() {
+                    "*" => { needed.insert("MUL16".to_string()); }
+                    "/" => { needed.insert("DIV16".to_string()); }
+                    "%" => { needed.insert("MOD16".to_string()); }
+                    _ => {}
+                }
+            }
+            
+            analyze_expr_for_helpers(left, needed);
+            analyze_expr_for_helpers(right, needed);
+        }
+        
+        // Other expression types
+        Expr::UnaryOp { operand, .. } => analyze_expr_for_helpers(operand, needed),
+        Expr::Index { target, index } => {
+            analyze_expr_for_helpers(target, needed);
+            analyze_expr_for_helpers(index, needed);
+        }
+        Expr::List(items) => {
+            for item in items {
+                analyze_expr_for_helpers(item, needed);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Check if any argument is not a constant (i.e., contains variables)
+fn has_variable_args(args: &[Expr]) -> bool {
+    args.iter().any(|arg| !matches!(arg, Expr::Number(_) | Expr::StringLit(_)))
+}
+
 /// Get BIOS function address from VECTREX.I
 /// Returns the address as a hex string (e.g., "$F1AA")
 /// Falls back to hardcoded value if VECTREX.I cannot be read
@@ -45,9 +198,13 @@ fn get_bios_address(symbol_name: &str, fallback_address: &str) -> String {
     fallback_address.to_string()
 }
 
-pub fn generate_helpers() -> Result<String, String> {
+pub fn generate_helpers(module: &Module) -> Result<String, String> {
     eprintln!("[DEBUG HELPERS] Generating runtime helpers...");
     let mut asm = String::new();
+    
+    // Analyze module to detect which helpers are needed
+    let needed = analyze_needed_helpers(module);
+    eprintln!("[DEBUG HELPERS] Detected {} needed helpers: {:?}", needed.len(), needed);
     
     // Get BIOS function addresses from VECTREX.I
     let dp_to_d0 = get_bios_address("DP_to_D0", "$F1AA");
@@ -113,12 +270,7 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
     asm.push_str("    RTS\n\n");
     
-    // TODO: Implement usage analysis to populate needed set
-    // For now, create empty set (no helpers will be emitted - for testing)
-    use std::collections::HashSet;
-    let needed: HashSet<String> = HashSet::new();
-    
-    // Call module-specific runtime helpers with conditional emission
+    // Call module-specific runtime helpers with analyzed needed set
     super::math::emit_runtime_helpers(&mut asm, &needed);
     super::joystick::emit_runtime_helpers(&mut asm, &needed);
     super::drawing::emit_runtime_helpers(&mut asm, &needed);

@@ -151,13 +151,13 @@ pub fn generate_m6809_asm(
         asm.push_str("    ORG $4000\n");
         asm.push_str(&format!("    ; Fixed bank (always visible at $4000-$7FFF)\n"));
         asm.push_str(&format!("    ; Contains runtime helpers for all banks\n\n"));
-        let helpers_asm = helpers::generate_helpers()?;
+        let helpers_asm = helpers::generate_helpers(module)?;
         asm.push_str(&helpers_asm);
     }
     
     // For single-bank: Emit helpers normally
     if !is_multibank {
-        let helpers_asm = helpers::generate_helpers()?;
+        let helpers_asm = helpers::generate_helpers(module)?;
         asm.push_str(&helpers_asm);
     }
     
