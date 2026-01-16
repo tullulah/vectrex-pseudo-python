@@ -8,6 +8,11 @@ output = "build/test_callgraph.bin"
 optimization = 2
 debug_symbols = true
 
+[multibank]
+enabled = true
+banks = 32
+bank_size = 16384
+
 [sources]
 vpy = ["src/**/*.vpy"]
 

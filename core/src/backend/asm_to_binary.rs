@@ -385,89 +385,109 @@ fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) 
 }
 
 /// Carga símbolos predefinidos de Vectrex (VECTREX.I + BIOS functions)
-fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
-    // === SÍMBOLOS DE HARDWARE (VIA) ===
-    equates.insert("VEC_DEFAULT_STK".to_string(), 0xCBEA);
-    equates.insert("VIA_PORT_B".to_string(), 0xD000);
-    equates.insert("VIA_PORT_A".to_string(), 0xD001);
-    equates.insert("VIA_DDR_B".to_string(), 0xD002);
-    equates.insert("VIA_DDR_A".to_string(), 0xD003);
-    equates.insert("VIA_T1_CNT_LO".to_string(), 0xD004);
-    equates.insert("VIA_T1_CNT_HI".to_string(), 0xD005);
-    equates.insert("VIA_T1_LCH_LO".to_string(), 0xD006);
-    equates.insert("VIA_T1_LCH_HI".to_string(), 0xD007);
-    equates.insert("VIA_T2_LO".to_string(), 0xD008);
-    equates.insert("VIA_T2_HI".to_string(), 0xD009);
-    equates.insert("VIA_SHIFT_REG".to_string(), 0xD00A);
-    equates.insert("VIA_AUX_CNTL".to_string(), 0xD00B);
-    equates.insert("VIA_CNTL".to_string(), 0xD00C);
-    equates.insert("VIA_INT_FLAGS".to_string(), 0xD00D);
-    equates.insert("VIA_INT_ENABLE".to_string(), 0xD00E);
-    equates.insert("VIA_PORT_A_NH".to_string(), 0xD00F);
+pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
+    // Parse VECTREX.I file directly to get authoritative symbol definitions
+    // This ensures we always have the correct addresses from the source
     
-    // === FUNCIONES DE BIOS (ROM 0xE000-0xFFFF) ===
-    // Funciones principales de vectores/líneas
+    // Try multiple possible paths (handle different working directories)
+    let possible_paths = vec![
+        "ide/frontend/public/include/VECTREX.I",
+        "../ide/frontend/public/include/VECTREX.I",
+        "../../ide/frontend/public/include/VECTREX.I",
+        "./ide/frontend/public/include/VECTREX.I",
+    ];
+    
+    let mut found = false;
+    for path in &possible_paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            eprintln!("✓ Loaded BIOS symbols from VECTREX.I ({})", path);
+            parse_vectrex_symbols(&content, equates);
+            found = true;
+            break;
+        }
+    }
+    
+    if !found {
+        eprintln!("⚠ Warning: Could not load VECTREX.I from any expected path, using fallback hardcoded symbols");
+        // Fallback to hardcoded symbols if VECTREX.I is not found
+        load_vectrex_symbols_fallback(equates);
+    }
+}
+
+/// Parse EQU definitions from VECTREX.I content
+fn parse_vectrex_symbols(content: &str, equates: &mut HashMap<String, u16>) {
+    for line in content.lines() {
+        // Parse lines like: "Print_Str_d         EQU      $F37A"
+        // Format: SYMBOL_NAME [spaces] EQU [spaces] $HEXVALUE [optional comment]
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') {
+            continue;
+        }
+        
+        // Split by EQU keyword
+        if let Some(equ_idx) = line.find("EQU") {
+            let (symbol_part, value_part) = line.split_at(equ_idx);
+            let symbol = symbol_part.trim();
+            
+            // Skip empty symbols and comments
+            if symbol.is_empty() || symbol.starts_with(';') || symbol.starts_with('*') {
+                continue;
+            }
+            
+            // Extract value part after "EQU"
+            let value_str = &value_part[3..]; // Skip "EQU"
+            
+            // Find the hex value: look for $ followed by hex digits
+            if let Some(dollar_idx) = value_str.find('$') {
+                let hex_part = &value_str[dollar_idx + 1..];
+                // Extract hex digits until non-hex character
+                let hex_str: String = hex_part
+                    .chars()
+                    .take_while(|c| c.is_ascii_hexdigit())
+                    .collect();
+                
+                if !hex_str.is_empty() {
+                    if let Ok(value) = u16::from_str_radix(&hex_str, 16) {
+                        // Store both uppercase and mixed-case variants
+                        equates.insert(symbol.to_uppercase(), value);
+                        equates.insert(symbol.to_string(), value);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Fallback hardcoded symbols (only used if VECTREX.I cannot be loaded)
+fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
+    // These are the CORRECTED values from VECTREX.I
     equates.insert("WAIT_RECAL".to_string(), 0xF192);
-    equates.insert("Wait_Recal".to_string(), 0xF192); // Mixed case variant
+    equates.insert("Wait_Recal".to_string(), 0xF192);
     equates.insert("MOVETO_D".to_string(), 0xF312);
-    equates.insert("Moveto_d".to_string(), 0xF312); // Mixed case variant
-    equates.insert("MOVETO_IX_FF".to_string(), 0xF34C);
-    equates.insert("MOVETO_IX".to_string(), 0xF34F);
-    equates.insert("MOVETO_D_7F".to_string(), 0xF35F);
+    equates.insert("Moveto_d".to_string(), 0xF312);
+    equates.insert("MOVETO_IX_FF".to_string(), 0xF308);
+    equates.insert("MOVETO_IX".to_string(), 0xF310);
+    equates.insert("MOVETO_D_7F".to_string(), 0xF2FC);
     equates.insert("ZERO_REF".to_string(), 0xF35B);
-    equates.insert("Zero_Ref".to_string(), 0xF35B); // Mixed case variant
+    equates.insert("Zero_Ref".to_string(), 0xF35B);
     equates.insert("DRAW_LINEC".to_string(), 0xF3DF);
-    equates.insert("DRAW_LINE_D".to_string(), 0xF3DD);
-    equates.insert("Draw_Line_d".to_string(), 0xF3DD); // Mixed case variant
-    equates.insert("DRAW_VLC".to_string(), 0xF408);
-    equates.insert("DRAW_VL_MODE".to_string(), 0xF40C);
-    equates.insert("DRAW_VL_A".to_string(), 0xF40E);
-    equates.insert("DRAW_VL_B".to_string(), 0xF410);
-    equates.insert("DRAW_VL".to_string(), 0xF413);
-    
-    // Funciones de texto
-    equates.insert("PRINT_STR_D".to_string(), 0xF373);
-    equates.insert("PRINT_STR".to_string(), 0xF37A);
-    equates.insert("PRINT_LIST".to_string(), 0xF385);
-    equates.insert("PRINT_SHIPS".to_string(), 0xF391);
-    equates.insert("PRINT_SHIP".to_string(), 0xF393);
-    
-    // Funciones de audio
+    equates.insert("DRAW_LINE_D".to_string(), 0xF3DF);
+    equates.insert("Draw_Line_d".to_string(), 0xF3DF);
+    equates.insert("DRAW_VLC".to_string(), 0xF3CE);
+    equates.insert("DRAW_VL_MODE".to_string(), 0xF46E);
+    equates.insert("DRAW_VL_A".to_string(), 0xF3DA);
+    equates.insert("DRAW_VL_B".to_string(), 0xF3D8);
+    equates.insert("DRAW_VL".to_string(), 0xF3DD);
+    equates.insert("PRINT_STR_D".to_string(), 0xF37A);
+    equates.insert("PRINT_STR".to_string(), 0xF495);
+    equates.insert("PRINT_LIST".to_string(), 0xF38A);
+    equates.insert("PRINT_SHIPS".to_string(), 0xF393);
     equates.insert("DO_SOUND".to_string(), 0xF289);
     equates.insert("INIT_MUSIC".to_string(), 0xF533);
-    equates.insert("INIT_MUSIC_CHK".to_string(), 0xF533);
-    
-    // Inicialización
-    equates.insert("INIT_VIA".to_string(), 0xF14C);
     equates.insert("INIT_OS".to_string(), 0xF18B);
-    equates.insert("INIT_OS_RAM".to_string(), 0xF164);
-    equates.insert("DP_TO_C8".to_string(), 0xF1AA);
     equates.insert("INTENSITY_A".to_string(), 0xF2AB);
-    equates.insert("Intensity_a".to_string(), 0xF2AB); // Mixed case variant
-    equates.insert("INTENSITY_5F".to_string(), 0xF2A9);
-    
-    // Joystick y controles
-    equates.insert("JOY_DIGITAL".to_string(), 0xF1F5);
-    equates.insert("JOY_ANALOG".to_string(), 0xF1F8);
+    equates.insert("Intensity_a".to_string(), 0xF2AB);
     equates.insert("READ_BTNS".to_string(), 0xF1BA);
-    
-    // Random y utilidades
-    equates.insert("RANDOM".to_string(), 0xF517);
-    equates.insert("RANDOM_3".to_string(), 0xF511);
-    
-    // Explosiones y efectos
-    equates.insert("EXPLOSION".to_string(), 0xF976);
-    equates.insert("EXPLOSION_SND".to_string(), 0xF92E);
-    
-    // Variantes de nombres comunes (lowercase/mixed case)
-    equates.insert("VIA_T1_CNT_LO".to_string(), 0xD004);
-    
-    // Variables del sistema Vectrex
-    equates.insert("VEC_SND_SHADOW".to_string(), 0xC800);
-    equates.insert("VEC_MUSIC_WORK".to_string(), 0xC856);
-    
-    // Music data placeholder
-    equates.insert("MUSIC1".to_string(), 0x0000);
 }
 
 /// Extrae etiqueta si la línea la define
@@ -664,23 +684,11 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
         
-        // DEBUG: Log splits for diagnosis
-        if expr.contains("C880") || expr.contains("C982") {
-            eprintln!("DEBUG evaluate_expression: expr='{}' left='{}' right='{}'", expr, left, right);
-        }
-        
         let offset = evaluate_expression(right, equates)?; // Recursivo para right
-        
-        if expr.contains("C880") || expr.contains("C982") {
-            eprintln!("DEBUG: offset parsed = 0x{:04X} ({})", offset, offset);
-        }
         
         return match evaluate_expression(left, equates) {
             Ok(base) => {
                 let result = base.wrapping_add(offset);
-                if expr.contains("C880") || expr.contains("C982") {
-                    eprintln!("DEBUG: base=0x{:04X} + offset=0x{:04X} = 0x{:04X}", base, offset, result);
-                }
                 Ok(result)
             },
             Err(e) if e.starts_with("SYMBOL:") => {

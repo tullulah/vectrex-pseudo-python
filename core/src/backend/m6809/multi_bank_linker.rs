@@ -366,8 +366,9 @@ impl MultiBankLinker {
             // CRITICAL: For Bank #31, CUSTOM_RESET must come IMMEDIATELY after ORG, before helpers
             eprintln!("DEBUG split_asm_by_bank: bank_id={}, org_line_empty={}, org_line={:?}", bank_id, org_line.is_empty(), org_line.trim());
             
-            // Extract CUSTOM_RESET if present in Bank #31 (must be first instruction)
-            let (custom_reset_code, remaining_code) = if bank_id == 31 {
+            // Extract CUSTOM_RESET if present in helpers bank (must be first instruction)
+            let helpers_bank = (self.rom_bank_count - 1) as u8;
+            let (custom_reset_code, remaining_code) = if bank_id == helpers_bank {
                 // Look for CUSTOM_RESET: label in code_without_org
                 if let Some(pos) = code_without_org.find("CUSTOM_RESET:") {
                     // Find the end of CUSTOM_RESET function (next label or empty line group)
@@ -391,31 +392,31 @@ impl MultiBankLinker {
             
             let full_code = if org_line.is_empty() && bank_id != 0 {
                 eprintln!("  → Entering org_line.is_empty() block");
-                let org_directive = if bank_id == 31 {
-                    eprintln!("    → Bank #31 detected - using ORG $4000");
+                let org_directive = if bank_id == helpers_bank {
+                    eprintln!("    → Helpers bank #{} detected - using ORG $4000", helpers_bank);
                     "    ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)\n".to_string()
                 } else {
                     eprintln!("    → Bank #{} detected - using ORG $0000", bank_id);
                     "    ORG $0000\n".to_string()
                 };
-                // For Bank #31: ORG → CUSTOM_RESET → includes/defs → helpers → remaining code
-                if bank_id == 31 {
+                // For helpers bank: ORG → CUSTOM_RESET → includes/defs → helpers → remaining code
+                if bank_id == helpers_bank {
                     format!("{}{}\n{}\n{}\n{}\n{}", org_directive, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
                 } else {
                     format!("{}{}\n{}\n{}\n{}", org_directive, include_directives, definitions, runtime_helpers, code_without_org)
                 }
             } else {
                 eprintln!("  → Using org_line from code");
-                if bank_id == 31 {
+                if bank_id == helpers_bank {
                     format!("{}{}\n{}\n{}\n{}\n{}", org_line, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
                 } else {
                     format!("{}{}\n{}\n{}\n{}", org_line, include_directives, definitions, runtime_helpers, code_without_org)
                 }
             };
             let size = full_code.len();
-            if bank_id == 31 {
-                eprintln!("DEBUG: Bank #31 full_code starts with: {}", &full_code[..80.min(full_code.len())].replace("\n", "\\n"));
-                eprintln!("DEBUG: Inserting Bank #31 section with ORG $4000");
+            if bank_id == helpers_bank {
+                eprintln!("DEBUG: Helpers bank #{} full_code starts with: {}", helpers_bank, &full_code[..80.min(full_code.len())].replace("\n", "\\n"));
+                eprintln!("DEBUG: Inserting helpers bank #{} section with ORG $4000", helpers_bank);
             }
             sections.insert(bank_id, BankSection {
                 bank_id,
@@ -425,17 +426,18 @@ impl MultiBankLinker {
             });
         }
         
-        // ===== ADD RUNTIME HELPERS TO BANK #31 ONLY =====
-        // Runtime helpers (wrappers, math functions, etc.) belong in Bank #31 (fixed ROM)
-        // They should NOT be duplicated in user banks (Bank #0-#30)
-        // Bank #31 helpers are always visible and accessible from any bank via wrappers
+        // ===== ADD RUNTIME HELPERS TO HELPERS BANK ONLY =====
+        // Runtime helpers (wrappers, math functions, etc.) belong in helpers bank (fixed ROM)
+        // They should NOT be duplicated in user banks
+        // Helpers bank is always visible and accessible from any bank via wrappers
+        let helpers_bank = (self.rom_bank_count - 1) as u8;
         if !runtime_helpers.is_empty() {
-            if let Some(bank31) = sections.get_mut(&31u8) {
-                // Add helpers to Bank #31 if not already present
-                if !bank31.asm_code.contains("; ===== CROSS-BANK CALL WRAPPERS =====") {
+            if let Some(bank_helpers) = sections.get_mut(&helpers_bank) {
+                // Add helpers to helpers bank if not already present
+                if !bank_helpers.asm_code.contains("; ===== CROSS-BANK CALL WRAPPERS =====") {
                     // Insert runtime_helpers AFTER definitions, BEFORE bank code
                     // Find where the bank code starts (look for first ORG directive)
-                    let lines: Vec<&str> = bank31.asm_code.lines().collect();
+                    let lines: Vec<&str> = bank_helpers.asm_code.lines().collect();
                     let mut new_code = String::new();
                     let mut org_found = false;
                     
@@ -450,8 +452,8 @@ impl MultiBankLinker {
                         new_code.push('\n');
                     }
                     
-                    bank31.asm_code = new_code;
-                    bank31.size_estimate = bank31.asm_code.len();
+                    bank_helpers.asm_code = new_code;
+                    bank_helpers.size_estimate = bank_helpers.asm_code.len();
                 }
             }
         }
@@ -499,11 +501,11 @@ impl MultiBankLinker {
             }
         }
 
-        // Propagate shared tail (arrays/consts) to all banks EXCEPT bank #31 (fixed bank)
-        // Bank #31 should have its own copy of assets at its own offset
+        // Propagate shared tail (arrays/consts) to all banks EXCEPT helpers bank (fixed bank)
+        // Helpers bank should have its own copy of assets at its own offset
         // Assets should NOT be duplicated across banks - each bank gets its data once
         if !shared_tail.is_empty() {
-            let fixed_bank_id = (self.rom_bank_count - 1) as u8;  // Bank #31
+            let fixed_bank_id = helpers_bank;  // Helpers bank (last)
             for (bank_id, section) in sections.iter_mut() {
                 // Skip the bank that already contains the shared tail (data_bank_id)
                 // AND skip bank #31 (fixed bank, should keep its assets)
@@ -515,8 +517,8 @@ impl MultiBankLinker {
             }
         }
         
-        // Assets are in both bank_0 and bank_31 at the same offsets due to global codegen
-        // We ensure bank_31 versions are preferred by skipping asset symbols from other banks during extraction
+        // Assets are in both bank_0 and helpers bank at the same offsets due to global codegen
+        // We ensure helpers bank versions are preferred by skipping asset symbols from other banks during extraction
         // (This is handled in the symbol extraction loop above)
 
         // Add interrupt vectors to last bank (fixed bank)
@@ -584,7 +586,18 @@ impl MultiBankLinker {
             full_asm = new_asm;
         }
         
-        let full_asm = &full_asm;
+        // Ensure each bank ASM has an explicit ORG before writing/assembling
+        let full_asm_owned = if !full_asm.contains("ORG ") {
+            let org_prefix = if bank_section.bank_id as u8 == helper_bank_id { "ORG $4000\n" } else { "ORG $0000\n" };
+            let mut with_org = String::new();
+            with_org.push_str(org_prefix);
+            with_org.push_str(&full_asm);
+            with_org
+        } else {
+            full_asm.to_string()
+        };
+
+        let full_asm = &full_asm_owned;
         
         // CRITICAL: For multi-bank, convert all short branches to long branches in helpers
         // This is needed because DIV16, MUL16, etc. have branches that exceed ±127 bytes
@@ -592,13 +605,115 @@ impl MultiBankLinker {
         // offsets (they're not known yet), so we convert at codegen time.
         let full_asm_longbranch = convert_short_to_long_branches(full_asm);
         
-        // DEBUG: Write ASM to temp file for inspection
+        // DEBUG: Write ASM snapshots to temp files for inspection
+        // - bank_XX_full.asm : full content (includes headers/external symbols)
+        // - bank_XX.asm      : trimmed view (only bank code; headers removed)
         {
             use std::fs::File;
             use std::io::Write;
-            let temp_asm_path = temp_dir.join(format!("bank_{:02}.asm", bank_section.bank_id));
-            if let Ok(mut file) = File::create(&temp_asm_path) {
+
+            // Full snapshot (unchanged)
+            let temp_full_path = temp_dir.join(format!("bank_{:02}_full.asm", bank_section.bank_id));
+            if let Ok(mut file) = File::create(&temp_full_path) {
                 let _ = file.write_all(full_asm_longbranch.as_bytes());
+            }
+
+            // Trimmed snapshot for readability (drop repeated headers/INCLUDE/externals for banks 0-30)
+            let trimmed = if bank_section.bank_id as u8 == helper_bank_id {
+                full_asm_longbranch.clone()
+            } else {
+                // Keep first ORG; then keep from CODE SECTION onwards, skipping INCLUDE/external EQU block for readability
+                let mut org_line: Option<String> = None;
+                let mut trimmed_body = Vec::new();
+                let mut in_code = false;
+
+                for line in full_asm_longbranch.lines() {
+                    let trimmed = line.trim_start();
+                    let upper = trimmed.to_uppercase();
+
+                    if org_line.is_none() && upper.starts_with("ORG ") {
+                        org_line = Some(line.to_string());
+                        continue;
+                    }
+
+                    if !in_code {
+                        if upper.contains("; CODE SECTION") {
+                            in_code = true;
+                            trimmed_body.push(line.to_string());
+                        }
+                        continue;
+                    }
+
+                    // Skip boilerplate/definitions for readability even after body starts
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if upper.starts_with("INCLUDE") {
+                        continue;
+                    }
+                    if upper.starts_with("; EXTERNAL SYMBOLS") {
+                        continue;
+                    }
+                    if let Some(second) = trimmed.split_whitespace().nth(1) {
+                        if second == "EQU" {
+                            continue;
+                        }
+                    }
+
+                    trimmed_body.push(line.to_string());
+                }
+
+                let mut out = String::new();
+                if let Some(org) = org_line.clone() {
+                    out.push_str(&org);
+                    out.push('\n');
+                }
+
+                if trimmed_body.is_empty() {
+                    // Fallback: no CODE SECTION marker (common in small banks). Do a light filter:
+                    let mut fallback = Vec::new();
+                    let mut saw_body = false;
+                    for line in full_asm_longbranch.lines() {
+                        let trimmed = line.trim_start();
+                        let upper = trimmed.to_uppercase();
+
+                        if upper.starts_with("ORG ") {
+                            continue; // already emitted
+                        }
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        if upper.starts_with("INCLUDE") {
+                            continue;
+                        }
+                        if upper.starts_with("; EXTERNAL SYMBOLS") {
+                            continue;
+                        }
+                        if let Some(second) = trimmed.split_whitespace().nth(1) {
+                            if second == "EQU" {
+                                continue;
+                            }
+                        }
+                        saw_body = true;
+                        fallback.push(line.to_string());
+                    }
+
+                    if saw_body {
+                        out.push_str(&fallback.join("\n"));
+                        out.push('\n');
+                    } else {
+                        out.push_str(&full_asm_longbranch);
+                    }
+                } else {
+                    out.push_str(&trimmed_body.join("\n"));
+                    out.push('\n');
+                }
+                out
+            };
+
+            let temp_trimmed_path = temp_dir.join(format!("bank_{:02}.asm", bank_section.bank_id));
+            if let Ok(mut file) = File::create(&temp_trimmed_path) {
+                let _ = file.write_all(trimmed.as_bytes());
             }
         }
         
@@ -682,30 +797,18 @@ impl MultiBankLinker {
         let helper_bank_id = (self.rom_bank_count - 1) as u8;
         let max_iterations = 5;
         
-        // Define BIOS symbols that are always available
-        let bios_symbols = [
-            ("Intensity_a", 0xF2ABu16),
-            ("INTENSITY_A", 0xF2ABu16),
-            ("Reset0Ref", 0xF192u16),
-            ("RESET0REF", 0xF192u16),
-            ("DP_to_D0", 0xF1AAu16),
-            ("DP_to_C8", 0xF1AFu16),
-            ("Wait_Recal", 0xF1A4u16),
-            ("Print_Str_d", 0xF373u16),
-            ("Draw_VL", 0xF1D5u16),
-            ("Draw_Line_d", 0xF1F5u16),
-            ("Moveto_d_7F", 0xF1DFu16),
-            ("Moveto_d", 0xF1EBu16),
-            ("Draw_Sync_List_At_With_Mirrors", 0xF0E8u16),
-            ("Draw_VLc", 0xF1CFu16),
-            ("Read_Btns", 0xF1BAu16),
-        ];
+        // Load BIOS symbols from shared function (same as single-bank)
+        // This ensures multibank and single-bank use identical BIOS addresses
+        use crate::backend::asm_to_binary::load_vectrex_symbols;
+        let mut bios_equates = std::collections::HashMap::new();
+        load_vectrex_symbols(&mut bios_equates);
         
-        for (name, addr) in bios_symbols.iter() {
-            all_symbols.insert(name.to_string(), *addr);
+        // Insert BIOS symbols into all_symbols
+        for (name, addr) in bios_equates.iter() {
+            all_symbols.insert(name.clone(), *addr);
         }
         
-        eprintln!("     - Injected {} BIOS symbols", bios_symbols.len());
+        eprintln!("     - Loaded {} BIOS symbols from shared table", bios_equates.len());
         
         // Also define a placeholder for START - will be overwritten if found in actual code
         if !all_symbols.contains_key("START") {
@@ -885,12 +988,13 @@ impl MultiBankLinker {
         eprintln!("       - Injected {} symbols into helper bank ASM", all_symbols.len());
         
         let helper_full_asm_longbranch = convert_short_to_long_branches(&helper_asm_with_symbols);
-        // CRITICAL FIX (2026-01-14): Helper bank (Bank #31) uses fixed window at 0x4000, not 0x0000
-        let helper_org = if helper_bank_id == 31 { 
-            eprintln!("DEBUG: helper_bank_id={} == 31? YES → using ORG $4000", helper_bank_id);
+        // CRITICAL FIX (2026-01-14): Helper bank uses fixed window at 0x4000, not 0x0000
+        let helpers_bank = (self.rom_bank_count - 1) as u8;
+        let helper_org = if helper_bank_id == helpers_bank { 
+            eprintln!("DEBUG: helper_bank_id={} == helpers_bank ({})? YES → using ORG $4000", helper_bank_id, helpers_bank);
             0x4000u16 
         } else { 
-            eprintln!("DEBUG: helper_bank_id={} == 31? NO → using ORG $0000", helper_bank_id);
+            eprintln!("DEBUG: helper_bank_id={} == helpers_bank ({})? NO → using ORG $0000", helper_bank_id, helpers_bank);
             0x0000u16 
         };
         let (mut helper_binary, _helper_line_map, _helper_symbol_table, _helper_unresolved) = crate::backend::asm_to_binary::assemble_m6809(
@@ -923,29 +1027,153 @@ impl MultiBankLinker {
         let mut flattened = String::new();
         flattened.push_str("; AUTO-GENERATED FLATTENED MULTIBANK ASM\n");
         flattened.push_str(&format!("; Banks: {} | Bank size: {} bytes | Total: {} bytes\n\n", self.rom_bank_count, self.rom_bank_size, self.rom_bank_size as usize * self.rom_bank_count as usize));
+        
+        // STRUCTURE (2026-01-14): ORG $0000 FIRST, then DEFINE SECTION
+        // Establishes program counter before including symbols
+        flattened.push_str("ORG $0000\n\n");
+        flattened.push_str(";***************************************************************************\n");
+        flattened.push_str("; DEFINE SECTION\n");
+        flattened.push_str(";***************************************************************************\n");
+        flattened.push_str("    INCLUDE \"VECTREX.I\"\n\n");
+
+        // Remove duplicated INCLUDE + RAM EQU + RUNTIME blocks in flattened view
+        // DEFINE SECTION is emitted ONCE at the top (global)
+        // Each bank emits only its code (no INCLUDE, no global EQU, no RUNTIME)
+        let strip_for_flatten = |bank_id: u8, code: &str| -> String {
+            // ALL banks strip INCLUDE (emitted globally at top)
+            // ALL banks strip RUNTIME SECTION (except Bank #31 which needs it)
+            // Bank #0 additionally strips RAM EQU (to be emitted after header)
+            let mut out = String::new();
+            let mut in_equ_section = false;
+            let mut in_runtime_section = false;
+            for line in code.lines() {
+                let trimmed = line.trim_start();
+                let upper = trimmed.to_uppercase();
+                
+                // Skip INCLUDE directives (all banks, emitted globally)
+                if upper.starts_with("INCLUDE") {
+                    continue;
+                }
+                
+                // Skip external symbol declarations header
+                if upper.starts_with("; EXTERNAL SYMBOLS") {
+                    continue;
+                }
+                
+                // Mark start of RUNTIME SECTION (skip for all banks except #31)
+                if upper.contains("RUNTIME SECTION") {
+                    in_runtime_section = true;
+                    if bank_id != 31 {
+                        continue; // Skip for non-Bank#31
+                    }
+                }
+                
+                // Skip entire RUNTIME SECTION for non-Bank#31
+                if in_runtime_section && bank_id != 31 {
+                    // Keep skipping until DATA SECTION or end of file
+                    if upper.contains("DATA SECTION") {
+                        in_runtime_section = false;
+                    }
+                    continue;
+                }
+                
+                // Mark start of EQU section (skip for Bank #0 during multibank)
+                if upper.contains("=== RAM VARIABLE DEFINITIONS") {
+                    in_equ_section = true;
+                    continue;
+                }
+                
+                // Skip blank/comment lines in EQU section
+                if in_equ_section && (trimmed.is_empty() || trimmed.starts_with(";")) {
+                    continue;
+                }
+                
+                // Detect end of EQU section
+                if in_equ_section && !trimmed.starts_with("EQU ") && !trimmed.starts_with("RESULT") && 
+                   !trimmed.contains(" EQU ") && !trimmed.is_empty() {
+                    in_equ_section = false;
+                }
+                
+                // Skip lines that are part of the EQU section
+                if in_equ_section {
+                    continue;
+                }
+                
+                out.push_str(line);
+                out.push('\n');
+            }
+            out
+        };
 
         for bank_id in 0..self.rom_bank_count {
             let phys_offset = bank_id as u32 * self.rom_bank_size;
             flattened.push_str(&format!("; ===== BANK #{:02} (physical offset ${:05X}) =====\n", bank_id, phys_offset));
             if let Some(section) = sections.get(&bank_id) {
+                // STRUCTURE (2026-01-14):
+                // Global ORG $0000 emitted at top (before DEFINE SECTION)
+                // Each bank: strip INCLUDE + RAM EQU, emit only code
+                //
+                // For Bank #0 in flat file:
+                //   - Strips INCLUDE (emitted globally)
+                //   - Strips RAM EQU (but re-inserted after header for readability)
+                //   - Keeps: header + START + code
+                
+                let code = strip_for_flatten(bank_id as u8, &section.asm_code);
+                
                 // Check if this bank's code already has an ORG directive
-                let has_org = section.asm_code.contains("ORG ");
-                if bank_id == 31 {
-                    eprintln!("DEBUG: Flattened writer for Bank #31: has_org={}, asm_code starts with: {}", has_org, &section.asm_code[..100.min(section.asm_code.len())].replace("\n", "\\n"));
-                }
+                let has_org = code.contains("ORG ");
                 
                 // For Bank #31 (fixed bank), ensure it has ORG $4000
+                // For Bank #0 (and others): ORG $0000 already emitted globally, no repeat needed
                 if bank_id == 31 && !has_org {
                     flattened.push_str("ORG $4000  ; Fixed bank window\n");
-                } else if !has_org {
-                    flattened.push_str("ORG $0000  ; Switchable bank window\n");
                 }
-                flattened.push_str(&section.asm_code);
+                // Bank #0 and #1-#30 don't need local ORG (global $0000 applies)
+                
+                // For Bank #0 in flat file: reinstate RAM definitions after header for readability
+                if bank_id == 0 {
+                    // Find where START: appears and insert definitions before it
+                    if let Some(start_pos) = code.find("START:") {
+                        let before_start = &code[..start_pos];
+                        let after_start = &code[start_pos..];
+                        
+                        flattened.push_str(before_start);
+                        // Extract and re-insert definitions section before START
+                        // Look for === RAM VARIABLE DEFINITIONS in the original section code
+                        if let Some(def_start) = section.asm_code.find("=== RAM VARIABLE DEFINITIONS") {
+                            if let Some(const_start) = section.asm_code.find(";**** CONST DECLARATIONS") {
+                                let extracted_defs = &section.asm_code[def_start..const_start];
+                                if !extracted_defs.trim().is_empty() {
+                                    flattened.push_str("\n;***************************************************************************\n");
+                                    flattened.push_str("; CODE SECTION\n");
+                                    flattened.push_str(";***************************************************************************\n\n");
+                                    flattened.push_str(extracted_defs);
+                                    flattened.push_str("\n;**** CONST DECLARATIONS (NUMBER-ONLY) ****\n\n");
+                                }
+                            }
+                        }
+                        flattened.push_str(after_start);
+                    } else {
+                        flattened.push_str(&code);
+                    }
+                } else {
+                    flattened.push_str(&code);
+                }
             } else {
                 flattened.push_str("; [empty bank]\n");
             }
             flattened.push_str("\n\n");
         }
+
+        // Add RESET vector at the end of Bank #31 (for complete flat file inspection)
+        // In multibank mode, vectors are in Bank #31 fixed window at $4000-$7FFF
+        // RESET vector is at $FFFE, which maps to Bank #31 ($4000 + $3FFE = $7FFE)
+        flattened.push_str("\n");
+        flattened.push_str(";***************************************************************************\n");
+        flattened.push_str("; INTERRUPT VECTORS (Bank #31 Fixed Window)\n");
+        flattened.push_str(";***************************************************************************\n");
+        flattened.push_str("ORG $FFFE\n");
+        flattened.push_str("FDB CUSTOM_RESET\n");
 
         // DEBUG: Check what Bank #31 looks like in flattened BEFORE writing
         let bank31_marker = flattened.find("; ===== BANK #31").unwrap_or(0);
@@ -961,6 +1189,30 @@ impl MultiBankLinker {
         } else {
             eprintln!("       [DEBUG] Flattened ASM written to {}", flattened_path.display());
             eprintln!("       [DEBUG] File size: {} bytes", fs::metadata(&flattened_path).map(|m| m.len()).unwrap_or(0));
+        }
+
+        // Emit per-bank ASM snapshots (bank_00.asm .. bank_31.asm) with explicit ORG for inspection
+        for bank_id in 0..self.rom_bank_count {
+            let bank_path = temp_dir.join(format!("bank_{:02}.asm", bank_id));
+            if let Some(section) = sections.get(&bank_id) {
+                let has_org = section.asm_code.contains("ORG ");
+                let mut bank_code = String::new();
+                if bank_id == 31 && !has_org {
+                    bank_code.push_str("ORG $4000  ; Fixed bank window\n");
+                } else if !has_org {
+                    bank_code.push_str("ORG $0000  ; Switchable bank window\n");
+                }
+                bank_code.push_str(&section.asm_code);
+                if let Err(e) = fs::write(&bank_path, bank_code) {
+                    eprintln!("       ⚠ Failed to write bank_{:02}.asm: {}", bank_id, e);
+                }
+            } else {
+                // Create an explicit empty placeholder to keep numbering consistent
+                let placeholder = format!("; [empty bank {:02}]\n", bank_id);
+                if let Err(e) = fs::write(&bank_path, placeholder) {
+                    eprintln!("       ⚠ Failed to write empty bank_{:02}.asm: {}", bank_id, e);
+                }
+            }
         }
         
         // Assemble each bank in order. The helper bank (#31) was already assembled above.

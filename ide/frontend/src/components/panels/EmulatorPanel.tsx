@@ -17,7 +17,7 @@ interface VecxMetrics {
   frameCount: number;
   running: boolean;
 }
-
+  
 interface VecxRegs {
   PC: number;
   A: number; B: number;
@@ -187,7 +187,7 @@ const EmulatorOutputInfo: React.FC = () => {
       }}>
         Emulator Output
       </div>
-      
+
       <div style={{ marginBottom: '2px' }}>
         PC: {hex16(regs?.PC)}
         {' | '}BANK: {typeof regs?.BANK === 'number' ? regs.BANK.toString(16).toUpperCase() : '--'}
@@ -1251,8 +1251,43 @@ export const EmulatorPanel: React.FC = () => {
               }
               
               // Open ASM file in new editor and highlight the line
-              if (currentPdbData.asm) {
-                const asmFileName = currentPdbData.asm;
+              if (currentPdbData.asm && currentPdbData.asmLineMap) {
+                // Look up the specific ASM file and line from asmLineMap
+                // event.data.pc is a string like "0x4168", so parse it correctly
+                const pcStr = event.data.pc.toString().replace(/^0x/i, ''); // Remove 0x prefix if present
+                const pcHex = pcStr.toUpperCase().padStart(4, '0');
+                const pcKey = `0x${pcHex}`;
+                
+                // Try exact match first
+                let asmEntry = currentPdbData.asmLineMap[pcKey];
+                
+                // If exact match not found, look for closest address <= PC
+                if (!asmEntry) {
+                  const pcValue = parseInt(pcHex, 16);
+                  let closestAddr = -1;
+                  let closestEntry = null;
+                  
+                  for (const [addrStr, entry] of Object.entries(currentPdbData.asmLineMap)) {
+                    const addrValue = parseInt(addrStr.replace(/^0x/i, ''), 16);
+                    if (addrValue <= pcValue && addrValue > closestAddr) {
+                      closestAddr = addrValue;
+                      closestEntry = entry;
+                    }
+                  }
+                  
+                  if (closestEntry) {
+                    asmEntry = closestEntry;
+                    console.log(`[EmulatorPanel] 📍 Found closest ASM mapping for ${pcKey}: ${closestAddr.toString(16).toUpperCase()}`);
+                  }
+                }
+                
+                if (!asmEntry) {
+                  console.warn(`[EmulatorPanel] ⚠️ No ASM line mapping found for PC: ${pcKey} (raw: ${event.data.pc})`);
+                  return;
+                }
+                
+                const asmFileName = asmEntry.file; // e.g., "bank_31.asm"
+                const asmLineNumber = asmEntry.line || 1;
                 
                 // Get directory from the binary path (which is in build/)
                 const editorStore = useEditorStore.getState();
@@ -1262,7 +1297,7 @@ export const EmulatorPanel: React.FC = () => {
                   // Get build directory from binary path
                   const binPath = lastCompiledBinary;
                   const buildDir = binPath.substring(0, binPath.lastIndexOf('/'));
-                  asmPath = `${buildDir}/${asmFileName}`;
+                  asmPath = `${buildDir}/${currentPdbData.asm}/${asmFileName}`;
                   console.log(`[EmulatorPanel] 📂 Opening ASM file from build dir: ${asmPath}`);
                 } else {
                   console.error(`[EmulatorPanel] ❌ No lastCompiledBinary available`);
@@ -1286,74 +1321,9 @@ export const EmulatorPanel: React.FC = () => {
                       console.error(`[EmulatorPanel] ❌ No content in ASM file`);
                       return;
                     }
-                    // Find the line number in ASM that corresponds to this PC
-                    let targetLine = 0;
-                    const pcHexUpper = event.data.pc.replace('0x', '').padStart(4, '0').toUpperCase();
-                    
-                    // Strategy 1: Use asmAddressMap for precise line mapping (PREFERRED)
-                    // Strategy 1: Try exact match in asmAddressMap
-                    if (currentPdbData.asmAddressMap) {
-                      for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
-                        if (addr.toLowerCase() === event.data.pc.toLowerCase()) {
-                          targetLine = parseInt(lineNum, 10);
-                          console.log(`[EmulatorPanel] ✅ Found exact ASM line ${targetLine} for address ${event.data.pc} using asmAddressMap`);
-                          break;
-                        }
-                      }
-                    }
-                    
-                    // Strategy 2: If still not found, show warning - PDB may be incomplete
-                    if (targetLine === 0) {
-                      console.log(`[EmulatorPanel] ⚠️ No exact match for PC ${event.data.pc} in asmAddressMap - PDB may need regeneration`);
-                    }
-                    
-                    // Strategy 3: If we know the native function name, fallback to first executable line
-                    if (targetLine === 0 && targetNativeFunction && currentPdbData.asmFunctions) {
-                      const asmFunction = currentPdbData.asmFunctions[targetNativeFunction];
-                      if (asmFunction) {
-                        // Look for the first executable line after the function label
-                        const lines = content.split('\n');
-                        let executableLine = asmFunction.startLine;
-                        
-                        // Start from the function start line and find the first non-comment, non-empty line
-                        for (let i = asmFunction.startLine - 1; i < Math.min(asmFunction.endLine, lines.length); i++) {
-                          const line = lines[i].trim();
-                          // Skip empty lines, comments, and labels
-                          if (line && !line.startsWith(';') && !line.startsWith('*') && !line.endsWith(':')) {
-                            executableLine = i + 1; // Convert to 1-based line number
-                            console.log(`[EmulatorPanel] ✅ Found first executable line ${executableLine} in function ${targetNativeFunction}: ${line}`);
-                            break;
-                          }
-                        }
-                        
-                        targetLine = executableLine;
-                        console.log(`[EmulatorPanel] ✅ Using native function executable line: ${targetNativeFunction} at line ${targetLine}`);
-                      } else {
-                        console.log(`[EmulatorPanel] ⚠️ Native function ${targetNativeFunction} not found in PDB asmFunctions`);
-                      }
-                    }
-                    
-                    // Strategy 3: Fallback - text search in ASM content
-                    if (targetLine === 0) {
-                      console.log(`[EmulatorPanel] 🔍 Using fallback text search for PC address: $${pcHexUpper}`);
-                      const lines = content.split('\n');
-                      for (let i = 0; i < lines.length; i++) {
-                        const line = lines[i];
-                        if (line.includes(`$${pcHexUpper}`) || 
-                            line.includes(`0x${pcHexUpper}`) ||
-                            line.match(new RegExp(`\\b${pcHexUpper}\\b`))) {
-                          targetLine = i + 1;
-                          console.log(`[EmulatorPanel] ✅ Found address at line ${targetLine}: ${line.trim()}`);
-                          break;
-                        }
-                      }
-                    }
-                    
-                    // Fallback: just show the file from the top
-                    if (targetLine === 0) {
-                      targetLine = 1;
-                      console.log(`[EmulatorPanel] ⚠️ Address not found, showing ASM from top`);
-                    }
+                    // Use the line number directly from asmLineMap (multibank architecture)
+                    console.log(`[EmulatorPanel] ✅ Opening ASM at line ${asmLineNumber} from asmLineMap`);
+                    const targetLine = asmLineNumber;
                     
                     // Open ASM file in editor
                     const asmUri = `file://${asmPath}`;
@@ -1606,6 +1576,90 @@ export const EmulatorPanel: React.FC = () => {
     win.PSG_LOG_LIMIT = 10000;
     console.log('[EmulatorPanel] PSG logging enabled globally on mount');
   }, []);
+
+  const onSnapshotROM = () => {
+    const vecx = (window as any).vecx;
+    if (!vecx || status !== 'paused') {
+      console.error('[EmulatorPanel] Snapshot failed - emulator not paused');
+      return;
+    }
+
+    try {
+      // Create 32KB snapshot: [Bank 0 at 0x0000-0x3FFF] + [Bank 31 at 0x4000-0x7FFF]
+      // Using vecx.read8() which handles all the complexity:
+      // - Single-bank vs multibank detection
+      // - Reading from correct container (cart or multibankRom)
+      // - Bank switching via currentBank for 0x0000-0x3FFF
+      // - Fixed bank #31 mapping for 0x4000-0x7FFF
+      const snapshot = new Uint8Array(0x8000);
+      for (let addr = 0x0000; addr < 0x8000; addr++) {
+        snapshot[addr] = vecx.read8(addr);
+      }
+
+      // Download as binary file
+      const blob = new Blob([snapshot], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `rom_snapshot_bank${vecx.currentBank || 0}_and_31.bin`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log(`[EmulatorPanel] ✓ ROM snapshot downloaded via read8() - Bank ${vecx.currentBank || 0} + Bank 31 (32KB total)`);
+    } catch (e) {
+      console.error('[EmulatorPanel] Snapshot error:', e);
+    }
+  };
+
+  const onDecompileROM = async () => {
+    const vecx = (window as any).vecx;
+    if (!vecx || status !== 'paused') {
+      console.error('[EmulatorPanel] Decompile failed - emulator not paused');
+      alert('❌ Emulator must be paused to decompile ROM');
+      return;
+    }
+
+    try {
+      // Capturar 32KB: [Bank 0 at 0x0000-0x3FFF] + [Bank 31 at 0x4000-0x7FFF]
+      const snapshot = new Uint8Array(0x8000);
+      for (let addr = 0x0000; addr < 0x8000; addr++) {
+        snapshot[addr] = vecx.read8(addr);
+      }
+      
+      // Convertir a base64
+      const base64 = btoa(String.fromCharCode(...snapshot));
+      
+      // Usar decompilador real (cargo run --bin disasm_full)
+      const api = (window as any).electronAPI;
+      if (!api?.disassembleSnapshot) {
+        console.error('[EmulatorPanel] electronAPI.disassembleSnapshot not available');
+        alert('❌ Decompile API not available');
+        return;
+      }
+      
+      // Backend calcula automáticamente cuántas instrucciones desensamblar basándose en el tamaño del snapshot
+      // Enviar ruta del binario compilado para que backend guarde en la misma carpeta
+      const result = await api.disassembleSnapshot({ base64, startHex: '0', binPath: lastCompiledBinary || undefined });
+      if (!result?.ok) {
+        console.error('[EmulatorPanel] Decompile failed:', result?.error, result?.stderr);
+        alert('❌ Decompile failed: ' + (result?.error || 'unknown error'));
+        return;
+      }
+      
+      // Mostrar rutas de archivos guardados
+      const message = result.message || `Disassembly saved to:\n${result.dissPath || 'unknown path'}`;
+      console.log('[EmulatorPanel] 📖 Disassembly Complete:', message);
+      console.log('Snapshot:', result.snapshotPath);
+      console.log('Disassembly:', result.dissPath);
+      alert(`✅ ${message}`);
+      
+    } catch (e) {
+      console.error('[EmulatorPanel] Decompile error:', e);
+      alert('❌ Decompilation failed: ' + (e as Error).message);
+    }
+  };
 
   const onPlay = () => {
     const vecx = (window as any).vecx;
@@ -2473,6 +2527,49 @@ export const EmulatorPanel: React.FC = () => {
             onClick={toggleOverlay}
             title={overlayEnabled ? 'Hide overlay' : 'Show overlay'} >
             🖼️
+          </button>
+        )}
+        
+        {/* Botón Snapshot ROM (solo si está pausado) */}
+        {status === 'paused' && (
+          <button 
+            style={{
+              ...btn,
+              backgroundColor: '#4a3a2a',
+              color: '#ffa',
+              fontSize: '18px',
+              padding: '10px',
+              minWidth: '50px',
+              minHeight: '50px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }} 
+            onClick={onSnapshotROM}
+            title="Download ROM snapshot (current bank + bank 31)" >
+            💾
+          </button>
+        )}
+        {/* Botón Decompile & Compare (solo si está pausado) */}
+        {status === 'paused' && (
+          <button 
+            style={{
+              ...btn,
+              backgroundColor: '#3a4a2a',
+              color: '#afa',
+              fontSize: '18px',
+              padding: '10px',
+              minWidth: '50px',
+              minHeight: '50px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }} 
+            onClick={onDecompileROM}
+            title="Decompile ROM and compare with expected values" >
+            🔍
           </button>
         )}
       </div>
