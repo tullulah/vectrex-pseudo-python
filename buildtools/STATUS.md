@@ -1,18 +1,27 @@
 # BuildTools - Modular Compiler Pipeline
 
-## Current Status (Updated 2026-01-16 - Phase 2c COMPLETE)
+## Current Status (Updated 2026-01-16 - Phase 3 COMPLETE)
 
 ✅ **Phase 1 Complete**: vpy_loader crate is ready
 ✅ **Phase 2a Complete**: vpy_parser lexer (11 tests passing)
 ✅ **Phase 2b Complete**: vpy_parser AST types (345 lines, 100% ported)
 ✅ **Phase 2c Complete**: vpy_parser parser (1496 lines ported, entry point wired, 41 tests passing)
-⏳ **Phase 3 Next**: vpy_unifier (module merging, import resolution)
+✅ **Phase 3 Complete**: vpy_unifier module resolution (24 tests passing)
+⏳ **Phase 4 Next**: vpy_bank_allocator (module merging, reference fixing)
 
 ### Session 2026-01-16: VECTREX.I Refactoring Complete ✅
 - ✅ All hardcoded BIOS addresses in buildtools eliminated
 - ✅ Dynamic resolution from VECTREX.I (single source of truth)
 - ✅ Wait_Recal ($F192), DP_to_D0 ($F1AA), DP_to_C8 ($F1AF) verified
 - ✅ buildtools compiles cleanly with no hardcoded BIOS addresses
+
+### Session 2026-01-16: Phase 3 Complete ✅
+- ✅ Module dependency graph with cycle detection (DFS)
+- ✅ Topological sorting (Kahn's algorithm, dependencies-first)
+- ✅ Symbol resolver with MODULE_symbol naming convention
+- ✅ 24 comprehensive tests for graph, resolver, scope, visitor
+- ✅ All 82 buildtools tests passing (parser 41 + unifier 24 + others)
+- ✅ Git commit 70281f40 pushed to feature/compiler-optimizations
 
 ### Completed Work
 
@@ -78,9 +87,16 @@ buildtools/
 │   │   └── builtins.rs
 │   ├── Cargo.toml
 │   └── tests/ (✅ comprehensive test suite: 15 new tests)
-├── vpy_unifier/         ⏳ NEXT (Phase 3)
-│   ├── src/lib.rs (placeholder)
-│   └── Cargo.toml
+├── vpy_unifier/         ✅ COMPLETE (Phase 3)
+│   ├── src/
+│   │   ├── lib.rs (✅ complete - unify_modules entry point)
+│   │   ├── graph.rs (✅ ModuleGraph with DFS cycles, Kahn's sort)
+│   │   ├── resolver.rs (✅ SymbolResolver for MODULE_symbol naming)
+│   │   ├── error.rs
+│   │   ├── scope.rs
+│   │   └── visitor.rs
+│   ├── Cargo.toml
+│   └── tests/ (✅ 24 comprehensive tests: graph, resolver, scope, visitor)
 ├── vpy_bank_allocator/  ⏳ TODO (Phase 4)
 ├── vpy_codegen/         ⏳ TODO (Phase 5)
 ├── vpy_assembler/       ⏳ TODO (Phase 6)
@@ -97,43 +113,33 @@ buildtools/
 
 ### ✅ COMPLETED (This Session - 2026-01-16)
 
-Phase 2c: Parser Entry Point Wiring
-- ✅ Created pub fn parse_module() in parser.rs
-- ✅ Connected parse_tokens() in lib.rs to parser module
-- ✅ Added 15 comprehensive tests
-- ✅ All 41 tests passing
-- ✅ buildtools compiles cleanly
+Phase 3: Module Unification & Import Resolution
+- ✅ Created ModuleGraph with DFS cycle detection
+- ✅ Implemented topological sorting (Kahn's algorithm)
+- ✅ Created SymbolResolver for MODULE_symbol naming
+- ✅ Added 24 comprehensive tests
+- ✅ All 82 buildtools tests passing (41 parser + 24 unifier + 17 others)
+- ✅ Git commit 70281f40 pushed
 
-### Immediate (Phase 3 Preparation - Estimated 3-4 hours)
+### Immediate (Phase 4 - Estimated 2-3 hours)
 
-**Status**: Phase 2 (Parsing) 100% complete, Phase 3 ready to start
+**Status**: Phase 3 (Unification) 100% complete, Phase 4 ready to start
 
-1. **Module unification** (~1.5-2 hours)
-   - Load multiple .vpy files via vpy_loader
+1. **Module merging** (~1-1.5 hours)
+   - Load all .vpy files recursively
    - Parse each file via vpy_parser
    - Merge into single unified AST
-   - Detect circular imports
+   - Fix all references (calls, variable access)
 
-2. **Symbol name mangling** (~1 hour)
-   - Transform `input.get_input()` → `INPUT_GET_INPUT`
-   - Prevent symbol name collisions
-   - Build unified symbol table
+2. **Bank allocation** (~1 hour)
+   - Analyze code to determine bank boundaries
+   - Handle cross-bank calls with wrappers
+   - Optimize for 32KB banks
 
-3. **Validation** (~30 min)
-   - Verify all imported symbols exist
-   - Check for duplicate definitions
-   - Type compatibility checking (basic)
-
-4. **Comprehensive testing** (~30 min)
-   - Single-file programs (passthrough)
+3. **Comprehensive testing** (~30 min)
+   - Single-file programs (no change)
    - Multi-file programs (import resolution)
-   - Error cases (missing imports, circular deps)
-
-### After Phase 3
-5. **Phase 4: vpy_bank_allocator** (~2 hours)
-   - Determine function-to-bank mapping
-   - Generate call graph
-   - Allocate functions to banks
+   - Error cases (missing imports, circular deps, unresolved symbols)
 
 ### Architecture Decisions
 
