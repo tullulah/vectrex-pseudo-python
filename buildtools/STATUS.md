@@ -1,13 +1,22 @@
 # BuildTools - Modular Compiler Pipeline
 
-## Current Status (Updated 2026-01-16 - Phase 3 COMPLETE)
+## Current Status (Updated 2026-01-16 - Tree Shaking COMPLETE)
 
 ✅ **Phase 1 Complete**: vpy_loader crate is ready
 ✅ **Phase 2a Complete**: vpy_parser lexer (11 tests passing)
 ✅ **Phase 2b Complete**: vpy_parser AST types (345 lines, 100% ported)
 ✅ **Phase 2c Complete**: vpy_parser parser (1496 lines ported, entry point wired, 41 tests passing)
 ✅ **Phase 3 Complete**: vpy_unifier module resolution (24 tests passing)
+✅ **Phase 5 Optimization Complete**: vpy_codegen tree shaking for runtime helpers
 ⏳ **Phase 4 Next**: vpy_bank_allocator (module merging, reference fixing)
+
+### Session 2026-01-16: Tree Shaking Implementation Complete ✅
+- ✅ **Infrastructure**: Conditional emission system for 17 runtime helpers
+- ✅ **Modular Design**: 5 helper modules (drawing, math, joystick, level, utilities)
+- ✅ **Automatic Detection**: AST analysis identifies needed helpers from code
+- ✅ **Dependency Tracking**: SQRT→DIV16, RAND_RANGE→RAND automatic resolution
+- ✅ **Real-World Results**: joystick_test emits only 3/17 helpers (82% reduction)
+- ✅ **Git commits**: 9e885571 (infrastructure) + ae998907 (analysis) pushed
 
 ### Session 2026-01-16: VECTREX.I Refactoring Complete ✅
 - ✅ All hardcoded BIOS addresses in buildtools eliminated
@@ -24,6 +33,32 @@
 - ✅ Git commit 70281f40 pushed to feature/compiler-optimizations
 
 ### Completed Work
+
+#### vpy_codegen Runtime Helper Optimization ✅ COMPLETE
+**Tree Shaking System** (commits 9e885571 + ae998907)
+- ✅ **Modular Architecture**: 5 helper modules
+  - `drawing.rs`: DRAW_CIRCLE_RUNTIME, DRAW_RECT_RUNTIME
+  - `math.rs`: MUL16, DIV16, MOD16, SQRT_HELPER, POW_HELPER, ATAN2_HELPER
+  - `joystick.rs`: J1X_BUILTIN, J1Y_BUILTIN, J2X_BUILTIN, J2Y_BUILTIN
+  - `level.rs`: SHOW_LEVEL_RUNTIME
+  - `utilities.rs`: RAND_HELPER, RAND_RANGE_HELPER, FADE_IN_RUNTIME, FADE_OUT_RUNTIME
+- ✅ **Conditional Emission**: `HashSet<String>` parameter for selective generation
+- ✅ **Usage Analysis**: `analyze_needed_helpers(module: &Module) -> HashSet<String>`
+  - Traverses entire AST (functions → statements → expressions)
+  - Detects builtin calls with variable arguments
+  - Detects binary operations (*, /, %) requiring helpers
+  - Tracks dependencies (SQRT→DIV16, RAND_RANGE→RAND)
+- ✅ **Detection Rules**: 17 total helpers analyzed
+  - Drawing: DRAW_CIRCLE(vars), DRAW_RECT(vars)
+  - Joystick: J1_X(), J1_Y(), J2_X(), J2_Y()
+  - Math: SQRT(vars), POW(vars), ATAN2(vars), RAND(), RAND_RANGE()
+  - Operations: x*y, x/y, x%y (only if operands are variables)
+- ✅ **Real-World Verification**:
+  - `joystick_test`: Emits only J1X_BUILTIN, J1Y_BUILTIN, DIV16 (3/17 helpers, 82% reduction)
+  - `test_buttons`: Emits only J1X_BUILTIN, J1Y_BUILTIN (2/17 helpers)
+- ✅ **Files Modified**:
+  - `buildtools/vpy_codegen/src/m6809/helpers.rs`: +195 lines analysis code
+  - `buildtools/vpy_codegen/src/m6809/mod.rs`: Updated 2 call sites
 
 #### vpy_loader (Phase 1) ✅ COMPLETE
 - ✅ Crate structure created
