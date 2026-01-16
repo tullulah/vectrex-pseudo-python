@@ -3,6 +3,15 @@ use crate::ast::Expr;
 use crate::codegen::CodegenOptions;
 use super::{FuncCtx, emit_expr, fresh_label};
 
+/// Hash a string to generate a unique label
+fn hash_string(s: &str) -> usize {
+    let mut hash: usize = 0;
+    for byte in s.bytes() {
+        hash = hash.wrapping_mul(31).wrapping_add(byte as usize);
+    }
+    hash
+}
+
 /// Generate JSR to helper function (with bank wrapper if in multibank mode)
 fn emit_jsr_to_helper(helper_name: &str, opts: &CodegenOptions) -> String {
     // BIOS functions ($F000-$FFFF) are always accessible, don't need wrappers
@@ -11,15 +20,22 @@ fn emit_jsr_to_helper(helper_name: &str, opts: &CodegenOptions) -> String {
         "Draw_VL", "Draw_VLc", "Print_Str_d", "DP_to_D0", "DP_to_C8", "Read_Btns"
     ];
     
+    // OPTIMIZATION (2026-01-14): Bank #31 (fixed ROM at $4000-$7FFF) is ALWAYS visible
+    // NO wrappers needed for runtime helpers - direct JSR works from any bank
+    // 
+    // Previous code emitted:  JSR HELPER_BANK_WRAPPER
+    // New code emits:         JSR HELPER
+    //
+    // This works because Bank #31 memory is never switched - always at $4000-$7FFF
+    // regardless of which bank is in the $0000-$3FFF switchable window
+    
     if BIOS_FUNCTIONS.contains(&helper_name) {
         // BIOS functions: always direct JSR (no wrapper needed)
         format!("    JSR {}\n", helper_name)
-    } else if opts.bank_config.is_some() {
-        // Multibank mode: use bank wrapper for cross-bank calls to our helpers
-        format!("    JSR {}_BANK_WRAPPER  ; Cross-bank call to helper in bank #31\n", helper_name)
     } else {
-        // Single bank mode: direct JSR
-        format!("    JSR {}\n", helper_name)
+        // Runtime helpers (Draw_Sync_List_At_With_Mirrors, VECTREX_PRINT_TEXT, etc):
+        // All in Bank #31 (fixed, always visible) - direct JSR works from any bank
+        format!("    JSR {}  ; Bank #31 (fixed) - no wrapper needed\n", helper_name)
     }
 }
 
@@ -1431,7 +1447,43 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
             return true;
         } else if args.len() == 3 {
             out.push_str("; PRINT_TEXT(x, y, text) - uses BIOS defaults\n");
-            // Normal 3-parameter version - fall through to generic handling below
+            
+            // Handle all 3 arguments with special string literal handling
+            // Arg 0: x coordinate
+            emit_expr(&args[0], out, fctx, string_map, opts);
+            out.push_str("    LDD RESULT\n");
+            out.push_str("    STD VAR_ARG0\n");
+            
+            // Arg 1: y coordinate
+            emit_expr(&args[1], out, fctx, string_map, opts);
+            out.push_str("    LDD RESULT\n");
+            out.push_str("    STD VAR_ARG1\n");
+            
+            // Arg 2: text string - handle as StringLit or expression
+            match &args[2] {
+                crate::ast::Expr::StringLit(s) => {
+                    // For string literals: use string_map which contains pre-generated labels
+                    // The string will have been added to string_map during parsing
+                    // For now, use a placeholder label based on the string content
+                    let label = string_map.get(s)
+                        .cloned()
+                        .unwrap_or_else(|| format!("STR_{}", hash_string(s)));
+                    out.push_str(&format!("    LDX #{}\n", label));
+                    out.push_str("    STX VAR_ARG2\n");
+                }
+                _ => {
+                    // Variable or expression - evaluate normally
+                    emit_expr(&args[2], out, fctx, string_map, opts);
+                    out.push_str("    LDD RESULT\n");
+                    out.push_str("    STD VAR_ARG2\n");
+                }
+            }
+            
+            add_native_call_comment(out, "VECTREX_PRINT_TEXT");
+            out.push_str(&emit_jsr_to_helper("VECTREX_PRINT_TEXT", opts));
+            
+            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+            return true;
         } else {
             // Wrong number of arguments - generate error comment
             out.push_str(&format!("; ERROR: PRINT_TEXT expects 3 or 5 arguments, got {}\n", args.len()));

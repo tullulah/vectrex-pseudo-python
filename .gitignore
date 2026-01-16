@@ -1,5 +1,6 @@
 # Rust / Cargo build artifacts
 /target/
+buildtools/target/
 **/*.rs.bk
 emulator_v2/target/
 

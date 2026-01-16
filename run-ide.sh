@@ -189,15 +189,17 @@ install_node_modules_if_missing() {
 install_node_modules_if_missing "$ROOT/ide/frontend"
 install_node_modules_if_missing "$ROOT/ide/electron"
 
-# Build Rust (LSP + core) salvo --no-rust-build
+# Build Rust (buildtools compiler only) salvo --no-rust-build
+# NOTE: LSP compilation disabled - core is deprecated, LSP needs migration to buildtools
 if [ "$NO_RUST_BUILD" = false ]; then
   if ! command -v cargo &> /dev/null; then
     echo '[WARN] cargo no encontrado; se omite build Rust'
   else
-    echo '[INFO] cargo build (LSP + compiler + core only, no emulator)'
-    cargo build -p vectrex_lang --bin vpy_lsp --bin vectrexc
+    # Build buildtools compiler (nuevo modular compiler)
+    echo '[INFO] cargo build (buildtools compiler)'
+    (cd "$ROOT/buildtools" && cargo build --bin vpy_cli)
     if [ $? -ne 0 ]; then
-      echo '[ERR ] cargo build falló'
+      echo '[ERR ] cargo build (buildtools) falló'
       exit 1
     fi
   fi

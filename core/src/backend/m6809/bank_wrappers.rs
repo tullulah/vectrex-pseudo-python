@@ -107,25 +107,38 @@ impl BankWrapperGenerator {
         self.function_lines.insert(func_name.to_string(), line);
     }
     
-    /// Detect if a function call is cross-bank
-    /// Returns Some(target_bank) if cross-bank, None if same-bank or unknown
+    /// Detect if a function call is cross-bank and needs a wrapper
+    /// Returns Some(target_bank) if cross-bank (but NOT helpers bank), None if same-bank or unknown or target is helpers bank
+    /// 
+    /// Helpers bank is ALWAYS visible (fixed at $4000-$7FFF), so no wrapper needed for calls to it
     pub fn is_cross_bank_call(&self, caller_func: &str, callee_func: &str) -> Option<u8> {
         let caller_bank = self.function_banks.get(caller_func)?;
         let callee_bank = self.function_banks.get(callee_func)?;
+        let helpers_bank = (self.rom_bank_count - 1) as u8;
         
-        if caller_bank != callee_bank {
-            Some(*callee_bank)
-        } else {
-            None
+        // No wrapper needed if same bank
+        if caller_bank == callee_bank {
+            return None;
         }
+        
+        // No wrapper needed if calling helpers bank (always visible, fixed memory)
+        if *callee_bank == helpers_bank {
+            return None;
+        }
+        
+        // Wrapper needed for other cross-bank calls
+        Some(*callee_bank)
     }
     
     /// Record a cross-bank call for later wrapper generation
+    /// Helpers bank is always visible, so we don't record calls to it
     pub fn record_cross_bank_call(&mut self, caller_func: String, callee_func: String) {
+        let helpers_bank = (self.rom_bank_count - 1) as u8;
         if let (Some(&caller_bank), Some(&callee_bank)) = 
             (self.function_banks.get(&caller_func), self.function_banks.get(&callee_func)) 
         {
-            if caller_bank != callee_bank {
+            // Only record if cross-bank AND target is not helpers bank (always visible)
+            if caller_bank != callee_bank && callee_bank != helpers_bank {
                 self.cross_bank_calls.push(CrossBankCall {
                     caller_func,
                     caller_bank,
@@ -193,44 +206,44 @@ r#"
     pub fn generate_all_wrappers(&mut self) -> String {
         let mut output = String::new();
         
-        // Always generate wrappers for runtime helpers in multibank mode
-        // These helpers are in bank #31 but called from user code in other banks
-        let runtime_helpers = vec![
-            "Draw_Sync_List_At_With_Mirrors",
-            "VECTREX_PRINT_TEXT",
-            "VECTREX_SET_INTENSITY",
-            "DRAW_LINE_WRAPPER",
-            "DRAW_CIRCLE_RUNTIME",
-        ];
+        // OPTIMIZATION (2026-01-14): Helpers bank (last bank) is ALWAYS visible (fixed at $4000-$7FFF)
+        // No wrappers needed for calls to helpers bank - JSR direct works from any bank
+        // 
+        // The following helpers are in helpers bank but were being wrapped unnecessarily:
+        // - Draw_Sync_List_At_With_Mirrors
+        // - VECTREX_PRINT_TEXT
+        // - VECTREX_SET_INTENSITY
+        // - DRAW_LINE_WRAPPER
+        // - DRAW_CIRCLE_RUNTIME
+        //
+        // Now: JSR directly to helpers bank functions from any bank (no wrapper overhead)
         
-        let helper_bank_id = (self.rom_bank_count - 1) as u8; // Bank #31 for helpers
+        let helper_bank_id = (self.rom_bank_count - 1) as u8; // Last bank for helpers
         
-        output.push_str("\n; ===== CROSS-BANK CALL WRAPPERS =====\n");
-        output.push_str("; Auto-generated wrappers for bank switching\n\n");
-        
-        // Generate wrappers for runtime helpers (always needed in multibank)
-        for helper_name in runtime_helpers {
-            let wrapper = self.generate_wrapper(helper_name, helper_bank_id);
-            if !wrapper.is_empty() {
-                output.push_str(&wrapper);
+        // Collect only cross-bank calls where callee is NOT helpers bank
+        let mut needed_wrappers: HashMap<String, u8> = HashMap::new();
+        for call in &self.cross_bank_calls {
+            // Skip if callee is helpers bank (always visible, no wrapper needed)
+            if call.callee_bank != helper_bank_id {
+                needed_wrappers.insert(call.callee_func.clone(), call.callee_bank);
             }
         }
         
-        if self.cross_bank_calls.is_empty() {
-            output.push_str("; ===== END CROSS-BANK WRAPPERS (helpers only) =====\n\n");
-            return output;
+        // If no wrappers needed, skip entire section
+        if needed_wrappers.is_empty() {
+            return output; // Empty string - no wrappers emitted
         }
         
-        // Collect unique callee functions
-        let mut unique_callees: HashMap<String, u8> = HashMap::new();
-        for call in &self.cross_bank_calls {
-            unique_callees.insert(call.callee_func.clone(), call.callee_bank);
-        }
+        output.push_str("\n; ===== CROSS-BANK CALL WRAPPERS =====\n");
+        output.push_str("; Auto-generated wrappers for bank switching\n");
+        output.push_str("; NOTE: Bank #31 (fixed memory) excluded - JSR direct used\n\n");
         
-        // Generate wrapper for each unique callee
-        for (func_name, target_bank) in unique_callees {
+        // Generate wrapper for each needed cross-bank call
+        for (func_name, target_bank) in needed_wrappers {
             let wrapper = self.generate_wrapper(&func_name, target_bank);
-            output.push_str(&wrapper);
+            if !wrapper.is_empty() {
+                output.push_str(&wrapper);
+            }
         }
         
         output.push_str("; ===== END CROSS-BANK WRAPPERS =====\n\n");

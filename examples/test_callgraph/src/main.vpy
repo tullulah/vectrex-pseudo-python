@@ -18,6 +18,7 @@ frame_count = 0
 # ==================== MAIN (runs once at startup) ====================
 def main():
     SET_INTENSITY(127)
+    pass
     # Initialization if needed - kept minimal for debugging
 
 # ==================== LOOP (runs every frame) ====================

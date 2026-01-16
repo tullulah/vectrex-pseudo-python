@@ -1,0 +1,9 @@
+META TITLE = "TEST PRINT"
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    PRINT_TEXT(-70, 70, "HELLO WORLD")
+    SET_INTENSITY(60)

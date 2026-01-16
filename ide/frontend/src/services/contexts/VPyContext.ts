@@ -890,10 +890,11 @@ def loop():
 \`\`\`
 
 #### Compilation:
-- **Build command**: \`vectrexc build src/main.vpy --bin\`
+- **Build command**: \`vpy_cli build src/main.vpy --output build/game.bin --rom-size 32768 --bank-size 32768 --debug\`
 - **Architecture**: Unified compilation (all modules merged before codegen)
 - **Runtime helpers**: Auto-deduplicated (no duplicate builtins)
 - **Symbol names**: Auto-prefixed to avoid collisions (e.g., \`INPUT_GET_INPUT\`)
+- **Compiler**: New buildtools modular compiler (replaces old core compiler)
 
 #### Rules:
 - ✅ **Only main.vpy** needs \`main()\` and \`loop()\` functions

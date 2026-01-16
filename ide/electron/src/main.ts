@@ -836,24 +836,23 @@ function resolveCompilerPath(): string | null {
     try { if (existsSync(override)) return override; } catch {}
     mainWindow?.webContents.send('run://stderr', `VPY_COMPILER_BIN set but file not found: ${override}`);
   }
-  const names = process.platform === 'win32' ? ['vectrexc.exe','vectrex_lang.exe'] : ['vectrexc','vectrex_lang'];
+  // NEW BUILDTOOLS COMPILER: vpy_cli (replaces vectrexc)
+  const names = process.platform === 'win32' ? ['vpy_cli.exe'] : ['vpy_cli'];
   const cwd = process.cwd();
   const candidates: string[] = [];
   for (const exe of names) {
     candidates.push(
+      join(cwd, 'buildtools', 'target', 'debug', exe),
+      join(cwd, 'buildtools', 'target', 'release', exe),
       join(cwd, 'target', 'debug', exe),
       join(cwd, 'target', 'release', exe),
       join(cwd, exe),
-      join(cwd, 'core', 'target', 'debug', exe),
-      join(cwd, 'core', 'target', 'release', exe),
-      join(cwd, '..', '..', 'target', 'debug', exe),
-      join(cwd, '..', '..', 'target', 'release', exe),
-      join(cwd, '..', '..', 'core', 'target', 'debug', exe),
-      join(cwd, '..', '..', 'core', 'target', 'release', exe),
+      join(cwd, '..', '..', 'buildtools', 'target', 'debug', exe),
+      join(cwd, '..', '..', 'buildtools', 'target', 'release', exe),
     );
   }
   for (const p of candidates) { try { if (existsSync(p)) return p; } catch {} }
-  mainWindow?.webContents.send('run://stderr', `Compiler binary not found. Tried paths (names: ${names.join(', ')}):\n${candidates.join('\n')}\nBuild with one of:\n  cargo build -p vectrex_lang --bin vectrexc\n  cargo build -p vectrex_lang --bin vectrex_lang\nOr set VPY_COMPILER_BIN=full\\path\\to\\compiler.exe`);
+  mainWindow?.webContents.send('run://stderr', `Compiler binary not found. Tried paths (names: ${names.join(', ')}):\n${candidates.join('\n')}\nBuild with:\n  cd buildtools && cargo build --bin vpy_cli\nOr set VPY_COMPILER_BIN=full/path/to/vpy_cli`);
   return null;
 }
 
@@ -1030,15 +1029,16 @@ export async function executeCompilation(args: { path: string; saveIfDirty?: { c
     const workspaceRoot = join(__dirname, '..', '..', '..');
     
     let outAsm = fsPath.replace(/\.[^.]+$/, '.asm');
-    const argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin', '--include-dir', workspaceRoot];
     
-    // If outputPath is provided (from project), add --out argument
-    // Note: --out specifies the ASM output path, binary is derived from it
+    // NEW BUILDTOOLS COMPILER ARGUMENTS
+    // OLD: ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin', '--include-dir', workspaceRoot]
+    // NEW: ['build', fsPath, '--output', binPath, '--rom-size', '32768', '--bank-size', '32768', '--debug']
+    
+    // If outputPath is provided (from project), use it
     let finalBinPath = outAsm.replace(/\.asm$/, '.bin');
     if (finalOutputPath) {
       // outputPath is the .bin path, derive .asm from it
       const outAsmFromProject = finalOutputPath.replace(/\.bin$/, '.asm');
-      argsv.push('--out', outAsmFromProject);
       finalBinPath = finalOutputPath;
       outAsm = outAsmFromProject; // CRITICAL: Use project ASM path for all checks
       // Ensure output directory exists
@@ -1046,6 +1046,21 @@ export async function executeCompilation(args: { path: string; saveIfDirty?: { c
       try {
         await fs.mkdir(outputDir, { recursive: true });
       } catch {}
+    }
+    
+    const argsv = ['build', fsPath, '--output', finalBinPath];
+    
+    // Add ROM size configuration if in project mode (read from .vpyproj if needed)
+    // Default: 32KB single-bank
+    argsv.push('--rom-size', '32768');
+    argsv.push('--bank-size', '32768');
+    
+    // Always generate debug symbols
+    argsv.push('--debug');
+    
+    // If verbose mode, add --verbose flag
+    if (verbose) {
+      argsv.push('--verbose');
     }
     
     // CRITICAL: Delete old .asm and .bin files before compilation to avoid stale files
@@ -1332,6 +1347,78 @@ ipcMain.handle('file:appendBin', async (_e, args: { path: string; data: Uint8Arr
     return { ok: true, path, size: statAfter?.size };
   } catch (e: any) {
     return { error: e?.message || 'append_failed' };
+  }
+});
+
+// Disassemble a ROM snapshot (base64) using core/bin/disasm_full
+ipcMain.handle('tools:disassembleSnapshot', async (_e, args: { base64: string; startHex?: string; binPath?: string }) => {
+  try {
+    const { base64, startHex = '0', binPath } = args || { base64: '' };
+    if (!base64 || typeof base64 !== 'string') {
+      return { ok: false, error: 'Invalid snapshot payload (base64 required)' };
+    }
+    const data = Buffer.from(base64, 'base64');
+    
+    // Determinar carpeta destino: junto al .bin del proyecto actual
+    let outputDir: string;
+    let outputBaseName: string;
+    
+    if (binPath) {
+      // Frontend envió ruta exacta del binario compilado
+      // Usar esa ubicación y nombre para los archivos de salida
+      outputDir = dirname(binPath);
+      outputBaseName = basename(binPath, '.bin');
+    } else {
+      // Sin binPath: guardar en storage/snapshots
+      const storageDir = getStoragePath();
+      outputDir = join(storageDir, 'snapshots');
+      try { await fs.mkdir(outputDir, { recursive: true }); } catch {}
+      outputBaseName = `rom_snapshot_${Date.now()}`;
+    }
+    
+    const snapshotPath = join(outputDir, `${outputBaseName}.snapshot.bin`);
+    const dissPath = join(outputDir, `${outputBaseName}.diss.asm`);
+    
+    // Guardar snapshot binario
+    await fs.writeFile(snapshotPath, data);
+
+    // Desensamblar TODO el snapshot
+    // IMPORTANTE: 'count' es el rango de BYTES a desensamblar, no número de instrucciones
+    // Para cubrir todo el snapshot, pasamos el tamaño completo
+    const snapshotSize = data.length;
+    
+    const cargoCmd = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
+    const cargoArgs = ['run', '--bin', 'disasm_full', '--', snapshotPath, startHex, String(snapshotSize)];
+    const cwd = process.cwd();
+    
+    return await new Promise((resolve) => {
+      const proc = spawn(cargoCmd, cargoArgs, { cwd });
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      proc.on('close', async (code) => {
+        if (code === 0) {
+          // Guardar salida desensamblada en .diss.asm
+          try {
+            await fs.writeFile(dissPath, stdout, 'utf8');
+            resolve({ 
+              ok: true, 
+              output: stdout, 
+              snapshotPath,
+              dissPath,
+              message: `Disassembly saved to:\n${dissPath}` 
+            });
+          } catch (writeErr: any) {
+            resolve({ ok: false, error: `Failed to write .diss.asm: ${writeErr.message}`, output: stdout, stderr });
+          }
+        } else {
+          resolve({ ok: false, error: `disasm_full exit ${code}`, output: stdout, stderr });
+        }
+      });
+    });
+  } catch (error: any) {
+    return { ok: false, error: String(error?.message || error) };
   }
 });
 

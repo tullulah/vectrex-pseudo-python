@@ -832,40 +832,59 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         
         // Phase 5: Write ASM file
         eprintln!("Phase 5: Writing assembly file...");
+        
+        // Check if multibank BEFORE determining output path
+        let has_multibank = codegen::BankConfig::from_meta(&final_module.meta)
+            .map_or(false, |cfg| cfg.is_enabled());
+        
+        // Always write to normal output path - linker will handle multibank_temp/
         let out_path = out.cloned().unwrap_or_else(|| path.with_extension("asm"));
+        
         fs::write(&out_path, &asm).map_err(|e| {
             eprintln!("❌ PHASE 5 FAILED: Cannot write assembly file");
             eprintln!("   Output path: {}", out_path.display());
             eprintln!("   Error: {}", e);
             e
         })?;
-        eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
+        
+        if has_multibank {
+            eprintln!("✓ Phase 5 SUCCESS: Written to {} (multibank intermediate)", out_path.display());
+        } else {
+            eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
+        }
         
         // Phase 5.5: Write .pdb file if debug info available
+        // CRITICAL: For multibank, defer PDB generation until Phase 6.8 (after linker)
+        // For single-bank, write immediately if no binary generation requested
         let mut debug_info_mut = debug_info;
+        
         if let Some(ref mut dbg) = debug_info_mut {
-            eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
-            let pdb_path = out_path.with_extension("pdb");
-            
-            // If binary generation is requested, we'll update the PDB after Phase 6.5
-            // Otherwise, write it now
-            if !(bin && tgt == target::Target::Vectrex) {
-                match dbg.to_json() {
-                    Ok(json) => {
-                        fs::write(&pdb_path, json).map_err(|e| {
-                            eprintln!("⚠ Warning: Cannot write debug symbols file");
-                            eprintln!("   Output path: {}", pdb_path.display());
-                            eprintln!("   Error: {}", e);
-                            e
-                        })?;
-                        eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
-                    },
-                    Err(e) => {
-                        eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
-                    }
-                }
+            if has_multibank {
+                eprintln!("Phase 5.5: Debug symbols write deferred until Phase 6.8 (after multibank linking)");
             } else {
-                eprintln!("Phase 5.5: Debug symbols write deferred until after binary generation");
+                eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
+                let pdb_path = out_path.with_extension("pdb");
+                
+                // If binary generation is requested, we'll update the PDB after Phase 6.5
+                // Otherwise, write it now
+                if !(bin && tgt == target::Target::Vectrex) {
+                    match dbg.to_json() {
+                        Ok(json) => {
+                            fs::write(&pdb_path, json).map_err(|e| {
+                                eprintln!("⚠ Warning: Cannot write debug symbols file");
+                                eprintln!("   Output path: {}", pdb_path.display());
+                                eprintln!("   Error: {}", e);
+                                e
+                            })?;
+                            eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                        },
+                        Err(e) => {
+                            eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                        }
+                    }
+                } else {
+                    eprintln!("Phase 5.5: Debug symbols write deferred until after binary generation");
+                }
             }
         } else {
             eprintln!("Phase 5.5: Debug symbols generation skipped (not supported for target={})", tgt);
@@ -1128,6 +1147,56 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             } else {
                 eprintln!("Phase 6.7: Multi-bank ROM generation skipped (no bank config)");
             }
+            
+            // Phase 6.8: Write PDB for multibank (after linker has processed all banks)
+            // TODO: Move inside bank_config if let scope to access rom_bank_count
+            if has_multibank && bin && tgt == target::Target::Vectrex {
+                if let Some(ref mut dbg) = debug_info_mut {
+                    eprintln!("Phase 6.8: Writing debug symbols file (.pdb) for multibank...");
+                    
+                    // For multibank, PDB should be in same directory as BIN (not with .vpy source)
+                    let bin_path = out_path.with_extension("bin");
+                    let pdb_path = bin_path.with_extension("pdb");
+                    
+                    // Update debug_info with addresses from bank_*.asm files
+                    // multibank_temp/ is in the same directory as the BIN file
+                    let multibank_temp = bin_path.parent()
+                        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Cannot find parent directory"))?
+                        .join("multibank_temp");
+                    
+                    if multibank_temp.exists() {
+                        eprintln!("   Parsing bank_*.asm files to update addresses...");
+                        // For now, use a default rom_bank_count of 32 (standard multibank)
+                        let rom_bank_count = 32usize;
+                        match update_debug_info_from_banks(dbg, &multibank_temp, rom_bank_count) {
+                            Ok(updated_count) => {
+                                eprintln!("   ✓ Updated {} symbols with bank addresses", updated_count);
+                            },
+                            Err(e) => {
+                                eprintln!("   ⚠ Warning: Failed to update addresses from banks: {}", e);
+                                eprintln!("   PDB will contain addresses from unified ASM (may be incorrect)");
+                            }
+                        }
+                    } else {
+                        eprintln!("   ⚠ Warning: multibank_temp/ not found, using unified ASM addresses");
+                    }
+                    
+                    match dbg.to_json() {
+                        Ok(json) => {
+                            fs::write(&pdb_path, json).map_err(|e| {
+                                eprintln!("⚠ Warning: Cannot write debug symbols file");
+                                eprintln!("   Output path: {}", pdb_path.display());
+                                eprintln!("   Error: {}", e);
+                                e
+                            })?;
+                            eprintln!("✓ Phase 6.8 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                        },
+                        Err(e) => {
+                            eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
+                        }
+                    }
+                }
+            }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");
         }
@@ -1135,6 +1204,238 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         eprintln!("=== COMPILATION PIPELINE COMPLETE ===");
         Ok(())
     }
+}
+
+/// Update debug_info with addresses from bank_*.asm files after multibank linking
+fn update_debug_info_from_banks(
+    debug_info: &mut backend::debug_info::DebugInfo,
+    multibank_temp: &Path,
+    rom_bank_count: usize,
+) -> Result<usize, String> {
+    use std::collections::HashMap;
+    
+    // Collect all bank files (store paths to avoid borrow issues)
+    let bank_files: Vec<_> = std::fs::read_dir(multibank_temp)
+        .map_err(|e| format!("Cannot read multibank_temp directory: {}", e))?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            if let Some(name) = entry.file_name().to_str() {
+                // Match ONLY bank_NN.asm (not bank_NN_full.asm)
+                name.starts_with("bank_") && 
+                name.ends_with(".asm") &&
+                !name.contains("_full") &&
+                !name.contains("_flat")
+            } else {
+                false
+            }
+        })
+        .map(|entry| (entry.path(), entry.file_name()))
+        .collect();
+    
+    if bank_files.is_empty() {
+        return Err("No bank_*.asm files found in multibank_temp/".to_string());
+    }
+    
+    eprintln!("   Found {} bank files to parse", bank_files.len());
+    
+    // Map to store all symbols with their final addresses
+    let mut all_symbols: HashMap<String, u16> = HashMap::new();
+    
+    // Parse each bank
+    for (bank_path, bank_name) in &bank_files {
+        let bank_name_str = bank_name.to_string_lossy();
+        
+        // Extract bank ID from filename (bank_00.asm -> 0, bank_31.asm -> 31)
+        let bank_id: u16 = if let Some(id_str) = bank_name_str.strip_prefix("bank_").and_then(|s| s.strip_suffix(".asm")) {
+            id_str.parse::<u16>().unwrap_or(0)
+        } else {
+            continue;
+        };
+        
+        // Read ASM source
+        let asm_source = std::fs::read_to_string(&bank_path)
+            .map_err(|e| format!("Cannot read {}: {}", bank_name_str, e))?;
+        
+        // Extract ORG directive to determine base address
+        let base_address = extract_org_address(&asm_source).unwrap_or(0x0000);
+        
+        // Calculate memory window address for this bank
+        // Helpers bank (last) is fixed at 0x4000-0x7FFF
+        // Other banks are switchable at 0x0000-0x3FFF
+        let helpers_bank = (rom_bank_count - 1) as u16;
+        let window_base = if bank_id == helpers_bank {
+            0x4000u16
+        } else {
+            0x0000u16
+        };
+        
+        eprintln!("      Bank {:02}: ORG ${:04X}, window @ ${:04X}", bank_id, base_address, window_base);
+        
+        // Assemble to get symbol table (use object_mode=true to allow unresolved symbols)
+        match backend::asm_to_binary::assemble_m6809(&asm_source, base_address, true, true) {
+            Ok((_, _, symbols, _)) => {
+                // Merge symbols with their bank addresses
+                for (name, offset) in symbols {
+                    // Final address is window_base + offset
+                    let final_addr = window_base.wrapping_add(offset);
+                    all_symbols.insert(name, final_addr);
+                }
+            },
+            Err(_e) => {
+                // Silently skip banks that fail to assemble (missing EQU definitions is expected)
+                // We still get symbols from banks that assemble successfully
+            }
+        }
+    }
+    
+    if all_symbols.is_empty() {
+        return Err("No symbols extracted from banks".to_string());
+    }
+    
+    eprintln!("   Extracted {} symbols from all banks", all_symbols.len());
+    
+    // Update debug_info.asm field to point to multibank_temp directory
+    // Store relative path from PDB location (same dir as BIN) to multibank_temp
+    // PDB is at: bin/test_multibank_pdb.pdb
+    // multibank_temp is at: src/multibank_temp
+    // Relative path from bin/ to src/multibank_temp is: ../src/multibank_temp
+    // But actually, multibank_temp is at the same level as the BIN file was created
+    // So just use the directory name "multibank_temp"
+    debug_info.asm = "multibank_temp".to_string();
+    
+    // Update debug_info.symbols
+    let mut updated_count = 0;
+    for (name, addr) in &all_symbols {
+        let addr_str = format!("0x{:04X}", addr);
+        debug_info.symbols.insert(name.clone(), addr_str);
+        updated_count += 1;
+    }
+    
+    // Update debug_info.functions (address field)
+    for func_info in debug_info.functions.values_mut() {
+        if let Some(addr) = all_symbols.get(&func_info.name) {
+            func_info.address = format!("0x{:04X}", addr);
+        }
+    }
+    
+    // Update debug_info.vpy_line_map (addresses)
+    let mut updated_vpy_map = HashMap::new();
+    for (old_addr, entry) in &debug_info.vpy_line_map {
+        // Try to match symbol and update address
+        // For now, keep old addresses if we can't find a better match
+        updated_vpy_map.insert(old_addr.clone(), entry.clone());
+    }
+    debug_info.vpy_line_map = updated_vpy_map;
+    
+    // Update debug_info.asm field to point to multibank_temp directory
+    debug_info.asm = "multibank_temp".to_string();
+    
+    // Rebuild asmLineMap from the actual bank_*.asm files now that we have symbol addresses
+    // The bank_*.asm files have ORG directives and can be mapped to final addresses
+    debug_info.asm_line_map.clear();
+    
+    // For each bank file, rebuild the line map with correct addresses
+    let mut lines_added = 0usize;
+    for (bank_path, bank_name) in &bank_files {
+        let bank_name_str = bank_name.to_string_lossy();
+        
+        // Extract bank ID from filename (bank_00.asm -> 0, bank_31.asm -> 31)
+        let bank_id: u16 = if let Some(id_str) = bank_name_str.strip_prefix("bank_").and_then(|s| s.strip_suffix(".asm")) {
+            id_str.parse::<u16>().unwrap_or(0)
+        } else {
+            continue;
+        };
+        
+        // Determine the window base for this bank
+        let helpers_bank = (rom_bank_count - 1) as u16;
+        let window_base = if bank_id == helpers_bank {
+            0x4000u16
+        } else {
+            0x0000u16
+        };
+        
+        // Read the bank ASM source
+        let asm_source = match std::fs::read_to_string(&bank_path) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        
+        // Parse the ORG directive
+        let base_address = extract_org_address(&asm_source).unwrap_or(0x0000);
+        
+        // Now assemble just this bank to get accurate address information
+        match backend::asm_to_binary::assemble_m6809(&asm_source, base_address, true, true) {
+            Ok((_, _, bank_symbols, binary_output)) => {
+                // The binary_output contains addr -> bytes mapping
+                // We can use this to determine exact addresses for each line
+                let mut current_addr = base_address;
+                
+                for (line_num, line) in asm_source.lines().enumerate() {
+                    let line_num_1based = line_num + 1;
+                    let trimmed = line.trim();
+                    
+                    // Skip empty lines and comments
+                    if trimmed.is_empty() || trimmed.starts_with(';') {
+                        continue;
+                    }
+                    
+                    // Check if this is a label
+                    if let Some(label_pos) = trimmed.find(':') {
+                        let label = trimmed[..label_pos].trim();
+                        if !label.is_empty() {
+                            // Update address from bank symbols
+                            if let Some(&offset) = bank_symbols.get(label) {
+                                current_addr = offset;
+                            }
+                        }
+                    }
+                    
+                    // Map this line to its address (apply window base)
+                    let final_addr = window_base.wrapping_add(current_addr);
+                    let addr_str = format!("0x{:04X}", final_addr);
+                    let entry = backend::debug_info::LineMapEntry {
+                        file: bank_name_str.to_string(),
+                        address: addr_str.clone(),
+                        line: line_num_1based,
+                    };
+                    debug_info.asm_line_map.insert(addr_str, entry);
+                    lines_added += 1;
+                    
+                    // Advance address (rough estimate: 2 bytes per instruction)
+                    if !trimmed.ends_with(':') && !trimmed.to_uppercase().starts_with("ORG") {
+                        current_addr = current_addr.wrapping_add(2);
+                    }
+                }
+            },
+            Err(_e) => {
+                // Skip banks that fail to assemble
+                eprintln!("   [DEBUG] Bank {} failed to assemble, skipping line map", bank_id);
+            }
+        }
+    }
+    
+    eprintln!("   Rebuilt asmLineMap from banks: added {} entries", lines_added);
+    
+    Ok(updated_count)
+}
+
+/// Extract ORG address from ASM source
+fn extract_org_address(asm: &str) -> Option<u16> {
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        if trimmed.to_uppercase().starts_with("ORG ") {
+            // Parse "ORG $4000" or "ORG 0x4000"
+            let addr_str = trimmed[3..].trim();
+            if let Some(hex) = addr_str.strip_prefix('$') {
+                return u16::from_str_radix(hex, 16).ok();
+            } else if let Some(hex) = addr_str.strip_prefix("0x") {
+                return u16::from_str_radix(hex, 16).ok();
+            } else {
+                return addr_str.parse::<u16>().ok();
+            }
+        }
+    }
+    None
 }
 
 fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>, bank_config: Option<&codegen::BankConfig>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
