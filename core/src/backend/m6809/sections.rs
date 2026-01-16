@@ -106,6 +106,7 @@ mod tests {
             bank_config: None,
             buffer_requirements: None,
             function_bank_map: std::collections::HashMap::new(),
+            skip_builtins: false,
         }
     }
     

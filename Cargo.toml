@@ -1,6 +1,20 @@
 [workspace]
-members = [ "core" ]
+members = [
+    "buildtools/vpy_parser",
+    "buildtools/vpy_unifier", 
+    "buildtools/vpy_codegen",
+    "buildtools/vpy_assembler",
+    "buildtools/vpy_bank_allocator",
+]  # core desactivado temporalmente
 resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["Daniel Ferrer"]
+
+[workspace.lints]
+# Define empty lints table to satisfy inheritance
 
 [profile.release]
 opt-level = 3

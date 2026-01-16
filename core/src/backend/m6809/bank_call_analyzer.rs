@@ -114,6 +114,16 @@ fn analyze_expr_calls(expr: &Expr, caller_func: &str, generator: &mut BankWrappe
             analyze_expr_calls(right, caller_func, generator);
         }
         
+        Expr::Compare { left, right, .. } => {
+            analyze_expr_calls(left, caller_func, generator);
+            analyze_expr_calls(right, caller_func, generator);
+        }
+        
+        Expr::Logic { left, right, .. } => {
+            analyze_expr_calls(left, caller_func, generator);
+            analyze_expr_calls(right, caller_func, generator);
+        }
+        
         Expr::Not(operand) | Expr::BitNot(operand) => {
             analyze_expr_calls(operand, caller_func, generator);
         }
