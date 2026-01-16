@@ -1,0 +1,3 @@
+name = "test_math_extended"
+version = "1.0.0"
+entry = "src/main.vpy"

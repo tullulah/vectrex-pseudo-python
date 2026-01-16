@@ -10,6 +10,7 @@ use vpy_parser::{Expr, Module};
 use super::expressions;
 use super::math;
 use super::debug;
+use super::math_extended;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -321,6 +322,40 @@ pub fn emit_builtin(
         }
         "PRINT_NUMBER" => {
             debug::emit_print_number(args, out);
+            true
+        }
+        
+        // ===== Math Extended =====
+        "SIN" | "MATH_SIN" => {
+            math_extended::emit_sin(args, out);
+            true
+        }
+        "COS" | "MATH_COS" => {
+            math_extended::emit_cos(args, out);
+            true
+        }
+        "TAN" | "MATH_TAN" => {
+            math_extended::emit_tan(args, out);
+            true
+        }
+        "SQRT" | "MATH_SQRT" => {
+            math_extended::emit_sqrt(args, out);
+            true
+        }
+        "POW" | "MATH_POW" => {
+            math_extended::emit_pow(args, out);
+            true
+        }
+        "ATAN2" | "MATH_ATAN2" => {
+            math_extended::emit_atan2(args, out);
+            true
+        }
+        "RAND" | "MATH_RAND" => {
+            math_extended::emit_rand(out);
+            true
+        }
+        "RAND_RANGE" | "MATH_RAND_RANGE" => {
+            math_extended::emit_rand_range(args, out);
             true
         }
         

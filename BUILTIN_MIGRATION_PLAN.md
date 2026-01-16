@@ -1,7 +1,7 @@
 # Builtin Migration Plan - buildtools
 
 **Date**: 2026-01-16  
-**Status**: 55% Complete (38/69 builtins)
+**Status**: 67% Complete (46/69 builtins)
 
 ## Current Status
 
@@ -26,12 +26,13 @@
 - **J2_BUTTON_UP, J2_BUTTON_DOWN, J2_BUTTON_LEFT, J2_BUTTON_RIGHT** ✨ NEW
 - **ABS, MIN, MAX, CLAMP** ✨ NEW
 - **DEBUG_PRINT, DEBUG_PRINT_STR, PRINT_NUMBER** ✨ NEW
+- **SIN, COS, TAN, SQRT, POW, ATAN2, RAND, RAND_RANGE** ✨ NEW
 
 ### ⚠️ Stubbed (2 builtins)
 - LEN
 - DRAW_CIRCLE, DRAW_POLYGON
 
-### ❌ Missing (29 builtins)
+### ❌ Missing (21 builtins)
 
 ---
 
@@ -76,8 +77,8 @@ Development essentials:
 
 ---
 
-### Phase 4: Math Extended (8 builtins) ⏱️ 3h
-**Priority**: 🟡 MEDIUM | **Effort**: 🟡 MEDIUM
+### Phase 4: Math Extended (8 builtins) ⏱️ 1.5h actual ✅
+**Priority**: 🟡 MEDIUM | **Effort**: 🟡 MEDIUM | **Status**: COMPLETE (2026-01-16)
 
 Advanced math:
 - `SIN(angle), COS(angle), TAN(angle)` - trigonometry (lookup tables)
