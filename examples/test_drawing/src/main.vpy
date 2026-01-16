@@ -14,3 +14,18 @@ def loop():
     
     # Test DRAW_POLYGON - triangle in bottom-right
     DRAW_POLYGON(30, -30, 50, -50, 70, -30, 90)
+    
+    # Test DRAW_CIRCLE_SEG - octagon (8 segments)
+    DRAW_CIRCLE_SEG(8, -60, 0, 30, 70)
+    
+    # Test DRAW_ARC - 90 degree arc
+    DRAW_ARC(12, 50, 50, 25, 0, 90, 85)
+    
+    # Test DRAW_FILLED_RECT - filled rectangle
+    DRAW_FILLED_RECT(-70, -70, 15, 10, 60)
+    
+    # Test DRAW_ELLIPSE - ellipse
+    DRAW_ELLIPSE(60, -50, 20, 10, 95)
+    
+    # Test DRAW_SPRITE - placeholder
+    DRAW_SPRITE(0, 0, "test")

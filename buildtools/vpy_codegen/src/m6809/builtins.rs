@@ -371,6 +371,26 @@ pub fn emit_builtin(
             drawing::emit_draw_polygon(args, out);
             true
         }
+        "DRAW_CIRCLE_SEG" => {
+            drawing::emit_draw_circle_seg(args, out);
+            true
+        }
+        "DRAW_ARC" => {
+            drawing::emit_draw_arc(args, out);
+            true
+        }
+        "DRAW_FILLED_RECT" => {
+            drawing::emit_draw_filled_rect(args, out);
+            true
+        }
+        "DRAW_ELLIPSE" => {
+            drawing::emit_draw_ellipse(args, out);
+            true
+        }
+        "DRAW_SPRITE" => {
+            drawing::emit_draw_sprite(args, out);
+            true
+        }
         
         "LEN" => {
             out.push_str("    ; LEN: Get array/string length\n");
