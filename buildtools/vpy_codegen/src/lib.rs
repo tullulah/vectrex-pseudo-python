@@ -9,10 +9,9 @@ use std::collections::HashMap;
 use thiserror::Error;
 // Note: These imports will be used when codegen is fully implemented
 #[allow(unused_imports)]
-use vpy_unifier::UnifiedModule;
+use vpy_parser::Module;
 #[allow(unused_imports)]
 use vpy_bank_allocator::BankLayout;
-use vpy_parser::Module;
 
 /// Get BIOS function address from VECTREX.I
 /// Returns the address as a hex string (e.g., "$F192")
