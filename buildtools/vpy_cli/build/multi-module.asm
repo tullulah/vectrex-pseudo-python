@@ -1,4 +1,4 @@
-; --- Motorola 6809 backend (Vectrex) title='UNTITLED' origin=$0000 ---
+; --- Motorola 6809 backend (Vectrex) title='multi-module' origin=$0000 ---
         ORG $0000
 ;***************************************************************************
 ; DEFINE SECTION
@@ -15,7 +15,7 @@
     FCB $50
     FCB $20
     FCB $BB
-    FCC "UNTITLED"
+    FCC "MULTI MODULE"
     FCB $80
     FCB 0
 
@@ -50,10 +50,10 @@ VLINE_DY_REMAINING   EQU $C880+$24   ; Remaining dy for segment 2 (16-bit) (2 by
 VLINE_DX_REMAINING   EQU $C880+$26   ; Remaining dx for segment 2 (16-bit) (2 bytes)
 VLINE_STEPS          EQU $C880+$28   ; Line drawing step counter (1 bytes)
 VLINE_LIST           EQU $C880+$29   ; 2-byte vector list (Y|endbit, X) (2 bytes)
-VAR_INPUT_INPUT_RESULT_DATA EQU $C880+$2B   ; Array data (2 elements) (4 bytes)
-VAR_PLAYER_X         EQU $C880+$2F   ; User variable (2 bytes)
-VAR_PLAYER_Y         EQU $C880+$31   ; User variable (2 bytes)
-VAR_PLAYER_SIZE      EQU $C880+$33   ; User variable (2 bytes)
+VAR_PLAYER_X         EQU $C880+$2B   ; User variable (2 bytes)
+VAR_PLAYER_Y         EQU $C880+$2D   ; User variable (2 bytes)
+VAR_PLAYER_SIZE      EQU $C880+$2F   ; User variable (2 bytes)
+VAR_INPUT_INPUT_RESULT_DATA EQU $C880+$31   ; Array data (2 elements) (4 bytes)
 VAR_ARG0             EQU $C880+$35   ; Function argument 0 (2 bytes)
 VAR_ARG1             EQU $C880+$37   ; Function argument 1 (2 bytes)
 VAR_ARG2             EQU $C880+$39   ; Function argument 2 (2 bytes)
@@ -81,6 +81,15 @@ START:
 
     ; *** DEBUG *** main() function code inline (initialization)
     ; VPy_LINE:11
+    ; VPy_LINE:7
+    LDD #0
+    STD VAR_PLAYER_X
+    ; VPy_LINE:8
+    LDD #0
+    STD VAR_PLAYER_Y
+    ; VPy_LINE:9
+    LDD #10
+    STD VAR_PLAYER_SIZE
     ; VPy_LINE:4
     ; Copy array 'input_input_result' from ROM to RAM (2 elements)
     LDX #ARRAY_INPUT_INPUT_RESULT       ; Source: ROM array data
@@ -91,15 +100,6 @@ COPY_LOOP_INPUT_INPUT_RESULT:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_INPUT_INPUT_RESULT ; Loop until done
-    ; VPy_LINE:7
-    LDD #0
-    STD VAR_PLAYER_X
-    ; VPy_LINE:8
-    LDD #0
-    STD VAR_PLAYER_Y
-    ; VPy_LINE:9
-    LDD #10
-    STD VAR_PLAYER_SIZE
     ; VPy_LINE:13
     LDD #127
     STD RESULT
@@ -133,69 +133,323 @@ MAIN:
     JSR LOOP_BODY
     BRA MAIN
 
-    ; VPy_LINE:6
-INPUT_GET_INPUT: ; function
-; --- function input_get_input ---
+    ; VPy_LINE:15
+LOOP_BODY:
     LEAS -4,S ; allocate locals
-    ; VPy_LINE:8
-; NATIVE_CALL: J1_X at line 8
-    JSR J1X_BUILTIN
+    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
+    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
+    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
+    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
+    ; DEBUG: Statement 0 - Discriminant(8)
+    ; VPy_LINE:17
+; NATIVE_CALL: VECTREX_WAIT_RECAL at line 17
+    JSR VECTREX_WAIT_RECAL
+    CLRA
+    CLRB
     STD RESULT
-    LDX RESULT
-    STX 0 ,S
-    ; VPy_LINE:9
-; NATIVE_CALL: J1_Y at line 9
-    JSR J1Y_BUILTIN
+    ; DEBUG: Statement 1 - Discriminant(8)
+    ; VPy_LINE:20
+    JSR INPUT_GET_INPUT
+    ; DEBUG: Statement 2 - Discriminant(0)
+    ; VPy_LINE:21
+    LDD #VAR_INPUT_INPUT_RESULT_DATA
     STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    ; VPy_LINE:10
+    LDD RESULT
+    STD TMPPTR
     LDD #0
     STD RESULT
     LDD RESULT
     ASLB
     ROLA
-    STD TMPPTR
-    LDD #VAR_INPUT_INPUT_RESULT_DATA
+    ADDD TMPPTR
     TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
-    LDD 0 ,S
+    LDD ,X
     STD RESULT
-    LDX TMPPTR2
+    LDX RESULT
+    STX 0 ,S
+    ; DEBUG: Statement 3 - Discriminant(0)
+    ; VPy_LINE:22
+    LDD #VAR_INPUT_INPUT_RESULT_DATA
+    STD RESULT
     LDD RESULT
-    STD ,X
-    ; VPy_LINE:11
+    STD TMPPTR
     LDD #1
     STD RESULT
     LDD RESULT
     ASLB
     ROLA
-    STD TMPPTR
-    LDD #VAR_INPUT_INPUT_RESULT_DATA
+    ADDD TMPPTR
     TFR D,X
-    LDD TMPPTR
-    LEAX D,X
-    STX TMPPTR2
+    LDD ,X
+    STD RESULT
+    LDX RESULT
+    STX 2 ,S
+    ; DEBUG: Statement 4 - Discriminant(0)
+    ; VPy_LINE:23
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
     LDD 2 ,S
     STD RESULT
-    LDX TMPPTR2
     LDD RESULT
-    STD ,X
-    ; VPy_LINE:12
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    ; DEBUG: Statement 5 - Discriminant(0)
+    ; VPy_LINE:24
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD 4 ,S
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    ADDD TMPRIGHT
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
+    ; DEBUG: Statement 6 - Discriminant(9)
+    ; VPy_LINE:27
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-100
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_2
     LDD #0
     STD RESULT
-    LEAS 4 ,S ; free locals
-    RTS
-
-    ; VPy_LINE:14
-INPUT_CHECK_FIRE: ; function
-; --- function input_check_fire ---
-    ; VPy_LINE:16
-; NATIVE_CALL: J1_BUTTON_1 at line 16
-    JSR J1B1_BUILTIN
+    BRA CE_3
+CT_2:
+    LDD #1
     STD RESULT
+CE_3:
+    LDD RESULT
+    LBEQ IF_NEXT_1
+    ; VPy_LINE:28
+    LDD #-100
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_0
+IF_NEXT_1:
+IF_END_0:
+    ; DEBUG: Statement 7 - Discriminant(9)
+    ; VPy_LINE:29
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_6
+    LDD #0
+    STD RESULT
+    BRA CE_7
+CT_6:
+    LDD #1
+    STD RESULT
+CE_7:
+    LDD RESULT
+    LBEQ IF_NEXT_5
+    ; VPy_LINE:30
+    LDD #100
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_X
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_4
+IF_NEXT_5:
+IF_END_4:
+    ; DEBUG: Statement 8 - Discriminant(9)
+    ; VPy_LINE:31
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #-100
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BLT CT_10
+    LDD #0
+    STD RESULT
+    BRA CE_11
+CT_10:
+    LDD #1
+    STD RESULT
+CE_11:
+    LDD RESULT
+    LBEQ IF_NEXT_9
+    ; VPy_LINE:32
+    LDD #-100
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_8
+IF_NEXT_9:
+IF_END_8:
+    ; DEBUG: Statement 9 - Discriminant(9)
+    ; VPy_LINE:33
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BGT CT_14
+    LDD #0
+    STD RESULT
+    BRA CE_15
+CT_14:
+    LDD #1
+    STD RESULT
+CE_15:
+    LDD RESULT
+    LBEQ IF_NEXT_13
+    ; VPy_LINE:34
+    LDD #100
+    STD RESULT
+    LDX RESULT
+    LDU #VAR_PLAYER_Y
+    STU TMPPTR
+    STX ,U
+    LBRA IF_END_12
+IF_NEXT_13:
+IF_END_12:
+    ; DEBUG: Statement 10 - Discriminant(8)
+    ; VPy_LINE:37
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD VAR_PLAYER_SIZE
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPLEFT
+    PSHS D
+    LDD VAR_PLAYER_SIZE
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    PULS D
+    STD TMPLEFT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDD VAR_PLAYER_SIZE
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+    LDD VAR_PLAYER_SIZE
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG3
+    LDD #127
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG4
+    JSR GRAPHICS_DRAW_BOX
+    ; DEBUG: Statement 11 - Discriminant(9)
+    ; VPy_LINE:40
+    JSR INPUT_CHECK_FIRE
+    LDD RESULT
+    STD TMPLEFT
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    STD TMPRIGHT
+    LDD TMPLEFT
+    SUBD TMPRIGHT
+    BEQ CT_18
+    LDD #0
+    STD RESULT
+    BRA CE_19
+CT_18:
+    LDD #1
+    STD RESULT
+CE_19:
+    LDD RESULT
+    LBEQ IF_NEXT_17
+    ; VPy_LINE:41
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDD #20
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG2
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG3
+    JSR GRAPHICS_DRAW_CROSS
+    LBRA IF_END_16
+IF_NEXT_17:
+IF_END_16:
+    LEAS 4,S ; free locals
     RTS
 
     ; VPy_LINE:3
@@ -546,323 +800,69 @@ GRAPHICS_DRAW_CROSS: ; function
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:15
-LOOP_BODY:
+    ; VPy_LINE:6
+INPUT_GET_INPUT: ; function
+; --- function input_get_input ---
     LEAS -4,S ; allocate locals
-    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
-    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
-    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
-    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:17
-; NATIVE_CALL: VECTREX_WAIT_RECAL at line 17
-    JSR VECTREX_WAIT_RECAL
-    CLRA
-    CLRB
-    STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:20
-    JSR INPUT_GET_INPUT
-    ; DEBUG: Statement 2 - Discriminant(0)
-    ; VPy_LINE:21
-    LDD #VAR_INPUT_INPUT_RESULT_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD #0
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
+    ; VPy_LINE:8
+; NATIVE_CALL: J1_X at line 8
+    JSR J1X_BUILTIN
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; DEBUG: Statement 3 - Discriminant(0)
-    ; VPy_LINE:22
-    LDD #VAR_INPUT_INPUT_RESULT_DATA
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    ADDD TMPPTR
-    TFR D,X
-    LDD ,X
+    ; VPy_LINE:9
+; NATIVE_CALL: J1_Y at line 9
+    JSR J1Y_BUILTIN
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; DEBUG: Statement 4 - Discriminant(0)
-    ; VPy_LINE:23
-    LDD VAR_PLAYER_X
+    ; VPy_LINE:10
+    LDD #0
     STD RESULT
     LDD RESULT
-    STD TMPLEFT
-    PSHS D
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_INPUT_INPUT_RESULT_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
+    LDD 0 ,S
+    STD RESULT
+    LDX TMPPTR2
+    LDD RESULT
+    STD ,X
+    ; VPy_LINE:11
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ASLB
+    ROLA
+    STD TMPPTR
+    LDD #VAR_INPUT_INPUT_RESULT_DATA
+    TFR D,X
+    LDD TMPPTR
+    LEAX D,X
+    STX TMPPTR2
     LDD 2 ,S
     STD RESULT
+    LDX TMPPTR2
     LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 5 - Discriminant(0)
-    ; VPy_LINE:24
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD 4 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    ; DEBUG: Statement 6 - Discriminant(9)
-    ; VPy_LINE:27
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #-100
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_2
+    STD ,X
+    ; VPy_LINE:12
     LDD #0
     STD RESULT
-    BRA CE_3
-CT_2:
-    LDD #1
+    LEAS 4 ,S ; free locals
+    RTS
+
+    ; VPy_LINE:14
+INPUT_CHECK_FIRE: ; function
+; --- function input_check_fire ---
+    ; VPy_LINE:16
+; NATIVE_CALL: J1_BUTTON_1 at line 16
+    JSR J1B1_BUILTIN
     STD RESULT
-CE_3:
-    LDD RESULT
-    LBEQ IF_NEXT_1
-    ; VPy_LINE:28
-    LDD #-100
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_0
-IF_NEXT_1:
-IF_END_0:
-    ; DEBUG: Statement 7 - Discriminant(9)
-    ; VPy_LINE:29
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_6
-    LDD #0
-    STD RESULT
-    BRA CE_7
-CT_6:
-    LDD #1
-    STD RESULT
-CE_7:
-    LDD RESULT
-    LBEQ IF_NEXT_5
-    ; VPy_LINE:30
-    LDD #100
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_4
-IF_NEXT_5:
-IF_END_4:
-    ; DEBUG: Statement 8 - Discriminant(9)
-    ; VPy_LINE:31
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #-100
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_10
-    LDD #0
-    STD RESULT
-    BRA CE_11
-CT_10:
-    LDD #1
-    STD RESULT
-CE_11:
-    LDD RESULT
-    LBEQ IF_NEXT_9
-    ; VPy_LINE:32
-    LDD #-100
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_8
-IF_NEXT_9:
-IF_END_8:
-    ; DEBUG: Statement 9 - Discriminant(9)
-    ; VPy_LINE:33
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_14
-    LDD #0
-    STD RESULT
-    BRA CE_15
-CT_14:
-    LDD #1
-    STD RESULT
-CE_15:
-    LDD RESULT
-    LBEQ IF_NEXT_13
-    ; VPy_LINE:34
-    LDD #100
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_Y
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_12
-IF_NEXT_13:
-IF_END_12:
-    ; DEBUG: Statement 10 - Discriminant(8)
-    ; VPy_LINE:37
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD VAR_PLAYER_SIZE
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD VAR_PLAYER_SIZE
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD VAR_PLAYER_SIZE
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD VAR_PLAYER_SIZE
-    STD RESULT
-    LDD RESULT
-    ASLB
-    ROLA
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    LDD #127
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG4
-    JSR GRAPHICS_DRAW_BOX
-    ; DEBUG: Statement 11 - Discriminant(9)
-    ; VPy_LINE:40
-    JSR INPUT_CHECK_FIRE
-    LDD RESULT
-    STD TMPLEFT
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_18
-    LDD #0
-    STD RESULT
-    BRA CE_19
-CT_18:
-    LDD #1
-    STD RESULT
-CE_19:
-    LDD RESULT
-    LBEQ IF_NEXT_17
-    ; VPy_LINE:41
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG1
-    LDD #20
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG2
-    LDD #100
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG3
-    JSR GRAPHICS_DRAW_CROSS
-    LBRA IF_END_16
-IF_NEXT_17:
-IF_END_16:
-    LEAS 4,S ; free locals
     RTS
 
 ;

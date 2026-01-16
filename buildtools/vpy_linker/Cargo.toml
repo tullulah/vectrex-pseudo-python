@@ -1,0 +1,16 @@
+[package]
+name = "vpy_linker"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+vpy_codegen = { path = "../vpy_codegen" }
+vpy_assembler = { path = "../vpy_assembler" }
+vpy_bank_allocator = { path = "../vpy_bank_allocator" }
+thiserror = "1.0"
+
+[dev-dependencies]

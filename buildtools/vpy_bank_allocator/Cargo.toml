@@ -1,0 +1,15 @@
+[package]
+name = "vpy_bank_allocator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+vpy_parser = { path = "../vpy_parser" }
+vpy_unifier = { path = "../vpy_unifier" }
+thiserror = "1.0"
+
+[dev-dependencies]

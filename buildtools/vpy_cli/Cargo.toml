@@ -1,0 +1,24 @@
+[package]
+name = "vpy_cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+vpy_loader = { path = "../vpy_loader" }
+vpy_parser = { path = "../vpy_parser" }
+vpy_unifier = { path = "../vpy_unifier" }
+vpy_bank_allocator = { path = "../vpy_bank_allocator" }
+vpy_codegen = { path = "../vpy_codegen" }
+vpy_assembler = { path = "../vpy_assembler" }
+vpy_linker = { path = "../vpy_linker" }
+vpy_binary_writer = { path = "../vpy_binary_writer" }
+vpy_debug_gen = { path = "../vpy_debug_gen" }
+
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+serde_json = "1.0"
+colored = "2.0"

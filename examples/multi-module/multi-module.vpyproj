@@ -10,3 +10,8 @@ debug_symbols = true
 
 [sources]
 vpy = ["src/**/*.vpy"]
+
+[resources]
+vectors = ["assets/vectors/*.vec"]
+music = ["assets/music/*.vmus"]
+sfx = ["assets/sfx/*.vsfx"]

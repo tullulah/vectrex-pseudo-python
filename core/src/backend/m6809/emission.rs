@@ -1309,6 +1309,8 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             CLR VIA_shift_reg\n\
             LBRA DSWM_LOOP          ; Long branch\n\
             DSWM_DONE:\n\
+            LDA #$C8                ; CRITICAL: Restore DP to $C8 for RAM access\n\
+            TFR A,DP\n\
             RTS\n"
         );
     }
