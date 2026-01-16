@@ -113,12 +113,17 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
     asm.push_str("    RTS\n\n");
     
-    // Call module-specific runtime helpers
-    super::math::emit_runtime_helpers(&mut asm);
-    super::joystick::emit_runtime_helpers(&mut asm);
-    super::drawing::emit_runtime_helpers(&mut asm);
-    super::level::emit_runtime_helpers(&mut asm);
-    super::utilities::emit_runtime_helpers(&mut asm);
+    // TODO: Implement usage analysis to populate needed set
+    // For now, create empty set (no helpers will be emitted - for testing)
+    use std::collections::HashSet;
+    let needed: HashSet<String> = HashSet::new();
+    
+    // Call module-specific runtime helpers with conditional emission
+    super::math::emit_runtime_helpers(&mut asm, &needed);
+    super::joystick::emit_runtime_helpers(&mut asm, &needed);
+    super::drawing::emit_runtime_helpers(&mut asm, &needed);
+    super::level::emit_runtime_helpers(&mut asm, &needed);
+    super::utilities::emit_runtime_helpers(&mut asm, &needed);
     
     eprintln!("[DEBUG HELPERS] ASM length after all helpers: {}", asm.len());
     

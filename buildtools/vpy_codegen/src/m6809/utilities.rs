@@ -1,6 +1,7 @@
 // Utility Builtins for VPy
 // Simple utility functions for common tasks
 
+use std::collections::HashSet;
 use vpy_parser::Expr;
 
 /// Emit MOVE(x, y) - Move beam to position without drawing
@@ -247,10 +248,12 @@ pub fn emit_fade_out(_args: &[Expr], out: &mut String) {
 }
 
 /// Emit runtime helpers for utilities builtins
-pub fn emit_runtime_helpers(out: &mut String) {
+/// Only emits helpers that are actually used in the code (tree shaking)
+pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
     // FADE_IN_RUNTIME: Gradual intensity increase
-    out.push_str("; === FADE_IN_RUNTIME - Gradual intensity increase ===\n");
-    out.push_str("FADE_IN_RUNTIME:\n");
+    if needed.contains("FADE_IN_RUNTIME") {
+        out.push_str("; === FADE_IN_RUNTIME - Gradual intensity increase ===\n");
+        out.push_str("FADE_IN_RUNTIME:\n");
     out.push_str("    ; Input: CURRENT_INTENSITY (target intensity)\n");
     out.push_str("    ; Gradually increases from 0 to target in 8 steps\n");
     out.push_str("    \n");
@@ -281,12 +284,14 @@ pub fn emit_runtime_helpers(out: &mut String) {
     out.push_str("    INC TMPPTR\n");
     out.push_str("    BRA .FI_LOOP\n");
     out.push_str("    \n");
-    out.push_str(".FI_DONE:\n");
-    out.push_str("    RTS\n\n");
+        out.push_str(".FI_DONE:\n");
+        out.push_str("    RTS\n\n");
+    }
     
     // FADE_OUT_RUNTIME: Gradual intensity decrease
-    out.push_str("; === FADE_OUT_RUNTIME - Gradual intensity decrease ===\n");
-    out.push_str("FADE_OUT_RUNTIME:\n");
+    if needed.contains("FADE_OUT_RUNTIME") {
+        out.push_str("; === FADE_OUT_RUNTIME - Gradual intensity decrease ===\n");
+        out.push_str("FADE_OUT_RUNTIME:\n");
     out.push_str("    ; Input: CURRENT_INTENSITY (starting intensity)\n");
     out.push_str("    ; Gradually decreases from current to 0 in 8 steps\n");
     out.push_str("    \n");
@@ -319,6 +324,7 @@ pub fn emit_runtime_helpers(out: &mut String) {
     out.push_str("    INC TMPPTR\n");
     out.push_str("    BRA .FO_LOOP\n");
     out.push_str("    \n");
-    out.push_str(".FO_DONE:\n");
-    out.push_str("    RTS\n\n");
+        out.push_str(".FO_DONE:\n");
+        out.push_str("    RTS\n\n");
+    }
 }
