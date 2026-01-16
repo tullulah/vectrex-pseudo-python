@@ -104,6 +104,144 @@ pub fn emit_builtin(
             true
         }
         
+        // ===== Joystick 2 Input (Player 2) =====
+        "J2_X" => {
+            out.push_str("    JSR J2X_BUILTIN\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_Y" => {
+            out.push_str("    JSR J2Y_BUILTIN\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_1" => {
+            out.push_str("    LDA $C812      ; Vec_Button_1_2 (Player 2 transition bits)\n");
+            out.push_str("    ANDA #$01      ; Test bit 0\n");
+            out.push_str("    BEQ .J2B1_OFF\n");
+            out.push_str("    LDD #1\n");
+            out.push_str("    BRA .J2B1_END\n");
+            out.push_str(".J2B1_OFF:\n");
+            out.push_str("    LDD #0\n");
+            out.push_str(".J2B1_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_2" => {
+            out.push_str("    LDA $C812      ; Vec_Button_1_2 (Player 2 transition bits)\n");
+            out.push_str("    ANDA #$02      ; Test bit 1\n");
+            out.push_str("    BEQ .J2B2_OFF\n");
+            out.push_str("    LDD #1\n");
+            out.push_str("    BRA .J2B2_END\n");
+            out.push_str(".J2B2_OFF:\n");
+            out.push_str("    LDD #0\n");
+            out.push_str(".J2B2_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_3" => {
+            out.push_str("    LDA $C812      ; Vec_Button_1_2 (Player 2 transition bits)\n");
+            out.push_str("    ANDA #$04      ; Test bit 2\n");
+            out.push_str("    BEQ .J2B3_OFF\n");
+            out.push_str("    LDD #1\n");
+            out.push_str("    BRA .J2B3_END\n");
+            out.push_str(".J2B3_OFF:\n");
+            out.push_str("    LDD #0\n");
+            out.push_str(".J2B3_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_4" => {
+            out.push_str("    LDA $C812      ; Vec_Button_1_2 (Player 2 transition bits)\n");
+            out.push_str("    ANDA #$08      ; Test bit 3\n");
+            out.push_str("    BEQ .J2B4_OFF\n");
+            out.push_str("    LDD #1\n");
+            out.push_str("    BRA .J2B4_END\n");
+            out.push_str(".J2B4_OFF:\n");
+            out.push_str("    LDD #0\n");
+            out.push_str(".J2B4_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_ANALOG_X" => {
+            out.push_str("    ; J2_ANALOG_X: Read raw Player 2 X axis (0-255)\n");
+            out.push_str("    LDB $CF02      ; Joy_2_X (unsigned byte)\n");
+            out.push_str("    CLRA           ; Zero extend to 16-bit\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_ANALOG_Y" => {
+            out.push_str("    ; J2_ANALOG_Y: Read raw Player 2 Y axis (0-255)\n");
+            out.push_str("    LDB $CF03      ; Joy_2_Y (unsigned byte)\n");
+            out.push_str("    CLRA           ; Zero extend to 16-bit\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_DIGITAL_X" => {
+            out.push_str("    ; J2_DIGITAL_X: Player 2 X axis as -1/0/+1\n");
+            out.push_str("    JSR J2X_BUILTIN\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_DIGITAL_Y" => {
+            out.push_str("    ; J2_DIGITAL_Y: Player 2 Y axis as -1/0/+1\n");
+            out.push_str("    JSR J2Y_BUILTIN\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_UP" => {
+            out.push_str("    ; J2_BUTTON_UP: Player 2 D-pad UP\n");
+            out.push_str("    LDB $CF03      ; Joy_2_Y\n");
+            out.push_str("    CMPB #149      ; Threshold for UP (>148)\n");
+            out.push_str("    BHI .J2UP_ON\n");
+            out.push_str("    LDD #0\n");
+            out.push_str("    BRA .J2UP_END\n");
+            out.push_str(".J2UP_ON:\n");
+            out.push_str("    LDD #1\n");
+            out.push_str(".J2UP_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_DOWN" => {
+            out.push_str("    ; J2_BUTTON_DOWN: Player 2 D-pad DOWN\n");
+            out.push_str("    LDB $CF03      ; Joy_2_Y\n");
+            out.push_str("    CMPB #108      ; Threshold for DOWN (<108)\n");
+            out.push_str("    BLO .J2DN_ON\n");
+            out.push_str("    LDD #0\n");
+            out.push_str("    BRA .J2DN_END\n");
+            out.push_str(".J2DN_ON:\n");
+            out.push_str("    LDD #1\n");
+            out.push_str(".J2DN_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_LEFT" => {
+            out.push_str("    ; J2_BUTTON_LEFT: Player 2 D-pad LEFT\n");
+            out.push_str("    LDB $CF02      ; Joy_2_X\n");
+            out.push_str("    CMPB #108      ; Threshold for LEFT (<108)\n");
+            out.push_str("    BLO .J2LFT_ON\n");
+            out.push_str("    LDD #0\n");
+            out.push_str("    BRA .J2LFT_END\n");
+            out.push_str(".J2LFT_ON:\n");
+            out.push_str("    LDD #1\n");
+            out.push_str(".J2LFT_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        "J2_BUTTON_RIGHT" => {
+            out.push_str("    ; J2_BUTTON_RIGHT: Player 2 D-pad RIGHT\n");
+            out.push_str("    LDB $CF02      ; Joy_2_X\n");
+            out.push_str("    CMPB #149      ; Threshold for RIGHT (>148)\n");
+            out.push_str("    BHI .J2RGT_ON\n");
+            out.push_str("    LDD #0\n");
+            out.push_str("    BRA .J2RGT_END\n");
+            out.push_str(".J2RGT_ON:\n");
+            out.push_str("    LDD #1\n");
+            out.push_str(".J2RGT_END:\n");
+            out.push_str("    STD RESULT\n");
+            true
+        }
+        
         // ===== Audio/Music =====
         "PLAY_MUSIC" => {
             out.push_str("    ; PLAY_MUSIC: Play music from asset\n");

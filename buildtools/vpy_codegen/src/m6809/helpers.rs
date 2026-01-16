@@ -130,6 +130,78 @@ pub fn generate_helpers() -> Result<String, String> {
     asm.push_str("    LEAS 4,S\n");
     asm.push_str("    RTS\n\n");
     
+    // J1X_BUILTIN: Joystick 1 X axis (-1, 0, +1)
+    asm.push_str("J1X_BUILTIN:\n");
+    asm.push_str("    ; Read J1_X from $CF00 and return -1/0/+1\n");
+    asm.push_str("    LDB $CF00      ; Joy_1_X (unsigned byte 0-255)\n");
+    asm.push_str("    CMPB #108      ; Compare with lower threshold\n");
+    asm.push_str("    BLO .J1X_LEFT  ; Branch if <108 (left)\n");
+    asm.push_str("    CMPB #148      ; Compare with upper threshold\n");
+    asm.push_str("    BHI .J1X_RIGHT ; Branch if >148 (right)\n");
+    asm.push_str("    ; Center (108-148)\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J1X_LEFT:\n");
+    asm.push_str("    LDD #-1\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J1X_RIGHT:\n");
+    asm.push_str("    LDD #1\n");
+    asm.push_str("    RTS\n\n");
+    
+    // J1Y_BUILTIN: Joystick 1 Y axis (-1, 0, +1)
+    asm.push_str("J1Y_BUILTIN:\n");
+    asm.push_str("    ; Read J1_Y from $CF01 and return -1/0/+1\n");
+    asm.push_str("    LDB $CF01      ; Joy_1_Y (unsigned byte 0-255)\n");
+    asm.push_str("    CMPB #108      ; Compare with lower threshold\n");
+    asm.push_str("    BLO .J1Y_DOWN  ; Branch if <108 (down)\n");
+    asm.push_str("    CMPB #148      ; Compare with upper threshold\n");
+    asm.push_str("    BHI .J1Y_UP    ; Branch if >148 (up)\n");
+    asm.push_str("    ; Center (108-148)\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J1Y_DOWN:\n");
+    asm.push_str("    LDD #-1\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J1Y_UP:\n");
+    asm.push_str("    LDD #1\n");
+    asm.push_str("    RTS\n\n");
+    
+    // J2X_BUILTIN: Joystick 2 X axis (-1, 0, +1)
+    asm.push_str("J2X_BUILTIN:\n");
+    asm.push_str("    ; Read J2_X from $CF02 and return -1/0/+1\n");
+    asm.push_str("    LDB $CF02      ; Joy_2_X (unsigned byte 0-255)\n");
+    asm.push_str("    CMPB #108      ; Compare with lower threshold\n");
+    asm.push_str("    BLO .J2X_LEFT  ; Branch if <108 (left)\n");
+    asm.push_str("    CMPB #148      ; Compare with upper threshold\n");
+    asm.push_str("    BHI .J2X_RIGHT ; Branch if >148 (right)\n");
+    asm.push_str("    ; Center (108-148)\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J2X_LEFT:\n");
+    asm.push_str("    LDD #-1\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J2X_RIGHT:\n");
+    asm.push_str("    LDD #1\n");
+    asm.push_str("    RTS\n\n");
+    
+    // J2Y_BUILTIN: Joystick 2 Y axis (-1, 0, +1)
+    asm.push_str("J2Y_BUILTIN:\n");
+    asm.push_str("    ; Read J2_Y from $CF03 and return -1/0/+1\n");
+    asm.push_str("    LDB $CF03      ; Joy_2_Y (unsigned byte 0-255)\n");
+    asm.push_str("    CMPB #108      ; Compare with lower threshold\n");
+    asm.push_str("    BLO .J2Y_DOWN  ; Branch if <108 (down)\n");
+    asm.push_str("    CMPB #148      ; Compare with upper threshold\n");
+    asm.push_str("    BHI .J2Y_UP    ; Branch if >148 (up)\n");
+    asm.push_str("    ; Center (108-148)\n");
+    asm.push_str("    LDD #0\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J2Y_DOWN:\n");
+    asm.push_str("    LDD #-1\n");
+    asm.push_str("    RTS\n");
+    asm.push_str(".J2Y_UP:\n");
+    asm.push_str("    LDD #1\n");
+    asm.push_str("    RTS\n\n");
+    
     eprintln!("[DEBUG HELPERS] ASM length after MOD16: {}", asm.len());
     
     Ok(asm)
