@@ -8,6 +8,7 @@
 
 use vpy_parser::{Expr, Module};
 use super::expressions;
+use super::math;
 
 /// Check if function is a builtin and emit code
 pub fn emit_builtin(
@@ -290,23 +291,21 @@ pub fn emit_builtin(
         }
         
         
-        // ===== Math Functions (TODO: Complete implementation) =====
+        // ===== Math Functions =====
         "ABS" | "MATH_ABS" => {
-            out.push_str("    ; TODO: ABS implementation\n");
-            out.push_str("    LDD RESULT\n");
-            out.push_str("    STD RESULT\n");
+            math::emit_abs(args, out);
             true
         }
         "MIN" | "MATH_MIN" => {
-            out.push_str("    ; TODO: MIN implementation\n");
-            out.push_str("    LDD #0\n");
-            out.push_str("    STD RESULT\n");
+            math::emit_min(args, out);
             true
         }
         "MAX" | "MATH_MAX" => {
-            out.push_str("    ; TODO: MAX implementation\n");
-            out.push_str("    LDD #0\n");
-            out.push_str("    STD RESULT\n");
+            math::emit_max(args, out);
+            true
+        }
+        "CLAMP" => {
+            math::emit_clamp(args, out);
             true
         }
         "LEN" => {

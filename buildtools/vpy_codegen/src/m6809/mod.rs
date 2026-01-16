@@ -14,6 +14,7 @@ pub mod functions;
 pub mod expressions;
 pub mod builtins;
 pub mod helpers;
+pub mod math;
 
 use vpy_parser::Module;
 
