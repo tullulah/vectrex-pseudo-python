@@ -15,6 +15,7 @@ pub mod expressions;
 pub mod builtins;
 pub mod helpers;
 pub mod math;
+pub mod joystick;
 pub mod debug;
 pub mod math_extended;
 pub mod drawing;

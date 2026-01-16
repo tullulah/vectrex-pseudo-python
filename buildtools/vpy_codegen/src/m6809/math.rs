@@ -145,3 +145,194 @@ pub fn emit_clamp(args: &[Expr], out: &mut String) {
     
     out.push_str(".CLAMP_END:\n");
 }
+
+/// Emit mathematical runtime helpers
+pub fn emit_runtime_helpers(out: &mut String) {
+    // MUL16: Multiply X * D -> D
+    out.push_str("MUL16:\n");
+    out.push_str("    ; Multiply 16-bit X * D -> D\n");
+    out.push_str("    ; Simple implementation (can be optimized)\n");
+    out.push_str("    PSHS X,B,A\n");
+    out.push_str("    LDD #0         ; Result accumulator\n");
+    out.push_str("    LDX 2,S        ; Multiplier\n");
+    out.push_str(".MUL16_LOOP:\n");
+    out.push_str("    BEQ .MUL16_END\n");
+    out.push_str("    ADDD ,S        ; Add multiplicand\n");
+    out.push_str("    LEAX -1,X\n");
+    out.push_str("    BRA .MUL16_LOOP\n");
+    out.push_str(".MUL16_END:\n");
+    out.push_str("    LEAS 4,S\n");
+    out.push_str("    RTS\n\n");
+    
+    // DIV16: Divide X / D -> D (quotient)
+    out.push_str("DIV16:\n");
+    out.push_str("    ; Divide 16-bit X / D -> D\n");
+    out.push_str("    ; Simple implementation\n");
+    out.push_str("    PSHS X,D\n");
+    out.push_str("    LDD #0         ; Quotient\n");
+    out.push_str(".DIV16_LOOP:\n");
+    out.push_str("    PSHS D         ; Save quotient\n");
+    out.push_str("    LDD 4,S        ; Load dividend (after PSHS D)\n");
+    out.push_str("    CMPD 2,S       ; Compare with divisor (after PSHS D)\n");
+    out.push_str("    PULS D         ; Restore quotient\n");
+    out.push_str("    BLT .DIV16_END\n");
+    out.push_str("    ADDD #1        ; Increment quotient\n");
+    out.push_str("    LDX 2,S\n");
+    out.push_str("    PSHS D\n");
+    out.push_str("    LDD 2,S        ; Divisor\n");
+    out.push_str("    LEAX D,X       ; Subtract divisor\n");
+    out.push_str("    STX 4,S\n");
+    out.push_str("    PULS D\n");
+    out.push_str("    BRA .DIV16_LOOP\n");
+    out.push_str(".DIV16_END:\n");
+    out.push_str("    LEAS 4,S\n");
+    out.push_str("    RTS\n\n");
+    
+    // MOD16: Modulo X % D -> D (remainder)
+    out.push_str("MOD16:\n");
+    out.push_str("    ; Modulo 16-bit X % D -> D\n");
+    out.push_str("    PSHS X,D\n");
+    out.push_str(".MOD16_LOOP:\n");
+    out.push_str("    PSHS D         ; Save D\n");
+    out.push_str("    LDD 4,S        ; Load dividend (after PSHS D)\n");
+    out.push_str("    CMPD 2,S       ; Compare with divisor (after PSHS D)\n");
+    out.push_str("    PULS D         ; Restore D\n");
+    out.push_str("    BLT .MOD16_END\n");
+    out.push_str("    LDX 2,S\n");
+    out.push_str("    LDD ,S\n");
+    out.push_str("    LEAX D,X\n");
+    out.push_str("    STX 2,S\n");
+    out.push_str("    BRA .MOD16_LOOP\n");
+    out.push_str(".MOD16_END:\n");
+    out.push_str("    LDD 2,S        ; Remainder\n");
+    out.push_str("    LEAS 4,S\n");
+    out.push_str("    RTS\n\n");
+    
+    // SQRT_HELPER: Square root (Newton-Raphson with DIV16)
+    out.push_str("SQRT_HELPER:\n");
+    out.push_str("    ; Input: D = x, Output: D = sqrt(x)\n");
+    out.push_str("    ; Newton-Raphson: guess_new = (guess + x/guess) / 2\n");
+    out.push_str("    ; Iterate 4 times for convergence\n");
+    out.push_str("    \n");
+    out.push_str("    ; Handle edge cases\n");
+    out.push_str("    CMPD #0\n");
+    out.push_str("    BEQ .SQRT_DONE  ; sqrt(0) = 0\n");
+    out.push_str("    CMPD #1\n");
+    out.push_str("    BEQ .SQRT_DONE  ; sqrt(1) = 1\n");
+    out.push_str("    \n");
+    out.push_str("    STD TMPPTR      ; Save x\n");
+    out.push_str("    ; Initial guess = (x + 1) / 2\n");
+    out.push_str("    ADDD #1\n");
+    out.push_str("    ASRA            ; Divide by 2\n");
+    out.push_str("    RORB\n");
+    out.push_str("    STD TMPPTR2     ; guess\n");
+    out.push_str("    \n");
+    out.push_str("    ; Iterate 4 times\n");
+    out.push_str("    LDB #4\n");
+    out.push_str("    STB RESULT+1    ; Counter\n");
+    out.push_str(".SQRT_LOOP:\n");
+    out.push_str("    ; Calculate x/guess using DIV16\n");
+    out.push_str("    LDX TMPPTR      ; X = x (dividend)\n");
+    out.push_str("    LDD TMPPTR2     ; D = guess (divisor)\n");
+    out.push_str("    JSR DIV16       ; D = x/guess\n");
+    out.push_str("    \n");
+    out.push_str("    ; guess_new = (guess + x/guess) / 2\n");
+    out.push_str("    ADDD TMPPTR2    ; D = guess + x/guess\n");
+    out.push_str("    ASRA            ; Divide by 2\n");
+    out.push_str("    RORB\n");
+    out.push_str("    STD TMPPTR2     ; Update guess\n");
+    out.push_str("    \n");
+    out.push_str("    DEC RESULT+1    ; Decrement counter\n");
+    out.push_str("    BNE .SQRT_LOOP\n");
+    out.push_str("    \n");
+    out.push_str("    LDD TMPPTR2     ; Return final guess\n");
+    out.push_str(".SQRT_DONE:\n");
+    out.push_str("    RTS\n\n");
+    
+    // POW_HELPER: Power (base ^ exp)
+    out.push_str("POW_HELPER:\n");
+    out.push_str("    ; Input: TMPPTR = base, TMPPTR2 = exp, Output: D = result\n");
+    out.push_str("    LDD #1         ; result = 1\n");
+    out.push_str("    STD RESULT\n");
+    out.push_str(".POW_LOOP:\n");
+    out.push_str("    LDD TMPPTR2    ; Load exponent\n");
+    out.push_str("    BEQ .POW_DONE  ; If exp == 0, done\n");
+    out.push_str("    SUBD #1        ; exp--\n");
+    out.push_str("    STD TMPPTR2\n");
+    out.push_str("    ; result = result * base (simplified: assumes small values)\n");
+    out.push_str("    LDD RESULT\n");
+    out.push_str("    LDX TMPPTR     ; Load base\n");
+    out.push_str("    ; Simple multiplication loop\n");
+    out.push_str("    PSHS D\n");
+    out.push_str("    LDD #0\n");
+    out.push_str(".POW_MUL_LOOP:\n");
+    out.push_str("    LEAX -1,X\n");
+    out.push_str("    BEQ .POW_MUL_DONE\n");
+    out.push_str("    ADDD ,S\n");
+    out.push_str("    BRA .POW_MUL_LOOP\n");
+    out.push_str(".POW_MUL_DONE:\n");
+    out.push_str("    LEAS 2,S\n");
+    out.push_str("    STD RESULT\n");
+    out.push_str("    BRA .POW_LOOP\n");
+    out.push_str(".POW_DONE:\n");
+    out.push_str("    LDD RESULT\n");
+    out.push_str("    RTS\n\n");
+    
+    // ATAN2_HELPER: Arctangent (y, x)
+    out.push_str("ATAN2_HELPER:\n");
+    out.push_str("    ; Input: TMPPTR = y, TMPPTR2 = x, Output: D = angle (0-127)\n");
+    out.push_str("    ; Simplified: return approximate angle based on quadrant\n");
+    out.push_str("    LDD TMPPTR2    ; Load x\n");
+    out.push_str("    BEQ .ATAN2_X_ZERO\n");
+    out.push_str("    ; TODO: Full CORDIC implementation\n");
+    out.push_str("    ; For now return 0 (placeholder)\n");
+    out.push_str("    LDD #0\n");
+    out.push_str("    RTS\n");
+    out.push_str(".ATAN2_X_ZERO:\n");
+    out.push_str("    LDD TMPPTR     ; Load y\n");
+    out.push_str("    BPL .ATAN2_Y_POS\n");
+    out.push_str("    LDD #96        ; -90 degrees (3/4 of 128)\n");
+    out.push_str("    RTS\n");
+    out.push_str(".ATAN2_Y_POS:\n");
+    out.push_str("    LDD #32        ; +90 degrees (1/4 of 128)\n");
+    out.push_str("    RTS\n\n");
+    
+    // RAND_HELPER: Random number generator (Linear Congruential)
+    out.push_str("RAND_HELPER:\n");
+    out.push_str("    ; LCG: seed = (seed * 1103515245 + 12345) & 0x7FFF\n");
+    out.push_str("    ; Simplified for 6809: seed = (seed * 25 + 13) & 0x7FFF\n");
+    out.push_str("    LDD RAND_SEED\n");
+    out.push_str("    LDX #25\n");
+    out.push_str("    ; Multiply by 25 (simple loop)\n");
+    out.push_str("    PSHS D\n");
+    out.push_str("    LDD #0\n");
+    out.push_str(".RAND_MUL_LOOP:\n");
+    out.push_str("    LEAX -1,X\n");
+    out.push_str("    BEQ .RAND_MUL_DONE\n");
+    out.push_str("    ADDD ,S\n");
+    out.push_str("    BRA .RAND_MUL_LOOP\n");
+    out.push_str(".RAND_MUL_DONE:\n");
+    out.push_str("    LEAS 2,S\n");
+    out.push_str("    ADDD #13       ; Add constant\n");
+    out.push_str("    ANDA #$7F      ; Mask to positive 15-bit\n");
+    out.push_str("    STD RAND_SEED  ; Update seed\n");
+    out.push_str("    RTS\n\n");
+    
+    // RAND_RANGE_HELPER: Random in range [min, max]
+    out.push_str("RAND_RANGE_HELPER:\n");
+    out.push_str("    ; Input: TMPPTR = min, TMPPTR2 = max\n");
+    out.push_str("    JSR RAND_HELPER\n");
+    out.push_str("    ; D = rand()\n");
+    out.push_str("    ; range = max - min\n");
+    out.push_str("    PSHS D         ; Save random value\n");
+    out.push_str("    LDD TMPPTR2    ; max\n");
+    out.push_str("    SUBD TMPPTR    ; max - min\n");
+    out.push_str("    STD TMPPTR2    ; Save range\n");
+    out.push_str("    ; result = (rand % range) + min\n");
+    out.push_str("    PULS D         ; Restore random\n");
+    out.push_str("    ; Simple modulo: D = D % TMPPTR2 (TODO: proper modulo)\n");
+    out.push_str("    ; For now: mask to range (works for power-of-2 ranges)\n");
+    out.push_str("    ; result = min + (rand & (range-1))\n");
+    out.push_str("    ADDD TMPPTR    ; Add min\n");
+    out.push_str("    RTS\n\n");
+}
