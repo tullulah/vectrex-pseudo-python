@@ -2,7 +2,7 @@
 //!
 //! Mathematical and utility functions
 
-use vpy_parser::{Module, Item, Stmt, Expr};
+use vpy_parser::{Module, Item, Stmt, Expr, BinOp};
 use std::collections::HashSet;
 
 /// Analyze module to detect which runtime helpers are needed
@@ -12,8 +12,8 @@ fn analyze_needed_helpers(module: &Module) -> HashSet<String> {
     
     // Scan all functions in module
     for item in &module.items {
-        if let Item::Function { body, .. } = item {
-            for stmt in body {
+        if let Item::Function(func) = item {
+            for stmt in &func.body {
                 analyze_stmt_for_helpers(stmt, &mut needed);
             }
         }
@@ -25,26 +25,32 @@ fn analyze_needed_helpers(module: &Module) -> HashSet<String> {
 /// Recursively analyze statement for helper usage
 fn analyze_stmt_for_helpers(stmt: &Stmt, needed: &mut HashSet<String>) {
     match stmt {
-        Stmt::Expr(expr) => analyze_expr_for_helpers(expr, needed),
+        Stmt::Expr(expr, _) => analyze_expr_for_helpers(expr, needed),
         Stmt::Assign { value, .. } => analyze_expr_for_helpers(value, needed),
-        Stmt::If { condition, then_block, else_block, .. } => {
-            analyze_expr_for_helpers(condition, needed);
-            for s in then_block {
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            analyze_expr_for_helpers(cond, needed);
+            for s in body {
                 analyze_stmt_for_helpers(s, needed);
             }
-            if let Some(else_stmts) = else_block {
+            for (elif_cond, elif_body) in elifs {
+                analyze_expr_for_helpers(elif_cond, needed);
+                for s in elif_body {
+                    analyze_stmt_for_helpers(s, needed);
+                }
+            }
+            if let Some(else_stmts) = else_body {
                 for s in else_stmts {
                     analyze_stmt_for_helpers(s, needed);
                 }
             }
         }
-        Stmt::While { condition, body, .. } => {
-            analyze_expr_for_helpers(condition, needed);
+        Stmt::While { cond, body, .. } => {
+            analyze_expr_for_helpers(cond, needed);
             for s in body {
                 analyze_stmt_for_helpers(s, needed);
             }
         }
-        Stmt::Return(Some(expr)) => analyze_expr_for_helpers(expr, needed),
+        Stmt::Return(Some(expr), _) => analyze_expr_for_helpers(expr, needed),
         _ => {}
     }
 }
@@ -53,8 +59,9 @@ fn analyze_stmt_for_helpers(stmt: &Stmt, needed: &mut HashSet<String>) {
 fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
     match expr {
         // Builtin calls that may need runtime helpers
-        Expr::Call { name, args } => {
-            let name_upper = name.to_uppercase();
+        Expr::Call(call_info) => {
+            let name_upper = call_info.name.to_uppercase();
+            let args = &call_info.args;
             
             // Drawing helpers: Need runtime if args contain non-constants
             if name_upper == "DRAW_CIRCLE" && has_variable_args(args) {
@@ -117,16 +124,16 @@ fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
         }
         
         // Binary operations that may need math helpers
-        Expr::BinaryOp { left, op, right } => {
+        Expr::Binary { left, op, right } => {
             // Check if operands are variables (not constants)
             let left_is_const = matches!(**left, Expr::Number(_));
             let right_is_const = matches!(**right, Expr::Number(_));
             
             if !left_is_const || !right_is_const {
-                match op.as_str() {
-                    "*" => { needed.insert("MUL16".to_string()); }
-                    "/" => { needed.insert("DIV16".to_string()); }
-                    "%" => { needed.insert("MOD16".to_string()); }
+                match op {
+                    BinOp::Mul => { needed.insert("MUL16".to_string()); }
+                    BinOp::Div | BinOp::FloorDiv => { needed.insert("DIV16".to_string()); }
+                    BinOp::Mod => { needed.insert("MOD16".to_string()); }
                     _ => {}
                 }
             }
@@ -135,8 +142,8 @@ fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
             analyze_expr_for_helpers(right, needed);
         }
         
-        // Other expression types
-        Expr::UnaryOp { operand, .. } => analyze_expr_for_helpers(operand, needed),
+        // Other expression types (Not and BitNot are unary operations)
+        Expr::Not(operand) | Expr::BitNot(operand) => analyze_expr_for_helpers(operand, needed),
         Expr::Index { target, index } => {
             analyze_expr_for_helpers(target, needed);
             analyze_expr_for_helpers(index, needed);
