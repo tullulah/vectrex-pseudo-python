@@ -92,24 +92,54 @@ buildtools/
 ├── Cargo.toml              # Workspace definition
 ├── ARCHITECTURE.md         # Pipeline design details
 ├── STATUS.md              # Progress tracking
+├── TREE_SHAKING_COMPLETE.md # Tree shaking documentation
 ├── test_buildtools.sh     # Test all crates
 │
-├── vpy_loader/            ✅ Complete
-│   ├── src/lib.rs         (413 lines, tested)
+├── vpy_loader/            ✅ Complete (Phase 1)
+│   ├── src/lib.rs         (413 lines, 5 tests passing)
 │   ├── Cargo.toml
 │   └── tests/
 │
-├── vpy_parser/            ⏳ Next (port from core)
-│   ├── src/lib.rs
-│   └── Cargo.toml
+├── vpy_parser/            ✅ Complete (Phase 2)
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── ast.rs         (345 lines)
+│   │   ├── lexer.rs       (570 lines, 11 tests)
+│   │   ├── parser.rs      (1496 lines, 41 tests)
+│   │   └── ...
+│   ├── Cargo.toml
+│   └── tests/
 │
-├── vpy_unifier/           ⏳ Phase 3
-├── vpy_bank_allocator/    ⏳ Phase 4 (NEW)
-├── vpy_codegen/           ⏳ Phase 5
-├── vpy_assembler/         ⏳ Phase 6
-├── vpy_linker/            ⏳ Phase 7 (CRITICAL - NEW)
-├── vpy_binary_writer/     ⏳ Phase 8
-└── vpy_debug_gen/         ⏳ Phase 9
+├── vpy_unifier/           ✅ Complete (Phase 3)
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── graph.rs       (cycle detection, topological sort)
+│   │   ├── resolver.rs    (MODULE_symbol naming)
+│   │   └── ...
+│   ├── Cargo.toml
+│   └── tests/             (24 tests passing)
+│
+├── vpy_bank_allocator/    ✅ Complete (Phase 4)
+│   ├── src/
+│   │   ├── lib.rs         (177 lines, 3 tests)
+│   │   ├── graph.rs       (270 lines, 4 tests - call graph analysis)
+│   │   ├── allocator.rs   (329 lines, 5 tests - sequential assignment)
+│   │   └── error.rs
+│   ├── Cargo.toml
+│   └── tests/             (12 tests passing)
+├── vpy_codegen/           ✅ Optimization Complete (Tree Shaking)
+│   ├── src/m6809/
+│   │   ├── helpers.rs     (analysis + coordination)
+│   │   ├── drawing.rs     (DRAW_CIRCLE, DRAW_RECT)
+│   │   ├── math.rs        (MUL16, DIV16, SQRT, POW, etc.)
+│   │   ├── joystick.rs    (J1X, J1Y, J2X, J2Y)
+│   │   ├── level.rs       (SHOW_LEVEL)
+│   │   └── utilities.rs   (RAND, FADE_IN/OUT)
+│   └── ...
+├── vpy_assembler/         ⏳ Phase 6 (TODO)
+├── vpy_linker/            ⏳ Phase 7 (TODO - CRITICAL)
+├── vpy_binary_writer/     ✅ Complete (Phase 8)
+└── vpy_debug_gen/         ⏳ Phase 9 (TODO)
 ```
 
 ## Key Design Decisions
