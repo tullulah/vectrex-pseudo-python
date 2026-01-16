@@ -61,11 +61,11 @@ impl SymbolResolver {
     pub fn resolve_symbol(&self, symbol: &str, module: &str) -> String {
         let prefix = self.get_module_prefix(module);
         if prefix.is_empty() {
-            // No prefix - convert symbol to uppercase for consistency with codegen
-            symbol.to_uppercase()
+            // No prefix for main module - keep symbol as-is
+            symbol.to_string()
         } else {
-            // With prefix - convert both to uppercase (e.g., INPUT_INPUT_RESULT)
-            format!("{}_{}", prefix.to_uppercase(), symbol.to_uppercase())
+            // With prefix - uppercase prefix, keep symbol lowercase (e.g., INPUT_get_input)
+            format!("{}_{}", prefix.to_uppercase(), symbol)
         }
     }
 
