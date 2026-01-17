@@ -66,15 +66,23 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - **Results**: Only emits helpers used in code (e.g., joystick_test: 3/17 helpers)
 - **Benefits**: Smaller binaries, zero manual configuration, automatic dependency resolution
 
-### ✅ Phase 6: vpy_assembler - Modular Refactoring (COMPLETE)
-- **Segregation Complete**: Extracted 480 lines into 3 focused modules
+### ✅ Phase 6: vpy_assembler - Critical Fixes (2026-01-17)
+- **ORG Directive Processing**: Fixed multibank boot sequence
+  - Added `set_org()` method with 0xFF padding to `binary_emitter.rs`
+  - Modified `asm_to_binary.rs` to parse and apply ORG directives
+  - Removed "ORG ya se manejó" ignore pattern that broke multibank
+  - Enhanced symbol resolution logging (shows buffer length)
+- **Interrupt Vector Fix**: Cartridge ROM architecture corrected
+  - Removed vector generation at $FFF0-$FFFF (they belong in BIOS ROM)
+  - Hardware vectors ($FFF0-$FFFF) are in BIOS ROM ($E000-$FFFF)
+  - Configurable vectors ($CBF2-$CBFB) are in RAM per VECTREX.I
+  - BIOS verifies copyright and jumps to $0000 (cartridge entry point)
+- **Modular Refactoring**: Extracted 480 lines into 3 focused modules
   - `parser.rs` (130 lines, 4 tests): Directive/label parsing
   - `expression.rs` (180 lines, 5 tests): Arithmetic evaluation
   - `symbols.rs` (170 lines, 3 tests): VECTREX.I loading
-- **Main module reduced**: 3090 → 2651 lines (-14%)
-- **Tests**: 18 total (15 legacy + 3 new modules)
-- **Maintainability**: Single responsibility per module
-- **Optional**: Could extract `instructions.rs`, `branches.rs` (see REFACTOR_PROGRESS.md)
+- **Result**: Binary now 32KB (was 64KB). test1.bin runs correctly in emulator.
+- **Reference**: http://vide.malban.de/27th-of-november-2020-lose-ends-irq
 
 ### ✅ Phase 7: vpy_linker (IN PROGRESS - Day 2/5.5 Complete)
 **Purpose**: Links .vo object files into final multibank ROM
@@ -193,16 +201,23 @@ buildtools/
 │   │   └── utilities.rs   (RAND, FADE_IN/OUT)
 │   └── ...
 │
-├── vpy_assembler/         ✅ Refactored (Phase 6)
+├── vpy_assembler/         ✅ Refactored + Fixed (Phase 6)
 │   ├── src/m6809/
 │   │   ├── asm_to_binary.rs (2651 lines, 15 tests)
+│   │   ├── binary_emitter.rs (set_org() with padding, symbol logging)
 │   │   ├── parser.rs        (130 lines, 4 tests - directives)
 │   │   ├── expression.rs    (180 lines, 5 tests - arithmetic)
 │   │   ├── symbols.rs       (170 lines, 3 tests - VECTREX.I)
 │   │   └── mod.rs
 │   ├── REFACTOR_PROGRESS.md (detailed module documentation)
 │   └── Cargo.toml
-│   └── Note: Further refactoring optional (instructions.rs, branches.rs)
+│   └── Note: ORG processing fixed, interrupt vectors removed from cartridge
+│
+├── vpy_disasm/            ✅ Complete (Disassembler)
+│   ├── src/lib.rs         (MC6809 instruction decoder)
+│   ├── Added opcodes: 0xFC (LDD ext), 0xFD (STD ext), 0xBF (STX ext)
+│   │                  0xFE (LDU ext), 0xDC (LDD direct)
+│   └── Cargo.toml
 │
 ├── vpy_linker/            🚀 Phase 7 (IN PROGRESS)
 ├── vpy_binary_writer/     ✅ Complete (Phase 8)
