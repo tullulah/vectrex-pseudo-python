@@ -5,7 +5,7 @@ members = [
     "buildtools/vpy_codegen",
     "buildtools/vpy_assembler",
     "buildtools/vpy_bank_allocator",
-]  # core desactivado temporalmente
+]  # core desactivado intencionalmente
 resolver = "2"
 
 [workspace.package]

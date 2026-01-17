@@ -117,6 +117,30 @@ impl MultiBankLinker {
     ///
     /// Returns: HashMap<bank_id, BankSection>
     pub fn split_asm_by_bank(&self, asm_content: &str) -> Result<HashMap<u8, BankSection>, String> {
+        eprintln!("🔧 split_asm_by_bank called with {} bytes", asm_content.len());
+        
+        // **FIRST PASS**: Collect all definitions (EQU) before processing banks
+        // This is necessary because definitions may appear AFTER bank code in the ASM
+        let mut definitions = String::new();
+        let mut in_defs = false;
+        for line in asm_content.lines() {
+            if line.contains("=== RAM VARIABLE DEFINITIONS") {
+                in_defs = true;
+                definitions.push_str(line);
+                definitions.push('\n');
+                continue;
+            }
+            if in_defs {
+                definitions.push_str(line);
+                definitions.push('\n');
+                // Stop at empty line or non-EQU line
+                if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
+                    in_defs = false;
+                }
+            }
+        }
+        eprintln!("📋 Collected definitions: {} bytes", definitions.len());
+        
         // Helper: detect start of shared data (arrays/consts) inside a bank block
         let extract_shared_tail = |code: &str| -> Option<String> {
             let markers = [
@@ -152,7 +176,7 @@ impl MultiBankLinker {
         let mut current_code = String::new();
         let mut header = String::new();
         let mut include_directives = String::new(); // INCLUDE directives - needed by ALL banks
-        let mut definitions = String::new(); // EQU definitions - needed by ALL banks
+        // NOTE: definitions already collected in FIRST PASS above
         let mut runtime_helpers = String::new(); // Runtime helper functions - needed by ALL banks
         let mut shared_tail = String::new(); // Data tail (arrays/consts) from last bank
         let mut data_bank_id: Option<u8> = None; // Bank that originally contained shared_tail
@@ -207,19 +231,15 @@ impl MultiBankLinker {
                 }
             }
             
-            // Detect RAM definitions section
+            // Skip definitions section - already collected in FIRST PASS
             if line.contains("=== RAM VARIABLE DEFINITIONS") {
                 in_definitions = true;
-                definitions.push_str(line);
-                definitions.push('\n');
                 continue;
             }
             
-            // Collect EQU definitions
+            // Skip EQU definitions - already collected in FIRST PASS
             if in_definitions {
-                definitions.push_str(line);
-                definitions.push('\n');
-                // End of definitions when we hit empty line or non-EQU line
+                // Skip until we hit empty line or non-EQU line
                 if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
                     in_definitions = false;
                     definitions_ended = true;  // Mark that definitions section has ended
@@ -241,6 +261,8 @@ impl MultiBankLinker {
                         } else {
                             format!("{}\n{}\n{}", include_directives, definitions, current_code)
                         };
+                        eprintln!("🔍 [SPLIT DEBUG] Saving Bank #{}: org=0x{:04X}, current_code_len={}, full_code_len={}", 
+                            bank_id, org, current_code.len(), full_code.len());
                         sections.insert(bank_id, BankSection {
                             bank_id,
                             org,
@@ -359,6 +381,9 @@ impl MultiBankLinker {
                 (String::new(), bank_code_only.clone())
             };
             
+            // CRITICAL FIX (2026-01-17): Remove ALL ORG directives from all content sections
+            // The code may have multiple ORG directives (from extracted sections), but we only want ONE at the top
+            
             // Reconstruct with ORG at the very beginning (before INCLUDE/definitions)
             // This ensures PC starts at correct address for this bank
             // Bank #31 (fixed window) uses $4000, all others use $0000
@@ -389,7 +414,27 @@ impl MultiBankLinker {
                 ("".to_string(), code_without_org.clone())
             };
             
-            let full_code = if org_line.is_empty() && bank_id != 0 {
+            // CRITICAL FIX (2026-01-17): Remove ALL ORG directives from content sections
+            // Multiple ORG directives cause assembler scope conflicts - we only want ONE at the top
+            let clean_runtime_helpers = runtime_helpers
+                .lines()
+                .filter(|line| !line.trim().starts_with("ORG "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            
+            let clean_remaining_code = remaining_code
+                .lines()
+                .filter(|line| !line.trim().starts_with("ORG "))
+                .collect::<Vec<_>>()
+                .join("\n");
+                
+            let clean_code_without_org = code_without_org
+                .lines()
+                .filter(|line| !line.trim().starts_with("ORG "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            
+            let full_code = if org_line.is_empty() {  // CRITICAL FIX (2026-01-17): Bank #0 also needs ORG directive
                 eprintln!("  → Entering org_line.is_empty() block");
                 let org_directive = if bank_id == helpers_bank {
                     eprintln!("    → Helpers bank #{} detected - using ORG $4000", helpers_bank);
@@ -400,16 +445,16 @@ impl MultiBankLinker {
                 };
                 // For helpers bank: ORG → CUSTOM_RESET → includes/defs → helpers → remaining code
                 if bank_id == helpers_bank {
-                    format!("{}{}\n{}\n{}\n{}\n{}", org_directive, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
+                    format!("{}{}\n{}\n{}\n{}\n{}", org_directive, custom_reset_code, include_directives, definitions, clean_runtime_helpers, clean_remaining_code)
                 } else {
-                    format!("{}{}\n{}\n{}\n{}", org_directive, include_directives, definitions, runtime_helpers, code_without_org)
+                    format!("{}{}\n{}\n{}\n{}", org_directive, include_directives, definitions, clean_runtime_helpers, clean_code_without_org)
                 }
             } else {
                 eprintln!("  → Using org_line from code");
                 if bank_id == helpers_bank {
-                    format!("{}{}\n{}\n{}\n{}\n{}", org_line, custom_reset_code, include_directives, definitions, runtime_helpers, remaining_code)
+                    format!("{}{}\n{}\n{}\n{}\n{}", org_line, custom_reset_code, include_directives, definitions, clean_runtime_helpers, clean_remaining_code)
                 } else {
-                    format!("{}{}\n{}\n{}\n{}", org_line, include_directives, definitions, runtime_helpers, code_without_org)
+                    format!("{}{}\n{}\n{}\n{}", org_line, include_directives, definitions, clean_runtime_helpers, clean_code_without_org)
                 }
             };
             let size = full_code.len();
@@ -727,6 +772,39 @@ impl MultiBankLinker {
             0x0000u16  // Switchable bank window
         };
         
+        // DEBUG: Check for multiple ORG directives (should only be ONE)
+        let org_count = full_asm_longbranch.matches("ORG $").count();
+        eprintln!("     [DEBUG] Bank #{}: ASM contains {} ORG directives", bank_section.bank_id, org_count);
+        eprintln!("     [DEBUG] Bank #{}: ASM size = {} bytes, {} lines", 
+            bank_section.bank_id, 
+            full_asm_longbranch.len(),
+            full_asm_longbranch.lines().count());
+        
+        // DEBUG: Save ASM to file for inspection
+        if bank_section.bank_id == 0 {
+            let debug_path = temp_dir.join(format!("bank_{}_debug_before_asm.asm", bank_section.bank_id));
+            if let Err(e) = fs::write(&debug_path, &full_asm_longbranch) {
+                eprintln!("     [WARN] Failed to write debug ASM: {}", e);
+            } else {
+                eprintln!("     [DEBUG] Wrote debug ASM to {}", debug_path.display());
+            }
+        }
+        
+        if org_count > 1 {
+            eprintln!("     [WARNING] Multiple ORG directives detected! This causes symbol scope conflicts.");
+            // Print first and last 100 lines to debug
+            let lines: Vec<&str> = full_asm_longbranch.lines().collect();
+            eprintln!("     [DEBUG] First 30 lines:");
+            for (i, line) in lines.iter().take(30).enumerate() {
+                eprintln!("       {:4}: {}", i+1, line);
+            }
+            eprintln!("     [DEBUG] Last 30 lines:");
+            let start_idx = lines.len().saturating_sub(30);
+            for (i, line) in lines.iter().skip(start_idx).enumerate() {
+                eprintln!("       {:4}: {}", start_idx+i+1, line);
+            }
+        }
+        
         let (binary, _line_map, symbol_table, _unresolved) = vpy_assembler::m6809::asm_to_binary::assemble_m6809(
             &full_asm_longbranch,
             bank_org,  // Use correct ORG based on bank type
@@ -819,7 +897,19 @@ impl MultiBankLinker {
             
             eprintln!("     - PASS 1 Iteration {}: Extracting symbols from all banks...", iteration + 1);
             
-            for bank_id in 0..self.rom_bank_count {
+            // CRITICAL: Process helper bank FIRST so its symbols (PRINT_TEXT_STR_*, etc.)
+            // are available for other banks in the same iteration
+            let helper_first_order: Vec<u8> = {
+                let mut order = vec![helper_bank_id];
+                for id in 0..self.rom_bank_count {
+                    if id != helper_bank_id {
+                        order.push(id);
+                    }
+                }
+                order
+            };
+            
+            for bank_id in helper_first_order {
                 if let Some(section) = sections.get(&bank_id) {
                     let mut bank_asm = convert_short_to_long_branches(&section.asm_code);
                     
@@ -862,11 +952,10 @@ impl MultiBankLinker {
                             let sym_count = symbol_table.len();
                             
                             // Calculate runtime address for each symbol based on bank
-                            let bank_base = if bank_id as u8 == helper_bank_id {
-                                0x4000u16  // Fixed bank at $4000
-                            } else {
-                                0x0000u16  // Other banks at $0000 (will switch via $DF00)
-                            };
+                            // CRITICAL FIX (2026-01-18): Symbol addresses from assembler already include ORG
+                            // For Bank #31 (ORG $4000), addresses are already absolute ($4000+offset)
+                            // For other banks (ORG $0000), addresses are already relative ($0000+offset)
+                            // So we DON'T add bank_base - the addresses are already correct!
                             
                             let mut skipped_count = 0;
                             for (label, addr) in symbol_table {
@@ -877,7 +966,14 @@ impl MultiBankLinker {
                                     continue;  // Skip this symbol - it's a duplicate
                                 }
                                 
-                                let runtime_addr = bank_base + (addr as u16);
+                                let runtime_addr = addr;  // Use address as-is (ORG already included)
+                                
+                                // DEBUG: Log PRINT_TEXT_STR symbols from Bank #31
+                                if bank_id as u8 == helper_bank_id && label.contains("PRINT_TEXT_STR") {
+                                    eprintln!("         DEBUG: Bank #{} symbol '{}' at addr 0x{:04X} (runtime 0x{:04X})", 
+                                             bank_id, label, addr, runtime_addr);
+                                }
+                                
                                 // Prefer symbols from fixed bank (#31) in case of conflicts
                                 if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
                                     all_symbols.insert(label, runtime_addr);
@@ -1225,8 +1321,26 @@ impl MultiBankLinker {
 
             if let Some(section) = sections.get(&bank_id) {
                 eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
-                // IMPORTANT: Pass external symbols to ALL banks (helpers available everywhere)
-                let binary = self.assemble_bank(section, &temp_dir, &all_symbols)?;
+                // CRITICAL FIX (2026-01-17): Only pass symbols from Bank #31 (helper bank) + BIOS
+                // NOT symbols from other user banks (0-30) as they would cause assembly conflicts
+                // Bank #31 is always visible at $4000-$7FFF (fixed window)
+                // Symbols from Bank #0-30 should NOT be passed as external symbols to other banks
+                let external_symbols: HashMap<String, u16> = all_symbols.iter()
+                    .filter(|(_name, addr)| {
+                        let a = **addr;
+                        // Only include:
+                        // 1. Bank #31 code range ($4000-$7FFF fixed window)
+                        // 2. BIOS range ($E000-$FFFF)  
+                        // 3. RAM variables ($C800-$CFFF)
+                        (a >= 0x4000 && a < 0x8000) || (a >= 0xE000) || (a >= 0xC800 && a < 0xD000)
+                    })
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                
+                eprintln!("       Filtered {} external symbols for Bank #{} (from {} total)", 
+                    external_symbols.len(), bank_id, all_symbols.len());
+                
+                let binary = self.assemble_bank(section, &temp_dir, &external_symbols)?;
                 rom_data.extend_from_slice(&binary);
             } else {
                 // Empty bank - fill with 0xFF

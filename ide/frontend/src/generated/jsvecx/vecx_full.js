@@ -3212,6 +3212,25 @@ const EADIRECT = () => (((this.reg_dp<<8)|this.vecx.read8(this.reg_pc++)));
                 console.log("    S: 0x" + this.reg_s.value.toString(16).toUpperCase().padStart(4, '0'));
                 console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
                 console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
+                
+                // Stop emulator to avoid infinite error loops
+                try {
+                    // Force stop by setting running flag to false globally
+                    if (typeof window !== 'undefined' && window.vecxInstance) {
+                        window.vecxInstance.running = false;
+                        if (typeof window.vecxInstance.debugStop === 'function') {
+                            window.vecxInstance.debugStop();
+                        }
+                    }
+                    if (this.vecx) {
+                        this.vecx.running = false;
+                        if (typeof this.vecx.debugStop === 'function') this.vecx.debugStop();
+                        else if (typeof this.vecx.stop === 'function') this.vecx.stop();
+                    }
+                } catch (e) {
+                    console.error("Failed to stop emulator:", e);
+                }
+                
                 utils.showError("Unknown page-0 opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
                 break;
         }

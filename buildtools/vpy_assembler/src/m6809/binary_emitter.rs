@@ -84,6 +84,13 @@ impl BinaryEmitter {
         if self.code.len() < 100 {
             eprintln!("📝 emit[{}]: byte=0x{:02X} current_addr=0x{:04X}", self.code.len(), byte, self.current_address);
         }
+        
+        // DEBUG: Log when writing around the problematic address 0x404D
+        if self.current_address >= 0x4048 && self.current_address <= 0x4055 {
+            eprintln!("🔍 [DEBUG 0x404D] emit at addr=0x{:04X}, offset=0x{:04X}, byte=0x{:02X}, line={}", 
+                self.current_address, self.code.len(), byte, self.current_line);
+        }
+        
         self.code.push(byte);
         self.current_address = self.current_address.wrapping_add(1);
     }
@@ -1283,7 +1290,20 @@ impl BinaryEmitter {
                 // Fórmula correcta: next_addr = branch_instruction_addr + opcode_size + ref_size (offset bytes)
                 let org = self.current_address.wrapping_sub(self.code.len() as u16);
                 
-                // Detectar si es long branch (opcode 2 bytes) o short branch (opcode 1 byte)
+                // 🔍 DEBUG: Log calculation for MAIN.MAIN_LOOP to see what's happening
+                if sym_ref.symbol.contains("MAIN_LOOP") {
+                    eprintln!("🔍 [MAIN_LOOP DEBUG] Resolving branch:");
+                    eprintln!("   symbol: {}", sym_ref.symbol);
+                    eprintln!("   current_address: 0x{:04X}", self.current_address);
+                    eprintln!("   code.len(): {}", self.code.len());
+                    eprintln!("   org (calculated): 0x{:04X}", org);
+                    eprintln!("   sym_ref.offset: {}", sym_ref.offset);
+                    eprintln!("   sym_ref.ref_size: {}", sym_ref.ref_size);
+                    eprintln!("   target_addr: 0x{:04X}", target_addr);
+                    eprintln!("   effective_target: 0x{:04X}", effective_target);
+                }
+                
+                // Detectar si es long branch (opcode 2 bytes) or short branch (opcode 1 byte)
                 // Long branches: LBEQ, LBNE, LBCC, LBCS, etc. (opcode = 0x10 0x2x)
                 // Short branches: BEQ, BNE, BCC, BCS, etc. (opcode = 0x2x)
                 let opcode_size = if sym_ref.ref_size == 2 { 2 } else { 1 };

@@ -1,6 +1,96 @@
 use vpy_parser::{Module, Item, Expr, Stmt, AssignTarget};
 use std::collections::HashSet;
+use super::ram_layout::RamLayout;
 
+/// Generate user variables using a RamLayout that already has system variables allocated
+/// Returns ASM string for array data sections (not EQU definitions - those come from RamLayout)
+pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<String, String> {
+    let mut asm = String::new();
+    let mut vars = HashSet::new();
+    let mut arrays = Vec::new();  // Track arrays for data generation
+    
+    // Collect all variable names from module (GlobalLet items)
+    for item in &module.items {
+        if let Item::GlobalLet { name, value, .. } = item {
+            vars.insert(name.clone());
+            
+            // Check if this is an array initialization
+            if matches!(value, Expr::List(_)) {
+                arrays.push((name.clone(), value.clone()));
+            }
+        }
+    }
+    
+    // CRITICAL FIX: Also collect all identifiers used in functions
+    // This includes function parameters and local variables
+    // Treat them all as globals for now (simple solution)
+    for item in &module.items {
+        if let Item::Function(func) = item {
+            // Collect parameters - they are Vec<String> not Vec<Param>
+            for param in &func.params {
+                vars.insert(param.clone());
+            }
+            
+            // Collect local variables from function body
+            collect_identifiers_from_stmts(&func.body, &mut vars);
+        }
+    }
+    
+    // Allocate all user variables using RamLayout
+    // This ensures no collisions with system variables
+    for var in vars.iter() {
+        // Variables use uppercase labels for consistency with array/const naming
+        ram.allocate(&format!("VAR_{}", var.to_uppercase()), 2, &format!("User variable: {}", var));
+    }
+    
+    // Generate array data sections
+    // Arrays are stored in ROM as FDB data with ARRAY_{name}_DATA labels
+    // At runtime, main() initializes VAR_{name} (RAM pointer) to point to this ROM data
+    if !arrays.is_empty() {
+        asm.push_str(";***************************************************************************\n");
+        asm.push_str("; ARRAY DATA (ROM literals)\n");
+        asm.push_str(";***************************************************************************\n");
+        asm.push_str("; Arrays are stored in ROM and accessed via pointers\n");
+        asm.push_str("; At startup, main() initializes VAR_{name} to point to ARRAY_{name}_DATA\n\n");
+        
+        // Emit array data in ROM (no ORG - flows naturally after code)
+        for (name, value) in arrays {
+            if let Expr::List(elements) = value {
+                let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+                asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
+                asm.push_str(&format!("{}:\n", array_label));
+                
+                // Emit array elements
+                for (i, elem) in elements.iter().enumerate() {
+                    if let Expr::Number(n) = elem {
+                        asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+                    } else {
+                        asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
+                    }
+                }
+                asm.push_str("\n");
+            }
+        }
+    }
+    
+    // NOTE: VAR_ARG definitions are now in helpers.rs using ram.allocate_fixed()
+    // They are emitted alongside system variables because they need fixed addresses
+    
+    // CRITICAL: Define internal builtin variables
+    // These are aliases to RESULT slots and don't consume additional RAM
+    asm.push_str("; Internal builtin variables (aliases to RESULT slots)\n");
+    asm.push_str("DRAW_VEC_X EQU RESULT+0\n");
+    asm.push_str("DRAW_VEC_Y EQU RESULT+2\n");
+    asm.push_str("MIRROR_X EQU RESULT+4\n");
+    asm.push_str("MIRROR_Y EQU RESULT+6\n");
+    asm.push_str("DRAW_VEC_INTENSITY EQU RESULT+8\n");
+    asm.push_str("\n");
+    
+    Ok(asm)
+}
+
+/// OLD FUNCTION - kept for backward compatibility but not used anymore
+/// Use generate_user_variables() instead with RamLayout parameter
 pub fn generate_variables(module: &Module) -> Result<String, String> {
     let mut asm = String::new();
     let mut vars = HashSet::new();
@@ -41,8 +131,8 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
         
         let mut offset = 0;
         for var in vars.iter() {
-            // IMPORTANT: Variable name already comes uppercase from unifier
-            asm.push_str(&format!("VAR_{} EQU $CF10+{}\n", var, offset));
+            // Variables use uppercase labels for consistency with array/const naming
+            asm.push_str(&format!("VAR_{} EQU $CF10+{}\n", var.to_uppercase(), offset));
             offset += 2;  // 16-bit variables
         }
         
@@ -50,52 +140,39 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
     }
     
     // Generate array data sections
+    // Arrays are stored in ROM as FDB data with ARRAY_{name}_DATA labels
+    // At runtime, main() initializes VAR_{name} (RAM pointer) to point to this ROM data
     if !arrays.is_empty() {
         asm.push_str(";***************************************************************************\n");
-        asm.push_str("; ARRAY DATA\n");
+        asm.push_str("; ARRAY DATA (ROM literals)\n");
         asm.push_str(";***************************************************************************\n");
+        asm.push_str("; Arrays are stored in ROM and accessed via pointers\n");
+        asm.push_str("; At startup, main() initializes VAR_{name} to point to ARRAY_{name}_DATA\n\n");
         
-        // Calculate starting address for array data (after all variable pointers)
-        // Variables start at $CF10, each takes 2 bytes
-        let array_data_start = 0xCF10 + (vars.len() * 2);
-        let mut data_offset = 0;
-        
-        // First pass: Generate EQU definitions for array data addresses
-        for (name, value) in arrays.iter() {
-            if let Expr::List(elements) = value {
-                // Define array data address as EQU (so assembler can resolve in first pass)
-                asm.push_str(&format!("VAR_{}_DATA EQU ${:04X}\n", name, array_data_start + data_offset));
-                data_offset += elements.len() * 2;  // 16-bit elements
-            }
-        }
-        asm.push_str("\n");
-        
-        // Second pass: Emit actual array data
-        asm.push_str("; Array data storage\n");
-        asm.push_str(&format!("    ORG ${:04X}  ; Start of array data section\n", array_data_start));
+        // Emit array data in ROM (no ORG - flows naturally after code)
         for (name, value) in arrays {
             if let Expr::List(elements) = value {
-                asm.push_str(&format!("; Array: VAR_{}_DATA\n", name));
+                let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+                asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
+                asm.push_str(&format!("{}:\n", array_label));
                 
                 // Emit array elements
                 for (i, elem) in elements.iter().enumerate() {
                     if let Expr::Number(n) = elem {
-                        asm.push_str(&format!("    FDB {}    ; Element {}\n", n, i));
+                        asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
                     } else {
-                        asm.push_str(&format!("    FDB 0     ; Element {} (TODO: complex init)\n", i));
+                        asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
                     }
                 }
+                asm.push_str("\n");
             }
         }
-        asm.push_str("\n");
     }
     
-    // Always define ARG variables for function calls
-    asm.push_str("; Function argument slots\n");
-    for i in 0..5 {
-        asm.push_str(&format!("VAR_ARG{} EQU $CFE0+{}\n", i, i * 2));
-    }
-    asm.push_str("\n");
+    // NOTE: VAR_ARG definitions moved to Bank #31 (helpers bank) in mod.rs
+    // They are emitted alongside helpers because Bank #31 is always visible at $4000-$7FFF
+    // This allows all banks to access VAR_ARG without duplication
+    // See mod.rs line ~325 for the actual emission
     
     // CRITICAL: Define internal builtin variables
     // These are used by DRAW_VECTOR_EX and other builtins

@@ -1,0 +1,1417 @@
+[Compiler] Compiling project: /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/test_multibank_pdb.vpyproj
+[Compiler] Using: /Users/daniel/projects/vectrex-pseudo-python/buildtools/target/debug/vpy_cli
+[STATUS] Starting compilation: /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/test_multibank_pdb.vpyproj
+[Compiler] Cleaned old output files
+[Compiler] Full command: "/Users/daniel/projects/vectrex-pseudo-python/buildtools/target/debug/vpy_cli" build /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/test_multibank_pdb.vpyproj --output /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/test_multibank_pdb.bin --rom-size 32768 --bank-size 32768 --debug
+[Compiler] Working dir: /Users/daniel/projects/vectrex-pseudo-python
+[Compiler] Mode: PROJECT (.vpyproj)
+=== FULL BUILD PIPELINE ===
+
+Phase 1: Load Project
+  Entry: /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/src/main.vpy
+  Files: 1
+  Assets: 0
+
+Phase 2: Parse Modules
+  ✓ Parsed 1 modules
+
+Phase 3: Unify Modules
+  ✓ Unified 2 items
+
+Phase 4: Code Generation
+[DEBUG HELPERS] Generating runtime helpers...
+[DEBUG HELPERS] Detected 1 needed helpers: {"PRINT_TEXT"}
+[DEBUG HELPERS] System RAM used: 13 bytes
+[DEBUG HELPERS] Generating user variables...
+[DEBUG HELPERS] Total RAM used (system + user): 13 bytes
+[DEBUG HELPERS] ASM length after all helpers: 1988
+  ✓ Generated 11598 bytes ASM
+  ✓ ASM written: /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/build/test_multibank_pdb.asm
+
+Multibank detected: 512 KB ROM (32 banks × 16 KB)
+
+Phase 6.7: Multi-bank binary generation...
+   [Multi-Bank Linker] Generating 512KB ROM...
+🔧 split_asm_by_bank called with 11598 bytes
+📋 Collected definitions: 1074 bytes
+🔍 [SPLIT DEBUG] Saving Bank #0: org=0x0000, current_code_len=2427, full_code_len=3698
+🔍 [SPLIT DEBUG] Saving Bank #1: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #2: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #3: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #4: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #5: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #6: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #7: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #8: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #9: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #10: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #11: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #12: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #13: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #14: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #15: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #16: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #17: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #18: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #19: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #20: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #21: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #22: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #23: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #24: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #25: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #26: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #27: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #28: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #29: org=0x0000, current_code_len=183, full_code_len=1259
+🔍 [SPLIT DEBUG] Saving Bank #30: org=0x0000, current_code_len=183, full_code_len=1259
+DEBUG split_asm_by_bank: bank_id=31, org_line_empty=true, org_line=""
+  → Entering org_line.is_empty() block
+    → Helpers bank #31 detected - using ORG $4000
+DEBUG: Helpers bank #31 full_code starts with:     ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)\n\n\n; ===
+DEBUG: Inserting helpers bank #31 section with ORG $4000
+     - Found 32 bank section(s)
+       Bank #16: 1259 bytes ASM
+       Bank #20: 1259 bytes ASM
+       Bank #15: 1259 bytes ASM
+       Bank #4: 1259 bytes ASM
+       Bank #5: 1259 bytes ASM
+       Bank #13: 1259 bytes ASM
+       Bank #9: 1259 bytes ASM
+       Bank #3: 1259 bytes ASM
+       Bank #11: 1259 bytes ASM
+       Bank #24: 1259 bytes ASM
+       Bank #31: 2382 bytes ASM
+       Bank #22: 1259 bytes ASM
+       Bank #10: 1259 bytes ASM
+       Bank #17: 1259 bytes ASM
+       Bank #18: 1259 bytes ASM
+       Bank #6: 1259 bytes ASM
+       Bank #1: 1259 bytes ASM
+       Bank #25: 1259 bytes ASM
+       Bank #26: 1259 bytes ASM
+       Bank #8: 1259 bytes ASM
+       Bank #21: 1259 bytes ASM
+       Bank #19: 1259 bytes ASM
+       Bank #23: 1259 bytes ASM
+       Bank #29: 1259 bytes ASM
+       Bank #30: 1259 bytes ASM
+       Bank #2: 1259 bytes ASM
+       Bank #14: 1259 bytes ASM
+       Bank #27: 1259 bytes ASM
+       Bank #28: 1259 bytes ASM
+       Bank #0: 3893 bytes ASM
+       Bank #7: 1259 bytes ASM
+       Bank #12: 1259 bytes ASM
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+     - Loaded 496 BIOS symbols from shared table
+     - PASS 1 Iteration 1: Extracting symbols from all banks...
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=13546 bytes, 555 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+🔧 ORG $4000: Padding 16384 bytes (0xFF) from offset 0x0 to 0x4000
+✓ ORG $4000 processed at line 501 (offset: 0x0 → 0x4000, delta=16384)
+🏷️  Defining label 'VECTREX_PRINT_TEXT' at label_address=0x4000 (offset=0x4000, current_address=0x4000, org=0x0000)
+🏷️  Defining label 'PRINT_TEXT_STR_68624562' at label_address=0x4013 (offset=0x4013, current_address=0x4013, org=0x0000)
+🏷️  Defining label 'PRINT_TEXT_STR_82781042' at label_address=0x4019 (offset=0x4019, current_address=0x4019, org=0x0000)
+🔍 [BEFORE RESOLVE] current_address=0x401F, code.len()=16415, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x401F, code.len()=16415
+         DEBUG: Bank #31 symbol 'PRINT_TEXT_STR_68624562' at addr 0x4013 (runtime 0x4013)
+         DEBUG: Bank #31 symbol 'PRINT_TEXT_STR_82781042' at addr 0x4019 (runtime 0x4019)
+       Bank #31: 3 symbols
+       Bank #31: 3 symbols (3 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=15154 bytes, 622 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 35 (offset: 0x0 → 0x0, delta=0)
+📝 emit[0]: byte=0x67 current_addr=0x0000
+📝 emit[1]: byte=0x20 current_addr=0x0001
+📝 emit[2]: byte=0x47 current_addr=0x0002
+📝 emit[3]: byte=0x43 current_addr=0x0003
+📝 emit[4]: byte=0x45 current_addr=0x0004
+📝 emit[5]: byte=0x20 current_addr=0x0005
+📝 emit[6]: byte=0x32 current_addr=0x0006
+📝 emit[7]: byte=0x30 current_addr=0x0007
+📝 emit[8]: byte=0x32 current_addr=0x0008
+📝 emit[9]: byte=0x35 current_addr=0x0009
+📝 emit[10]: byte=0x80 current_addr=0x000A
+📝 emit[11]: byte=0xFD current_addr=0x000B
+📝 emit[12]: byte=0x0D current_addr=0x000C
+📝 emit[13]: byte=0xF8 current_addr=0x000D
+📝 emit[14]: byte=0x50 current_addr=0x000E
+📝 emit[15]: byte=0x20 current_addr=0x000F
+📝 emit[16]: byte=0xBB current_addr=0x0010
+📝 emit[17]: byte=0x4D current_addr=0x0011
+📝 emit[18]: byte=0x55 current_addr=0x0012
+📝 emit[19]: byte=0x4C current_addr=0x0013
+📝 emit[20]: byte=0x54 current_addr=0x0014
+📝 emit[21]: byte=0x49 current_addr=0x0015
+📝 emit[22]: byte=0x42 current_addr=0x0016
+📝 emit[23]: byte=0x41 current_addr=0x0017
+📝 emit[24]: byte=0x4E current_addr=0x0018
+📝 emit[25]: byte=0x4B current_addr=0x0019
+📝 emit[26]: byte=0x20 current_addr=0x001A
+📝 emit[27]: byte=0x50 current_addr=0x001B
+📝 emit[28]: byte=0x44 current_addr=0x001C
+📝 emit[29]: byte=0x42 current_addr=0x001D
+📝 emit[30]: byte=0x20 current_addr=0x001E
+📝 emit[31]: byte=0x54 current_addr=0x001F
+📝 emit[32]: byte=0x45 current_addr=0x0020
+📝 emit[33]: byte=0x53 current_addr=0x0021
+📝 emit[34]: byte=0x54 current_addr=0x0022
+📝 emit[35]: byte=0x80 current_addr=0x0023
+📝 emit[36]: byte=0x00 current_addr=0x0024
+🏷️  Defining label 'START' at label_address=0x0025 (offset=0x0025, current_address=0x0025, org=0x0000)
+📝 emit[37]: byte=0x86 current_addr=0x0025
+📝 emit[38]: byte=0xD0 current_addr=0x0026
+🔎 parse_and_emit: TFR 'A,DP' (full line: 'TFR A,DP')
+📝 emit[39]: byte=0x1F current_addr=0x0027
+📝 emit[40]: byte=0x8B current_addr=0x0028
+📝 emit[41]: byte=0x7F current_addr=0x0029
+DEBUG emit_word: word=0xC80E at offset=0x002A
+📝 emit[42]: byte=0xC8 current_addr=0x002A
+📝 emit[43]: byte=0x0E current_addr=0x002B
+📝 emit[44]: byte=0x86 current_addr=0x002C
+📝 emit[45]: byte=0x80 current_addr=0x002D
+📝 emit[46]: byte=0xB7 current_addr=0x002E
+📝 emit[47]: byte=0xD0 current_addr=0x002F
+📝 emit[48]: byte=0x04 current_addr=0x0030
+📝 emit[49]: byte=0x10 current_addr=0x0031
+📝 emit[50]: byte=0xCE current_addr=0x0032
+📝 emit[51]: byte=0xCB current_addr=0x0033
+📝 emit[52]: byte=0xFF current_addr=0x0034
+📝 emit[53]: byte=0x7E current_addr=0x0035
+📝 emit[54]: byte=0x00 current_addr=0x0036
+📝 emit[55]: byte=0x00 current_addr=0x0037
+🏷️  Defining label 'MAIN' at label_address=0x0038 (offset=0x0038, current_address=0x0038, org=0x0000)
+📝 emit[56]: byte=0xCC current_addr=0x0038
+📝 emit[57]: byte=0x00 current_addr=0x0039
+📝 emit[58]: byte=0x7F current_addr=0x003A
+📝 emit[59]: byte=0xFD current_addr=0x003B
+DEBUG emit_word: word=0xC880 at offset=0x003C
+📝 emit[60]: byte=0xC8 current_addr=0x003C
+📝 emit[61]: byte=0x80 current_addr=0x003D
+📝 emit[62]: byte=0xB6 current_addr=0x003E
+DEBUG emit_word: word=0xC881 at offset=0x003F
+📝 emit[63]: byte=0xC8 current_addr=0x003F
+📝 emit[64]: byte=0x81 current_addr=0x0040
+📝 emit[65]: byte=0xBD current_addr=0x0041
+📝 emit[66]: byte=0x00 current_addr=0x0042
+📝 emit[67]: byte=0x00 current_addr=0x0043
+📝 emit[68]: byte=0xCC current_addr=0x0044
+📝 emit[69]: byte=0x00 current_addr=0x0045
+📝 emit[70]: byte=0x00 current_addr=0x0046
+📝 emit[71]: byte=0xFD current_addr=0x0047
+DEBUG emit_word: word=0xC880 at offset=0x0048
+📝 emit[72]: byte=0xC8 current_addr=0x0048
+📝 emit[73]: byte=0x80 current_addr=0x0049
+📝 emit[74]: byte=0xBD current_addr=0x004A
+📝 emit[75]: byte=0x00 current_addr=0x004B
+📝 emit[76]: byte=0x00 current_addr=0x004C
+📝 emit[77]: byte=0x16 current_addr=0x004D
+📝 emit[78]: byte=0x00 current_addr=0x004E
+📝 emit[79]: byte=0x00 current_addr=0x004F
+🏷️  Defining label 'LOOP_BODY' at label_address=0x0050 (offset=0x0050, current_address=0x0050, org=0x0000)
+📝 emit[80]: byte=0xBD current_addr=0x0050
+📝 emit[81]: byte=0x00 current_addr=0x0051
+📝 emit[82]: byte=0x00 current_addr=0x0052
+📝 emit[83]: byte=0xBD current_addr=0x0053
+📝 emit[84]: byte=0x00 current_addr=0x0054
+📝 emit[85]: byte=0x00 current_addr=0x0055
+📝 emit[86]: byte=0xCC current_addr=0x0056
+📝 emit[87]: byte=0xFF current_addr=0x0057
+📝 emit[88]: byte=0xBA current_addr=0x0058
+📝 emit[89]: byte=0xFD current_addr=0x0059
+DEBUG emit_word: word=0xC880 at offset=0x005A
+📝 emit[90]: byte=0xC8 current_addr=0x005A
+📝 emit[91]: byte=0x80 current_addr=0x005B
+📝 emit[92]: byte=0xFC current_addr=0x005C
+DEBUG emit_word: word=0xC880 at offset=0x005D
+📝 emit[93]: byte=0xC8 current_addr=0x005D
+📝 emit[94]: byte=0x80 current_addr=0x005E
+📝 emit[95]: byte=0xFD current_addr=0x005F
+📝 emit[96]: byte=0xCF current_addr=0x0060
+📝 emit[97]: byte=0xE0 current_addr=0x0061
+📝 emit[98]: byte=0xCC current_addr=0x0062
+📝 emit[99]: byte=0x00 current_addr=0x0063
+DEBUG emit_word: word=0xC880 at offset=0x0066
+DEBUG emit_word: word=0xC880 at offset=0x0069
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x0075 (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x007B
+DEBUG emit_word: word=0xC880 at offset=0x0081
+DEBUG emit_word: word=0xC880 at offset=0x0084
+DEBUG emit_word: word=0xC880 at offset=0x008D
+DEBUG emit_word: word=0xC880 at offset=0x0090
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x009C (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x00A2
+🔍 [BEFORE RESOLVE] current_address=0x00A5, code.len()=165, org=0
+   ASM snippet (first 200 chars): ; VPy M6809 Assembly (Vectrex) | ; ROM: 524288 bytes | ; Multibank cartridge: 32 banks (16KB each) | ; Helpers bank: 31 (fixed bank at $4000-$7FFF) | 
+🔗 Symbol 'MAIN' at bin_offset=0x0036 resolved to addr=0x0038
+   📝 Writing to self.code[0x0036] = 0x0038 (code.len()=165)
+🔗 Symbol 'LOOP_BODY' at bin_offset=0x004B resolved to addr=0x0050
+   📝 Writing to self.code[0x004B] = 0x0050 (code.len()=165)
+🔍 [MAIN_LOOP DEBUG] Resolving branch:
+   symbol: MAIN.MAIN_LOOP
+   current_address: 0x00A5
+   code.len(): 165
+   org (calculated): 0x0000
+   sym_ref.offset: 78
+   sym_ref.ref_size: 2
+   target_addr: 0x004A
+   effective_target: 0x004A
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x0075 resolved to addr=0x4000
+   📝 Writing to self.code[0x0075] = 0x4000 (code.len()=165)
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x009C resolved to addr=0x4000
+   📝 Writing to self.code[0x009C] = 0x4000 (code.len()=165)
+🔍 [AFTER RESOLVE] current_address=0x00A5, code.len()=165
+       Bank #0: 4 symbols
+       Bank #0: 4 symbols (4 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #1: 0 symbols
+       Bank #1: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #2: 0 symbols
+       Bank #2: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #3: 0 symbols
+       Bank #3: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #4: 0 symbols
+       Bank #4: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #5: 0 symbols
+       Bank #5: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #6: 0 symbols
+       Bank #6: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #7: 0 symbols
+       Bank #7: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #8: 0 symbols
+       Bank #8: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #9: 0 symbols
+       Bank #9: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #10: 0 symbols
+       Bank #10: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #11: 0 symbols
+       Bank #11: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #12: 0 symbols
+       Bank #12: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #13: 0 symbols
+       Bank #13: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #14: 0 symbols
+       Bank #14: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #15: 0 symbols
+       Bank #15: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #16: 0 symbols
+       Bank #16: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #17: 0 symbols
+       Bank #17: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #18: 0 symbols
+       Bank #18: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #19: 0 symbols
+       Bank #19: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #20: 0 symbols
+       Bank #20: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #21: 0 symbols
+       Bank #21: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #22: 0 symbols
+       Bank #22: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #23: 0 symbols
+       Bank #23: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #24: 0 symbols
+       Bank #24: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #25: 0 symbols
+       Bank #25: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #26: 0 symbols
+       Bank #26: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #27: 0 symbols
+       Bank #27: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #28: 0 symbols
+       Bank #28: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #29: 0 symbols
+       Bank #29: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #30: 0 symbols
+       Bank #30: 0 symbols (0 after skipping)
+       Total symbols: 503 (new: 6)
+     - PASS 1 Iteration 2: Extracting symbols from all banks...
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=13703 bytes, 561 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+🔧 ORG $4000: Padding 16384 bytes (0xFF) from offset 0x0 to 0x4000
+✓ ORG $4000 processed at line 507 (offset: 0x0 → 0x4000, delta=16384)
+🏷️  Defining label 'VECTREX_PRINT_TEXT' at label_address=0x4000 (offset=0x4000, current_address=0x4000, org=0x0000)
+🏷️  Defining label 'PRINT_TEXT_STR_68624562' at label_address=0x4013 (offset=0x4013, current_address=0x4013, org=0x0000)
+🏷️  Defining label 'PRINT_TEXT_STR_82781042' at label_address=0x4019 (offset=0x4019, current_address=0x4019, org=0x0000)
+🔍 [BEFORE RESOLVE] current_address=0x401F, code.len()=16415, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x401F, code.len()=16415
+         DEBUG: Bank #31 symbol 'PRINT_TEXT_STR_68624562' at addr 0x4013 (runtime 0x4013)
+         DEBUG: Bank #31 symbol 'PRINT_TEXT_STR_82781042' at addr 0x4019 (runtime 0x4019)
+       Bank #31: 3 symbols
+       Bank #31: 3 symbols (3 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=15214 bytes, 625 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 35 (offset: 0x0 → 0x0, delta=0)
+📝 emit[0]: byte=0x67 current_addr=0x0000
+📝 emit[1]: byte=0x20 current_addr=0x0001
+📝 emit[2]: byte=0x47 current_addr=0x0002
+📝 emit[3]: byte=0x43 current_addr=0x0003
+📝 emit[4]: byte=0x45 current_addr=0x0004
+📝 emit[5]: byte=0x20 current_addr=0x0005
+📝 emit[6]: byte=0x32 current_addr=0x0006
+📝 emit[7]: byte=0x30 current_addr=0x0007
+📝 emit[8]: byte=0x32 current_addr=0x0008
+📝 emit[9]: byte=0x35 current_addr=0x0009
+📝 emit[10]: byte=0x80 current_addr=0x000A
+📝 emit[11]: byte=0xFD current_addr=0x000B
+📝 emit[12]: byte=0x0D current_addr=0x000C
+📝 emit[13]: byte=0xF8 current_addr=0x000D
+📝 emit[14]: byte=0x50 current_addr=0x000E
+📝 emit[15]: byte=0x20 current_addr=0x000F
+📝 emit[16]: byte=0xBB current_addr=0x0010
+📝 emit[17]: byte=0x4D current_addr=0x0011
+📝 emit[18]: byte=0x55 current_addr=0x0012
+📝 emit[19]: byte=0x4C current_addr=0x0013
+📝 emit[20]: byte=0x54 current_addr=0x0014
+📝 emit[21]: byte=0x49 current_addr=0x0015
+📝 emit[22]: byte=0x42 current_addr=0x0016
+📝 emit[23]: byte=0x41 current_addr=0x0017
+📝 emit[24]: byte=0x4E current_addr=0x0018
+📝 emit[25]: byte=0x4B current_addr=0x0019
+📝 emit[26]: byte=0x20 current_addr=0x001A
+📝 emit[27]: byte=0x50 current_addr=0x001B
+📝 emit[28]: byte=0x44 current_addr=0x001C
+📝 emit[29]: byte=0x42 current_addr=0x001D
+📝 emit[30]: byte=0x20 current_addr=0x001E
+📝 emit[31]: byte=0x54 current_addr=0x001F
+📝 emit[32]: byte=0x45 current_addr=0x0020
+📝 emit[33]: byte=0x53 current_addr=0x0021
+📝 emit[34]: byte=0x54 current_addr=0x0022
+📝 emit[35]: byte=0x80 current_addr=0x0023
+📝 emit[36]: byte=0x00 current_addr=0x0024
+🏷️  Defining label 'START' at label_address=0x0025 (offset=0x0025, current_address=0x0025, org=0x0000)
+📝 emit[37]: byte=0x86 current_addr=0x0025
+📝 emit[38]: byte=0xD0 current_addr=0x0026
+🔎 parse_and_emit: TFR 'A,DP' (full line: 'TFR A,DP')
+📝 emit[39]: byte=0x1F current_addr=0x0027
+📝 emit[40]: byte=0x8B current_addr=0x0028
+📝 emit[41]: byte=0x7F current_addr=0x0029
+DEBUG emit_word: word=0xC80E at offset=0x002A
+📝 emit[42]: byte=0xC8 current_addr=0x002A
+📝 emit[43]: byte=0x0E current_addr=0x002B
+📝 emit[44]: byte=0x86 current_addr=0x002C
+📝 emit[45]: byte=0x80 current_addr=0x002D
+📝 emit[46]: byte=0xB7 current_addr=0x002E
+📝 emit[47]: byte=0xD0 current_addr=0x002F
+📝 emit[48]: byte=0x04 current_addr=0x0030
+📝 emit[49]: byte=0x10 current_addr=0x0031
+📝 emit[50]: byte=0xCE current_addr=0x0032
+📝 emit[51]: byte=0xCB current_addr=0x0033
+📝 emit[52]: byte=0xFF current_addr=0x0034
+📝 emit[53]: byte=0x7E current_addr=0x0035
+📝 emit[54]: byte=0x00 current_addr=0x0036
+📝 emit[55]: byte=0x00 current_addr=0x0037
+🏷️  Defining label 'MAIN' at label_address=0x0038 (offset=0x0038, current_address=0x0038, org=0x0000)
+📝 emit[56]: byte=0xCC current_addr=0x0038
+📝 emit[57]: byte=0x00 current_addr=0x0039
+📝 emit[58]: byte=0x7F current_addr=0x003A
+📝 emit[59]: byte=0xFD current_addr=0x003B
+DEBUG emit_word: word=0xC880 at offset=0x003C
+📝 emit[60]: byte=0xC8 current_addr=0x003C
+📝 emit[61]: byte=0x80 current_addr=0x003D
+📝 emit[62]: byte=0xB6 current_addr=0x003E
+DEBUG emit_word: word=0xC881 at offset=0x003F
+📝 emit[63]: byte=0xC8 current_addr=0x003F
+📝 emit[64]: byte=0x81 current_addr=0x0040
+📝 emit[65]: byte=0xBD current_addr=0x0041
+📝 emit[66]: byte=0x00 current_addr=0x0042
+📝 emit[67]: byte=0x00 current_addr=0x0043
+📝 emit[68]: byte=0xCC current_addr=0x0044
+📝 emit[69]: byte=0x00 current_addr=0x0045
+📝 emit[70]: byte=0x00 current_addr=0x0046
+📝 emit[71]: byte=0xFD current_addr=0x0047
+DEBUG emit_word: word=0xC880 at offset=0x0048
+📝 emit[72]: byte=0xC8 current_addr=0x0048
+📝 emit[73]: byte=0x80 current_addr=0x0049
+📝 emit[74]: byte=0xBD current_addr=0x004A
+📝 emit[75]: byte=0x00 current_addr=0x004B
+📝 emit[76]: byte=0x00 current_addr=0x004C
+📝 emit[77]: byte=0x16 current_addr=0x004D
+📝 emit[78]: byte=0x00 current_addr=0x004E
+📝 emit[79]: byte=0x00 current_addr=0x004F
+🏷️  Defining label 'LOOP_BODY' at label_address=0x0050 (offset=0x0050, current_address=0x0050, org=0x0000)
+📝 emit[80]: byte=0xBD current_addr=0x0050
+📝 emit[81]: byte=0x00 current_addr=0x0051
+📝 emit[82]: byte=0x00 current_addr=0x0052
+📝 emit[83]: byte=0xBD current_addr=0x0053
+📝 emit[84]: byte=0x00 current_addr=0x0054
+📝 emit[85]: byte=0x00 current_addr=0x0055
+📝 emit[86]: byte=0xCC current_addr=0x0056
+📝 emit[87]: byte=0xFF current_addr=0x0057
+📝 emit[88]: byte=0xBA current_addr=0x0058
+📝 emit[89]: byte=0xFD current_addr=0x0059
+DEBUG emit_word: word=0xC880 at offset=0x005A
+📝 emit[90]: byte=0xC8 current_addr=0x005A
+📝 emit[91]: byte=0x80 current_addr=0x005B
+📝 emit[92]: byte=0xFC current_addr=0x005C
+DEBUG emit_word: word=0xC880 at offset=0x005D
+📝 emit[93]: byte=0xC8 current_addr=0x005D
+📝 emit[94]: byte=0x80 current_addr=0x005E
+📝 emit[95]: byte=0xFD current_addr=0x005F
+📝 emit[96]: byte=0xCF current_addr=0x0060
+📝 emit[97]: byte=0xE0 current_addr=0x0061
+📝 emit[98]: byte=0xCC current_addr=0x0062
+📝 emit[99]: byte=0x00 current_addr=0x0063
+DEBUG emit_word: word=0xC880 at offset=0x0066
+DEBUG emit_word: word=0xC880 at offset=0x0069
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x0075 (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x007B
+DEBUG emit_word: word=0xC880 at offset=0x0081
+DEBUG emit_word: word=0xC880 at offset=0x0084
+DEBUG emit_word: word=0xC880 at offset=0x008D
+DEBUG emit_word: word=0xC880 at offset=0x0090
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x009C (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x00A2
+🔍 [BEFORE RESOLVE] current_address=0x00A5, code.len()=165, org=0
+   ASM snippet (first 200 chars): ; VPy M6809 Assembly (Vectrex) | ; ROM: 524288 bytes | ; Multibank cartridge: 32 banks (16KB each) | ; Helpers bank: 31 (fixed bank at $4000-$7FFF) | 
+🔗 Symbol 'MAIN' at bin_offset=0x0036 resolved to addr=0x0038
+   📝 Writing to self.code[0x0036] = 0x0038 (code.len()=165)
+🔗 Symbol 'LOOP_BODY' at bin_offset=0x004B resolved to addr=0x0050
+   📝 Writing to self.code[0x004B] = 0x0050 (code.len()=165)
+🔍 [MAIN_LOOP DEBUG] Resolving branch:
+   symbol: MAIN.MAIN_LOOP
+   current_address: 0x00A5
+   code.len(): 165
+   org (calculated): 0x0000
+   sym_ref.offset: 78
+   sym_ref.ref_size: 2
+   target_addr: 0x004A
+   effective_target: 0x004A
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x0075 resolved to addr=0x4000
+   📝 Writing to self.code[0x0075] = 0x4000 (code.len()=165)
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x009C resolved to addr=0x4000
+   📝 Writing to self.code[0x009C] = 0x4000 (code.len()=165)
+🔍 [AFTER RESOLVE] current_address=0x00A5, code.len()=165
+       Bank #0: 4 symbols
+       Bank #0: 4 symbols (4 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #1: 0 symbols
+       Bank #1: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #2: 0 symbols
+       Bank #2: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #3: 0 symbols
+       Bank #3: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #4: 0 symbols
+       Bank #4: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #5: 0 symbols
+       Bank #5: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #6: 0 symbols
+       Bank #6: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #7: 0 symbols
+       Bank #7: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #8: 0 symbols
+       Bank #8: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #9: 0 symbols
+       Bank #9: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #10: 0 symbols
+       Bank #10: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #11: 0 symbols
+       Bank #11: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #12: 0 symbols
+       Bank #12: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #13: 0 symbols
+       Bank #13: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #14: 0 symbols
+       Bank #14: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #15: 0 symbols
+       Bank #15: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #16: 0 symbols
+       Bank #16: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #17: 0 symbols
+       Bank #17: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #18: 0 symbols
+       Bank #18: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #19: 0 symbols
+       Bank #19: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #20: 0 symbols
+       Bank #20: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #21: 0 symbols
+       Bank #21: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #22: 0 symbols
+       Bank #22: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #23: 0 symbols
+       Bank #23: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #24: 0 symbols
+       Bank #24: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #25: 0 symbols
+       Bank #25: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #26: 0 symbols
+       Bank #26: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #27: 0 symbols
+       Bank #27: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #28: 0 symbols
+       Bank #28: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #29: 0 symbols
+       Bank #29: 0 symbols (0 after skipping)
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=12580 bytes, 530 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 526 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars): ; External symbols (cross-bank references and BIOS) | Vec_Expl_1 EQU $C858 | VIA_T1_CNT_HI EQU $D005 | Rise_Run_Len EQU $F603 | VIA_T1_LCH_LO EQU $D006
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+       Bank #30: 0 symbols
+       Bank #30: 0 symbols (0 after skipping)
+       Total symbols: 503 (new: 0)
+     - Extracted 503 global symbols
+       ✓ Symbol START found at 0x0022
+     - PASS 2: Assembling helper bank #31 with global symbols...
+       - Injected 503 symbols into helper bank ASM
+DEBUG: helper_bank_id=31 == helpers_bank (31)? YES → using ORG $4000
+🔍 [ASSEMBLE START] org=0x4000, asm_source_len=13650 bytes, 559 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $4000 processed at line 505 (offset: 0x0 → 0x0, delta=0)
+🏷️  Defining label 'VECTREX_PRINT_TEXT' at label_address=0x0000 (offset=0x0000, current_address=0x4000, org=0x4000)
+📝 emit[0]: byte=0xBD current_addr=0x4000
+📝 emit[1]: byte=0xF1 current_addr=0x4001
+📝 emit[2]: byte=0xAA current_addr=0x4002
+📝 emit[3]: byte=0xFE current_addr=0x4003
+📝 emit[4]: byte=0xCF current_addr=0x4004
+📝 emit[5]: byte=0xE4 current_addr=0x4005
+📝 emit[6]: byte=0xB6 current_addr=0x4006
+📝 emit[7]: byte=0xCF current_addr=0x4007
+📝 emit[8]: byte=0xE3 current_addr=0x4008
+📝 emit[9]: byte=0xF6 current_addr=0x4009
+📝 emit[10]: byte=0xCF current_addr=0x400A
+📝 emit[11]: byte=0xE1 current_addr=0x400B
+📝 emit[12]: byte=0xBD current_addr=0x400C
+📝 emit[13]: byte=0x00 current_addr=0x400D
+📝 emit[14]: byte=0x00 current_addr=0x400E
+📝 emit[15]: byte=0xBD current_addr=0x400F
+📝 emit[16]: byte=0xF1 current_addr=0x4010
+📝 emit[17]: byte=0xAF current_addr=0x4011
+📝 emit[18]: byte=0x39 current_addr=0x4012
+🏷️  Defining label 'PRINT_TEXT_STR_68624562' at label_address=0x0013 (offset=0x0013, current_address=0x4013, org=0x4000)
+📝 emit[19]: byte=0x48 current_addr=0x4013
+📝 emit[20]: byte=0x45 current_addr=0x4014
+📝 emit[21]: byte=0x4C current_addr=0x4015
+📝 emit[22]: byte=0x4C current_addr=0x4016
+📝 emit[23]: byte=0x4F current_addr=0x4017
+📝 emit[24]: byte=0x80 current_addr=0x4018
+🏷️  Defining label 'PRINT_TEXT_STR_82781042' at label_address=0x0019 (offset=0x0019, current_address=0x4019, org=0x4000)
+📝 emit[25]: byte=0x57 current_addr=0x4019
+📝 emit[26]: byte=0x4F current_addr=0x401A
+📝 emit[27]: byte=0x52 current_addr=0x401B
+📝 emit[28]: byte=0x4C current_addr=0x401C
+📝 emit[29]: byte=0x44 current_addr=0x401D
+📝 emit[30]: byte=0x80 current_addr=0x401E
+🔍 [BEFORE RESOLVE] current_address=0x401F, code.len()=31, org=16384
+   ASM snippet (first 200 chars): Rot_VL_dft EQU $F637 | DRAW_GRID_VL EQU $FF9F | VEC_STR_PTR EQU $C82C | MOVE_MEM_A EQU $F683 | Vec_Run_Index EQU $C837
+🔍 [AFTER RESOLVE] current_address=0x401F, code.len()=31
+     - Using global symbol table: 503 entries
+DEBUG: Flattened Bank #31 content before write starts:   ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)\n\n\nVECTREX_PRINT_TEXT:\n    ; V...
+       [DEBUG] Flattened ASM written to /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/multibank_temp/multibank_flat.asm
+       [DEBUG] File size: 9445 bytes
+     - Assembling Bank #0 (2621 bytes code)...
+       Filtered 467 external symbols for Bank #0 (from 503 total)
+     [DEBUG] Bank #0: ASM contains 1 ORG directives
+     [DEBUG] Bank #0: ASM size = 14413 bytes, 589 lines
+     [DEBUG] Wrote debug ASM to /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/multibank_temp/bank_0_debug_before_asm.asm
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=14413 bytes, 589 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 35 (offset: 0x0 → 0x0, delta=0)
+📝 emit[0]: byte=0x67 current_addr=0x0000
+📝 emit[1]: byte=0x20 current_addr=0x0001
+📝 emit[2]: byte=0x47 current_addr=0x0002
+📝 emit[3]: byte=0x43 current_addr=0x0003
+📝 emit[4]: byte=0x45 current_addr=0x0004
+📝 emit[5]: byte=0x20 current_addr=0x0005
+📝 emit[6]: byte=0x32 current_addr=0x0006
+📝 emit[7]: byte=0x30 current_addr=0x0007
+📝 emit[8]: byte=0x32 current_addr=0x0008
+📝 emit[9]: byte=0x35 current_addr=0x0009
+📝 emit[10]: byte=0x80 current_addr=0x000A
+📝 emit[11]: byte=0xFD current_addr=0x000B
+📝 emit[12]: byte=0x0D current_addr=0x000C
+📝 emit[13]: byte=0xF8 current_addr=0x000D
+📝 emit[14]: byte=0x50 current_addr=0x000E
+📝 emit[15]: byte=0x20 current_addr=0x000F
+📝 emit[16]: byte=0xBB current_addr=0x0010
+📝 emit[17]: byte=0x4D current_addr=0x0011
+📝 emit[18]: byte=0x55 current_addr=0x0012
+📝 emit[19]: byte=0x4C current_addr=0x0013
+📝 emit[20]: byte=0x54 current_addr=0x0014
+📝 emit[21]: byte=0x49 current_addr=0x0015
+📝 emit[22]: byte=0x42 current_addr=0x0016
+📝 emit[23]: byte=0x41 current_addr=0x0017
+📝 emit[24]: byte=0x4E current_addr=0x0018
+📝 emit[25]: byte=0x4B current_addr=0x0019
+📝 emit[26]: byte=0x20 current_addr=0x001A
+📝 emit[27]: byte=0x50 current_addr=0x001B
+📝 emit[28]: byte=0x44 current_addr=0x001C
+📝 emit[29]: byte=0x42 current_addr=0x001D
+📝 emit[30]: byte=0x20 current_addr=0x001E
+📝 emit[31]: byte=0x54 current_addr=0x001F
+📝 emit[32]: byte=0x45 current_addr=0x0020
+📝 emit[33]: byte=0x53 current_addr=0x0021
+📝 emit[34]: byte=0x54 current_addr=0x0022
+📝 emit[35]: byte=0x80 current_addr=0x0023
+📝 emit[36]: byte=0x00 current_addr=0x0024
+🏷️  Defining label 'START' at label_address=0x0025 (offset=0x0025, current_address=0x0025, org=0x0000)
+📝 emit[37]: byte=0x86 current_addr=0x0025
+📝 emit[38]: byte=0xD0 current_addr=0x0026
+🔎 parse_and_emit: TFR 'A,DP' (full line: 'TFR A,DP')
+📝 emit[39]: byte=0x1F current_addr=0x0027
+📝 emit[40]: byte=0x8B current_addr=0x0028
+📝 emit[41]: byte=0x7F current_addr=0x0029
+DEBUG emit_word: word=0xC80E at offset=0x002A
+📝 emit[42]: byte=0xC8 current_addr=0x002A
+📝 emit[43]: byte=0x0E current_addr=0x002B
+📝 emit[44]: byte=0x86 current_addr=0x002C
+📝 emit[45]: byte=0x80 current_addr=0x002D
+📝 emit[46]: byte=0xB7 current_addr=0x002E
+📝 emit[47]: byte=0xD0 current_addr=0x002F
+📝 emit[48]: byte=0x04 current_addr=0x0030
+📝 emit[49]: byte=0x10 current_addr=0x0031
+📝 emit[50]: byte=0xCE current_addr=0x0032
+📝 emit[51]: byte=0xCB current_addr=0x0033
+📝 emit[52]: byte=0xFF current_addr=0x0034
+📝 emit[53]: byte=0x7E current_addr=0x0035
+📝 emit[54]: byte=0x00 current_addr=0x0036
+📝 emit[55]: byte=0x00 current_addr=0x0037
+🏷️  Defining label 'MAIN' at label_address=0x0038 (offset=0x0038, current_address=0x0038, org=0x0000)
+📝 emit[56]: byte=0xCC current_addr=0x0038
+📝 emit[57]: byte=0x00 current_addr=0x0039
+📝 emit[58]: byte=0x7F current_addr=0x003A
+📝 emit[59]: byte=0xFD current_addr=0x003B
+DEBUG emit_word: word=0xC880 at offset=0x003C
+📝 emit[60]: byte=0xC8 current_addr=0x003C
+📝 emit[61]: byte=0x80 current_addr=0x003D
+📝 emit[62]: byte=0xB6 current_addr=0x003E
+DEBUG emit_word: word=0xC881 at offset=0x003F
+📝 emit[63]: byte=0xC8 current_addr=0x003F
+📝 emit[64]: byte=0x81 current_addr=0x0040
+📝 emit[65]: byte=0xBD current_addr=0x0041
+📝 emit[66]: byte=0x00 current_addr=0x0042
+📝 emit[67]: byte=0x00 current_addr=0x0043
+📝 emit[68]: byte=0xCC current_addr=0x0044
+📝 emit[69]: byte=0x00 current_addr=0x0045
+📝 emit[70]: byte=0x00 current_addr=0x0046
+📝 emit[71]: byte=0xFD current_addr=0x0047
+DEBUG emit_word: word=0xC880 at offset=0x0048
+📝 emit[72]: byte=0xC8 current_addr=0x0048
+📝 emit[73]: byte=0x80 current_addr=0x0049
+📝 emit[74]: byte=0xBD current_addr=0x004A
+📝 emit[75]: byte=0x00 current_addr=0x004B
+📝 emit[76]: byte=0x00 current_addr=0x004C
+📝 emit[77]: byte=0x16 current_addr=0x004D
+📝 emit[78]: byte=0x00 current_addr=0x004E
+📝 emit[79]: byte=0x00 current_addr=0x004F
+🏷️  Defining label 'LOOP_BODY' at label_address=0x0050 (offset=0x0050, current_address=0x0050, org=0x0000)
+📝 emit[80]: byte=0xBD current_addr=0x0050
+📝 emit[81]: byte=0x00 current_addr=0x0051
+📝 emit[82]: byte=0x00 current_addr=0x0052
+📝 emit[83]: byte=0xBD current_addr=0x0053
+📝 emit[84]: byte=0x00 current_addr=0x0054
+📝 emit[85]: byte=0x00 current_addr=0x0055
+📝 emit[86]: byte=0xCC current_addr=0x0056
+📝 emit[87]: byte=0xFF current_addr=0x0057
+📝 emit[88]: byte=0xBA current_addr=0x0058
+📝 emit[89]: byte=0xFD current_addr=0x0059
+DEBUG emit_word: word=0xC880 at offset=0x005A
+📝 emit[90]: byte=0xC8 current_addr=0x005A
+📝 emit[91]: byte=0x80 current_addr=0x005B
+📝 emit[92]: byte=0xFC current_addr=0x005C
+DEBUG emit_word: word=0xC880 at offset=0x005D
+📝 emit[93]: byte=0xC8 current_addr=0x005D
+📝 emit[94]: byte=0x80 current_addr=0x005E
+📝 emit[95]: byte=0xFD current_addr=0x005F
+📝 emit[96]: byte=0xCF current_addr=0x0060
+📝 emit[97]: byte=0xE0 current_addr=0x0061
+📝 emit[98]: byte=0xCC current_addr=0x0062
+📝 emit[99]: byte=0x00 current_addr=0x0063
+DEBUG emit_word: word=0xC880 at offset=0x0066
+DEBUG emit_word: word=0xC880 at offset=0x0069
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x0075 (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x007B
+DEBUG emit_word: word=0xC880 at offset=0x0081
+DEBUG emit_word: word=0xC880 at offset=0x0084
+DEBUG emit_word: word=0xC880 at offset=0x008D
+DEBUG emit_word: word=0xC880 at offset=0x0090
+🔗 Adding symbol_ref 'VECTREX_PRINT_TEXT' at offset=0x009C (is_relative=false, ref_size=2)
+DEBUG emit_word: word=0xC880 at offset=0x00A2
+🔍 [BEFORE RESOLVE] current_address=0x00A5, code.len()=165, org=0
+   ASM snippet (first 200 chars): ; VPy M6809 Assembly (Vectrex) | ; ROM: 524288 bytes | ; Multibank cartridge: 32 banks (16KB each) | ; Helpers bank: 31 (fixed bank at $4000-$7FFF) | 
+🔗 Symbol 'MAIN' at bin_offset=0x0036 resolved to addr=0x0038
+   📝 Writing to self.code[0x0036] = 0x0038 (code.len()=165)
+🔗 Symbol 'LOOP_BODY' at bin_offset=0x004B resolved to addr=0x0050
+   📝 Writing to self.code[0x004B] = 0x0050 (code.len()=165)
+🔍 [MAIN_LOOP DEBUG] Resolving branch:
+   symbol: MAIN.MAIN_LOOP
+   current_address: 0x00A5
+   code.len(): 165
+   org (calculated): 0x0000
+   sym_ref.offset: 78
+   sym_ref.ref_size: 2
+   target_addr: 0x004A
+   effective_target: 0x004A
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x0075 resolved to addr=0x4000
+   📝 Writing to self.code[0x0075] = 0x4000 (code.len()=165)
+🔗 Symbol 'VECTREX_PRINT_TEXT' at bin_offset=0x009C resolved to addr=0x4000
+   📝 Writing to self.code[0x009C] = 0x4000 (code.len()=165)
+🔍 [AFTER RESOLVE] current_address=0x00A5, code.len()=165
+     [DEBUG] Bank #0: START symbol at offset 0x0025 (37 bytes)
+     - Assembling Bank #1 (183 bytes code)...
+       Filtered 467 external symbols for Bank #1 (from 503 total)
+     [DEBUG] Bank #1: ASM contains 1 ORG directives
+     [DEBUG] Bank #1: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #2 (183 bytes code)...
+       Filtered 467 external symbols for Bank #2 (from 503 total)
+     [DEBUG] Bank #2: ASM contains 1 ORG directives
+     [DEBUG] Bank #2: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #3 (183 bytes code)...
+       Filtered 467 external symbols for Bank #3 (from 503 total)
+     [DEBUG] Bank #3: ASM contains 1 ORG directives
+     [DEBUG] Bank #3: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #4 (183 bytes code)...
+       Filtered 467 external symbols for Bank #4 (from 503 total)
+     [DEBUG] Bank #4: ASM contains 1 ORG directives
+     [DEBUG] Bank #4: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #5 (183 bytes code)...
+       Filtered 467 external symbols for Bank #5 (from 503 total)
+     [DEBUG] Bank #5: ASM contains 1 ORG directives
+     [DEBUG] Bank #5: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #6 (183 bytes code)...
+       Filtered 467 external symbols for Bank #6 (from 503 total)
+     [DEBUG] Bank #6: ASM contains 1 ORG directives
+     [DEBUG] Bank #6: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #7 (183 bytes code)...
+       Filtered 467 external symbols for Bank #7 (from 503 total)
+     [DEBUG] Bank #7: ASM contains 1 ORG directives
+     [DEBUG] Bank #7: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #8 (183 bytes code)...
+       Filtered 467 external symbols for Bank #8 (from 503 total)
+     [DEBUG] Bank #8: ASM contains 1 ORG directives
+     [DEBUG] Bank #8: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #9 (183 bytes code)...
+       Filtered 467 external symbols for Bank #9 (from 503 total)
+     [DEBUG] Bank #9: ASM contains 1 ORG directives
+     [DEBUG] Bank #9: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #10 (183 bytes code)...
+       Filtered 467 external symbols for Bank #10 (from 503 total)
+     [DEBUG] Bank #10: ASM contains 1 ORG directives
+     [DEBUG] Bank #10: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #11 (183 bytes code)...
+       Filtered 467 external symbols for Bank #11 (from 503 total)
+     [DEBUG] Bank #11: ASM contains 1 ORG directives
+     [DEBUG] Bank #11: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #12 (183 bytes code)...
+       Filtered 467 external symbols for Bank #12 (from 503 total)
+     [DEBUG] Bank #12: ASM contains 1 ORG directives
+     [DEBUG] Bank #12: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #13 (183 bytes code)...
+       Filtered 467 external symbols for Bank #13 (from 503 total)
+     [DEBUG] Bank #13: ASM contains 1 ORG directives
+     [DEBUG] Bank #13: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #14 (183 bytes code)...
+       Filtered 467 external symbols for Bank #14 (from 503 total)
+     [DEBUG] Bank #14: ASM contains 1 ORG directives
+     [DEBUG] Bank #14: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #15 (183 bytes code)...
+       Filtered 467 external symbols for Bank #15 (from 503 total)
+     [DEBUG] Bank #15: ASM contains 1 ORG directives
+     [DEBUG] Bank #15: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #16 (183 bytes code)...
+       Filtered 467 external symbols for Bank #16 (from 503 total)
+     [DEBUG] Bank #16: ASM contains 1 ORG directives
+     [DEBUG] Bank #16: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #17 (183 bytes code)...
+       Filtered 467 external symbols for Bank #17 (from 503 total)
+     [DEBUG] Bank #17: ASM contains 1 ORG directives
+     [DEBUG] Bank #17: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #18 (183 bytes code)...
+       Filtered 467 external symbols for Bank #18 (from 503 total)
+     [DEBUG] Bank #18: ASM contains 1 ORG directives
+     [DEBUG] Bank #18: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #19 (183 bytes code)...
+       Filtered 467 external symbols for Bank #19 (from 503 total)
+     [DEBUG] Bank #19: ASM contains 1 ORG directives
+     [DEBUG] Bank #19: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #20 (183 bytes code)...
+       Filtered 467 external symbols for Bank #20 (from 503 total)
+     [DEBUG] Bank #20: ASM contains 1 ORG directives
+     [DEBUG] Bank #20: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #21 (183 bytes code)...
+       Filtered 467 external symbols for Bank #21 (from 503 total)
+     [DEBUG] Bank #21: ASM contains 1 ORG directives
+     [DEBUG] Bank #21: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #22 (183 bytes code)...
+       Filtered 467 external symbols for Bank #22 (from 503 total)
+     [DEBUG] Bank #22: ASM contains 1 ORG directives
+     [DEBUG] Bank #22: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #23 (183 bytes code)...
+       Filtered 467 external symbols for Bank #23 (from 503 total)
+     [DEBUG] Bank #23: ASM contains 1 ORG directives
+     [DEBUG] Bank #23: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #24 (183 bytes code)...
+       Filtered 467 external symbols for Bank #24 (from 503 total)
+     [DEBUG] Bank #24: ASM contains 1 ORG directives
+     [DEBUG] Bank #24: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #25 (183 bytes code)...
+       Filtered 467 external symbols for Bank #25 (from 503 total)
+     [DEBUG] Bank #25: ASM contains 1 ORG directives
+     [DEBUG] Bank #25: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #26 (183 bytes code)...
+       Filtered 467 external symbols for Bank #26 (from 503 total)
+     [DEBUG] Bank #26: ASM contains 1 ORG directives
+     [DEBUG] Bank #26: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #27 (183 bytes code)...
+       Filtered 467 external symbols for Bank #27 (from 503 total)
+     [DEBUG] Bank #27: ASM contains 1 ORG directives
+     [DEBUG] Bank #27: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #28 (183 bytes code)...
+       Filtered 467 external symbols for Bank #28 (from 503 total)
+     [DEBUG] Bank #28: ASM contains 1 ORG directives
+     [DEBUG] Bank #28: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #29 (183 bytes code)...
+       Filtered 467 external symbols for Bank #29 (from 503 total)
+     [DEBUG] Bank #29: ASM contains 1 ORG directives
+     [DEBUG] Bank #29: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Assembling Bank #30 (183 bytes code)...
+       Filtered 467 external symbols for Bank #30 (from 503 total)
+     [DEBUG] Bank #30: ASM contains 1 ORG directives
+     [DEBUG] Bank #30: ASM size = 1259 bytes, 24 lines
+🔍 [ASSEMBLE START] org=0x0000, asm_source_len=1259 bytes, 24 lines, 1 ORG directives
+✓ Loaded BIOS symbols from VECTREX.I (ide/frontend/public/include/VECTREX.I)
+✓ ORG $0000 processed at line 20 (offset: 0x0 → 0x0, delta=0)
+🔍 [BEFORE RESOLVE] current_address=0x0000, code.len()=0, org=0
+   ASM snippet (first 200 chars):  | ; === RAM VARIABLE DEFINITIONS === | ;*************************************************************************** | RESULT               EQU $C880+$00   ; Main result temporary (2 bytes) | TMPPTR          
+🔍 [AFTER RESOLVE] current_address=0x0000, code.len()=0
+     - Using preassembled helper bank #31
+     ℹ Multibank ROM: Header assembled in Bank #0 (from backend codegen)
+     ✓ Multi-bank ROM written: 512 KB (524288 bytes)
+     [DEBUG] Temp ASM files kept in: "/Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/multibank_temp"
+  ✓ Phase 6.7 SUCCESS: Multi-bank binary written to /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/test_multibank_pdb.bin
+     Total size: 512 KB (32 banks × 16 KB)
+
+✓ BUILD SUCCESS (multibank): 512 KB written to /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/test_multibank_pdb.bin
+[STATUS] ✓ Compilation Phase 1: Checking ASM generation...
+ERROR: ASM file not generated: /Users/daniel/projects/vectrex-pseudo-python/examples/test_multibank_pdb/bin/test_multibank_pdb.asm[STATUS] ❌ Phase 1 FAILED: ASM generation failed

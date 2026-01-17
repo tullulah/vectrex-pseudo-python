@@ -21,79 +21,9 @@ pub mod math_extended;
 pub mod drawing;
 pub mod level;
 pub mod utilities;
+pub mod ram_layout;
 
 use vpy_parser::{Item, Expr, Stmt, CallInfo};
-use std::collections::HashSet;
-
-// Determine which RAM variables are needed based on used helpers
-fn get_needed_ram_vars(needed_helpers: &HashSet<String>, is_multibank: bool) -> HashSet<String> {
-    let mut vars = HashSet::new();
-    
-    // Always needed
-    vars.insert("RESULT".to_string());
-    
-    // Multibank needs bank tracking
-    if is_multibank {
-        vars.insert("CURRENT_ROM_BANK".to_string());
-    }
-    
-    // Helper-specific variables
-    if needed_helpers.contains("PRINT_TEXT") || needed_helpers.contains("PRINT_NUMBER") {
-        vars.insert("VAR_ARG0".to_string());
-        vars.insert("VAR_ARG1".to_string());
-        vars.insert("VAR_ARG2".to_string());
-    }
-    
-    if needed_helpers.contains("PRINT_NUMBER") {
-        vars.insert("NUM_STR".to_string());
-    }
-    
-    if needed_helpers.contains("DRAW_CIRCLE_RUNTIME") {
-        vars.insert("DRAW_CIRCLE_XC".to_string());
-        vars.insert("DRAW_CIRCLE_YC".to_string());
-        vars.insert("DRAW_CIRCLE_DIAM".to_string());
-        vars.insert("DRAW_CIRCLE_INTENSITY".to_string());
-        vars.insert("DRAW_CIRCLE_TEMP".to_string());
-        vars.insert("TMPPTR".to_string());
-    }
-    
-    if needed_helpers.contains("DRAW_RECT_RUNTIME") {
-        vars.insert("DRAW_RECT_X".to_string());
-        vars.insert("DRAW_RECT_Y".to_string());
-        vars.insert("DRAW_RECT_WIDTH".to_string());
-        vars.insert("DRAW_RECT_HEIGHT".to_string());
-        vars.insert("DRAW_RECT_INTENSITY".to_string());
-    }
-    
-    if needed_helpers.contains("DRAW_LINE_WRAPPER") {
-        vars.insert("VLINE_DX_16".to_string());
-        vars.insert("VLINE_DY_16".to_string());
-        vars.insert("VLINE_DX".to_string());
-        vars.insert("VLINE_DY".to_string());
-        vars.insert("VLINE_DY_REMAINING".to_string());
-        vars.insert("TMPPTR".to_string());
-    }
-    
-    if needed_helpers.contains("SHOW_LEVEL_RUNTIME") {
-        vars.insert("LEVEL_PTR".to_string());
-        vars.insert("LEVEL_WIDTH".to_string());
-        vars.insert("LEVEL_HEIGHT".to_string());
-        vars.insert("LEVEL_TILE_SIZE".to_string());
-        vars.insert("TMPPTR".to_string());
-        vars.insert("TMPPTR2".to_string());
-    }
-    
-    if needed_helpers.contains("FADE_IN_RUNTIME") || needed_helpers.contains("FADE_OUT_RUNTIME") {
-        vars.insert("FRAME_COUNTER".to_string());
-        vars.insert("CURRENT_INTENSITY".to_string());
-    }
-    
-    if needed_helpers.contains("RAND_HELPER") || needed_helpers.contains("RAND_RANGE_HELPER") {
-        vars.insert("RAND_SEED".to_string());
-    }
-    
-    vars
-}
 
 /// Check if trigonometric functions (SIN, COS, TAN) are used in statements
 fn check_trig_usage(stmts: &[Stmt]) -> bool {
@@ -170,10 +100,11 @@ pub fn generate_m6809_asm(
         asm.push_str("; ================================================\n");
     }
     
-    // Start of ROM
+    // NOW start of ROM code
+    asm.push_str("\n");
     asm.push_str("    ORG $0000\n\n");
     
-    // Include VECTREX.I
+    // Include VECTREX.I for BIOS definitions
     asm.push_str(";***************************************************************************\n");
     asm.push_str("; DEFINE SECTION\n");
     asm.push_str(";***************************************************************************\n");
@@ -182,88 +113,6 @@ pub fn generate_m6809_asm(
     // Generate Vectrex header
     let header_asm = header::generate_header(title, &module.meta)?;
     asm.push_str(&header_asm);
-    
-    // Analyze which helpers are needed (for conditional RAM variables)
-    let needed_helpers = helpers::analyze_module_helpers(module);
-    let needed_ram_vars = get_needed_ram_vars(&needed_helpers, is_multibank);
-    eprintln!("[DEBUG RAM] Needed {} RAM variables: {:?}", needed_ram_vars.len(), needed_ram_vars);
-    
-    // RAM variables (conditional based on usage)
-    asm.push_str(";***************************************************************************\n");
-    asm.push_str("; SYSTEM RAM VARIABLES\n");
-    asm.push_str(";***************************************************************************\n");
-    
-    if needed_ram_vars.contains("CURRENT_ROM_BANK") {
-        asm.push_str("CURRENT_ROM_BANK EQU $C880\n");
-    }
-    if needed_ram_vars.contains("RESULT") {
-        asm.push_str("RESULT EQU $CF00\n");
-    }
-    if needed_ram_vars.contains("TMPPTR") {
-        asm.push_str("TMPPTR EQU $CF02\n");
-    }
-    if needed_ram_vars.contains("TMPPTR2") {
-        asm.push_str("TMPPTR2 EQU $CF04\n");
-    }
-    if needed_ram_vars.contains("NUM_STR") {
-        asm.push_str("NUM_STR EQU $CF06   ; 2-byte buffer for PRINT_NUMBER hex output\n");
-    }
-    if needed_ram_vars.contains("RAND_SEED") {
-        asm.push_str("RAND_SEED EQU $CF08 ; 2-byte random seed for RAND()\n");
-    }
-    
-    // Drawing builtins parameters
-    if needed_ram_vars.contains("DRAW_CIRCLE_XC") {
-        asm.push_str("\n; Drawing builtins parameters (bytes in RAM)\n");
-        asm.push_str("DRAW_CIRCLE_XC EQU $CF0A\n");
-        asm.push_str("DRAW_CIRCLE_YC EQU $CF0B\n");
-        asm.push_str("DRAW_CIRCLE_DIAM EQU $CF0C\n");
-        asm.push_str("DRAW_CIRCLE_INTENSITY EQU $CF0D\n");
-        asm.push_str("DRAW_CIRCLE_TEMP EQU $CF0E ; 6 bytes for runtime calculations\n");
-    }
-    
-    if needed_ram_vars.contains("DRAW_RECT_X") {
-        asm.push_str("\nDRAW_RECT_X EQU $CF14\n");
-        asm.push_str("DRAW_RECT_Y EQU $CF15\n");
-        asm.push_str("DRAW_RECT_WIDTH EQU $CF16\n");
-        asm.push_str("DRAW_RECT_HEIGHT EQU $CF17\n");
-        asm.push_str("DRAW_RECT_INTENSITY EQU $CF18\n");
-    }
-    
-    if needed_ram_vars.contains("VLINE_DX_16") {
-        asm.push_str("\n; DRAW_LINE helper variables (16-bit deltas + 8-bit clamped + remaining)\n");
-        asm.push_str("VLINE_DX_16 EQU $CF19         ; 16-bit dx (2 bytes)\n");
-        asm.push_str("VLINE_DY_16 EQU $CF1B         ; 16-bit dy (2 bytes)\n");
-        asm.push_str("VLINE_DX EQU $CF1D            ; 8-bit clamped dx (1 byte)\n");
-        asm.push_str("VLINE_DY EQU $CF1E            ; 8-bit clamped dy (1 byte)\n");
-        asm.push_str("VLINE_DY_REMAINING EQU $CF1F  ; Remaining dy for segment 2 (2 bytes)\n");
-    }
-    
-    if needed_ram_vars.contains("LEVEL_PTR") {
-        asm.push_str("\n; Level system variables\n");
-        asm.push_str("LEVEL_PTR EQU $CF20           ; Pointer to current level data (2 bytes)\n");
-        asm.push_str("LEVEL_WIDTH EQU $CF22          ; Level width in tiles (1 byte)\n");
-        asm.push_str("LEVEL_HEIGHT EQU $CF23         ; Level height in tiles (1 byte)\n");
-        asm.push_str("LEVEL_TILE_SIZE EQU $CF24      ; Tile size in pixels (1 byte)\n");
-    }
-    
-    if needed_ram_vars.contains("FRAME_COUNTER") {
-        asm.push_str("\n; Fade effects\n");
-        asm.push_str("FRAME_COUNTER EQU $CF26        ; Frame counter (2 bytes)\n");
-        asm.push_str("CURRENT_INTENSITY EQU $CF28    ; Current intensity for fade effects (1 byte)\n");
-    }
-    
-    if needed_ram_vars.contains("VAR_ARG0") {
-        asm.push_str("\n; Function argument slots (16-bit each, 3 slots = 6 bytes)\n");
-        asm.push_str("VAR_ARG0 EQU $CFE0+0\n");
-        asm.push_str("VAR_ARG1 EQU $CFE0+2\n");
-        asm.push_str("VAR_ARG2 EQU $CFE0+4\n");
-    }
-    asm.push_str("\n");
-    
-    // Generate user variables
-    let vars_asm = variables::generate_variables(module)?;
-    asm.push_str(&vars_asm);
     
     // Generate code section
     asm.push_str(";***************************************************************************\n");
@@ -318,8 +167,12 @@ pub fn generate_m6809_asm(
         asm.push_str(&format!("\n; ================================================\n"));
         asm.push_str(&format!("; BANK #{} - 0 function(s) [HELPERS ONLY]\n", helpers_bank));
         asm.push_str(&format!("; ================================================\n"));
-        asm.push_str("    ORG $0000  ; Sequential bank model\n");
+        asm.push_str("    ORG $4000  ; Fixed bank (always visible at $4000-$7FFF)\n");
         asm.push_str(&format!("    ; Runtime helpers (accessible from all banks)\n\n"));
+        
+        // NOTE: VAR_ARG0-4 are already defined in SYSTEM RAM VARIABLES section above
+        // (before bank split). No need to redefine them here in Bank #31.
+        
         let helpers_asm = helpers::generate_helpers(module)?;
         asm.push_str(&helpers_asm);
     }

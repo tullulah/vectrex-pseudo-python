@@ -118,6 +118,30 @@ impl MultiBankLinker {
     ///
     /// Returns: HashMap<bank_id, BankSection>
     pub fn split_asm_by_bank(&self, asm_content: &str) -> Result<HashMap<u8, BankSection>, String> {
+        eprintln!("🔧 split_asm_by_bank called with {} bytes", asm_content.len());
+        
+        // **FIRST PASS**: Collect all definitions (EQU) before processing banks
+        // This is necessary because definitions may appear AFTER bank code in the ASM
+        let mut definitions = String::new();
+        let mut in_defs = false;
+        for line in asm_content.lines() {
+            if line.contains("=== RAM VARIABLE DEFINITIONS") {
+                in_defs = true;
+                definitions.push_str(line);
+                definitions.push('\n');
+                continue;
+            }
+            if in_defs {
+                definitions.push_str(line);
+                definitions.push('\n');
+                // Stop at empty line or non-EQU line
+                if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
+                    in_defs = false;
+                }
+            }
+        }
+        eprintln!("📋 Collected definitions: {} bytes", definitions.len());
+        
         // Helper: detect start of shared data (arrays/consts) inside a bank block
         let extract_shared_tail = |code: &str| -> Option<String> {
             let markers = [
@@ -153,7 +177,7 @@ impl MultiBankLinker {
         let mut current_code = String::new();
         let mut header = String::new();
         let mut include_directives = String::new(); // INCLUDE directives - needed by ALL banks
-        let mut definitions = String::new(); // EQU definitions - needed by ALL banks
+        // NOTE: definitions already collected in FIRST PASS above
         let mut runtime_helpers = String::new(); // Runtime helper functions - needed by ALL banks
         let mut shared_tail = String::new(); // Data tail (arrays/consts) from last bank
         let mut data_bank_id: Option<u8> = None; // Bank that originally contained shared_tail
@@ -208,22 +232,16 @@ impl MultiBankLinker {
                 }
             }
             
-            // Detect RAM definitions section
+            // Skip definitions section - already collected in FIRST PASS
             if line.contains("=== RAM VARIABLE DEFINITIONS") {
                 in_definitions = true;
-                definitions.push_str(line);
-                definitions.push('\n');
                 continue;
             }
-            
-            // Collect EQU definitions
             if in_definitions {
-                definitions.push_str(line);
-                definitions.push('\n');
-                // End of definitions when we hit empty line or non-EQU line
+                // Skip until we hit empty line or non-EQU line
                 if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
                     in_definitions = false;
-                    definitions_ended = true;  // Mark that definitions section has ended
+                    definitions_ended = true;
                 }
                 continue;
             }
@@ -231,22 +249,47 @@ impl MultiBankLinker {
 
             // Detect bank header: "; BANK #N - M function(s)"
             if line.starts_with("; BANK #") {
+                eprintln!("DEBUG: Detected bank header: {}", line);
                 // If we're coming from a bank section, save it first
                 // NOTE: Don't add runtime_helpers here - they'll be added later at the end
                 if in_bank_section {
+                    eprintln!("DEBUG: Saving current bank_id={:?}", current_bank_id);
                     if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
+                        // Remove shared data (arrays) from non-helper banks
+                        let helpers_bank = (self.rom_bank_count - 1) as u8;
+                        eprintln!("DEBUG: bank_id={}, helpers_bank={}, removing_shared={}", bank_id, helpers_bank, bank_id != helpers_bank);
+                        let code_to_save = if bank_id != helpers_bank {
+                            // Find first array marker and cut everything from there
+                            let markers = [
+                                "; Array literal for variable",
+                                "; Const array literal",
+                                "; Inline array",
+                                "; CONST ARRAY",
+                                "; === CONST ARRAY",
+                            ];
+                            let cut_pos = markers.iter()
+                                .filter_map(|m| current_code.find(m))
+                                .min()
+                                .unwrap_or(current_code.len());
+                            
+                            eprintln!("     - Removing shared data from Bank #{} (cut at position {} / {})", bank_id, cut_pos, current_code.len());
+                            current_code[..cut_pos].to_string()
+                        } else {
+                            current_code.clone()
+                        };
+                        
                         // For Bank #0: prepend header (FCC/FCB directives), then INCLUDE, then definitions
                         // For other banks: prepend INCLUDE + definitions only
                         let full_code = if bank_id == 0 {
-                            format!("{}\n{}\n{}\n{}", header, include_directives, definitions, current_code)
+                            format!("{}\n{}\n{}\n{}", header, include_directives, definitions, code_to_save)
                         } else {
-                            format!("{}\n{}\n{}", include_directives, definitions, current_code)
+                            format!("{}\n{}\n{}", include_directives, definitions, code_to_save)
                         };
                         sections.insert(bank_id, BankSection {
                             bank_id,
                             org,
                             asm_code: full_code,
-                            size_estimate: current_code.len(),
+                            size_estimate: code_to_save.len(),
                         });
                     }
                 }
@@ -341,23 +384,51 @@ impl MultiBankLinker {
         // ===== SAVE LAST BANK WITH RUNTIME HELPERS =====
         if let (Some(bank_id), Some(org)) = (current_bank_id, current_org) {
             // Capture shared tail (arrays/consts) from bank_code_only
-            if let Some(tail) = extract_shared_tail(&bank_code_only) {
-                shared_tail = tail;
-                data_bank_id = Some(bank_id);
-            }
+            // AND remove it from the bank code (only helper bank #31 should have it)
+            let helpers_bank = (self.rom_bank_count - 1) as u8;
+            let bank_code_without_shared = if bank_id != helpers_bank {
+                // Find first array marker and cut everything from there
+                let markers = [
+                    "; Array literal for variable",
+                    "; Const array literal",
+                    "; Inline array",
+                    "; CONST ARRAY",
+                    "; === CONST ARRAY",
+                ];
+                let cut_pos = markers.iter()
+                    .filter_map(|m| bank_code_only.find(m))
+                    .min()
+                    .unwrap_or(bank_code_only.len());
+                
+                if cut_pos < bank_code_only.len() {
+                    eprintln!("     - Removing shared data from final Bank #{} (cut at position {})", bank_id, cut_pos);
+                    // Store tail for Bank #31 (helpers)
+                    shared_tail = bank_code_only[cut_pos..].to_string();
+                    data_bank_id = Some(bank_id);
+                }
+                
+                bank_code_only[..cut_pos].to_string()
+            } else {
+                // Helper bank - keep all array data
+                if let Some(tail) = extract_shared_tail(&bank_code_only) {
+                    shared_tail = tail;
+                    data_bank_id = Some(bank_id);
+                }
+                bank_code_only.clone()
+            };
             
-            // CRITICAL: Extract ORG directive from bank_code_only if present, and place it at the TOP
-            let (org_line, code_without_org) = if bank_code_only.trim_start().starts_with("ORG ") {
-                let first_newline = bank_code_only.find('\n').unwrap_or(bank_code_only.len());
-                let org_part = bank_code_only[..first_newline].to_string();
-                let code_part = if first_newline < bank_code_only.len() {
-                    bank_code_only[first_newline+1..].to_string()
+            // CRITICAL: Extract ORG directive from bank_code_without_shared if present, and place it at the TOP
+            let (org_line, code_without_org) = if bank_code_without_shared.trim_start().starts_with("ORG ") {
+                let first_newline = bank_code_without_shared.find('\n').unwrap_or(bank_code_without_shared.len());
+                let org_part = bank_code_without_shared[..first_newline].to_string();
+                let code_part = if first_newline < bank_code_without_shared.len() {
+                    bank_code_without_shared[first_newline+1..].to_string()
                 } else {
                     String::new()
                 };
                 (format!("{}\n", org_part), code_part)
             } else {
-                (String::new(), bank_code_only.clone())
+                (String::new(), bank_code_without_shared.clone())
             };
             
             // Reconstruct with ORG at the very beginning (before INCLUDE/definitions)
@@ -871,9 +942,10 @@ impl MultiBankLinker {
                             
                             let mut skipped_count = 0;
                             for (label, addr) in symbol_table {
-                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
-                                // Skip vector/music assets from non-helper banks (they're duplicates in the generated ASM)
-                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
+                                // CRITICAL: Asset vectors, arrays, and variables should ONLY come from bank #31
+                                // Skip vector/music assets and arrays from non-helper banks (they're duplicates in the generated ASM)
+                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC") 
+                                    || label.starts_with("ARRAY_") || label.starts_with("VAR_")) && bank_id as u8 != helper_bank_id {
                                     skipped_count += 1;
                                     continue;  // Skip this symbol - it's a duplicate
                                 }
@@ -885,11 +957,11 @@ impl MultiBankLinker {
                                 }
                             }
                             if skipped_count > 0 {
-                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
+                                eprintln!("       ⏭ Bank {}: Skipped {} shared symbols (assets/arrays/vars)", bank_id, skipped_count);
                             }
                             eprintln!("       Bank #{}: {} symbols", bank_id, sym_count);
                             if skipped_count > 0 {
-                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
+                                eprintln!("       ⏭ Bank {}: Skipped {} shared symbols (assets/arrays/vars)", bank_id, skipped_count);
                             }
                             eprintln!("       Bank #{}: {} symbols ({} after skipping)", bank_id, sym_count, sym_count - skipped_count);
                         }
@@ -906,8 +978,9 @@ impl MultiBankLinker {
                             };
                             
                             for (label, offset) in parsed_labels {
-                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
-                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
+                                // CRITICAL: Asset vectors, arrays, and variables should ONLY come from bank #31
+                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")
+                                    || label.starts_with("ARRAY_") || label.starts_with("VAR_")) && bank_id as u8 != helper_bank_id {
                                     continue;  // Skip this symbol - it's a duplicate
                                 }
                                 

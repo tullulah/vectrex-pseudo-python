@@ -1326,6 +1326,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             } // End of phase6_success check
             
             // Phase 6.7: Multi-bank binary generation (unified format: always .bin)
+            let mut multibank_symbols: Option<std::collections::HashMap<String, u16>> = None;
             if let Some(ref bank_config) = codegen::BankConfig::from_meta(&final_module.meta) {
                 if bank_config.is_enabled() {
                     eprintln!("Phase 6.7: Multi-bank binary generation...");
@@ -1339,12 +1340,14 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     );
                     
                     match linker.generate_multibank_rom(&out_path, &bin_path) {
-                        Ok(_) => {
+                        Ok(symbols) => {
                             eprintln!("✓ Phase 6.7 SUCCESS: Multi-bank binary written to {}", bin_path.display());
                             eprintln!("   Total size: {} KB ({} banks × {} KB)", 
                                 (bank_config.rom_total_size / 1024),
                                 bank_config.rom_bank_count,
                                 (bank_config.rom_bank_size / 1024));
+                            eprintln!("   Extracted {} symbols from all banks", symbols.len());
+                            multibank_symbols = Some(symbols);
                         },
                         Err(e) => {
                             eprintln!("⚠ Warning: Multi-bank ROM generation failed: {}", e);
@@ -1368,27 +1371,33 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     let bin_path = out_path.with_extension("bin");
                     let pdb_path = bin_path.with_extension("pdb");
                     
-                    // Update debug_info with addresses from bank_*.asm files
-                    // multibank_temp/ is in the same directory as the BIN file
-                    let multibank_temp = bin_path.parent()
-                        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Cannot find parent directory"))?
-                        .join("multibank_temp");
-                    
-                    if multibank_temp.exists() {
-                        eprintln!("   Parsing bank_*.asm files to update addresses...");
-                        // For now, use a default rom_bank_count of 32 (standard multibank)
-                        let rom_bank_count = 32usize;
-                        match update_debug_info_from_banks(dbg, &multibank_temp, rom_bank_count) {
-                            Ok(updated_count) => {
-                                eprintln!("   ✓ Updated {} symbols with bank addresses", updated_count);
-                            },
-                            Err(e) => {
-                                eprintln!("   ⚠ Warning: Failed to update addresses from banks: {}", e);
-                                eprintln!("   PDB will contain addresses from unified ASM (may be incorrect)");
+                    // CRITICAL FIX (2026-01-17): Use symbols returned from linker
+                    // instead of re-reading bank_*.asm files from disk
+                    if let Some(ref symbols) = multibank_symbols {
+                        eprintln!("   Using {} symbols from linker (no file scanning needed)", symbols.len());
+                        
+                        // Update debug_info with symbols from linker
+                        let mut updated_count = 0;
+                        for (symbol_name, address) in symbols {
+                            // Update function addresses
+                            for func in &mut dbg.functions {
+                                if func.name == *symbol_name {
+                                    func.address = Some(*address);
+                                    updated_count += 1;
+                                }
+                            }
+                            // Update variable addresses
+                            for var in &mut dbg.variables {
+                                if var.name == *symbol_name {
+                                    var.address = Some(*address);
+                                    updated_count += 1;
+                                }
                             }
                         }
+                        eprintln!("   ✓ Updated {} symbols with bank addresses", updated_count);
                     } else {
-                        eprintln!("   ⚠ Warning: multibank_temp/ not found, using unified ASM addresses");
+                        eprintln!("   ⚠ Warning: No symbols available from linker");
+                        eprintln!("   PDB will contain addresses from unified ASM (may be incorrect)");
                     }
                     
                     match dbg.to_json() {
