@@ -512,6 +512,8 @@ dependencies = [
  "vpy_assembler",
  "vpy_bank_allocator",
  "vpy_codegen",
+ "vpy_parser",
+ "vpy_unifier",
 ]
 
 [[package]]

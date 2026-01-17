@@ -754,12 +754,57 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         
         println!("  {} ASM written: {}", "✓".green(), asm_path.display());
         
-        // Phase 5: Binary generation (TODO - for now show message)
-        println!("\n{}", "Phase 5: Binary Generation".bright_cyan().bold());
-        println!("  {}", "⚠ Binary assembly not yet implemented in buildtools".yellow());
-        println!("  {}", "→ Use native M6809 assembler or lwasm manually".yellow());
+        // Phase 5: Parse ASM into bank sections
+        println!("\n{}", "Phase 5: Parse Bank Sections".bright_cyan().bold());
         
-        println!("\n{}", "✓ Compilation SUCCESS (ASM generated)".bright_green().bold());
+        let sections = vpy_assembler::parse_unified_asm(&generated.asm_source)
+            .context("Failed to parse unified ASM")?;
+        
+        if verbose {
+            println!("  Found {} bank section(s)", sections.len());
+            for section in &sections {
+                println!("    Bank {}: {} lines at ORG ${:04X}", 
+                    section.bank_id, section.asm_lines.len(), section.org_address);
+            }
+        }
+        
+        // Phase 6: Assemble banks
+        println!("\n{}", "Phase 6: Assemble Banks".bright_cyan().bold());
+        
+        // Set include directory for VECTREX.I (IDE has it in public/include/)
+        let include_dir = std::path::PathBuf::from("ide/frontend/public/include");
+        vpy_assembler::set_include_dir(Some(include_dir));
+        
+        let binaries = vpy_assembler::assemble_banks(sections)
+            .context("Failed to assemble banks")?;
+        
+        if verbose {
+            for binary in &binaries {
+                println!("    Bank {}: {} bytes", binary.bank_id, binary.bytes.len());
+            }
+        }
+        println!("  {} Assembled {} bank(s)", "✓".green(), binaries.len());
+        
+        // Phase 7: Link ROM
+        println!("\n{}", "Phase 7: Link ROM".bright_cyan().bold());
+        
+        let rom = vpy_linker::link_unified_asm(&generated, binaries)
+            .context("Failed to link ROM")?;
+        
+        println!("  {} ROM size: {} bytes", "✓".green(), rom.rom_data.len());
+        println!("  {} Symbols: {}", "✓".green(), rom.symbols.len());
+        
+        // Phase 8: Write binary
+        println!("\n{}", "Phase 8: Write Binary".bright_cyan().bold());
+        
+        let output_path = output.unwrap_or_else(|| build_dir.join(format!("{}.bin", project_name)));
+        
+        std::fs::write(&output_path, &rom.rom_data)
+            .context("Failed to write binary")?;
+        
+        println!("  {} Binary written: {}", "✓".green(), output_path.display());
+        
+        println!("\n{}", format!("✓ BUILD SUCCESS: {} bytes", rom.rom_data.len()).bright_green().bold());
         
         return Ok(());
     }

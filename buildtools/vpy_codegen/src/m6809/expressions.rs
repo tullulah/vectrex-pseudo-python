@@ -167,10 +167,19 @@ fn emit_compare(left: &Expr, op: CmpOp, right: &Expr, out: &mut String) {
 }
 
 fn emit_index(array: &Expr, index: &Expr, out: &mut String) {
-    // Evaluate array (gets address)
-    emit_simple_expr(array, out);
-    out.push_str("    LDX RESULT  ; Array base address\n");
-    out.push_str("    PSHS X\n");
+    // For array indexing, we need the DATA address, not the variable pointer
+    // If array is a simple identifier, load DATA address directly
+    if let Expr::Ident(id) = array {
+        // Direct array access - load DATA address
+        // IMPORTANT: Name already comes uppercase from unifier
+        out.push_str(&format!("    LDX #VAR_{}_DATA  ; Array data address\n", id.name));
+        out.push_str("    PSHS X\n");
+    } else {
+        // Complex array expression - evaluate it
+        emit_simple_expr(array, out);
+        out.push_str("    LDX RESULT  ; Array base address\n");
+        out.push_str("    PSHS X\n");
+    }
     
     // Evaluate index
     emit_simple_expr(index, out);
