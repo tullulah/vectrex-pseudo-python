@@ -80,6 +80,10 @@ impl BinaryEmitter {
 
     /// Emite un byte y avanza la dirección actual
     pub fn emit(&mut self, byte: u8) {
+        // DEBUG: Log first 100 bytes to see header emission
+        if self.code.len() < 100 {
+            eprintln!("📝 emit[{}]: byte=0x{:02X} current_addr=0x{:04X}", self.code.len(), byte, self.current_address);
+        }
         self.code.push(byte);
         self.current_address = self.current_address.wrapping_add(1);
     }
@@ -96,11 +100,26 @@ impl BinaryEmitter {
 
     /// Define una etiqueta en la posición actual
     pub fn define_label(&mut self, label: &str) {
-        if label == "START" || label == "MAIN" || label == "LOOP_BODY" {
-            eprintln!("🏷️  Defining label '{}' at current_address=0x{:04X} (offset=0x{:04X})", 
-                label, self.current_address, self.code.len());
+        // CRITICAL FIX: Use offset-based address calculation to avoid ORG wrapping issues
+        // With ORG 0xFFF0, current_address wraps around, but labels should use absolute addresses
+        // Example: offset 0x0071 should have address 0x0071, not 0x0061 (0xFFF0 + 0x0071 wrapped)
+        let org = self.current_address.wrapping_sub(self.code.len() as u16);
+        let label_address = if org == 0 {
+            // Normal case: ORG 0x0000, address = current_address
+            self.current_address
+        } else {
+            // Cartridge case: ORG 0xFFF0, address = offset (ignore ORG for label addresses)
+            self.code.len() as u16
+        };
+        
+        // DEBUG: Log all important labels and PRINT_TEXT strings + VECTREX helpers
+        let should_log = label == "START" || label == "MAIN" || label == "LOOP_BODY" 
+            || label.starts_with("PRINT_TEXT_STR_") || label.starts_with("VECTREX_");
+        if should_log {
+            eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X}, org=0x{:04X})", 
+                label, label_address, self.code.len(), self.current_address, org);
         }
-        self.symbols.insert(label.to_string(), self.current_address);
+        self.symbols.insert(label.to_string(), label_address);
     }
 
     /// Registra referencia a símbolo para resolver en segunda pasada
@@ -110,6 +129,12 @@ impl BinaryEmitter {
 
     /// Registra referencia a símbolo con addend (e.g. LABEL+1)
     pub fn add_symbol_ref_with_addend(&mut self, symbol: &str, is_relative: bool, ref_size: u8, addend: i16) {
+        // DEBUG: Log JSR to VECTREX helpers
+        let should_log = symbol.starts_with("PRINT_TEXT_STR_") || symbol.starts_with("VECTREX_");
+        if should_log {
+            eprintln!("🔗 Adding symbol_ref '{}' at offset=0x{:04X} (is_relative={}, ref_size={})", 
+                symbol, self.code.len(), is_relative, ref_size);
+        }
         // CRITICAL FIX: Reject single-character symbols that are register names
         if symbol.len() == 1 {
             let c = symbol.chars().next().unwrap().to_ascii_uppercase();
@@ -118,6 +143,12 @@ impl BinaryEmitter {
                 eprintln!("❌ BUG: Attempted to add register name '{}' as symbol at offset={} - REJECTED", symbol, self.current_offset());
                 return; // Don't add invalid symbol refs
             }
+        }
+        
+        // DEBUG: Log PRINT_TEXT string references
+        if symbol.starts_with("PRINT_TEXT_STR_") {
+            eprintln!("🔗 Adding symbol_ref '{}' at offset=0x{:04X} (is_relative={}, ref_size={})", 
+                symbol, self.current_offset(), is_relative, ref_size);
         }
         
         self.symbol_refs.push(SymbolRef {
@@ -601,13 +632,6 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
-    /// EORB immediate (opcode 0xC8)
-    pub fn eorb_immediate(&mut self, value: u8) {
-        self.record_line_mapping();
-        self.emit(0xC8);
-        self.emit(value);
-    }
-
     /// CLRA (opcode 0x4F)
     pub fn clra(&mut self) {
         self.record_line_mapping();
@@ -703,15 +727,6 @@ impl BinaryEmitter {
     pub fn negb(&mut self) {
         self.record_line_mapping();
         self.emit(0x50);
-    }
-
-    /// NEGD (16-bit negate D) - Negate D register (A:B as 16-bit)
-    /// Implementation: NEGA; SBCB #0 (negate high byte, then negate low byte with borrow)
-    pub fn negd(&mut self) {
-        self.record_line_mapping();
-        self.nega();          // Negate A
-        self.emit(0xC2);      // SBCB #0 (subtract 0 with carry from B)
-        self.emit(0x00);
     }
 
     /// COMA (opcode 0x43) - Complement A (one's complement)
@@ -1266,7 +1281,7 @@ impl BinaryEmitter {
             if sym_ref.is_relative {
                 // Branch relativo: calcular offset desde la siguiente instrucción
                 // Fórmula correcta: next_addr = branch_instruction_addr + opcode_size + ref_size (offset bytes)
-                let org = self.current_address - self.code.len() as u16;
+                let org = self.current_address.wrapping_sub(self.code.len() as u16);
                 
                 // Detectar si es long branch (opcode 2 bytes) o short branch (opcode 1 byte)
                 // Long branches: LBEQ, LBNE, LBCC, LBCS, etc. (opcode = 0x10 0x2x)
@@ -1275,7 +1290,7 @@ impl BinaryEmitter {
                 
                 // CRÍTICO: sym_ref.offset apunta al OFFSET FIELD, no al inicio del opcode
                 // Por eso necesitamos restar opcode_size para obtener el inicio real del branch
-                let branch_instruction_addr = org + sym_ref.offset as u16 - opcode_size;
+                let branch_instruction_addr = org.wrapping_add(sym_ref.offset as u16).wrapping_sub(opcode_size);
                 let next_addr = branch_instruction_addr + opcode_size + sym_ref.ref_size as u16;
                 let offset_i32 = effective_target as i32 - next_addr as i32;
                 
@@ -1304,8 +1319,8 @@ impl BinaryEmitter {
             } else {
                 // Dirección absoluta de 16 bits
                 if sym_ref.ref_size == 2 {
-                    // 🔍 DEBUG: Log ALL symbol resolutions (temporary debug)
-                    let should_log = sym_ref.symbol.starts_with('_') || sym_ref.symbol == "START" || sym_ref.symbol == "MAIN" || sym_ref.symbol == "LOOP_BODY";
+                    // 🔍 DEBUG: Log ALL symbol resolutions including PRINT_TEXT strings and VECTREX helpers
+                    let should_log = sym_ref.symbol.starts_with('_') || sym_ref.symbol == "START" || sym_ref.symbol == "MAIN" || sym_ref.symbol == "LOOP_BODY" || sym_ref.symbol.starts_with("PRINT_TEXT_STR_") || sym_ref.symbol.starts_with("VECTREX_");
                     if should_log {
                         if sym_ref.addend != 0 {
                             eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X} (addend {:+}) => 0x{:04X}", 
@@ -1314,6 +1329,8 @@ impl BinaryEmitter {
                             eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X}", 
                                 sym_ref.symbol, sym_ref.offset, target_addr);
                         }
+                        eprintln!("   📝 Writing to self.code[0x{:04X}] = 0x{:02X}{:02X} (code.len()={})", 
+                            sym_ref.offset, (effective_target >> 8) as u8, effective_target as u8, self.code.len());
                     }
                     self.code[sym_ref.offset] = (effective_target >> 8) as u8;
                     self.code[sym_ref.offset + 1] = effective_target as u8;
@@ -1355,7 +1372,49 @@ impl BinaryEmitter {
     /// Obtiene la dirección base (ORG)
     #[allow(dead_code)]
     pub fn get_org(&self) -> u16 {
-        self.current_address - self.code.len() as u16
+        self.current_address.wrapping_sub(self.code.len() as u16)
+    }
+    
+    /// Cambia la dirección base (ORG) y rellena con padding si es necesario
+    /// Esto se usa cuando el ASM tiene múltiples directivas ORG (ej: código + vectores)
+    pub fn set_org(&mut self, new_org: u16) {
+        let current_org = self.get_org();
+        let current_offset = self.code.len();
+        
+        // Calcular cuántos bytes necesitamos añadir para llegar al nuevo ORG
+        // new_org debe ser >= current_address para que tenga sentido
+        if new_org < self.current_address {
+            eprintln!("⚠️  Warning: ORG ${:04X} is before current address ${:04X} - padding backward", 
+                new_org, self.current_address);
+            // En este caso, necesitamos calcular el offset esperado
+            // Si ORG inicial era $FFF0 y current es $0020, y new_org es $FFF0
+            // entonces queremos mantener el offset pero cambiar current_address
+            self.current_address = new_org;
+            return;
+        }
+        
+        // Calcular cuántos bytes de padding necesitamos
+        let target_offset = if current_org == 0 {
+            // ORG normal (secuencial): new_org es el offset directo
+            new_org as usize
+        } else {
+            // ORG con base alta (ej: $FFF0): calcular offset relativo
+            // Si current_org = $FFF0 y new_org = $FFF0, offset no cambia
+            // Si current_org = $FFF0 y new_org = $0020, queremos offset = $0030 (0x0020 + 0x0010)
+            let offset_from_base = (new_org.wrapping_sub(current_org)) as usize;
+            current_offset + offset_from_base
+        };
+        
+        // Rellenar con 0xFF hasta el target offset
+        if target_offset > current_offset {
+            let padding_bytes = target_offset - current_offset;
+            eprintln!("🔧 ORG ${:04X}: Padding {} bytes (0xFF) from offset 0x{:X} to 0x{:X}", 
+                new_org, padding_bytes, current_offset, target_offset);
+            self.code.resize(target_offset, 0xFF);
+        }
+        
+        // Actualizar dirección actual
+        self.current_address = new_org;
     }
     
     /// Obtiene la tabla de símbolos (labels -> addresses reales)

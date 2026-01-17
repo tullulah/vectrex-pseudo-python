@@ -1,0 +1,18 @@
+[package]
+name = "vpy_disasm"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[lib]
+name = "vpy_disasm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vpy_disasm"
+path = "src/main.rs"
+
+[dependencies]
+
+[lints]
+workspace = true

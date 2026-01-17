@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs;
-use super::binary_emitter::BinaryEmitter;
+use crate::m6809::binary_emitter::BinaryEmitter;
 
 /// Reference type for unresolved symbols in object mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,12 +59,10 @@ pub fn assemble_m6809(
     
     // SIEMPRE cargar símbolos de Vectrex BIOS al inicio
     load_vectrex_symbols(&mut equates);
-    eprintln!("[DEBUG] Loaded {} BIOS symbols", equates.len());
     
     // PRE-PASADA: Procesar TODO el archivo recolectando símbolos EQU e INCLUDE
     // Hacemos múltiples pasadas para resolver dependencias entre símbolos
     let lines: Vec<&str> = asm_source.lines().collect();
-    eprintln!("[DEBUG] Processing {} lines of ASM source", lines.len());
     let mut unresolved_equs: Vec<(String, String)> = Vec::new(); // (nombre, expresión)
     let mut max_iterations = 10;
     
@@ -79,12 +77,9 @@ pub fn assemble_m6809(
         
         // Procesar directivas INCLUDE
         if let Some(include_path) = parse_include_directive(trimmed) {
-            eprintln!("[DEBUG] Processing INCLUDE directive: {}", include_path);
             // Procesar archivo incluido y cargar sus símbolos
             if let Err(e) = process_include_file(&include_path, &mut equates) {
                 eprintln!("Warning: {}", e);
-            } else {
-                eprintln!("[DEBUG] Successfully loaded INCLUDE file, now have {} symbols", equates.len());
             }
             continue;
         }
@@ -189,7 +184,17 @@ pub fn assemble_m6809(
         
         // Procesar directivas ORG (cambio de dirección base)
         if trimmed.to_uppercase().starts_with("ORG") {
-            // ORG ya se manejó al crear el emitter, ignorar
+            // Parse ORG directive: "ORG $FFF0" or "ORG 0xFFF0"
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let addr_str = parts[1].trim_start_matches('$').trim_start_matches("0x");
+                if let Ok(new_org) = u16::from_str_radix(addr_str, 16) {
+                    emitter.set_org(new_org);
+                    eprintln!("✓ ORG ${:04X} processed (offset now: 0x{:X})", new_org, emitter.current_offset());
+                } else {
+                    eprintln!("⚠️  Warning: Invalid ORG address: {}", parts[1]);
+                }
+            }
             current_line += 1;
             continue;
         }
@@ -296,9 +301,9 @@ fn parse_include_directive(line: &str) -> Option<String> {
 }
 
 /// Resuelve path de INCLUDE buscando en directorios estándar
+#[allow(static_mut_refs)]
 fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
     // Priorizar el directorio especificado por --include-dir
-    #[allow(static_mut_refs)]
     let base_dir = unsafe {
         INCLUDE_DIR.clone().or_else(|| std::env::current_dir().ok())
     }?;
@@ -356,20 +361,14 @@ fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
 /// Procesa archivo INCLUDE y extrae símbolos EQU
 fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) -> Result<(), String> {
     // Resolver path del archivo
-    eprintln!("[DEBUG] Resolving INCLUDE path: {}", include_path);
     let resolved_path = resolve_include_path(include_path)
         .ok_or_else(|| format!("INCLUDE file not found: {}", include_path))?;
-    
-    eprintln!("[DEBUG] Resolved to: {}", resolved_path.display());
     
     // Leer contenido del archivo
     let content = fs::read_to_string(&resolved_path)
         .map_err(|e| format!("Error reading INCLUDE file {}: {}", include_path, e))?;
     
-    eprintln!("[DEBUG] Read {} bytes from INCLUDE file", content.len());
-    
     // Parsear EQU del archivo incluido
-    let mut equ_count = 0;
     for line in content.lines() {
         let trimmed = line.trim();
         
@@ -384,7 +383,6 @@ fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) 
             match evaluate_expression(&expr, equates) {
                 Ok(value) => {
                     equates.insert(name, value);
-                    equ_count += 1;
                 }
                 Err(_) => {
                     // Si no se puede resolver, ignorar por ahora
@@ -393,8 +391,6 @@ fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) 
             }
         }
     }
-    
-    eprintln!("[DEBUG] Loaded {} EQU symbols from INCLUDE file", equ_count);
     
     Ok(())
 }
@@ -624,7 +620,6 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "ORB" => emit_orb(emitter, operand, equates),
         "ORA" => emit_ora(emitter, operand, equates),
         "EORA" => emit_eora(emitter, operand, equates),
-        "EORB" => emit_eorb(emitter, operand, equates),
         
         // === REGISTER OPS ===
         "CLRA" => { emitter.clra(); Ok(()) },
@@ -652,7 +647,6 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "TST" => emit_tst(emitter, operand, equates),
         "NEGA" => { emitter.nega(); Ok(()) },
         "NEGB" => { emitter.negb(); Ok(()) },
-        "NEGD" => { emitter.negd(); Ok(()) },
         "COMA" => { emitter.coma(); Ok(()) },
         "COMB" => { emitter.comb(); Ok(()) },
         "SEX" => { emitter.sex(); Ok(()) },
@@ -759,11 +753,6 @@ fn resolve_symbol_value(symbol: &str, equates: &HashMap<String, u16>) -> Result<
     } else if symbol.starts_with("0X") || symbol.starts_with("0x") {
         u16::from_str_radix(&symbol[2..], 16)
             .map_err(|_| format!("Valor hex inválido: {}", symbol))
-    } else if symbol.starts_with('-') {
-        // Handle negative numbers: -70 → 0xFFBA (16-bit signed)
-        symbol.parse::<i16>()
-            .map(|v| v as u16)
-            .map_err(|_| format!("Valor decimal negativo inválido: {}", symbol))
     } else if symbol.chars().all(|c| c.is_digit(10)) {
         symbol.parse::<u16>()
             .map_err(|_| format!("Valor decimal inválido: {}", symbol))
@@ -2085,44 +2074,8 @@ fn emit_eora(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     }
 }
 
-fn emit_eorb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    if operand.starts_with('#') {
-        let val = parse_immediate(&operand[1..])?;
-        emitter.eorb_immediate(val);
-        Ok(())
-    } else if operand.contains(',') {
-        // INDEXED MODE
-        emitter.emit(0xE8); // EORB indexed opcode
-        let (postbyte, offset) = parse_indexed_mode(operand)?;
-        emitter.emit(postbyte);
-        if let Some(off) = offset {
-            emitter.emit(off as u8);
-        }
-        Ok(())
-    } else {
-        match evaluate_expression(operand, equates) {
-            Ok(addr) => {
-                emitter.emit(0xF8); // EORB extended opcode
-                emitter.emit_word(addr);
-                Ok(())
-            }
-            Err(msg) => {
-                if msg.starts_with("SYMBOL:") {
-                    let symbol = &msg[7..];
-                    emitter.add_symbol_ref(symbol, false, 2);
-                    emitter.emit(0xF8);
-                    emitter.emit_word(0);
-                    Ok(())
-                } else {
-                    Err(msg)
-                }
-            }
-        }
-    }
-}
-
 fn emit_tfr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
-    use super::binary_emitter::tfr_regs;
+    use crate::m6809::binary_emitter::tfr_regs;
     
     let parts: Vec<&str> = operand.split(',').map(|s| s.trim()).collect();
     if parts.len() != 2 {
@@ -2448,16 +2401,9 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
             "Y" => Ok(0x20),
             "U" => Ok(0x40),
             "S" => Ok(0x60),
-            "PC" => Ok(0x80),  // PC-relative support
             _ => Err(format!("Registro no reconocido: {}", reg))
         }
     };
-    
-    // PC-relative indirect addressing: [.,PC]
-    // This is a special case that enables loading address right after the instruction
-    if trimmed == "[.,PC]" || trimmed == "[.,pc]" {
-        return Ok((0x9C, None));  // 0x9C = PC-relative indirect postbyte
-    }
     
     // Modos con acumulador: A,X  B,X  D,X  A,Y  B,Y  D,Y  A,U  B,U  D,U  A,S  B,S  D,S
     // Postbytes: A=0x86, B=0x85, D=0x8B (más bits de registro)
