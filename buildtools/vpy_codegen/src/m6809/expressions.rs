@@ -22,8 +22,8 @@ pub fn emit_simple_expr(expr: &Expr, out: &mut String) {
         }
         
         Expr::Ident(id) => {
-            // IMPORTANT: Name already comes uppercase from unifier (INPUT_INPUT_RESULT, not input_input_result)
-            out.push_str(&format!("    LDD VAR_{}\n", id.name));
+            // Variable references use uppercase labels
+            out.push_str(&format!("    LDD VAR_{}\n", id.name.to_uppercase()));
             out.push_str("    STD RESULT\n");
         }
         
@@ -172,7 +172,7 @@ fn emit_index(array: &Expr, index: &Expr, out: &mut String) {
     if let Expr::Ident(id) = array {
         // Direct array access - load DATA address
         // CRITICAL: Normalize to uppercase (unifier may have mixed case)
-        out.push_str(&format!("    LDX #VAR_{}_DATA  ; Array data address\n", id.name.to_uppercase()));
+        out.push_str(&format!("    LDX #ARRAY_{}_DATA  ; Array data address (ROM literal)\n", id.name.to_uppercase()));
         out.push_str("    PSHS X\n");
     } else {
         // Complex array expression - evaluate it

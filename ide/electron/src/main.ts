@@ -1350,7 +1350,7 @@ ipcMain.handle('file:appendBin', async (_e, args: { path: string; data: Uint8Arr
   }
 });
 
-// Disassemble a ROM snapshot (base64) using core/bin/disasm_full
+// Disassemble a ROM snapshot (base64) using buildtools/vpy_disasm
 ipcMain.handle('tools:disassembleSnapshot', async (_e, args: { base64: string; startHex?: string; binPath?: string }) => {
   try {
     const { base64, startHex = '0', binPath } = args || { base64: '' };
@@ -1387,16 +1387,36 @@ ipcMain.handle('tools:disassembleSnapshot', async (_e, args: { base64: string; s
     // Para cubrir todo el snapshot, pasamos el tamaño completo
     const snapshotSize = data.length;
     
-    const cargoCmd = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
-    const cargoArgs = ['run', '--bin', 'disasm_full', '--', snapshotPath, startHex, String(snapshotSize)];
-    const cwd = process.cwd();
+    // Use vpy_disasm from buildtools (migrated from core)
+    // In development: ide/electron -> ../../buildtools
+    // In packaged: app dir -> buildtools (if bundled alongside)
+    const appDir = app.isPackaged ? dirname(app.getPath('exe')) : join(process.cwd(), '..', '..');
+    const disasmBin = join(appDir, 'buildtools', 'target', 'release', 
+      process.platform === 'win32' ? 'vpy_disasm.exe' : 'vpy_disasm');
+    
+    // Check if binary exists
+    try {
+      await fs.access(disasmBin);
+    } catch {
+      return { 
+        ok: false, 
+        error: 'Disassembler not found. Please build it first:\ncd buildtools && cargo build --release --bin vpy_disasm',
+        stderr: `Binary not found at: ${disasmBin}\nApp dir: ${appDir}\nCWD: ${process.cwd()}`
+      };
+    }
     
     return await new Promise((resolve) => {
-      const proc = spawn(cargoCmd, cargoArgs, { cwd });
+      const proc = spawn(disasmBin, [snapshotPath, startHex, String(snapshotSize)]);
       let stdout = '';
       let stderr = '';
+      
       proc.stdout.on('data', (d) => { stdout += d.toString(); });
       proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      
+      proc.on('error', (err) => {
+        resolve({ ok: false, error: `Failed to spawn disassembler: ${err.message}`, stderr });
+      });
+      
       proc.on('close', async (code) => {
         if (code === 0) {
           // Guardar salida desensamblada en .diss.asm
@@ -1413,7 +1433,7 @@ ipcMain.handle('tools:disassembleSnapshot', async (_e, args: { base64: string; s
             resolve({ ok: false, error: `Failed to write .diss.asm: ${writeErr.message}`, output: stdout, stderr });
           }
         } else {
-          resolve({ ok: false, error: `disasm_full exit ${code}`, output: stdout, stderr });
+          resolve({ ok: false, error: `vpy_disasm exit ${code}`, output: stdout, stderr });
         }
       });
     });

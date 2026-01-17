@@ -6,7 +6,7 @@ META ROM_BANK_SIZE = 16384
 my_var = 10
 
 # Simple array variable
-my_array = [1, 2, 3, 4]  # Comment here
+my_array = [127, 100, 80, 60]  # Visible intensities
 
 def main():
     SET_INTENSITY(127)

@@ -754,8 +754,25 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         std::fs::create_dir_all(&build_dir)?;
         
         let project_name = input.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
-        let asm_path = build_dir.join(format!("{}.asm", project_name));
-        let _bin_path = output.clone().unwrap_or_else(|| build_dir.join(format!("{}.bin", project_name)));
+        
+        // CRITICAL FIX (2026-01-18): When --output is specified, place ASM in same directory
+        // This fixes IDE integration where it expects both .asm and .bin in the same location
+        let (asm_path, _bin_path) = if let Some(ref output_bin) = output {
+            // User specified --output path -> use same directory for ASM
+            let output_dir = output_bin.parent().unwrap_or_else(|| std::path::Path::new("."));
+            std::fs::create_dir_all(output_dir)?;
+            
+            let asm_file = if let Some(stem) = output_bin.file_stem().and_then(|s| s.to_str()) {
+                format!("{}.asm", stem)
+            } else {
+                format!("{}.asm", project_name)
+            };
+            
+            (output_dir.join(asm_file), output_bin.clone())
+        } else {
+            // No --output specified -> use default build/ directory
+            (build_dir.join(format!("{}.asm", project_name)), build_dir.join(format!("{}.bin", project_name)))
+        };
         
         // Write ASM file
         std::fs::write(&asm_path, &generated.asm_source)

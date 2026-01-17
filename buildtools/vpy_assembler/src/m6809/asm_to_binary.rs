@@ -49,6 +49,20 @@ pub fn assemble_m6809(
     object_mode: bool,
     use_long_branches: bool,
 ) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>, Vec<UnresolvedRef>), String> {
+    let line_count = asm_source.lines().count();
+    let org_count = asm_source.matches("ORG ").count();
+    eprintln!("🔍 [ASSEMBLE START] org=0x{:04X}, asm_source_len={} bytes, {} lines, {} ORG directives", 
+        org, asm_source.len(), line_count, org_count);
+    
+    // DEBUG: Show first 10 lines if multiple ORGs detected
+    if org_count > 1 {
+        eprintln!("⚠️  WARNING: Multiple ORG directives detected in single assembly unit!");
+        eprintln!("   First 10 lines:");
+        for (i, line) in asm_source.lines().take(10).enumerate() {
+            eprintln!("   {:3}: {}", i+1, line);
+        }
+    }
+    
     let mut emitter = BinaryEmitter::new(org);
     let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
     let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Símbolos no resueltos (object mode)
@@ -189,14 +203,28 @@ pub fn assemble_m6809(
             if parts.len() >= 2 {
                 let addr_str = parts[1].trim_start_matches('$').trim_start_matches("0x");
                 if let Ok(new_org) = u16::from_str_radix(addr_str, 16) {
+                    let prev_offset = emitter.current_offset();
                     emitter.set_org(new_org);
-                    eprintln!("✓ ORG ${:04X} processed (offset now: 0x{:X})", new_org, emitter.current_offset());
+                    let new_offset = emitter.current_offset();
+                    eprintln!("✓ ORG ${:04X} processed at line {} (offset: 0x{:X} → 0x{:X}, delta={})", 
+                        new_org, current_line, prev_offset, new_offset, new_offset as i64 - prev_offset as i64);
+                    
+                    // WARNING if padding is huge
+                    if new_offset > prev_offset && (new_offset - prev_offset) > 16384 {
+                        eprintln!("   ⚠️  LARGE PADDING: {} bytes added!", new_offset - prev_offset);
+                    }
                 } else {
                     eprintln!("⚠️  Warning: Invalid ORG address: {}", parts[1]);
                 }
             }
             current_line += 1;
             continue;
+        }
+        
+        // 🔍 DEBUG: Log when processing lines that will emit around 0x404D
+        if emitter.current_address >= 0x4048 && emitter.current_address <= 0x4055 {
+            eprintln!("🔍 [DEBUG 0x404D] Processing line {}: addr=0x{:04X}, ASM: {}", 
+                current_line, emitter.current_address, trimmed);
         }
         
         // 🔍 TRACE: Antes de procesar instrucción
@@ -212,6 +240,12 @@ pub fn assemble_m6809(
             return Err(format!("Error en línea {}: {} (código: '{}')", current_line, e, trimmed));
         }
         
+        // 🔍 DEBUG: Log after processing if we emitted at 0x404D range
+        if emitter.current_address >= 0x4048 && emitter.current_address <= 0x4060 {
+            eprintln!("🔍 [DEBUG 0x404D] After line {}: addr=0x{:04X}, offset=0x{:04X}", 
+                current_line, emitter.current_address, emitter.current_offset());
+        }
+        
         // 🔍 TRACE: Después de procesar
         if should_trace {
             eprintln!("   ✓ After: addr=${:04X} off={} (delta={})", 
@@ -222,8 +256,18 @@ pub fn assemble_m6809(
         current_line += 1;
     }
     
+    // 🔍 DEBUG: Log emitter state before resolve_symbols
+    let asm_snippet = if asm_source.len() > 200 { &asm_source[..200] } else { asm_source };
+    eprintln!("🔍 [BEFORE RESOLVE] current_address=0x{:04X}, code.len()={}, org={}", 
+        emitter.current_address, emitter.current_offset(), org);
+    eprintln!("   ASM snippet (first 200 chars): {}", asm_snippet.lines().take(5).collect::<Vec<_>>().join(" | "));
+    
     // Segunda pasada: resolver símbolos (incluyendo símbolos externos de BIOS)
     emitter.resolve_symbols_with_equates(&equates)?;
+    
+    // 🔍 DEBUG: Log emitter state after resolve_symbols
+    eprintln!("🔍 [AFTER RESOLVE] current_address=0x{:04X}, code.len()={}", 
+        emitter.current_address, emitter.current_offset());
     
     // En object mode, extraer referencias no resueltas del emitter
     if object_mode {
@@ -871,11 +915,21 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.lda_extended_sym(operand);
         }
     } else {
-        let addr = resolve_address(operand, equates)?;
-        if addr <= 0xFF {
-            emitter.lda_direct(addr as u8);
-        } else {
-            emitter.lda_extended(addr);
+        // Could be expression like RESULT+1
+        match resolve_address(operand, equates) {
+            Ok(addr) => {
+                if addr <= 0xFF {
+                    emitter.lda_direct(addr as u8);
+                } else {
+                    emitter.lda_extended(addr);
+                }
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                // Symbol with arithmetic (e.g., RESULT+1)
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xB6, &symbol, addend); // LDA extended opcode
+            },
+            Err(e) => return Err(e),
         }
     }
     Ok(())

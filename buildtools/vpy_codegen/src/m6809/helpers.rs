@@ -4,6 +4,7 @@
 
 use vpy_parser::{Module, Item, Stmt, Expr, BinOp};
 use std::collections::HashSet;
+use super::ram_layout::RamLayout;
 
 /// Analyze module to detect which runtime helpers are needed
 /// Returns set of helper names that should be emitted
@@ -228,6 +229,107 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     let dp_to_d0 = get_bios_address("DP_to_D0", "$F1AA");
     let dp_to_c8 = get_bios_address("DP_to_C8", "$F1AF");
     
+    // =========================================================================
+    // AUTOMATIC RAM LAYOUT (Bank #31 - Always visible at $4000-$7FFF)
+    // =========================================================================
+    // Use RamLayout to allocate all RAM variables dynamically
+    // This prevents collisions and optimizes RAM usage
+    
+    let mut ram = RamLayout::new(0xC880); // Start at $C880 (Vectrex RAM: $C800-$CBFF)
+    
+    // Core scratch variables (always needed)
+    ram.allocate("RESULT", 2, "Main result temporary");
+    ram.allocate("TMPPTR", 2, "Temporary pointer");
+    ram.allocate("TMPPTR2", 2, "Temporary pointer 2");
+    
+    // Conditional variables based on usage
+    if needed.contains("PRINT_NUMBER") {
+        ram.allocate("NUM_STR", 2, "Buffer for PRINT_NUMBER hex output");
+    }
+    if needed.contains("RAND") {
+        ram.allocate("RAND_SEED", 2, "Random seed for RAND()");
+    }
+    
+    // Drawing helper variables
+    if needed.contains("DRAW_CIRCLE") {
+        ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X");
+        ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y");
+        ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter");
+        ram.allocate("DRAW_CIRCLE_INTENSITY", 1, "Circle intensity");
+        ram.allocate("DRAW_CIRCLE_TEMP", 6, "Circle temporary buffer");
+    }
+    
+    if needed.contains("DRAW_RECT") {
+        ram.allocate("DRAW_RECT_X", 1, "Rectangle X");
+        ram.allocate("DRAW_RECT_Y", 1, "Rectangle Y");
+        ram.allocate("DRAW_RECT_WIDTH", 1, "Rectangle width");
+        ram.allocate("DRAW_RECT_HEIGHT", 1, "Rectangle height");
+        ram.allocate("DRAW_RECT_INTENSITY", 1, "Rectangle intensity");
+    }
+    
+    // DRAW_LINE segmentation variables (always needed if DRAW_LINE exists)
+    ram.allocate("VLINE_DX_16", 2, "DRAW_LINE dx (16-bit)");
+    ram.allocate("VLINE_DY_16", 2, "DRAW_LINE dy (16-bit)");
+    ram.allocate("VLINE_DX", 1, "DRAW_LINE dx clamped (8-bit)");
+    ram.allocate("VLINE_DY", 1, "DRAW_LINE dy clamped (8-bit)");
+    ram.allocate("VLINE_DY_REMAINING", 1, "DRAW_LINE remaining dy for segment 2");
+    
+    // Level system variables
+    if needed.contains("SHOW_LEVEL") {
+        ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
+        ram.allocate("LEVEL_WIDTH", 1, "Level width");
+        ram.allocate("LEVEL_HEIGHT", 1, "Level height");
+        ram.allocate("LEVEL_TILE_SIZE", 1, "Tile size");
+    }
+    
+    // Fade effects variables
+    if needed.contains("FADE_IN") || needed.contains("FADE_OUT") {
+        ram.allocate("FRAME_COUNTER", 2, "Frame counter for fade effects");
+        ram.allocate("CURRENT_INTENSITY", 2, "Current intensity for fade");
+    }
+    
+    // Audio system variables (auto-detected)
+    use crate::m6809::functions::has_audio_calls;
+    if has_audio_calls(module) {
+        eprintln!("[DEBUG HELPERS] Audio calls detected, emitting PSG RAM variables");
+        ram.allocate("PSG_MUSIC_PTR", 2, "PSG music data pointer");
+        ram.allocate("PSG_IS_PLAYING", 1, "PSG playing flag");
+        ram.allocate("PSG_DELAY_FRAMES", 1, "PSG frame delay counter");
+        ram.allocate("SFX_PTR", 2, "SFX data pointer");
+        ram.allocate("SFX_ACTIVE", 1, "SFX active flag");
+    }
+    
+    // Function argument slots (used by PRINT_TEXT, etc.) - at fixed address $CFE0
+    // These need to be at a fixed location for cross-bank compatibility
+    ram.allocate_fixed("VAR_ARG0", 0xCFE0, 2, "Function argument 0 (16-bit)");
+    ram.allocate_fixed("VAR_ARG1", 0xCFE2, 2, "Function argument 1 (16-bit)");
+    ram.allocate_fixed("VAR_ARG2", 0xCFE4, 2, "Function argument 2 (16-bit)");
+    ram.allocate_fixed("VAR_ARG3", 0xCFE6, 2, "Function argument 3 (16-bit)");
+    ram.allocate_fixed("VAR_ARG4", 0xCFE8, 2, "Function argument 4 (16-bit)");
+    
+    // =========================================================================
+    // USER VARIABLES (continue allocation after system vars)
+    // =========================================================================
+    eprintln!("[DEBUG HELPERS] System RAM used: {} bytes", ram.total_size());
+    eprintln!("[DEBUG HELPERS] Generating user variables...");
+    
+    // Generate user variables using the same RamLayout instance
+    let user_vars_result = crate::m6809::variables::generate_user_variables(module, &mut ram)?;
+    
+    eprintln!("[DEBUG HELPERS] Total RAM used (system + user): {} bytes", ram.total_size());
+    
+    // =========================================================================
+    // EMIT EQU DEFINITIONS
+    // =========================================================================
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; === RAM VARIABLE DEFINITIONS ===\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str(&ram.emit_equ_definitions());
+    asm.push_str("\n");
+    
+    // Emit user variable array data if any
+    asm.push_str(&user_vars_result);
+    
     asm.push_str(";***************************************************************************\n");
     asm.push_str("; RUNTIME HELPERS\n");
     asm.push_str(";***************************************************************************\n\n");
@@ -299,7 +401,223 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     super::level::emit_runtime_helpers(&mut asm, &needed);
     super::utilities::emit_runtime_helpers(&mut asm, &needed);
     
+    // AUDIO_UPDATE: Auto-inject if PLAY_MUSIC or PLAY_SFX detected
+    // (has_audio_calls already imported at top of function)
+    if has_audio_calls(module) {
+        eprintln!("[DEBUG HELPERS] Emitting AUDIO_UPDATE helper (audio calls detected)");
+        emit_audio_update_helper(&mut asm);
+    }
+    
     eprintln!("[DEBUG HELPERS] ASM length after all helpers: {}", asm.len());
     
     Ok(asm)
 }
+
+/// Emit AUDIO_UPDATE helper for PSG music + SFX playback
+/// Auto-called at end of LOOP_BODY when PLAY_MUSIC/PLAY_SFX detected
+/// Uses Sound_Byte BIOS call for PSG writes (DP=$D0 required)
+fn emit_audio_update_helper(asm: &mut String) {
+    asm.push_str(
+        "; ============================================================================\n\
+        ; AUDIO_UPDATE - Unified music + SFX update (auto-injected after WAIT_RECAL)\n\
+        ; ============================================================================\n\
+        ; Processes both music (channel B) and SFX (channel C) in one pass\n\
+        ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems\n\
+        ; Sets DP=$D0 once at entry, restores at exit\n\
+        ; RAM variables: PSG_MUSIC_PTR, PSG_IS_PLAYING, PSG_DELAY_FRAMES\n\
+        ;                SFX_PTR, SFX_ACTIVE (defined in SYSTEM RAM VARIABLES)\n\
+        \n\
+        AUDIO_UPDATE:\n\
+        PSHS DP                 ; Save current DP\n\
+        LDA #$D0                ; Set DP=$D0 (Sound_Byte requirement)\n\
+        TFR A,DP\n\
+        \n\
+        ; UPDATE MUSIC (channel B: registers 9, 11-14)\n\
+        LDA PSG_IS_PLAYING     ; Check if music is playing\n\
+        BEQ AU_SKIP_MUSIC       ; Skip if not\n\
+        \n\
+        ; Check delay counter first\n\
+        LDA PSG_DELAY_FRAMES   ; Load delay counter\n\
+        BEQ AU_MUSIC_READ       ; If zero, read next frame data\n\
+        DECA                    ; Decrement delay\n\
+        STA PSG_DELAY_FRAMES   ; Store back\n\
+        CMPA #0                 ; Check if it just reached zero\n\
+        BNE AU_UPDATE_SFX       ; If not zero yet, skip this frame\n\
+        \n\
+        ; Delay just reached zero, X points to count byte already\n\
+        LDX PSG_MUSIC_PTR      ; Load music pointer (points to count)\n\
+        BEQ AU_SKIP_MUSIC       ; Skip if null\n\
+        BRA AU_MUSIC_READ_COUNT ; Skip delay read, go straight to count\n\
+        \n\
+        AU_MUSIC_READ:\n\
+        LDX PSG_MUSIC_PTR      ; Load music pointer\n\
+        BEQ AU_SKIP_MUSIC       ; Skip if null\n\
+        \n\
+        ; Check if we need to read delay or we're ready for count\n\
+        ; PSG_DELAY_FRAMES just reached 0, so we read delay byte first\n\
+        LDB ,X+                 ; Read delay counter (X now points to count byte)\n\
+        CMPB #$FF               ; Check for loop marker\n\
+        BEQ AU_MUSIC_LOOP       ; Handle loop\n\
+        CMPB #0                 ; Check if delay is 0\n\
+        BNE AU_MUSIC_HAS_DELAY  ; If not 0, process delay\n\
+        \n\
+        ; Delay is 0, read count immediately\n\
+        AU_MUSIC_NO_DELAY:\n\
+        AU_MUSIC_READ_COUNT:\n\
+        LDB ,X+                 ; Read count (number of register writes)\n\
+        BEQ AU_MUSIC_ENDED      ; If 0, end of music\n\
+        CMPB #$FF               ; Check for loop marker (can appear after delay)\n\
+        BEQ AU_MUSIC_LOOP       ; Handle loop\n\
+        BRA AU_MUSIC_PROCESS_WRITES\n\
+        \n\
+        AU_MUSIC_HAS_DELAY:\n\
+        ; B has delay > 0, store it and skip to next frame\n\
+        DECB                    ; Delay-1 (we consume this frame)\n\
+        STB PSG_DELAY_FRAMES   ; Save delay counter\n\
+        STX PSG_MUSIC_PTR      ; Save pointer (X points to count byte)\n\
+        BRA AU_UPDATE_SFX       ; Skip reading data this frame\n\
+        \n\
+        AU_MUSIC_PROCESS_WRITES:\n\
+        PSHS B                  ; Save count\n\
+        \n\
+        ; Mark that next time we should read delay, not count\n\
+        ; (This is implicit - after processing, X points to next delay byte)\n\
+        \n\
+        AU_MUSIC_WRITE_LOOP:\n\
+        LDA ,X+                 ; Load register number\n\
+        LDB ,X+                 ; Load register value\n\
+        PSHS X                  ; Save pointer\n\
+        JSR Sound_Byte          ; Write to PSG using BIOS (DP=$D0)\n\
+        PULS X                  ; Restore pointer\n\
+        PULS B                  ; Get counter\n\
+        DECB                    ; Decrement\n\
+        BEQ AU_MUSIC_DONE       ; Done if count=0\n\
+        PSHS B                  ; Save counter\n\
+        BRA AU_MUSIC_WRITE_LOOP ; Continue\n\
+        \n\
+        AU_MUSIC_DONE:\n\
+        STX PSG_MUSIC_PTR      ; Update music pointer\n\
+        BRA AU_UPDATE_SFX       ; Now update SFX\n\
+        \n\
+        AU_MUSIC_ENDED:\n\
+        CLR PSG_IS_PLAYING     ; Stop music\n\
+        BRA AU_UPDATE_SFX       ; Continue to SFX\n\
+        \n\
+        AU_MUSIC_LOOP:\n\
+        LDD ,X                  ; Load loop target\n\
+        STD PSG_MUSIC_PTR      ; Set music pointer to loop\n\
+        CLR PSG_DELAY_FRAMES   ; Clear delay on loop\n\
+        BRA AU_UPDATE_SFX       ; Continue to SFX\n\
+        \n\
+        AU_SKIP_MUSIC:\n\
+        BRA AU_UPDATE_SFX       ; Skip music, go to SFX\n\
+        \n\
+        ; UPDATE SFX (channel C: registers 4/5=tone, 6=noise, 10=volume, 7=mixer)\n\
+        AU_UPDATE_SFX:\n\
+        LDA SFX_ACTIVE         ; Check if SFX is active\n\
+        BEQ AU_DONE             ; Skip if not active\n\
+        \n\
+        JSR sfx_doframe         ; Process one SFX frame (uses Sound_Byte internally)\n\
+        \n\
+        AU_DONE:\n\
+        PULS DP                 ; Restore original DP\n\
+        RTS\n\
+        \n\
+        ; ============================================================================\n\
+        ; sfx_doframe - AYFX frame parser (Richard Chadd original)\n\
+        ; ============================================================================\n\
+        ; Process one SFX frame - called by AUDIO_UPDATE\n\
+        ; Uses Sound_Byte BIOS call for PSG writes (DP=$D0 already set by caller)\n\
+        ; AYFX format: flag byte + optional data per frame, end marker $D0 $20\n\
+        ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,\n\
+        ;            6=noise data present, 7=disable noise\n\
+        \n\
+        sfx_doframe:\n\
+        LDU SFX_PTR            ; Get current frame pointer\n\
+        LDB ,U                  ; Read flag byte (NO auto-increment)\n\
+        CMPB #$D0               ; Check end marker (first byte)\n\
+        BNE sfx_checktonefreq   ; Not end, continue\n\
+        LDB 1,U                 ; Check second byte at offset 1\n\
+        CMPB #$20               ; End marker $D0 $20?\n\
+        BEQ sfx_endofeffect     ; Yes, stop\n\
+        \n\
+        sfx_checktonefreq:\n\
+        LEAY 1,U                ; Y = pointer to tone/noise data\n\
+        LDB ,U                  ; Reload flag byte (Sound_Byte corrupts B)\n\
+        BITB #$20               ; Bit 5: tone data present?\n\
+        BEQ sfx_checknoisefreq  ; No, skip tone\n\
+        ; Set tone frequency (channel C = reg 4/5)\n\
+        LDB 2,U                 ; Get LOW byte (fine tune)\n\
+        LDA #$04                ; Register 4\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        LDB 1,U                 ; Get HIGH byte (coarse tune)\n\
+        LDA #$05                ; Register 5\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        LEAY 2,Y                ; Skip 2 tone bytes\n\
+        \n\
+        sfx_checknoisefreq:\n\
+        LDB ,U                  ; Reload flag byte\n\
+        BITB #$40               ; Bit 6: noise data present?\n\
+        BEQ sfx_checkvolume     ; No, skip noise\n\
+        LDB ,Y                  ; Get noise period\n\
+        LDA #$06                ; Register 6\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        LEAY 1,Y                ; Skip 1 noise byte\n\
+        \n\
+        sfx_checkvolume:\n\
+        LDB ,U                  ; Reload flag byte\n\
+        ANDB #$0F               ; Get volume from bits 0-3\n\
+        LDA #$0A                ; Register 10 (volume C)\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        \n\
+        sfx_checktonedisable:\n\
+        LDB ,U                  ; Reload flag byte\n\
+        BITB #$10               ; Bit 4: disable tone?\n\
+        BEQ sfx_enabletone\n\
+        sfx_disabletone:\n\
+        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
+        ORB #$04                ; Set bit 2 (disable tone C)\n\
+        LDA #$07                ; Register 7 (mixer)\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        BRA sfx_checknoisedisable  ; Continue to noise check\n\
+        \n\
+        sfx_enabletone:\n\
+        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
+        ANDB #$FB               ; Clear bit 2 (enable tone C)\n\
+        LDA #$07                ; Register 7 (mixer)\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        \n\
+        sfx_checknoisedisable:\n\
+        LDB ,U                  ; Reload flag byte\n\
+        BITB #$80               ; Bit 7: disable noise?\n\
+        BEQ sfx_enablenoise\n\
+        sfx_disablenoise:\n\
+        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
+        ORB #$20                ; Set bit 5 (disable noise C)\n\
+        LDA #$07                ; Register 7 (mixer)\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        BRA sfx_nextframe       ; Done, update pointer\n\
+        \n\
+        sfx_enablenoise:\n\
+        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
+        ANDB #$DF               ; Clear bit 5 (enable noise C)\n\
+        LDA #$07                ; Register 7 (mixer)\n\
+        JSR Sound_Byte          ; Write to PSG\n\
+        \n\
+        sfx_nextframe:\n\
+        STY SFX_PTR            ; Update pointer for next frame\n\
+        RTS\n\
+        \n\
+        sfx_endofeffect:\n\
+        ; Stop SFX - set volume to 0\n\
+        CLR SFX_ACTIVE         ; Mark as inactive\n\
+        LDA #$0A                ; Register 10 (volume C)\n\
+        LDB #$00                ; Volume = 0\n\
+        JSR Sound_Byte\n\
+        LDD #$0000\n\
+        STD SFX_PTR            ; Clear pointer\n\
+        RTS\n\
+        \n"
+    );
+}
+

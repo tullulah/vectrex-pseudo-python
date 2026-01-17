@@ -1,5 +1,11 @@
 ; VPy M6809 Assembly (Vectrex)
-; ROM: 32768 bytes
+; ROM: 524288 bytes
+; Multibank cartridge: 32 banks (16KB each)
+; Helpers bank: 31 (fixed bank at $4000-$7FFF)
+
+; ================================================
+; BANK #0 - Entry point and main code
+; ================================================
 
     ORG $0000
 
@@ -20,20 +26,6 @@
     FCB 0                   ; End of header
 
 ;***************************************************************************
-; SYSTEM RAM VARIABLES
-;***************************************************************************
-CURRENT_ROM_BANK EQU $C880
-RESULT EQU $CF00
-TMPPTR EQU $CF02
-
-; Function argument slots
-VAR_ARG0 EQU $CFE0+0
-VAR_ARG1 EQU $CFE0+2
-VAR_ARG2 EQU $CFE0+4
-VAR_ARG3 EQU $CFE0+6
-VAR_ARG4 EQU $CFE0+8
-
-;***************************************************************************
 ; CODE SECTION
 ;***************************************************************************
 
@@ -44,6 +36,7 @@ START:
     LDA #$80
     STA VIA_t1_cnt_lo
     LDS #$CBFF       ; Initialize stack
+; Bank 0 ($0000) is active; fixed bank 31 ($4000-$7FFF) always visible
     JMP MAIN
 
 ;***************************************************************************
@@ -51,6 +44,7 @@ START:
 ;***************************************************************************
 
 MAIN:
+    ; Initialize global variables
     ; Call main() for initialization
     ; SET_INTENSITY: Set drawing intensity
     LDD #127
@@ -66,6 +60,7 @@ MAIN:
 
 LOOP_BODY:
     JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)
+    JSR Reset0Ref    ; Reset beam to center (0,0)
     ; PRINT_TEXT: Print text at position
     LDD #-70
     STD RESULT
@@ -96,14 +91,246 @@ LOOP_BODY:
     STD RESULT
     RTS
 
-;**** PRINT_TEXT String Data ****
-PRINT_TEXT_STR_68624562:
-    FCC "HELLO"
-    FCB $80          ; Vectrex string terminator
 
-PRINT_TEXT_STR_82781042:
-    FCC "WORLD"
-    FCB $80          ; Vectrex string terminator
+; ================================================
+; BANK #1 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #2 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #3 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #4 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #5 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #6 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #7 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #8 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #9 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #10 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #11 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #12 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #13 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #14 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #15 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #16 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #17 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #18 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #19 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #20 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #21 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #22 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #23 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #24 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #25 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #26 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #27 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #28 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #29 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #30 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000  ; Sequential bank model
+    ; Reserved for future code overflow
+
+
+; ================================================
+; BANK #31 - 0 function(s) [HELPERS ONLY]
+; ================================================
+    ORG $4000  ; Fixed bank (always visible at $4000-$7FFF)
+    ; Runtime helpers (accessible from all banks)
+
+;***************************************************************************
+; === RAM VARIABLE DEFINITIONS ===
+;***************************************************************************
+RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
+TMPPTR               EQU $C880+$02   ; Temporary pointer (2 bytes)
+TMPPTR2              EQU $C880+$04   ; Temporary pointer 2 (2 bytes)
+VLINE_DX_16          EQU $C880+$06   ; DRAW_LINE dx (16-bit) (2 bytes)
+VLINE_DY_16          EQU $C880+$08   ; DRAW_LINE dy (16-bit) (2 bytes)
+VLINE_DX             EQU $C880+$0A   ; DRAW_LINE dx clamped (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$0B   ; DRAW_LINE dy clamped (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$0C   ; DRAW_LINE remaining dy for segment 2 (1 bytes)
+VAR_ARG0             EQU $CFE0   ; Function argument 0 (16-bit) (2 bytes)
+VAR_ARG1             EQU $CFE2   ; Function argument 1 (16-bit) (2 bytes)
+VAR_ARG2             EQU $CFE4   ; Function argument 2 (16-bit) (2 bytes)
+VAR_ARG3             EQU $CFE6   ; Function argument 3 (16-bit) (2 bytes)
+VAR_ARG4             EQU $CFE8   ; Function argument 4 (16-bit) (2 bytes)
+
+; Internal builtin variables (aliases to RESULT slots)
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+2
+MIRROR_X EQU RESULT+4
+MIRROR_Y EQU RESULT+6
+DRAW_VEC_INTENSITY EQU RESULT+8
 
 ;***************************************************************************
 ; RUNTIME HELPERS
@@ -120,60 +347,12 @@ VECTREX_PRINT_TEXT:
     JSR $F1AF      ; DP_to_C8 - restore DP before return
     RTS
 
-MUL16:
-    ; Multiply 16-bit X * D -> D
-    ; Simple implementation (can be optimized)
-    PSHS X,B,A
-    LDD #0         ; Result accumulator
-    LDX 2,S        ; Multiplier
-.MUL16_LOOP:
-    BEQ .MUL16_END
-    ADDD ,S        ; Add multiplicand
-    LEAX -1,X
-    BRA .MUL16_LOOP
-.MUL16_END:
-    LEAS 4,S
-    RTS
+;**** PRINT_TEXT String Data ****
+PRINT_TEXT_STR_68624562:
+    FCC "HELLO"
+    FCB $80          ; Vectrex string terminator
 
-DIV16:
-    ; Divide 16-bit X / D -> D
-    ; Simple implementation
-    PSHS X,D
-    LDD #0         ; Quotient
-.DIV16_LOOP:
-    PSHS D         ; Save quotient
-    LDD 4,S        ; Load dividend (after PSHS D)
-    CMPD 2,S       ; Compare with divisor (after PSHS D)
-    PULS D         ; Restore quotient
-    BLT .DIV16_END
-    ADDD #1        ; Increment quotient
-    LDX 2,S
-    PSHS D
-    LDD 2,S        ; Divisor
-    LEAX D,X       ; Subtract divisor
-    STX 4,S
-    PULS D
-    BRA .DIV16_LOOP
-.DIV16_END:
-    LEAS 4,S
-    RTS
-
-MOD16:
-    ; Modulo 16-bit X % D -> D
-    PSHS X,D
-.MOD16_LOOP:
-    PSHS D         ; Save D
-    LDD 4,S        ; Load dividend (after PSHS D)
-    CMPD 2,S       ; Compare with divisor (after PSHS D)
-    PULS D         ; Restore D
-    BLT .MOD16_END
-    LDX 2,S
-    LDD ,S
-    LEAX D,X
-    STX 2,S
-    BRA .MOD16_LOOP
-.MOD16_END:
-    LDD 2,S        ; Remainder
-    LEAS 4,S
-    RTS
+PRINT_TEXT_STR_82781042:
+    FCC "WORLD"
+    FCB $80          ; Vectrex string terminator
 

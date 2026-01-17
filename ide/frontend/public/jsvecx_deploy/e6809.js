@@ -2560,11 +2560,21 @@ function e6809()
 
                 // Stop emulator to avoid infinite error loops
                 try {
+                    // Force stop by setting running flag to false globally
+                    if (typeof window !== 'undefined' && window.vecxInstance) {
+                        window.vecxInstance.running = false;
+                        if (typeof window.vecxInstance.debugStop === 'function') {
+                            window.vecxInstance.debugStop();
+                        }
+                    }
                     if (this.vecx) {
+                        this.vecx.running = false;
                         if (typeof this.vecx.debugStop === 'function') this.vecx.debugStop();
                         else if (typeof this.vecx.stop === 'function') this.vecx.stop();
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error("Failed to stop emulator:", e);
+                }
 
                 utils.showError(errorMsg);
                 break;

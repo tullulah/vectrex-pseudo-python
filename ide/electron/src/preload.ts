@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCompiledBin: (cb: (payload: { base64: string; size: number; binPath: string }) => void) => ipcRenderer.on('emu://compiledBin', (_e: IpcRendererEvent, data) => cb(data)),
   // setVectorMode legacy removed
   listSources: (args?: { limit?: number }) => ipcRenderer.invoke('list:sources', args) as Promise<{ ok?:boolean; sources?: Array<{ path:string; kind:'vpy'|'asm'; size:number; mtime:number }> }> ,
-  // Disassemble a ROM snapshot (base64) using cargo disasm_full
+  // Disassemble a ROM snapshot (base64) using buildtools/vpy_disasm
   disassembleSnapshot: (args: { base64: string; startHex?: string; binPath?: string }) => ipcRenderer.invoke('tools:disassembleSnapshot', args) as Promise<{ ok: boolean; output?: string; error?: string; snapshotPath?: string; dissPath?: string; message?: string; stderr?: string }>,
 
   // Expose ipcRenderer for generic channel listening

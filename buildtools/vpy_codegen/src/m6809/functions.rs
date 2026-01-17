@@ -2,8 +2,45 @@
 //!
 //! Generates M6809 assembly for VPy functions
 
-use vpy_parser::{Module, Function, Stmt};
+use vpy_parser::{Module, Function, Stmt, Expr};
 use super::expressions;
+
+/// Check if module uses PLAY_MUSIC or PLAY_SFX (needs AUDIO_UPDATE auto-injection)
+/// Check if module uses PLAY_MUSIC or PLAY_SFX builtins
+/// Used to determine if AUDIO_UPDATE helper should be auto-injected
+pub fn has_audio_calls(module: &Module) -> bool {
+    fn check_expr(expr: &Expr) -> bool {
+        match expr {
+            Expr::Call(call_info) => {
+                call_info.name == "PLAY_MUSIC" || call_info.name == "PLAY_SFX"
+            },
+            _ => false,
+        }
+    }
+    
+    fn check_stmt(stmt: &Stmt) -> bool {
+        match stmt {
+            Stmt::Expr(expr, _) => check_expr(expr),
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                check_expr(cond) ||
+                body.iter().any(check_stmt) ||
+                elifs.iter().any(|(e, b)| check_expr(e) || b.iter().any(check_stmt)) ||
+                else_body.as_ref().map_or(false, |body| body.iter().any(check_stmt))
+            },
+            Stmt::While { cond, body, .. } => check_expr(cond) || body.iter().any(check_stmt),
+            Stmt::For { body, .. } => body.iter().any(check_stmt),
+            _ => false,
+        }
+    }
+    
+    module.items.iter().any(|item| {
+        if let vpy_parser::Item::Function(func) = item {
+            func.body.iter().any(check_stmt)
+        } else {
+            false
+        }
+    })
+}
 
 pub fn generate_functions(module: &Module) -> Result<String, String> {
     let mut asm = String::new();
@@ -35,12 +72,18 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
     asm.push_str("    ; Initialize global variables\n");
     for item in &module.items {
         if let vpy_parser::Item::GlobalLet { name, value, .. } = item {
-            // Skip arrays (they are handled separately)
-            if !matches!(value, vpy_parser::Expr::List(_)) {
-                // Generate initialization code
+            if let vpy_parser::Expr::List(_elements) = value {
+                // Array initialization: load ROM address into RAM variable
+                // The array data is in ROM with label ARRAY_{NAME}_DATA
+                // VAR_{NAME} is a 2-byte RAM pointer to the array
+                let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+                asm.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
+                asm.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+            } else {
+                // Non-array initialization
                 if let vpy_parser::Expr::Number(n) = value {
                     asm.push_str(&format!("    LDD #{}\n", n));
-                    asm.push_str(&format!("    STD VAR_{}\n", name));
+                    asm.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
         }
@@ -65,6 +108,12 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         // Inject Reset0Ref to position beam at center (0,0) before drawing
         asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
         generate_function_body(loop_fn, &mut asm)?;
+        
+        // Auto-inject AUDIO_UPDATE at END if module uses PLAY_MUSIC/PLAY_SFX
+        if has_audio_calls(module) {
+            asm.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)\n");
+        }
+        
         asm.push_str("    RTS\n\n");
     } else {
         // Empty loop if not defined
@@ -117,9 +166,9 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                     // 1. Evaluate expression
                     expressions::emit_simple_expr(value, asm);
                     
-                    // 2. Store to variable (name already uppercase from unifier)
+                    // 2. Store to variable (uppercase for consistency)
                     asm.push_str("    LDD RESULT\n");
-                    asm.push_str(&format!("    STD VAR_{}\n", name));
+                    asm.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
                 
                 vpy_parser::AssignTarget::Index { target: array_expr, index, .. } => {
@@ -181,8 +230,8 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                         _ => return Err(format!("Aug-assign {:?} not yet supported", op)),
                     }
                     
-                    // Store back
-                    asm.push_str(&format!("    STD VAR_{}\n", name));
+                    // Store back (uppercase for consistency)
+                    asm.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
                 _ => return Err("Complex assignment targets not yet supported".to_string()),
             }
