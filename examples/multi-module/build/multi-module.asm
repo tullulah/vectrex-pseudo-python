@@ -55,10 +55,10 @@ CURRENT_INTENSITY EQU $CF28    ; Current intensity for fade effects (1 byte)
 ;***************************************************************************
 ; USER VARIABLES
 ;***************************************************************************
-VAR_PLAYER_X EQU $CF10+0
-VAR_PLAYER_Y EQU $CF10+2
-VAR_PLAYER_SIZE EQU $CF10+4
-VAR_INPUT_INPUT_RESULT EQU $CF10+6
+VAR_PLAYER_SIZE EQU $CF10+0
+VAR_INPUT_INPUT_RESULT EQU $CF10+2
+VAR_PLAYER_X EQU $CF10+4
+VAR_PLAYER_Y EQU $CF10+6
 
 ;***************************************************************************
 ; ARRAY DATA
@@ -105,65 +105,111 @@ LOOP_BODY:
     JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)
     RTS
 
-; Function: INPUT_GET_INPUT
-INPUT_GET_INPUT:
-    JSR J1X_BUILTIN
+; Function: GRAPHICS_DRAW_BOX
+GRAPHICS_DRAW_BOX:
+    ; DRAW_VECTOR: Draw vector asset at position
+    ; Asset: box
+    LDD VAR_X
     STD RESULT
-    LDD RESULT
-    STD VAR_INPUT_X
-    JSR J1Y_BUILTIN
+    LDA RESULT+1  ; X position (low byte)
+    STA TMPPTR    ; Save X to temporary storage
+    LDD VAR_Y
     STD RESULT
-    LDD RESULT
-    STD VAR_INPUT_Y
+    LDA RESULT+1  ; Y position (low byte)
+    STA TMPPTR+1  ; Save Y to temporary storage
+    LDA TMPPTR    ; X position
+    STA DRAW_VEC_X
+    LDA TMPPTR+1  ; Y position
+    STA DRAW_VEC_Y
+    CLR MIRROR_X
+    CLR MIRROR_Y
+    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
+    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
+    LDX #_BOX_PATH0  ; Load first path
+    JSR Draw_Sync_List_At_With_Mirrors
+    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    LDD RESULT
-    ASLB            ; Multiply index by 2 (16-bit elements)
-    ROLA
-    STD TMPPTR      ; Save offset temporarily
-    LDD #VAR_INPUT_INPUT_RESULT_DATA  ; Load array data address
-    TFR D,X         ; X = array base pointer
-    LDD TMPPTR      ; D = offset
-    LEAX D,X        ; X = base + offset
-    STX TMPPTR2     ; Save computed address
-    LDD VAR_INPUT_X
-    STD RESULT
-    LDX TMPPTR2     ; Load computed address
-    LDD RESULT      ; Load value
-    STD ,X          ; Store value
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    ASLB            ; Multiply index by 2 (16-bit elements)
-    ROLA
-    STD TMPPTR      ; Save offset temporarily
-    LDD #VAR_INPUT_INPUT_RESULT_DATA  ; Load array data address
-    TFR D,X         ; X = array base pointer
-    LDD TMPPTR      ; D = offset
-    LEAX D,X        ; X = base + offset
-    STX TMPPTR2     ; Save computed address
-    LDD VAR_INPUT_Y
-    STD RESULT
-    LDX TMPPTR2     ; Load computed address
-    LDD RESULT      ; Load value
-    STD ,X          ; Store value
-    LDD #0
-    STD RESULT
-    RTS
     RTS
 
-; Function: INPUT_CHECK_FIRE
-INPUT_CHECK_FIRE:
-    LDA $C811      ; Vec_Button_1_1 (transition bits)
-    ANDA #$01      ; Test bit 0
-    BEQ .J1B1_OFF
-    LDD #1
-    BRA .J1B1_END
-.J1B1_OFF:
-    LDD #0
-.J1B1_END:
+; Function: GRAPHICS_DRAW_CROSS
+GRAPHICS_DRAW_CROSS:
+    ; DRAW_LINE: Draw line from (x0,y0) to (x1,y1)
+    LDD VAR_X
     STD RESULT
-    RTS
+    LDD RESULT
+    PSHS D
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    SUBD ,S++
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+0    ; x0
+    LDD VAR_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+2    ; y0
+    LDD VAR_X
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+4    ; x1
+    LDD VAR_Y
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+6    ; y1
+    LDD VAR_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+8    ; intensity
+    JSR DRAW_LINE_WRAPPER
+    LDD #0
+    STD RESULT
+    ; DRAW_LINE: Draw line from (x0,y0) to (x1,y1)
+    LDD VAR_X
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+0    ; x0
+    LDD VAR_Y
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    SUBD ,S++
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+2    ; y0
+    LDD VAR_X
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+4    ; x1
+    LDD VAR_Y
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #10
+    STD RESULT
+    LDD RESULT
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+6    ; y1
+    LDD VAR_INTENSITY
+    STD RESULT
+    LDD RESULT
+    STD TMPPTR+8    ; intensity
+    JSR DRAW_LINE_WRAPPER
+    LDD #0
+    STD RESULT
     RTS
 
 ; Function: MAIN
@@ -180,7 +226,11 @@ MAIN:
 ; Function: LOOP
 LOOP:
     JSR INPUT_get_input
-    LDX #VAR_INPUT_input_result_DATA  ; Array data address
+    LDD VAR_PLAYER_X
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDX #VAR_INPUT_INPUT_RESULT_DATA  ; Array data address
     PSHS X
     LDD #0
     STD RESULT
@@ -192,8 +242,15 @@ LOOP:
     LDD ,X      ; Load value
     STD RESULT
     LDD RESULT
-    STD VAR_DX
-    LDX #VAR_INPUT_input_result_DATA  ; Array data address
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD VAR_PLAYER_X
+    LDD VAR_PLAYER_Y
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDX #VAR_INPUT_INPUT_RESULT_DATA  ; Array data address
     PSHS X
     LDD #1
     STD RESULT
@@ -203,25 +260,6 @@ LOOP:
     PULS X      ; Array base
     LEAX D,X    ; X = base + (index * 2)
     LDD ,X      ; Load value
-    STD RESULT
-    LDD RESULT
-    STD VAR_DY
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD VAR_DX
-    STD RESULT
-    LDD RESULT
-    ADDD ,S++
-    STD RESULT
-    LDD RESULT
-    STD VAR_PLAYER_X
-    LDD VAR_PLAYER_Y
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD VAR_DY
     STD RESULT
     LDD RESULT
     ADDD ,S++
@@ -413,111 +451,57 @@ LOOP:
 .IF_END:
     RTS
 
-; Function: GRAPHICS_DRAW_BOX
-GRAPHICS_DRAW_BOX:
-    ; DRAW_VECTOR: Draw vector asset at position
-    ; Asset: box
-    LDD VAR_X
+; Function: INPUT_GET_INPUT
+INPUT_GET_INPUT:
+    LDD #0
     STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA TMPPTR    ; Save X to temporary storage
-    LDD VAR_Y
+    LDD RESULT
+    ASLB            ; Multiply index by 2 (16-bit elements)
+    ROLA
+    STD TMPPTR      ; Save offset temporarily
+    LDD #VAR_INPUT_INPUT_RESULT_DATA  ; Load array data address
+    TFR D,X         ; X = array base pointer
+    LDD TMPPTR      ; D = offset
+    LEAX D,X        ; X = base + offset
+    STX TMPPTR2     ; Save computed address
+    JSR J1X_BUILTIN
     STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA TMPPTR+1  ; Save Y to temporary storage
-    LDA TMPPTR    ; X position
-    STA DRAW_VEC_X
-    LDA TMPPTR+1  ; Y position
-    STA DRAW_VEC_Y
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_BOX_PATH0  ; Load first path
-    JSR Draw_Sync_List_At_With_Mirrors
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
+    LDX TMPPTR2     ; Load computed address
+    LDD RESULT      ; Load value
+    STD ,X          ; Store value
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ASLB            ; Multiply index by 2 (16-bit elements)
+    ROLA
+    STD TMPPTR      ; Save offset temporarily
+    LDD #VAR_INPUT_INPUT_RESULT_DATA  ; Load array data address
+    TFR D,X         ; X = array base pointer
+    LDD TMPPTR      ; D = offset
+    LEAX D,X        ; X = base + offset
+    STX TMPPTR2     ; Save computed address
+    JSR J1Y_BUILTIN
+    STD RESULT
+    LDX TMPPTR2     ; Load computed address
+    LDD RESULT      ; Load value
+    STD ,X          ; Store value
     LDD #0
     STD RESULT
     RTS
+    RTS
 
-; Function: GRAPHICS_DRAW_CROSS
-GRAPHICS_DRAW_CROSS:
-    ; DRAW_LINE: Draw line from (x0,y0) to (x1,y1)
-    LDD VAR_X
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    SUBD ,S++
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+0    ; x0
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+2    ; y0
-    LDD VAR_X
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    ADDD ,S++
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+4    ; x1
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+6    ; y1
-    LDD VAR_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+8    ; intensity
-    JSR DRAW_LINE_WRAPPER
+; Function: INPUT_CHECK_FIRE
+INPUT_CHECK_FIRE:
+    LDA $C811      ; Vec_Button_1_1 (transition bits)
+    ANDA #$01      ; Test bit 0
+    BEQ .J1B1_OFF
+    LDD #1
+    BRA .J1B1_END
+.J1B1_OFF:
     LDD #0
+.J1B1_END:
     STD RESULT
-    ; DRAW_LINE: Draw line from (x0,y0) to (x1,y1)
-    LDD VAR_X
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+0    ; x0
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    SUBD ,S++
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+2    ; y0
-    LDD VAR_X
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+4    ; x1
-    LDD VAR_Y
-    STD RESULT
-    LDD RESULT
-    PSHS D
-    LDD #10
-    STD RESULT
-    LDD RESULT
-    ADDD ,S++
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+6    ; y1
-    LDD VAR_INTENSITY
-    STD RESULT
-    LDD RESULT
-    STD TMPPTR+8    ; intensity
-    JSR DRAW_LINE_WRAPPER
-    LDD #0
-    STD RESULT
+    RTS
     RTS
 
 ;***************************************************************************
