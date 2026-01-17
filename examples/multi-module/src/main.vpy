@@ -18,10 +18,9 @@ def main():
 def loop():
     # Get input using module (stores in global input.input_result)
     input.get_input()
-    dx = input.input_result[0]
-    dy = input.input_result[1]
-    player_x = player_x + dx
-    player_y = player_y + dy
+    # Use array values directly - no local variables
+    player_x = player_x + input.input_result[0]
+    player_y = player_y + input.input_result[1]
     
     # Clamp to screen bounds
     if player_x < -100:

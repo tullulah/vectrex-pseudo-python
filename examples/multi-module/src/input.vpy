@@ -4,11 +4,9 @@
 input_result = [0, 0]
 
 def get_input():
-    # Read joystick input and store in global array
-    x = J1_X()
-    y = J1_Y()
-    input_result[0] = x
-    input_result[1] = y
+    # Read joystick input and store in global array (no local variables)
+    input_result[0] = J1_X()
+    input_result[1] = J1_Y()
     return 0  # Return dummy value
 
 def check_fire():

@@ -171,8 +171,8 @@ fn emit_index(array: &Expr, index: &Expr, out: &mut String) {
     // If array is a simple identifier, load DATA address directly
     if let Expr::Ident(id) = array {
         // Direct array access - load DATA address
-        // IMPORTANT: Name already comes uppercase from unifier
-        out.push_str(&format!("    LDX #VAR_{}_DATA  ; Array data address\n", id.name));
+        // CRITICAL: Normalize to uppercase (unifier may have mixed case)
+        out.push_str(&format!("    LDX #VAR_{}_DATA  ; Array data address\n", id.name.to_uppercase()));
         out.push_str("    PSHS X\n");
     } else {
         // Complex array expression - evaluate it
