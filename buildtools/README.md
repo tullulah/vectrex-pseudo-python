@@ -68,6 +68,78 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 
 ### ✅ Phase 6: vpy_assembler - Critical Fixes (2026-01-17)
 - **ORG Directive Processing**: Fixed multibank boot sequence
+  - Added `set_org()` method with 0xFF padding
+  - Fixed parsing to recognize `$FFF0` and `0xFFF0` formats
+  - Applies ORG directives sequentially (was ignoring all after first)
+  
+- **Interrupt Vector Fix**: Removed from cartridge ROM
+  - Vectors are in BIOS ROM ($E000-$FFFF) and configurable RAM ($CBF2-$CBFB)
+  - Cartridge ROM only contains code ($0000-$7FFF)
+  - Reference: http://vide.malban.de/27th-of-november-2020-lose-ends-irq
+  
+- **Missing Opcodes Added**: Fixed desensamblador
+  - 0xFC (LDD extended), 0xDC (LDD direct)
+  - 0xFD (STD extended), 0xBF (STX extended)
+  - 0xFE (LDU extended)
+
+### ✅ Phase 6.7: Multi-bank ROM Generation (IMPLEMENTED 2026-01-17)
+
+**Status**: ✅ FULLY IMPLEMENTED - Dynamic bank allocation
+
+Buildtools now supports multi-bank cartridges up to 4MB:
+
+**Features**:
+- Automatic detection of multibank projects (ROM size > 32KB)
+- Dynamic bank count calculation (supports 1-256 banks)
+- All banks marked in ASM with proper headers
+- Helpers bank dynamically placed at last bank position
+- Sequential bank model: ALL banks use ORG $0000
+- No hardcoded bank numbers - fully scalable
+
+**Configuration** (in .vpy source):
+```python
+META ROM_TOTAL_SIZE = 524288   # 512KB (32 banks)
+META ROM_BANK_SIZE = 16384      # 16KB per bank (standard)
+
+# Supports up to 4MB:
+# META ROM_TOTAL_SIZE = 4194304   # 4MB (256 banks)
+```
+
+**Generated Bank Structure**:
+```
+; ================================================
+; BANK #0 - Entry point and main code
+; ================================================
+    ORG $0000
+    [Vectrex header + START label + user functions]
+
+; ================================================
+; BANK #1 - 0 function(s) [EMPTY]
+; ================================================
+    ORG $0000
+    ; Reserved for future code overflow
+
+; ... (Banks 2-30: Empty placeholders)
+
+; ================================================
+; BANK #31 - 0 function(s) [HELPERS ONLY]
+; ================================================
+    ORG $0000
+    ; Runtime helpers (VECTREX_PRINT_TEXT, etc.)
+```
+
+**Implementation**:
+- `vpy_codegen/src/m6809/mod.rs`: Emits ALL bank markers dynamically
+- `vpy_cli/src/main.rs`: Detects multibank and invokes multi_bank_linker
+- `vpy_linker/src/multi_bank_linker.rs`: Ported from core, assembles each bank
+
+**Key Technical Details**:
+- Helpers bank = `(rom_total_size / rom_bank_size) - 1`
+- All banks 1 to (helpers_bank - 1) marked as [EMPTY]
+- Compatible with multi_bank_linker::split_asm_by_bank()
+- Tested with 512KB ROM (32 banks) - generates valid binary
+
+### Phase 7: ROM Linker
   - Added `set_org()` method with 0xFF padding to `binary_emitter.rs`
   - Modified `asm_to_binary.rs` to parse and apply ORG directives
   - Removed "ORG ya se manejó" ignore pattern that broke multibank

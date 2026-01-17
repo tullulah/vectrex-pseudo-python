@@ -52,9 +52,9 @@ pub fn emit_simple_expr(expr: &Expr, out: &mut String) {
         Expr::Not(expr) => {
             emit_simple_expr(expr, out);
             out.push_str("    LDD RESULT\n");
-            out.push_str("    BNE .NOT_ZERO\n");
+            out.push_str("    LBNE .NOT_ZERO\n");
             out.push_str("    LDD #1\n");
-            out.push_str("    BRA .NOT_END\n");
+            out.push_str("    LBRA .NOT_END\n");
             out.push_str(".NOT_ZERO:\n");
             out.push_str("    LDD #0\n");
             out.push_str(".NOT_END:\n");
@@ -149,17 +149,17 @@ fn emit_compare(left: &Expr, op: CmpOp, right: &Expr, out: &mut String) {
     out.push_str("    CMPD ,S++\n");
     
     let branch_true = match op {
-        CmpOp::Eq => "BEQ",
-        CmpOp::Ne => "BNE",
-        CmpOp::Lt => "BLT",
-        CmpOp::Le => "BLE",
-        CmpOp::Gt => "BGT",
-        CmpOp::Ge => "BGE",
+        CmpOp::Eq => "LBEQ",
+        CmpOp::Ne => "LBNE",
+        CmpOp::Lt => "LBLT",
+        CmpOp::Le => "LBLE",
+        CmpOp::Gt => "LBGT",
+        CmpOp::Ge => "LBGE",
     };
     
     out.push_str(&format!("    {} .CMP_TRUE\n", branch_true));
     out.push_str("    LDD #0\n");
-    out.push_str("    BRA .CMP_END\n");
+    out.push_str("    LBRA .CMP_END\n");
     out.push_str(".CMP_TRUE:\n");
     out.push_str("    LDD #1\n");
     out.push_str(".CMP_END:\n");

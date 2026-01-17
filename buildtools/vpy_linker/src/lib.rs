@@ -27,6 +27,7 @@ pub mod object;      // Object file format (.vo)
 pub mod relocation;
 pub mod resolver;    // Symbol resolution (4-step algorithm)
 pub mod bank_layout; // Multibank ROM integration
+pub mod multi_bank_linker; // Phase 6.7: Multi-bank ROM generation
 
 pub use error::{LinkerError, LinkerResult};
 pub use object::{
@@ -38,6 +39,7 @@ pub use object::{
 };
 pub use resolver::{SymbolResolver, GlobalSymbolTable, ResolvedSymbol};
 pub use bank_layout::{BankConfig, MultibankLayout, BankData, SectionAssignment};
+pub use multi_bank_linker::MultiBankLinker;
 
 /// Multi-bank ROM output
 #[derive(Debug, Clone)]

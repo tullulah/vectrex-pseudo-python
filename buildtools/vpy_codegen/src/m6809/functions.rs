@@ -15,9 +15,10 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
     
     for item in &module.items {
         if let vpy_parser::Item::Function(func) = item {
-            match func.name.as_str() {
-                "main" => main_fn = Some(func),
-                "loop" => loop_fn = Some(func),
+            // IMPORTANT: After unifier, function names are uppercase
+            match func.name.to_uppercase().as_str() {
+                "MAIN" => main_fn = Some(func),
+                "LOOP" => loop_fn = Some(func),
                 _ => other_fns.push(func),
             }
         }
@@ -29,6 +30,21 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
     asm.push_str(";***************************************************************************\n\n");
     
     asm.push_str("MAIN:\n");
+    
+    // Initialize global variables with their initial values
+    asm.push_str("    ; Initialize global variables\n");
+    for item in &module.items {
+        if let vpy_parser::Item::GlobalLet { name, value, .. } = item {
+            // Skip arrays (they are handled separately)
+            if !matches!(value, vpy_parser::Expr::List(_)) {
+                // Generate initialization code
+                if let vpy_parser::Expr::Number(n) = value {
+                    asm.push_str(&format!("    LDD #{}\n", n));
+                    asm.push_str(&format!("    STD VAR_{}\n", name));
+                }
+            }
+        }
+    }
     
     // Call main() if exists
     if let Some(main) = main_fn {
@@ -46,22 +62,39 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         asm.push_str("LOOP_BODY:\n");
         // Inject WAIT_RECAL at the start of every loop
         asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
+        // Inject Reset0Ref to position beam at center (0,0) before drawing
+        asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
         generate_function_body(loop_fn, &mut asm)?;
         asm.push_str("    RTS\n\n");
     } else {
         // Empty loop if not defined
         asm.push_str("LOOP_BODY:\n");
         asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
+        asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
         asm.push_str("    RTS\n\n");
     }
     
-    // Generate other user functions
+    // Generate other user functions (excluding MAIN and LOOP which are handled above)
     for func in other_fns {
+        // Double-check: skip MAIN and LOOP (should already be filtered but be safe)
+        let name_upper = func.name.to_uppercase();
+        if name_upper == "MAIN" || name_upper == "LOOP" {
+            continue;  // Already handled above
+        }
+        
         // IMPORTANT: Function name already comes uppercase from unifier
         asm.push_str(&format!("; Function: {}\n", func.name));
         asm.push_str(&format!("{}:\n", func.name));
         generate_function_body(func, &mut asm)?;
-        asm.push_str("    RTS\n\n");
+        
+        // Only add RTS if function doesn't end with explicit return
+        let has_explicit_return = func.body.last()
+            .map(|stmt| matches!(stmt, Stmt::Return(..)))
+            .unwrap_or(false);
+        if !has_explicit_return {
+            asm.push_str("    RTS\n");
+        }
+        asm.push_str("\n");
     }
     
     Ok(asm)
@@ -165,13 +198,13 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
             
             // Branch if zero (false)
             asm.push_str("    LDD RESULT\n");
-            asm.push_str("    BEQ .IF_ELSE\n");
+            asm.push_str("    LBEQ .IF_ELSE\n");
             
             // Then body
             for stmt in body {
                 generate_statement(stmt, asm)?;
             }
-            asm.push_str("    BRA .IF_END\n");
+            asm.push_str("    LBRA .IF_END\n");
             
             // Else body (ignoring elifs for now)
             asm.push_str(".IF_ELSE:\n");
@@ -190,14 +223,14 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
             // Evaluate condition
             expressions::emit_simple_expr(cond, asm);
             asm.push_str("    LDD RESULT\n");
-            asm.push_str("    BEQ .WHILE_END\n");
+            asm.push_str("    LBEQ .WHILE_END\n");
             
             // Body
             for stmt in body {
                 generate_statement(stmt, asm)?;
             }
             
-            asm.push_str("    BRA .WHILE_START\n");
+            asm.push_str("    LBRA .WHILE_START\n");
             asm.push_str(".WHILE_END:\n");
         }
         

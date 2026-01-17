@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 /// Analyze module to detect which runtime helpers are needed
 /// Returns set of helper names that should be emitted
-fn analyze_needed_helpers(module: &Module) -> HashSet<String> {
+pub fn analyze_module_helpers(module: &Module) -> HashSet<String> {
     let mut needed = HashSet::new();
     
     // Scan all functions in module
@@ -63,12 +63,23 @@ fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
             let name_upper = call_info.name.to_uppercase();
             let args = &call_info.args;
             
+            // Text/Number printing
+            if name_upper == "PRINT_TEXT" {
+                needed.insert("PRINT_TEXT".to_string());
+            }
+            if name_upper == "PRINT_NUMBER" {
+                needed.insert("PRINT_NUMBER".to_string());
+            }
+            
             // Drawing helpers: Need runtime if args contain non-constants
             if name_upper == "DRAW_CIRCLE" && has_variable_args(args) {
                 needed.insert("DRAW_CIRCLE_RUNTIME".to_string());
             }
             if name_upper == "DRAW_RECT" && has_variable_args(args) {
                 needed.insert("DRAW_RECT_RUNTIME".to_string());
+            }
+            if name_upper == "DRAW_LINE" {
+                needed.insert("DRAW_LINE_WRAPPER".to_string());
             }
             
             // Joystick helpers: Always needed when called
@@ -210,7 +221,7 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     let mut asm = String::new();
     
     // Analyze module to detect which helpers are needed
-    let needed = analyze_needed_helpers(module);
+    let needed = analyze_module_helpers(module);
     eprintln!("[DEBUG HELPERS] Detected {} needed helpers: {:?}", needed.len(), needed);
     
     // Get BIOS function addresses from VECTREX.I
@@ -221,61 +232,65 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     asm.push_str("; RUNTIME HELPERS\n");
     asm.push_str(";***************************************************************************\n\n");
     
-    // VECTREX_PRINT_TEXT: Call Print_Str_d with proper setup
-    // Entry: VAR_ARG0=x, VAR_ARG1=y, VAR_ARG2=string pointer
-    asm.push_str("VECTREX_PRINT_TEXT:\n");
-    asm.push_str("    ; VPy signature: PRINT_TEXT(x, y, string)\n");
-    asm.push_str("    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n");
-    asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
-    asm.push_str("    LDU VAR_ARG2   ; string pointer (third parameter)\n");
-    asm.push_str("    LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)\n");
-    asm.push_str("    LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)\n");
-    asm.push_str("    JSR Print_Str_d ; Print string from U register\n");
-    asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
-    asm.push_str("    RTS\n\n");
+    // VECTREX_PRINT_TEXT: Call Print_Str_d with proper setup (CONDITIONAL)
+    // Only emit if PRINT_TEXT is actually used in code
+    if needed.contains("PRINT_TEXT") {
+        asm.push_str("VECTREX_PRINT_TEXT:\n");
+        asm.push_str("    ; VPy signature: PRINT_TEXT(x, y, string)\n");
+        asm.push_str("    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n");
+        asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
+        asm.push_str("    LDU VAR_ARG2   ; string pointer (third parameter)\n");
+        asm.push_str("    LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)\n");
+        asm.push_str("    LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)\n");
+        asm.push_str("    JSR Print_Str_d ; Print string from U register\n");
+        asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
+        asm.push_str("    RTS\n\n");
+    }
     
-    // VECTREX_PRINT_NUMBER: Print number at position
-    // Entry: VAR_ARG0=x, VAR_ARG1=y, VAR_ARG2=number
-    asm.push_str("VECTREX_PRINT_NUMBER:\n");
-    asm.push_str("    ; VPy signature: PRINT_NUMBER(x, y, num)\n");
-    asm.push_str("    ; Convert number to hex string and print\n");
-    asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
-    asm.push_str("    LDA VAR_ARG1+1   ; Y position\n");
-    asm.push_str("    LDB VAR_ARG0+1   ; X position\n");
-    asm.push_str("    JSR Moveto_d     ; Move to position\n");
-    asm.push_str("    \n");
-    asm.push_str("    ; Convert number to string (show low byte as hex)\n");
-    asm.push_str("    LDA VAR_ARG2+1   ; Load number value\n");
-    asm.push_str("    \n");
-    asm.push_str("    ; Convert high nibble to ASCII\n");
-    asm.push_str("    LSRA\n");
-    asm.push_str("    LSRA\n");
-    asm.push_str("    LSRA\n");
-    asm.push_str("    LSRA\n");
-    asm.push_str("    ANDA #$0F\n");
-    asm.push_str("    CMPA #10\n");
-    asm.push_str("    BLO PN_DIGIT1\n");
-    asm.push_str("    ADDA #7          ; A-F\n");
-    asm.push_str("PN_DIGIT1:\n");
-    asm.push_str("    ADDA #'0'\n");
-    asm.push_str("    STA NUM_STR      ; Store first digit\n");
-    asm.push_str("    \n");
-    asm.push_str("    ; Convert low nibble to ASCII  \n");
-    asm.push_str("    LDA VAR_ARG2+1\n");
-    asm.push_str("    ANDA #$0F\n");
-    asm.push_str("    CMPA #10\n");
-    asm.push_str("    BLO PN_DIGIT2\n");
-    asm.push_str("    ADDA #7          ; A-F\n");
-    asm.push_str("PN_DIGIT2:\n");
-    asm.push_str("    ADDA #'0'\n");
-    asm.push_str("    ORA #$80         ; Set high bit for string termination\n");
-    asm.push_str("    STA NUM_STR+1    ; Store second digit with high bit\n");
-    asm.push_str("    \n");
-    asm.push_str("    ; Print the string\n");
-    asm.push_str("    LDU #NUM_STR     ; Point to our number string\n");
-    asm.push_str("    JSR Print_Str_d  ; Print using BIOS\n");
-    asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
-    asm.push_str("    RTS\n\n");
+    // VECTREX_PRINT_NUMBER: Print number at position (CONDITIONAL)
+    // Only emit if PRINT_NUMBER is actually used in code
+    if needed.contains("PRINT_NUMBER") {
+        asm.push_str("VECTREX_PRINT_NUMBER:\n");
+        asm.push_str("    ; VPy signature: PRINT_NUMBER(x, y, num)\n");
+        asm.push_str("    ; Convert number to hex string and print\n");
+        asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
+        asm.push_str("    LDA VAR_ARG1+1   ; Y position\n");
+        asm.push_str("    LDB VAR_ARG0+1   ; X position\n");
+        asm.push_str("    JSR Moveto_d     ; Move to position\n");
+        asm.push_str("    \n");
+        asm.push_str("    ; Convert number to string (show low byte as hex)\n");
+        asm.push_str("    LDA VAR_ARG2+1   ; Load number value\n");
+        asm.push_str("    \n");
+        asm.push_str("    ; Convert high nibble to ASCII\n");
+        asm.push_str("    LSRA\n");
+        asm.push_str("    LSRA\n");
+        asm.push_str("    LSRA\n");
+        asm.push_str("    LSRA\n");
+        asm.push_str("    ANDA #$0F\n");
+        asm.push_str("    CMPA #10\n");
+        asm.push_str("    BLO PN_DIGIT1\n");
+        asm.push_str("    ADDA #7          ; A-F\n");
+        asm.push_str("PN_DIGIT1:\n");
+        asm.push_str("    ADDA #'0'\n");
+        asm.push_str("    STA NUM_STR      ; Store first digit\n");
+        asm.push_str("    \n");
+        asm.push_str("    ; Convert low nibble to ASCII  \n");
+        asm.push_str("    LDA VAR_ARG2+1\n");
+        asm.push_str("    ANDA #$0F\n");
+        asm.push_str("    CMPA #10\n");
+        asm.push_str("    BLO PN_DIGIT2\n");
+        asm.push_str("    ADDA #7          ; A-F\n");
+        asm.push_str("PN_DIGIT2:\n");
+        asm.push_str("    ADDA #'0'\n");
+        asm.push_str("    ORA #$80         ; Set high bit for string termination\n");
+        asm.push_str("    STA NUM_STR+1    ; Store second digit with high bit\n");
+        asm.push_str("    \n");
+        asm.push_str("    ; Print the string\n");
+        asm.push_str("    LDU #NUM_STR     ; Point to our number string\n");
+        asm.push_str("    JSR Print_Str_d  ; Print using BIOS\n");
+        asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
+        asm.push_str("    RTS\n\n");
+    }
     
     // Call module-specific runtime helpers with analyzed needed set
     super::math::emit_runtime_helpers(&mut asm, &needed);

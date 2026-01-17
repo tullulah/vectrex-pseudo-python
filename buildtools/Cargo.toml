@@ -10,7 +10,7 @@ members = [
     "vpy_linker",
     "vpy_binary_writer",
     "vpy_debug_gen",
-    "vpy_cli",
+    "vpy_cli", "vpy_disasm",
 ]
 
 [workspace.package]

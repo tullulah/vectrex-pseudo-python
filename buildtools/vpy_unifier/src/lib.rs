@@ -422,10 +422,10 @@ fn rewrite_expr(expr: vpy_parser::ast::Expr, resolver: &SymbolResolver) -> vpy_p
             }
         }
         
-        // Regular Call: rewrite arguments
+        // Regular Call: rewrite arguments AND normalize function name
         Expr::Call(call) => {
             Expr::Call(CallInfo {
-                name: call.name,
+                name: call.name.to_uppercase(),  // CRITICAL FIX: Normalize function names to uppercase
                 args: call.args.into_iter().map(|a| rewrite_expr(a, resolver)).collect(),
                 source_line: call.source_line,
                 col: call.col,
