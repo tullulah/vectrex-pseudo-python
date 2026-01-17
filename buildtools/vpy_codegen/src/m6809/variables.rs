@@ -97,6 +97,16 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
     }
     asm.push_str("\n");
     
+    // CRITICAL: Define internal builtin variables
+    // These are used by DRAW_VECTOR_EX and other builtins
+    asm.push_str("; Internal builtin variables (aliases to RESULT slots)\n");
+    asm.push_str("DRAW_VEC_X EQU RESULT+0\n");
+    asm.push_str("DRAW_VEC_Y EQU RESULT+2\n");
+    asm.push_str("MIRROR_X EQU RESULT+4\n");
+    asm.push_str("MIRROR_Y EQU RESULT+6\n");
+    asm.push_str("DRAW_VEC_INTENSITY EQU RESULT+8\n");
+    asm.push_str("\n");
+    
     Ok(asm)
 }
 
