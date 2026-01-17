@@ -726,6 +726,15 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         
         println!("  {} Unified {} items", "✓".green(), unified.items.len());
         
+        // **CRITICAL**: Override rom_size and bank_size from META if specified
+        let rom_size = unified.meta.rom_total_size.map(|s| s as usize).unwrap_or(rom_size);
+        let bank_size = unified.meta.rom_bank_size.map(|s| s as usize).unwrap_or(bank_size);
+        
+        if verbose && (unified.meta.rom_total_size.is_some() || unified.meta.rom_bank_size.is_some()) {
+            println!("  {} Using ROM size from META: {} bytes", "✓".cyan(), rom_size);
+            println!("  {} Using Bank size from META: {} bytes", "✓".cyan(), bank_size);
+        }
+        
         // Phase 4: Code generation
         println!("\n{}", "Phase 4: Code Generation".bright_cyan().bold());
         let title = unified.meta.title_override.as_deref()
@@ -754,7 +763,51 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         
         println!("  {} ASM written: {}", "✓".green(), asm_path.display());
         
-        // Phase 5: Parse ASM into bank sections
+        // **CRITICAL: Detect multibank BEFORE assembling**
+        // If multibank is detected, skip unified assembler and use multi_bank_linker directly
+        let is_multibank = rom_size > 32768;
+        
+        if is_multibank {
+            println!("\n{}", format!("Multibank detected: {} KB ROM ({} banks × {} KB)", 
+                rom_size / 1024,
+                rom_size / bank_size,
+                bank_size / 1024).bright_yellow().bold());
+            
+            println!("\n{}", "Phase 6.7: Multi-bank binary generation...".bright_cyan().bold());
+            
+            let output_path_mb = output.clone().unwrap_or_else(|| build_dir.join(format!("{}.bin", project_name)));
+            
+            let linker = vpy_linker::MultiBankLinker::new(
+                bank_size as u32,
+                (rom_size / bank_size) as u8,
+                true // use native assembler
+            );
+            
+            match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
+                Ok(_) => {
+                    println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
+                        "✓".green(), output_path_mb.display());
+                    println!("     Total size: {} KB ({} banks × {} KB)", 
+                        rom_size / 1024,
+                        rom_size / bank_size,
+                        bank_size / 1024);
+                    
+                    println!("\n{}", format!("✓ BUILD SUCCESS (multibank): {} KB written to {}", 
+                        rom_size / 1024,
+                        output_path_mb.display()).bright_green().bold());
+                    
+                    return Ok(());
+                }
+                Err(e) => {
+                    println!("  {} Warning: Multi-bank ROM generation failed: {}", 
+                        "⚠".yellow(), e);
+                    println!("     Falling back to unified assembler...");
+                    // Fall through to unified assembler
+                }
+            }
+        }
+        
+        // Phase 5: Parse ASM into bank sections (single-bank path OR multibank fallback)
         println!("\n{}", "Phase 5: Parse Bank Sections".bright_cyan().bold());
         
         let sections = vpy_assembler::parse_unified_asm(&generated.asm_source)
@@ -884,7 +937,53 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("  ASM written: {}", asm_path.display());
     }
     
-    // Phase 3: Assemble each bank
+    // **CRITICAL: Detect multibank BEFORE assembling**
+    // If multibank is detected, skip unified assembler and use multi_bank_linker directly
+    let is_multibank = rom_size > 32768;
+    
+    if is_multibank {
+        println!("\n{}", format!("Multibank detected: {} KB ROM ({} banks × {} KB)", 
+            rom_size / 1024,
+            rom_size / bank_size,
+            bank_size / 1024).bright_yellow().bold());
+        
+        println!("\n{}", "Phase 6.7: Multi-bank binary generation...".bright_cyan().bold());
+        
+        let output_path_mb = output.clone().unwrap_or_else(|| {
+            source_path.with_extension("bin")
+        });
+        
+        let linker = vpy_linker::MultiBankLinker::new(
+            bank_size as u32,
+            (rom_size / bank_size) as u8,
+            true // use native assembler
+        );
+        
+        match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
+            Ok(_) => {
+                println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
+                    "✓".green(), output_path_mb.display());
+                println!("     Total size: {} KB ({} banks × {} KB)", 
+                    rom_size / 1024,
+                    rom_size / bank_size,
+                    bank_size / 1024);
+                
+                println!("\n{}", format!("✓ Build SUCCESS (multibank): {} KB written to {}", 
+                    rom_size / 1024,
+                    output_path_mb.display()).bright_green().bold());
+                
+                return Ok(());
+            }
+            Err(e) => {
+                println!("  {} Warning: Multi-bank ROM generation failed: {}", 
+                    "⚠".yellow(), e);
+                println!("     Falling back to unified assembler...");
+                // Fall through to unified assembler
+            }
+        }
+    }
+    
+    // Phase 3: Assemble each bank (single-bank path OR multibank fallback)
     if verbose {
         println!("\n{}", "Phase 3: Assembling banks...".bright_cyan());
     }

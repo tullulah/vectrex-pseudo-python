@@ -163,9 +163,11 @@ pub fn generate_m6809_asm(
     }
     asm.push_str("\n");
     
-    // For multibank: Start Bank 0
+    // For multibank: Emit Bank 0 marker
     if is_multibank {
-        asm.push_str("; === BANK 0 ===\n");
+        asm.push_str("; ================================================\n");
+        asm.push_str("; BANK #0 - Entry point and main code\n");
+        asm.push_str("; ================================================\n");
     }
     
     // Start of ROM
@@ -286,7 +288,7 @@ pub fn generate_m6809_asm(
     
     asm.push_str("    JMP MAIN\n\n");
     
-    // Generate user functions
+    // Generate user functions in Bank 0
     let functions_asm = functions::generate_functions(module)?;
     asm.push_str(&functions_asm);
     
@@ -296,18 +298,28 @@ pub fn generate_m6809_asm(
     // Solution: Collect now, emit at END (after helpers, before vectors) like CORE does
     let print_text_strings = builtins::collect_print_text_strings(module);
     
-    // For multibank: Switch to fixed bank (last bank) for helpers
-    // This bank is always visible at $4000-$7FFF, so helpers can be called from any bank
-    // Two-pass assembly in vpy_assembler will:
-    //   1. Assemble fixed bank first
-    //   2. Extract helper symbols (VECTREX_PRINT_TEXT, etc.)
-    //   3. Inject EQU declarations into other banks
-    //   4. Assemble other banks with symbol references resolved
+    // For multibank: Emit ALL intermediate banks as empty placeholders
+    // multi_bank_linker requires ALL banks to be marked in the ASM
+    // Format: "; ================================================"
+    //         "; BANK #N - 0 function(s) [EMPTY]"
+    //         "; ================================================"
+    //         "    ORG $0000  ; Sequential bank model"
     if is_multibank {
-        asm.push_str(&format!("\n; === BANK {} ===\n", helpers_bank));
-        asm.push_str("    ORG $4000\n");
-        asm.push_str(&format!("    ; Fixed bank (always visible at $4000-$7FFF)\n"));
-        asm.push_str(&format!("    ; Contains runtime helpers for all banks\n\n"));
+        // Emit banks 1 through (helpers_bank - 1) as empty
+        for bank_id in 1..(helpers_bank as usize) {
+            asm.push_str(&format!("\n; ================================================\n"));
+            asm.push_str(&format!("; BANK #{} - 0 function(s) [EMPTY]\n", bank_id));
+            asm.push_str(&format!("; ================================================\n"));
+            asm.push_str("    ORG $0000  ; Sequential bank model\n");
+            asm.push_str(&format!("    ; Reserved for future code overflow\n\n"));
+        }
+        
+        // Emit helpers bank (last bank) with proper marker
+        asm.push_str(&format!("\n; ================================================\n"));
+        asm.push_str(&format!("; BANK #{} - 0 function(s) [HELPERS ONLY]\n", helpers_bank));
+        asm.push_str(&format!("; ================================================\n"));
+        asm.push_str("    ORG $0000  ; Sequential bank model\n");
+        asm.push_str(&format!("    ; Runtime helpers (accessible from all banks)\n\n"));
         let helpers_asm = helpers::generate_helpers(module)?;
         asm.push_str(&helpers_asm);
     }

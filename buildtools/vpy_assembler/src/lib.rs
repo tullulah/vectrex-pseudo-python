@@ -14,6 +14,58 @@ use std::collections::HashMap;
 #[allow(unused_imports)]
 use vpy_codegen::GeneratedASM;
 
+// Helper function to extract labels from ASM when assembly fails
+// Based on core/src/backend/m6809/multi_bank_linker.rs
+fn extract_labels_from_asm(asm: &str, org_address: u16) -> HashMap<String, u16> {
+    let mut labels = HashMap::new();
+    let mut current_offset = 0u16;
+    
+    for line in asm.lines() {
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('*') {
+            continue;
+        }
+        
+        // Skip INCLUDE and EQU directives
+        if trimmed.to_uppercase().starts_with("INCLUDE") || trimmed.to_uppercase().contains(" EQU ") {
+            continue;
+        }
+        
+        // Parse label (line ends with :)
+        if let Some(label_pos) = trimmed.find(':') {
+            let label = trimmed[..label_pos].trim().to_string();
+            if !label.is_empty() && !label.starts_with(' ') {
+                labels.insert(label, org_address + current_offset);
+            }
+        }
+        
+        // Estimate instruction size (rough approximation)
+        if !trimmed.is_empty() && !trimmed.ends_with(':') {
+            if trimmed.to_uppercase().starts_with("FCB ") {
+                current_offset += 1;
+            } else if trimmed.to_uppercase().starts_with("FDB ") {
+                current_offset += 2;
+            } else if trimmed.to_uppercase().starts_with("FCC ") {
+                // Count string length roughly
+                if let Some(start) = trimmed.find('"') {
+                    if let Some(end) = trimmed.rfind('"') {
+                        if end > start {
+                            current_offset += (end - start - 1) as u16 + 1;
+                        }
+                    }
+                }
+            } else if !trimmed.starts_with("ORG ") {
+                // Regular instruction estimate
+                current_offset += 2;
+            }
+        }
+    }
+    
+    labels
+}
+
 /// Bank section extracted from unified ASM
 #[derive(Debug, Clone)]
 pub struct BankSection {
@@ -173,132 +225,133 @@ pub fn assemble_banks(sections: Vec<BankSection>) -> Result<Vec<BankBinary>, Ass
         return assemble_banks_simple(sections);
     }
     
-    // === TWO-PASS ASSEMBLY FOR MULTIBANK ===
+    // === TWO-PASS ASSEMBLY FOR MULTIBANK (Based on core/multi_bank_linker.rs) ===
     
-    // Step 1: Find fixed bank (last bank ID) and Bank 0
     let max_bank_id = *bank_ids.iter().max().unwrap();
-    let fixed_bank_id = max_bank_id;
+    let helper_bank_id = max_bank_id;
     
-    // Step 2: Extract EQU definitions from Bank 0 (shared RAM symbols)
-    let bank0_section = sections.iter().find(|s| s.bank_id == 0);
-    let mut shared_equ_definitions = Vec::new();
+    // **PASS 1**: Iteratively extract global symbol table from all banks
+    // This allows cross-bank references (e.g., Bank 31 interrupt vectors referencing Bank 0 START)
+    let mut all_symbols: HashMap<String, u16> = HashMap::new();
+    let max_iterations = 5;
     
-    if let Some(bank0) = bank0_section {
-        shared_equ_definitions.push("; === Shared RAM symbols from Bank 0 ===".to_string());
-        for line in &bank0.asm_lines {
-            let trimmed = line.trim();
-            // Extract EQU definitions for shared symbols
-            if trimmed.contains(" EQU ") && 
-               (trimmed.starts_with("CURRENT_ROM_BANK") || 
-                trimmed.starts_with("RESULT") ||
-                trimmed.starts_with("TMPPTR") ||
-                trimmed.starts_with("VAR_ARG") ||
-                trimmed.starts_with("VAR_")) {
-                shared_equ_definitions.push(line.clone());
-            }
-        }
-        shared_equ_definitions.push(String::new()); // Blank line
+    // Load BIOS symbols first
+    use crate::m6809::load_vectrex_symbols;
+    let mut bios_symbols = HashMap::new();
+    load_vectrex_symbols(&mut bios_symbols);
+    for (name, addr) in bios_symbols.iter() {
+        all_symbols.insert(name.clone(), *addr);
     }
     
-    // Step 3: Separate fixed bank from other banks
-    let mut fixed_bank_section: Option<BankSection> = None;
-    let mut other_sections = Vec::new();
+    // Placeholder for START if not found (will be overwritten)
+    if !all_symbols.contains_key("START") {
+        all_symbols.insert("START".to_string(), 0x0000);
+    }
     
+    // Create a map of sections by bank_id for easy access
+    let mut sections_map: HashMap<usize, BankSection> = HashMap::new();
     for section in sections {
-        if section.bank_id == fixed_bank_id {
-            fixed_bank_section = Some(section);
-        } else {
-            other_sections.push(section);
-        }
+        sections_map.insert(section.bank_id, section);
     }
     
-    let mut fixed_bank_section = fixed_bank_section
-        .ok_or_else(|| AssemblyError::Failed(format!("Fixed bank {} not found", fixed_bank_id)))?;
-    
-    // Step 4: Inject shared EQU definitions into fixed bank
-    let mut augmented_fixed_lines = shared_equ_definitions.clone();
-    augmented_fixed_lines.extend(fixed_bank_section.asm_lines);
-    fixed_bank_section.asm_lines = augmented_fixed_lines;
-    
-    // Step 5: Assemble fixed bank (PASS 1)
-    let asm_source = fixed_bank_section.asm_lines.join("\n");
-    let (bytes, _line_map, symbol_table, _unresolved) = m6809::assemble_m6809(
-        &asm_source, 
-        fixed_bank_section.org_address, 
-        false, 
-        false
-    ).map_err(|e| AssemblyError::Failed(format!("Failed to assemble fixed bank {}: {}", fixed_bank_id, e)))?;
-    
-    // Convert symbol table for fixed bank
-    let fixed_symbols: HashMap<String, SymbolDef> = symbol_table
-        .iter()
-        .map(|(name, &offset)| (name.clone(), SymbolDef { offset, is_export: true }))
-        .collect();
-    
-    let fixed_bank_binary = BankBinary {
-        bank_id: fixed_bank_id,
-        bytes,
-        symbols: fixed_symbols.clone(),
-    };
-    
-    // Step 6: Generate EQU declarations for helper symbols from fixed bank
-    let mut helper_equ_declarations = Vec::new();
-    helper_equ_declarations.push(format!("; === Cross-bank helper symbols from Bank {} (fixed bank) ===", fixed_bank_id));
-    
-    // Filter for helper symbols (typically uppercase, exclude internal labels starting with underscore or dot)
-    for (name, def) in &fixed_symbols {
-        if name.chars().next().map_or(false, |c| c.is_uppercase()) && 
-           !name.starts_with('_') && 
-           !name.starts_with('.') &&
-           !name.starts_with("VAR_") &&  // Skip VAR_ symbols (already in shared EQUs)
-           name != "CURRENT_ROM_BANK" &&
-           name != "RESULT" &&
-           name != "TMPPTR" {
-            // Symbol offsets from fixed bank assembly are already absolute (ORG $4000)
-            // Do NOT re-add $4000 or we would double the base (0x4000 -> 0x8000)
-            let absolute_addr = def.offset;
-            helper_equ_declarations.push(format!("{} EQU ${:04X}", name, absolute_addr));
-        }
-    }
-    helper_equ_declarations.push(String::new()); // Blank line after EQUs
-    
-    // Step 7: Assemble other banks with injected EQU declarations (PASS 2)
-    let mut binaries = vec![fixed_bank_binary];
-    
-    for section in other_sections {
-        // Inject both shared EQUs and helper EQUs at the beginning of the bank's ASM
-        let mut augmented_lines = Vec::new();
-        augmented_lines.extend(shared_equ_definitions.clone());
-        augmented_lines.extend(helper_equ_declarations.clone());
-        augmented_lines.extend(section.asm_lines);
+    // Iterative symbol extraction from all banks
+    eprintln!("PASS 1: Starting iterative symbol extraction...");
+    for iteration in 0..max_iterations {
+        let prev_count = all_symbols.len();
+        eprintln!("  Iteration {}: {} symbols known", iteration + 1, prev_count);
         
-        let asm_source = augmented_lines.join("\n");
-        
-        // Assemble with injected symbols
-        match m6809::assemble_m6809(&asm_source, section.org_address, false, false) {
-            Ok((bytes, _line_map, symbol_table, _unresolved)) => {
-                let symbols: HashMap<String, SymbolDef> = symbol_table
-                    .into_iter()
-                    .map(|(name, offset)| (name, SymbolDef { offset, is_export: false }))
-                    .collect();
+        for bank_id in 0..=max_bank_id {
+            if let Some(section) = sections_map.get(&bank_id) {
+                // Inject all known symbols as EQU at the beginning
+                let mut augmented_lines = Vec::new();
+                augmented_lines.push("; === Symbols from other banks (PASS 1) ===".to_string());
+                for (symbol, address) in &all_symbols {
+                    augmented_lines.push(format!("{} EQU ${:04X}", symbol, address));
+                }
+                augmented_lines.push(String::new());
+                augmented_lines.extend(section.asm_lines.clone());
                 
-                binaries.push(BankBinary {
-                    bank_id: section.bank_id,
-                    bytes,
-                    symbols,
-                });
-            }
-            Err(e) => {
-                return Err(AssemblyError::Failed(format!(
-                    "Failed to assemble bank {} (pass 2): {}", 
-                    section.bank_id, e
-                )));
+                let asm_source = augmented_lines.join("\n");
+                
+                // Assemble to extract symbols (ignore errors in early iterations)
+                match m6809::assemble_m6809(&asm_source, section.org_address, false, false) {
+                    Ok((_bytes, _line_map, symbol_table, _unresolved)) => {
+                        // Extract new symbols from successful assembly
+                        let mut new_symbols = 0;
+                        for (name, &offset) in &symbol_table {
+                            // Skip internal labels
+                            if !name.starts_with('.') && !name.starts_with('_') {
+                                if !all_symbols.contains_key(name) {
+                                    new_symbols += 1;
+                                }
+                                all_symbols.insert(name.clone(), offset);
+                            }
+                        }
+                        eprintln!("    Bank {}: {} new symbols extracted (assembly succeeded)", bank_id, new_symbols);
+                    }
+                    Err(_e) => {
+                        // Assembly failed - extract labels via simple parsing
+                        let parsed_labels = extract_labels_from_asm(&asm_source, section.org_address);
+                        let mut new_symbols = 0;
+                        for (label, offset) in parsed_labels {
+                            if !label.starts_with('.') && !label.starts_with('_') {
+                                if !all_symbols.contains_key(&label) {
+                                    new_symbols += 1;
+                                }
+                                all_symbols.insert(label, offset);
+                            }
+                        }
+                        eprintln!("    Bank {}: {} new symbols extracted (via parsing, assembly failed)", bank_id, new_symbols);
+                    }
+                }
             }
         }
+        
+        // Check convergence
+        if all_symbols.len() == prev_count {
+            eprintln!("  Convergence reached at iteration {}", iteration + 1);
+            break;
+        }
     }
+    eprintln!("PASS 1 complete: {} total symbols\n", all_symbols.len());
     
-    // Sort binaries by bank_id for consistent output
-    binaries.sort_by_key(|b| b.bank_id);
+    // **PASS 2**: Assemble all banks with complete symbol table
+    let mut binaries = Vec::new();
+    
+    for bank_id in 0..=max_bank_id {
+        if let Some(section) = sections_map.get(&bank_id) {
+            // Inject complete symbol table
+            let mut augmented_lines = Vec::new();
+            augmented_lines.push("; === Global symbol table (PASS 2) ===".to_string());
+            for (symbol, address) in &all_symbols {
+                augmented_lines.push(format!("{} EQU ${:04X}", symbol, address));
+            }
+            augmented_lines.push(String::new());
+            augmented_lines.extend(section.asm_lines.clone());
+            
+            let asm_source = augmented_lines.join("\n");
+            
+            // Final assembly with all symbols available
+            let (bytes, _line_map, symbol_table, _unresolved) = m6809::assemble_m6809(
+                &asm_source,
+                section.org_address,
+                false,
+                false
+            ).map_err(|e| AssemblyError::Failed(format!("Failed to assemble bank {}: {}", bank_id, e)))?;
+            
+            // Convert symbol table
+            let symbols: HashMap<String, SymbolDef> = symbol_table
+                .into_iter()
+                .map(|(name, offset)| (name, SymbolDef { offset, is_export: bank_id == 0 || bank_id == helper_bank_id }))
+                .collect();
+            
+            binaries.push(BankBinary {
+                bank_id,
+                bytes,
+                symbols,
+            });
+        }
+    }
     
     Ok(binaries)
 }

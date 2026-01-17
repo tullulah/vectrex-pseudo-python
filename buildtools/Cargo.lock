@@ -503,6 +503,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "vpy_disasm"
+version = "0.1.0"
+
+[[package]]
 name = "vpy_linker"
 version = "0.1.0"
 dependencies = [
