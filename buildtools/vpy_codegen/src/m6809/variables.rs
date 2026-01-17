@@ -40,11 +40,27 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
         asm.push_str("; ARRAY DATA\n");
         asm.push_str(";***************************************************************************\n");
         
-        let mut _data_offset = 0;
+        // Calculate starting address for array data (after all variable pointers)
+        // Variables start at $CF10, each takes 2 bytes
+        let array_data_start = 0xCF10 + (vars.len() * 2);
+        let mut data_offset = 0;
+        
+        // First pass: Generate EQU definitions for array data addresses
+        for (name, value) in arrays.iter() {
+            if let Expr::List(elements) = value {
+                // Define array data address as EQU (so assembler can resolve in first pass)
+                asm.push_str(&format!("VAR_{}_DATA EQU ${:04X}\n", name, array_data_start + data_offset));
+                data_offset += elements.len() * 2;  // 16-bit elements
+            }
+        }
+        asm.push_str("\n");
+        
+        // Second pass: Emit actual array data
+        asm.push_str("; Array data storage\n");
+        asm.push_str(&format!("    ORG ${:04X}  ; Start of array data section\n", array_data_start));
         for (name, value) in arrays {
             if let Expr::List(elements) = value {
-                // Generate data label
-                asm.push_str(&format!("VAR_{}_DATA:\n", name));
+                asm.push_str(&format!("; Array: VAR_{}_DATA\n", name));
                 
                 // Emit array elements
                 for (i, elem) in elements.iter().enumerate() {
@@ -54,10 +70,9 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
                         asm.push_str(&format!("    FDB 0     ; Element {} (TODO: complex init)\n", i));
                     }
                 }
-                asm.push_str("\n");
-                _data_offset += elements.len() * 2;
             }
         }
+        asm.push_str("\n");
     }
     
     // Always define ARG variables for function calls

@@ -104,9 +104,17 @@ Phase 9: vpy_debug_gen  → .pdb file (from linker data)
 - ✅ File output: write_banks() (per-bank), write_merged() (single file)
 - ✅ Tests: single_bank, multibank_assignment, section_overflow
 
+**Day 4 Complete** (2026-01-17):
+- ✅ `integration_test.rs`: End-to-end pipeline validation (313 lines, 5 tests)
+- ✅ test_end_to_end_simple_link: Basic single object → binary
+- ✅ test_end_to_end_multibank: Multi-object bank allocation
+- ✅ test_end_to_end_with_imports: Symbol resolution + relocation patching
+- ✅ test_end_to_end_file_output: Binary file I/O
+- ✅ test_end_to_end_symbol_table: Multi-section address calculation
+- ✅ **Complete pipeline verified**: Object → Resolve → Relocate → Layout → Output
+
 **Pending**:
-- Day 4: End-to-end integration test (compile → assemble → link → run)
-- Day 5: Multibank polish + cross-bank call wrappers
+- Day 5: Cross-bank call wrappers + polish
 
 ### ⏳ Phase 8-9: Planned
 - Phase 8: vpy_binary_writer (trivial ROM assembly)
