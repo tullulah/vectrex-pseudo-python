@@ -1,4 +1,4 @@
-use vpy_parser::{Module, Item, Expr};
+use vpy_parser::{Module, Item, Expr, Stmt, AssignTarget};
 use std::collections::HashSet;
 
 pub fn generate_variables(module: &Module) -> Result<String, String> {
@@ -15,6 +15,21 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
             if matches!(value, Expr::List(_)) {
                 arrays.push((name.clone(), value.clone()));
             }
+        }
+    }
+    
+    // CRITICAL FIX: Also collect all identifiers used in functions
+    // This includes function parameters and local variables
+    // Treat them all as globals for now (simple solution)
+    for item in &module.items {
+        if let Item::Function(func) = item {
+            // Collect parameters - they are Vec<String> not Vec<Param>
+            for param in &func.params {
+                vars.insert(param.clone());
+            }
+            
+            // Collect local variables from function body
+            collect_identifiers_from_stmts(&func.body, &mut vars);
         }
     }
     
@@ -83,4 +98,138 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
     asm.push_str("\n");
     
     Ok(asm)
+}
+
+/// Recursively collect all identifiers from statements
+/// This captures local variables and any identifiers used in expressions
+fn collect_identifiers_from_stmts(stmts: &[Stmt], vars: &mut HashSet<String>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign { target, value, .. } => {
+                // Collect from assignment target
+                match target {
+                    AssignTarget::Ident { name, .. } => {
+                        vars.insert(name.clone());
+                    }
+                    AssignTarget::Index { target, .. } => {
+                        collect_identifiers_from_expr(target, vars);
+                    }
+                    AssignTarget::FieldAccess { target, .. } => {
+                        collect_identifiers_from_expr(target, vars);
+                    }
+                }
+                
+                // Collect from value expression
+                collect_identifiers_from_expr(value, vars);
+            }
+            Stmt::Let { name, value, .. } => {
+                vars.insert(name.clone());
+                collect_identifiers_from_expr(value, vars);
+            }
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                collect_identifiers_from_expr(cond, vars);
+                collect_identifiers_from_stmts(body, vars);
+                for (elif_cond, elif_body) in elifs {
+                    collect_identifiers_from_expr(elif_cond, vars);
+                    collect_identifiers_from_stmts(elif_body, vars);
+                }
+                if let Some(else_stmts) = else_body {
+                    collect_identifiers_from_stmts(else_stmts, vars);
+                }
+            }
+            Stmt::While { cond, body, .. } => {
+                collect_identifiers_from_expr(cond, vars);
+                collect_identifiers_from_stmts(body, vars);
+            }
+            Stmt::For { var, start, end, step, body, .. } => {
+                vars.insert(var.clone());
+                collect_identifiers_from_expr(start, vars);
+                collect_identifiers_from_expr(end, vars);
+                if let Some(step_expr) = step {
+                    collect_identifiers_from_expr(step_expr, vars);
+                }
+                collect_identifiers_from_stmts(body, vars);
+            }
+            Stmt::ForIn { var, iterable, body, .. } => {
+                vars.insert(var.clone());
+                collect_identifiers_from_expr(iterable, vars);
+                collect_identifiers_from_stmts(body, vars);
+            }
+            Stmt::Return(value, _) => {
+                if let Some(expr) = value {
+                    collect_identifiers_from_expr(expr, vars);
+                }
+            }
+            Stmt::Expr(expr, _) => {
+                collect_identifiers_from_expr(expr, vars);
+            }
+            Stmt::CompoundAssign { target, value, .. } => {
+                match target {
+                    AssignTarget::Ident { name, .. } => {
+                        vars.insert(name.clone());
+                    }
+                    AssignTarget::Index { target, .. } => {
+                        collect_identifiers_from_expr(target, vars);
+                    }
+                    AssignTarget::FieldAccess { target, .. } => {
+                        collect_identifiers_from_expr(target, vars);
+                    }
+                }
+                collect_identifiers_from_expr(value, vars);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Recursively collect identifiers from an expression
+fn collect_identifiers_from_expr(expr: &Expr, vars: &mut HashSet<String>) {
+    match expr {
+        Expr::Ident(id) => {
+            vars.insert(id.name.clone());
+        }
+        Expr::Binary { left, right, .. } => {
+            collect_identifiers_from_expr(left, vars);
+            collect_identifiers_from_expr(right, vars);
+        }
+        Expr::Compare { left, right, .. } => {
+            collect_identifiers_from_expr(left, vars);
+            collect_identifiers_from_expr(right, vars);
+        }
+        Expr::Logic { left, right, .. } => {
+            collect_identifiers_from_expr(left, vars);
+            collect_identifiers_from_expr(right, vars);
+        }
+        Expr::Not(operand) => {
+            collect_identifiers_from_expr(operand, vars);
+        }
+        Expr::BitNot(operand) => {
+            collect_identifiers_from_expr(operand, vars);
+        }
+        Expr::Call(call_info) => {
+            // CallInfo has name field, not func
+            for arg in &call_info.args {
+                collect_identifiers_from_expr(arg, vars);
+            }
+        }
+        Expr::MethodCall(method_info) => {
+            collect_identifiers_from_expr(&method_info.target, vars);
+            for arg in &method_info.args {
+                collect_identifiers_from_expr(arg, vars);
+            }
+        }
+        Expr::Index { target, index, .. } => {
+            collect_identifiers_from_expr(target, vars);
+            collect_identifiers_from_expr(index, vars);
+        }
+        Expr::FieldAccess { target, .. } => {
+            collect_identifiers_from_expr(target, vars);
+        }
+        Expr::List(elements) => {
+            for elem in elements {
+                collect_identifiers_from_expr(elem, vars);
+            }
+        }
+        _ => {}
+    }
 }
