@@ -23,6 +23,119 @@ pub fn analyze_module_helpers(module: &Module) -> HashSet<String> {
     needed
 }
 
+/// Generate RAM definitions and array data (called BEFORE user functions)
+/// Returns tuple: (ASM string, RamLayout for later use by generate_helpers)
+pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
+    eprintln!("[DEBUG RAM] Generating RAM definitions and array data...");
+    let mut asm = String::new();
+    
+    // Analyze module to detect which helpers are needed (for RAM allocation)
+    let needed = analyze_module_helpers(module);
+    
+    // Create RamLayout for RAM variable allocation
+    let mut ram = RamLayout::new(0xC880); // Start at $C880 (Vectrex RAM: $C800-$CBFF)
+    
+    // Core scratch variables (always needed)
+    ram.allocate("RESULT", 2, "Main result temporary");
+    ram.allocate("TMPPTR", 2, "Temporary pointer");
+    ram.allocate("TMPPTR2", 2, "Temporary pointer 2");
+    
+    // Conditional variables based on usage
+    if needed.contains("PRINT_NUMBER") {
+        ram.allocate("NUM_STR", 2, "Buffer for PRINT_NUMBER hex output");
+    }
+    if needed.contains("RAND") {
+        ram.allocate("RAND_SEED", 2, "Random seed for RAND()");
+    }
+    
+    // Drawing helper variables
+    if needed.contains("DRAW_CIRCLE") {
+        ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X");
+        ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y");
+        ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter");
+        ram.allocate("DRAW_CIRCLE_INTENSITY", 1, "Circle intensity");
+        ram.allocate("DRAW_CIRCLE_TEMP", 6, "Circle temporary buffer");
+    }
+    
+    if needed.contains("DRAW_RECT") {
+        ram.allocate("DRAW_RECT_X", 1, "Rectangle X");
+        ram.allocate("DRAW_RECT_Y", 1, "Rectangle Y");
+        ram.allocate("DRAW_RECT_WIDTH", 1, "Rectangle width");
+        ram.allocate("DRAW_RECT_HEIGHT", 1, "Rectangle height");
+        ram.allocate("DRAW_RECT_INTENSITY", 1, "Rectangle intensity");
+    }
+    
+    // DRAW_LINE segmentation variables (always needed if DRAW_LINE exists)
+    ram.allocate("VLINE_DX_16", 2, "DRAW_LINE dx (16-bit)");
+    ram.allocate("VLINE_DY_16", 2, "DRAW_LINE dy (16-bit)");
+    ram.allocate("VLINE_DX", 1, "DRAW_LINE dx clamped (8-bit)");
+    ram.allocate("VLINE_DY", 1, "DRAW_LINE dy clamped (8-bit)");
+    ram.allocate("VLINE_DY_REMAINING", 1, "DRAW_LINE remaining dy for segment 2");
+    
+    // Level system variables
+    if needed.contains("SHOW_LEVEL") {
+        ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
+        ram.allocate("LEVEL_WIDTH", 1, "Level width");
+        ram.allocate("LEVEL_HEIGHT", 1, "Level height");
+        ram.allocate("LEVEL_TILE_SIZE", 1, "Tile size");
+    }
+    
+    // Fade effects variables
+    if needed.contains("FADE_IN") || needed.contains("FADE_OUT") {
+        ram.allocate("FRAME_COUNTER", 2, "Frame counter for fade effects");
+        ram.allocate("CURRENT_INTENSITY", 2, "Current intensity for fade");
+    }
+    
+    // Audio system variables (auto-detected)
+    use crate::m6809::functions::has_audio_calls;
+    if has_audio_calls(module) {
+        eprintln!("[DEBUG RAM] Audio calls detected, emitting PSG RAM variables");
+        ram.allocate("PSG_MUSIC_PTR", 2, "PSG music data pointer");
+        ram.allocate("PSG_IS_PLAYING", 1, "PSG playing flag");
+        ram.allocate("PSG_DELAY_FRAMES", 1, "PSG frame delay counter");
+        ram.allocate("SFX_PTR", 2, "SFX data pointer");
+        ram.allocate("SFX_ACTIVE", 1, "SFX active flag");
+    }
+    
+    // Function argument slots (used by PRINT_TEXT, etc.) - at fixed address $CFE0
+    // These need to be at a fixed location for cross-bank compatibility
+    ram.allocate_fixed("VAR_ARG0", 0xCFE0, 2, "Function argument 0 (16-bit)");
+    ram.allocate_fixed("VAR_ARG1", 0xCFE2, 2, "Function argument 1 (16-bit)");
+    ram.allocate_fixed("VAR_ARG2", 0xCFE4, 2, "Function argument 2 (16-bit)");
+    ram.allocate_fixed("VAR_ARG3", 0xCFE6, 2, "Function argument 3 (16-bit)");
+    ram.allocate_fixed("VAR_ARG4", 0xCFE8, 2, "Function argument 4 (16-bit)");
+    
+    // =========================================================================
+    // USER VARIABLES (continue allocation after system vars)
+    // =========================================================================
+    eprintln!("[DEBUG RAM] System RAM used: {} bytes", ram.total_size());
+    eprintln!("[DEBUG RAM] Generating user variables...");
+    
+    // Generate user variables using the same RamLayout instance
+    let user_vars_result = crate::m6809::variables::generate_user_variables(module, &mut ram)?;
+    
+    eprintln!("[DEBUG RAM] Total RAM used (system + user): {} bytes", ram.total_size());
+    
+    // =========================================================================
+    // EMIT EQU DEFINITIONS
+    // =========================================================================
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; === RAM VARIABLE DEFINITIONS ===\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str(&ram.emit_equ_definitions());
+    asm.push_str("\n");
+    
+    // CRITICAL FIX (2026-01-18): Emit array data BEFORE code
+    // Arrays must be defined before first use to avoid forward references in single-pass assembler
+    asm.push_str(&crate::m6809::variables::emit_array_data(module));
+    
+    // Emit user variable internal definitions (builtin aliases)
+    asm.push_str(&user_vars_result);
+    asm.push_str("\n");
+    
+    Ok(asm)
+}
+
 /// Recursively analyze statement for helper usage
 fn analyze_stmt_for_helpers(stmt: &Stmt, needed: &mut HashSet<String>) {
     match stmt {
@@ -221,6 +334,9 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     eprintln!("[DEBUG HELPERS] Generating runtime helpers...");
     let mut asm = String::new();
     
+    // Import has_audio_calls for audio helper detection
+    use crate::m6809::functions::has_audio_calls;
+    
     // Analyze module to detect which helpers are needed
     let needed = analyze_module_helpers(module);
     eprintln!("[DEBUG HELPERS] Detected {} needed helpers: {:?}", needed.len(), needed);
@@ -229,106 +345,9 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     let dp_to_d0 = get_bios_address("DP_to_D0", "$F1AA");
     let dp_to_c8 = get_bios_address("DP_to_C8", "$F1AF");
     
-    // =========================================================================
-    // AUTOMATIC RAM LAYOUT (Bank #31 - Always visible at $4000-$7FFF)
-    // =========================================================================
-    // Use RamLayout to allocate all RAM variables dynamically
-    // This prevents collisions and optimizes RAM usage
-    
-    let mut ram = RamLayout::new(0xC880); // Start at $C880 (Vectrex RAM: $C800-$CBFF)
-    
-    // Core scratch variables (always needed)
-    ram.allocate("RESULT", 2, "Main result temporary");
-    ram.allocate("TMPPTR", 2, "Temporary pointer");
-    ram.allocate("TMPPTR2", 2, "Temporary pointer 2");
-    
-    // Conditional variables based on usage
-    if needed.contains("PRINT_NUMBER") {
-        ram.allocate("NUM_STR", 2, "Buffer for PRINT_NUMBER hex output");
-    }
-    if needed.contains("RAND") {
-        ram.allocate("RAND_SEED", 2, "Random seed for RAND()");
-    }
-    
-    // Drawing helper variables
-    if needed.contains("DRAW_CIRCLE") {
-        ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X");
-        ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y");
-        ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter");
-        ram.allocate("DRAW_CIRCLE_INTENSITY", 1, "Circle intensity");
-        ram.allocate("DRAW_CIRCLE_TEMP", 6, "Circle temporary buffer");
-    }
-    
-    if needed.contains("DRAW_RECT") {
-        ram.allocate("DRAW_RECT_X", 1, "Rectangle X");
-        ram.allocate("DRAW_RECT_Y", 1, "Rectangle Y");
-        ram.allocate("DRAW_RECT_WIDTH", 1, "Rectangle width");
-        ram.allocate("DRAW_RECT_HEIGHT", 1, "Rectangle height");
-        ram.allocate("DRAW_RECT_INTENSITY", 1, "Rectangle intensity");
-    }
-    
-    // DRAW_LINE segmentation variables (always needed if DRAW_LINE exists)
-    ram.allocate("VLINE_DX_16", 2, "DRAW_LINE dx (16-bit)");
-    ram.allocate("VLINE_DY_16", 2, "DRAW_LINE dy (16-bit)");
-    ram.allocate("VLINE_DX", 1, "DRAW_LINE dx clamped (8-bit)");
-    ram.allocate("VLINE_DY", 1, "DRAW_LINE dy clamped (8-bit)");
-    ram.allocate("VLINE_DY_REMAINING", 1, "DRAW_LINE remaining dy for segment 2");
-    
-    // Level system variables
-    if needed.contains("SHOW_LEVEL") {
-        ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
-        ram.allocate("LEVEL_WIDTH", 1, "Level width");
-        ram.allocate("LEVEL_HEIGHT", 1, "Level height");
-        ram.allocate("LEVEL_TILE_SIZE", 1, "Tile size");
-    }
-    
-    // Fade effects variables
-    if needed.contains("FADE_IN") || needed.contains("FADE_OUT") {
-        ram.allocate("FRAME_COUNTER", 2, "Frame counter for fade effects");
-        ram.allocate("CURRENT_INTENSITY", 2, "Current intensity for fade");
-    }
-    
-    // Audio system variables (auto-detected)
-    use crate::m6809::functions::has_audio_calls;
-    if has_audio_calls(module) {
-        eprintln!("[DEBUG HELPERS] Audio calls detected, emitting PSG RAM variables");
-        ram.allocate("PSG_MUSIC_PTR", 2, "PSG music data pointer");
-        ram.allocate("PSG_IS_PLAYING", 1, "PSG playing flag");
-        ram.allocate("PSG_DELAY_FRAMES", 1, "PSG frame delay counter");
-        ram.allocate("SFX_PTR", 2, "SFX data pointer");
-        ram.allocate("SFX_ACTIVE", 1, "SFX active flag");
-    }
-    
-    // Function argument slots (used by PRINT_TEXT, etc.) - at fixed address $CFE0
-    // These need to be at a fixed location for cross-bank compatibility
-    ram.allocate_fixed("VAR_ARG0", 0xCFE0, 2, "Function argument 0 (16-bit)");
-    ram.allocate_fixed("VAR_ARG1", 0xCFE2, 2, "Function argument 1 (16-bit)");
-    ram.allocate_fixed("VAR_ARG2", 0xCFE4, 2, "Function argument 2 (16-bit)");
-    ram.allocate_fixed("VAR_ARG3", 0xCFE6, 2, "Function argument 3 (16-bit)");
-    ram.allocate_fixed("VAR_ARG4", 0xCFE8, 2, "Function argument 4 (16-bit)");
-    
-    // =========================================================================
-    // USER VARIABLES (continue allocation after system vars)
-    // =========================================================================
-    eprintln!("[DEBUG HELPERS] System RAM used: {} bytes", ram.total_size());
-    eprintln!("[DEBUG HELPERS] Generating user variables...");
-    
-    // Generate user variables using the same RamLayout instance
-    let user_vars_result = crate::m6809::variables::generate_user_variables(module, &mut ram)?;
-    
-    eprintln!("[DEBUG HELPERS] Total RAM used (system + user): {} bytes", ram.total_size());
-    
-    // =========================================================================
-    // EMIT EQU DEFINITIONS
-    // =========================================================================
-    asm.push_str(";***************************************************************************\n");
-    asm.push_str("; === RAM VARIABLE DEFINITIONS ===\n");
-    asm.push_str(";***************************************************************************\n");
-    asm.push_str(&ram.emit_equ_definitions());
-    asm.push_str("\n");
-    
-    // Emit user variable array data if any
-    asm.push_str(&user_vars_result);
+    // NOTE: RAM allocation and EQU definitions are now handled by generate_ram_and_arrays()
+    // which is called BEFORE user functions in mod.rs
+    // This ensures arrays are defined before first use
     
     asm.push_str(";***************************************************************************\n");
     asm.push_str("; RUNTIME HELPERS\n");

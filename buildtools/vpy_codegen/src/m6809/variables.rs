@@ -43,35 +43,8 @@ pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<S
         ram.allocate(&format!("VAR_{}", var.to_uppercase()), 2, &format!("User variable: {}", var));
     }
     
-    // Generate array data sections
-    // Arrays are stored in ROM as FDB data with ARRAY_{name}_DATA labels
-    // At runtime, main() initializes VAR_{name} (RAM pointer) to point to this ROM data
-    if !arrays.is_empty() {
-        asm.push_str(";***************************************************************************\n");
-        asm.push_str("; ARRAY DATA (ROM literals)\n");
-        asm.push_str(";***************************************************************************\n");
-        asm.push_str("; Arrays are stored in ROM and accessed via pointers\n");
-        asm.push_str("; At startup, main() initializes VAR_{name} to point to ARRAY_{name}_DATA\n\n");
-        
-        // Emit array data in ROM (no ORG - flows naturally after code)
-        for (name, value) in arrays {
-            if let Expr::List(elements) = value {
-                let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
-                asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
-                asm.push_str(&format!("{}:\n", array_label));
-                
-                // Emit array elements
-                for (i, elem) in elements.iter().enumerate() {
-                    if let Expr::Number(n) = elem {
-                        asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
-                    } else {
-                        asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
-                    }
-                }
-                asm.push_str("\n");
-            }
-        }
-    }
+    // NOTE: Array data moved to emit_array_data() function
+    // Arrays are emitted BEFORE code (after EQU definitions) to ensure labels are defined before use
     
     // NOTE: VAR_ARG definitions are now in helpers.rs using ram.allocate_fixed()
     // They are emitted alongside system variables because they need fixed addresses
@@ -87,6 +60,54 @@ pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<S
     asm.push_str("\n");
     
     Ok(asm)
+}
+
+/// Emit array data sections (must be called AFTER EQU definitions, BEFORE code)
+/// Arrays stored in ROM with ARRAY_{name}_DATA labels
+/// At runtime, main() initializes VAR_{name} (RAM pointer) to point to this ROM data
+pub fn emit_array_data(module: &Module) -> String {
+    let mut asm = String::new();
+    let mut arrays = Vec::new();
+    
+    // Collect arrays from module
+    for item in &module.items {
+        if let Item::GlobalLet { name, value, .. } = item {
+            if matches!(value, Expr::List(_)) {
+                arrays.push((name.clone(), value.clone()));
+            }
+        }
+    }
+    
+    if arrays.is_empty() {
+        return asm;
+    }
+    
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; ARRAY DATA (ROM literals)\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; Arrays are stored in ROM and accessed via pointers\n");
+    asm.push_str("; At startup, main() initializes VAR_{name} to point to ARRAY_{name}_DATA\n\n");
+    
+    // Emit array data in ROM (no ORG - flows naturally after EQU definitions)
+    for (name, value) in arrays {
+        if let Expr::List(elements) = value {
+            let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+            asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
+            asm.push_str(&format!("{}:\n", array_label));
+            
+            // Emit array elements
+            for (i, elem) in elements.iter().enumerate() {
+                if let Expr::Number(n) = elem {
+                    asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+                } else {
+                    asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
+                }
+            }
+            asm.push_str("\n");
+        }
+    }
+    
+    asm
 }
 
 /// OLD FUNCTION - kept for backward compatibility but not used anymore

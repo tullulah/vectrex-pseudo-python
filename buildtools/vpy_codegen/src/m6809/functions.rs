@@ -188,7 +188,7 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                     asm.push_str("    STD TMPPTR      ; Save offset temporarily\n");
                     
                     // 2. Load array base address (name already uppercase from unifier)
-                    asm.push_str(&format!("    LDD #VAR_{}_DATA  ; Load array data address\n", array_name));
+                    asm.push_str(&format!("    LDD #ARRAY_{}_DATA  ; Load array data address\n", array_name));
                     
                     // 3. Add offset to base pointer
                     asm.push_str("    TFR D,X         ; X = array base pointer\n");
