@@ -2,7 +2,6 @@
 // Elimina dependencia de lwasm proporcionando emisión binaria integrada con mapeo preciso
 
 use std::collections::HashMap;
-use crate::backend::asm_to_binary::{UnresolvedRef, RefType};
 
 /// Representa una referencia a símbolo que necesita resolverse en la segunda pasada
 #[derive(Debug, Clone)]
@@ -23,9 +22,6 @@ pub struct BinaryEmitter {
     line_to_offset: HashMap<usize, usize>,  // Línea VPy -> offset en binario
     offset_to_line: HashMap<usize, usize>,  // Offset en binario -> línea VPy
     current_line: usize,                    // Línea actual del código fuente VPy
-    object_mode: bool,                      // Object mode: allow unresolved symbols
-    unresolved_refs: Vec<UnresolvedRef>,    // Unresolved symbols (for object mode)
-    use_long_branches: bool,                // Multi-bank mode: use long branches (LBEQ/LBNE/LBRA) instead of short
 }
 
 impl BinaryEmitter {
@@ -39,26 +35,7 @@ impl BinaryEmitter {
             line_to_offset: HashMap::new(),
             offset_to_line: HashMap::new(),
             current_line: 0,
-            object_mode: false,
-            unresolved_refs: Vec::new(),
-            use_long_branches: false,
         }
-    }
-    
-    /// Set object mode (allows unresolved symbols)
-    pub fn set_object_mode(&mut self, enabled: bool) {
-        self.object_mode = enabled;
-    }
-    
-    /// Set long branch mode (use LBEQ/LBNE/LBRA instead of BEQ/BNE/BRA)
-    /// Required for multi-bank ROMs where branches may exceed 8-bit range
-    pub fn set_long_branches(&mut self, enabled: bool) {
-        self.use_long_branches = enabled;
-    }
-    
-    /// Get list of unresolved symbols (for object mode)
-    pub fn take_unresolved_refs(&mut self) -> Vec<UnresolvedRef> {
-        std::mem::take(&mut self.unresolved_refs)
     }
 
     /// Establece la línea actual del código fuente (para debug mapping)
@@ -358,26 +335,12 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BRA con etiqueta (auto-selecciona short/long según configuración)
+    /// BRA con etiqueta (resolver después)
     pub fn bra_label(&mut self, label: &str) {
-        if self.use_long_branches {
-            self.lbra_label(label);
-        } else {
-            self.record_line_mapping();
-            self.emit(0x20);
-            self.add_symbol_ref(label, true, 1);
-            self.emit(0x00); // Placeholder
-        }
-    }
-
-    /// LBRA - long branch siempre (opcode 0x16, offset 16-bit)
-    /// NOTE: LBRA tiene opcode especial 0x16 (no 0x10 0x20 como otros long branches)
-    pub fn lbra_label(&mut self, label: &str) {
         self.record_line_mapping();
-        self.emit(0x16);  // LBRA special opcode (not 0x10 0x20)
-        self.add_symbol_ref(label, true, 2); // 2 bytes para offset de 16 bits
-        self.emit(0x00);
-        self.emit(0x00);
+        self.emit(0x20);
+        self.add_symbol_ref(label, true, 1);
+        self.emit(0x00); // Placeholder
     }
 
     /// BEQ - branch si igual/cero (opcode 0x27)
@@ -387,16 +350,12 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BEQ con etiqueta (auto-selecciona short/long según configuración)
+    /// BEQ con etiqueta
     pub fn beq_label(&mut self, label: &str) {
-        if self.use_long_branches {
-            self.lbeq_label(label);
-        } else {
-            self.record_line_mapping();
-            self.emit(0x27);
-            self.add_symbol_ref(label, true, 1);
-            self.emit(0x00);
-        }
+        self.record_line_mapping();
+        self.emit(0x27);
+        self.add_symbol_ref(label, true, 1);
+        self.emit(0x00);
     }
 
     /// LBEQ - long branch si igual/cero (opcode 0x10 0x27, offset 16-bit)
@@ -416,16 +375,12 @@ impl BinaryEmitter {
         self.emit(offset as u8);
     }
 
-    /// BNE con etiqueta (auto-selecciona short/long según configuración)
+    /// BNE con etiqueta
     pub fn bne_label(&mut self, label: &str) {
-        if self.use_long_branches {
-            self.lbne_label(label);
-        } else {
-            self.record_line_mapping();
-            self.emit(0x26);
-            self.add_symbol_ref(label, true, 1);
-            self.emit(0x00);
-        }
+        self.record_line_mapping();
+        self.emit(0x26);
+        self.add_symbol_ref(label, true, 1);
+        self.emit(0x00);
     }
 
     /// LBNE - long branch si no igual (opcode 0x10 0x26, offset 16-bit)
@@ -1049,56 +1004,6 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// LDS #immediate (opcode 0x10CE) - Load Stack Pointer
-    pub fn lds_immediate(&mut self, value: u16) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xCE);
-        self.emit_word(value);
-    }
-
-    /// LDS #immediate con símbolo (opcode 0x10CE + symbol ref)
-    pub fn lds_immediate_sym(&mut self, symbol: &str) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xCE);
-        self.add_symbol_ref(symbol, false, 2);
-        self.emit_word(0); // Placeholder for symbol resolution
-    }
-
-    /// LDS direct (opcode 0x10DE)
-    pub fn lds_direct(&mut self, addr: u8) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xDE);
-        self.emit(addr);
-    }
-
-    /// LDS indexed (opcode 0x10EE + postbyte)
-    pub fn lds_indexed(&mut self, postbyte: u8) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xEE);
-        self.emit(postbyte);
-    }
-
-    /// LDS extended (opcode 0x10FE)
-    pub fn lds_extended(&mut self, addr: u16) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xFE);
-        self.emit_word(addr);
-    }
-
-    /// LDS extended con símbolo
-    pub fn lds_extended_sym(&mut self, symbol: &str) {
-        self.record_line_mapping();
-        self.emit(0x10);
-        self.emit(0xFE);
-        self.add_symbol_ref(symbol, false, 2);
-        self.emit_word(0x0000);
-    }
-
     /// LEAX indexed (opcode 0x30 + postbyte)
     pub fn leax_indexed(&mut self, postbyte: u8) {
         self.record_line_mapping();
@@ -1196,43 +1101,13 @@ impl BinaryEmitter {
     pub fn resolve_symbols_with_equates(&mut self, equates: &std::collections::HashMap<String, u16>) -> Result<(), String> {
         for sym_ref in &self.symbol_refs {
             // Buscar primero en symbols locales (case-sensitive)
-            let target_addr_opt = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
-                Some(addr)
+            let target_addr = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
+                addr
             } else {
                 // Buscar en equates con uppercase (símbolos BIOS/INCLUDE son uppercase)
                 let upper_symbol = sym_ref.symbol.to_uppercase();
-                equates.get(&upper_symbol).copied()
-            };
-            
-            // Si el símbolo no se encontró
-            let target_addr = match target_addr_opt {
-                Some(addr) => addr,
-                None => {
-                    let upper_symbol = sym_ref.symbol.to_uppercase();
-                    
-                    // En object mode: agregar a unresolved_refs y usar placeholder
-                    if self.object_mode {
-                        let ref_type = if sym_ref.is_relative {
-                            if sym_ref.ref_size == 1 {
-                                RefType::Relative8
-                            } else {
-                                RefType::Relative16
-                            }
-                        } else {
-                            RefType::Absolute16
-                        };
-                        
-                        self.unresolved_refs.push(UnresolvedRef {
-                            symbol: upper_symbol.clone(),
-                            offset: sym_ref.offset,
-                            ref_type,
-                        });
-                        
-                        // Usar placeholder 0x0000 (ya emitido durante first pass)
-                        continue;
-                    }
-                    
-                    // En modo normal: error
+                if equates.get(&upper_symbol).is_none() {
+                    // Debug: mostrar DÓNDE se agregó esta referencia
                     eprintln!("❌ SÍMBOLO NO RESUELTO: '{}' (uppercase: '{}') at offset={}, is_relative={}, ref_size={}", 
                         sym_ref.symbol, upper_symbol, sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
                     
@@ -1240,9 +1115,9 @@ impl BinaryEmitter {
                     if sym_ref.symbol.len() == 1 {
                         eprintln!("   ⚠️  POSIBLE BUG: Símbolo de 1 carácter '{}' - probablemente offset mal parseado", sym_ref.symbol);
                     }
-                    
-                    return Err(format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol));
                 }
+                *equates.get(&upper_symbol)
+                    .ok_or_else(|| format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol))?
             };
 
             let effective_target = target_addr.wrapping_add(sym_ref.addend as u16);

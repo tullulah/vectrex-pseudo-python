@@ -69,6 +69,19 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
         ram.allocate("DRAW_RECT_INTENSITY", 1, "Rectangle intensity");
     }
     
+    // DRAW_VECTOR / DRAW_VECTOR_EX variables (CRITICAL - MISSING!)
+    if needed.contains("DRAW_VECTOR") || needed.contains("DRAW_VECTOR_EX") {
+        ram.allocate("DRAW_VEC_X", 1, "Vector draw X offset");
+        ram.allocate("DRAW_VEC_Y", 1, "Vector draw Y offset");
+        ram.allocate("DRAW_VEC_INTENSITY", 1, "Vector intensity override (0=use vector data)");
+        
+        // CRITICAL FIX: Add padding to prevent collision with TEMP_YX (usually allocated at offset 6)
+        ram.allocate("MIRROR_PAD", 16, "Safety padding to prevent MIRROR flag corruption");
+
+        ram.allocate("MIRROR_X", 1, "X mirror flag (0=normal, 1=flip)");
+        ram.allocate("MIRROR_Y", 1, "Y mirror flag (0=normal, 1=flip)");
+    }
+    
     // DRAW_LINE argument buffer (10 bytes: x0, y0, x1, y1, intensity)
     ram.allocate("DRAW_LINE_ARGS", 10, "DRAW_LINE argument buffer (x0,y0,x1,y1,intensity)");
     
@@ -382,11 +395,16 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
         asm.push_str("VECTREX_PRINT_TEXT:\n");
         asm.push_str("    ; VPy signature: PRINT_TEXT(x, y, string)\n");
         asm.push_str("    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)\n");
+        asm.push_str("    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n");
+        asm.push_str("    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)\n");
+        asm.push_str("    STA >$D00C     ; VIA_cntl\n");
         asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
         asm.push_str("    LDU VAR_ARG2   ; string pointer (third parameter)\n");
         asm.push_str("    LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)\n");
         asm.push_str("    LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)\n");
         asm.push_str("    JSR Print_Str_d ; Print string from U register\n");
+        asm.push_str("    ; CRITICAL: Reset ALL pen parameters after Print_Str_d (scale, position, etc.)\n");
+        asm.push_str("    JSR Reset_Pen  ; BIOS $F35B - resets scale, intensity, and beam state\n");
         asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
         asm.push_str("    RTS\n\n");
     }
@@ -397,6 +415,9 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
         asm.push_str("VECTREX_PRINT_NUMBER:\n");
         asm.push_str("    ; VPy signature: PRINT_NUMBER(x, y, num)\n");
         asm.push_str("    ; Convert number to hex string and print\n");
+        asm.push_str("    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n");
+        asm.push_str("    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)\n");
+        asm.push_str("    STA >$D00C     ; VIA_cntl\n");
         asm.push_str(&format!("    JSR {}      ; DP_to_D0 - set Direct Page for BIOS/VIA access\n", dp_to_d0));
         asm.push_str("    LDA VAR_ARG1+1   ; Y position\n");
         asm.push_str("    LDB VAR_ARG0+1   ; X position\n");
@@ -432,6 +453,8 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
         asm.push_str("    ; Print the string\n");
         asm.push_str("    LDU #NUM_STR     ; Point to our number string\n");
         asm.push_str("    JSR Print_Str_d  ; Print using BIOS\n");
+        asm.push_str("    ; CRITICAL: Reset ALL pen parameters after Print_Str_d (scale, position, etc.)\n");
+        asm.push_str("    JSR Reset_Pen  ; BIOS $F35B - resets scale, intensity, and beam state\n");
         asm.push_str(&format!("    JSR {}      ; DP_to_C8 - restore DP before return\n", dp_to_c8));
         asm.push_str("    RTS\n\n");
     }

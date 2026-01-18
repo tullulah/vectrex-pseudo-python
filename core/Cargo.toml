@@ -14,12 +14,9 @@ strum = { version = "0.27", features = ["derive"] }
 tower-lsp = "0.20"
 tokio = { version = "1.47", features = ["rt-multi-thread","macros","io-std"] }
 lazy_static = "1.4"
-once_cell = "1.19"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"  # For .vpyproj files
-bincode = "1.3"  # For .vo object files
-walkdir = "2.5"  # For .vpyproj source file discovery
 
 [features]
 default = []

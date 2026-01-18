@@ -552,14 +552,14 @@ pub fn parse_asm_variables(asm: &str) -> HashMap<String, VariableInfo> {
         // Determine variable type and size from name and comment
         let comment = trimmed.split(';').nth(1).unwrap_or("").trim();
         
-        // First, try to extract explicit size from comment (e.g., "(320 bytes)" or "(1 byte)")
-        let explicit_size = if let (Some(paren_start), Some(paren_end)) = (comment.rfind('('), comment.rfind(')')) {
-            if paren_end > paren_start {
-                let inside = &comment[paren_start + 1..paren_end];
-                inside
-                    .split_whitespace()
-                    .next()
-                    .and_then(|s| s.parse::<usize>().ok())
+        // First, try to extract explicit size from comment (e.g., "(320 bytes)")
+        let explicit_size = if let Some(bytes_pos) = comment.rfind(" bytes)") {
+            // Find the opening parenthesis before "bytes)"
+            let before_bytes = &comment[..bytes_pos];
+            if let Some(paren_pos) = before_bytes.rfind('(') {
+                // Extract the number between '(' and ' bytes)'
+                let num_str = &before_bytes[paren_pos + 1..].trim();
+                num_str.parse::<usize>().ok()
             } else {
                 None
             }

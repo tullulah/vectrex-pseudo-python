@@ -5,17 +5,21 @@ def main():
     SET_INTENSITY(127)
 
 def loop():
-    # Test DRAW_LINE: Different types of lines
+    # reset0ref()
+    DRAW_LINE(-40, 0, 40, 0, 100)
+
+    # Ahora texto - debería aparecer en posiciones absolutas
+    PRINT_TEXT(-60, 60, "LINE 1")
+    PRINT_TEXT(-60, 40, "LINE 2")
+    PRINT_TEXT(-60, 20, "LINE 3")
     
-    #Horizontal line
-    DRAW_LINE(-40, 50, 40, 50, 100)
+    # Test DRAW_VECTOR - should draw pang logo (requires x, y position)
+    DRAW_VECTOR("logo", 0, 0)
     
-    # Vertical line  
-    DRAW_LINE(-50, -40, -50, 40, 100)
-    
-    # Diagonal line (45 degrees)
-    DRAW_LINE(-30, -30, 30, 30, 127)
-    
-    # Different diagonal
-    DRAW_LINE(30, -30, -30, 30, 90)
+    # Test DRAW_RECT - should draw two rectangles
+    # DRAW_RECT(-80, -30, 40, 30, 127)
+    # DRAW_RECT(40, -30, 40, 30, 100)
+
+    # # Una línea simple
+    # DRAW_LINE(-40, -10, 40,-10, 100)
 

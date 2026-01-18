@@ -1,43 +1,7 @@
 // Builtins - Implementation of built-in functions for M6809 backend
-use crate::ast::Expr;
+use crate::ast::{Expr, Stmt};
 use crate::codegen::CodegenOptions;
 use super::{FuncCtx, emit_expr, fresh_label};
-
-/// Hash a string to generate a unique label
-fn hash_string(s: &str) -> usize {
-    let mut hash: usize = 0;
-    for byte in s.bytes() {
-        hash = hash.wrapping_mul(31).wrapping_add(byte as usize);
-    }
-    hash
-}
-
-/// Generate JSR to helper function (with bank wrapper if in multibank mode)
-fn emit_jsr_to_helper(helper_name: &str, opts: &CodegenOptions) -> String {
-    // BIOS functions ($F000-$FFFF) are always accessible, don't need wrappers
-    const BIOS_FUNCTIONS: &[&str] = &[
-        "Wait_Recal", "Intensity_a", "Reset0Ref", "Moveto_d", "Draw_Line_d",
-        "Draw_VL", "Draw_VLc", "Print_Str_d", "DP_to_D0", "DP_to_C8", "Read_Btns"
-    ];
-    
-    // OPTIMIZATION (2026-01-14): Bank #31 (fixed ROM at $4000-$7FFF) is ALWAYS visible
-    // NO wrappers needed for runtime helpers - direct JSR works from any bank
-    // 
-    // Previous code emitted:  JSR HELPER_BANK_WRAPPER
-    // New code emits:         JSR HELPER
-    //
-    // This works because Bank #31 memory is never switched - always at $4000-$7FFF
-    // regardless of which bank is in the $0000-$3FFF switchable window
-    
-    if BIOS_FUNCTIONS.contains(&helper_name) {
-        // BIOS functions: always direct JSR (no wrapper needed)
-        format!("    JSR {}\n", helper_name)
-    } else {
-        // Runtime helpers (Draw_Sync_List_At_With_Mirrors, VECTREX_PRINT_TEXT, etc):
-        // All in Bank #31 (fixed, always visible) - direct JSR works from any bank
-        format!("    JSR {}  ; Bank #31 (fixed) - no wrapper needed\n", helper_name)
-    }
-}
 
 pub fn resolve_function_name(name: &str) -> Option<String> {
     let map = [
@@ -135,7 +99,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str(&emit_jsr_to_helper("Draw_Sync_List_At_With_Mirrors", opts));
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses unified mirror function\n");
                 }
                 out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
@@ -253,7 +217,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
                 out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
                 for path_idx in 0..path_count {
                     out.push_str(&format!("    LDX #{}_PATH{}  ; Path {}\n", symbol, path_idx, path_idx));
-                    out.push_str(&emit_jsr_to_helper("Draw_Sync_List_At_With_Mirrors", opts));
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY\n");
                 }
                 out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
                 
@@ -733,7 +697,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("VL_LOOP_START:\n");
         
         // Frame initialization sequence (Malban lines 13-43 from VIDE ASM)
-        out.push_str("    CLR $D00A           ; VIA_shift_reg = 0 (blank beam)\n");
+        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (blank beam)\n");
         out.push_str("    LDA #$CC\n");
         out.push_str("    STA $D00B           ; VIA_cntl = 0xCC (zero integrators)\n");
         out.push_str("    CLR $D000           ; VIA_port_a = 0 (reset offset)\n");
@@ -796,12 +760,12 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         out.push_str("    STA $D000           ; VIA_port_a = dx\n");
         out.push_str("    CLR $D005           ; VIA_t1_cnt_hi = 0\n");
         out.push_str("    LDA #$FF\n");
-        out.push_str("    STA $D00A           ; VIA_shift_reg = 0xFF (beam ON)\n");
+        out.push_str("    STA $D05A           ; VIA_shift_reg = 0xFF (beam ON)\n");
         out.push_str("VL_WAIT_DRAW:\n");
         out.push_str("    LDA $D00D\n");
         out.push_str("    ANDA #$40\n");
         out.push_str("    BEQ VL_WAIT_DRAW\n");
-        out.push_str("    CLR $D00A           ; VIA_shift_reg = 0 (beam OFF)\n");
+        out.push_str("    CLR $D05A           ; VIA_shift_reg = 0 (beam OFF)\n");
         out.push_str("    BRA VL_CONTINUE\n");
         
         // MOVE TO (*u == 0)
@@ -1435,7 +1399,11 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
             }
             
             add_native_call_comment(out, "VECTREX_PRINT_TEXT");
-            out.push_str(&emit_jsr_to_helper("VECTREX_PRINT_TEXT", opts));
+            if opts.force_extended_jsr {
+                out.push_str("    JSR >VECTREX_PRINT_TEXT\n");
+            } else {
+                out.push_str("    JSR VECTREX_PRINT_TEXT\n");
+            }
             
             // CRITICAL: Restore BIOS default values after rendering
             out.push_str("    LDA #$F8      ; Default height (-8 in two's complement)\n");
@@ -1447,43 +1415,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
             return true;
         } else if args.len() == 3 {
             out.push_str("; PRINT_TEXT(x, y, text) - uses BIOS defaults\n");
-            
-            // Handle all 3 arguments with special string literal handling
-            // Arg 0: x coordinate
-            emit_expr(&args[0], out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT\n");
-            out.push_str("    STD VAR_ARG0\n");
-            
-            // Arg 1: y coordinate
-            emit_expr(&args[1], out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT\n");
-            out.push_str("    STD VAR_ARG1\n");
-            
-            // Arg 2: text string - handle as StringLit or expression
-            match &args[2] {
-                crate::ast::Expr::StringLit(s) => {
-                    // For string literals: use string_map which contains pre-generated labels
-                    // The string will have been added to string_map during parsing
-                    // For now, use a placeholder label based on the string content
-                    let label = string_map.get(s)
-                        .cloned()
-                        .unwrap_or_else(|| format!("STR_{}", hash_string(s)));
-                    out.push_str(&format!("    LDX #{}\n", label));
-                    out.push_str("    STX VAR_ARG2\n");
-                }
-                _ => {
-                    // Variable or expression - evaluate normally
-                    emit_expr(&args[2], out, fctx, string_map, opts);
-                    out.push_str("    LDD RESULT\n");
-                    out.push_str("    STD VAR_ARG2\n");
-                }
-            }
-            
-            add_native_call_comment(out, "VECTREX_PRINT_TEXT");
-            out.push_str(&emit_jsr_to_helper("VECTREX_PRINT_TEXT", opts));
-            
-            out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
-            return true;
+            // Normal 3-parameter version - fall through to generic handling below
         } else {
             // Wrong number of arguments - generate error comment
             out.push_str(&format!("; ERROR: PRINT_TEXT expects 3 or 5 arguments, got {}\n", args.len()));

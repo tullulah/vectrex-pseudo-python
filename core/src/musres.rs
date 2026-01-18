@@ -202,20 +202,20 @@ impl MusicResource {
         
         // Process frames - emit only when something changes, add delay counter for unchanged frames
         while current_frame <= max_frame {
-            let mut _something_changed = false;
+            let mut something_changed = false;
             
             // Remove expired notes
             let prev_count = active_notes.len();
             active_notes.retain(|(end_frame, _)| *end_frame > current_frame);
             if active_notes.len() != prev_count {
-                _something_changed = true;
+                something_changed = true;
             }
             
             // Remove expired noise
             let prev_noise_count = active_noise.len();
             active_noise.retain(|(end_frame, _)| *end_frame > current_frame);
             if active_noise.len() != prev_noise_count {
-                _something_changed = true;
+                something_changed = true;
             }
             
             // Add new notes starting this frame
@@ -223,7 +223,7 @@ impl MusicResource {
                 for note in new_notes {
                     let duration_frames = tick_to_frame(note.start + note.duration) - current_frame;
                     active_notes.push((current_frame + duration_frames, note));
-                    _something_changed = true;
+                    something_changed = true;
                 }
             }
             
@@ -232,7 +232,7 @@ impl MusicResource {
                 for noise in new_noise {
                     let duration_frames = tick_to_frame(noise.start + noise.duration) - current_frame;
                     active_noise.push((current_frame + duration_frames, noise));
-                    _something_changed = true;
+                    something_changed = true;
                 }
             }
             

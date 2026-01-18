@@ -12,15 +12,12 @@ mod musres;   // Music resources (.vmus)
 mod sfxres;   // Sound effects resources (.vsfx)
 mod levelres; // Level resources (.vplay)
 mod struct_layout; // Struct layout computation
-mod linker;   // Linker system for modular compilation
 
-use vectrex_lang;  // For linker types
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use clap::{Parser, Subcommand};
 use toml;
-use walkdir;
 
 #[allow(dead_code)]
 fn find_project_root() -> anyhow::Result<PathBuf> {
@@ -168,7 +165,6 @@ enum Commands {
         #[arg(short = 'p', long, help="Compilar proyecto .vpyproj (ignora -f si se especifica)")] project: bool,
         #[arg(short = 'f', long, help="Compilar archivo .vpy individual (default)")] file: bool,
         #[arg(long = "include-dir", help="Directorio con archivos include (VECTREX.I, etc)")] include_dir: Option<PathBuf>,
-        #[arg(long, help="Compilar cada módulo a .vo separado y luego enlazar (compilación incremental)")] separate_modules: bool,
     },
     Lex { input: PathBuf },
     Ast { input: PathBuf },
@@ -207,44 +203,16 @@ enum Commands {
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
-    /// Compile to object file (.vo) for linking
-    CompileObject {
-        /// Input .vpy file
-        input: PathBuf,
-        /// Output .vo file (default: same name with .vo extension)
-        #[arg(short, long)]
-        out: Option<PathBuf>,
-        /// Title for cartridge header
-        #[arg(long, default_value="UNTITLED")]
-        title: String,
-    },
-    /// Link multiple object files (.vo) into final binary
-    Link {
-        /// Input .vo files to link
-        inputs: Vec<PathBuf>,
-        /// Output .bin file
-        #[arg(short, long)]
-        out: PathBuf,
-        /// Base address for linking (default: 0xC880 - standard RAM start)
-        #[arg(long, default_value="51328")]  // 0xC880
-        base: u16,
-        /// Title for cartridge header
-        #[arg(long, default_value="UNTITLED")]
-        title: String,
-    },
 }
 
 // main: parse CLI and dispatch subcommands.
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Build { input, out, target, title, bin, use_lwasm, dual, project, file: _, include_dir, separate_modules } => {
+        Commands::Build { input, out, target, title, bin, use_lwasm, dual, project, file: _, include_dir } => {
             // Si -p está especificado o el input es .vpyproj, compilar como proyecto
             if project || input.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
                 build_project_cmd(&input, bin, use_lwasm, dual, include_dir.as_ref())
-            } else if separate_modules {
-                // Compilación modular: compile cada .vpy a .vo, luego link
-                build_separate_modules(&input, out.as_ref(), &title, bin)
             } else {
                 build_cmd(&input, out.as_ref(), target, &title, bin, use_lwasm, dual, include_dir.as_ref(), None)
             }
@@ -255,8 +223,6 @@ fn main() -> Result<()> {
         Commands::Init { name, path } => init_cmd(&name, path.as_ref()),
         Commands::Vec2Asm { input, out } => vec2asm_cmd(&input, out.as_ref()),
         Commands::VecNew { name, path } => vec_new_cmd(&name, path.as_ref()),
-        Commands::CompileObject { input, out, title } => compile_object_cmd(&input, out.as_ref(), &title),
-        Commands::Link { inputs, out, base, title } => link_cmd(&inputs, &out, base, &title),
     }
 }
 
@@ -420,69 +386,15 @@ fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: b
     
     let entry_file = project_root.join(entry_relative);
     
-    // Find all .vpy files in src/ directory
-    let mut vpy_files = Vec::new();
-    let src_dir = project_root.join("src");
-    if src_dir.is_dir() {
-        for entry in walkdir::WalkDir::new(&src_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("vpy"))
-        {
-            vpy_files.push(entry.path().to_path_buf());
-        }
-    }
-    
-    let project_name = project_toml.get("project")
-        .and_then(|p| p.get("name"))
-        .and_then(|n| n.as_str())
-        .unwrap_or("unknown");
-    
-    eprintln!("✓ Project: {}", project_name);
-    eprintln!("✓ Entry file: {}", entry_file.display());
-    
-    // Parse ALL modules and unify if multi-module
-    let final_module = if vpy_files.len() > 1 {
-        eprintln!("✓ Multi-module project: {} source files", vpy_files.len());
-        
-        // Use ModuleResolver for proper multi-module compilation
-        let mut resolver = resolver::ModuleResolver::new(project_root.to_path_buf());
-        resolver.load_project(&entry_file).map_err(|e| {
-            anyhow::anyhow!("Failed to load project modules: {}", e)
-        })?;
-        
-        eprintln!("✓ Loaded {} modules", resolver.get_all_modules().len());
-        
-        // Get entry module name
-        let entry_module_name = entry_file.file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| anyhow::anyhow!("Invalid entry module name"))?
-            .to_string();
-        
-        eprintln!("✓ Unifying modules (entry: {})...", entry_module_name);
-        
-        // Unify all modules into one
-        let options = unifier::UnifyOptions::default();
-        let unified = unifier::unify_modules(&resolver, &entry_module_name, &options)
-            .map_err(|e| anyhow::anyhow!("Unification failed: {}", e))?;
-        
-        eprintln!("✓ Unified module: {} items total", unified.module.items.len());
-        unified.module
-    } else {
-        // Single file project - just parse entry file
-        eprintln!("✓ Single-file project");
-        let src = fs::read_to_string(&entry_file)?;
-        let tokens = lexer::lex(&src)?;
-        parser::parse_with_filename(&tokens, &entry_file.display().to_string())?
-    };
-    
     // Extract output path from [build] section
+    // Note: .vpyproj defines bin path, but build_cmd expects ASM path
     let output_relative = project_toml.get("build")
         .and_then(|b| b.get("output"))
         .and_then(|o| o.as_str());
     
     let output_path = output_relative.map(|o| {
         let bin_path = project_root.join(o);
+        // Derive ASM path from bin path (change .bin to .asm)
         bin_path.with_extension("asm")
     });
     
@@ -501,185 +413,30 @@ fn build_project_cmd(project_path: &PathBuf, bin: bool, use_lwasm: bool, dual: b
         _ => target::Target::Vectrex,
     };
     
+    // Extract title from [project] section
     let title = project_toml.get("project")
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
         .unwrap_or("UNTITLED");
     
+    eprintln!("✓ Project: {}", title);
+    eprintln!("✓ Entry file: {}", entry_file.display());
     if let Some(ref out) = output_path {
         eprintln!("✓ Output: {}", out.display());
     }
     
-    // Extract output base name for PDB
+    // Extract output base name (without extension) for PDB generation
     let output_name = output_relative.and_then(|o| {
         let path = PathBuf::from(o);
         path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
     });
     
-    // Phase 4: Asset discovery
-    eprintln!("Phase 4: Asset discovery...");
-    let assets = discover_assets(&project_root);
-    eprintln!("✓ Phase 4 SUCCESS: Discovered {} assets", assets.len());
-    
-    // Phase 5: Code generation
-    eprintln!("Phase 5: Code generation (VPy → M6809 assembly)...");
-    let opts = codegen::CodegenOptions {
-        title: title.to_string(),
-        auto_loop: true,
-        diag_freeze: false,
-        force_extended_jsr: false,
-        _bank_size: 0,
-        per_frame_silence: false,
-        debug_init_draw: false,
-        blink_intensity: false,
-        exclude_ram_org: true,
-        fast_wait: false,
-        emit_sections: false,
-        skip_builtins: false,
-        source_path: Some(entry_file.canonicalize().unwrap_or_else(|_| entry_file.clone()).display().to_string()),
-        output_name: output_name.clone(),
-        assets,
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        inline_arrays: Vec::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-        buffer_requirements: None,
-        bank_config: codegen::BankConfig::from_meta(&final_module.meta),
-        function_bank_map: std::collections::HashMap::new(),
-    };
-    
-    let (asm, debug_info, diagnostics) = codegen::emit_asm_with_debug(&final_module, target, &opts);
-    
-    // Check for ERRORS only (not warnings/suggestions)
-    let errors: Vec<_> = diagnostics.iter().filter(|d| {
-        matches!(d.severity, codegen::DiagnosticSeverity::Error)
-    }).collect();
-    
-    if !errors.is_empty() {
-        eprintln!("❌ PHASE 5 FAILED: Semantic errors detected:");
-        for diag in &errors {
-            if let (Some(line), Some(col)) = (diag.line, diag.col) {
-                eprintln!("   error {}:{} - {:?}: {}", line, col, diag.code, diag.message);
-            } else {
-                eprintln!("   error - {:?}: {}", diag.code, diag.message);
-            }
-        }
-        return Err(anyhow::anyhow!("Semantic validation failed"));
-    }
-    
-    // Show warnings/suggestions but don't fail
-    let warnings: Vec<_> = diagnostics.iter().filter(|d| {
-        !matches!(d.severity, codegen::DiagnosticSeverity::Error)
-    }).collect();
-    
-    if !warnings.is_empty() {
-        eprintln!("⚠ {} warning(s)/suggestion(s):", warnings.len());
-        for diag in &warnings {
-            if let (Some(line), Some(col)) = (diag.line, diag.col) {
-                eprintln!("   {}:{} - {:?}: {}", line, col, diag.code, diag.message);
-            } else {
-                eprintln!("   {:?}: {}", diag.code, diag.message);
-            }
-        }
-    }
-    
-    if asm.is_empty() {
-        eprintln!("❌ PHASE 5 FAILED: Generated empty assembly");
-        return Err(anyhow::anyhow!("Empty assembly generated"));
-    }
-    
-    let asm_len = asm.lines().count();
-    let code_size = asm.len();
-    eprintln!("✓ Phase 5 SUCCESS: Generated {} lines ({} bytes)", asm_len, code_size);
-    
-    // Write assembly to output path
-    if let Some(out_path) = &output_path {
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        
-        fs::write(out_path, &asm)?;
-        eprintln!("✓ Assembly written to: {}", out_path.display());
-        
-        // Phase 6: Binary generation (if requested)
-        if bin {
-            eprintln!("Phase 6: Binary generation...");
-            
-            // Use native M6809 assembler through assemble_bin()
-            let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
-            match assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()) {
-                Ok((binary_symbol_table, _line_map, _org)) => {
-                    let bin_path = out_path.with_extension("bin");
-                    let size = fs::metadata(&bin_path)?.len();
-                    eprintln!("✓ Phase 6 SUCCESS: Binary written to {} ({} bytes)", 
-                             bin_path.display(), size);
-                    
-                    // Phase 5.5: Debug symbols (PDB)
-                    if let Some(mut debug_info) = debug_info {
-                        let pdb_path = out_path.with_extension("pdb");
-                        eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
-                        
-                        // Add symbols from binary
-                        for (symbol_name, &address) in &binary_symbol_table {
-                            debug_info.add_symbol(symbol_name.clone(), address);
-                        }
-                        
-                        // Set entry point
-                        if let Some(&start_addr) = binary_symbol_table.get("START") {
-                            debug_info.set_entry_point(start_addr);
-                        }
-                        
-                        // Write PDB
-                        match debug_info.to_json() {
-                            Ok(json) => {
-                                fs::write(&pdb_path, json)?;
-                                eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
-                            },
-                            Err(e) => {
-                                eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("❌ PHASE 6 FAILED: Assembly error");
-                    eprintln!("   Error: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-    }
-    
-    eprintln!("=== COMPILATION COMPLETE ===");
-    Ok(())
+    // Call regular build_cmd with project-resolved paths and output name
+    build_cmd(&entry_file, output_path.as_ref(), target, title, bin, use_lwasm, dual, include_dir, output_name.as_deref())
 }
 
 // build_cmd: run full pipeline (lex/parse/opt/codegen) and write assembly.
 fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: &str, bin: bool, use_lwasm: bool, dual: bool, include_dir: Option<&PathBuf>, output_name: Option<&str>) -> Result<()> {
-    // If this is a .vpyproj file, redirect to build_project_cmd
-    if path.extension().and_then(|e| e.to_str()) == Some("vpyproj") {
-        return build_project_cmd(path, bin, use_lwasm, dual, include_dir);
-    }
-    
-    // REJECT .vpy files - only .vpyproj is supported
-    if path.extension().and_then(|e| e.to_str()) == Some("vpy") {
-        eprintln!("❌ ERROR: Cannot compile .vpy files directly");
-        eprintln!("   vectrexc only accepts .vpyproj project files.");
-        eprintln!("   ");
-        eprintln!("   If you want to compile a single file, create a .vpyproj:");
-        eprintln!("   1. vectrexc init myproject");
-        eprintln!("   2. Move your .vpy to myproject/src/main.vpy");
-        eprintln!("   3. vectrexc build myproject/myproject.vpyproj --bin");
-        eprintln!("   ");
-        eprintln!("   Direct .vpy compilation is not supported to avoid");
-        eprintln!("   confusion with multi-module projects.");
-        return Err(anyhow::anyhow!("Use .vpyproj instead of .vpy"));
-    }
-    
     eprintln!("=== COMPILATION PIPELINE START ===");
     eprintln!("Input file: {}", path.display());
     eprintln!("Target: {:?}", tgt);
@@ -720,63 +477,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         e
     })?;
     eprintln!("✓ Phase 3 SUCCESS: Parsed module with {} top-level items", module.items.len());
-    
-    // Phase 3.6-3.7: Bank switching analysis (if enabled)
-    let bank_assignments = if let Some(bank_config) = codegen::BankConfig::from_meta(&module.meta) {
-        eprintln!("   [Bank Switching] Enabled with {} banks:", bank_config.rom_bank_count);
-        eprintln!("     - Total ROM: {} KB ({} bytes)", 
-            bank_config.rom_total_size / 1024, bank_config.rom_total_size);
-        eprintln!("     - Bank size: {} KB ({} bytes)", 
-            bank_config.rom_bank_size / 1024, bank_config.rom_bank_size);
-        eprintln!("     - Sequential model: Banks #0-#{} for code, bank #{} for helpers", 
-            bank_config.last_bank_id() - 1, bank_config.last_bank_id());
-        
-        // Phase 3.6: Call graph analysis (if bank switching enabled)
-        eprintln!("   [Call Graph] Analyzing function calls...");
-        let call_graph = backend::m6809::call_graph::build_call_graph(&module);
-        eprintln!("     - Functions: {}", call_graph.nodes.len());
-        eprintln!("     - Call edges: {}", call_graph.edges.len());
-        eprintln!("     - Total size: {} bytes ({:.1} KB)", 
-            call_graph.total_size(), call_graph.total_size() as f64 / 1024.0);
-        
-        // Show hot functions (called > 100 times)
-        let hot = call_graph.hot_functions(100);
-        if !hot.is_empty() {
-            eprintln!("     - Hot functions (>100 calls): {}", hot.join(", "));
-        }
-        
-        // Show critical functions
-        let critical: Vec<_> = call_graph.nodes.values()
-            .filter(|n| n.is_critical)
-            .map(|n| n.name.as_str())
-            .collect();
-        if !critical.is_empty() {
-            eprintln!("     - Critical (fixed bank): {}", critical.join(", "));
-        }
-        
-        // Phase 3.7: Bank assignment optimization
-        eprintln!("   [Bank Assignment] Running optimizer...");
-        let optimizer = backend::m6809::bank_optimizer::BankOptimizer::new(bank_config, call_graph);
-        let bank_assignments = match optimizer.assign_banks() {
-            Ok(assignments) => {
-                eprintln!("     ✓ Successfully assigned {} functions to banks", assignments.len());
-                
-                // Show statistics
-                let stats = optimizer.assignment_stats(&assignments);
-                stats.print();
-                
-                Some(assignments)
-            }
-            Err(e) => {
-                eprintln!("     ❌ Bank assignment failed: {}", e);
-                return Err(anyhow::anyhow!("Bank assignment error: {}", e));
-            }
-        };
-        
-        bank_assignments
-    } else {
-        None
-    };
     
     // Phase 3.5: Multi-file resolution (if module has imports)
     let final_module = if !module.imports.is_empty() {
@@ -872,8 +572,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 blink_intensity: false,
                 exclude_ram_org: true,
                 fast_wait: false,
-                emit_sections: false,  // Monolithic ASM mode (backward compatible, default)
-                skip_builtins: false,
                 source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
                 output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
                 assets: vec![], // TODO: Implement asset discovery
@@ -881,7 +579,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
                 const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
                 mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
-                inline_arrays: Vec::new(), // Will be populated by backend (inline array literals)
                 structs: std::collections::HashMap::new(), // Empty registry for non-struct code
                 type_context: std::collections::HashMap::new(), // Empty type context for non-struct code
                 buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
@@ -889,18 +586,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                     needs_buffer: r.needs_buffer,
                     analyzed_files: r.analyzed_files.clone(),
                 }),
-                bank_config: {
-                    let cfg = codegen::BankConfig::from_meta(&final_module.meta);
-                    if cfg.is_some() {
-                        eprintln!("✓ Bank config created from META");
-                    } else if final_module.meta.rom_total_size.is_some() {
-                        eprintln!("! rom_total_size is Some but BankConfig::from_meta returned None");
-                    } else {
-                        eprintln!("✗ No rom_total_size in META (multibank disabled)");
-                    }
-                    cfg
-                },
-                function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
             });
                 let base = path.file_stem().unwrap().to_string_lossy();
                 let out_path = out.cloned().unwrap_or_else(|| path.with_file_name(format!("{}-{}.asm", base, ct)));
@@ -909,8 +594,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             // fast_wait desactivado en modo minimal
             if bin && *ct == target::Target::Vectrex {
                 // When generating for all targets, always use native assembler
-                let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
-                assemble_bin(&out_path, false, include_dir, bank_cfg.as_ref())?;
+                assemble_bin(&out_path, false, include_dir)?;
             }
         }
         Ok(())
@@ -968,8 +652,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             blink_intensity: false,
             exclude_ram_org: true,
             fast_wait: false,
-            emit_sections: false,  // Monolithic ASM mode (default)
-            skip_builtins: false,
             source_path: Some(path.canonicalize().unwrap_or_else(|_| path.clone()).display().to_string()),
             output_name: output_name.map(|s| s.to_string()), // Pass project name for PDB
             assets,
@@ -977,7 +659,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             const_arrays: std::collections::BTreeMap::new(), // Will be populated by backend
             const_string_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
             mutable_arrays: std::collections::BTreeSet::new(), // Will be populated by backend
-            inline_arrays: Vec::new(), // Will be populated by backend (inline array literals)
             structs: std::collections::HashMap::new(), // Will be populated by emit_asm_with_debug
             type_context: std::collections::HashMap::new(), // Will be populated during semantic validation
             buffer_requirements: buffer_requirements.as_ref().map(|r| codegen::BufferRequirements {
@@ -985,18 +666,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
                 needs_buffer: r.needs_buffer,
                 analyzed_files: r.analyzed_files.clone(),
             }),
-            bank_config: {
-                let cfg = codegen::BankConfig::from_meta(&final_module.meta);
-                if cfg.is_some() {
-                    eprintln!("✓ Bank config created from META (build command)");
-                } else if final_module.meta.rom_total_size.is_some() {
-                    eprintln!("! rom_total_size is Some but BankConfig::from_meta returned None");
-                } else {
-                    eprintln!("✗ No rom_total_size in META (build command, multibank disabled)");
-                }
-                cfg
-            },
-            function_bank_map: bank_assignments.clone().unwrap_or_else(|| std::collections::HashMap::new()), // Pass bank assignments from Phase 3.7
         });
         
         // Phase 4 validation: Check if assembly was actually generated
@@ -1042,59 +711,40 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         
         // Phase 5: Write ASM file
         eprintln!("Phase 5: Writing assembly file...");
-        
-        // Check if multibank BEFORE determining output path
-        let has_multibank = codegen::BankConfig::from_meta(&final_module.meta)
-            .map_or(false, |cfg| cfg.is_enabled());
-        
-        // Always write to normal output path - linker will handle multibank_temp/
         let out_path = out.cloned().unwrap_or_else(|| path.with_extension("asm"));
-        
         fs::write(&out_path, &asm).map_err(|e| {
             eprintln!("❌ PHASE 5 FAILED: Cannot write assembly file");
             eprintln!("   Output path: {}", out_path.display());
             eprintln!("   Error: {}", e);
             e
         })?;
-        
-        if has_multibank {
-            eprintln!("✓ Phase 5 SUCCESS: Written to {} (multibank intermediate)", out_path.display());
-        } else {
-            eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
-        }
+        eprintln!("✓ Phase 5 SUCCESS: Written to {} (target={})", out_path.display(), tgt);
         
         // Phase 5.5: Write .pdb file if debug info available
-        // CRITICAL: For multibank, defer PDB generation until Phase 6.8 (after linker)
-        // For single-bank, write immediately if no binary generation requested
         let mut debug_info_mut = debug_info;
-        
         if let Some(ref mut dbg) = debug_info_mut {
-            if has_multibank {
-                eprintln!("Phase 5.5: Debug symbols write deferred until Phase 6.8 (after multibank linking)");
-            } else {
-                eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
-                let pdb_path = out_path.with_extension("pdb");
-                
-                // If binary generation is requested, we'll update the PDB after Phase 6.5
-                // Otherwise, write it now
-                if !(bin && tgt == target::Target::Vectrex) {
-                    match dbg.to_json() {
-                        Ok(json) => {
-                            fs::write(&pdb_path, json).map_err(|e| {
-                                eprintln!("⚠ Warning: Cannot write debug symbols file");
-                                eprintln!("   Output path: {}", pdb_path.display());
-                                eprintln!("   Error: {}", e);
-                                e
-                            })?;
-                            eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
-                        },
-                        Err(e) => {
-                            eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
-                        }
+            eprintln!("Phase 5.5: Writing debug symbols file (.pdb)...");
+            let pdb_path = out_path.with_extension("pdb");
+            
+            // If binary generation is requested, we'll update the PDB after Phase 6.5
+            // Otherwise, write it now
+            if !(bin && tgt == target::Target::Vectrex) {
+                match dbg.to_json() {
+                    Ok(json) => {
+                        fs::write(&pdb_path, json).map_err(|e| {
+                            eprintln!("⚠ Warning: Cannot write debug symbols file");
+                            eprintln!("   Output path: {}", pdb_path.display());
+                            eprintln!("   Error: {}", e);
+                            e
+                        })?;
+                        eprintln!("✓ Phase 5.5 SUCCESS: Debug symbols written to {}", pdb_path.display());
+                    },
+                    Err(e) => {
+                        eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
                     }
-                } else {
-                    eprintln!("Phase 5.5: Debug symbols write deferred until after binary generation");
                 }
+            } else {
+                eprintln!("Phase 5.5: Debug symbols write deferred until after binary generation");
             }
         } else {
             eprintln!("Phase 5.5: Debug symbols generation skipped (not supported for target={})", tgt);
@@ -1103,54 +753,39 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
         // Phase 6: Binary assembly (if requested)
         if bin && tgt == target::Target::Vectrex { 
             eprintln!("Phase 6: Binary assembly requested...");
-            let phase6_success = if dual {
-                match assemble_dual(&out_path, include_dir) {
-                    Ok(_) => {
-                        eprintln!("✓ Phase 6 SUCCESS: Dual assembly complete");
-                        true
-                    },
-                    Err(e) => {
-                        eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
-                        eprintln!("   Error: {}", e);
-                        false
-                    }
-                }
+            if dual {
+                assemble_dual(&out_path, include_dir).map_err(|e| {
+                    eprintln!("❌ PHASE 6 FAILED: Dual assembly error");
+                    eprintln!("   Error: {}", e);
+                    e
+                })?;
             } else {
                 // CRITICAL: Store symbol_table from binary for accurate header offset calculation
-                let bank_cfg = codegen::BankConfig::from_meta(&final_module.meta);
-                match assemble_bin(&out_path, use_lwasm, include_dir, bank_cfg.as_ref()) {
-                    Ok((binary_symbol_table, line_map, org)) => {
-                        // Store binary_symbol_table in debug_info for Phase 6.6
-                        if let Some(ref mut dbg) = debug_info_mut {
-                            // Add ALL symbols from binary_symbol_table (single source of truth)
-                            for (symbol_name, &address) in &binary_symbol_table {
-                                dbg.add_symbol(symbol_name.clone(), address);
-                            }
-                            
-                            // Set entryPoint to START address from binary (real address)
-                            if let Some(&start_addr) = binary_symbol_table.get("START") {
-                                dbg.set_entry_point(start_addr);
-                                eprintln!("✓ Using START from binary symbol table: 0x{:04X}", start_addr);
-                            } else {
-                                eprintln!("⚠ Warning: START symbol not found in binary symbol table");
-                            }
-                        }
-                        eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
-                        true
-                    },
-                    Err(e) => {
-                        eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
-                        eprintln!("   Error: {}", e);
-                        eprintln!("   Continuing to Phase 6.7 (multibank) which only needs .asm file...");
-                        false
+                let (binary_symbol_table, line_map, org) = assemble_bin(&out_path, use_lwasm, include_dir).map_err(|e| {
+                    eprintln!("❌ PHASE 6 FAILED: Binary assembly error");
+                    eprintln!("   Error: {}", e);
+                    e
+                })?;
+                
+                // Store binary_symbol_table in debug_info for Phase 6.6
+                if let Some(ref mut dbg) = debug_info_mut {
+                    // Add ALL symbols from binary_symbol_table (single source of truth)
+                    for (symbol_name, &address) in &binary_symbol_table {
+                        dbg.add_symbol(symbol_name.clone(), address);
+                    }
+                    
+                    // Set entryPoint to START address from binary (real address)
+                    if let Some(&start_addr) = binary_symbol_table.get("START") {
+                        dbg.set_entry_point(start_addr);
+                        eprintln!("✓ Using START from binary symbol table: 0x{:04X}", start_addr);
+                    } else {
+                        eprintln!("⚠ Warning: START symbol not found in binary symbol table");
                     }
                 }
-            };
+            }
                 
-            // Only proceed with Phase 6.5-6.6 if Phase 6 succeeded (needs .bin file)
-            if !phase6_success {
-                eprintln!("⚠ Skipping Phase 6.5-6.6 (debug symbol mapping) due to Phase 6 failure");
-            } else {
+            eprintln!("✓ Phase 6 SUCCESS: Binary generation complete");
+            
             // Phase 6.5: Generate ASM address mapping
             if let Some(ref mut dbg) = debug_info_mut {
                 eprintln!("Phase 6.5: Generating ASM address mapping...");
@@ -1323,99 +958,6 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
             } else {
                 eprintln!("Phase 6.5/6.6: Debug symbols generation skipped (no debug info available)");
             }
-            } // End of phase6_success check
-            
-            // Phase 6.7: Multi-bank binary generation (unified format: always .bin)
-            let mut multibank_symbols: Option<std::collections::HashMap<String, u16>> = None;
-            if let Some(ref bank_config) = codegen::BankConfig::from_meta(&final_module.meta) {
-                if bank_config.is_enabled() {
-                    eprintln!("Phase 6.7: Multi-bank binary generation...");
-                    
-                    // Generate multibank as .bin directly (unified format)
-                    let bin_path = out_path.with_extension("bin");
-                    let linker = backend::m6809::multi_bank_linker::MultiBankLinker::new(
-                        bank_config.rom_bank_size,
-                        bank_config.rom_bank_count,
-                        !use_lwasm, // Use native assembler by default unless lwasm is requested
-                    );
-                    
-                    match linker.generate_multibank_rom(&out_path, &bin_path) {
-                        Ok(symbols) => {
-                            eprintln!("✓ Phase 6.7 SUCCESS: Multi-bank binary written to {}", bin_path.display());
-                            eprintln!("   Total size: {} KB ({} banks × {} KB)", 
-                                (bank_config.rom_total_size / 1024),
-                                bank_config.rom_bank_count,
-                                (bank_config.rom_bank_size / 1024));
-                            eprintln!("   Extracted {} symbols from all banks", symbols.len());
-                            multibank_symbols = Some(symbols);
-                        },
-                        Err(e) => {
-                            eprintln!("⚠ Warning: Multi-bank ROM generation failed: {}", e);
-                            eprintln!("   Single-bank .bin file is still available");
-                        }
-                    }
-                } else {
-                    eprintln!("Phase 6.7: Multi-bank ROM generation skipped (only 1 bank)");
-                }
-            } else {
-                eprintln!("Phase 6.7: Multi-bank ROM generation skipped (no bank config)");
-            }
-            
-            // Phase 6.8: Write PDB for multibank (after linker has processed all banks)
-            // TODO: Move inside bank_config if let scope to access rom_bank_count
-            if has_multibank && bin && tgt == target::Target::Vectrex {
-                if let Some(ref mut dbg) = debug_info_mut {
-                    eprintln!("Phase 6.8: Writing debug symbols file (.pdb) for multibank...");
-                    
-                    // For multibank, PDB should be in same directory as BIN (not with .vpy source)
-                    let bin_path = out_path.with_extension("bin");
-                    let pdb_path = bin_path.with_extension("pdb");
-                    
-                    // CRITICAL FIX (2026-01-17): Use symbols returned from linker
-                    // instead of re-reading bank_*.asm files from disk
-                    if let Some(ref symbols) = multibank_symbols {
-                        eprintln!("   Using {} symbols from linker (no file scanning needed)", symbols.len());
-                        
-                        // Update debug_info with symbols from linker
-                        let mut updated_count = 0;
-                        for (symbol_name, address) in symbols {
-                            // Update function addresses
-                            for func in &mut dbg.functions {
-                                if func.name == *symbol_name {
-                                    func.address = Some(*address);
-                                    updated_count += 1;
-                                }
-                            }
-                            // Update variable addresses
-                            for var in &mut dbg.variables {
-                                if var.name == *symbol_name {
-                                    var.address = Some(*address);
-                                    updated_count += 1;
-                                }
-                            }
-                        }
-                        eprintln!("   ✓ Updated {} symbols with bank addresses", updated_count);
-                    } else {
-                        eprintln!("   ⚠ Warning: No symbols available from linker");
-                        eprintln!("   PDB will contain addresses from unified ASM (may be incorrect)");
-                    }
-                    
-                    match dbg.to_json() {
-                        Ok(json) => {
-                            fs::write(&pdb_path, json).map_err(|e| {
-                                eprintln!("⚠ Warning: Cannot write debug symbols file");
-                                eprintln!("   Output path: {}", pdb_path.display());
-                                eprintln!("   Error: {}", e);
-                                e
-                            })?;
-                            eprintln!("✓ Phase 6.8 SUCCESS: Debug symbols written to {}", pdb_path.display());
-                        },
-                        Err(e) => {
-                            eprintln!("⚠ Warning: Failed to serialize debug symbols: {}", e);
-                        }
-                    }
-                }
-            }
         } else {
             eprintln!("Phase 6: Binary assembly skipped (not requested or target not Vectrex)");
         }
@@ -1425,239 +967,7 @@ fn build_cmd(path: &PathBuf, out: Option<&PathBuf>, tgt: target::Target, title: 
     }
 }
 
-/// Update debug_info with addresses from bank_*.asm files after multibank linking
-fn update_debug_info_from_banks(
-    debug_info: &mut backend::debug_info::DebugInfo,
-    multibank_temp: &Path,
-    rom_bank_count: usize,
-) -> Result<usize, String> {
-    use std::collections::HashMap;
-    
-    // Collect all bank files (store paths to avoid borrow issues)
-    let bank_files: Vec<_> = std::fs::read_dir(multibank_temp)
-        .map_err(|e| format!("Cannot read multibank_temp directory: {}", e))?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            if let Some(name) = entry.file_name().to_str() {
-                // Match ONLY bank_NN.asm (not bank_NN_full.asm)
-                name.starts_with("bank_") && 
-                name.ends_with(".asm") &&
-                !name.contains("_full") &&
-                !name.contains("_flat")
-            } else {
-                false
-            }
-        })
-        .map(|entry| (entry.path(), entry.file_name()))
-        .collect();
-    
-    if bank_files.is_empty() {
-        return Err("No bank_*.asm files found in multibank_temp/".to_string());
-    }
-    
-    eprintln!("   Found {} bank files to parse", bank_files.len());
-    
-    // Map to store all symbols with their final addresses
-    let mut all_symbols: HashMap<String, u16> = HashMap::new();
-    
-    // Parse each bank
-    for (bank_path, bank_name) in &bank_files {
-        let bank_name_str = bank_name.to_string_lossy();
-        
-        // Extract bank ID from filename (bank_00.asm -> 0, bank_31.asm -> 31)
-        let bank_id: u16 = if let Some(id_str) = bank_name_str.strip_prefix("bank_").and_then(|s| s.strip_suffix(".asm")) {
-            id_str.parse::<u16>().unwrap_or(0)
-        } else {
-            continue;
-        };
-        
-        // Read ASM source
-        let asm_source = std::fs::read_to_string(&bank_path)
-            .map_err(|e| format!("Cannot read {}: {}", bank_name_str, e))?;
-        
-        // Extract ORG directive to determine base address
-        let base_address = extract_org_address(&asm_source).unwrap_or(0x0000);
-        
-        // Calculate memory window address for this bank
-        // Helpers bank (last) is fixed at 0x4000-0x7FFF
-        // Other banks are switchable at 0x0000-0x3FFF
-        let helpers_bank = (rom_bank_count - 1) as u16;
-        let window_base = if bank_id == helpers_bank {
-            0x4000u16
-        } else {
-            0x0000u16
-        };
-        
-        eprintln!("      Bank {:02}: ORG ${:04X}, window @ ${:04X}", bank_id, base_address, window_base);
-        
-        // Assemble to get symbol table (use object_mode=true to allow unresolved symbols)
-        match backend::asm_to_binary::assemble_m6809(&asm_source, base_address, true, true) {
-            Ok((_, _, symbols, _)) => {
-                // Merge symbols with their bank addresses
-                for (name, offset) in symbols {
-                    // Final address is window_base + offset
-                    let final_addr = window_base.wrapping_add(offset);
-                    all_symbols.insert(name, final_addr);
-                }
-            },
-            Err(_e) => {
-                // Silently skip banks that fail to assemble (missing EQU definitions is expected)
-                // We still get symbols from banks that assemble successfully
-            }
-        }
-    }
-    
-    if all_symbols.is_empty() {
-        return Err("No symbols extracted from banks".to_string());
-    }
-    
-    eprintln!("   Extracted {} symbols from all banks", all_symbols.len());
-    
-    // Update debug_info.asm field to point to multibank_temp directory
-    // Store relative path from PDB location (same dir as BIN) to multibank_temp
-    // PDB is at: bin/test_multibank_pdb.pdb
-    // multibank_temp is at: src/multibank_temp
-    // Relative path from bin/ to src/multibank_temp is: ../src/multibank_temp
-    // But actually, multibank_temp is at the same level as the BIN file was created
-    // So just use the directory name "multibank_temp"
-    debug_info.asm = "multibank_temp".to_string();
-    
-    // Update debug_info.symbols
-    let mut updated_count = 0;
-    for (name, addr) in &all_symbols {
-        let addr_str = format!("0x{:04X}", addr);
-        debug_info.symbols.insert(name.clone(), addr_str);
-        updated_count += 1;
-    }
-    
-    // Update debug_info.functions (address field)
-    for func_info in debug_info.functions.values_mut() {
-        if let Some(addr) = all_symbols.get(&func_info.name) {
-            func_info.address = format!("0x{:04X}", addr);
-        }
-    }
-    
-    // Update debug_info.vpy_line_map (addresses)
-    let mut updated_vpy_map = HashMap::new();
-    for (old_addr, entry) in &debug_info.vpy_line_map {
-        // Try to match symbol and update address
-        // For now, keep old addresses if we can't find a better match
-        updated_vpy_map.insert(old_addr.clone(), entry.clone());
-    }
-    debug_info.vpy_line_map = updated_vpy_map;
-    
-    // Update debug_info.asm field to point to multibank_temp directory
-    debug_info.asm = "multibank_temp".to_string();
-    
-    // Rebuild asmLineMap from the actual bank_*.asm files now that we have symbol addresses
-    // The bank_*.asm files have ORG directives and can be mapped to final addresses
-    debug_info.asm_line_map.clear();
-    
-    // For each bank file, rebuild the line map with correct addresses
-    let mut lines_added = 0usize;
-    for (bank_path, bank_name) in &bank_files {
-        let bank_name_str = bank_name.to_string_lossy();
-        
-        // Extract bank ID from filename (bank_00.asm -> 0, bank_31.asm -> 31)
-        let bank_id: u16 = if let Some(id_str) = bank_name_str.strip_prefix("bank_").and_then(|s| s.strip_suffix(".asm")) {
-            id_str.parse::<u16>().unwrap_or(0)
-        } else {
-            continue;
-        };
-        
-        // Determine the window base for this bank
-        let helpers_bank = (rom_bank_count - 1) as u16;
-        let window_base = if bank_id == helpers_bank {
-            0x4000u16
-        } else {
-            0x0000u16
-        };
-        
-        // Read the bank ASM source
-        let asm_source = match std::fs::read_to_string(&bank_path) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        
-        // Parse the ORG directive
-        let base_address = extract_org_address(&asm_source).unwrap_or(0x0000);
-        
-        // Now assemble just this bank to get accurate address information
-        match backend::asm_to_binary::assemble_m6809(&asm_source, base_address, true, true) {
-            Ok((_, _, bank_symbols, binary_output)) => {
-                // The binary_output contains addr -> bytes mapping
-                // We can use this to determine exact addresses for each line
-                let mut current_addr = base_address;
-                
-                for (line_num, line) in asm_source.lines().enumerate() {
-                    let line_num_1based = line_num + 1;
-                    let trimmed = line.trim();
-                    
-                    // Skip empty lines and comments
-                    if trimmed.is_empty() || trimmed.starts_with(';') {
-                        continue;
-                    }
-                    
-                    // Check if this is a label
-                    if let Some(label_pos) = trimmed.find(':') {
-                        let label = trimmed[..label_pos].trim();
-                        if !label.is_empty() {
-                            // Update address from bank symbols
-                            if let Some(&offset) = bank_symbols.get(label) {
-                                current_addr = offset;
-                            }
-                        }
-                    }
-                    
-                    // Map this line to its address (apply window base)
-                    let final_addr = window_base.wrapping_add(current_addr);
-                    let addr_str = format!("0x{:04X}", final_addr);
-                    let entry = backend::debug_info::LineMapEntry {
-                        file: bank_name_str.to_string(),
-                        address: addr_str.clone(),
-                        line: line_num_1based,
-                    };
-                    debug_info.asm_line_map.insert(addr_str, entry);
-                    lines_added += 1;
-                    
-                    // Advance address (rough estimate: 2 bytes per instruction)
-                    if !trimmed.ends_with(':') && !trimmed.to_uppercase().starts_with("ORG") {
-                        current_addr = current_addr.wrapping_add(2);
-                    }
-                }
-            },
-            Err(_e) => {
-                // Skip banks that fail to assemble
-                eprintln!("   [DEBUG] Bank {} failed to assemble, skipping line map", bank_id);
-            }
-        }
-    }
-    
-    eprintln!("   Rebuilt asmLineMap from banks: added {} entries", lines_added);
-    
-    Ok(updated_count)
-}
-
-/// Extract ORG address from ASM source
-fn extract_org_address(asm: &str) -> Option<u16> {
-    for line in asm.lines() {
-        let trimmed = line.trim();
-        if trimmed.to_uppercase().starts_with("ORG ") {
-            // Parse "ORG $4000" or "ORG 0x4000"
-            let addr_str = trimmed[3..].trim();
-            if let Some(hex) = addr_str.strip_prefix('$') {
-                return u16::from_str_radix(hex, 16).ok();
-            } else if let Some(hex) = addr_str.strip_prefix("0x") {
-                return u16::from_str_radix(hex, 16).ok();
-            } else {
-                return addr_str.parse::<u16>().ok();
-            }
-        }
-    }
-    None
-}
-
-fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>, bank_config: Option<&codegen::BankConfig>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
+fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBuf>) -> Result<(HashMap<String, u16>, HashMap<usize, usize>, u16)> {
     let bin_path = asm_path.with_extension("bin");
     eprintln!("=== BINARY ASSEMBLY PHASE ===");
     eprintln!("ASM input: {}", asm_path.display());
@@ -1747,8 +1057,8 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
         // Set include directory for assembler
         backend::asm_to_binary::set_include_dir(include_dir.map(|p| p.to_path_buf()));
         
-        // Assemble with native assembler (object_mode=false for monolithic build)
-        let (binary, line_map, symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false, false)
+        // Assemble with native assembler
+        let (binary, line_map, symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
             .map_err(|e| {
                 eprintln!("❌ Native assembler failed: {}", e);
                 eprintln!("\nPlease fix the assembly errors above.");
@@ -1773,44 +1083,21 @@ fn assemble_bin(asm_path: &PathBuf, use_lwasm: bool, include_dir: Option<&PathBu
     let original_size = binary.0.len();
     eprintln!("✓ Assembler generated: {} bytes", original_size);
     
-    // Pad to correct size based on bank configuration
-    let target_size = if let Some(cfg) = bank_config {
-        // Multi-bank ROM: use total ROM size
-        cfg.rom_total_size as usize
-    } else {
-        // Standard cartridge: 32KB
-        0x8000
-    };
-    
+    // Pad to 32KB cartridge size
     let mut data = binary.0;
     let symbol_table = binary.1;
     let line_map = binary.2;
     let org = binary.3;
-    
-    if original_size <= target_size { 
-        data.resize(target_size, 0);
-        let remaining = target_size - original_size;
-        if target_size == 0x8000 {
-            eprintln!("✓ Padded to 32KB (available space: {} bytes / {} KB)", 
-                remaining, remaining / 1024);
-        } else {
-            eprintln!("✓ Padded to {} KB (available space: {} bytes / {} KB)", 
-                target_size / 1024, remaining, remaining / 1024);
-        }
-    } else if original_size == target_size {
-        if target_size == 0x8000 {
-            eprintln!("⚠ Cartridge is at maximum size (32KB)");
-        } else {
-            eprintln!("⚠ ROM is at maximum size ({} KB)", target_size / 1024);
-        }
+    if original_size <= 0x8000 { 
+        data.resize(0x8000, 0); 
+        let remaining = 0x8000 - original_size;
+        eprintln!("✓ Padded to 32KB (available space: {} bytes / {} KB)", 
+            remaining, remaining / 1024);
+    } else if original_size == 0x8000 {
+        eprintln!("⚠ Cartridge is at maximum size (32KB)");
     } else {
-        if target_size == 0x8000 {
-            eprintln!("❌ Binary size exceeds 32KB cartridge limit by {} bytes", 
-                original_size - target_size);
-        } else {
-            eprintln!("❌ Binary size exceeds {} KB ROM limit by {} bytes", 
-                target_size / 1024, original_size - target_size);
-        }
+        eprintln!("❌ Binary size exceeds 32KB cartridge limit by {} bytes", 
+            original_size - 0x8000);
     }
     
     // Write final binary to file
@@ -1848,7 +1135,7 @@ fn assemble_dual(asm_path: &PathBuf, include_dir: Option<&PathBuf>) -> Result<()
     let org = extract_org_directive(&asm_source).unwrap_or(0xC800);
     eprintln!("    Detected ORG: 0x{:04X}", org);
     
-    let (native_binary, _line_map, _symbol_table, _unresolved) = backend::asm_to_binary::assemble_m6809(&asm_source, org, false, false)
+    let (native_binary, _line_map, _symbol_table) = backend::asm_to_binary::assemble_m6809(&asm_source, org)
         .map_err(|e| {
             eprintln!("❌ Native assembler failed: {}", e);
             anyhow::anyhow!("Native assembler failed: {}", e)
@@ -1986,476 +1273,4 @@ fn extract_org_directive(asm: &str) -> Option<u16> {
         }
     }
     None
-}
-
-/// Compile VPy source to .vo object file for linking
-fn compile_object_cmd(input: &Path, output: Option<&PathBuf>, title: &str) -> Result<()> {
-    use crate::linker::{VectrexObject, ObjectHeader, TargetArch, ObjectFlags, DebugInfo};
-    use crate::linker::{extract_sections_with_binary, build_symbol_table, collect_relocations};
-    
-    eprintln!("=== OBJECT FILE GENERATION ===");
-    eprintln!("Input: {}", input.display());
-    
-    // Phase 1-3: Parse VPy to AST
-    eprintln!("Phase 1-3: Parsing VPy source...");
-    let source = read_source(&input.to_path_buf())?;
-    let tokens = lexer::lex(&source)
-        .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
-    let module = parser::parse_with_filename(&tokens, &input.display().to_string())
-        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-    
-    // Phase 4: Generate ASM with section markers
-    eprintln!("Phase 4: Generating ASM with section markers...");
-    let assets = discover_assets(input);
-    
-    let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(&module, target::Target::Vectrex, &codegen::CodegenOptions {
-        title: title.to_string(),
-        auto_loop: true,
-        diag_freeze: false,
-        force_extended_jsr: false,
-        _bank_size: 0,
-        per_frame_silence: false,
-        debug_init_draw: false,
-        blink_intensity: false,
-        exclude_ram_org: true,
-        fast_wait: false,
-        emit_sections: true,  // CRITICAL: Enable section markers
-        skip_builtins: false,  // NOT using --separate-modules, so emit builtins
-        source_path: Some(input.display().to_string()),
-        output_name: Some(title.to_string()),
-        assets,
-        const_values: std::collections::BTreeMap::new(),
-        const_arrays: std::collections::BTreeMap::new(),
-        const_string_arrays: std::collections::BTreeSet::new(),
-        mutable_arrays: std::collections::BTreeSet::new(),
-        inline_arrays: Vec::new(),
-        structs: std::collections::HashMap::new(),
-        type_context: std::collections::HashMap::new(),
-        buffer_requirements: None,
-        bank_config: None,
-        function_bank_map: std::collections::HashMap::new(),
-    });
-    
-    if !diagnostics.is_empty() {
-        eprintln!("❌ Semantic errors detected:");
-        for diag in &diagnostics {
-            eprintln!("   {}", diag.message);
-        }
-        return Err(anyhow::anyhow!("Compilation failed with semantic errors"));
-    }
-    
-    // Phase 5: Parse ASM and assemble sections
-    eprintln!("Phase 5: Parsing sections and assembling to binary...");
-    let sections = extract_sections_with_binary(&asm, 0x0000)
-        .map_err(|e| anyhow::anyhow!("Section extraction error: {}", e))?;
-    eprintln!("  ✓ Extracted {} sections", sections.len());
-    
-    // Phase 6: Build symbol table
-    eprintln!("Phase 6: Building symbol table...");
-    let symbols = build_symbol_table(&sections, &asm)
-        .map_err(|e| anyhow::anyhow!("Symbol table error: {}", e))?;
-    eprintln!("  ✓ Found {} exports, {} imports", 
-        symbols.exports.len(), symbols.imports.len());
-    
-    // Phase 7: Collect relocations
-    eprintln!("Phase 7: Collecting relocations...");
-    let relocations = collect_relocations(&sections, &symbols, &asm)
-        .map_err(|e| anyhow::anyhow!("Relocation collection error: {}", e))?;
-    eprintln!("  ✓ Collected {} relocations", relocations.len());
-    
-    // Phase 8: Create object file
-    let obj = VectrexObject {
-        header: ObjectHeader {
-            magic: crate::linker::OBJECT_MAGIC,
-            version: crate::linker::OBJECT_FORMAT_VERSION,
-            target: TargetArch::M6809,
-            flags: ObjectFlags {
-                position_independent: false,
-                contains_bank_hints: false,
-            },
-            source_file: input.display().to_string(),
-        },
-        sections,
-        symbols,
-        relocations,
-        debug_info: DebugInfo::default(),
-    };
-    
-    // Phase 9: Write .vo file
-    let output_path = output.cloned().unwrap_or_else(|| {
-        input.with_extension("vo")
-    });
-    
-    eprintln!("Phase 9: Writing object file...");
-    let mut file = std::fs::File::create(&output_path)?;
-    obj.write(&mut file)
-        .map_err(|e| anyhow::anyhow!("Failed to write object file: {}", e))?;
-    
-    eprintln!("\n✓ SUCCESS: Object file generated");
-    eprintln!("  Output: {}", output_path.display());
-    eprintln!("  Size: {} bytes", fs::metadata(&output_path)?.len());
-    eprintln!("  Sections: {}", obj.sections.len());
-    eprintln!("  Symbols: {} exports, {} imports", 
-        obj.symbols.exports.len(), obj.symbols.imports.len());
-    eprintln!("  Relocations: {}", obj.relocations.len());
-    
-    Ok(())
-}
-fn link_cmd(inputs: &[PathBuf], output: &Path, base_address: u16, title: &str) -> Result<()> {
-    use crate::linker::{VectrexObject, SymbolResolver};
-    
-    eprintln!("=== VECTREX LINKER ===");
-    eprintln!("Linking {} object files...", inputs.len());
-    eprintln!("Base address: 0x{:04X}", base_address);
-    
-    // Phase 1: Load all object files
-    eprintln!("\nPhase 1: Loading object files...");
-    let mut objects = Vec::new();
-    for (idx, input_path) in inputs.iter().enumerate() {
-        eprintln!("  [{}/{}] Loading {}...", idx + 1, inputs.len(), input_path.display());
-        
-        let mut file = std::fs::File::open(input_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open {}: {}", input_path.display(), e))?;
-        
-        let obj = VectrexObject::read(&mut file)
-            .map_err(|e| anyhow::anyhow!("Failed to read object file {}: {}", input_path.display(), e))?;
-        
-        eprintln!("      Sections: {}", obj.sections.len());
-        eprintln!("      Exports: {}", obj.symbols.exports.len());
-        eprintln!("      Imports: {}", obj.symbols.imports.len());
-        eprintln!("      Relocations: {}", obj.relocations.len());
-        
-        objects.push(obj);
-    }
-    
-    // Phase 2: Collect symbols and build global symbol table
-    eprintln!("\nPhase 2: Building global symbol table...");
-    let mut global = SymbolResolver::collect_symbols(&objects)
-        .map_err(|e| anyhow::anyhow!("Symbol collection failed: {}", e))?;
-    eprintln!("  ✓ Collected {} global symbols", global.symbols.len());
-    
-    // Phase 3: Verify all imports are satisfied
-    eprintln!("\nPhase 3: Verifying imports...");
-    SymbolResolver::verify_imports(&objects, &global)
-        .map_err(|e| anyhow::anyhow!("Import verification failed:\n{}", e))?;
-    eprintln!("  ✓ All imports resolved");
-    
-    // Phase 4: Assign addresses to sections and symbols
-    eprintln!("\nPhase 4: Assigning addresses...");
-    let section_bases = SymbolResolver::assign_addresses(&objects, &mut global, base_address)
-        .map_err(|e| anyhow::anyhow!("Address assignment failed: {}", e))?;
-    eprintln!("  ✓ Assigned {} section addresses", section_bases.len());
-    
-    // Print symbol addresses for debugging
-    eprintln!("\nSymbol addresses:");
-    let mut sorted_symbols: Vec<_> = global.symbols.iter().collect();
-    sorted_symbols.sort_by_key(|(_, sym)| sym.address);
-    for (name, sym) in sorted_symbols.iter().take(10) {
-        eprintln!("  {} = 0x{:04X} ({})", name, sym.address, sym.source_file);
-    }
-    if sorted_symbols.len() > 10 {
-        eprintln!("  ... and {} more", sorted_symbols.len() - 10);
-    }
-    
-    // Phase 5: Apply relocations
-    eprintln!("\nPhase 5: Applying relocations...");
-    let mut objects_mut = objects.clone();
-    SymbolResolver::apply_relocations(&mut objects_mut, &global, &section_bases)
-        .map_err(|e| anyhow::anyhow!("Relocation patching failed: {}", e))?;
-    eprintln!("  ✓ Patched all relocations");
-    
-    // Phase 6: Merge all sections into final binary
-    eprintln!("\nPhase 6: Merging sections...");
-    let mut final_binary = Vec::new();
-    let mut current_address = base_address;
-    
-    for (obj_idx, obj) in objects_mut.iter().enumerate() {
-        for (section_idx, section) in obj.sections.iter().enumerate() {
-            let section_base = section_bases[&(obj_idx, section_idx)];
-            
-            // Add padding if needed
-            while final_binary.len() < (section_base - base_address) as usize {
-                final_binary.push(0x00);
-            }
-            
-            // Append section data
-            final_binary.extend_from_slice(&section.data);
-            current_address = section_base + section.data.len() as u16;
-            
-            eprintln!("  Section {} from {}: 0x{:04X}-0x{:04X} ({} bytes)",
-                section.name, obj.header.source_file, section_base, current_address, section.data.len());
-        }
-    }
-    
-    // Phase 7: Write final binary
-    eprintln!("\nPhase 7: Writing binary...");
-    std::fs::write(output, &final_binary)?;
-    
-    eprintln!("\n✓ SUCCESS: Linked binary generated");
-    eprintln!("  Output: {}", output.display());
-    eprintln!("  Size: {} bytes", final_binary.len());
-    eprintln!("  Base: 0x{:04X}", base_address);
-    eprintln!("  End: 0x{:04X}", current_address);
-    eprintln!("  Objects linked: {}", objects.len());
-    eprintln!("  Total symbols: {}", global.symbols.len());
-    
-    Ok(())
-}// build_separate_modules: Compile each module to .vo, then link (Phase 6.5)
-// Implementation: Unifier-First + Section Extraction (PHASE6_FUTURE_WORK.md)
-fn build_separate_modules(entry_path: &Path, output: Option<&PathBuf>, title: &str, generate_bin: bool) -> Result<()> {
-    eprintln!("=== SEPARATE MODULE COMPILATION (Phase 6.5) ===");
-    eprintln!("Entry: {}", entry_path.display());
-    
-    // Phase 1: Parse entry module
-    eprintln!("\nPhase 1: Parsing entry module...");
-    let entry_pathbuf = entry_path.to_path_buf();
-    let src = read_source(&entry_pathbuf)?;
-    let tokens = lexer::lex(&src)?;
-    let module = parser::parse_with_filename(&tokens, &entry_path.display().to_string())?;
-    eprintln!("  ✓ Parsed {} top-level items", module.items.len());
-    
-    // Phase 2: Multi-file resolution (COPY from Phase 3.5 of build_cmd)
-    eprintln!("\nPhase 2: Multi-file import resolution...");
-    eprintln!("   Found {} import declarations", module.imports.len());
-    
-    let file_dir = entry_path.parent().unwrap_or(Path::new("."));
-    let project_root = if file_dir.ends_with("src") {
-        file_dir.parent().unwrap_or(file_dir).to_path_buf()
-    } else {
-        file_dir.to_path_buf()
-    };
-    
-    eprintln!("   Project root: {}", project_root.display());
-    
-    let mut resolver = resolver::ModuleResolver::new(project_root);
-    resolver.load_project(entry_path)?;
-    
-    let loaded_modules = resolver.get_all_modules();
-    let num_modules = loaded_modules.len();
-    eprintln!("   Loaded {} module(s)", num_modules);
-    for loaded_mod in &loaded_modules {
-        eprintln!("    - {}", loaded_mod.path.display());
-    }
-    
-    // Phase 3: UNIFY (use existing unifier - 100% working code)
-    eprintln!("\nPhase 3: Unifying modules (symbol resolution)...");
-    let entry_module_name = entry_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("main")
-        .to_string();
-    
-    let options = unifier::UnifyOptions {
-        prefix_symbols: true,
-        prefix_separator: "_".to_string(),
-        tree_shake: false,
-    };
-    
-    let unified = unifier::unify_modules(&resolver, &entry_module_name, &options)
-        .map_err(|e| anyhow::anyhow!("Unification failed: {}", e))?;
-    
-    eprintln!("  ✓ Unified module: {} items", unified.module.items.len());
-    
-    // Phase 4: COMPILE unified module (single ASM with all symbols prefixed)
-    eprintln!("\nPhase 4: Compiling unified module to ASM...");
-    let assets = discover_assets(entry_path);
-    let (asm, _debug_info, diagnostics) = codegen::emit_asm_with_debug(
-        &unified.module, 
-        target::Target::Vectrex, 
-        &codegen::CodegenOptions {
-            title: title.to_string(),
-            auto_loop: true, // Entry module behavior
-            diag_freeze: false,
-            force_extended_jsr: false,
-            _bank_size: 0,
-            per_frame_silence: false,
-            debug_init_draw: false,
-            blink_intensity: false,
-            exclude_ram_org: true,
-            fast_wait: false,
-            emit_sections: true, // CRITICAL for section extraction
-            skip_builtins: false, // Phase 6.4: Emit builtins (deferred optimization)
-            source_path: Some(entry_path.to_string_lossy().to_string()),
-            output_name: Some(entry_module_name.clone()),
-            assets,
-            const_values: std::collections::BTreeMap::new(),
-            const_arrays: std::collections::BTreeMap::new(),
-            const_string_arrays: std::collections::BTreeSet::new(),
-            mutable_arrays: std::collections::BTreeSet::new(),
-            inline_arrays: Vec::new(),
-            structs: std::collections::HashMap::new(),
-            type_context: std::collections::HashMap::new(),
-            buffer_requirements: None,
-            bank_config: None,
-            function_bank_map: std::collections::HashMap::new(),
-        }
-    );
-    
-    // Filter only errors (not warnings)
-    let errors: Vec<_> = diagnostics.iter()
-        .filter(|d| d.severity == codegen::DiagnosticSeverity::Error)
-        .collect();
-    
-    if !errors.is_empty() {
-        eprintln!("  ❌ Compilation errors:");
-        for diag in &errors {
-            eprintln!("     {}", diag.message);
-        }
-        return Err(anyhow::anyhow!("Unified module failed to compile"));
-    }
-    
-    // Print warnings (non-blocking)
-    let warnings: Vec<_> = diagnostics.iter()
-        .filter(|d| d.severity != codegen::DiagnosticSeverity::Error)
-        .collect();
-    if !warnings.is_empty() {
-        eprintln!("  ⚠️  Compilation warnings:");
-        for diag in &warnings {
-            eprintln!("     {}", diag.message);
-        }
-    }
-    
-    eprintln!("  ✓ ASM generated ({} bytes)", asm.len());
-    
-    // Phase 5: EXTRACT sections per module (based on symbol prefixes)
-    eprintln!("\nPhase 5: Extracting sections per module...");
-    let sections_by_module = extract_module_sections(&asm, &unified.name_map, loaded_modules)?;
-    
-    eprintln!("  ✓ Extracted {} module sections", sections_by_module.len());
-    
-    // Phase 6: CREATE .vo per module
-    eprintln!("\nPhase 6: Creating object files...");
-    let output_dir = entry_path.parent().unwrap_or(Path::new("."));
-    let mut vo_files = Vec::new();
-    let mut first_module = true;
-    
-    for (module_name, sections) in sections_by_module {
-        let module_path = output_dir.join(format!("{}.vo", module_name));
-        
-        use crate::linker::{VectrexObject, ObjectHeader, TargetArch, ObjectFlags, DebugInfo};
-        use crate::linker::{build_symbol_table, collect_relocations};
-        
-        let symbols = build_symbol_table(&sections, &asm)
-            .map_err(|e| anyhow::anyhow!("Symbol table failed for {}: {}", module_name, e))?;
-        let relocations = collect_relocations(&sections, &symbols, &asm)
-            .map_err(|e| anyhow::anyhow!("Relocations failed for {}: {}", module_name, e))?;
-        
-        let object = VectrexObject {
-            header: ObjectHeader {
-                magic: crate::linker::OBJECT_MAGIC,
-                version: crate::linker::OBJECT_FORMAT_VERSION,
-                target: TargetArch::M6809,
-                flags: ObjectFlags {
-                    position_independent: true,
-                    contains_bank_hints: false,
-                },
-                source_file: module_name.clone(),
-            },
-            sections,
-            symbols,
-            relocations,
-            debug_info: DebugInfo::default(),
-        };
-        
-        object.save(&module_path)?;
-        
-        // First module contains all builtins, others don't
-        let builtin_status = if first_module { "with builtins" } else { "no builtins (in first module)" };
-        eprintln!("  ✓ {}: {} sections, {} exports, {} imports, {} relocations ({})", 
-            module_name, 
-            object.sections.len(), 
-            object.symbols.exports.len(),
-            object.symbols.imports.len(),
-            object.relocations.len(),
-            builtin_status);
-        
-        vo_files.push(module_path);
-        first_module = false;
-    }
-    
-    // Phase 7: LINK all .vo files (if --bin requested)
-    if generate_bin {
-        eprintln!("\nPhase 7: Linking {} object files...", vo_files.len());
-        let final_output = output.cloned().unwrap_or_else(|| {
-            entry_path.with_extension("bin")
-        });
-        
-        link_cmd(&vo_files, &final_output, 0xC880, title)?;
-        
-        eprintln!("\n✅ SEPARATE MODULE COMPILATION COMPLETE");
-        eprintln!("  Modules: {}", num_modules);
-        eprintln!("  Object files: {}", vo_files.len());
-        eprintln!("  Final binary: {}", final_output.display());
-    } else {
-        eprintln!("\n✅ OBJECT FILES GENERATED (no linking)");
-        eprintln!("  Modules: {}", num_modules);
-        eprintln!("  Object files: {}", vo_files.len());
-    }
-    
-    Ok(())
-}
-
-// Helper: Extract sections per module from unified ASM
-fn extract_module_sections(
-    asm: &str,
-    name_map: &std::collections::HashMap<(String, String), String>,
-    loaded_modules: Vec<&resolver::LoadedModule>,
-) -> Result<std::collections::HashMap<String, Vec<crate::linker::Section>>> {
-    use crate::linker::Section;
-    use std::collections::HashMap;
-    
-    // Build reverse map: UNIFIED_NAME -> module_name
-    let mut symbol_to_module: HashMap<String, String> = HashMap::new();
-    for ((module, _symbol), unified) in name_map {
-        symbol_to_module.insert(unified.clone(), module.clone());
-    }
-    
-    // Parse ASM and group sections by module
-    let mut sections_by_module: HashMap<String, Vec<Section>> = HashMap::new();
-    
-    // Initialize with all known modules
-    for loaded_mod in &loaded_modules {
-        let module_name = loaded_mod.path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        sections_by_module.insert(module_name, Vec::new());
-    }
-    
-    // Parse ASM and categorize sections
-    for line in asm.lines() {
-        let trimmed = line.trim();
-        
-        // Detect section start (label with colon)
-        if let Some(label) = trimmed.strip_suffix(':') {
-            // Determine which module owns this symbol
-            let module_name = if let Some(module) = symbol_to_module.get(label) {
-                module.clone()
-            } else {
-                // Default to entry module for non-prefixed symbols
-                loaded_modules.first()
-                    .and_then(|m| m.path.file_stem())
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("main")
-                    .to_string()
-            };
-            
-            // Create section for this symbol
-            let section = Section {
-                name: label.to_string(),
-                section_type: crate::linker::SectionType::Text, // Code sections
-                bank_hint: None,
-                alignment: 1,
-                data: Vec::new(), // TODO: Extract actual bytes from ASM
-            };
-            
-            sections_by_module
-                .entry(module_name)
-                .or_insert_with(Vec::new)
-                .push(section);
-        }
-    }
-    
-    Ok(sections_by_module)
 }
