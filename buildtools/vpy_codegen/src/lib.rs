@@ -4,6 +4,10 @@
 //! Produces assembly code per bank with metadata.
 
 pub mod m6809;
+pub mod vecres;
+pub mod musres;
+pub mod levelres;
+pub mod sfxres;
 
 use std::collections::HashMap;
 use thiserror::Error;
@@ -54,6 +58,23 @@ fn get_bios_address(symbol_name: &str, fallback_address: &str) -> String {
     
     // Fallback to hardcoded value
     fallback_address.to_string()
+}
+
+/// Asset information
+#[derive(Debug, Clone)]
+pub struct AssetInfo {
+    pub name: String,      // Asset name (filename without extension)
+    pub path: String,      // Full path to asset file
+    pub asset_type: AssetType,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssetType {
+    Vector,  // .vec file
+    Music,   // .vmus file (background music, loops)
+    Sfx,     // .vsfx file (sound effect, parametric SFXR-style)
+    Level,   // .vlevel file (level data for games)
 }
 
 #[derive(Debug, Clone, Error)]
@@ -125,6 +146,7 @@ pub fn generate_from_module(
     module: &Module,
     bank_config: &BankConfig,
     title: &str,
+    assets: &[AssetInfo],
 ) -> Result<GeneratedASM, CodegenError> {
     // Use real M6809 backend
     let asm_source = m6809::generate_m6809_asm(
@@ -132,6 +154,7 @@ pub fn generate_from_module(
         title,
         bank_config.rom_total_size,
         bank_config.rom_bank_size,
+        assets,
     ).map_err(|e| CodegenError::Error(e))?;
     
     Ok(GeneratedASM {

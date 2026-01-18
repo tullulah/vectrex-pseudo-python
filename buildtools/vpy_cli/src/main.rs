@@ -1,7 +1,121 @@
 use clap::{Parser, Subcommand};
 use colored::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::fs;
 use anyhow::{Result, Context};
+
+// COPY-PASTE FROM core/src/main.rs (lines 42-150) - Asset Discovery
+fn discover_assets(source_path: &Path) -> Vec<vpy_codegen::AssetInfo> {
+    let mut assets = Vec::new();
+    
+    // Determine project root - convert to absolute path first to avoid cwd confusion
+    let abs_source = source_path.canonicalize().unwrap_or_else(|_| source_path.to_path_buf());
+    
+    let project_root: PathBuf = if let Some(parent) = abs_source.parent() {
+        if parent.file_name().and_then(|n| n.to_str()) == Some("src") {
+            // Source is in src/ directory, project root is parent
+            parent.parent().unwrap_or(parent).to_path_buf()
+        } else {
+            // Source is not in src/, assume parent is project root
+            parent.to_path_buf()
+        }
+    } else {
+        // No parent (shouldn't happen with absolute path), use source itself
+        abs_source.clone()
+    };
+    
+    // Search for vector assets (assets/vectors/*.vec)
+    let vectors_dir = project_root.join("assets").join("vectors");
+    if vectors_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&vectors_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vec") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(vpy_codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: vpy_codegen::AssetType::Vector,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Search for music assets (assets/music/*.vmus)
+    let music_dir = project_root.join("assets").join("music");
+    if music_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&music_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(vpy_codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: vpy_codegen::AssetType::Music,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Search for sound effects (assets/sfx/*.vsfx)
+    let sfx_dir = project_root.join("assets").join("sfx");
+    if sfx_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&sfx_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vsfx") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(vpy_codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: vpy_codegen::AssetType::Sfx,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Search for level data (assets/playground/*.vplay)
+    let levels_dir = project_root.join("assets").join("playground");
+    if levels_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&levels_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("vplay") {
+                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                        assets.push(vpy_codegen::AssetInfo {
+                            name: name.to_string(),
+                            path: path.display().to_string(),
+                            asset_type: vpy_codegen::AssetType::Level,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Log discovered assets
+    if !assets.is_empty() {
+        eprintln!("✓ Discovered {} asset(s):", assets.len());
+        for asset in &assets {
+            let type_str = match asset.asset_type {
+                vpy_codegen::AssetType::Vector => "Vector",
+                vpy_codegen::AssetType::Music => "Music",
+                vpy_codegen::AssetType::Sfx => "SFX",
+                vpy_codegen::AssetType::Level => "Level",
+            };
+            eprintln!("  - {} ({})", asset.name, type_str);
+        }
+    }
+    
+    assets
+}
 
 #[derive(Parser)]
 #[command(name = "vpy_cli")]
@@ -614,8 +728,11 @@ fn cmd_asm(input: &PathBuf, rom_size: usize, bank_size: usize, output: Option<Pa
     
     println!("\n{}", "Generating unified ASM...".bright_white());
     
+    // Discover assets (vectors, music, sfx, levels)
+    let assets = discover_assets(&source_path);
+    
     // Generate unified ASM using real M6809 backend
-    let generated = vpy_codegen::generate_from_module(&module, &bank_config, title)
+    let generated = vpy_codegen::generate_from_module(&module, &bank_config, title, &assets)
         .context("Failed to generate ASM")?;
     
     println!("  ASM size: {} bytes", generated.asm_source.len());
@@ -743,7 +860,10 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         
         let bank_config = vpy_codegen::BankConfig::new(rom_size, bank_size);
         
-        let generated = vpy_codegen::generate_from_module(&unified, &bank_config, title)
+        // Discover assets
+        let assets = discover_assets(&input);
+        
+        let generated = vpy_codegen::generate_from_module(&unified, &bank_config, title, &assets)
             .map_err(|e| anyhow::anyhow!("Codegen error: {}", e))?;
         
         println!("  {} Generated {} bytes ASM", "✓".green(), generated.asm_source.len());
@@ -841,8 +961,20 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         // Phase 6: Assemble banks
         println!("\n{}", "Phase 6: Assemble Banks".bright_cyan().bold());
         
-        // Set include directory for VECTREX.I (IDE has it in public/include/)
-        let include_dir = std::path::PathBuf::from("ide/frontend/public/include");
+        // Set include directory for VECTREX.I (absolute path from CLI binary location)
+        let cli_exe = std::env::current_exe()
+            .context("Failed to get CLI executable path")?;
+        let cli_dir = cli_exe.parent()
+            .context("Failed to get CLI directory")?;
+        // Go up from target/release/ to workspace root (3 levels up)
+        let workspace_root = cli_dir.parent()  // target/
+            .and_then(|p| p.parent())          // buildtools/
+            .and_then(|p| p.parent())          // vectrex-pseudo-python/
+            .context("Failed to get workspace root")?;
+        let include_dir = workspace_root.join("ide/frontend/public/include");
+        eprintln!("🔧 [DEBUG] CLI exe: {:?}", cli_exe);
+        eprintln!("🔧 [DEBUG] Workspace root: {:?}", workspace_root);
+        eprintln!("🔧 [DEBUG] Include dir: {:?}", include_dir);
         vpy_assembler::set_include_dir(Some(include_dir));
         
         let binaries = vpy_assembler::assemble_banks(sections)
@@ -920,7 +1052,11 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
     }
     
     let bank_config = vpy_codegen::BankConfig::new(rom_size, bank_size);
-    let generated = vpy_codegen::generate_from_module(&module, &bank_config, title)
+    
+    // Discover assets
+    let assets = discover_assets(&source_path);
+    
+    let generated = vpy_codegen::generate_from_module(&module, &bank_config, title, &assets)
         .context("Failed to generate ASM")?;
     
     if verbose {
@@ -1005,8 +1141,20 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("\n{}", "Phase 3: Assembling banks...".bright_cyan());
     }
     
-    // Set include directory for VECTREX.I (IDE has it in public/include/)
-    let include_dir = std::path::PathBuf::from("ide/frontend/public/include");
+    // Set include directory for VECTREX.I (absolute path from CLI binary location)
+    let cli_exe = std::env::current_exe()
+        .context("Failed to get CLI executable path")?;
+    let cli_dir = cli_exe.parent()
+        .context("Failed to get CLI directory")?;
+    // Go up from target/release/ to workspace root (3 levels up)
+    let workspace_root = cli_dir.parent()  // target/
+        .and_then(|p| p.parent())          // buildtools/
+        .and_then(|p| p.parent())          // vectrex-pseudo-python/
+        .context("Failed to get workspace root")?;
+    let include_dir = workspace_root.join("ide/frontend/public/include");
+    eprintln!("🔧 [DEBUG SINGLEBANK] CLI exe: {:?}", cli_exe);
+    eprintln!("🔧 [DEBUG SINGLEBANK] Workspace root: {:?}", workspace_root);
+    eprintln!("🔧 [DEBUG SINGLEBANK] Include dir: {:?}", include_dir);
     vpy_assembler::set_include_dir(Some(include_dir));
     
     let binaries = vpy_assembler::assemble_banks(sections)

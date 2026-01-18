@@ -12,5 +12,8 @@ vpy_parser = { path = "../vpy_parser" }
 vpy_unifier = { path = "../vpy_unifier" }
 vpy_bank_allocator = { path = "../vpy_bank_allocator" }
 thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
 
 [dev-dependencies]

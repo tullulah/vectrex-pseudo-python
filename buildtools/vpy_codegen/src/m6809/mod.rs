@@ -7,6 +7,7 @@
 //! - expressions: Expression compilation
 //! - builtins: Builtin function code
 //! - helpers: Runtime helpers (MUL16, DIV16, etc.)
+//! - assets: Asset discovery and generation
 
 pub mod header;
 pub mod variables;
@@ -22,8 +23,186 @@ pub mod drawing;
 pub mod level;
 pub mod utilities;
 pub mod ram_layout;
+pub mod assets;
 
 use vpy_parser::{Item, Expr, Stmt, CallInfo};
+
+/// Extract vector names referenced by a level asset
+/// Scans level JSON for vectorName fields in all layers
+#[allow(dead_code)]
+fn extract_level_vectors(level_name: &str, assets: &[crate::AssetInfo]) -> Vec<String> {
+    use crate::AssetType;
+    
+    // Find the level asset
+    let level_asset = assets.iter().find(|a| {
+        matches!(a.asset_type, AssetType::Level) && a.name == level_name
+    });
+    
+    if let Some(level_asset) = level_asset {
+        // Load and parse the level JSON
+        if let Ok(json_str) = std::fs::read_to_string(&level_asset.path) {
+            if let Ok(level_data) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                let mut vectors = Vec::new();
+                
+                // Extract vectorName from all layers
+                if let Some(layers) = level_data.get("layers") {
+                    for layer_name in ["background", "gameplay", "foreground"] {
+                        if let Some(layer) = layers.get(layer_name) {
+                            if let Some(objects) = layer.as_array() {
+                                for obj in objects {
+                                    if let Some(vector_name) = obj.get("vectorName").and_then(|v| v.as_str()) {
+                                        vectors.push(vector_name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return vectors;
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
+/// Returns set of asset names that are actually used in the code
+#[allow(dead_code)]
+fn analyze_used_assets(module: &Module, assets: &[crate::AssetInfo]) -> std::collections::HashSet<String> {
+    use std::collections::HashSet;
+    let mut used = HashSet::new();
+    
+    fn scan_expr(expr: &Expr, used: &mut HashSet<String>, assets: &[crate::AssetInfo], depth: usize) {
+        const MAX_DEPTH: usize = 500;
+        if depth > MAX_DEPTH {
+            panic!("Maximum expression nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
+        }
+        match expr {
+            Expr::Call(call_info) => {
+                let name_upper = call_info.name.to_uppercase();
+                // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
+                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), or LOAD_LEVEL("level_name")
+                if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
+                   (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
+                   (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
+                   (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
+                   (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
+                    if let Expr::StringLit(asset_name) = &call_info.args[0] {
+                        eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
+                        used.insert(asset_name.clone());
+                        
+                        // If loading a level, also mark vectors it references as used
+                        if name_upper == "LOAD_LEVEL" {
+                            let level_vectors = extract_level_vectors(asset_name, assets);
+                            for vec_name in level_vectors {
+                                eprintln!("[DEBUG] Level '{}' references vector: {}", asset_name, vec_name);
+                                used.insert(vec_name);
+                            }
+                        }
+                    }
+                }
+                // Recursively scan arguments
+                for arg in &call_info.args {
+                    scan_expr(arg, used, assets, depth + 1);
+                }
+            },
+            Expr::MethodCall(mc) => {
+                // Scan target and arguments for nested asset usages
+                scan_expr(&mc.target, used, assets, depth + 1);
+                for arg in &mc.args {
+                    scan_expr(arg, used, assets, depth + 1);
+                }
+            },
+            Expr::Binary { left, right, .. } | Expr::Compare { left, right, .. } | Expr::Logic { left, right, .. } => {
+                scan_expr(left, used, assets, depth + 1);
+                scan_expr(right, used, assets, depth + 1);
+            },
+            Expr::Not(inner) | Expr::BitNot(inner) => scan_expr(inner, used, assets, depth + 1),
+            Expr::List(elements) => {
+                for elem in elements {
+                    scan_expr(elem, used, assets, depth + 1);
+                }
+            },
+            Expr::Index { target, index } => {
+                scan_expr(target, used, assets, depth + 1);
+                scan_expr(index, used, assets, depth + 1);
+            },
+            _ => {}
+        }
+    }
+    
+    fn scan_stmt(stmt: &Stmt, used: &mut HashSet<String>, assets: &[crate::AssetInfo], depth: usize) {
+        const MAX_DEPTH: usize = 500;
+        if depth > MAX_DEPTH {
+            panic!("Maximum statement nesting depth ({}) exceeded during asset analysis.", MAX_DEPTH);
+        }
+        match stmt {
+            Stmt::Assign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Let { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::CompoundAssign { value, .. } => scan_expr(value, used, assets, depth + 1),
+            Stmt::Expr(expr, _line) => scan_expr(expr, used, assets, depth + 1),
+            Stmt::If { cond, body, elifs, else_body, .. } => {
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
+                for (elif_cond, elif_body) in elifs {
+                    scan_expr(elif_cond, used, assets, depth + 1);
+                    for s in elif_body { scan_stmt(s, used, assets, depth + 1); }
+                }
+                if let Some(els) = else_body {
+                    for s in els { scan_stmt(s, used, assets, depth + 1); }
+                }
+            },
+            Stmt::While { cond, body, .. } => {
+                scan_expr(cond, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
+            },
+            Stmt::For { start, end, step, body, .. } => {
+                scan_expr(start, used, assets, depth + 1);
+                scan_expr(end, used, assets, depth + 1);
+                if let Some(step_expr) = step {
+                    scan_expr(step_expr, used, assets, depth + 1);
+                }
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
+            },
+            Stmt::ForIn { iterable, body, .. } => {
+                scan_expr(iterable, used, assets, depth + 1);
+                for s in body { scan_stmt(s, used, assets, depth + 1); }
+            },
+            Stmt::Switch { expr, cases, default, .. } => {
+                scan_expr(expr, used, assets, depth + 1);
+                for (case_expr, case_body) in cases {
+                    scan_expr(case_expr, used, assets, depth + 1);
+                    for s in case_body { scan_stmt(s, used, assets, depth + 1); }
+                }
+                if let Some(default_body) = default {
+                    for s in default_body { scan_stmt(s, used, assets, depth + 1); }
+                }
+            },
+            Stmt::Return(Some(expr), _line) => scan_expr(expr, used, assets, depth + 1),
+            _ => {}
+        }
+    }
+    
+    // Scan all functions and top-level items in module
+    for item in &module.items {
+        match item {
+            Item::Function(func) => {
+                for stmt in &func.body {
+                    scan_stmt(stmt, &mut used, assets, 0);
+                }
+            },
+            Item::Const { value, .. } | Item::GlobalLet { value, .. } => {
+                scan_expr(value, &mut used, assets, 0);
+            },
+            Item::ExprStatement(expr) => {
+                scan_expr(expr, &mut used, assets, 0);
+            },
+            _ => {}
+        }
+    }
+    
+    used
+}
 
 /// Check if trigonometric functions (SIN, COS, TAN) are used in statements
 fn check_trig_usage(stmts: &[Stmt]) -> bool {
@@ -73,6 +252,7 @@ pub fn generate_m6809_asm(
     title: &str,
     rom_size: usize,
     _bank_size: usize,
+    assets: &[crate::AssetInfo],
 ) -> Result<String, String> {
     let mut asm = String::new();
     
@@ -127,6 +307,15 @@ pub fn generate_m6809_asm(
     asm.push_str("    LDA #$80\n");
     asm.push_str("    STA VIA_t1_cnt_lo\n");
     asm.push_str("    LDS #$CBFF       ; Initialize stack\n");
+    
+    // CRITICAL: Initialize SFX system variables to prevent garbage data interference
+    use crate::m6809::functions::has_audio_calls;
+    if has_audio_calls(module) {
+        asm.push_str("    ; Initialize SFX variables to prevent random noise on startup\n");
+        asm.push_str("    CLR >SFX_ACTIVE         ; Mark SFX as inactive (0=off)\n");
+        asm.push_str("    LDD #$0000\n");
+        asm.push_str("    STD >SFX_PTR            ; Clear SFX pointer\n");
+    }
     
     // For multibank: Fixed bank is ALWAYS visible at $4000-$7FFF
     // No need to write bank register - cartridge hardware has it configured
@@ -205,6 +394,13 @@ pub fn generate_m6809_asm(
     // Matches CORE architecture where strings are emitted at end
     if !print_text_strings.is_empty() {
         builtins::emit_print_text_strings(&print_text_strings, &mut asm);
+    }
+    
+    // Generate embedded assets (vectors, music, levels, SFX)
+    if !assets.is_empty() {
+        let assets_asm = assets::generate_assets_asm(assets)
+            .map_err(|e| format!("Asset generation failed: {}", e))?;
+        asm.push_str(&assets_asm);
     }
     
     // NOTE: Cartridge ROM ($0000-$7FFF) does NOT contain interrupt vectors

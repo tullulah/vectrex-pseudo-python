@@ -4,7 +4,7 @@
 META TITLE = "PANG"
 META ROM_TOTAL_SIZE = 524288  # 512 KB total ROM
 META ROM_BANK_SIZE = 16384    # 16 KB per bank (32 banks)
-
+META MUSIC = music1
 # Game states
 const STATE_TITLE = 0
 const STATE_MAP = 1

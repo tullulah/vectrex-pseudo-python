@@ -2,6 +2,7 @@
 # VPy game for Vectrex
 
 META TITLE = "PANG"
+META MUSIC = music1
 
 # Game states
 const STATE_TITLE = 0

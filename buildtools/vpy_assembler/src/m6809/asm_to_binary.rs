@@ -899,9 +899,18 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.lda_direct((addr & 0xFF) as u8);
     } else if operand.starts_with('>') {
-        // Extended mode forzado (lwasm compatibility)
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.lda_extended(addr);
+        // Extended mode forzado (lwasm compatibility) - soporta números Y símbolos
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.lda_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xB6, &symbol, addend); // LDA extended
+            },
+            Err(e) => return Err(e),
+        }
     } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
         // Símbolo - intentar resolver, sino usar referencia
         let upper = operand.to_uppercase();
@@ -951,9 +960,18 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.ldb_direct((addr & 0xFF) as u8);
     } else if operand.starts_with('>') {
-        // Extended mode forzado (lwasm compatibility)
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.ldb_extended(addr);
+        // Extended mode forzado (lwasm compatibility) - soporta números Y símbolos
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.ldb_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xF6, &symbol, addend); // LDB extended
+            },
+            Err(e) => return Err(e),
+        }
     } else if operand.starts_with('$') {
         let addr = parse_hex(&operand[1..])?;
         if addr <= 0xFF {
@@ -987,11 +1005,21 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 
 fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
-        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
-        emitter.ldd_immediate(val);
-    } else if operand.starts_with('>') {
-        let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
-        emitter.ldd_immediate(val);
+        // Immediate mode: #VALUE or #SYMBOL
+        let value_str = &operand[1..];
+        match parse_immediate_16_with_symbols(value_str, equates) {
+            Ok(val) => {
+                // Resolved value
+                emitter.ldd_immediate(val);
+            },
+            Err(_) => {
+                // Could not resolve - treat as symbol reference
+                let symbol = value_str.trim().to_uppercase();
+                emitter.emit(0xCC); // LDD immediate opcode
+                emitter.add_symbol_ref(&symbol, false, 2); // 16-bit absolute reference
+                emitter.emit_data_word(0x0000); // Placeholder for symbol value
+            }
+        }
     } else if operand.starts_with('>') {
         // Force extended addressing (lwasm compatibility)
         let operand_without_prefix = &operand[1..];
@@ -1036,6 +1064,20 @@ fn emit_sta(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.emit(off as u8);
         }
         return Ok(());
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.sta_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xB7, &symbol, addend); // STA extended
+            },
+            Err(e) => return Err(e),
+        }
+        return Ok(());
     }
     
     // Handle < (force direct page) and > (force extended) operators
@@ -1073,6 +1115,20 @@ fn emit_stb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.stb_indexed(postbyte);
         if let Some(off) = offset {
             emitter.emit(off as u8);
+        }
+        return Ok(());
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.stb_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xF7, &symbol, addend); // STB extended
+            },
+            Err(e) => return Err(e),
         }
         return Ok(());
     }
@@ -2336,8 +2392,17 @@ fn emit_clr(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.emit((addr & 0xFF) as u8);
         return Ok(());
     } else if operand.starts_with('>') {
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.clr_extended(addr);
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.clr_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0x7F, &symbol, addend); // CLR extended
+            },
+            Err(e) => return Err(e),
+        }
         return Ok(());
     }
     
@@ -2399,8 +2464,17 @@ fn emit_dec(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.dec_direct((addr & 0xFF) as u8);
         return Ok(());
     } else if operand.starts_with('>') {
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.dec_extended(addr);
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.dec_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0x7A, &symbol, addend); // DEC extended
+            },
+            Err(e) => return Err(e),
+        }
         return Ok(());
     }
     
@@ -2743,8 +2817,17 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         }
     } else if operand.starts_with('>') {
         // Force extended addressing (lwasm compatibility) - LDX has no DP mode anyway
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.ldx_extended(addr);
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.ldx_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xBE, &symbol, addend); // LDX extended
+            },
+            Err(e) => return Err(e),
+        }
     } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
         // Indexed mode: ,Y  ,Y++  5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
@@ -2810,8 +2893,17 @@ fn emit_stx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         }
     } else if operand.starts_with('>') {
         // Force extended addressing (lwasm compatibility) - STX has no DP mode
-        let addr = resolve_address(&operand[1..], equates)?;
-        emitter.stx_extended(addr);
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.stx_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xBF, &symbol, addend); // STX extended
+            },
+            Err(e) => return Err(e),
+        }
     } else {
         // Extended addressing
         let upper = operand.to_uppercase();
@@ -2832,6 +2924,20 @@ fn emit_sty(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         emitter.sty_indexed(postbyte);
         if let Some(off) = offset {
             emitter.emit(off as u8);
+        }
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.sty_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0x10); // STY is page 2 instruction
+                emitter.emit_extended_symbol_ref(0xBF, &symbol, addend); // STY second byte
+            },
+            Err(e) => return Err(e),
         }
     } else {
         // Extended addressing
@@ -2870,6 +2976,19 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                     emitter.ldu_immediate(value);
                 }
             }
+        }
+    } else if operand.starts_with('>') {
+        // Force extended addressing (lwasm compatibility)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.ldu_extended(addr);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xFE, &symbol, addend); // LDU extended
+            },
+            Err(e) => return Err(e),
         }
     } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
         // Indexed mode: ,X  X++  ,X++  5,X  A,X  etc.

@@ -194,27 +194,26 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    RTS\n\n");
     }
     
-    // MOD16: Modulo X % D -> D (remainder)
-    if needed.contains("MOD16") {
-            out.push_str("MOD16:\n");
-        out.push_str("    ; Modulo 16-bit X % D -> D\n");
-        out.push_str("    PSHS X,D\n");
-        out.push_str(".MOD16_LOOP:\n");
-        out.push_str("    PSHS D         ; Save D\n");
-        out.push_str("    LDD 4,S        ; Load dividend (after PSHS D)\n");
-        out.push_str("    CMPD 2,S       ; Compare with divisor (after PSHS D)\n");
-        out.push_str("    PULS D         ; Restore D\n");
-        out.push_str("    BLT .MOD16_END\n");
-        out.push_str("    LDX 2,S\n");
-        out.push_str("    LDD ,S\n");
-        out.push_str("    LEAX D,X\n");
-        out.push_str("    STX 2,S\n");
-        out.push_str("    BRA .MOD16_LOOP\n");
-        out.push_str(".MOD16_END:\n");
-        out.push_str("    LDD 2,S        ; Remainder\n");
-        out.push_str("    LEAS 4,S\n");
-        out.push_str("    RTS\n\n");
-    }
+    // MOD16: Modulo X % D -> D (remainder) - ALWAYS EMIT (conditional detection broken)
+    eprintln!("[DEBUG MATH] Emitting MOD16 helper (always emitted)");
+    out.push_str("MOD16:\n");
+    out.push_str("    ; Modulo 16-bit X % D -> D\n");
+    out.push_str("    PSHS X,D\n");
+    out.push_str(".MOD16_LOOP:\n");
+    out.push_str("    PSHS D         ; Save D\n");
+    out.push_str("    LDD 4,S        ; Load dividend (after PSHS D)\n");
+    out.push_str("    CMPD 2,S       ; Compare with divisor (after PSHS D)\n");
+    out.push_str("    PULS D         ; Restore D\n");
+    out.push_str("    BLT .MOD16_END\n");
+    out.push_str("    LDX 2,S\n");
+    out.push_str("    LDD ,S\n");
+    out.push_str("    LEAX D,X\n");
+    out.push_str("    STX 2,S\n");
+    out.push_str("    BRA .MOD16_LOOP\n");
+    out.push_str(".MOD16_END:\n");
+    out.push_str("    LDD 2,S        ; Remainder\n");
+    out.push_str("    LEAS 4,S\n");
+    out.push_str("    RTS\n\n");
     
     // SQRT_HELPER: Square root (Newton-Raphson with DIV16)
     if needed.contains("SQRT_HELPER") {
