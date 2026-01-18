@@ -69,12 +69,20 @@ pub fn emit_array_data(module: &Module) -> String {
     let mut asm = String::new();
     let mut arrays = Vec::new();
     
-    // Collect arrays from module
+    // Collect arrays from module (both GlobalLet and Const)
     for item in &module.items {
-        if let Item::GlobalLet { name, value, .. } = item {
-            if matches!(value, Expr::List(_)) {
-                arrays.push((name.clone(), value.clone()));
+        match item {
+            Item::GlobalLet { name, value, .. } => {
+                if matches!(value, Expr::List(_)) {
+                    arrays.push((name.clone(), value.clone()));
+                }
             }
+            Item::Const { name, value, .. } => {
+                if matches!(value, Expr::List(_)) {
+                    arrays.push((name.clone(), value.clone()));
+                }
+            }
+            _ => {}
         }
     }
     
@@ -92,18 +100,49 @@ pub fn emit_array_data(module: &Module) -> String {
     for (name, value) in arrays {
         if let Expr::List(elements) = value {
             let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
-            asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
-            asm.push_str(&format!("{}:\n", array_label));
             
-            // Emit array elements
-            for (i, elem) in elements.iter().enumerate() {
-                if let Expr::Number(n) = elem {
-                    asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
-                } else {
-                    asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
+            // Check if this is a string array (all elements are StringLit)
+            let is_string_array = elements.iter().all(|e| matches!(e, Expr::StringLit(_)));
+            
+            if is_string_array {
+                // String array: emit individual strings with labels + pointer table
+                asm.push_str(&format!("; String array literal for variable '{}' ({} elements)\n", name, elements.len()));
+                
+                let mut string_labels = Vec::new();
+                
+                // Emit individual strings
+                for (i, elem) in elements.iter().enumerate() {
+                    if let Expr::StringLit(s) = elem {
+                        let str_label = format!("{}_STR_{}", array_label, i);
+                        string_labels.push(str_label.clone());
+                        
+                        asm.push_str(&format!("{}:\n", str_label));
+                        asm.push_str(&format!("    FCC \"{}\"\n", s.to_ascii_uppercase()));
+                        asm.push_str("    FCB $80   ; String terminator (high bit)\n");
+                    }
                 }
+                
+                // Emit pointer table
+                asm.push_str(&format!("\n{}:  ; Pointer table for {}\n", array_label, name));
+                for str_label in string_labels {
+                    asm.push_str(&format!("    FDB {}  ; Pointer to string\n", str_label));
+                }
+                asm.push_str("\n");
+            } else {
+                // Number array: emit FDB values
+                asm.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
+                asm.push_str(&format!("{}:\n", array_label));
+                
+                // Emit array elements
+                for (i, elem) in elements.iter().enumerate() {
+                    if let Expr::Number(n) = elem {
+                        asm.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
+                    } else {
+                        asm.push_str(&format!("    FDB 0    ; Element {} (TODO: complex init)\n", i));
+                    }
+                }
+                asm.push_str("\n");
             }
-            asm.push_str("\n");
         }
     }
     

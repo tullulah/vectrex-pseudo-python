@@ -119,9 +119,10 @@ impl BinaryEmitter {
             self.code.len() as u16
         };
         
-        // DEBUG: Log all important labels and PRINT_TEXT strings + VECTREX helpers
+        // DEBUG: Log all important labels including ARRAY labels
         let should_log = label == "START" || label == "MAIN" || label == "LOOP_BODY" 
-            || label.starts_with("PRINT_TEXT_STR_") || label.starts_with("VECTREX_");
+            || label.starts_with("PRINT_TEXT_STR_") || label.starts_with("VECTREX_")
+            || label.starts_with("ARRAY_");  // ← Log array labels for debugging
         if should_log {
             eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X}, org=0x{:04X})", 
                 label, label_address, self.code.len(), self.current_address, org);
@@ -1232,14 +1233,54 @@ impl BinaryEmitter {
     /// Resuelve todas las referencias a símbolos después de la primera pasada
     /// Busca primero en symbols (labels locales), luego en equates (símbolos externos/BIOS)
     pub fn resolve_symbols_with_equates(&mut self, equates: &std::collections::HashMap<String, u16>) -> Result<(), String> {
+        // DEBUG: Log all symbols before resolution
+        if !self.symbols.is_empty() {
+            eprintln!("🔍 [RESOLVE START] {} symbols defined:", self.symbols.len());
+            for (sym, addr) in &self.symbols {
+                if sym.starts_with("ARRAY_") || sym == "START" || sym == "MAIN" {
+                    eprintln!("     {} → 0x{:04X}", sym, addr);
+                }
+            }
+        }
+        
         for sym_ref in &self.symbol_refs {
+            // DEBUG: Log each symbol lookup attempt
+            if sym_ref.symbol.starts_with("ARRAY_") {
+                eprintln!("🔍 [LOOKUP] Searching for symbol: '{}'", sym_ref.symbol);
+                eprintln!("           offset={}, is_relative={}, ref_size={}", 
+                    sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
+            }
+            
             // Buscar primero en symbols locales (case-sensitive)
             let target_addr_opt = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
+                // DEBUG: Log successful lookup
+                if sym_ref.symbol.starts_with("ARRAY_") {
+                    eprintln!("✅ [FOUND] Symbol '{}' found in self.symbols at 0x{:04X}", 
+                        sym_ref.symbol, addr);
+                }
                 Some(addr)
             } else {
+                // DEBUG: Log fallback to equates
+                if sym_ref.symbol.starts_with("ARRAY_") {
+                    eprintln!("⚠️  [NOT FOUND] Symbol '{}' not in self.symbols, trying equates...", 
+                        sym_ref.symbol);
+                }
+                
                 // Buscar en equates con uppercase (símbolos BIOS/INCLUDE son uppercase)
                 let upper_symbol = sym_ref.symbol.to_uppercase();
-                equates.get(&upper_symbol).copied()
+                let result = equates.get(&upper_symbol).copied();
+                
+                // DEBUG: Log equates lookup result
+                if sym_ref.symbol.starts_with("ARRAY_") {
+                    match result {
+                        Some(addr) => eprintln!("✅ [FOUND] Symbol '{}' found in equates as '{}' at 0x{:04X}", 
+                            sym_ref.symbol, upper_symbol, addr),
+                        None => eprintln!("❌ [FAILED] Symbol '{}' not found in equates either", 
+                            sym_ref.symbol),
+                    }
+                }
+                
+                result
             };
             
             // Si el símbolo no se encontró

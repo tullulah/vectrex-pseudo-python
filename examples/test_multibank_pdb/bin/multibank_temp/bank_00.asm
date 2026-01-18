@@ -11,6 +11,8 @@ START:
 ; Bank 0 ($0000) is active; fixed bank 31 ($4000-$7FFF) always visible
     JMP MAIN
 ;***************************************************************************
+; Internal builtin variables (aliases to RESULT slots)
+;***************************************************************************
 ; MAIN PROGRAM
 ;***************************************************************************
 MAIN:
@@ -29,6 +31,9 @@ MAIN:
 LOOP_BODY:
     JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)
     JSR Reset0Ref    ; Reset beam to center (0,0)
+    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
+    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
+    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; PRINT_TEXT: Print text at position
     LDD #-70
     STD RESULT

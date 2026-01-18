@@ -597,97 +597,319 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
     }
     
     // DRAW_LINE_WRAPPER: Only emit if DRAW_LINE is used
+    // CRITICAL FIX (2026-01-18): Copy exact implementation from core
+    // The previous version was missing DP setup ($D0 for BIOS) and VIA_cntl initialization
+    // Without DP=$D0, Intensity_a and Moveto_d write to wrong memory locations
     if needed.contains("DRAW_LINE_WRAPPER") {
+        out.push_str("; DRAW_LINE unified wrapper - handles 16-bit signed coordinates\n");
+        out.push_str("; Args: DRAW_LINE_ARGS+0=x0, +2=y0, +4=x1, +6=y1, +8=intensity\n");
+        out.push_str("; ALWAYS sets intensity. Does NOT reset origin (allows connected lines).\n");
         out.push_str("DRAW_LINE_WRAPPER:\n");
-    out.push_str("    ; Line drawing wrapper with segmentation for lines > 127 pixels\n");
-    out.push_str("    ; Args: TMPPTR+0=x0, TMPPTR+2=y0, TMPPTR+4=x1, TMPPTR+6=y1, TMPPTR+8=intensity\n");
-    out.push_str("    ; Calculate deltas (16-bit signed)\n");
-    out.push_str("    LDD TMPPTR+4    ; x1\n");
-    out.push_str("    SUBD TMPPTR+0   ; x1 - x0\n");
-    out.push_str("    STD VLINE_DX_16 ; Store 16-bit dx\n");
-    out.push_str("    \n");
-    out.push_str("    LDD TMPPTR+6    ; y1\n");
-    out.push_str("    SUBD TMPPTR+2   ; y1 - y0\n");
-    out.push_str("    STD VLINE_DY_16 ; Store 16-bit dy\n");
-    out.push_str("    \n");
-    out.push_str("    ; === SEGMENT 1: Clamp deltas to ±127 ===\n");
-    out.push_str("    ; Check dy: if > 127, clamp to 127; if < -128, clamp to -128\n");
-    out.push_str("    LDD VLINE_DY_16\n");
-    out.push_str("    CMPD #127       ; Compare with max positive\n");
-    out.push_str("    LBLE DLW_SEG1_DY_LO ; Branch if <= 127\n");
-    out.push_str("    LDD #127        ; Clamp to 127\n");
-    out.push_str("    STD VLINE_DY_16\n");
-    out.push_str("DLW_SEG1_DY_LO:\n");
-    out.push_str("    LDD VLINE_DY_16\n");
-    out.push_str("    CMPD #-128      ; Compare with min negative\n");
-    out.push_str("    LBGE DLW_SEG1_DY_READY ; Branch if >= -128\n");
-    out.push_str("    LDD #-128       ; Clamp to -128\n");
-    out.push_str("    STD VLINE_DY_16\n");
-    out.push_str("DLW_SEG1_DY_READY:\n");
-    out.push_str("    LDB VLINE_DY_16+1 ; Load low byte (8-bit clamped)\n");
-    out.push_str("    STB VLINE_DY\n");
-    out.push_str("    \n");
-    out.push_str("    ; Check dx: if > 127, clamp to 127; if < -128, clamp to -128\n");
-    out.push_str("    LDD VLINE_DX_16\n");
-    out.push_str("    CMPD #127\n");
-    out.push_str("    LBLE DLW_SEG1_DX_LO\n");
-    out.push_str("    LDD #127\n");
-    out.push_str("    STD VLINE_DX_16\n");
-    out.push_str("DLW_SEG1_DX_LO:\n");
-    out.push_str("    LDD VLINE_DX_16\n");
-    out.push_str("    CMPD #-128\n");
-    out.push_str("    LBGE DLW_SEG1_DX_READY\n");
-    out.push_str("    LDD #-128\n");
-    out.push_str("    STD VLINE_DX_16\n");
-    out.push_str("DLW_SEG1_DX_READY:\n");
-    out.push_str("    LDB VLINE_DX_16+1 ; Load low byte (8-bit clamped)\n");
-    out.push_str("    STB VLINE_DX\n");
-    out.push_str("    \n");
-    out.push_str("    ; Set intensity\n");
-    out.push_str("    LDA TMPPTR+8+1  ; Load intensity (low byte)\n");
-    out.push_str("    JSR Intensity_a\n");
-    out.push_str("    \n");
-    out.push_str("    ; Move to start position (x0, y0)\n");
-    out.push_str("    CLR Vec_Misc_Count\n");
-    out.push_str("    LDA TMPPTR+2+1  ; y0 (low byte)\n");
-    out.push_str("    LDB TMPPTR+0+1  ; x0 (low byte)\n");
-    out.push_str("    JSR Moveto_d\n");
-    out.push_str("    \n");
-    out.push_str("    ; Draw first segment (clamped deltas)\n");
-    out.push_str("    LDA VLINE_DY    ; 8-bit clamped dy\n");
-    out.push_str("    LDB VLINE_DX    ; 8-bit clamped dx\n");
-    out.push_str("    JSR Draw_Line_d\n");
-    out.push_str("    \n");
-    out.push_str("    ; === CHECK IF SEGMENT 2 NEEDED ===\n");
-    out.push_str("    ; Original dy still in VLINE_DY_16, check if exceeds ±127\n");
-    out.push_str("    LDD TMPPTR+6    ; Reload original y1\n");
-    out.push_str("    SUBD TMPPTR+2   ; y1 - y0\n");
-    out.push_str("    CMPD #127\n");
-    out.push_str("    LBGT DLW_NEED_SEG2 ; dy > 127\n");
-    out.push_str("    CMPD #-128\n");
-    out.push_str("    LBLT DLW_NEED_SEG2 ; dy < -128\n");
-    out.push_str("    LBRA DLW_DONE   ; No second segment needed\n");
-    out.push_str("    \n");
-    out.push_str("DLW_NEED_SEG2:\n");
-    out.push_str("    ; Calculate remaining dy\n");
-    out.push_str("    LDD TMPPTR+6    ; y1\n");
-    out.push_str("    SUBD TMPPTR+2   ; y1 - y0\n");
-    out.push_str("    ; Check sign: if positive, subtract 127; if negative, add 128\n");
-    out.push_str("    CMPD #0\n");
-    out.push_str("    LBGE DLW_SEG2_DY_POS\n");
-    out.push_str("    ADDD #128       ; dy was negative, add 128\n");
-    out.push_str("    LBRA DLW_SEG2_DY_DONE\n");
-    out.push_str("DLW_SEG2_DY_POS:\n");
-    out.push_str("    SUBD #127       ; dy was positive, subtract 127\n");
-    out.push_str("DLW_SEG2_DY_DONE:\n");
-    out.push_str("    STD VLINE_DY_REMAINING\n");
-    out.push_str("    \n");
-    out.push_str("    ; Draw second segment (remaining dy, dx=0)\n");
-    out.push_str("    LDA VLINE_DY_REMAINING ; Low byte of remaining (it's already 8-bit)\n");
-    out.push_str("    LDB #0          ; dx = 0 for vertical segment\n");
-    out.push_str("    JSR Draw_Line_d\n");
-    out.push_str("    \n");
-    out.push_str("DLW_DONE:\n");
-    out.push_str("    RTS\n\n");
+        out.push_str("    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)\n");
+        out.push_str("    LDA #$98       ; VIA_cntl = $98 (DAC mode for vector drawing)\n");
+        out.push_str("    STA >$D00C     ; VIA_cntl\n");
+        out.push_str("    ; Set DP to hardware registers\n");
+        out.push_str("    LDA #$D0\n");
+        out.push_str("    TFR A,DP\n");
+        
+        // Set intensity and move to start
+        out.push_str("    ; ALWAYS set intensity (no optimization)\n");
+        out.push_str("    LDA DRAW_LINE_ARGS+8+1  ; intensity (low byte of 16-bit value)\n");
+        out.push_str("    JSR Intensity_a\n");
+        out.push_str("    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)\n");
+        out.push_str("    LDA DRAW_LINE_ARGS+2+1  ; Y start (low byte of 16-bit value)\n");
+        out.push_str("    LDB DRAW_LINE_ARGS+0+1  ; X start (low byte of 16-bit value)\n");
+        out.push_str("    JSR Moveto_d\n");
+        
+        // Compute deltas
+        out.push_str("    ; Compute deltas using 16-bit arithmetic\n");
+        out.push_str("    ; dx = x1 - x0 (treating as signed 16-bit)\n");
+        out.push_str("    LDD DRAW_LINE_ARGS+4    ; x1 (16-bit)\n");
+        out.push_str("    SUBD DRAW_LINE_ARGS+0   ; subtract x0 (16-bit)\n");
+        out.push_str("    STD VLINE_DX_16 ; Store full 16-bit dx\n");
+        out.push_str("    ; dy = y1 - y0 (treating as signed 16-bit)\n");
+        out.push_str("    LDD DRAW_LINE_ARGS+6    ; y1 (16-bit)\n");
+        out.push_str("    SUBD DRAW_LINE_ARGS+2   ; subtract y0 (16-bit)\n");
+        out.push_str("    STD VLINE_DY_16 ; Store full 16-bit dy\n");
+        
+        // SEGMENT 1: Clamp and draw first segment
+        out.push_str("    ; SEGMENT 1: Clamp dy to ±127 and draw\n");
+        out.push_str("    LDD VLINE_DY_16 ; Load full dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG1_DY_LO\n");
+        out.push_str("    LDA #127        ; dy > 127: use 127\n");
+        out.push_str("    BRA DLW_SEG1_DY_READY\n");
+        out.push_str("DLW_SEG1_DY_LO:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG1_DY_NO_CLAMP  ; -128 <= dy <= 127: use original (sign-extended)\n");
+        out.push_str("    LDA #$80        ; dy < -128: use -128\n");
+        out.push_str("    BRA DLW_SEG1_DY_READY\n");
+        out.push_str("DLW_SEG1_DY_NO_CLAMP:\n");
+        out.push_str("    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("DLW_SEG1_DY_READY:\n");
+        out.push_str("    STA VLINE_DY    ; Save clamped dy for segment 1\n");
+        
+        // Clamp dx for segment 1
+        out.push_str("    ; Clamp dx to ±127\n");
+        out.push_str("    LDD VLINE_DX_16\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG1_DX_LO\n");
+        out.push_str("    LDB #127        ; dx > 127: use 127\n");
+        out.push_str("    BRA DLW_SEG1_DX_READY\n");
+        out.push_str("DLW_SEG1_DX_LO:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG1_DX_NO_CLAMP  ; -128 <= dx <= 127: use original (sign-extended)\n");
+        out.push_str("    LDB #$80        ; dx < -128: use -128\n");
+        out.push_str("    BRA DLW_SEG1_DX_READY\n");
+        out.push_str("DLW_SEG1_DX_NO_CLAMP:\n");
+        out.push_str("    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("DLW_SEG1_DX_READY:\n");
+        out.push_str("    STB VLINE_DX    ; Save clamped dx for segment 1\n");
+        
+        // Draw segment 1
+        out.push_str("    ; Draw segment 1\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA VLINE_DY\n");
+        out.push_str("    LDB VLINE_DX\n");
+        out.push_str("    JSR Draw_Line_d ; Beam moves automatically\n");
+        
+        // Check if we need segment 2 - for BOTH dy > 127 AND dy < -128
+        out.push_str("    ; Check if we need SEGMENT 2 (dy outside ±127 range)\n");
+        out.push_str("    LDD VLINE_DY_16 ; Reload original dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BGT DLW_NEED_SEG2  ; dy > 127: needs segment 2\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BLT DLW_NEED_SEG2  ; dy < -128: needs segment 2\n");
+        out.push_str("    BRA DLW_DONE       ; dy in range ±127: no segment 2\n");
+        out.push_str("DLW_NEED_SEG2:\n");
+        
+        // SEGMENT 2: Handle remaining dy AND dx
+        out.push_str("    ; SEGMENT 2: Draw remaining dy and dx\n");
+        out.push_str("    ; Calculate remaining dy\n");
+        out.push_str("    LDD VLINE_DY_16 ; Load original full dy\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BGT DLW_SEG2_DY_POS  ; dy > 127\n");
+        out.push_str("    ; dy < -128, so we drew -128 in segment 1\n");
+        out.push_str("    ; remaining = dy - (-128) = dy + 128\n");
+        out.push_str("    ADDD #128       ; Add back the -128 we already drew\n");
+        out.push_str("    BRA DLW_SEG2_DY_DONE\n");
+        out.push_str("DLW_SEG2_DY_POS:\n");
+        out.push_str("    ; dy > 127, so we drew 127 in segment 1\n");
+        out.push_str("    ; remaining = dy - 127\n");
+        out.push_str("    SUBD #127       ; Subtract 127 we already drew\n");
+        out.push_str("DLW_SEG2_DY_DONE:\n");
+        out.push_str("    STD VLINE_DY_REMAINING  ; Store remaining dy (16-bit)\n");
+        
+        // Also calculate remaining dx
+        out.push_str("    ; Calculate remaining dx\n");
+        out.push_str("    LDD VLINE_DX_16 ; Load original full dx\n");
+        out.push_str("    CMPD #127\n");
+        out.push_str("    BLE DLW_SEG2_DX_CHECK_NEG\n");
+        out.push_str("    ; dx > 127, so we drew 127 in segment 1\n");
+        out.push_str("    ; remaining = dx - 127\n");
+        out.push_str("    SUBD #127\n");
+        out.push_str("    BRA DLW_SEG2_DX_DONE\n");
+        out.push_str("DLW_SEG2_DX_CHECK_NEG:\n");
+        out.push_str("    CMPD #-128\n");
+        out.push_str("    BGE DLW_SEG2_DX_NO_REMAIN  ; -128 <= dx <= 127: no remaining dx\n");
+        out.push_str("    ; dx < -128, so we drew -128 in segment 1\n");
+        out.push_str("    ; remaining = dx - (-128) = dx + 128\n");
+        out.push_str("    ADDD #128\n");
+        out.push_str("    BRA DLW_SEG2_DX_DONE\n");
+        out.push_str("DLW_SEG2_DX_NO_REMAIN:\n");
+        out.push_str("    LDD #0          ; No remaining dx\n");
+        out.push_str("DLW_SEG2_DX_DONE:\n");
+        out.push_str("    STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit)\n");
+        
+        // Draw segment 2 with both remaining dx and dy
+        out.push_str("    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)\n");
+        out.push_str("    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy\n");
+        out.push_str("    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    JSR Draw_Line_d ; Beam continues from segment 1 endpoint\n");
+        
+        // Cleanup
+        out.push_str("DLW_DONE:\n");
+        out.push_str("    LDA #$C8       ; CRITICAL: Restore DP to $C8 for our code\n");
+        out.push_str("    TFR A,DP\n");
+        out.push_str("    RTS\n\n");
+    }
+    
+    // Draw_Sync_List_At_With_Mirrors - CRITICAL FOR DRAW_VECTOR
+    // Only emit if DRAW_VECTOR or DRAW_VECTOR_EX is used
+    // COPY-PASTE FROM core/src/backend/m6809/emission.rs lines 1136-1315
+    if needed.contains("DRAW_VECTOR") || needed.contains("DRAW_VECTOR_EX") {
+        out.push_str(
+            "Draw_Sync_List_At_With_Mirrors:\n\
+        ; Unified mirror support using flags: MIRROR_X and MIRROR_Y\n\
+            ; Conditionally negates X and/or Y coordinates and deltas\n\
+            ; NOTE: Caller must ensure DP=$D0 for VIA access\n\
+            LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set\n\
+            BNE DSWM_USE_OVERRIDE   ; If non-zero, use override\n\
+            LDA ,X+                 ; Otherwise, read intensity from vector data\n\
+            BRA DSWM_SET_INTENSITY\n\
+DSWM_USE_OVERRIDE:\n\
+            LEAX 1,X                ; Skip intensity byte in vector data\n\
+DSWM_SET_INTENSITY:\n\
+            JSR $F2AB               ; BIOS Intensity_a\n\
+            LDB ,X+                 ; y_start from .vec (already relative to center)\n\
+            ; Check if Y mirroring is enabled\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NO_NEGATE_Y\n\
+            NEGB                    ; ← Negate Y if flag set\n\
+DSWM_NO_NEGATE_Y:\n\
+            ADDB DRAW_VEC_Y         ; Add Y offset\n\
+            LDA ,X+                 ; x_start from .vec (already relative to center)\n\
+            ; Check if X mirroring is enabled\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NO_NEGATE_X\n\
+            NEGA                    ; ← Negate X if flag set\n\
+DSWM_NO_NEGATE_X:\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
+            STD TEMP_YX             ; Save adjusted position\n\
+            ; Reset completo\n\
+            CLR VIA_shift_reg\n\
+            LDA #$CC\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_a\n\
+            LDA #$82\n\
+            STA VIA_port_b\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            LDA #$83\n\
+            STA VIA_port_b\n\
+            ; Move sequence\n\
+            LDD TEMP_YX\n\
+            STB VIA_port_a          ; y to DAC\n\
+            PSHS A                  ; Save x\n\
+            LDA #$CE\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A                  ; Restore x\n\
+            STA VIA_port_a          ; x to DAC\n\
+            ; Timing setup\n\
+            LDA #$7F\n\
+            STA VIA_t1_cnt_lo\n\
+            CLR VIA_t1_cnt_hi\n\
+            LEAX 2,X                ; Skip next_y, next_x\n\
+            ; Wait for move to complete\n\
+            DSWM_W1:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSWM_W1\n\
+            ; Loop de dibujo (conditional mirrors)\n\
+            DSWM_LOOP:\n\
+            LDA ,X+                 ; Read flag\n\
+            CMPA #2                 ; Check end marker\n\
+            LBEQ DSWM_DONE\n\
+            CMPA #1                 ; Check next path marker\n\
+            LBEQ DSWM_NEXT_PATH\n\
+            ; Draw line with conditional negations\n\
+            LDB ,X+                 ; dy\n\
+            ; Check if Y mirroring is enabled\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NO_NEGATE_DY\n\
+            NEGB                    ; ← Negate dy if flag set\n\
+DSWM_NO_NEGATE_DY:\n\
+            LDA ,X+                 ; dx\n\
+            ; Check if X mirroring is enabled\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NO_NEGATE_DX\n\
+            NEGA                    ; ← Negate dx if flag set\n\
+DSWM_NO_NEGATE_DX:\n\
+            PSHS A                  ; Save final dx\n\
+            STB VIA_port_a          ; dy (possibly negated) to DAC\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A                  ; Restore final dx\n\
+            STA VIA_port_a          ; dx (possibly negated) to DAC\n\
+            CLR VIA_t1_cnt_hi\n\
+            LDA #$FF\n\
+            STA VIA_shift_reg\n\
+            ; Wait for line draw\n\
+            DSWM_W2:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSWM_W2\n\
+            CLR VIA_shift_reg\n\
+            LBRA DSWM_LOOP          ; Long branch\n\
+            ; Next path: repeat mirror logic for new path header\n\
+            DSWM_NEXT_PATH:\n\
+            TFR X,D\n\
+            PSHS D\n\
+            ; Check intensity override (same logic as start)\n\
+            LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set\n\
+            BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override\n\
+            LDA ,X+                 ; Otherwise, read intensity from vector data\n\
+            BRA DSWM_NEXT_SET_INTENSITY\n\
+DSWM_NEXT_USE_OVERRIDE:\n\
+            LEAX 1,X                ; Skip intensity byte in vector data\n\
+DSWM_NEXT_SET_INTENSITY:\n\
+            PSHS A\n\
+            LDB ,X+                 ; y_start\n\
+            TST MIRROR_Y\n\
+            BEQ DSWM_NEXT_NO_NEGATE_Y\n\
+            NEGB\n\
+DSWM_NEXT_NO_NEGATE_Y:\n\
+            ADDB DRAW_VEC_Y         ; Add Y offset\n\
+            LDA ,X+                 ; x_start\n\
+            TST MIRROR_X\n\
+            BEQ DSWM_NEXT_NO_NEGATE_X\n\
+            NEGA\n\
+DSWM_NEXT_NO_NEGATE_X:\n\
+            ADDA DRAW_VEC_X         ; Add X offset\n\
+            STD TEMP_YX\n\
+            PULS A                  ; Get intensity back\n\
+            JSR $F2AB\n\
+            PULS D\n\
+            ADDD #3\n\
+            TFR D,X\n\
+            ; Reset to zero\n\
+            CLR VIA_shift_reg\n\
+            LDA #$CC\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_a\n\
+            LDA #$82\n\
+            STA VIA_port_b\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            NOP\n\
+            LDA #$83\n\
+            STA VIA_port_b\n\
+            ; Move to new start position\n\
+            LDD TEMP_YX\n\
+            STB VIA_port_a\n\
+            PSHS A\n\
+            LDA #$CE\n\
+            STA VIA_cntl\n\
+            CLR VIA_port_b\n\
+            LDA #1\n\
+            STA VIA_port_b\n\
+            PULS A\n\
+            STA VIA_port_a\n\
+            LDA #$7F\n\
+            STA VIA_t1_cnt_lo\n\
+            CLR VIA_t1_cnt_hi\n\
+            LEAX 2,X\n\
+            ; Wait for move\n\
+            DSWM_W3:\n\
+            LDA VIA_int_flags\n\
+            ANDA #$40\n\
+            BEQ DSWM_W3\n\
+            CLR VIA_shift_reg\n\
+            LBRA DSWM_LOOP          ; Long branch\n\
+            DSWM_DONE:\n\
+            LDA #$C8                ; CRITICAL: Restore DP to $C8 for RAM access\n\
+            TFR A,DP\n\
+            RTS\n"
+        );
     }
 }

@@ -107,6 +107,11 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
         // Inject Reset0Ref to position beam at center (0,0) before drawing
         asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
+        // CRITICAL (2026-01-19): Button reading with proper DP handling
+        // This sequence MUST happen before any user code to ensure DP=$C8 for normal RAM access
+        asm.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+        asm.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+        asm.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
         generate_function_body(loop_fn, &mut asm)?;
         
         // Auto-inject AUDIO_UPDATE at END if module uses PLAY_MUSIC/PLAY_SFX
@@ -120,6 +125,10 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         asm.push_str("LOOP_BODY:\n");
         asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
         asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
+        // CRITICAL: Button reading with proper DP handling (even if no user code)
+        asm.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+        asm.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+        asm.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
         asm.push_str("    RTS\n\n");
     }
     

@@ -49,6 +49,15 @@ START:
     JMP MAIN
 
 ;***************************************************************************
+; Internal builtin variables (aliases to RESULT slots)
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+2
+MIRROR_X EQU RESULT+4
+MIRROR_Y EQU RESULT+6
+DRAW_VEC_INTENSITY EQU RESULT+8
+
+
+;***************************************************************************
 ; MAIN PROGRAM
 ;***************************************************************************
 
@@ -70,6 +79,9 @@ MAIN:
 LOOP_BODY:
     JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)
     JSR Reset0Ref    ; Reset beam to center (0,0)
+    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
+    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
+    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; PRINT_TEXT: Print text at position
     LDD #-70
     STD RESULT
@@ -387,6 +399,25 @@ VECTREX_PRINT_TEXT:
     LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)
     JSR Print_Str_d ; Print string from U register
     JSR $F1AF      ; DP_to_C8 - restore DP before return
+    RTS
+
+MOD16:
+    ; Modulo 16-bit X % D -> D
+    PSHS X,D
+.MOD16_LOOP:
+    PSHS D         ; Save D
+    LDD 4,S        ; Load dividend (after PSHS D)
+    CMPD 2,S       ; Compare with divisor (after PSHS D)
+    PULS D         ; Restore D
+    BLT .MOD16_END
+    LDX 2,S
+    LDD ,S
+    LEAX D,X
+    STX 2,S
+    BRA .MOD16_LOOP
+.MOD16_END:
+    LDD 2,S        ; Remainder
+    LEAS 4,S
     RTS
 
 ;**** PRINT_TEXT String Data ****

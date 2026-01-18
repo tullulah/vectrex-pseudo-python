@@ -1,1330 +1,412 @@
-; --- Motorola 6809 backend (Vectrex) title='Level Debug' origin=$0000 ---
-        ORG $0000
+; VPy M6809 Assembly (Vectrex)
+; ROM: 32768 bytes
+
+
+    ORG $0000
+
 ;***************************************************************************
 ; DEFINE SECTION
 ;***************************************************************************
     INCLUDE "VECTREX.I"
 
 ;***************************************************************************
-; HEADER SECTION
+; CARTRIDGE HEADER
 ;***************************************************************************
-    FCC "g GCE 1982"
-    FCB $80
-    FDB music1
-    FCB $F8
-    FCB $50
-    FCB $20
-    FCB $BB
-    FCC "LEVEL DEBUG"
-    FCB $80
-    FCB 0
+    FCC "g GCE 2025"
+    FCB $80                 ; String terminator
+    FDB $0000              ; Music pointer
+    FCB $F8,$50,$20,$BB     ; Height, Width, Rel Y, Rel X
+    FCC "Level Debug"
+    FCB $80                 ; String terminator
+    FCB 0                   ; End of header
 
 ;***************************************************************************
 ; CODE SECTION
 ;***************************************************************************
 
-; === RAM VARIABLE DEFINITIONS (EQU) ===
-; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 101 bytes
-RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
-TMPPTR               EQU $C880+$02   ; Pointer temp (used by DRAW_VECTOR, arrays, structs) (2 bytes)
-TMPPTR2              EQU $C880+$04   ; Pointer temp 2 (for nested array operations) (2 bytes)
-TEMP_YX              EQU $C880+$06   ; Temporary y,x storage (2 bytes)
-TEMP_X               EQU $C880+$08   ; Temporary x storage (1 bytes)
-TEMP_Y               EQU $C880+$09   ; Temporary y storage (1 bytes)
-NUM_STR              EQU $C880+$0A   ; String buffer for PRINT_NUMBER (2 bytes)
-DRAW_VEC_X           EQU $C880+$0C   ; X position offset for vector drawing (1 bytes)
-DRAW_VEC_Y           EQU $C880+$0D   ; Y position offset for vector drawing (1 bytes)
-MIRROR_X             EQU $C880+$0E   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
-MIRROR_Y             EQU $C880+$0F   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
-DRAW_VEC_INTENSITY   EQU $C880+$10   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-LEVEL_PTR            EQU $C880+$11   ; Pointer to currently loaded level data (2 bytes)
-LEVEL_BG_COUNT       EQU $C880+$13   ; SHOW_LEVEL: background object count (1 bytes)
-LEVEL_GP_COUNT       EQU $C880+$14   ; SHOW_LEVEL: gameplay object count (1 bytes)
-LEVEL_FG_COUNT       EQU $C880+$15   ; SHOW_LEVEL: foreground object count (1 bytes)
-LEVEL_BG_PTR         EQU $C880+$16   ; SHOW_LEVEL: background objects pointer (RAM buffer) (2 bytes)
-LEVEL_GP_PTR         EQU $C880+$18   ; SHOW_LEVEL: gameplay objects pointer (RAM buffer) (2 bytes)
-LEVEL_FG_PTR         EQU $C880+$1A   ; SHOW_LEVEL: foreground objects pointer (RAM buffer) (2 bytes)
-LEVEL_BG_ROM_PTR     EQU $C880+$1C   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
-LEVEL_GP_ROM_PTR     EQU $C880+$1E   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
-LEVEL_FG_ROM_PTR     EQU $C880+$20   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_GP_BUFFER      EQU $C880+$22   ; Gameplay objects buffer (max 4 objects × 14 bytes, auto-sized) (56 bytes)
-UGPC_OUTER_IDX       EQU $C880+$5A   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$5B   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$5C   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$5D   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$5F   ; Manhattan distance temporary (16-bit) (2 bytes)
-VAR_ARG0             EQU $C880+$61   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$63   ; Function argument 1 (2 bytes)
-
-    JMP START
-
-;**** CONST DECLARATIONS (NUMBER-ONLY) ****
-
-;
-; ┌─────────────────────────────────────────────────────────────────┐
-; │ RUNTIME SECTION - VPy Builtin Helpers & System Functions       │
-; │ This section contains reusable code shared across all VPy       │
-; │ programs. These helpers are emitted once per compilation unit.  │
-; └─────────────────────────────────────────────────────────────────┘
-;
-
-; === JOYSTICK BUILTIN SUBROUTINES ===
-; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
-; Returns: D = raw value from $C81B after Joy_Analog call
-J1X_BUILTIN:
-    PSHS X       ; Save X (Joy_Analog uses it)
-    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
-    JSR $F1F5    ; Joy_Analog (updates $C81B from hardware)
-    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81B)
-    LDB $C81B    ; Vec_Joy_1_X (BIOS writes ~$FE at center)
-    SEX          ; Sign-extend B to D
-    ADDD #2      ; Calibrate center offset
-    PULS X       ; Restore X
-    RTS
-
-; J1_Y() - Read Joystick 1 Y axis (INCREMENTAL - with state preservation)
-; Returns: D = raw value from $C81C after Joy_Analog call
-J1Y_BUILTIN:
-    PSHS X       ; Save X (Joy_Analog uses it)
-    JSR $F1AA    ; DP_to_D0 (required for Joy_Analog BIOS call)
-    JSR $F1F5    ; Joy_Analog (updates $C81C from hardware)
-    JSR $F1AF    ; DP_to_C8 (required to read RAM $C81C)
-    LDB $C81C    ; Vec_Joy_1_Y (BIOS writes ~$FE at center)
-    SEX          ; Sign-extend B to D
-    ADDD #2      ; Calibrate center offset
-    PULS X       ; Restore X
-    RTS
-
-; === BUTTON SYSTEM - BIOS TRANSITIONS ===
-; J1_BUTTON_1-4() - Read transition bits from $C811
-; Read_Btns (auto-injected) calculates: ~(new) OR Vec_Prev_Btns
-; Result: bit=1 ONLY on rising edge (0→1 transition)
-; Returns: D = 1 (just pressed), 0 (not pressed or still held)
-
-J1B1_BUILTIN:
-    LDA $C811      ; Read transition bits (Vec_Button_1_1)
-    ANDA #$01      ; Test bit 0 (Button 1)
-    BEQ .J1B1_OFF
-    LDD #1         ; Return pressed (rising edge)
-    RTS
-.J1B1_OFF:
-    LDD #0         ; Return not pressed
-    RTS
-
-J1B2_BUILTIN:
-    LDA $C811
-    ANDA #$02      ; Test bit 1 (Button 2)
-    BEQ .J1B2_OFF
-    LDD #1
-    RTS
-.J1B2_OFF:
-    LDD #0
-    RTS
-
-J1B3_BUILTIN:
-    LDA $C811
-    ANDA #$04      ; Test bit 2 (Button 3)
-    BEQ .J1B3_OFF
-    LDD #1
-    RTS
-.J1B3_OFF:
-    LDD #0
-    RTS
-
-J1B4_BUILTIN:
-    LDA $C811
-    ANDA #$08      ; Test bit 3 (Button 4)
-    BEQ .J1B4_OFF
-    LDD #1
-    RTS
-.J1B4_OFF:
-    LDD #0
-    RTS
-
-VECTREX_SET_INTENSITY:
-    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
-    LDA #$98       ; VIA_cntl = $98 (DAC mode)
-    STA >$D00C     ; VIA_cntl
-    LDA #$D0
-    TFR A,DP       ; Set Direct Page to $D0 for BIOS
-    LDA VAR_ARG0+1
-    JSR __Intensity_a
-    RTS
-; BIOS Wrappers - VIDE compatible (ensure DP=$D0 per call)
-__Intensity_a:
-TFR B,A         ; Move B to A (BIOS expects intensity in A)
-JMP Intensity_a ; JMP (not JSR) - BIOS returns to original caller
-__Reset0Ref:
-JMP Reset0Ref   ; JMP (not JSR) - BIOS returns to original caller
-__Moveto_d:
-LDA 2,S         ; Get Y from stack (after return address)
-JMP Moveto_d    ; JMP (not JSR) - BIOS returns to original caller
-__Draw_Line_d:
-LDA 2,S         ; Get dy from stack (after return address)
-JMP Draw_Line_d ; JMP (not JSR) - BIOS returns to original caller
-; ============================================================================
-; Draw_Sync_List - EXACT port of Malban's draw_synced_list_c
-; Data: FCB intensity, y_start, x_start, next_y, next_x, [flag, dy, dx]*, 2
-; ============================================================================
-Draw_Sync_List:
-; ITERACIÓN 11: Loop completo dentro (bug assembler arreglado, datos embebidos OK)
-LDA ,X+                 ; intensity
-JSR $F2AB               ; BIOS Intensity_a (expects value in A)
-LDB ,X+                 ; y_start
-LDA ,X+                 ; x_start
-STD TEMP_YX             ; Guardar en variable temporal (evita stack)
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX             ; Recuperar y,x
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSL_W1:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSL_W1
-; Loop de dibujo
-DSL_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-LBEQ DSL_DONE           ; Exit if end (long branch)
-CMPA #1                 ; Check next path marker
-LBEQ DSL_NEXT_PATH      ; Process next path (long branch)
-; Draw line
-CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)
-LDB ,X+                 ; dy
-LDA ,X+                 ; dx
-PSHS A                  ; Save dx
-STB VIA_port_a          ; dy to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore dx
-STA VIA_port_a          ; dx to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSL_W2:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSL_W2
-CLR VIA_shift_reg
-LBRA DSL_LOOP            ; Long branch back to loop start
-; Next path: read new intensity and header, then continue drawing
-DSL_NEXT_PATH:
-; Save current X position before reading anything
-TFR X,D                 ; D = X (current position)
-PSHS D                  ; Save X address
-LDA ,X+                 ; Read intensity (X now points to y_start)
-PSHS A                  ; Save intensity
-LDB ,X+                 ; y_start
-LDA ,X+                 ; x_start (X now points to next_y)
-STD TEMP_YX             ; Save y,x
-PULS A                  ; Get intensity back
-PSHS A                  ; Save intensity again
-LDA #$D0
-TFR A,DP                ; Set DP=$D0 (BIOS requirement)
-PULS A                  ; Restore intensity
-JSR $F2AB               ; BIOS Intensity_a (may corrupt X!)
-; Restore X to point to next_y,next_x (after the 3 bytes we read)
-PULS D                  ; Get original X
-ADDD #3                 ; Skip intensity, y_start, x_start
-TFR D,X                 ; X now points to next_y
-; Reset to zero (same as Draw_Sync_List start)
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move to new start position
-LDD TEMP_YX
-STB VIA_port_a          ; y to DAC
-PSHS A
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A
-STA VIA_port_a          ; x to DAC
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move
-DSL_W3:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSL_W3
-CLR VIA_shift_reg       ; Clear before continuing
-LBRA DSL_LOOP            ; Continue drawing - LONG BRANCH
-DSL_DONE:
-RTS
-
-; ============================================================================
-; Draw_Sync_List_At - Draw vector at offset position (DRAW_VEC_X, DRAW_VEC_Y)
-; Same as Draw_Sync_List but adds offset to y_start, x_start coordinates
-; Uses: DRAW_VEC_X, DRAW_VEC_Y (set by DRAW_VECTOR before calling this)
-; ============================================================================
-Draw_Sync_List_At:
-LDA ,X+                 ; intensity
-PSHS A                  ; Save intensity
-LDA #$D0
-PULS A                  ; Restore intensity
-JSR $F2AB               ; BIOS Intensity_a
-LDB ,X+                 ; y_start from .vec
-ADDB DRAW_VEC_Y         ; Add Y offset
-LDA ,X+                 ; x_start from .vec
-ADDA DRAW_VEC_X         ; Add X offset
-STD TEMP_YX             ; Save adjusted position
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX             ; Recuperar y,x ajustado
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSLA_W1:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSLA_W1
-; Loop de dibujo (same as Draw_Sync_List)
-DSLA_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-LBEQ DSLA_DONE
-CMPA #1                 ; Check next path marker
-LBEQ DSLA_NEXT_PATH
-; Draw line
-CLR Vec_Misc_Count      ; Clear for relative line drawing (CRITICAL for continuity)
-LDB ,X+                 ; dy
-LDA ,X+                 ; dx
-PSHS A                  ; Save dx
-STB VIA_port_a          ; dy to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore dx
-STA VIA_port_a          ; dx to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSLA_W2:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSLA_W2
-CLR VIA_shift_reg
-LBRA DSLA_LOOP           ; Long branch
-; Next path: add offset to new coordinates too
-DSLA_NEXT_PATH:
-TFR X,D
-PSHS D
-LDA ,X+                 ; Read intensity
-PSHS A
-LDB ,X+                 ; y_start
-ADDB DRAW_VEC_Y         ; Add Y offset to new path
-LDA ,X+                 ; x_start
-ADDA DRAW_VEC_X         ; Add X offset to new path
-STD TEMP_YX
-PULS A                  ; Get intensity back
-JSR $F2AB
-PULS D
-ADDD #3
-TFR D,X
-; Reset to zero
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move to new start position (already offset-adjusted)
-LDD TEMP_YX
-STB VIA_port_a
-PSHS A
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A
-STA VIA_port_a
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X
-; Wait for move
-DSLA_W3:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSLA_W3
-CLR VIA_shift_reg
-LBRA DSLA_LOOP           ; Long branch
-DSLA_DONE:
-RTS
-Draw_Sync_List_At_With_Mirrors:
-; Unified mirror support using flags: MIRROR_X and MIRROR_Y
-; Conditionally negates X and/or Y coordinates and deltas
-; NOTE: Caller must ensure DP=$D0 for VIA access
-LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-BNE DSWM_USE_OVERRIDE   ; If non-zero, use override
-LDA ,X+                 ; Otherwise, read intensity from vector data
-BRA DSWM_SET_INTENSITY
-DSWM_USE_OVERRIDE:
-LEAX 1,X                ; Skip intensity byte in vector data
-DSWM_SET_INTENSITY:
-JSR $F2AB               ; BIOS Intensity_a
-LDB ,X+                 ; y_start from .vec (already relative to center)
-; Check if Y mirroring is enabled
-TST MIRROR_Y
-BEQ DSWM_NO_NEGATE_Y
-NEGB                    ; ← Negate Y if flag set
-DSWM_NO_NEGATE_Y:
-ADDB DRAW_VEC_Y         ; Add Y offset
-LDA ,X+                 ; x_start from .vec (already relative to center)
-; Check if X mirroring is enabled
-TST MIRROR_X
-BEQ DSWM_NO_NEGATE_X
-NEGA                    ; ← Negate X if flag set
-DSWM_NO_NEGATE_X:
-ADDA DRAW_VEC_X         ; Add X offset
-STD TEMP_YX             ; Save adjusted position
-; Reset completo
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move sequence
-LDD TEMP_YX
-STB VIA_port_a          ; y to DAC
-PSHS A                  ; Save x
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore x
-STA VIA_port_a          ; x to DAC
-; Timing setup
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X                ; Skip next_y, next_x
-; Wait for move to complete
-DSWM_W1:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSWM_W1
-; Loop de dibujo (conditional mirrors)
-DSWM_LOOP:
-LDA ,X+                 ; Read flag
-CMPA #2                 ; Check end marker
-LBEQ DSWM_DONE
-CMPA #1                 ; Check next path marker
-LBEQ DSWM_NEXT_PATH
-; Draw line with conditional negations
-LDB ,X+                 ; dy
-; Check if Y mirroring is enabled
-TST MIRROR_Y
-BEQ DSWM_NO_NEGATE_DY
-NEGB                    ; ← Negate dy if flag set
-DSWM_NO_NEGATE_DY:
-LDA ,X+                 ; dx
-; Check if X mirroring is enabled
-TST MIRROR_X
-BEQ DSWM_NO_NEGATE_DX
-NEGA                    ; ← Negate dx if flag set
-DSWM_NO_NEGATE_DX:
-PSHS A                  ; Save final dx
-STB VIA_port_a          ; dy (possibly negated) to DAC
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A                  ; Restore final dx
-STA VIA_port_a          ; dx (possibly negated) to DAC
-CLR VIA_t1_cnt_hi
-LDA #$FF
-STA VIA_shift_reg
-; Wait for line draw
-DSWM_W2:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSWM_W2
-CLR VIA_shift_reg
-LBRA DSWM_LOOP          ; Long branch
-; Next path: repeat mirror logic for new path header
-DSWM_NEXT_PATH:
-TFR X,D
-PSHS D
-; Check intensity override (same logic as start)
-LDA DRAW_VEC_INTENSITY  ; Check if intensity override is set
-BNE DSWM_NEXT_USE_OVERRIDE   ; If non-zero, use override
-LDA ,X+                 ; Otherwise, read intensity from vector data
-BRA DSWM_NEXT_SET_INTENSITY
-DSWM_NEXT_USE_OVERRIDE:
-LEAX 1,X                ; Skip intensity byte in vector data
-DSWM_NEXT_SET_INTENSITY:
-PSHS A
-LDB ,X+                 ; y_start
-TST MIRROR_Y
-BEQ DSWM_NEXT_NO_NEGATE_Y
-NEGB
-DSWM_NEXT_NO_NEGATE_Y:
-ADDB DRAW_VEC_Y         ; Add Y offset
-LDA ,X+                 ; x_start
-TST MIRROR_X
-BEQ DSWM_NEXT_NO_NEGATE_X
-NEGA
-DSWM_NEXT_NO_NEGATE_X:
-ADDA DRAW_VEC_X         ; Add X offset
-STD TEMP_YX
-PULS A                  ; Get intensity back
-JSR $F2AB
-PULS D
-ADDD #3
-TFR D,X
-; Reset to zero
-CLR VIA_shift_reg
-LDA #$CC
-STA VIA_cntl
-CLR VIA_port_a
-LDA #$82
-STA VIA_port_b
-NOP
-NOP
-NOP
-NOP
-NOP
-LDA #$83
-STA VIA_port_b
-; Move to new start position
-LDD TEMP_YX
-STB VIA_port_a
-PSHS A
-LDA #$CE
-STA VIA_cntl
-CLR VIA_port_b
-LDA #1
-STA VIA_port_b
-PULS A
-STA VIA_port_a
-LDA #$7F
-STA VIA_t1_cnt_lo
-CLR VIA_t1_cnt_hi
-LEAX 2,X
-; Wait for move
-DSWM_W3:
-LDA VIA_int_flags
-ANDA #$40
-BEQ DSWM_W3
-CLR VIA_shift_reg
-LBRA DSWM_LOOP          ; Long branch
-DSWM_DONE:
-RTS
-; === LOAD_LEVEL_RUNTIME ===
-; Load level data from ROM and copy objects to RAM
-; Input: X = pointer to level data in ROM
-; Output: LEVEL_PTR = pointer to level header (persistent)
-;         RESULT    = pointer to level header (return value)
-;         OPTIMIZATION: BG and FG are static → read from ROM directly
-;                       Only GP is copied to RAM (has dynamic objects)
-;           LEVEL_GP_BUFFER (max 16 objects * 20 bytes = 320 bytes)
-LOAD_LEVEL_RUNTIME:
-    PSHS D,X,Y,U     ; Preserve registers
-    
-    ; Store level pointer persistently
-    STX >LEVEL_PTR
-    
-    ; Skip world bounds (8 bytes) + time/score (4 bytes)
-    LEAX 12,X        ; X now points to object counts
-    
-    ; Read object counts
-    LDB ,X+          ; B = bgCount
-    STB >LEVEL_BG_COUNT
-    LDB ,X+          ; B = gameplayCount
-    STB >LEVEL_GP_COUNT
-    LDB ,X+          ; B = fgCount
-    STB >LEVEL_FG_COUNT
-    
-    ; Read layer pointers (ROM)
-    LDD ,X++         ; D = bgObjectsPtr (ROM)
-    STD >LEVEL_BG_ROM_PTR
-    LDD ,X++         ; D = gameplayObjectsPtr (ROM)
-    STD >LEVEL_GP_ROM_PTR
-    LDD ,X++         ; D = fgObjectsPtr (ROM)
-    STD >LEVEL_FG_ROM_PTR
-    
-    ; === Setup GP pointer: RAM buffer if physics, ROM if static ===
-    LDB >LEVEL_GP_COUNT
-    BEQ LLR_SKIP_GP  ; Skip if zero objects
-    
-    ; Physics enabled → Copy GP objects to RAM buffer
-    LDA #$FF         ; Empty marker
-    LDU #LEVEL_GP_BUFFER
-    LDB #16          ; 16 objects
-LLR_CLR_GP_LOOP:
-    STA ,U           ; Write 0xFF to type byte
-    LEAU 14,U
-    DECB
-    BNE LLR_CLR_GP_LOOP
-    
-    LDB >LEVEL_GP_COUNT   ; Reload count
-    LDX >LEVEL_GP_ROM_PTR ; X = source (ROM)
-    LDU #LEVEL_GP_BUFFER ; U = destination (RAM)
-    PSHS U              ; Save buffer start BEFORE copy
-    JSR LLR_COPY_OBJECTS ; Copy B objects from X to U
-    PULS D              ; Restore buffer start
-    STD >LEVEL_GP_PTR    ; Store RAM buffer pointer
-    BRA LLR_GP_DONE
-LLR_GP_DONE:
-LLR_SKIP_GP:
-    
-    ; Return level pointer in RESULT
-    LDX >LEVEL_PTR
-    STX RESULT
-    
-    PULS D,X,Y,U,PC  ; Restore and return
-    
-; === Subroutine: Copy N Objects ===
-; Input: B = count, X = source (ROM), U = destination (RAM)
-; OPTIMIZATION: Skip 'type' field (+0) - read from ROM when needed
-; Each ROM object is 20 bytes, but we copy only 19 bytes to RAM (skip type)
-; Clobbers: A, B, X, U
-LLR_COPY_OBJECTS:
-LLR_COPY_LOOP:
-    TSTB
-    BEQ LLR_COPY_DONE
-    PSHS B           ; Save counter (LDD will clobber B!)
-    
-    ; Skip type (offset +0) and intensity (offset +8) fields in ROM
-    LEAX 1,X         ; X now points to +1 (x position)
-    
-    ; Copy 14 bytes optimized: x,y,scale,spawn_delay as 1-byte values
-    LDA 1,X          ; ROM +2 (x low byte) → RAM +0
-    STA ,U+
-    LDA 3,X          ; ROM +4 (y low byte) → RAM +1
-    STA ,U+
-    LDA 5,X          ; ROM +6 (scale low byte) → RAM +2
-    STA ,U+
-    LDA 6,X          ; ROM +7 (rotation) → RAM +3
-    STA ,U+
-    LEAX 8,X         ; Skip to ROM +9 (past intensity at +8)
-    LDA ,X+          ; ROM +9 (velocity_x) → RAM +4
-    STA ,U+
-    LDA ,X+          ; ROM +10 (velocity_y) → RAM +5
-    STA ,U+
-    LDA ,X+          ; ROM +11 (physics_flags) → RAM +6
-    STA ,U+
-    LDA ,X+          ; ROM +12 (collision_flags) → RAM +7
-    STA ,U+
-    LDA ,X+          ; ROM +13 (collision_size) → RAM +8
-    STA ,U+
-    LDA 1,X          ; ROM +15 (spawn_delay low byte) → RAM +9
-    STA ,U+
-    LEAX 2,X         ; Skip spawn_delay (2 bytes)
-    LDD ,X++         ; ROM +16-17 (vector_ptr) → RAM +10-11
-    STD ,U++
-    LDD ,X++         ; ROM +18-19 (properties_ptr) → RAM +12-13
-    STD ,U++
-    
-    PULS B           ; Restore counter
-    DECB             ; Decrement after copy
-    BRA LLR_COPY_LOOP
-LLR_COPY_DONE:
-    RTS
-
-; === SHOW_LEVEL_RUNTIME ===
-; Draw all level objects from loaded level
-; Input: LEVEL_PTR = pointer to level data
-; Level structure (from levelres.rs):
-;   +0:  FDB xMin, xMax (world bounds)
-;   +4:  FDB yMin, yMax
-;   +8:  FDB timeLimit, targetScore
-;   +12: FCB bgCount, gameplayCount, fgCount
-;   +15: FDB bgObjectsPtr, gameplayObjectsPtr, fgObjectsPtr
-; RAM object structure (19 bytes each, 'type' omitted - read from ROM):
-;   +0:  FDB x, y (position)
-;   +4:  FDB scale (8.8 fixed point)
-;   +6:  FCB rotation, intensity
-;   +8:  FCB velocity_x, velocity_y
-;   +10: FCB physics_flags, collision_flags, collision_size
-;   +13: FDB spawn_delay
-;   +15: FDB vector_ptr
-;   +17: FDB properties_ptr
-SHOW_LEVEL_RUNTIME:
-    PSHS D,X,Y,U     ; Preserve registers
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access - ONCE at start)
-    
-    ; Get level pointer (persistent)
-    LDX >LEVEL_PTR
-    CMPX #0
-    BEQ SLR_DONE     ; No level loaded
-    
-    ; Skip world bounds (8 bytes) + time/score (4 bytes)
-    LEAX 12,X        ; X now points to object counts
-    
-    ; Read object counts (use LDB+STB to ensure 1-byte operations)
-    LDB ,X+          ; B = bgCount
-    STB >LEVEL_BG_COUNT
-    LDB ,X+          ; B = gameplayCount
-    STB >LEVEL_GP_COUNT
-    LDB ,X+          ; B = fgCount
-    STB >LEVEL_FG_COUNT
-    
-    ; NOTE: Layer pointers already set by LOAD_LEVEL
-    ; - LEVEL_BG_PTR points to ROM (set by LOAD_LEVEL)
-    ; - LEVEL_GP_PTR points to RAM buffer if physics, ROM if static (set by LOAD_LEVEL)
-    ; - LEVEL_FG_PTR points to ROM (set by LOAD_LEVEL)
-    
-    ; === Draw Background Layer (from ROM) ===
-SLR_BG_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_BG_COUNT
-    CMPB #0
-    BEQ SLR_GAMEPLAY
-SLR_BG_PTR:
-    LDA #20          ; ROM objects are 20 bytes (with 'type' field)
-    LDX >LEVEL_BG_ROM_PTR ; Read from ROM directly (no RAM copy)
-    JSR SLR_DRAW_OBJECTS
-    
-    ; === Draw Gameplay Layer (from RAM) ===
-SLR_GAMEPLAY:
-SLR_GP_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_GP_COUNT
-    CMPB #0
-    BEQ SLR_FOREGROUND
-SLR_GP_PTR:
-    LDA #14          ; GP objects in RAM buffer (14 bytes)
-    LDX >LEVEL_GP_PTR ; Read from pointer (RAM if physics, ROM if static)
-    JSR SLR_DRAW_OBJECTS
-    
-    ; === Draw Foreground Layer (from ROM) ===
-SLR_FOREGROUND:
-SLR_FG_COUNT:
-    CLRB             ; Clear high byte to prevent corruption
-    LDB >LEVEL_FG_COUNT
-    CMPB #0
-    BEQ SLR_DONE
-SLR_FG_PTR:
-    LDA #20          ; ROM objects are 20 bytes (with 'type' field)
-    LDX >LEVEL_FG_ROM_PTR ; Read from ROM directly (no RAM copy)
-    JSR SLR_DRAW_OBJECTS
-    
-SLR_DONE:
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access - ONCE at end)
-    PULS D,X,Y,U,PC  ; Restore and return
-    
-; === Subroutine: Draw N Objects ===
-; Input: A = stride (19=RAM, 20=ROM), B = count, X = objects ptr
-SLR_DRAW_OBJECTS:
-    PSHS A           ; Save stride on stack
-    ; NOTE: Use register-based loop (no stack juggling).
-    ; Input: B = count, X = objects ptr. Clobbers B,X,Y,U.
-SLR_OBJ_LOOP:
-    TSTB             ; Test if count is zero
-    LBEQ SLR_OBJ_DONE ; Exit if zero (LONG branch - intensity calc made loop large)
-    
-    PSHS B           ; CRITICAL: Save counter (B gets clobbered by LDD operations)
-    
-    ; X points to current object
-    ; ROM: 20 bytes with 'type' at +0 (offsets: intensity +8, y +3, x +1, vector_ptr +16)
-    ; RAM: 18 bytes without 'type' and 'intensity' (offsets: y +2, x +0, vector_ptr +14)
-    ; NOTE: intensity ALWAYS read from ROM (even for RAM objects)
-    
-    ; Determine object type based on stride (peek from stack)
-    LDA 1,S          ; Load stride from stack (offset +1 because B is at top)
-    CMPA #20
-    BEQ SLR_ROM_OFFSETS
-    
-    ; RAM offsets (18 bytes, no 'type' or 'intensity')
-    ; Need to calculate ROM address for intensity: ROM_PTR + (objIndex * 20) + 8
-    ; objIndex = (X - LEVEL_GP_BUFFER) / 18
-    PSHS X           ; Save RAM object pointer
-    LDB >LEVEL_GP_COUNT
-    SUBB 2,S         ; objIndex = totalCount - currentCounter
-    ; Multiply objIndex by 20 using loop (B * 20)
-    PSHS B           ; Save objIndex for loop counter
-    LDD >LEVEL_GP_ROM_PTR ; D = ROM base
-SLR_RAM_INTENSITY_LOOP:
-    LDB ,S           ; Load counter
-    BEQ SLR_RAM_INTENSITY_DONE  ; Exit if 0
-    ADDD #20         ; D += 20
-    DEC ,S           ; Decrement counter on stack
-    LBRA SLR_RAM_INTENSITY_LOOP
-SLR_RAM_INTENSITY_DONE:
-    LEAS 1,S         ; Clean objIndex from stack
-    TFR D,Y          ; Y = ROM object address
-    LDA 8,Y          ; intensity at ROM +8
-    STA DRAW_VEC_INTENSITY
-    PULS X           ; Restore RAM object pointer
-    
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    LDB 1,X          ; y at +1 (1 byte)
-    STB DRAW_VEC_Y
-    LDB 0,X          ; x at +0 (1 byte)
-    STB DRAW_VEC_X
-    LDU 10,X         ; vector_ptr at +10
-    BRA SLR_DRAW_VECTOR
-    
-SLR_ROM_OFFSETS:
-    ; ROM offsets (20 bytes, with 'type' at +0)
-    CLR MIRROR_X
-    CLR MIRROR_Y
-    LDA 8,X          ; intensity at +8
-    STA DRAW_VEC_INTENSITY
-    LDD 3,X          ; y at +3
-    STB DRAW_VEC_Y
-    LDD 1,X          ; x at +1
-    STB DRAW_VEC_X
-    LDU 16,X         ; vector_ptr at +16
-    
-SLR_DRAW_VECTOR:
-    PSHS X           ; Save object pointer on stack (Y may be corrupted by Draw_Sync_List)
-    TFR U,X          ; X = vector data pointer (points to header)
-    
-    ; Read path_count from header (byte 0)
-    LDB ,X+          ; B = path_count, X now points to pointer table
-    
-    ; Draw all paths using pointer table (DP already set to $D0 by SHOW_LEVEL_RUNTIME)
-SLR_PATH_LOOP:
-    TSTB             ; Check if count is zero
-    BEQ SLR_PATH_DONE ; Exit if no paths left
-    DECB             ; Decrement count
-    PSHS B           ; Save decremented count
-    
-    ; Read next path pointer from table (X points to current FDB entry)
-    LDU ,X++         ; U = path pointer, X advances to next entry
-    PSHS X           ; Save pointer table position
-    TFR U,X          ; X = actual path data
-    JSR Draw_Sync_List_At_With_Mirrors  ; Draw this path
-    PULS X           ; Restore pointer table position
-    PULS B           ; Restore counter for next iteration
-    BRA SLR_PATH_LOOP
-    
-SLR_PATH_DONE:
-    PULS X           ; Restore object pointer from stack
-    
-    ; Advance to next object using stride from stack
-    LDA 1,S          ; Load stride from stack (offset +1 because B is at top)
-    LEAX A,X         ; X += stride (18 or 20 bytes)
-    
-    PULS B           ; Restore counter
-    DECB             ; Decrement count AFTER drawing
-    LBRA SLR_OBJ_LOOP  ; LONG branch - intensity calc made loop large
-    
-SLR_OBJ_DONE:
-    PULS A           ; Clean up stride from stack
-    RTS
-
-; === UPDATE_LEVEL_RUNTIME ===
-; Update level state (physics, velocity, spawn delays)
-; OPTIMIZATION: Only updates GP layer (BG/FG are static, read from ROM)
-; CRITICAL: Works on RAM BUFFERS, not ROM!
-;
-UPDATE_LEVEL_RUNTIME:
-    PSHS U,X,Y,D  ; Preserve all registers
-    
-    ; === Skip Background (static, no updates) ===
-    ; BG objects are read directly from ROM - no physics processing needed
-    
-    ; === Update Gameplay Objects ONLY ===
-    LDB LEVEL_GP_COUNT
-    CMPB #0
-    LBEQ ULR_EXIT  ; Long branch (no objects to update)
-    LDU LEVEL_GP_PTR  ; U = GP pointer (RAM if physics, ROM if static)
-    BSR ULR_UPDATE_LAYER  ; Process objects
-    
-    ; === Object-to-Object Collisions (GAMEPLAY only) ===
-    JSR ULR_GAMEPLAY_COLLISIONS  ; Use JSR for long distance
-    
-    ; === Skip Foreground (static, no updates) ===
-    ; FG objects are read directly from ROM - no physics processing needed
-    
-ULR_EXIT:
-    PULS D,Y,X,U  ; Restore registers
-    RTS
-
-; === ULR_UPDATE_LAYER - Process all objects in a layer ===
-; Input: B = object count, U = buffer base address
-; Uses: X for world bounds
-ULR_UPDATE_LAYER:
-    LDX >LEVEL_PTR  ; Load level pointer for world bounds
-    CMPX #0
-    LBEQ ULR_LAYER_EXIT  ; No level loaded (long branch)
-    
-ULR_LOOP:
-    ; U = pointer to object data (19 bytes per object in RAM)
-    ; RAM object structure (type omitted - read from ROM if needed):
-    ; +0: x (2 bytes signed)
-    ; +2: y (2 bytes signed)
-    ; +4: scale (2 bytes - not used by physics)
-    ; +6: rotation (1 byte - not used by physics)
-    ; +7: intensity (1 byte - not used by physics)
-    ; +8: velocity_x (1 byte signed)
-    ; +9: velocity_y (1 byte signed)
-    ; +10: physics_flags (1 byte)
-    ; +11: collision_flags (1 byte)
-    ; +12-18: other fields (collision_size, spawn_delay, vector_ptr, properties_ptr)
-
-    ; Check physics_flags (offset +9)
-    PSHS B  ; Save loop counter
-    LDB 6,U      ; Read flags
-    CMPB #0
-    LBEQ ULR_NEXT  ; Skip if no physics enabled (long branch)
-
-    ; Check if dynamic physics enabled (bit 0)
-    BITB #$01
-    LBEQ ULR_NEXT  ; Skip if not dynamic (long branch)
-
-    ; Check if gravity enabled (bit 1)
-    BITB #$02
-    LBEQ ULR_NO_GRAVITY  ; Long branch
-
-    ; Apply gravity: velocity_y -= 1
-    LDB 8,U       ; Read velocity_y
-    DECB          ; Subtract gravity
-    ; Clamp to -15..+15 (max velocity)
-    CMPB #$F1     ; Compare with -15
-    BGE ULR_VY_OK
-    LDB #$F1      ; Clamp to -15
-ULR_VY_OK:
-    STB 5,U       ; Store updated velocity_y
-
-ULR_NO_GRAVITY:
-    ; Apply velocity to position (8-bit arithmetic)
-    ; x += velocity_x
-    LDA 0,U       ; Load x (8-bit at offset +0)
-    LDB 4,U       ; Load velocity_x (signed 8-bit)
-    PSHS A        ; Save original x
-    ADDA 4,U      ; A = x + velocity_x
-    STA 0,U       ; Store new x
-    PULS A        ; Clean stack
-
-    ; y += velocity_y
-    LDA 1,U       ; Load y (8-bit at offset +1)
-    ADDA 5,U      ; A = y + velocity_y
-    STA 1,U       ; Store new y
-
-    ; === Check World Bounds (Wall Collisions) ===
-    LDB 7,U      ; Load collision_flags
-    BITB #$02     ; Check bounce_walls flag (bit 1)
-    LBEQ ULR_NEXT  ; Skip bounce if not enabled (long branch)
-
-    ; Load world bounds pointer from LEVEL_PTR
-    LDX >LEVEL_PTR
-    ; LEVEL_PTR → +0: xMin, +2: xMax, +4: yMin, +6: yMax (direct values)
-
-    ; === Check X Bounds (Left/Right walls) ===
-    ; Check xMin: if (x - collision_size) < xMin then bounce
-    LDB 8,U      ; collision_size (offset +8)
-    SEX           ; Sign-extend to 16-bit in D
-    PSHS D        ; Save collision_size on stack
-    LDB 0,U       ; Load object x (8-bit at offset +0)
-    SEX           ; Sign-extend x to 16-bit
-    SUBD ,S++     ; D = x - collision_size (left edge), pop stack
-    CMPD 0,X      ; Compare left edge with xMin
-    LBGE ULR_X_MAX_CHECK  ; Skip if left_edge >= xMin (LONG)
-    ; Hit xMin wall - only bounce if moving left (velocity_x < 0)
-    LDB 4,U       ; velocity_x (offset +4)
-    CMPB #0
-    LBGE ULR_X_MAX_CHECK  ; Skip if moving right (LONG)
-    ; Bounce: set position so left edge = xMin
-    LDB 8,U      ; Reload collision_size
-    SEX
-    ADDD 0,X      ; D = xMin + collision_size (center position)
-    STB 0,U       ; x = (xMin + collision_size) low byte (8-bit store)
-    LDB 4,U       ; Reload velocity_x
-    NEGB          ; velocity_x = -velocity_x
-    STB 4,U
-
-    ; Check xMax: if (x + collision_size) > xMax then bounce
-ULR_X_MAX_CHECK:
-    LDB 8,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDB 0,U       ; Load object x (8-bit at offset +0)
-    SEX           ; Sign-extend x to 16-bit
-    ADDD ,S++     ; D = x + collision_size (right edge), pop stack
-    CMPD 2,X      ; Compare right edge with xMax
-    LBLE ULR_Y_BOUNDS  ; Skip if right_edge <= xMax (LONG)
-    ; Hit xMax wall - only bounce if moving right (velocity_x > 0)
-    LDB 4,U       ; velocity_x (offset +4)
-    CMPB #0
-    LBLE ULR_Y_BOUNDS  ; Skip if moving left (LONG)
-    ; Bounce: set position so right edge = xMax
-    LDB 8,U      ; Reload collision_size
-    SEX
-    TFR D,Y       ; Y = collision_size
-    LDD 2,X       ; D = xMax
-    PSHS Y        ; Push collision_size
-    SUBD ,S++     ; D = xMax - collision_size (center position), pop
-    STB 0,U       ; x = (xMax - collision_size) low byte (8-bit store)
-    LDB 4,U       ; Reload velocity_x
-    NEGB          ; velocity_x = -velocity_x
-    STB 4,U
-
-    ; === Check Y Bounds (Top/Bottom walls) ===
-ULR_Y_BOUNDS:
-    ; Check yMin: if (y - collision_size) < yMin then bounce
-    LDB 8,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDB 1,U       ; Load object y (8-bit at offset +1)
-    SEX           ; Sign-extend y to 16-bit
-    SUBD ,S++     ; D = y - collision_size (bottom edge), pop stack
-    CMPD 4,X      ; Compare bottom edge with yMin
-    LBGE ULR_Y_MAX_CHECK  ; Skip if bottom_edge >= yMin (LONG)
-    ; Hit yMin wall - only bounce if moving down (velocity_y < 0)
-    LDB 5,U       ; velocity_y (offset +5)
-    CMPB #0
-    LBGE ULR_Y_MAX_CHECK  ; Skip if moving up (LONG)
-    ; Bounce: set position so bottom edge = yMin
-    LDB 8,U      ; Reload collision_size
-    SEX
-    ADDD 4,X      ; D = yMin + collision_size (center position)
-    STB 1,U       ; y = (yMin + collision_size) low byte (8-bit store)
-    LDB 5,U       ; Reload velocity_y
-    NEGB          ; velocity_y = -velocity_y
-    STB 5,U
-
-    ; Check yMax: if (y + collision_size) > yMax then bounce
-ULR_Y_MAX_CHECK:
-    LDB 8,U      ; Reload collision_size
-    SEX
-    PSHS D        ; Save collision_size on stack
-    LDB 1,U       ; Load object y (8-bit at offset +1)
-    SEX           ; Sign-extend y to 16-bit
-    ADDD ,S++     ; D = y + collision_size (top edge), pop stack
-    CMPD 6,X      ; Compare top edge with yMax
-    LBLE ULR_NEXT  ; Skip if top_edge <= yMax (LONG)
-    ; Hit yMax wall - only bounce if moving up (velocity_y > 0)
-    LDB 5,U       ; velocity_y (offset +5)
-    CMPB #0
-    LBLE ULR_NEXT  ; Skip if moving down (LONG)
-    ; Bounce: set position so top edge = yMax
-    LDB 8,U      ; Reload collision_size
-    SEX
-    TFR D,Y       ; Y = collision_size
-    LDD 6,X       ; D = yMax
-    PSHS Y        ; Push collision_size
-    SUBD ,S++     ; D = yMax - collision_size (center position), pop
-    STB 1,U       ; y = (yMax - collision_size) low byte (8-bit store)
-    LDB 5,U       ; Reload velocity_y
-    NEGB          ; velocity_y = -velocity_y
-    STB 5,U
-
-ULR_NEXT:
-    PULS B        ; Restore loop counter
-    LEAU 14,U     ; Move to next object (14 bytes)
-    DECB
-    LBNE ULR_LOOP  ; Continue if more objects (long branch)
-
-ULR_LAYER_EXIT:
-    RTS
-
-; === ULR_GAMEPLAY_COLLISIONS - Check collisions between gameplay objects ===
-; Input: None (uses LEVEL_GP_BUFFER and LEVEL_GP_COUNT)
-ULR_GAMEPLAY_COLLISIONS:
-    ; Ultra-simple algorithm: NO stack juggling, use RAM variables
-    LDA LEVEL_GP_COUNT
-    CMPA #2
-    BHS UGPC_START   ; Continue if >=2
-    RTS              ; Early exit
-UGPC_START:
-    
-    ; Store count-1 in temporary RAM (we'll iterate up to this)
-    DECA
-    STA UGPC_OUTER_MAX   ; Store at RESULT+20 (temp storage)
-    CLR UGPC_OUTER_IDX   ; Start at 0
-    
-UGPC_OUTER_LOOP:
-    ; Calculate U = LEVEL_GP_BUFFER + (UGPC_OUTER_IDX * 14)
-    LDU #LEVEL_GP_BUFFER
-    LDB UGPC_OUTER_IDX
-    BEQ UGPC_SKIP_OUTER_MUL  ; If idx=0, U already correct
-UGPC_OUTER_MUL:
-    LEAU 14,U
-    DECB
-    BNE UGPC_OUTER_MUL
-UGPC_SKIP_OUTER_MUL:
-    
-    ; Check if collidable
-    LDB 10,U
-    BITB #$01
-    LBEQ UGPC_NEXT_OUTER
-    
-    ; Inner loop: check against all objects AFTER current
-    LDA UGPC_OUTER_IDX
-    INCA             ; Start from next object
-    STA UGPC_INNER_IDX
-    
-UGPC_INNER_LOOP:
-    ; Check if inner reached count
-    LDA UGPC_INNER_IDX
-    CMPA LEVEL_GP_COUNT
-    LBHS UGPC_INNER_DONE  ; Done if idx >= count (LONG)
-    
-    ; Calculate Y = LEVEL_GP_BUFFER + (UGPC_INNER_IDX * 14)
-    LDY #LEVEL_GP_BUFFER
-    LDB UGPC_INNER_IDX
-    BEQ UGPC_SKIP_INNER_MUL
-UGPC_INNER_MUL:
-    LEAY 14,Y
-    DECB
-    BNE UGPC_INNER_MUL
-UGPC_SKIP_INNER_MUL:
-    
-    ; Check if Y collidable
-    LDB 7,Y
-    BITB #$01
-    LBEQ UGPC_NEXT_INNER
-    
-    ; Manhattan distance |x1-x2| + |y1-y2|
-    LDB 0,U          ; x1 (8-bit at offset +0)
-    SEX              ; Sign-extend to 16-bit
-    PSHS D           ; Save x1
-    LDB 0,Y          ; x2 (8-bit at offset +0)
-    SEX              ; Sign-extend to 16-bit
-    TFR D,X          ; X = x2
-    PULS D           ; D = x1
-    PSHS X           ; Save X register
-    TFR X,D          ; D = x2
-    PULS X           ; Restore X
-    PSHS D           ; Push x2
-    LDB 0,U          ; Reload x1
-    SEX
-    SUBD ,S++        ; x1-x2
-    BPL UGPC_DX_POS
-    COMA
-    COMB
-    ADDD #1
-UGPC_DX_POS:
-    STD UGPC_DX      ; Store |dx| in temp
-    
-    LDB 1,U          ; y1 (8-bit at offset +1)
-    SEX              ; Sign-extend to 16-bit
-    PSHS D           ; Save y1
-    LDB 1,Y          ; y2 (8-bit at offset +1)
-    SEX              ; Sign-extend to 16-bit
-    TFR D,X          ; X = y2 (temp)
-    PULS D           ; D = y1
-    PSHS X           ; Save X
-    TFR X,D          ; D = y2
-    PULS X           ; Restore X
-    PSHS D           ; Push y2
-    LDB 1,U          ; Reload y1
-    SEX
-    SUBD ,S++        ; y1-y2
-    BPL UGPC_DY_POS
-    COMA
-    COMB
-    ADDD #1
-UGPC_DY_POS:
-    ADDD UGPC_DX     ; distance = |dx| + |dy|
-    STD UGPC_DIST
-    
-    ; Sum of radii
-    LDB 8,U
-    ADDB 8,Y
-    SEX              ; D = sum_radius (normal, not doubled)
-    ; Collision if distance < sum_radius (i.e., sum_radius > distance)
-    CMPD UGPC_DIST   ; Compare sum_radius with distance
-    LBHI UGPC_COLLISION  ; Jump to collision if sum_radius > distance (LONG)
-    LBRA UGPC_NEXT_INNER ; No collision, skip (LONG)
-    
-UGPC_COLLISION:
-    ; COLLISION! Swap velocities (elastic collision)
-    ; Swap velocity_x (offset +4)
-    LDA 4,U          ; A = vel_x of object 1
-    LDB 4,Y          ; B = vel_x of object 2
-    STB 4,U          ; Object 1 gets object 2's vel_x
-    STA 4,Y          ; Object 2 gets object 1's vel_x
-    ; Swap velocity_y (offset +5)
-    LDA 5,U          ; A = vel_y of object 1
-    LDB 5,Y          ; B = vel_y of object 2
-    STB 5,U          ; Object 1 gets object 2's vel_y
-    STA 5,Y          ; Object 2 gets object 1's vel_y
-    
-UGPC_NEXT_INNER:
-    INC UGPC_INNER_IDX
-    LBRA UGPC_INNER_LOOP
-    
-UGPC_INNER_DONE:
-UGPC_NEXT_OUTER:
-    INC UGPC_OUTER_IDX
-    LDA UGPC_OUTER_IDX
-    CMPA UGPC_OUTER_MAX
-    LBHI UGPC_EXIT    ; Exit if idx > max (LONG)
-    LBRA UGPC_OUTER_LOOP  ; Continue (LONG)
-    
-UGPC_EXIT:
-    RTS
-    
-;
-; ┌─────────────────────────────────────────────────────────────────┐
-; │ PROGRAM CODE SECTION - User VPy Code                            │
-; │ This section contains the compiled user program logic.          │
-; └─────────────────────────────────────────────────────────────────┘
-;
-
 START:
     LDA #$D0
-    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
-    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce
+    TFR A,DP        ; Set Direct Page for BIOS
+    CLR $C80E        ; Initialize Vec_Prev_Btns
     LDA #$80
     STA VIA_t1_cnt_lo
-    LDX #Vec_Default_Stk
-    TFR X,S
+    LDS #$CBFF       ; Initialize stack
+    JMP MAIN
 
-    ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:6
-    ; VPy_LINE:7
-    LDD #127
-    STD RESULT
-    LDD RESULT
-    STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 7
-    JSR VECTREX_SET_INTENSITY
-    CLRA
-    CLRB
-    STD RESULT
-    ; VPy_LINE:8
-; LOAD_LEVEL("test_level") - load level data
-    LDX #_TEST_LEVEL_LEVEL
-    JSR LOAD_LEVEL_RUNTIME
-    LDD RESULT  ; Returns level pointer
+;***************************************************************************
+; === RAM VARIABLE DEFINITIONS ===
+;***************************************************************************
+RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
+TMPPTR               EQU $C880+$02   ; Temporary pointer (2 bytes)
+TMPPTR2              EQU $C880+$04   ; Temporary pointer 2 (2 bytes)
+TEMP_YX              EQU $C880+$06   ; Temporary Y/X coordinate storage (2 bytes)
+VLINE_DX_16          EQU $C880+$08   ; DRAW_LINE dx (16-bit) (2 bytes)
+VLINE_DY_16          EQU $C880+$0A   ; DRAW_LINE dy (16-bit) (2 bytes)
+VLINE_DX             EQU $C880+$0C   ; DRAW_LINE dx clamped (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$0D   ; DRAW_LINE dy clamped (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$0E   ; DRAW_LINE remaining dy for segment 2 (1 bytes)
+VAR_RAM_TEST_COUNT   EQU $C880+$0F   ; User variable: RAM_TEST_COUNT (2 bytes)
+VAR_RAM_TEST_X       EQU $C880+$11   ; User variable: RAM_TEST_X (2 bytes)
+VAR_RAM_TEST_Y       EQU $C880+$13   ; User variable: RAM_TEST_Y (2 bytes)
+VAR_X                EQU $C880+$15   ; User variable: X (2 bytes)
+VAR_Y                EQU $C880+$17   ; User variable: Y (2 bytes)
+VAR_COUNT            EQU $C880+$19   ; User variable: COUNT (2 bytes)
+VAR_ARG0             EQU $CFE0   ; Function argument 0 (16-bit) (2 bytes)
+VAR_ARG1             EQU $CFE2   ; Function argument 1 (16-bit) (2 bytes)
+VAR_ARG2             EQU $CFE4   ; Function argument 2 (16-bit) (2 bytes)
+VAR_ARG3             EQU $CFE6   ; Function argument 3 (16-bit) (2 bytes)
+VAR_ARG4             EQU $CFE8   ; Function argument 4 (16-bit) (2 bytes)
+
+; Internal builtin variables (aliases to RESULT slots)
+DRAW_VEC_X EQU RESULT+0
+DRAW_VEC_Y EQU RESULT+2
+MIRROR_X EQU RESULT+4
+MIRROR_Y EQU RESULT+6
+DRAW_VEC_INTENSITY EQU RESULT+8
+
+
+;***************************************************************************
+; MAIN PROGRAM
+;***************************************************************************
 
 MAIN:
-    JSR $F1AF    ; DP_to_C8 (required for RAM access)
-    ; === Initialize Joystick (one-time setup) ===
-    CLR $C823    ; CRITICAL: Clear analog mode flag (Joy_Analog does DEC on this)
-    LDA #$01     ; CRITICAL: Resolution threshold (power of 2: $40=fast, $01=accurate)
-    STA $C81A    ; Vec_Joy_Resltn (loop terminates when B=this value after LSRBs)
-    LDA #$01
-    STA $C81F    ; Vec_Joy_Mux_1_X (enable X axis reading)
-    LDA #$03
-    STA $C820    ; Vec_Joy_Mux_1_Y (enable Y axis reading)
-    LDA #$00
-    STA $C821    ; Vec_Joy_Mux_2_X (disable joystick 2 - CRITICAL!)
-    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)
-    ; Mux configured - J1_X()/J1_Y() can now be called
+    ; Initialize global variables
+    ; Call main() for initialization
+    ; SET_INTENSITY: Set drawing intensity
+    LDD #127
+    STD RESULT
+    LDA RESULT+1    ; Load intensity (8-bit)
+    JSR Intensity_a
+    LDD #0
+    STD RESULT
+    ; ===== LOAD_LEVEL builtin =====
+    ; Load level: 'test_level'
+    LDX #LEVEL_TEST_LEVEL
+    STX LEVEL_PTR          ; Store level data pointer
+    LDA ,X+                ; Load width (byte)
+    STA LEVEL_WIDTH
+    LDA ,X+                ; Load height (byte)
+    STA LEVEL_HEIGHT
+    LDD #1                 ; Return success
+    STD RESULT
 
-    ; JSR Wait_Recal is now called at start of LOOP_BODY (see auto-inject)
-    LDA #$80
-    STA VIA_t1_cnt_lo
-    ; *** Call loop() as subroutine (executed every frame)
+.MAIN_LOOP:
     JSR LOOP_BODY
-    BRA MAIN
+    BRA .MAIN_LOOP
 
-    ; VPy_LINE:12
 LOOP_BODY:
-    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
+    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)
+    JSR Reset0Ref    ; Reset beam to center (0,0)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
-    ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:15
-; SHOW_LEVEL() - draw all level objects
+    ; ===== SHOW_LEVEL builtin =====
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
     STD RESULT
-    ; DEBUG: Statement 1 - Discriminant(8)
-    ; VPy_LINE:18
-; NATIVE_CALL: UPDATE_LEVEL at line 18
-    JSR UPDATE_LEVEL_RUNTIME
-    CLRA
-    CLRB
+    ; ===== UPDATE_LEVEL builtin =====
+    ; Placeholder - extend for animated/destructible tiles
+    LDD #0
+    STD RESULT
+    RTS
+
+; Function: RAM_TEST_MAIN
+RAM_TEST_MAIN:
+    ; SET_INTENSITY: Set drawing intensity
+    LDD #127
+    STD RESULT
+    LDA RESULT+1    ; Load intensity (8-bit)
+    JSR Intensity_a
+    LDD #0
+    STD RESULT
+    RTS
+
+; Function: RAM_TEST_LOOP
+RAM_TEST_LOOP:
+    ; WAIT_RECAL: Wait for screen refresh
+    JSR Wait_Recal
+    LDD #0
+    STD RESULT
+    ; PRINT_TEXT: Print text at position
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #PRINT_TEXT_STR_68994724591312392      ; Pointer to string in helpers bank
+    STX VAR_ARG2
+    JSR VECTREX_PRINT_TEXT
+    LDD #0
+    STD RESULT
+    ; PRINT_TEXT: Print text at position
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #PRINT_TEXT_STR_68729639722158      ; Pointer to string in helpers bank
+    STX VAR_ARG2
+    JSR VECTREX_PRINT_TEXT
+    LDD #0
+    STD RESULT
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_X
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_Y
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_COUNT
+    LDD VAR_X
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_X
+    LDD VAR_Y
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_Y
+    LDD VAR_COUNT
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #1
+    STD RESULT
+    LDD RESULT
+    ADDD ,S++
+    STD RESULT
+    LDD RESULT
+    STD VAR_RAM_TEST_COUNT
+    LDD VAR_COUNT
+    STD RESULT
+    LDD RESULT
+    PSHS D
+    LDD #100
+    STD RESULT
+    LDD RESULT
+    CMPD ,S++
+    LBGT .CMP_TRUE
+    LDD #0
+    LBRA .CMP_END
+.CMP_TRUE:
+    LDD #1
+.CMP_END:
+    STD RESULT
+    LDD RESULT
+    LBEQ .IF_ELSE
+    LDD #0
+    STD RESULT
+    LDD RESULT
+    STD VAR_COUNT
+    LBRA .IF_END
+.IF_ELSE:
+.IF_END:
+    RTS
+
+; Function: TEST_SIMPLE_MAIN
+TEST_SIMPLE_MAIN:
+    ; SET_INTENSITY: Set drawing intensity
+    LDD #127
+    STD RESULT
+    LDA RESULT+1    ; Load intensity (8-bit)
+    JSR Intensity_a
+    LDD #0
+    STD RESULT
+    RTS
+
+; Function: TEST_SIMPLE_LOOP
+TEST_SIMPLE_LOOP:
+    ; WAIT_RECAL: Wait for screen refresh
+    JSR Wait_Recal
+    LDD #0
+    STD RESULT
+    ; PRINT_TEXT: Print text at position
+    LDD #-60
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG0
+    LDD #80
+    STD RESULT
+    LDD RESULT
+    STD VAR_ARG1
+    LDX #PRINT_TEXT_STR_2315958665076      ; Pointer to string in helpers bank
+    STX VAR_ARG2
+    JSR VECTREX_PRINT_TEXT
+    LDD #0
     STD RESULT
     RTS
 
 ;***************************************************************************
-; DATA SECTION
+; RUNTIME HELPERS
 ;***************************************************************************
 
-; ========================================
-; ASSET DATA SECTION
-; Embedded 5 of 7 assets (unused assets excluded)
-; ========================================
+VECTREX_PRINT_TEXT:
+    ; VPy signature: PRINT_TEXT(x, y, string)
+    ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
+    JSR $F1AA      ; DP_to_D0 - set Direct Page for BIOS/VIA access
+    LDU VAR_ARG2   ; string pointer (third parameter)
+    LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)
+    LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)
+    JSR Print_Str_d ; Print string from U register
+    JSR $F1AF      ; DP_to_C8 - restore DP before return
+    RTS
 
-; Vector asset: coin
+MOD16:
+    ; Modulo 16-bit X % D -> D
+    PSHS X,D
+.MOD16_LOOP:
+    PSHS D         ; Save D
+    LDD 4,S        ; Load dividend (after PSHS D)
+    CMPD 2,S       ; Compare with divisor (after PSHS D)
+    PULS D         ; Restore D
+    BLT .MOD16_END
+    LDX 2,S
+    LDD ,S
+    LEAX D,X
+    STX 2,S
+    BRA .MOD16_LOOP
+.MOD16_END:
+    LDD 2,S        ; Remainder
+    LEAS 4,S
+    RTS
+
+; === SHOW_LEVEL_RUNTIME - Draw entire level ===
+SHOW_LEVEL_RUNTIME:
+    ; Input: LEVEL_PTR (pointer to level data)
+    ;        LEVEL_WIDTH, LEVEL_HEIGHT (dimensions)
+    ; Renders 8x8 tiles as rectangles
+    
+    LDA #$D0
+    TFR A,DP
+    JSR Reset0Ref
+    
+    ; Outer loop: Y (rows)
+    CLR LEVEL_Y_IDX
+.SL_Y_LOOP:
+    LDA LEVEL_Y_IDX
+    CMPA LEVEL_HEIGHT
+    BHS .SL_DONE         ; If Y >= height, done
+    
+    ; Inner loop: X (columns)
+    CLR LEVEL_X_IDX
+.SL_X_LOOP:
+    LDA LEVEL_X_IDX
+    CMPA LEVEL_WIDTH
+    BHS .SL_NEXT_Y       ; If X >= width, next row
+    
+    ; Calculate tile offset: (Y * width) + X
+    LDA LEVEL_Y_IDX
+    LDB LEVEL_WIDTH
+    MUL                  ; D = Y * width
+    ADDB LEVEL_X_IDX     ; D += X
+    ADCA #0
+    
+    ; Add to level pointer (skip 2-byte header)
+    ADDD #2              ; Skip width, height bytes
+    ADDD LEVEL_PTR
+    TFR D,X              ; X = address of tile
+    LDA ,X               ; Load tile value
+    
+    ; If tile is 0 (empty), skip drawing
+    CMPA #0
+    BEQ .SL_SKIP_TILE
+    
+    ; Draw tile as 8x8 rectangle
+    ; Calculate screen position
+    LDA LEVEL_X_IDX
+    LDB #8
+    MUL                  ; B = X * 8 (pixel X)
+    SUBB #128            ; Center horizontally
+    STB LEVEL_TEMP       ; Save pixel X
+    
+    LDA LEVEL_Y_IDX
+    LDB #8
+    MUL                  ; B = Y * 8 (pixel Y)
+    SUBB #128            ; Center vertically
+    NEGB                 ; Flip Y (screen coords)
+    TFR B,A              ; Y to A
+    LDB LEVEL_TEMP       ; X to B
+    
+    ; Move to tile position
+    JSR Moveto_d_7F
+    
+    ; Draw 8x8 rectangle
+    LDA #$7F
+    JSR Intensity_a
+    
+    CLR Vec_Misc_Count
+    LDA #0
+    LDB #8
+    JSR Draw_Line_d      ; Right
+    
+    CLR Vec_Misc_Count
+    LDA #-8
+    LDB #0
+    JSR Draw_Line_d      ; Down
+    
+    CLR Vec_Misc_Count
+    LDA #0
+    LDB #-8
+    JSR Draw_Line_d      ; Left
+    
+    CLR Vec_Misc_Count
+    LDA #8
+    LDB #0
+    JSR Draw_Line_d      ; Up
+    
+.SL_SKIP_TILE:
+    ; Next column
+    INC LEVEL_X_IDX
+    BRA .SL_X_LOOP
+    
+.SL_NEXT_Y:
+    ; Next row
+    INC LEVEL_Y_IDX
+    BRA .SL_Y_LOOP
+    
+.SL_DONE:
+    RTS
+
+;**** PRINT_TEXT String Data ****
+PRINT_TEXT_STR_2315958665076:
+    FCC "RAM TEST"
+    FCB $80          ; Vectrex string terminator
+
+PRINT_TEXT_STR_68729639722158:
+    FCC "NO LEVELS"
+    FCB $80          ; Vectrex string terminator
+
+PRINT_TEXT_STR_68994724591312392:
+    FCC "RAM TEST OK"
+    FCB $80          ; Vectrex string terminator
+
+;***************************************************************************
+; EMBEDDED ASSETS (vectors, music, levels, SFX)
+;***************************************************************************
+
 ; Generated from coin.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 8
 ; X bounds: min=-8, max=8, width=16
@@ -1350,8 +432,33 @@ _COIN_PATH0:    ; Path 0
     FCB $FF,$06,$02          ; line 6: flag=-1, dy=6, dx=2
     FCB $FF,$02,$06          ; closing line: flag=-1, dy=2, dx=6
     FCB 2                ; End marker (path complete)
+; Generated from square.vec (Malban Draw_Sync_List format)
+; Total paths: 2, points: 6
+; X bounds: min=-50, max=50, width=100
+; Center: (0, 0)
 
-; Vector asset: bubble_huge
+_SQUARE_WIDTH EQU 100
+_SQUARE_CENTER_X EQU 0
+_SQUARE_CENTER_Y EQU 0
+
+_SQUARE_VECTORS:  ; Main entry (header + 2 path(s))
+    FCB 2               ; path_count (runtime metadata)
+    FDB _SQUARE_PATH0        ; pointer to path 0
+    FDB _SQUARE_PATH1        ; pointer to path 1
+
+_SQUARE_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $32,$CE,0,0        ; path0: header (y=50, x=-50, relative to center)
+    FCB $FF,$00,$64          ; line 0: flag=-1, dy=0, dx=100
+    FCB $FF,$9C,$00          ; line 1: flag=-1, dy=-100, dx=0
+    FCB $FF,$00,$9C          ; line 2: flag=-1, dy=0, dx=-100
+    FCB 2                ; End marker (path complete)
+
+_SQUARE_PATH1:    ; Path 1
+    FCB 127              ; path1: intensity
+    FCB $32,$CE,0,0        ; path1: header (y=50, x=-50, relative to center)
+    FCB $FF,$9C,$00          ; line 0: flag=-1, dy=-100, dx=0
+    FCB 2                ; End marker (path complete)
 ; Generated from bubble_huge.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 8
 ; X bounds: min=-25, max=27, width=52
@@ -1377,8 +484,6 @@ _BUBBLE_HUGE_PATH0:    ; Path 0
     FCB $FF,$08,$12          ; line 6: flag=-1, dy=8, dx=18
     FCB $FF,$12,$08          ; closing line: flag=-1, dy=18, dx=8
     FCB 2                ; End marker (path complete)
-
-; Vector asset: bubble_large
 ; Generated from bubble_large.vec (Malban Draw_Sync_List format)
 ; Total paths: 1, points: 8
 ; X bounds: min=-15, max=15, width=30
@@ -1404,8 +509,26 @@ _BUBBLE_LARGE_PATH0:    ; Path 0
     FCB $FF,$0A,$05          ; line 6: flag=-1, dy=10, dx=5
     FCB $FF,$05,$0A          ; closing line: flag=-1, dy=5, dx=10
     FCB 2                ; End marker (path complete)
+; Generated from mountain.vec (Malban Draw_Sync_List format)
+; Total paths: 1, points: 4
+; X bounds: min=-38, max=38, width=76
+; Center: (0, 13)
 
-; Vector asset: fuji_bg
+_MOUNTAIN_WIDTH EQU 76
+_MOUNTAIN_CENTER_X EQU 0
+_MOUNTAIN_CENTER_Y EQU 13
+
+_MOUNTAIN_VECTORS:  ; Main entry (header + 1 path(s))
+    FCB 1               ; path_count (runtime metadata)
+    FDB _MOUNTAIN_PATH0        ; pointer to path 0
+
+_MOUNTAIN_PATH0:    ; Path 0
+    FCB 127              ; path0: intensity
+    FCB $F3,$DA,0,0        ; path0: header (y=-13, x=-38, relative to center)
+    FCB $FF,$1A,$0D          ; line 0: flag=-1, dy=26, dx=13
+    FCB $FF,$01,$33          ; line 1: flag=-1, dy=1, dx=51
+    FCB $FF,$E4,$0C          ; line 2: flag=-1, dy=-28, dx=12
+    FCB 2                ; End marker (path complete)
 ; Generated from fuji_bg.vec (Malban Draw_Sync_List format)
 ; Total paths: 5, points: 64
 ; X bounds: min=-124, max=125, width=249
@@ -1506,8 +629,6 @@ _FUJI_BG_PATH4:    ; Path 4
     FCB $FF,$04,$02          ; line 21: flag=-1, dy=4, dx=2
     FCB $FF,$FC,$14          ; line 22: flag=-1, dy=-4, dx=20
     FCB 2                ; End marker (path complete)
-
-; Level Asset: test_level (from /Users/daniel/projects/vectrex-pseudo-python/examples/level_test/assets/playground/test_level.vplay)
 ; ==== Level: TEST_LEVEL ====
 ; Author: 
 ; Difficulty: medium
@@ -1612,5 +733,3 @@ _TEST_LEVEL_GAMEPLAY_OBJECTS:
 
 _TEST_LEVEL_FG_OBJECTS:
 
-
-; === INLINE ARRAY LITERALS (from function bodies) ===

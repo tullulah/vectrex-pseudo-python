@@ -570,31 +570,31 @@ fn emit_draw_line(args: &[Expr], out: &mut String) {
     
     out.push_str("    ; DRAW_LINE: Draw line from (x0,y0) to (x1,y1)\n");
     
-    // Store all arguments in TMPPTR area (RESULT+0 to RESULT+8)
+    // Store all arguments in DRAW_LINE_ARGS area (10 bytes: 5 words)
     // Arg 0: x0
     expressions::emit_simple_expr(&args[0], out);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    STD TMPPTR+0    ; x0\n");
+    out.push_str("    STD DRAW_LINE_ARGS+0    ; x0\n");
     
     // Arg 1: y0
     expressions::emit_simple_expr(&args[1], out);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    STD TMPPTR+2    ; y0\n");
+    out.push_str("    STD DRAW_LINE_ARGS+2    ; y0\n");
     
     // Arg 2: x1
     expressions::emit_simple_expr(&args[2], out);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    STD TMPPTR+4    ; x1\n");
+    out.push_str("    STD DRAW_LINE_ARGS+4    ; x1\n");
     
     // Arg 3: y1
     expressions::emit_simple_expr(&args[3], out);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    STD TMPPTR+6    ; y1\n");
+    out.push_str("    STD DRAW_LINE_ARGS+6    ; y1\n");
     
     // Arg 4: intensity
     expressions::emit_simple_expr(&args[4], out);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    STD TMPPTR+8    ; intensity\n");
+    out.push_str("    STD DRAW_LINE_ARGS+8    ; intensity\n");
     
     // Call DRAW_LINE_WRAPPER which handles DP switching and segmentation
     out.push_str("    JSR DRAW_LINE_WRAPPER\n");
@@ -695,17 +695,17 @@ fn emit_draw_vector_ex(args: &[Expr], out: &mut String) {
             out.push_str("    CLR MIRROR_X  ; Clear X flag\n");
             out.push_str("    CLR MIRROR_Y  ; Clear Y flag\n");
             out.push_str("    CMPB #1       ; Check if X-mirror (mode 1)\n");
-            out.push_str("    BNE .DSVEX_CHK_Y\n");
+            out.push_str("    LBNE .DSVEX_CHK_Y\n");
             out.push_str("    LDA #1\n");
             out.push_str("    STA MIRROR_X\n");
             out.push_str(".DSVEX_CHK_Y:\n");
             out.push_str("    CMPB #2       ; Check if Y-mirror (mode 2)\n");
-            out.push_str("    BNE .DSVEX_CHK_XY\n");
+            out.push_str("    LBNE .DSVEX_CHK_XY\n");
             out.push_str("    LDA #1\n");
             out.push_str("    STA MIRROR_Y\n");
             out.push_str(".DSVEX_CHK_XY:\n");
             out.push_str("    CMPB #3       ; Check if both-mirror (mode 3)\n");
-            out.push_str("    BNE .DSVEX_CALL\n");
+            out.push_str("    LBNE .DSVEX_CALL\n");
             out.push_str("    LDA #1\n");
             out.push_str("    STA MIRROR_X\n");
             out.push_str("    STA MIRROR_Y\n");
