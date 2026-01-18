@@ -137,6 +137,11 @@ pub fn generate_m6809_asm(
     
     asm.push_str("    JMP MAIN\n\n");
     
+    // CRITICAL FIX (2026-01-18): Generate RAM definitions and arrays BEFORE user functions
+    // This ensures arrays are defined before first use (fixes forward reference errors)
+    let ram_and_arrays_asm = helpers::generate_ram_and_arrays(module)?;
+    asm.push_str(&ram_and_arrays_asm);
+    
     // Generate user functions in Bank 0
     let functions_asm = functions::generate_functions(module)?;
     asm.push_str(&functions_asm);

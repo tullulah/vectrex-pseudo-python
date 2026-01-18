@@ -1,0 +1,20 @@
+=== FULL BUILD PIPELINE ===
+
+Phase 1: Load Project
+  Entry: src/main.vpy
+  Files: 1
+  Assets: 39
+
+Phase 2: Parse Modules
+  ✓ Parsed 1 modules
+
+Phase 3: Unify Modules
+  ✓ Unified 62 items
+
+Phase 4: Code Generation
+  ✓ Generated 77170 bytes ASM
+  ✓ ASM written: build/pang.asm
+
+Phase 5: Parse Bank Sections
+
+Phase 6: Assemble Banks
