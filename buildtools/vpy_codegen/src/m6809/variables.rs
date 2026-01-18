@@ -5,7 +5,7 @@ use super::ram_layout::RamLayout;
 /// Generate user variables using a RamLayout that already has system variables allocated
 /// Returns ASM string for array data sections (not EQU definitions - those come from RamLayout)
 pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<String, String> {
-    let mut asm = String::new();
+    let asm = String::new();
     let mut vars = HashSet::new();
     let mut arrays = Vec::new();  // Track arrays for data generation
     
@@ -49,15 +49,8 @@ pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<S
     // NOTE: VAR_ARG definitions are now in helpers.rs using ram.allocate_fixed()
     // They are emitted alongside system variables because they need fixed addresses
     
-    // CRITICAL: Define internal builtin variables
-    // These are aliases to RESULT slots and don't consume additional RAM
-    asm.push_str("; Internal builtin variables (aliases to RESULT slots)\n");
-    asm.push_str("DRAW_VEC_X EQU RESULT+0\n");
-    asm.push_str("DRAW_VEC_Y EQU RESULT+2\n");
-    asm.push_str("MIRROR_X EQU RESULT+4\n");
-    asm.push_str("MIRROR_Y EQU RESULT+6\n");
-    asm.push_str("DRAW_VEC_INTENSITY EQU RESULT+8\n");
-    asm.push_str("\n");
+    // NOTE: Internal variables (DRAW_VEC_X, MIRROR_Y, etc.) are now allocated via RamLayout in helpers.rs
+    // This prevents collisions with scratchpad variables like TEMP_YX
     
     Ok(asm)
 }
@@ -234,15 +227,8 @@ pub fn generate_variables(module: &Module) -> Result<String, String> {
     // This allows all banks to access VAR_ARG without duplication
     // See mod.rs line ~325 for the actual emission
     
-    // CRITICAL: Define internal builtin variables
-    // These are used by DRAW_VECTOR_EX and other builtins
-    asm.push_str("; Internal builtin variables (aliases to RESULT slots)\n");
-    asm.push_str("DRAW_VEC_X EQU RESULT+0\n");
-    asm.push_str("DRAW_VEC_Y EQU RESULT+2\n");
-    asm.push_str("MIRROR_X EQU RESULT+4\n");
-    asm.push_str("MIRROR_Y EQU RESULT+6\n");
-    asm.push_str("DRAW_VEC_INTENSITY EQU RESULT+8\n");
-    asm.push_str("\n");
+    // NOTE: Internal variables (DRAW_VEC_X, MIRROR_Y, etc.) are now allocated via RamLayout in helpers.rs
+    // This prevents collisions with scratchpad variables like TEMP_YX
     
     Ok(asm)
 }

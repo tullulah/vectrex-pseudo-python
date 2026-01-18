@@ -15,8 +15,6 @@ pub struct RamLayout {
     current_offset: usize,
     vars: Vec<RamVar>,
     offsets: HashMap<String, usize>,
-    // Fixed-address variables (absolute address, not relative to base)
-    fixed_vars: Vec<(String, u16, usize, String)>,
 }
 
 impl RamLayout {
@@ -26,18 +24,6 @@ impl RamLayout {
             current_offset: 0,
             vars: Vec::new(),
             offsets: HashMap::new(),
-            fixed_vars: Vec::new(),
-        }
-    }
-    
-    /// Create RamLayout with first byte reserved (for multibank CURRENT_ROM_BANK)
-    pub fn new_with_reserved_first_byte(base_address: u16) -> Self {
-        Self {
-            base_address,
-            current_offset: 1, // Skip first byte
-            vars: Vec::new(),
-            offsets: HashMap::new(),
-            fixed_vars: Vec::new(),
         }
     }
     
@@ -56,14 +42,6 @@ impl RamLayout {
         self.current_offset += size;
         
         offset
-    }
-    
-    /// Allocate a variable at a fixed absolute address (outside the compact region)
-    /// Emits an EQU with the absolute address but does NOT reserve storage in ORG block.
-    pub fn allocate_fixed(&mut self, name: impl Into<String>, address: u16, size: usize, comment: impl Into<String>) {
-        let name = name.into();
-        let comment = comment.into();
-        self.fixed_vars.push((name, address, size, comment));
     }
     
     /// Get the offset of a variable (if already allocated)
@@ -95,21 +73,6 @@ impl RamLayout {
                 var.size
             ));
         }
-        // Emit fixed-address EQUs after compact region
-        for (name, addr, size, comment) in &self.fixed_vars {
-            // Don't append size if comment already contains it (avoid duplication)
-            let formatted_comment = if comment.contains("byte") {
-                comment.clone()
-            } else {
-                format!("{} ({} bytes)", comment, size)
-            };
-            out.push_str(&format!(
-                "{:<20} EQU ${:04X}   ; {}\n",
-                name,
-                addr,
-                formatted_comment
-            ));
-        }
         out
     }
     
@@ -126,21 +89,6 @@ impl RamLayout {
             ));
         }
         out
-    }
-    
-    /// Get base address
-    pub fn base_address(&self) -> u16 {
-        self.base_address
-    }
-    
-    /// Iterator over all variables (name, offset)
-    pub fn iter_variables(&self) -> impl Iterator<Item = (&String, &usize)> {
-        self.offsets.iter()
-    }
-    
-    /// Iterator over fixed-address variables (name, address)
-    pub fn iter_fixed_variables(&self) -> impl Iterator<Item = (&String, &u16)> + '_ {
-        self.fixed_vars.iter().map(|(name, addr, _, _)| (name, addr))
     }
 }
 

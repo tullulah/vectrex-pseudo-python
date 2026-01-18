@@ -13,7 +13,6 @@ pub mod sfxres;   // Sound effects resource format (.vsfx)
 pub mod levelres; // Level resource format (.vplay)
 pub mod vplay_analyzer; // Automatic .vplay analysis for dynamic buffer sizing
 pub mod struct_layout; // Struct layout computation (Phase 2)
-pub mod linker;        // Linker for modular compilation and libraries
 pub mod backend;
 // Legacy emulator module removed; use vectrex_emulator crate instead.
 // pub mod emulator; // intentionally disabled

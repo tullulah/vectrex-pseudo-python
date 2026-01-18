@@ -12,12 +12,6 @@ mod emission;
 mod collectors;
 mod ram_layout;
 mod address_tracker;
-mod sections; // NEW: Section emission for linker object files
-pub mod call_graph;
-pub mod bank_optimizer;
-pub mod bank_wrappers;
-pub mod bank_call_analyzer;
-pub mod multi_bank_linker;
 
 // Re-export for backward compatibility
 pub use utils::*;
@@ -30,7 +24,6 @@ pub use emission::*;
 pub use collectors::*;
 pub use ram_layout::*;
 pub use address_tracker::*;
-pub use sections::*; // NEW: Export section helpers
 
 // Explicit imports for functions used in this module
 use emission::{emit_function, emit_builtin_helpers};
@@ -277,9 +270,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let start_address = u16::from_str_radix(ti.origin.trim_start_matches("0x").trim_start_matches("$"), 16)
         .unwrap_or(0xC800);
     let mut tracker = LineTracker::new(source_name.clone(), binary_name, start_address);
-
-    // Bank register address used by compiler and wrappers (safe, unused address)
-    let bank_register = 0xDF00; // Bank register at $DF00 (safe unmapped address, avoids conflicts with other bank switching code)
     
     // Initialize address tracker for ASM listing generation
     AddressTracker::init_global(start_address);
@@ -292,41 +282,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Collect const declarations (go to ROM only, NO RAM allocation or initialization)
     let const_vars = collect_const_vars(module);
     let const_vars_with_line = collect_const_vars_with_line(module); // WITH line numbers for PDB
-    
-    // Collect inline array literals from function bodies
-    let inline_arrays = collect_inline_array_literals(module);
-    
-    // Phase 3.8: Cross-bank call wrapper generation (TODO #8)
-    // Initialize wrapper generator if bank switching is enabled
-    let mut wrapper_generator = if !opts.function_bank_map.is_empty() {
-        eprintln!("   [Phase 3.8] Analyzing cross-bank calls...");
-        let rom_bank_count = opts.bank_config.as_ref().map(|bc| bc.rom_bank_count).unwrap_or(1);
-        let mut gen = bank_wrappers::BankWrapperGenerator::new(
-            opts.function_bank_map.clone(),
-            bank_register,
-            rom_bank_count
-        );
-        
-        // Register function line numbers for debugging (wrapper line markers)
-        for item in &module.items {
-            if let Item::Function(f) = item {
-                gen.register_function_line(&f.name, f.line);
-            }
-        }
-        
-        // Analyze AST to detect cross-bank calls
-        bank_call_analyzer::analyze_cross_bank_calls(module, &mut gen);
-        
-        // Print statistics
-        gen.print_statistics();
-        
-        // Initialize global generator for use during emission
-        bank_wrappers::init_global_generator(gen.clone());
-        
-        Some(gen)
-    } else {
-        None
-    };
     
     // Build set of const array names to exclude from RAM allocation
     let const_array_names: std::collections::HashSet<String> = const_vars
@@ -362,11 +317,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     
     // Poblar const_arrays map para indexación en tiempo de compilación
-    // Store variable name (uppercase) as value instead of index to avoid collisions
+    let mut const_array_index = 0;
     for (name, value) in &const_vars {
         if matches!(value, Expr::List(_)) {
-            // Map const array name to its uppercase version (used for label generation)
-            opts_with_consts.const_arrays.insert(name.clone(), name.to_uppercase());
+            opts_with_consts.const_arrays.insert(name.clone(), const_array_index);
+            const_array_index += 1;
         }
     }
     
@@ -388,21 +343,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     }
     
-    // Add inline array literals to opts
-    opts_with_consts.inline_arrays = inline_arrays;
-    
     let opts = &opts_with_consts; // Use the modified opts
     
-        let mut rt_usage = analyze_runtime_usage(module);
-    
-    // OPTIMIZATION (2026-01-14): In multibank mode, DRAW_LINE_WRAPPER is ALWAYS emitted
-    // (see emission.rs line 264: "opts.bank_config.is_some()")
-    // So VLINE_* variables MUST be allocated for multibank mode
-    // But DRAW_CIRCLE variables only if actually used
-    if opts.bank_config.is_some() {
-        rt_usage.needs_line_vars = true;  // DRAW_LINE_WRAPPER ALWAYS uses VLINE_* variables in multibank
-        // Note: rt_usage.uses_draw_circle is NOT forced - only allocate if actually used
-    }
+        let rt_usage = analyze_runtime_usage(module);
     
     // Locate required 'main' and 'loop' functions
     let mut user_main: Option<&Function> = None;
@@ -439,19 +382,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // Detect if any vector list already carries intensity commands; if so skip per-frame Intensity_5F
     // NOTE: previously used to skip per-frame Intensity_5F; currently unused. If reinstated, re-enable.
     // let vectorlists_have_intensity = module.items.iter().any(|it| matches!(it, Item::VectorList { .. }));
-    
-    // Sequential Bank Model (2025-01-02):
-    // - ALL banks use ORG $0000 (no special fixed bank at $4000)
-    // - Bank #0 starts at $0000 with header
-    // - Banks #1-#(N-2) overflow code, also at $0000
-    // - Bank #(N-1) contains helpers, also at $0000
-    let is_multibank = opts.bank_config.as_ref().map_or(false, |cfg| cfg.is_enabled());
-    
-    // Sequential Model: ALL code (header, START, MAIN, LOOP_BODY) goes to Bank #0 at $0000
-    // The linker multibank later redistributes into banks #0-#31 as needed
-    let origin_addr = 0x0000;
-    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=${:04X} ---\n", ti.name, opts.title, origin_addr));
-    out.push_str(&format!("        ORG ${:04X}\n", origin_addr));
+    // Origin is fixed at $0000 for Vectrex cartridge space. Using a configurable origin caused
+    // loader mismatches with the emulator; keep this constant and adjust the emulator loader base
+    // instead of relocating here.
+    out.push_str(&format!("; --- Motorola 6809 backend ({}) title='{}' origin=$0000 ---\n", ti.name, opts.title));
+    out.push_str("        ORG $0000\n");
     out.push_str(";***************************************************************************\n; DEFINE SECTION\n;***************************************************************************\n");
     // Classic include; no manual EQU needed.
     let include_path = calculate_include_path(opts);
@@ -460,11 +395,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // NOTE: BIOS symbols (Vec_Music_Flag, etc.) are defined in VECTREX.I
     // Do NOT duplicate them here to maintain lwasm compatibility
     
-    // HEADER SECTION - Always generate (single-bank and multi-bank)
-    // In multi-bank mode, linker will extract and place in Bank #0
     out.push_str(";***************************************************************************\n; HEADER SECTION\n;***************************************************************************\n");
-    // Emit section marker for header (if linker mode enabled)
-    emit_header_section(&mut out, opts);
     // Header (emulator-compatible variant):
     //  - 'g GCE 1998' + $80 (year per reference example)
     //  - music pointer (word) (set 0 if no custom music)
@@ -496,6 +427,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if title.is_empty() { title.push(' '); }
     out.push_str(&format!("    FCC \"{}\"\n", title));
     out.push_str("    FCB $80\n    FCB 0\n\n");
+    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
     
     // Check for music/sfx assets (needed for RAM allocation)
     let has_music_assets = opts.assets.iter().any(|a| {
@@ -505,25 +437,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
     
-    // NOTE: music1 is defined in VECTREX.I ($FD0D) - assembler loads it automatically
-    // No need to generate placeholder - FDB music1 resolves to BIOS symbol
-    
-    out.push_str(";***************************************************************************\n; CODE SECTION\n;***************************************************************************\n");
-    
     // Calculate max args needed (for VAR_ARG* allocation)
     let max_args = compute_max_args_used(module);
     
     // ========================================================================
     // AUTOMATIC RAM LAYOUT - Calculates all offsets automatically
     // No more hardcoded offsets, no collisions, always compact
-    // If multibank: reserve first byte (0xC880) for CURRENT_ROM_BANK
     // ========================================================================
-    // is_multibank already defined earlier for ORG calculation
-    let mut ram = if is_multibank {
-        RamLayout::new_with_reserved_first_byte(0xC880) // Skip first byte for CURRENT_ROM_BANK
-    } else {
-        RamLayout::new(0xC880) // Standard Vectrex RAM start
-    };
+    let mut ram = RamLayout::new(0xC880);
     
     // 1. RESULT (always needed)
     ram.allocate("RESULT", 2, "Main result temporary");
@@ -654,10 +575,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     
     // 10. DRAW_LINE variables (only if DRAW_LINE is used)
-    // CRITICAL: In multibank mode, these are NOT allocated in global RAM
-    // They are allocated in Bank #31 (fixed bank) separately
-    // In singlebank mode, allocate them in global RAM
-    if rt_usage.needs_line_vars && opts.function_bank_map.is_empty() {
+    if rt_usage.needs_line_vars {
         ram.allocate("VLINE_DX_16", 2, "x1-x0 (16-bit) for line drawing");
         ram.allocate("VLINE_DY_16", 2, "y1-y0 (16-bit) for line drawing");
         ram.allocate("VLINE_DX", 1, "Clamped dx (8-bit)");
@@ -683,15 +601,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     }
     if opts.fast_wait {
         ram.allocate("FAST_WAIT_HIT", 1, "Fast wait recalibration flag");
-    }
-
-    // 12.1 Bank switching runtime tracking (current bank in RAM)
-    // CRITICAL: Must use fixed address because multi-bank linker compiles each bank separately
-    // and they ALL need to reference the SAME RAM address. Dynamic allocation would give
-    // different addresses per bank.
-    // Using 0xC880 (FIRST byte of RAM) - allocator skips this byte in multibank mode.
-    if is_multibank {
-        ram.allocate_fixed("CURRENT_ROM_BANK", 0xC880, 1, "Current ROM bank tracker (1 byte, FIXED at first RAM byte)");
     }
     
     // 13. VL_: Vector list variables for DRAW_VECTOR_LIST (Malban algorithm)
@@ -734,19 +643,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     out.push_str("\n; === RAM VARIABLE DEFINITIONS (EQU) ===\n");
     out.push_str("; AUTO-GENERATED - All offsets calculated automatically\n");
     out.push_str(&format!("; Total RAM used: {} bytes\n", ram.total_size()));
-    let ram_definitions = ram.emit_equ_definitions(); // Store for reuse in bank_31
-    out.push_str(&ram_definitions);
-    
-    // Export ALL RAM variables to debug_info for .pdb generation
-    // This includes CURRENT_ROM_BANK, VAR_*, runtime helpers, etc.
-    for (name, offset) in ram.iter_variables() {
-        let address = ram.base_address() + (*offset as u16);
-        debug_info.add_symbol(name.to_string(), address);
-    }
-    // Also export fixed-address variables (like CURRENT_ROM_BANK)
-    for (name, address) in ram.iter_fixed_variables() {
-        debug_info.add_symbol(name.to_string(), *address);
-    }
+    out.push_str(&ram.emit_equ_definitions());
     
     // DP-relative offsets for PSG (lwasm compatibility)
     if has_music_assets {
@@ -801,9 +698,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if main_has_content {
         // main() has real content - use START structure
-        // Sequential Bank Model: START label immediately follows header
-        // No JMP needed - execution flows naturally from ORG $0000 to START
-        out.push_str("\n");
+        out.push_str("    JMP START\n\n");
         
         // ✅ Emit line markers for const NUMBER declarations (not arrays)
         // These are inlined in expressions, so we need to record them for PDB coverage
@@ -822,34 +717,17 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
         out.push_str("\n");
         
-        // Emit section marker for main initialization code
-        // NOTE: Builtin helpers now emitted AFTER user code for cleaner organization
-        emit_main_section(&mut out, opts);
+        // Emit builtin helpers BEFORE program code (fixes forward reference issues)
+        if !suppress_runtime {
+            emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
+        }
         
-        // ===================================================================
-        // PROGRAM CODE SECTION - User code and initialization
-        // ===================================================================
-        out.push_str(";\n");
-        out.push_str("; ┌─────────────────────────────────────────────────────────────────┐\n");
-        out.push_str("; │ PROGRAM CODE SECTION - User VPy Code                            │\n");
-        out.push_str("; │ This section contains the compiled user program logic.          │\n");
-        out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
-        out.push_str(";\n\n");
-        
-        // Always go directly to START (no CUSTOM_RESET wrapper)
-        // Multibank: CUSTOM_RESET will be emitted in Bank #31 by linker for bank switching
-        
-        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDS #$CBFF       ; Initialize stack at top of RAM (safer than Vec_Default_Stk)\n");
-        
-        // Multibank: Bank #31 is FIXED at $4000-$7FFF (always visible, never switchable)
-        // Bank #0 (current) is at $0000-$3FFF
-        // No bank switching needed at startup - Bank #31 is already there
-        // Just jump to MAIN which resides in fixed Bank #31
+        out.push_str("START:\n    LDA #$D0\n    TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)\n    CLR $C80E        ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    LDA #$80\n    STA VIA_t1_cnt_lo\n    LDX #Vec_Default_Stk\n    TFR X,S\n");
         
         // Check if code actually uses music/sfx (unused assets in assets/ folder should not trigger audio system)
         let has_music_calls = rt_usage.wrappers_used.contains("PLAY_MUSIC_RUNTIME");
         let has_sfx_calls = rt_usage.wrappers_used.contains("PLAY_SFX_RUNTIME");
-        let _has_audio_calls = has_music_calls || has_sfx_calls;
+        let has_audio_calls = has_music_calls || has_sfx_calls;
         
         // BIOS music system: Initialize music buffer to silence
         if has_music_calls {
@@ -891,7 +769,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             
             // Initialize global variables with their initial values (ONCE at startup)
             // Use global_vars_with_line to emit line markers for PDB coverage
-            let mut _array_counter = 0;
+            let mut array_counter = 0;
             for (name, value, source_line) in &global_vars_with_line {
                 // Skip const arrays (they're already in ROM)
                 if const_array_names.contains(name) {
@@ -903,20 +781,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 out.push_str(&format!("    ; VPy_LINE:{}\n", source_line));
                 
                 if let Expr::List(elements) = value {
-                    // Mutable array: copy from ROM (ARRAY_VARNAME) to RAM (VAR_NAME_DATA)
-                    // Use variable name instead of counter to avoid collisions in multi-module builds
-                    let array_label = format!("ARRAY_{}", name.to_uppercase());
+                    // Mutable array: copy from ROM (ARRAY_N) to RAM (VAR_NAME_DATA)
+                    let array_label = format!("ARRAY_{}", array_counter);
                     let array_len = elements.len();
                     out.push_str(&format!("    ; Copy array '{}' from ROM to RAM ({} elements)\n", name, array_len));
                     out.push_str(&format!("    LDX #{}       ; Source: ROM array data\n", array_label));
                     out.push_str(&format!("    LDU #VAR_{}_DATA ; Dest: RAM array space\n", name.to_uppercase()));
                     out.push_str(&format!("    LDD #{}        ; Number of elements\n", array_len));
-                    out.push_str(&format!("COPY_LOOP_{}:\n", name.to_uppercase()));
+                    out.push_str(&format!("COPY_LOOP_{}:\n", array_counter));
                     out.push_str("    LDY ,X++        ; Load word from ROM, increment source\n");
                     out.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
                     out.push_str("    SUBD #1         ; Decrement counter\n");
-                    out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", name.to_uppercase()));
-                    _array_counter += 1;
+                    out.push_str(&format!("    BNE COPY_LOOP_{} ; Loop until done\n", array_counter));
+                    array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     // Emit numbers as decimal (assembler interprets negatives as signed)
                     out.push_str(&format!("    LDD #{}\n", n));
@@ -933,13 +810,13 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     }
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { func_name: None, locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
             
             if let Some(main_func) = user_main {
-                let fctx = FuncCtx { func_name: Some("main".to_string()), locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() };
+                let fctx = FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() };
                 for stmt in &main_func.body {
                     emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
                 }
@@ -982,6 +859,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         // Use global_vars_with_line to emit line markers for PDB coverage
         if !main_has_content && !global_vars_with_line.is_empty() {
             out.push_str("    ; Initialize global variables (excluding const arrays)\n");
+            let mut array_counter = 0;
             for (name, value, source_line) in &global_vars_with_line {
                 // Skip const arrays (they're already in ROM)
                 if const_array_names.contains(name) {
@@ -994,15 +872,16 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 
                 if let Expr::List(_elements) = value {
                     // Array literal: load address of pre-generated array data
-                    let array_label = format!("ARRAY_{}", name.to_uppercase());
+                    let array_label = format!("ARRAY_{}", array_counter);
                     out.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
                     out.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                    array_counter += 1;
                 } else if let Expr::Number(n) = value {
                     out.push_str(&format!("    LDD #{}\n", n));
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 } else {
                     // For non-constant initial values, evaluate the expression
-                    emit_expr(value, &mut out, &FuncCtx { func_name: None, locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
+                    emit_expr(value, &mut out, &FuncCtx { locals: Vec::new(), frame_size: 0, var_info: std::collections::HashMap::new(), struct_type: None, params: Vec::new() }, &string_map, opts);
                     out.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
                 }
             }
@@ -1018,255 +897,14 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     } else {
         out.push_str("; Init without implicit loop (auto_loop disabled)\n");
     let intensity_init: String = if do_blink { "    JSR VECTREX_BLINK_INT\n".into() } else { format!("    JSR {}Intensity_5F\n", jsr_ext) };
-    out.push_str(&format!("ENTRY_START: LDS #$CBFF ; Initialize stack at top of RAM\n    CLR $C80E ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
+    out.push_str(&format!("ENTRY_START: LDS #Vec_Default_Stk ; set default stack like BIOS examples\n    CLR $C80E ; Initialize Vec_Prev_Btns to 0 for Read_Btns debounce\n    JSR {}Wait_Recal\n{}    JSR MAIN ; user initialization\n    JSR LOOP ; user loop\nHANG: BRA HANG\n\n", jsr_ext, intensity_init));
     }
     // Emit all functions so code exists (MAIN label will resolve).
     let mut global_mutables: Vec<(String,i32)> = Vec::new();
     use std::collections::BTreeSet;
     let mut emitted_consts: BTreeSet<String> = BTreeSet::new();
-    
-    // Track if we already emitted the CUSTOM_RESET handler (only once in fixed bank)
-    let mut custom_reset_emitted = false;
-    // Track if helpers/runtime have been emitted in multibank mode
-    let mut helpers_emitted = false;
-
-    // Group functions by bank if bank switching is enabled
-    if !opts.function_bank_map.is_empty() {
-        use std::collections::HashMap;
-        let mut functions_by_bank: HashMap<u8, Vec<&Function>> = HashMap::new();
-        
-        // Group all functions by their assigned bank (including main/loop for helpers bank)
-        let helpers_bank = opts.bank_config.as_ref().map(|cfg| cfg.helpers_bank).unwrap_or(0);
-        for item in &module.items {
-            if let Item::Function(f) = item {
-                // Get bank assignment (main/loop will be in helpers bank, others as assigned)
-                let bank = opts.function_bank_map.get(&f.name).copied().unwrap_or(helpers_bank);
-                functions_by_bank.entry(bank).or_insert_with(Vec::new).push(f);
-            }
-        }
-        
-        // Sort banks for consistent output (helpers bank LAST, then others ascending)
-        let mut sorted_banks: Vec<u8> = functions_by_bank.keys().copied().collect();
-        sorted_banks.sort_by(|a, b| {
-            // Helpers bank should be emitted last so following data lives in fixed bank
-            if *a == helpers_bank { std::cmp::Ordering::Greater }
-            else if *b == helpers_bank { std::cmp::Ordering::Less }
-            else { a.cmp(b) }
-        });
-        
-        // Emit each bank section
-        let num_banks = sorted_banks.len();
-        for bank_id in sorted_banks {
-            let functions = functions_by_bank.get(&bank_id).unwrap();
-            
-            // ALWAYS emit bank markers (even for single bank) so linker can split correctly
-            // Bank markers are required for multi_bank_linker::split_asm_by_bank to detect bank sections
-            out.push_str(&format!("\n; ================================================\n"));
-            out.push_str(&format!("; BANK #{} - {} function(s)\n", bank_id, functions.len()));
-            out.push_str(&format!("; ================================================\n"));
-            
-            // Sequential Bank Model: ALL banks use ORG $0000
-            // - Bank #0: Code starts at $0000 (header + main)
-            // - Banks #1-#(N-2): Overflow code at $0000
-            // - Bank #(N-1): Helpers at $0000
-            // EXCEPTION: Bank #0 already has ORG in the header section (FCC/FCB)
-            // so skip emitting ORG again to avoid resetting PC
-            if bank_id != 0 {
-                out.push_str(&format!("    ORG $0000  ; Sequential bank model\n\n"));
-            }
-            
-            // Emit functions in this bank (with special handling for main/loop in auto_loop mode)
-            for f in functions {
-                if opts.auto_loop && f.name == "main" {
-                    // Skip main - it's inlined in START label
-                    continue;
-                } else if opts.auto_loop && f.name == "loop" {
-                    // Emit loop as LOOP_BODY with auto-injections
-                    tracker.set_line(f.line);
-                    out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
-                    
-                    // Emit section marker for loop code
-                    emit_loop_section(&mut out, opts);
-                    
-                    out.push_str("LOOP_BODY:\n");
-                    
-                    // Collect locals and allocate stack frame
-                    let locals = collect_locals(&f.body, &global_names);
-                    let var_info = analyze_var_types(&f.body, &locals, &opts.structs);
-                    
-                    let mut frame_size = 0;
-                    for var_name in &locals {
-                        let size = var_info.get(var_name)
-                            .map(|(_, s)| *s as i32)
-                            .unwrap_or(2);
-                        frame_size += size;
-                    }
-                    
-                    if frame_size > 0 {
-                        out.push_str(&format!("    LEAS -{},S ; allocate locals\n", frame_size));
-                    }
-                    
-                    // Auto-inject WAIT_RECAL, Reset0Ref, UPDATE_BUTTONS
-                    out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
-                    out.push_str("    JSR Reset0Ref   ; CRITICAL: Center beam at (0,0) before drawing\n");
-                    out.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
-                    out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
-                    out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
-
-                    let fctx = FuncCtx { func_name: Some("loop".to_string()), locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
-                    for stmt in &f.body {
-                        emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
-                    }
-                    
-                    // Auto-inject AUDIO_UPDATE at END
-                    if opts.has_audio(module) {
-                        out.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)\n");
-                    }
-                    
-                    // Free locals before RTS
-                    if frame_size > 0 {
-                        out.push_str(&format!("    LEAS {},S ; free locals\n", frame_size));
-                    }
-                    out.push_str("    RTS\n\n");
-                } else {
-                    // Normal function
-                    emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
-                }
-            }
-
-            // If this is the helpers bank, emit cross-bank wrappers here so they execute from non-switchable ROM
-            if bank_id == helpers_bank {
-                // Emit custom reset handler once (even if bank 31 already has functions)
-                if !custom_reset_emitted {
-                    out.push_str("CUSTOM_RESET:\n");
-                    out.push_str("    LDA #0\n");
-                    out.push_str("    STA $DF00           ; Switch hardware bank to #0 (cart register)\n");
-                    out.push_str("    STA >CURRENT_ROM_BANK ; Keep RAM tracker in sync\n");
-                    out.push_str("    JMP START           ; Jump to program entry in Bank #0\n\n");
-                    custom_reset_emitted = true;
-                }
-
-                // Emit helpers/runtime directly when helpers bank already exists
-                if !helpers_emitted {
-                    emit_helpers_section(&mut out, opts);
-
-                    if rt_usage.needs_line_vars {
-                        out.push_str("; DRAW_LINE_WRAPPER variables (allocated in fixed bank #31)\n");
-                        out.push_str("VLINE_DX_16          EQU $C880+$1A   ; x1-x0 (16-bit) for line drawing (2 bytes)\n");
-                        out.push_str("VLINE_DY_16          EQU $C880+$1C   ; y1-y0 (16-bit) for line drawing (2 bytes)\n");
-                        out.push_str("VLINE_DX             EQU $C880+$1E   ; Clamped dx (8-bit) (1 bytes)\n");
-                        out.push_str("VLINE_DY             EQU $C880+$1F   ; Clamped dy (8-bit) (1 bytes)\n");
-                        out.push_str("VLINE_DY_REMAINING   EQU $C880+$20   ; Remaining dy for segment 2 (16-bit) (2 bytes)\n");
-                        out.push_str("VLINE_DX_REMAINING   EQU $C880+$22   ; Remaining dx for segment 2 (16-bit) (2 bytes)\n");
-                        out.push_str("VLINE_STEPS          EQU $C880+$24   ; Line drawing step counter (1 bytes)\n");
-                        out.push_str("VLINE_LIST           EQU $C880+$25   ; 2-byte vector list (Y|endbit, X) (2 bytes)\n");
-                        out.push_str("\n");
-                    }
-
-                    if !suppress_runtime {
-                        if !opts.skip_builtins {
-                            emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
-                        }
-                        if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
-                        if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-                    }
-
-                    helpers_emitted = true;
-                }
-
-                if let Some(ref mut generator) = wrapper_generator {
-                    let wrappers = generator.generate_all_wrappers();
-                    if !wrappers.is_empty() {
-                        out.push_str(&wrappers);
-                    }
-                }
-            }
-        }
-        
-        // CRITICAL FIX (2026-01-14): Emit empty bank placeholders for multibank splitting
-        // split_asm_by_bank() requires ALL banks to be marked (even if empty)
-        // otherwise it only detects banks that have functions and fails to split correctly
-        // Emit if we have multibank (ROM size configured via META)
-        let has_multibank = opts.bank_config.is_some();
-        if has_multibank {
-            let max_bank_id = helpers_bank;
-            for bank_id in 0..=max_bank_id {
-                // Skip banks that were already emitted above
-                if functions_by_bank.contains_key(&bank_id) || bank_id == helpers_bank {
-                    continue;  // Will be handled below
-                }
-                // Emit placeholder for empty bank
-                out.push_str(&format!("\n; ================================================\n"));
-                out.push_str(&format!("; BANK #{} - 0 function(s) [EMPTY]\n", bank_id));
-                out.push_str(&format!("; ================================================\n"));
-                out.push_str(&format!("    ORG $0000\n\n"));
-            }
-        }
-        
-        // CRITICAL FIX (2026-01-14): Force Bank #31 generation if multibank AND no VPy functions assigned to it
-        // Bank #31 must exist for runtime helpers (DRAW_LINE_WRAPPER, MUL16, etc.) and interrupt vectors
-        // Detect multibank by checking if there are multiple banks OR if ROM size is set
-        let is_multibank = opts.bank_config.is_some();
-        if is_multibank && !helpers_emitted {
-            // CRITICAL: Emit Bank #31 marker in the EXACT format split_asm_by_bank() expects
-            // Format: "; BANK #N - M function(s)" (no ===== - that's added by linker)
-            out.push_str(&format!("; BANK #{} - 0 function(s) [HELPERS ONLY]\n", helpers_bank));
-            
-            // NOTE: CUSTOM_RESET code was previously here, but it's never executed:
-            // - BIOS always jumps to $0000 (Bank #0)
-            // - Bank #31 is at $4000 (fixed window)
-            // - BIOS never uses RESET vector ($FFFE)
-            // Solution: Bank switching now handled in Bank #0 START label (see mod.rs line ~420)
-            // Bank #0 code switches to Bank #31 AFTER header verification by BIOS
-            
-            // No code emitted here - bank switching is handled in Bank #0
-            
-            // NO RE-EMIT RAM DEFINITIONS - they were already emitted at line 727
-            // RAM definitions (EQU) must appear ONCE in the ASM before any code uses them
-            // Emitting them again here causes duplicates and misaligns the bank assembly
-            
-            // Emit runtime helpers in fixed bank (always visible, not switchable)
-            emit_helpers_section(&mut out, opts);
-            
-            // Emit DRAW_LINE variables in Bank #31 (only in multibank mode)
-            // These are NOT in global RAM; they're allocated in the fixed bank where DRAW_LINE_WRAPPER lives
-            if rt_usage.needs_line_vars {
-                out.push_str("; DRAW_LINE_WRAPPER variables (allocated in fixed bank #31)\n");
-                out.push_str("VLINE_DX_16          EQU $C880+$1A   ; x1-x0 (16-bit) for line drawing (2 bytes)\n");
-                out.push_str("VLINE_DY_16          EQU $C880+$1C   ; y1-y0 (16-bit) for line drawing (2 bytes)\n");
-                out.push_str("VLINE_DX             EQU $C880+$1E   ; Clamped dx (8-bit) (1 bytes)\n");
-                out.push_str("VLINE_DY             EQU $C880+$1F   ; Clamped dy (8-bit) (1 bytes)\n");
-                out.push_str("VLINE_DY_REMAINING   EQU $C880+$20   ; Remaining dy for segment 2 (16-bit) (2 bytes)\n");
-                out.push_str("VLINE_DX_REMAINING   EQU $C880+$22   ; Remaining dx for segment 2 (16-bit) (2 bytes)\n");
-                out.push_str("VLINE_STEPS          EQU $C880+$24   ; Line drawing step counter (1 bytes)\n");
-                out.push_str("VLINE_LIST           EQU $C880+$25   ; 2-byte vector list (Y|endbit, X) (2 bytes)\n");
-                out.push_str("\n");
-            }
-            
-            if !suppress_runtime {
-                if !opts.skip_builtins {
-                    emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
-                }
-                if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
-                if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-            }
-            
-            // Emit cross-bank wrappers if needed
-            if let Some(ref mut generator) = wrapper_generator {
-                let wrappers = generator.generate_all_wrappers();
-                if !wrappers.is_empty() {
-                    out.push_str(&wrappers);
-                }
-            }
-
-            helpers_emitted = true;
-        }
-    }
-    
-    // Emit main/loop and other items (VectorList, Const, GlobalLet) only if NO bank switching
-    if opts.function_bank_map.is_empty() {
-        for item in &module.items {
-            match item {
+    for item in &module.items {
+        match item {
             Item::Function(f) => {
                 if opts.auto_loop && f.name == "main" {
                     // Skip main function in auto_loop mode - it's inlined in START/MAIN
@@ -1275,9 +913,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     // ✅ CRITICAL: Record the loop() definition line in .pdb
                     tracker.set_line(f.line);
                     out.push_str(&format!("    ; VPy_LINE:{}\n", f.line));
-                    
-                    // Emit section marker for loop code
-                    emit_loop_section(&mut out, opts);
                     
                     // Emit loop function as LOOP_BODY subroutine to avoid code duplication
                     out.push_str("LOOP_BODY:\n");
@@ -1303,7 +938,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     
                     // Auto-inject WAIT_RECAL at START of every frame (MANDATORY for Vectrex synchronization)
                     out.push_str("    JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)\n");
-                    out.push_str("    JSR Reset0Ref   ; CRITICAL: Center beam at (0,0) before drawing\n");
                     
                     // Auto-inject UPDATE_BUTTONS at START of loop (before user code)
                     // This calls Read_Btns once per frame, populating $C80F from PSG register 14
@@ -1312,7 +946,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     out.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
                     out.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
 
-                    let fctx = FuncCtx { func_name: Some("loop".to_string()), locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
+                    let fctx = FuncCtx { locals: locals.clone(), frame_size, var_info, struct_type: None, params: f.params.clone() };
                     for (i, stmt) in f.body.iter().enumerate() {
                         out.push_str(&format!("    ; DEBUG: Statement {} - {:?}\n", i, std::mem::discriminant(stmt)));
                         emit_stmt(stmt, &mut out, &LoopCtx::default(), &fctx, &string_map, opts, &mut tracker, 0);
@@ -1334,20 +968,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     emit_function(f, &mut out, &string_map, opts, &mut tracker, &global_names);
                 }
             }
-            _ => {
-                // Skip other items (VectorList, Const, etc.) - will be emitted later
-            }
-        }
-    }
-    }
-    
-    // Emit VectorList, Const, GlobalLet, StructDef ALWAYS (regardless of bank switching)
-    for item in &module.items {
-        match item {
-            Item::Function(_) => {
-                // Functions already emitted above
-            }
-            Item::VectorList { name, entries } => {
+                Item::VectorList { name, entries } => {
                     // Emit compact data-only vector list consumed by Run_VectorList.
                     // Format: count, then 'count' triples (y,x,cmd). For CMD_INT an extra intensity byte follows. Terminator triple CMD_END added automatically.
                     // Map: Move -> START, Rect -> START + 4 LINE, Polygon -> START + n LINE, Origin -> ZERO (Reset0Ref), Intensity -> INT (with mapped byte).
@@ -1541,28 +1162,11 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         let runtime_path = calculate_runtime_path(opts);
         out.push_str(&format!("    INCLUDE \"{}\"\n", runtime_path));
     }
-    
-    // Emit builtin helpers AFTER all user code (cleaner organization)
-    // CRITICAL FIX: Only emit helpers if NOT in multibank mode
-    // In multibank mode, helpers are already emitted at end of fixed bank (#31)
-    // Avoid emitting twice - once in fixed bank and once here
-    if opts.function_bank_map.is_empty() {
-        // Emit section marker for helper functions
-        emit_helpers_section(&mut out, opts);
-        
-        if !suppress_runtime {
-            // Emit builtin helpers AFTER user code but before DATA section
-            if !opts.skip_builtins {
-                emit_builtin_helpers(&mut out, &rt_usage, opts, module, &mut debug_info);
-            }
-            
-            if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
-            if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
-        }
+    if !suppress_runtime {
+        if rt_usage.needs_mul_helper { emit_mul_helper(&mut out); }
+        if rt_usage.needs_div_helper { emit_div_helper(&mut out); }
+        // NOTE: emit_builtin_helpers moved BEFORE program code (line ~268) to fix forward references
     }
-    
-    // Phase 3.8: Cross-bank wrappers are emitted inside fixed bank section above
-    
     out.push_str(";***************************************************************************\n; DATA SECTION\n;***************************************************************************\n");
     
     // Re-evaluate suppress_runtime now that we know max_args (calculated earlier)
@@ -1577,20 +1181,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     if suppress_runtime { /* skip RAM ORG and temp vars entirely */ }
     else if !opts.exclude_ram_org {
         out.push_str("    ORG $C880 ; begin runtime variables in RAM\n");
-        
-        // Emit section marker for RAM variables
-        emit_bss_section(&mut out, opts);
-        
-        // ===================================================================
-        // DATA SECTION - Variables, Arrays, Constants
-        // ===================================================================
-        out.push_str(";\n");
-        out.push_str("; ┌─────────────────────────────────────────────────────────────────┐\n");
-        out.push_str("; │ DATA SECTION - RAM Variables & ROM Constants                    │\n");
-        out.push_str("; │ This section defines all variables, arrays, and const data.     │\n");
-        out.push_str("; └─────────────────────────────────────────────────────────────────┘\n");
-        out.push_str(";\n\n");
-        
         out.push_str("; Variables (in RAM)\n");
         out.push_str(&ram.emit_storage_allocations());
     }
@@ -1687,10 +1277,10 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // ✅ ARRAY LITERAL DATA SECTION
     // Collect all array literals from NON-CONST global variables and generate data
     // (Const arrays are emitted separately in CONST ARRAY DATA SECTION)
-    // Use variable names instead of counters to avoid label collisions in multi-module builds
+    let mut array_counter = 0;
     for (name, value) in &non_const_vars {
         if let Expr::List(elements) = value {
-            let array_label = format!("ARRAY_{}", name.to_uppercase());
+            let array_label = format!("ARRAY_{}", array_counter);
             out.push_str(&format!("; Array literal for variable '{}' ({} elements)\n", name, elements.len()));
             out.push_str(&format!("{}:\n", array_label));
             for (i, elem) in elements.iter().enumerate() {
@@ -1701,27 +1291,8 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 }
             }
             out.push_str("\n");
+            array_counter += 1;
         }
-    }
-    
-    // ✅ INLINE ARRAY LITERAL DATA SECTION
-    // Emit array literals from function bodies (collected during pre-pass)
-    out.push_str("; === INLINE ARRAY LITERALS (from function bodies) ===\n");
-    for (label, elements) in &opts.inline_arrays {
-        out.push_str(&format!("; Inline array '{}' ({} elements)\n", label, elements.len()));
-        out.push_str(&format!("{}:\n", label));
-        for (i, elem) in elements.iter().enumerate() {
-            if let Expr::Number(n) = elem {
-                out.push_str(&format!("    FDB {}   ; Element {}\n", n, i));
-            } else if let Expr::Ident(id) = elem {
-                // Variable reference - emit as variable name
-                out.push_str(&format!("    FDB VAR_{}   ; Element {} (variable '{}')\n", id.name.to_uppercase(), i, id.name));
-            } else {
-                // Non-constant - emit as 0 (will be initialized at runtime if needed)
-                out.push_str(&format!("    FDB 0    ; Element {} (non-constant)\n", i));
-            }
-        }
-        out.push_str("\n");
     }
     
     // ✅ CONST ARRAY DATA SECTION
@@ -1755,7 +1326,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         }
     };
     
-    // Use variable names instead of counters to avoid label collisions in multi-module builds
+    let mut const_array_counter = 0;
     for (name, value, source_line) in &const_vars_with_line {
         if let Expr::List(elements) = value {
             // ✅ Register const array definition line in .pdb
@@ -1767,7 +1338,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             
             if is_string_array {
                 // String array: emit strings first, then pointer table
-                let const_array_label = format!("CONST_ARRAY_{}", name.to_uppercase());
+                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
                 out.push_str(&format!("; Const string array for '{}' ({} strings)\n", name, elements.len()));
                 
                 // Emit individual strings
@@ -1790,7 +1361,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 out.push_str("\n");
             } else {
                 // Number array (original code)
-                let const_array_label = format!("CONST_ARRAY_{}", name.to_uppercase());
+                let const_array_label = format!("CONST_ARRAY_{}", const_array_counter);
                 out.push_str(&format!("; Const array literal for '{}' ({} elements)\n", name, elements.len()));
                 out.push_str(&format!("{}:\n", const_array_label));
                 for (i, elem) in elements.iter().enumerate() {
@@ -1799,6 +1370,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                 }
                 out.push_str("\n");
             }
+            const_array_counter += 1;
         }
     }
     
@@ -1810,9 +1382,6 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     
     if !suppress_runtime && !filtered_strings.is_empty() { out.push_str("; String literals (classic FCC + $80 terminator)\n"); }
     if !filtered_strings.is_empty() {
-        // Emit section marker for read-only data (strings)
-        emit_rodata_section(&mut out, opts);
-        
         if filtered_strings.len()==1 {
             let (lit,_label) = filtered_strings[0];
             out.push_str("STR_0:\n");
@@ -1861,26 +1430,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     // debug_info.line_map = parse_vpy_line_markers(&out, start_address);
     debug_info.line_map.clear(); // Ensure empty - main.rs will populate with real addresses
     
-    // Cleanup: Clear global wrapper generator
-    bank_wrappers::clear_global_generator();
-    
-    // ===== INTERRUPT VECTORS TABLE =====
-    // Generate ONLY the RESET vector in single-bank mode
-    // CRITICAL: Other interrupt vectors ($FFF0-$FFFC) are provided by BIOS ROM (fixed bank)
-    // Multibank: All vectors handled by linker as part of Bank #31
-    // Single-bank: Only need RESET vector at $FFFE (entry point)
-    if !is_multibank {
-        out.push_str("\n; === RESET Vector (Entry Point) ===\n");
-        out.push_str("; Other vectors ($FFF0-$FFFC) provided by BIOS ROM\n");
-        out.push_str("    ORG $FFFE\n");
-        out.push_str("    FDB START           ; RESET vector (entry point)\n");
-    } else {
-        out.push_str("\n; === Multibank Mode: Interrupt Vectors in Bank #31 (Linker) ===\n");
-        out.push_str("; All vectors handled by multi_bank_linker\n");
-        out.push_str("; Bank #0-#30: Local 0xFFF0-0xFFFF addresses are unreachable\n");
-        out.push_str("; Bank #31: Contains complete interrupt vector table (fixed at 0x4000-0x7FFF window)\n");
-    }
-    
+    // NOTE: No cartridge vector table emitted (raw snippet). Emulator that needs full 32K must wrap externally.
     (out, debug_info)
 }
 // collect_stmt_syms: process statement symbols.

@@ -6,22 +6,6 @@ use std::path::PathBuf;
 use std::fs;
 use crate::backend::m6809_binary_emitter::BinaryEmitter;
 
-/// Reference type for unresolved symbols in object mode
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RefType {
-    Absolute16,  // JSR, LDD #, LDX # - 2-byte absolute address
-    Relative8,   // BRA, BEQ, BNE - 1-byte signed offset
-    Relative16,  // LBRA, LBEQ - 2-byte signed offset
-}
-
-/// Unresolved symbol reference (for object mode)
-#[derive(Debug, Clone)]
-pub struct UnresolvedRef {
-    pub symbol: String,
-    pub offset: usize,      // Byte offset in assembled output
-    pub ref_type: RefType,  // Type of reference
-}
-
 // Global variable to store include directory (set before assembly)
 static mut INCLUDE_DIR: Option<PathBuf> = None;
 
@@ -32,30 +16,10 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
 }
 
 /// Convierte código M6809 assembly a formato binario
-/// 
-/// Arguments:
-/// - `asm_source`: ASM source code
-/// - `org`: Origin address
-/// - `object_mode`: If true, allows unresolved symbols and returns UnresolvedRef list
-///
-/// Returns:
-/// - bytes_binarios: Assembled binary
-/// - linea_vpy -> offset_binario: Line map
-/// - symbol_table: Defined symbols
-/// - unresolved_refs: Unresolved symbols (only in object_mode)
-pub fn assemble_m6809(
-    asm_source: &str, 
-    org: u16,
-    object_mode: bool,
-    use_long_branches: bool,
-) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>, Vec<UnresolvedRef>), String> {
+/// Retorna (bytes_binarios, linea_vpy -> offset_binario, symbol_table)
+pub fn assemble_m6809(asm_source: &str, org: u16) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>), String> {
     let mut emitter = BinaryEmitter::new(org);
     let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
-    let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Símbolos no resueltos (object mode)
-    
-    // Configure emitter for object mode and long branches
-    emitter.set_object_mode(object_mode);
-    emitter.set_long_branches(use_long_branches);
     
     // SIEMPRE cargar símbolos de Vectrex BIOS al inicio
     load_vectrex_symbols(&mut equates);
@@ -215,17 +179,12 @@ pub fn assemble_m6809(
     // Segunda pasada: resolver símbolos (incluyendo símbolos externos de BIOS)
     emitter.resolve_symbols_with_equates(&equates)?;
     
-    // En object mode, extraer referencias no resueltas del emitter
-    if object_mode {
-        unresolved_refs = emitter.take_unresolved_refs();
-    }
-    
     // Obtener mapeo y symbols ANTES de finalizar (finalize consume emitter)
     let line_map = emitter.get_line_to_offset_map().clone();
     let symbol_table = emitter.get_symbol_table().clone();
     let binary = emitter.finalize();
     
-    Ok((binary, line_map, symbol_table, unresolved_refs))
+    Ok((binary, line_map, symbol_table))
 }
 
 /// Extrae número de línea VPy desde comentario marcador
@@ -385,109 +344,89 @@ fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) 
 }
 
 /// Carga símbolos predefinidos de Vectrex (VECTREX.I + BIOS functions)
-pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
-    // Parse VECTREX.I file directly to get authoritative symbol definitions
-    // This ensures we always have the correct addresses from the source
+fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
+    // === SÍMBOLOS DE HARDWARE (VIA) ===
+    equates.insert("VEC_DEFAULT_STK".to_string(), 0xCBEA);
+    equates.insert("VIA_PORT_B".to_string(), 0xD000);
+    equates.insert("VIA_PORT_A".to_string(), 0xD001);
+    equates.insert("VIA_DDR_B".to_string(), 0xD002);
+    equates.insert("VIA_DDR_A".to_string(), 0xD003);
+    equates.insert("VIA_T1_CNT_LO".to_string(), 0xD004);
+    equates.insert("VIA_T1_CNT_HI".to_string(), 0xD005);
+    equates.insert("VIA_T1_LCH_LO".to_string(), 0xD006);
+    equates.insert("VIA_T1_LCH_HI".to_string(), 0xD007);
+    equates.insert("VIA_T2_LO".to_string(), 0xD008);
+    equates.insert("VIA_T2_HI".to_string(), 0xD009);
+    equates.insert("VIA_SHIFT_REG".to_string(), 0xD00A);
+    equates.insert("VIA_AUX_CNTL".to_string(), 0xD00B);
+    equates.insert("VIA_CNTL".to_string(), 0xD00C);
+    equates.insert("VIA_INT_FLAGS".to_string(), 0xD00D);
+    equates.insert("VIA_INT_ENABLE".to_string(), 0xD00E);
+    equates.insert("VIA_PORT_A_NH".to_string(), 0xD00F);
     
-    // Try multiple possible paths (handle different working directories)
-    let possible_paths = vec![
-        "ide/frontend/public/include/VECTREX.I",
-        "../ide/frontend/public/include/VECTREX.I",
-        "../../ide/frontend/public/include/VECTREX.I",
-        "./ide/frontend/public/include/VECTREX.I",
-    ];
-    
-    let mut found = false;
-    for path in &possible_paths {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            eprintln!("✓ Loaded BIOS symbols from VECTREX.I ({})", path);
-            parse_vectrex_symbols(&content, equates);
-            found = true;
-            break;
-        }
-    }
-    
-    if !found {
-        eprintln!("⚠ Warning: Could not load VECTREX.I from any expected path, using fallback hardcoded symbols");
-        // Fallback to hardcoded symbols if VECTREX.I is not found
-        load_vectrex_symbols_fallback(equates);
-    }
-}
-
-/// Parse EQU definitions from VECTREX.I content
-fn parse_vectrex_symbols(content: &str, equates: &mut HashMap<String, u16>) {
-    for line in content.lines() {
-        // Parse lines like: "Print_Str_d         EQU      $F37A"
-        // Format: SYMBOL_NAME [spaces] EQU [spaces] $HEXVALUE [optional comment]
-        let line = line.trim();
-        if line.is_empty() || line.starts_with(';') {
-            continue;
-        }
-        
-        // Split by EQU keyword
-        if let Some(equ_idx) = line.find("EQU") {
-            let (symbol_part, value_part) = line.split_at(equ_idx);
-            let symbol = symbol_part.trim();
-            
-            // Skip empty symbols and comments
-            if symbol.is_empty() || symbol.starts_with(';') || symbol.starts_with('*') {
-                continue;
-            }
-            
-            // Extract value part after "EQU"
-            let value_str = &value_part[3..]; // Skip "EQU"
-            
-            // Find the hex value: look for $ followed by hex digits
-            if let Some(dollar_idx) = value_str.find('$') {
-                let hex_part = &value_str[dollar_idx + 1..];
-                // Extract hex digits until non-hex character
-                let hex_str: String = hex_part
-                    .chars()
-                    .take_while(|c| c.is_ascii_hexdigit())
-                    .collect();
-                
-                if !hex_str.is_empty() {
-                    if let Ok(value) = u16::from_str_radix(&hex_str, 16) {
-                        // Store both uppercase and mixed-case variants
-                        equates.insert(symbol.to_uppercase(), value);
-                        equates.insert(symbol.to_string(), value);
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Fallback hardcoded symbols (only used if VECTREX.I cannot be loaded)
-fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
-    // These are the CORRECTED values from VECTREX.I
+    // === FUNCIONES DE BIOS (ROM 0xE000-0xFFFF) ===
+    // Funciones principales de vectores/líneas
     equates.insert("WAIT_RECAL".to_string(), 0xF192);
-    equates.insert("Wait_Recal".to_string(), 0xF192);
+    equates.insert("Wait_Recal".to_string(), 0xF192); // Mixed case variant
     equates.insert("MOVETO_D".to_string(), 0xF312);
-    equates.insert("Moveto_d".to_string(), 0xF312);
-    equates.insert("MOVETO_IX_FF".to_string(), 0xF308);
-    equates.insert("MOVETO_IX".to_string(), 0xF310);
-    equates.insert("MOVETO_D_7F".to_string(), 0xF2FC);
+    equates.insert("Moveto_d".to_string(), 0xF312); // Mixed case variant
+    equates.insert("MOVETO_IX_FF".to_string(), 0xF34C);
+    equates.insert("MOVETO_IX".to_string(), 0xF34F);
+    equates.insert("MOVETO_D_7F".to_string(), 0xF35F);
     equates.insert("ZERO_REF".to_string(), 0xF35B);
-    equates.insert("Zero_Ref".to_string(), 0xF35B);
+    equates.insert("Zero_Ref".to_string(), 0xF35B); // Mixed case variant
     equates.insert("DRAW_LINEC".to_string(), 0xF3DF);
-    equates.insert("DRAW_LINE_D".to_string(), 0xF3DF);
-    equates.insert("Draw_Line_d".to_string(), 0xF3DF);
-    equates.insert("DRAW_VLC".to_string(), 0xF3CE);
-    equates.insert("DRAW_VL_MODE".to_string(), 0xF46E);
-    equates.insert("DRAW_VL_A".to_string(), 0xF3DA);
-    equates.insert("DRAW_VL_B".to_string(), 0xF3D8);
-    equates.insert("DRAW_VL".to_string(), 0xF3DD);
-    equates.insert("PRINT_STR_D".to_string(), 0xF37A);
-    equates.insert("PRINT_STR".to_string(), 0xF495);
-    equates.insert("PRINT_LIST".to_string(), 0xF38A);
-    equates.insert("PRINT_SHIPS".to_string(), 0xF393);
+    equates.insert("DRAW_LINE_D".to_string(), 0xF3DD);
+    equates.insert("Draw_Line_d".to_string(), 0xF3DD); // Mixed case variant
+    equates.insert("DRAW_VLC".to_string(), 0xF408);
+    equates.insert("DRAW_VL_MODE".to_string(), 0xF40C);
+    equates.insert("DRAW_VL_A".to_string(), 0xF40E);
+    equates.insert("DRAW_VL_B".to_string(), 0xF410);
+    equates.insert("DRAW_VL".to_string(), 0xF413);
+    
+    // Funciones de texto
+    equates.insert("PRINT_STR_D".to_string(), 0xF373);
+    equates.insert("PRINT_STR".to_string(), 0xF37A);
+    equates.insert("PRINT_LIST".to_string(), 0xF385);
+    equates.insert("PRINT_SHIPS".to_string(), 0xF391);
+    equates.insert("PRINT_SHIP".to_string(), 0xF393);
+    
+    // Funciones de audio
     equates.insert("DO_SOUND".to_string(), 0xF289);
     equates.insert("INIT_MUSIC".to_string(), 0xF533);
+    equates.insert("INIT_MUSIC_CHK".to_string(), 0xF533);
+    
+    // Inicialización
+    equates.insert("INIT_VIA".to_string(), 0xF14C);
     equates.insert("INIT_OS".to_string(), 0xF18B);
+    equates.insert("INIT_OS_RAM".to_string(), 0xF164);
+    equates.insert("DP_TO_C8".to_string(), 0xF1AA);
     equates.insert("INTENSITY_A".to_string(), 0xF2AB);
-    equates.insert("Intensity_a".to_string(), 0xF2AB);
+    equates.insert("Intensity_a".to_string(), 0xF2AB); // Mixed case variant
+    equates.insert("INTENSITY_5F".to_string(), 0xF2A9);
+    
+    // Joystick y controles
+    equates.insert("JOY_DIGITAL".to_string(), 0xF1F5);
+    equates.insert("JOY_ANALOG".to_string(), 0xF1F8);
     equates.insert("READ_BTNS".to_string(), 0xF1BA);
+    
+    // Random y utilidades
+    equates.insert("RANDOM".to_string(), 0xF517);
+    equates.insert("RANDOM_3".to_string(), 0xF511);
+    
+    // Explosiones y efectos
+    equates.insert("EXPLOSION".to_string(), 0xF976);
+    equates.insert("EXPLOSION_SND".to_string(), 0xF92E);
+    
+    // Variantes de nombres comunes (lowercase/mixed case)
+    equates.insert("VIA_T1_CNT_LO".to_string(), 0xD004);
+    
+    // Variables del sistema Vectrex
+    equates.insert("VEC_SND_SHADOW".to_string(), 0xC800);
+    equates.insert("VEC_MUSIC_WORK".to_string(), 0xC856);
+    
+    // Music data placeholder
+    equates.insert("MUSIC1".to_string(), 0x0000);
 }
 
 /// Extrae etiqueta si la línea la define
@@ -657,7 +596,6 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "LDX" => emit_ldx(emitter, operand, equates),
         "LDY" => emit_ldy(emitter, operand, equates),
         "LDU" => emit_ldu(emitter, operand, equates),
-        "LDS" => emit_lds(emitter, operand, equates),
         "STX" => emit_stx(emitter, operand, equates),
         "STY" => emit_sty(emitter, operand, equates),
         "STU" => emit_stu(emitter, operand, equates),
@@ -684,11 +622,23 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
         
+        // DEBUG: Log splits for diagnosis
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG evaluate_expression: expr='{}' left='{}' right='{}'", expr, left, right);
+        }
+        
         let offset = evaluate_expression(right, equates)?; // Recursivo para right
+        
+        if expr.contains("C880") || expr.contains("C982") {
+            eprintln!("DEBUG: offset parsed = 0x{:04X} ({})", offset, offset);
+        }
         
         return match evaluate_expression(left, equates) {
             Ok(base) => {
                 let result = base.wrapping_add(offset);
+                if expr.contains("C880") || expr.contains("C982") {
+                    eprintln!("DEBUG: base=0x{:04X} + offset=0x{:04X} = 0x{:04X}", base, offset, result);
+                }
                 Ok(result)
             },
             Err(e) if e.starts_with("SYMBOL:") => {
@@ -2836,50 +2786,6 @@ fn emit_stu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     } else {
         let addr = parse_address(operand)?;
         emitter.stu_extended(addr);
-    }
-    Ok(())
-}
-
-fn emit_lds(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    if operand.starts_with('#') {
-        // Immediate mode (LDS #$CBFF)
-        let value_part = &operand[1..];
-
-        // Try equates first (fast path)
-        let upper = value_part.to_uppercase();
-        if let Some(&value) = equates.get(&upper) {
-            emitter.lds_immediate(value);
-        } else {
-            match evaluate_expression(value_part, equates) {
-                Ok(value) => emitter.lds_immediate(value),
-                Err(e) if e.starts_with("SYMBOL:") => {
-                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
-                    emitter.emit_immediate16_symbol_ref(&[0x10, 0xCE], &symbol, addend);
-                }
-                Err(_) => {
-                    let value = parse_immediate_16(value_part)?;
-                    emitter.lds_immediate(value);
-                }
-            }
-        }
-    } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
-        // Indexed mode: ,X  X++  ,X++  5,X  A,X  etc.
-        let (postbyte, offset) = parse_indexed_mode(operand)?;
-        emitter.lds_indexed(postbyte);
-        if let Some(off) = offset {
-            emitter.emit(off as u8);
-        }
-    } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        // Symbol reference
-        let upper = operand.to_uppercase();
-        if let Some(&value) = equates.get(&upper) {
-            emitter.lds_extended(value);
-        } else {
-            emitter.lds_extended_sym(operand);
-        }
-    } else {
-        let addr = parse_address(operand)?;
-        emitter.lds_extended(addr);
     }
     Ok(())
 }

@@ -3,7 +3,7 @@ use crate::target::{info, CpuArch, Target};
 use std::collections::{HashSet, HashMap};
 use std::cell::RefCell;
 
-use crate::struct_layout::{StructRegistry, build_struct_registry};
+use crate::struct_layout::{StructRegistry, build_struct_registry, StructLayout};
 
 // ---------------- Diagnostics (S8) ----------------
 // Canal estructurado para warnings (y pronto errores S9).
@@ -221,75 +221,6 @@ impl BufferRequirements {
     }
 }
 
-// Bank switching configuration (automatic bank assignment)
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BankConfig {
-    /// Total ROM size in bytes (e.g., 524288 for 512KB)
-    pub rom_total_size: u32,
-    /// Bank size in bytes (default: 16384 = 16KB)
-    pub rom_bank_size: u32,
-    /// Number of banks (calculated: rom_total_size / rom_bank_size)
-    pub rom_bank_count: u8,
-    /// Helpers bank ID (last bank, holds DRAW_LINE_WRAPPER, MUL16, etc.)
-    /// Sequential model: Banks #0-(N-2) = VPy code, Bank #(N-1) = helpers
-    pub helpers_bank: u8,
-}
-
-impl BankConfig {
-    /// Create BankConfig from META directives (with defaults)
-    /// 
-    /// Sequential bank layout:
-    /// - Bank #0: Header + main() + loop() + Code (fills from 0x0000)
-    /// - Bank #1-#N-2: Additional VPy code (if code overflows bank #0)
-    /// - Bank #N-1: Runtime helpers (DRAW_LINE_WRAPPER, MUL16, DIV_A, etc.)
-    pub fn from_meta(meta: &ModuleMeta) -> Option<Self> {
-        let rom_total_size = meta.rom_total_size?;
-        let rom_bank_size = meta.rom_bank_size.unwrap_or(16384); // Default 16KB
-        
-        if rom_total_size < rom_bank_size {
-            eprintln!("⚠️  Warning: ROM_TOTAL_SIZE ({}) < ROM_BANK_SIZE ({}), bank switching disabled",
-                rom_total_size, rom_bank_size);
-            return None;
-        }
-        
-        let rom_bank_count = (rom_total_size / rom_bank_size) as u8;
-        
-        if rom_bank_count == 0 {
-            eprintln!("⚠️  Warning: ROM_BANK_COUNT is 0 (ROM too small?), bank switching disabled");
-            return None;
-        }
-        
-        let helpers_bank = rom_bank_count.saturating_sub(1);
-        
-        Some(BankConfig {
-            rom_total_size,
-            rom_bank_size,
-            rom_bank_count,
-            helpers_bank,
-        })
-    }
-    
-    /// Check if bank switching is enabled (more than 1 bank)
-    pub fn is_enabled(&self) -> bool {
-        self.rom_bank_count > 1
-    }
-    
-    /// Get total number of banks
-    pub fn num_banks(&self) -> usize {
-        self.rom_bank_count as usize
-    }
-    
-    /// Get ID of the last bank (reserved for helpers)
-    pub fn last_bank_id(&self) -> u8 {
-        self.helpers_bank
-    }
-    
-    /// Get number of banks available for VPy code (excludes helpers bank)
-    pub fn code_banks(&self) -> u8 {
-        self.rom_bank_count.saturating_sub(1)
-    }
-}
-
 // CodegenOptions: options affecting generation (title, etc.).
 #[derive(Clone)]
 pub struct CodegenOptions {
@@ -308,17 +239,12 @@ pub struct CodegenOptions {
     pub output_name: Option<String>, // nombre base del output (ej: "test_bp_min") para PDB correcto
     pub assets: Vec<AssetInfo>,      // Assets to embed in ROM (.vec, .vmus files)
     pub const_values: std::collections::BTreeMap<String, i32>, // Constant values for inlining (nombre_uppercase → valor)
-    pub const_arrays: std::collections::BTreeMap<String, String>, // Maps const array name -> label suffix (uppercase name) for ROM-only data
+    pub const_arrays: std::collections::BTreeMap<String, usize>, // Maps const array name -> CONST_ARRAY_N index for ROM-only data
     pub const_string_arrays: std::collections::BTreeSet<String>, // Set of const array names that are string arrays (not number arrays)
     pub mutable_arrays: std::collections::BTreeSet<String>, // Set of mutable (non-const) array names that need RAM allocation
-    pub inline_arrays: Vec<(String, Vec<crate::ast::Expr>)>, // Inline array literals from function bodies (label, elements)
     pub structs: StructRegistry, // Struct layout information (Phase 2)
     pub type_context: HashMap<String, String>, // Maps variable names to struct types (e.g., "p" -> "Point")
     pub buffer_requirements: Option<BufferRequirements>, // Dynamic buffer sizing from .vplay analysis
-    pub bank_config: Option<BankConfig>, // Bank switching configuration (automatic bank assignment)
-    pub function_bank_map: HashMap<String, u8>, // Maps function name → bank ID (automatic assignment result)
-    pub emit_sections: bool, // Emit section markers for linker (.vo generation)
-    pub skip_builtins: bool, // Skip emitting builtin helpers (for per-module .vo files)
     // future: fast_wait_counter could toggle increment of a frame counter
 }
 
@@ -683,9 +609,6 @@ pub fn emit_asm_with_debug(module: &Module, target: Target, opts: &CodegenOption
         type_context, // Add type context for method resolution
         const_string_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
         mutable_arrays: std::collections::BTreeSet::new(), // Initialize empty (will be populated in backend)
-        inline_arrays: Vec::new(), // Initialize empty (will be populated in backend)
-        // NOTE: emit_sections now comes from opts.clone() - don't override here
-        // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
     };
@@ -723,8 +646,6 @@ pub fn emit_asm_with_diagnostics(module: &Module, target: Target, opts: &Codegen
     let ti = info(target);
     // If source defines CONST TITLE = "..." let it override CLI title.
     let mut effective = CodegenOptions { 
-        // NOTE: emit_sections now comes from opts.clone() - don't override here
-        // NOTE: function_bank_map comes from opts.clone() - do NOT override here
         output_name: opts.output_name.clone(), // Propagate project name for PDB
         ..opts.clone() 
     };

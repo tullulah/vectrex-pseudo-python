@@ -12,10 +12,6 @@ pub struct ModuleMeta {
 	pub metas: std::collections::HashMap<String,String>,
 	pub music_override: Option<String>,
 	pub copyright_override: Option<String>,
-	/// Bank switching: Total ROM size in bytes (e.g., 524288 for 512KB)
-	pub rom_total_size: Option<u32>,
-	/// Bank switching: Bank size in bytes (default: 16384 = 16KB)
-	pub rom_bank_size: Option<u32>,
 }
 
 /// Declaración de import
