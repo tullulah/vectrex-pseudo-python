@@ -402,6 +402,41 @@ impl VecResource {
         
         data
     }
+    
+    /// Estimate binary size in bytes (for bank distribution)
+    /// This calculates the size that the ASM will compile to
+    pub fn estimate_binary_size(&self) -> usize {
+        let path_count = self.visible_paths().len();
+        if path_count == 0 {
+            return 4; // Just EQU constants + end marker
+        }
+        
+        let mut size = 0;
+        
+        // Header: path_count (1 byte) + pointers (2 bytes each)
+        size += 1 + path_count * 2;
+        
+        // EQU constants: _WIDTH, _CENTER_X, _CENTER_Y (0 bytes - just labels)
+        
+        for path in self.visible_paths() {
+            // Path header: intensity (1) + y,x,0,0 (4) = 5 bytes
+            size += 5;
+            
+            // Lines: 3 bytes each (flag, dy, dx)
+            let line_count = if path.points.is_empty() { 0 } else { path.points.len() - 1 };
+            size += line_count * 3;
+            
+            // Closing line if closed path (3 bytes)
+            if path.closed && path.points.len() > 2 {
+                size += 3;
+            }
+            
+            // End marker: 1 byte
+            size += 1;
+        }
+        
+        size
+    }
 }
 
 /// Compile a .vec file to ASM
