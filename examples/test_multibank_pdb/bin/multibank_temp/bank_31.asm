@@ -7,11 +7,13 @@ RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPPTR               EQU $C880+$02   ; Temporary pointer (2 bytes)
 TMPPTR2              EQU $C880+$04   ; Temporary pointer 2 (2 bytes)
 TEMP_YX              EQU $C880+$06   ; Temporary Y/X coordinate storage (2 bytes)
-VLINE_DX_16          EQU $C880+$08   ; DRAW_LINE dx (16-bit) (2 bytes)
-VLINE_DY_16          EQU $C880+$0A   ; DRAW_LINE dy (16-bit) (2 bytes)
-VLINE_DX             EQU $C880+$0C   ; DRAW_LINE dx clamped (8-bit) (1 bytes)
-VLINE_DY             EQU $C880+$0D   ; DRAW_LINE dy clamped (8-bit) (1 bytes)
-VLINE_DY_REMAINING   EQU $C880+$0E   ; DRAW_LINE remaining dy for segment 2 (1 bytes)
+DRAW_LINE_ARGS       EQU $C880+$08   ; DRAW_LINE argument buffer (x0,y0,x1,y1,intensity) (10 bytes)
+VLINE_DX_16          EQU $C880+$12   ; DRAW_LINE dx (16-bit) (2 bytes)
+VLINE_DY_16          EQU $C880+$14   ; DRAW_LINE dy (16-bit) (2 bytes)
+VLINE_DX             EQU $C880+$16   ; DRAW_LINE dx clamped (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$17   ; DRAW_LINE dy clamped (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$18   ; DRAW_LINE remaining dy for segment 2 (16-bit) (2 bytes)
+VLINE_DX_REMAINING   EQU $C880+$1A   ; DRAW_LINE remaining dx for segment 2 (16-bit) (2 bytes)
 VAR_ARG0             EQU $CFE0   ; Function argument 0 (16-bit) (2 bytes)
 VAR_ARG1             EQU $CFE2   ; Function argument 1 (16-bit) (2 bytes)
 VAR_ARG2             EQU $CFE4   ; Function argument 2 (16-bit) (2 bytes)
@@ -30,11 +32,16 @@ VAR_ARG4             EQU $CFE8   ; Function argument 4 (16-bit) (2 bytes)
 VECTREX_PRINT_TEXT:
     ; VPy signature: PRINT_TEXT(x, y, string)
     ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)
+    STA >$D00C     ; VIA_cntl
     JSR $F1AA      ; DP_to_D0 - set Direct Page for BIOS/VIA access
     LDU VAR_ARG2   ; string pointer (third parameter)
     LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)
     LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)
     JSR Print_Str_d ; Print string from U register
+    ; CRITICAL: Reset ALL pen parameters after Print_Str_d (scale, position, etc.)
+    JSR Reset_Pen  ; BIOS $F35B - resets scale, intensity, and beam state
     JSR $F1AF      ; DP_to_C8 - restore DP before return
     RTS
 

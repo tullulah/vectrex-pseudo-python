@@ -7,6 +7,7 @@
 
 use vpy_parser::Expr;
 use super::expressions;
+use crate::AssetInfo;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Label counter for unique labels (thread-safe)
@@ -27,7 +28,7 @@ fn next_label() -> String {
 /// - $C000-$C001: Value (low, high)
 /// - $C002: Marker ($FE=labeled, $42=simple)
 /// - $C004-$C005: Label pointer (or 0 if no label)
-pub fn emit_debug_print(args: &[Expr], out: &mut String) {
+pub fn emit_debug_print(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; DEBUG_PRINT: no argument\n");
         out.push_str("    LDD #0\n");
@@ -43,7 +44,7 @@ pub fn emit_debug_print(args: &[Expr], out: &mut String) {
     };
     
     // Evaluate expression
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     if let Some(name) = var_name {
         // Labeled debug output (show variable name)
@@ -90,7 +91,7 @@ pub fn emit_debug_print(args: &[Expr], out: &mut String) {
 /// 
 /// Note: For buildtools simplicity, only supports string variables.
 /// String literals should be passed as variables.
-pub fn emit_debug_print_str(args: &[Expr], out: &mut String) {
+pub fn emit_debug_print_str(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; DEBUG_PRINT_STR: no argument\n");
         out.push_str("    LDD #0\n");
@@ -105,7 +106,7 @@ pub fn emit_debug_print_str(args: &[Expr], out: &mut String) {
         None
     };
     
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     if let Some(name) = var_name {
         out.push_str(&format!("    ; DEBUG_PRINT_STR({})\n", name));
@@ -153,7 +154,7 @@ pub fn emit_debug_print_str(args: &[Expr], out: &mut String) {
 /// The helper converts the low byte to a 2-digit hex string and prints it.
 /// 
 /// Note: Assumes VAR_ARG0-2 are allocated (requires max_args >= 3 in codegen).
-pub fn emit_print_number(args: &[Expr], out: &mut String) {
+pub fn emit_print_number(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() < 3 {
         out.push_str("    ; PRINT_NUMBER: insufficient arguments\n");
         out.push_str("    LDD #0\n");
@@ -164,17 +165,17 @@ pub fn emit_print_number(args: &[Expr], out: &mut String) {
     out.push_str("    ; PRINT_NUMBER(x, y, num)\n");
     
     // Evaluate x position
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD VAR_ARG0    ; X position\n");
     
     // Evaluate y position
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD VAR_ARG1    ; Y position\n");
     
     // Evaluate number
-    expressions::emit_simple_expr(&args[2], out);
+    expressions::emit_simple_expr(&args[2], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD VAR_ARG2    ; Number value\n");
     

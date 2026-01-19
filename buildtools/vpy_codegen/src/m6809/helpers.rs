@@ -95,7 +95,7 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     ram.allocate("VLINE_DX_REMAINING", 2, "DRAW_LINE remaining dx for segment 2 (16-bit)");
     
     // Level system variables
-    if needed.contains("SHOW_LEVEL") {
+    if needed.contains("SHOW_LEVEL") || needed.contains("LOAD_LEVEL") {
         ram.allocate("LEVEL_PTR", 2, "Pointer to currently loaded level data");
         ram.allocate("LEVEL_WIDTH", 1, "Level width");
         ram.allocate("LEVEL_HEIGHT", 1, "Level height");
@@ -244,6 +244,9 @@ fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
             // Level system helpers
             if name_upper == "SHOW_LEVEL" {
                 needed.insert("SHOW_LEVEL_RUNTIME".to_string());
+            }
+            if name_upper == "LOAD_LEVEL" {
+                needed.insert("LOAD_LEVEL".to_string());
             }
             
             // Utility helpers
@@ -518,11 +521,17 @@ fn emit_play_music_runtime(asm: &mut String) {
         ; PLAY_MUSIC_RUNTIME - Start PSG music playback\n\
         ; Input: X = pointer to PSG music data\n\
         PLAY_MUSIC_RUNTIME:\n\
+        CMPX >PSG_MUSIC_START   ; Check if already playing this music\n\
+        BNE PMr_start_new       ; If different, start fresh\n\
+        LDA >PSG_IS_PLAYING     ; Check if currently playing\n\
+        BNE PMr_done            ; If playing same song, ignore\n\
+PMr_start_new:\n\
         STX >PSG_MUSIC_PTR      ; Store current music pointer (force extended)\n\
         STX >PSG_MUSIC_START    ; Store start pointer for loops (force extended)\n\
         CLR >PSG_DELAY_FRAMES   ; Clear delay counter\n\
         LDA #$01\n\
         STA >PSG_IS_PLAYING     ; Mark as playing (extended - var at 0xC8A0)\n\
+PMr_done:\n\
         RTS\n\
         \n\
         ; ============================================================================\n\
@@ -700,13 +709,13 @@ fn emit_audio_update_helper(asm: &mut String) {
         BRA AU_UPDATE_SFX       ; Now update SFX\n\
         \n\
         AU_MUSIC_ENDED:\n\
-        CLR PSG_IS_PLAYING     ; Stop music\n\
+        CLR >PSG_IS_PLAYING     ; Stop music\n\
         BRA AU_UPDATE_SFX       ; Continue to SFX\n\
         \n\
         AU_MUSIC_LOOP:\n\
         LDD ,X                  ; Load loop target\n\
         STD >PSG_MUSIC_PTR      ; Set music pointer to loop\n\
-        CLR PSG_DELAY_FRAMES   ; Clear delay on loop\n\
+        CLR >PSG_DELAY_FRAMES   ; Clear delay on loop\n\
         BRA AU_UPDATE_SFX       ; Continue to SFX\n\
         \n\
         AU_SKIP_MUSIC:\n\
@@ -721,101 +730,6 @@ fn emit_audio_update_helper(asm: &mut String) {
         \n\
         AU_DONE:\n\
         PULS DP                 ; Restore original DP\n\
-        RTS\n\
-        \n\
-        ; ============================================================================\n\
-        ; sfx_doframe - AYFX frame parser (Richard Chadd original)\n\
-        ; ============================================================================\n\
-        ; Process one SFX frame - called by AUDIO_UPDATE\n\
-        ; Uses Sound_Byte BIOS call for PSG writes (DP=$D0 already set by caller)\n\
-        ; AYFX format: flag byte + optional data per frame, end marker $D0 $20\n\
-        ; Flag bits: 0-3=volume, 4=disable tone, 5=tone data present,\n\
-        ;            6=noise data present, 7=disable noise\n\
-        \n\
-        sfx_doframe:\n\
-        LDU >SFX_PTR            ; Get current frame pointer\n\
-        LDB ,U                  ; Read flag byte (NO auto-increment)\n\
-        CMPB #$D0               ; Check end marker (first byte)\n\
-        LBNE sfx_checktonefreq  ; Not end, continue (LONG BRANCH)\n\
-        LDB 1,U                 ; Check second byte at offset 1\n\
-        CMPB #$20               ; End marker $D0 $20?\n\
-        LBEQ sfx_endofeffect    ; Yes, stop (LONG BRANCH)\n\
-        \n\
-        sfx_checktonefreq:\n\
-        LEAY 1,U                ; Y = pointer to tone/noise data\n\
-        LDB ,U                  ; Reload flag byte (Sound_Byte corrupts B)\n\
-        BITB #$20               ; Bit 5: tone data present?\n\
-        LBEQ sfx_checknoisefreq ; No, skip tone (LONG BRANCH)\n\
-        ; Set tone frequency (channel C = reg 4/5)\n\
-        LDB 2,U                 ; Get LOW byte (fine tune)\n\
-        LDA #$04                ; Register 4\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        LDB 1,U                 ; Get HIGH byte (coarse tune)\n\
-        LDA #$05                ; Register 5\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        LEAY 2,Y                ; Skip 2 tone bytes\n\
-        \n\
-        sfx_checknoisefreq:\n\
-        LDB ,U                  ; Reload flag byte\n\
-        BITB #$40               ; Bit 6: noise data present?\n\
-        LBEQ sfx_checkvolume    ; No, skip noise (LONG BRANCH)\n\
-        LDB ,Y                  ; Get noise period\n\
-        LDA #$06                ; Register 6\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        LEAY 1,Y                ; Skip 1 noise byte\n\
-        \n\
-        sfx_checkvolume:\n\
-        LDB ,U                  ; Reload flag byte\n\
-        ANDB #$0F               ; Get volume from bits 0-3\n\
-        LDA #$0A                ; Register 10 (volume C)\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        \n\
-        sfx_checktonedisable:\n\
-        LDB ,U                  ; Reload flag byte\n\
-        BITB #$10               ; Bit 4: disable tone?\n\
-        LBEQ sfx_enabletone     ; (LONG BRANCH)\n\
-        sfx_disabletone:\n\
-        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
-        ORB #$04                ; Set bit 2 (disable tone C)\n\
-        LDA #$07                ; Register 7 (mixer)\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        LBRA sfx_checknoisedisable ; Continue to noise check (LONG BRANCH)\n\
-        \n\
-        sfx_enabletone:\n\
-        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
-        ANDB #$FB               ; Clear bit 2 (enable tone C)\n\
-        LDA #$07                ; Register 7 (mixer)\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        \n\
-        sfx_checknoisedisable:\n\
-        LDB ,U                  ; Reload flag byte\n\
-        BITB #$80               ; Bit 7: disable noise?\n\
-        LBEQ sfx_enablenoise    ; (LONG BRANCH)\n\
-        sfx_disablenoise:\n\
-        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
-        ORB #$20                ; Set bit 5 (disable noise C)\n\
-        LDA #$07                ; Register 7 (mixer)\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        LBRA sfx_nextframe      ; Done, update pointer (LONG BRANCH)\n\
-        \n\
-        sfx_enablenoise:\n\
-        LDB $C807               ; Read mixer shadow (MUST be B register)\n\
-        ANDB #$DF               ; Clear bit 5 (enable noise C)\n\
-        LDA #$07                ; Register 7 (mixer)\n\
-        JSR Sound_Byte          ; Write to PSG\n\
-        \n\
-        sfx_nextframe:\n\
-        STY >SFX_PTR            ; Update pointer for next frame\n\
-        RTS\n\
-        \n\
-        sfx_endofeffect:\n\
-        ; Stop SFX - set volume to 0\n\
-        CLR >SFX_ACTIVE         ; Mark as inactive\n\
-        LDA #$0A                ; Register 10 (volume C)\n\
-        LDB #$00                ; Volume = 0\n\
-        JSR Sound_Byte\n\
-        LDD #$0000\n\
-        STD >SFX_PTR            ; Clear pointer\n\
         RTS\n\
         \n"
     );
@@ -991,8 +905,6 @@ DSWM_NEXT_NO_NEGATE_X:\n\
             CLR VIA_shift_reg\n\
             LBRA DSWM_LOOP          ; Long branch\n\
             DSWM_DONE:\n\
-            LDA #$C8                ; CRITICAL: Restore DP to $C8 for RAM access\n\
-            TFR A,DP\n\
             RTS\n"
     );
 }

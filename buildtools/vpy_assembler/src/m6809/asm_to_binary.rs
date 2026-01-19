@@ -2339,8 +2339,22 @@ fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         let val = parse_immediate_16_with_symbols(&operand[1..], equates)?;
         emitter.cmpx_immediate(val);
         Ok(())
+    } else if operand.starts_with('>') {
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                emitter.cmpx_extended(addr);
+                Ok(())
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit_extended_symbol_ref(0xBC, &symbol, addend);
+                Ok(())
+            },
+            Err(e) => Err(e),
+        }
     } else {
-        Err(format!("CMPX solo soporta modo inmediato (#valor)"))
+        Err(format!("CMPX solo soporta modo inmediato (#valor) o extendido (>label)"))
     }
 }
 

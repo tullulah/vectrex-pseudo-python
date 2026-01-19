@@ -49,13 +49,6 @@ START:
     JMP MAIN
 
 ;***************************************************************************
-; Internal builtin variables (aliases to RESULT slots)
-DRAW_VEC_X EQU RESULT+0
-DRAW_VEC_Y EQU RESULT+2
-MIRROR_X EQU RESULT+4
-MIRROR_Y EQU RESULT+6
-DRAW_VEC_INTENSITY EQU RESULT+8
-
 
 ;***************************************************************************
 ; MAIN PROGRAM
@@ -393,11 +386,16 @@ LOOP_BODY:
 VECTREX_PRINT_TEXT:
     ; VPy signature: PRINT_TEXT(x, y, string)
     ; BIOS signature: Print_Str_d(A=Y, B=X, U=string)
+    ; CRITICAL: Set VIA to DAC mode BEFORE calling BIOS (don't assume state)
+    LDA #$98       ; VIA_cntl = $98 (DAC mode for text rendering)
+    STA >$D00C     ; VIA_cntl
     JSR $F1AA      ; DP_to_D0 - set Direct Page for BIOS/VIA access
     LDU VAR_ARG2   ; string pointer (third parameter)
     LDA VAR_ARG1+1 ; Y coordinate (second parameter, low byte)
     LDB VAR_ARG0+1 ; X coordinate (first parameter, low byte)
     JSR Print_Str_d ; Print string from U register
+    ; CRITICAL: Reset ALL pen parameters after Print_Str_d (scale, position, etc.)
+    JSR Reset_Pen  ; BIOS $F35B - resets scale, intensity, and beam state
     JSR $F1AF      ; DP_to_C8 - restore DP before return
     RTS
 

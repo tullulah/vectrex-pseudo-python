@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "name": "asym",
+  "canvas": { "width": 256, "height": 256, "origin": "center" },
+  "layers": [
+    {
+      "name": "layer1",
+      "visible": true,
+      "paths": [
+        {
+          "name": "shape",
+          "intensity": 127,
+          "closed": false,
+          "points": [
+            { "x": 0, "y": 0 },
+            { "x": 10, "y": 20 },
+            { "x": 20, "y": 0 }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -32,7 +32,8 @@ pub fn emit_load_level(args: &[Expr], out: &mut String) {
         out.push_str(&format!("    ; Load level: '{}'\n", level_name));
         
         // Load pointer to level data (asset must exist)
-        let label = format!("LEVEL_{}", level_name.to_uppercase().replace(" ", "_"));
+        // Format must match levelres.rs: _{NAME}_LEVEL
+        let label = format!("_{}_LEVEL", level_name.to_uppercase().replace("-", "_").replace(" ", "_"));
         out.push_str(&format!("    LDX #{}\n", label));
         out.push_str("    STX LEVEL_PTR          ; Store level data pointer\n");
         

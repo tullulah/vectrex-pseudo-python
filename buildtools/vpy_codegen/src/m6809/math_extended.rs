@@ -10,6 +10,7 @@
 
 use vpy_parser::Expr;
 use super::expressions;
+use crate::AssetInfo;
 
 /// Generates trigonometry lookup tables
 /// 
@@ -58,7 +59,7 @@ pub fn generate_trig_tables() -> String {
 }
 
 /// SIN(angle) - Sine lookup (angle 0-127 represents 0-360°)
-pub fn emit_sin(args: &[Expr], out: &mut String) {
+pub fn emit_sin(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; SIN: no argument\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -68,7 +69,7 @@ pub fn emit_sin(args: &[Expr], out: &mut String) {
     out.push_str("    ; SIN: Sine lookup\n");
     
     // Evaluate angle -> RESULT
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     // Mask to 0-127 range
     out.push_str("    LDD RESULT\n");
@@ -87,7 +88,7 @@ pub fn emit_sin(args: &[Expr], out: &mut String) {
 }
 
 /// COS(angle) - Cosine lookup
-pub fn emit_cos(args: &[Expr], out: &mut String) {
+pub fn emit_cos(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; COS: no argument\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -96,7 +97,7 @@ pub fn emit_cos(args: &[Expr], out: &mut String) {
     
     out.push_str("    ; COS: Cosine lookup\n");
     
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     out.push_str("    LDD RESULT\n");
     out.push_str("    ANDB #$7F\n");
@@ -110,7 +111,7 @@ pub fn emit_cos(args: &[Expr], out: &mut String) {
 }
 
 /// TAN(angle) - Tangent lookup
-pub fn emit_tan(args: &[Expr], out: &mut String) {
+pub fn emit_tan(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; TAN: no argument\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -119,7 +120,7 @@ pub fn emit_tan(args: &[Expr], out: &mut String) {
     
     out.push_str("    ; TAN: Tangent lookup\n");
     
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     out.push_str("    LDD RESULT\n");
     out.push_str("    ANDB #$7F\n");
@@ -137,7 +138,7 @@ pub fn emit_tan(args: &[Expr], out: &mut String) {
 /// Simple implementation using successive approximation:
 /// result = (x + 1) >> 1  (initial guess)
 /// for 4 iterations: result = (result + x/result) >> 1
-pub fn emit_sqrt(args: &[Expr], out: &mut String) {
+pub fn emit_sqrt(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.is_empty() {
         out.push_str("    ; SQRT: no argument\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -147,7 +148,7 @@ pub fn emit_sqrt(args: &[Expr], out: &mut String) {
     out.push_str("    ; SQRT: Square root (Newton-Raphson)\n");
     
     // Evaluate x
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     // Call helper
     out.push_str("    LDD RESULT\n");
@@ -156,7 +157,7 @@ pub fn emit_sqrt(args: &[Expr], out: &mut String) {
 }
 
 /// POW(base, exp) - Power (repeated multiplication)
-pub fn emit_pow(args: &[Expr], out: &mut String) {
+pub fn emit_pow(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() < 2 {
         out.push_str("    ; POW: insufficient arguments\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -166,12 +167,12 @@ pub fn emit_pow(args: &[Expr], out: &mut String) {
     out.push_str("    ; POW: Power (base ^ exp)\n");
     
     // Evaluate base
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save base\n");
     
     // Evaluate exponent
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR2    ; Save exponent\n");
     
@@ -181,7 +182,7 @@ pub fn emit_pow(args: &[Expr], out: &mut String) {
 }
 
 /// ATAN2(y, x) - Arctangent (CORDIC-style approximation)
-pub fn emit_atan2(args: &[Expr], out: &mut String) {
+pub fn emit_atan2(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() < 2 {
         out.push_str("    ; ATAN2: insufficient arguments\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -191,12 +192,12 @@ pub fn emit_atan2(args: &[Expr], out: &mut String) {
     out.push_str("    ; ATAN2: Arctangent (y, x)\n");
     
     // Evaluate y
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save y\n");
     
     // Evaluate x
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR2    ; Save x\n");
     
@@ -209,14 +210,14 @@ pub fn emit_atan2(args: &[Expr], out: &mut String) {
 /// 
 /// Uses formula: seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
 /// Returns 16-bit positive random value (0-32767)
-pub fn emit_rand(out: &mut String) {
+pub fn emit_rand(out: &mut String, _assets: &[AssetInfo]) {
     out.push_str("    ; RAND: Random number generator\n");
     out.push_str("    JSR RAND_HELPER\n");
     out.push_str("    STD RESULT\n");
 }
 
 /// RAND_RANGE(min, max) - Random number in range [min, max]
-pub fn emit_rand_range(args: &[Expr], out: &mut String) {
+pub fn emit_rand_range(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() < 2 {
         out.push_str("    ; RAND_RANGE: insufficient arguments\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
@@ -226,12 +227,12 @@ pub fn emit_rand_range(args: &[Expr], out: &mut String) {
     out.push_str("    ; RAND_RANGE: Random in range [min, max]\n");
     
     // Evaluate min
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save min\n");
     
     // Evaluate max
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR2    ; Save max\n");
     

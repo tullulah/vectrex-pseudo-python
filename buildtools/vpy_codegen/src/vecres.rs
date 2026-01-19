@@ -312,12 +312,7 @@ impl VecResource {
         let path_count = self.visible_paths().len();
         
         asm.push_str(&format!("_{}_VECTORS:  ; Main entry (header + {} path(s))\n", symbol_name, path_count));
-        // Use FDB (2 bytes) if path_count > 255, FCB (1 byte) otherwise
-        if path_count > 255 {
-            asm.push_str(&format!("    FDB {}               ; path_count (runtime metadata, >255 paths)\n", path_count));
-        } else {
-            asm.push_str(&format!("    FCB {}               ; path_count (runtime metadata)\n", path_count));
-        }
+        asm.push_str(&format!("    FCB {}               ; path_count (runtime metadata)\n", path_count));
         
         // Emit pointer table for all paths (allows runtime iteration)
         for path_idx in 0..path_count {
