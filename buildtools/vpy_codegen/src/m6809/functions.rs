@@ -4,6 +4,15 @@
 
 use vpy_parser::{Module, Function, Stmt, Expr};
 use super::expressions;
+use crate::AssetInfo;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Generate a unique label with the given prefix (copied from core/src/backend/m6809/utils.rs)
+pub fn fresh_label(prefix: &str) -> String {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{}_{}", prefix, id)
+}
 
 /// Check if module uses PLAY_MUSIC or PLAY_SFX (needs AUDIO_UPDATE auto-injection)
 /// Check if module uses PLAY_MUSIC or PLAY_SFX builtins
@@ -42,7 +51,7 @@ pub fn has_audio_calls(module: &Module) -> bool {
     })
 }
 
-pub fn generate_functions(module: &Module) -> Result<String, String> {
+pub fn generate_functions(module: &Module, assets: &[AssetInfo]) -> Result<String, String> {
     let mut asm = String::new();
     
     // Find main() and loop()
@@ -92,7 +101,7 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
     // Call main() if exists
     if let Some(main) = main_fn {
         asm.push_str("    ; Call main() for initialization\n");
-        generate_function_body(main, &mut asm)?;
+        generate_function_body(main, &mut asm, assets)?;
     }
     
     // Infinite loop calling loop()
@@ -112,7 +121,7 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         asm.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
         asm.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
         asm.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
-        generate_function_body(loop_fn, &mut asm)?;
+        generate_function_body(loop_fn, &mut asm, assets)?;
         
         // Auto-inject AUDIO_UPDATE at END if module uses PLAY_MUSIC/PLAY_SFX
         if has_audio_calls(module) {
@@ -143,7 +152,7 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
         // IMPORTANT: Function name already comes uppercase from unifier
         asm.push_str(&format!("; Function: {}\n", func.name));
         asm.push_str(&format!("{}:\n", func.name));
-        generate_function_body(func, &mut asm)?;
+        generate_function_body(func, &mut asm, assets)?;
         
         // Only add RTS if function doesn't end with explicit return
         let has_explicit_return = func.body.last()
@@ -158,22 +167,22 @@ pub fn generate_functions(module: &Module) -> Result<String, String> {
     Ok(asm)
 }
 
-fn generate_function_body(func: &Function, asm: &mut String) -> Result<(), String> {
+fn generate_function_body(func: &Function, asm: &mut String, assets: &[AssetInfo]) -> Result<(), String> {
     // Generate code for each statement
     for stmt in &func.body {
-        generate_statement(stmt, asm)?;
+        generate_statement(stmt, asm, assets)?;
     }
     Ok(())
 }
 
-fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
+fn generate_statement(stmt: &Stmt, asm: &mut String, assets: &[AssetInfo]) -> Result<(), String> {
     match stmt {
         Stmt::Assign { target, value, .. } => {
             match target {
                 vpy_parser::AssignTarget::Ident { name, .. } => {
                     // Simple variable assignment: var = value
                     // 1. Evaluate expression
-                    expressions::emit_simple_expr(value, asm);
+                    expressions::emit_simple_expr(value, asm, assets);
                     
                     // 2. Store to variable (uppercase for consistency)
                     asm.push_str("    LDD RESULT\n");
@@ -190,7 +199,7 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                     };
                     
                     // 1. Evaluate index first
-                    expressions::emit_simple_expr(index, asm);
+                    expressions::emit_simple_expr(index, asm, assets);
                     asm.push_str("    LDD RESULT\n");
                     asm.push_str("    ASLB            ; Multiply index by 2 (16-bit elements)\n");
                     asm.push_str("    ROLA\n");
@@ -206,7 +215,7 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                     asm.push_str("    STX TMPPTR2     ; Save computed address\n");
                     
                     // 4. Evaluate value to assign
-                    expressions::emit_simple_expr(value, asm);
+                    expressions::emit_simple_expr(value, asm, assets);
                     
                     // 5. Store value at computed address
                     asm.push_str("    LDX TMPPTR2     ; Load computed address\n");
@@ -229,7 +238,7 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
                     asm.push_str("    PSHS D\n");
                     
                     // Evaluate right side
-                    expressions::emit_simple_expr(value, asm);
+                    expressions::emit_simple_expr(value, asm, assets);
                     asm.push_str("    LDD RESULT\n");
                     
                     // Perform operation
@@ -247,54 +256,52 @@ fn generate_statement(stmt: &Stmt, asm: &mut String) -> Result<(), String> {
         }
         
         Stmt::Expr(expr, ..) => {
-            expressions::emit_simple_expr(expr, asm);
+            expressions::emit_simple_expr(expr, asm, assets);
         }
         
-        Stmt::If { cond, body, else_body, .. } => {
-            // Evaluate condition
-            expressions::emit_simple_expr(cond, asm);
-            
-            // Branch if zero (false)
-            asm.push_str("    LDD RESULT\n");
-            asm.push_str("    LBEQ .IF_ELSE\n");
-            
-            // Then body
-            for stmt in body {
-                generate_statement(stmt, asm)?;
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            // Copied from core/src/backend/m6809/statements.rs
+            let end = fresh_label("IF_END");
+            let mut next = fresh_label("IF_NEXT");
+            let simple_if = elifs.is_empty() && else_body.is_none();
+            expressions::emit_simple_expr(cond, asm, assets);
+            asm.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", next));
+            for s in body { generate_statement(s, asm, assets)?; }
+            asm.push_str(&format!("    LBRA {}\n", end));
+            for (i, (c, b)) in elifs.iter().enumerate() {
+                asm.push_str(&format!("{}:\n", next));
+                let new_next = if i == elifs.len() - 1 && else_body.is_none() { end.clone() } else { fresh_label("IF_NEXT") };
+                expressions::emit_simple_expr(c, asm, assets);
+                asm.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", new_next));
+                for s in b { generate_statement(s, asm, assets)?; }
+                asm.push_str(&format!("    LBRA {}\n", end));
+                next = new_next;
             }
-            asm.push_str("    LBRA .IF_END\n");
-            
-            // Else body (ignoring elifs for now)
-            asm.push_str(".IF_ELSE:\n");
-            if let Some(else_stmts) = else_body {
-                for stmt in else_stmts {
-                    generate_statement(stmt, asm)?;
+            if let Some(eb) = else_body {
+                asm.push_str(&format!("{}:\n", next));
+                for s in eb { generate_statement(s, asm, assets)?; }
+            } else if !elifs.is_empty() || simple_if {
+                if next != end {
+                    asm.push_str(&format!("{}:\n", next));
                 }
             }
-            
-            asm.push_str(".IF_END:\n");
+            asm.push_str(&format!("{}:\n", end));
         }
         
         Stmt::While { cond, body, .. } => {
-            asm.push_str(".WHILE_START:\n");
-            
-            // Evaluate condition
-            expressions::emit_simple_expr(cond, asm);
-            asm.push_str("    LDD RESULT\n");
-            asm.push_str("    LBEQ .WHILE_END\n");
-            
-            // Body
-            for stmt in body {
-                generate_statement(stmt, asm)?;
-            }
-            
-            asm.push_str("    LBRA .WHILE_START\n");
-            asm.push_str(".WHILE_END:\n");
+            // Copied from core/src/backend/m6809/statements.rs
+            let ls = fresh_label("WH");
+            let le = fresh_label("WH_END");
+            asm.push_str(&format!("{}: ; while start\n", ls));
+            expressions::emit_simple_expr(cond, asm, assets);
+            asm.push_str(&format!("    LDD RESULT\n    LBEQ {}\n", le));
+            for s in body { generate_statement(s, asm, assets)?; }
+            asm.push_str(&format!("    LBRA {}\n{}: ; while end\n", ls, le));
         }
         
         Stmt::Return(expr, ..) => {
             if let Some(e) = expr {
-                expressions::emit_simple_expr(e, asm);
+                expressions::emit_simple_expr(e, asm, assets);
             }
             asm.push_str("    RTS\n");
         }

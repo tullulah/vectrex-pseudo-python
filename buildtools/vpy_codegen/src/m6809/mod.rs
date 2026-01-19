@@ -332,7 +332,7 @@ pub fn generate_m6809_asm(
     asm.push_str(&ram_and_arrays_asm);
     
     // Generate user functions in Bank 0
-    let functions_asm = functions::generate_functions(module)?;
+    let functions_asm = functions::generate_functions(module, assets)?;
     asm.push_str(&functions_asm);
     
     // CRITICAL FIX (2026-01-17): Collect PRINT_TEXT strings here but emit LATER

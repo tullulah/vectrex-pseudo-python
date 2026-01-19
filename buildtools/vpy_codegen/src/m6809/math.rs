@@ -3,148 +3,158 @@
 //! Basic math operations for VPy
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use vpy_parser::Expr;
 use super::expressions;
 
-pub fn emit_abs(args: &[Expr], out: &mut String) {
+use crate::AssetInfo;
+
+/// Unique label counter for math labels
+static LABEL_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+pub fn emit_abs(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() != 1 {
         out.push_str("    ; ERROR: ABS requires 1 argument\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
         return;
     }
     
+    let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
     out.push_str("    ; ABS: Absolute value\n");
     
     // Evaluate argument
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     
     // Check if negative (test high bit of A)
     out.push_str("    LDD RESULT\n");
     out.push_str("    TSTA           ; Test sign bit\n");
-    out.push_str("    BPL .ABS_POS   ; Branch if positive\n");
+    out.push_str(&format!("    BPL .ABS_{}_POS   ; Branch if positive\n", label_id));
     
     // Negative: negate (two's complement)
     out.push_str("    COMA           ; Complement A\n");
     out.push_str("    COMB           ; Complement B\n");
     out.push_str("    ADDD #1        ; Add 1 for two's complement\n");
     
-    out.push_str(".ABS_POS:\n");
+    out.push_str(&format!(".ABS_{}_POS:\n", label_id));
     out.push_str("    STD RESULT\n");
 }
 
-pub fn emit_min(args: &[Expr], out: &mut String) {
+pub fn emit_min(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() != 2 {
         out.push_str("    ; ERROR: MIN requires 2 arguments\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
         return;
     }
     
+    let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
     out.push_str("    ; MIN: Return minimum of two values\n");
     
     // Evaluate first argument -> store in TMPPTR
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save first value\n");
     
     // Evaluate second argument -> RESULT
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     
     // Compare: TMPPTR vs RESULT (signed comparison)
     out.push_str("    LDD TMPPTR     ; Load first value\n");
     out.push_str("    CMPD RESULT    ; Compare with second\n");
-    out.push_str("    BLE .MIN_FIRST ; Branch if first <= second\n");
+    out.push_str(&format!("    BLE .MIN_{}_FIRST ; Branch if first <= second\n", label_id));
     
     // Second is smaller, already in RESULT
-    out.push_str("    BRA .MIN_END\n");
+    out.push_str(&format!("    BRA .MIN_{}_END\n", label_id));
     
-    out.push_str(".MIN_FIRST:\n");
+    out.push_str(&format!(".MIN_{}_FIRST:\n", label_id));
     out.push_str("    STD RESULT     ; First is smaller\n");
     
-    out.push_str(".MIN_END:\n");
+    out.push_str(&format!(".MIN_{}_END:\n", label_id));
 }
 
-pub fn emit_max(args: &[Expr], out: &mut String) {
+pub fn emit_max(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() != 2 {
         out.push_str("    ; ERROR: MAX requires 2 arguments\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
         return;
     }
     
+    let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
     out.push_str("    ; MAX: Return maximum of two values\n");
     
     // Evaluate first argument -> store in TMPPTR
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save first value\n");
     
     // Evaluate second argument -> RESULT
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     
     // Compare: TMPPTR vs RESULT (signed comparison)
     out.push_str("    LDD TMPPTR     ; Load first value\n");
     out.push_str("    CMPD RESULT    ; Compare with second\n");
-    out.push_str("    BGE .MAX_FIRST ; Branch if first >= second\n");
+    out.push_str(&format!("    BGE .MAX_{}_FIRST ; Branch if first >= second\n", label_id));
     
     // Second is larger, already in RESULT
-    out.push_str("    BRA .MAX_END\n");
+    out.push_str(&format!("    BRA .MAX_{}_END\n", label_id));
     
-    out.push_str(".MAX_FIRST:\n");
+    out.push_str(&format!(".MAX_{}_FIRST:\n", label_id));
     out.push_str("    STD RESULT     ; First is larger\n");
     
-    out.push_str(".MAX_END:\n");
+    out.push_str(&format!(".MAX_{}_END:\n", label_id));
 }
 
-pub fn emit_clamp(args: &[Expr], out: &mut String) {
+pub fn emit_clamp(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     if args.len() != 3 {
         out.push_str("    ; ERROR: CLAMP requires 3 arguments (value, min, max)\n");
         out.push_str("    LDD #0\n    STD RESULT\n");
         return;
     }
     
+    let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
     out.push_str("    ; CLAMP: Clamp value to range [min, max]\n");
     
     // Evaluate value (arg 0)
-    expressions::emit_simple_expr(&args[0], out);
+    expressions::emit_simple_expr(&args[0], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR     ; Save value\n");
     
     // Evaluate min (arg 1)
-    expressions::emit_simple_expr(&args[1], out);
+    expressions::emit_simple_expr(&args[1], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR+2   ; Save min\n");
     
     // Evaluate max (arg 2)
-    expressions::emit_simple_expr(&args[2], out);
+    expressions::emit_simple_expr(&args[2], out, assets);
     out.push_str("    LDD RESULT\n");
     out.push_str("    STD TMPPTR+4   ; Save max\n");
     
     // Compare value with min
     out.push_str("    LDD TMPPTR     ; Load value\n");
     out.push_str("    CMPD TMPPTR+2  ; Compare with min\n");
-    out.push_str("    BGE .CLAMP_CHK_MAX ; Branch if value >= min\n");
+    out.push_str(&format!("    BGE .CLAMP_{}_CHK_MAX ; Branch if value >= min\n", label_id));
     
     // Value < min: return min
     out.push_str("    LDD TMPPTR+2\n");
     out.push_str("    STD RESULT\n");
-    out.push_str("    BRA .CLAMP_END\n");
+    out.push_str(&format!("    BRA .CLAMP_{}_END\n", label_id));
     
-    out.push_str(".CLAMP_CHK_MAX:\n");
+    out.push_str(&format!(".CLAMP_{}_CHK_MAX:\n", label_id));
     // Compare value with max
     out.push_str("    LDD TMPPTR     ; Load value again\n");
     out.push_str("    CMPD TMPPTR+4  ; Compare with max\n");
-    out.push_str("    BLE .CLAMP_OK  ; Branch if value <= max\n");
+    out.push_str(&format!("    BLE .CLAMP_{}_OK  ; Branch if value <= max\n", label_id));
     
     // Value > max: return max
     out.push_str("    LDD TMPPTR+4\n");
     out.push_str("    STD RESULT\n");
-    out.push_str("    BRA .CLAMP_END\n");
+    out.push_str(&format!("    BRA .CLAMP_{}_END\n", label_id));
     
-    out.push_str(".CLAMP_OK:\n");
+    out.push_str(&format!(".CLAMP_{}_OK:\n", label_id));
     // Value is in range: return value
     out.push_str("    LDD TMPPTR\n");
     out.push_str("    STD RESULT\n");
     
-    out.push_str(".CLAMP_END:\n");
+    out.push_str(&format!(".CLAMP_{}_END:\n", label_id));
 }
 
 /// Emit mathematical runtime helpers

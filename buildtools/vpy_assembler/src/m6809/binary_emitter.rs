@@ -903,6 +903,13 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
+    /// CMPX extended (opcode 0xBC) - Compare X register with memory
+    pub fn cmpx_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xBC);
+        self.emit_word(addr);
+    }
+
     /// CMPY #immediate (opcode 0x108C) - Compare Y register with 16-bit value
     pub fn cmpy_immediate(&mut self, value: u16) {
         self.record_line_mapping();
