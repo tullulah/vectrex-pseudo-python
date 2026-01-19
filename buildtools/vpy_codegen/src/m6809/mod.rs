@@ -24,6 +24,7 @@ pub mod level;
 pub mod utilities;
 pub mod ram_layout;
 pub mod assets;
+pub mod context;  // Thread-local context for mutable array tracking
 
 use vpy_parser::{Item, Expr, Stmt, CallInfo};
 
@@ -256,6 +257,18 @@ pub fn generate_m6809_asm(
 ) -> Result<String, String> {
     let mut asm = String::new();
     
+    // CRITICAL FIX (2026-01-19): Populate context with mutable arrays
+    // This allows emit_index() to know whether to use RAM or ROM labels
+    let mut mutable_arrays = std::collections::HashSet::new();
+    for item in &module.items {
+        if let Item::GlobalLet { name, value, .. } = item {
+            if matches!(value, Expr::List(_)) {
+                mutable_arrays.insert(name.clone());
+            }
+        }
+    }
+    context::set_mutable_arrays(mutable_arrays);
+    
     // Detect if this is a multibank ROM (>32KB)
     let is_multibank = rom_size > 32768;
     
@@ -341,20 +354,88 @@ pub fn generate_m6809_asm(
     // Solution: Collect now, emit at END (after helpers, before vectors) like CORE does
     let print_text_strings = builtins::collect_print_text_strings(module);
     
-    // For multibank: Emit ALL intermediate banks as empty placeholders
+    // CRITICAL FIX (2026-01-20): Asset distribution across banks for multibank support
+    // For single-bank: all assets go in Bank #0 (existing behavior)
+    // For multibank: only distribute if assets > 8KB, otherwise keep in Bank #0
+    // This prevents breaking small projects with unnecessary asset distribution
+    let mut distributed_lookup_tables = String::new();
+    
+    // Calculate total asset size to decide distribution strategy
+    let total_asset_bytes: usize = if !assets.is_empty() {
+        let sized_assets = assets::prepare_assets_with_sizes(assets);
+        sized_assets.iter().map(|a| a.binary_size).sum()
+    } else {
+        0
+    };
+    
+    // Threshold: only distribute if assets > 8KB (leaving ~8KB for code in Bank #0)
+    const ASSET_DISTRIBUTION_THRESHOLD: usize = 8192;
+    let should_distribute_assets = is_multibank && total_asset_bytes > ASSET_DISTRIBUTION_THRESHOLD;
+    
+    if !assets.is_empty() {
+        if should_distribute_assets {
+            // MULTIBANK + LARGE ASSETS: Distribute assets across multiple banks
+            eprintln!("[CODEGEN] Multibank mode: distributing {} assets ({} bytes > {}KB threshold) across banks", 
+                     assets.len(), total_asset_bytes, ASSET_DISTRIBUTION_THRESHOLD / 1024);
+            
+            let (bank_asm_map, lookup_tables) = assets::generate_distributed_assets_asm(
+                assets,
+                _bank_size as usize,
+                helpers_bank as u8,
+            ).map_err(|e| format!("Asset distribution failed: {}", e))?;
+            
+            // Save lookup tables for later (will be emitted in helpers bank)
+            distributed_lookup_tables = lookup_tables;
+            
+            // Emit assets in Bank #0 if any were assigned there (overflow)
+            if let Some(bank0_assets) = bank_asm_map.get(&0) {
+                asm.push_str(bank0_assets);
+            }
+            
+            // Assets for other banks will be emitted in their respective bank markers below
+            
+        } else {
+            // SINGLE-BANK or SMALL ASSETS: All assets in Bank #0 (existing behavior)
+            eprintln!("[CODEGEN] {} mode: keeping {} assets ({} bytes) in Bank #0", 
+                     if is_multibank { "Multibank (small assets)" } else { "Single-bank" },
+                     assets.len(), total_asset_bytes);
+            let assets_asm = assets::generate_assets_asm(assets)
+                .map_err(|e| format!("Asset generation failed: {}", e))?;
+            asm.push_str(&assets_asm);
+        }
+    }
+    
+    // For multibank: Emit ALL intermediate banks with their assets
     // multi_bank_linker requires ALL banks to be marked in the ASM
-    // Format: "; ================================================"
-    //         "; BANK #N - 0 function(s) [EMPTY]"
-    //         "; ================================================"
-    //         "    ORG $0000  ; Sequential bank model"
     if is_multibank {
-        // Emit banks 1 through (helpers_bank - 1) as empty
+        // Get distributed assets for each bank (only if we're distributing)
+        let (bank_asm_map, _) = if should_distribute_assets && !assets.is_empty() {
+            assets::generate_distributed_assets_asm(
+                assets,
+                _bank_size as usize,
+                helpers_bank as u8,
+            ).map_err(|e| format!("Asset distribution failed: {}", e))?
+        } else {
+            (std::collections::HashMap::new(), String::new())
+        };
+        
+        // Emit banks 1 through (helpers_bank - 1) with their assets
         for bank_id in 1..(helpers_bank as usize) {
             asm.push_str(&format!("\n; ================================================\n"));
-            asm.push_str(&format!("; BANK #{} - 0 function(s) [EMPTY]\n", bank_id));
-            asm.push_str(&format!("; ================================================\n"));
-            asm.push_str("    ORG $0000  ; Sequential bank model\n");
-            asm.push_str(&format!("    ; Reserved for future code overflow\n\n"));
+            
+            // Check if this bank has assets
+            if let Some(bank_assets) = bank_asm_map.get(&(bank_id as u8)) {
+                let asset_count = bank_assets.matches("_VECTORS:").count();
+                asm.push_str(&format!("; BANK #{} - {} asset(s)\n", bank_id, asset_count));
+                asm.push_str(&format!("; ================================================\n"));
+                asm.push_str("    ORG $0000  ; Sequential bank model\n\n");
+                asm.push_str(bank_assets);
+            } else {
+                asm.push_str(&format!("; BANK #{} - 0 function(s) [EMPTY]\n", bank_id));
+                asm.push_str(&format!("; ================================================\n"));
+                asm.push_str("    ORG $0000  ; Sequential bank model\n");
+                asm.push_str(&format!("    ; Reserved for future code overflow\n\n"));
+            }
         }
         
         // Emit helpers bank (last bank) with proper marker
@@ -363,6 +444,11 @@ pub fn generate_m6809_asm(
         asm.push_str(&format!("; ================================================\n"));
         asm.push_str("    ORG $4000  ; Fixed bank (always visible at $4000-$7FFF)\n");
         asm.push_str(&format!("    ; Runtime helpers (accessible from all banks)\n\n"));
+        
+        // Emit asset lookup tables (ASSET_BANK_TABLE, ASSET_ADDR_TABLE, DRAW_VECTOR_BANKED)
+        if !distributed_lookup_tables.is_empty() {
+            asm.push_str(&distributed_lookup_tables);
+        }
         
         // NOTE: VAR_ARG0-4 are already defined in SYSTEM RAM VARIABLES section above
         // (before bank split). No need to redefine them here in Bank #31.
@@ -396,12 +482,8 @@ pub fn generate_m6809_asm(
         builtins::emit_print_text_strings(&print_text_strings, &mut asm);
     }
     
-    // Generate embedded assets (vectors, music, levels, SFX)
-    if !assets.is_empty() {
-        let assets_asm = assets::generate_assets_asm(assets)
-            .map_err(|e| format!("Asset generation failed: {}", e))?;
-        asm.push_str(&assets_asm);
-    }
+    // NOTE: Assets already emitted BEFORE intermediate banks (see above)
+    // Do NOT emit them again here
     
     // NOTE: Cartridge ROM ($0000-$7FFF) does NOT contain interrupt vectors
     // Hardware vectors ($FFF0-$FFFF) are in BIOS ROM
