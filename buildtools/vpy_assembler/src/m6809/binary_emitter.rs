@@ -107,25 +107,17 @@ impl BinaryEmitter {
 
     /// Define una etiqueta en la posición actual
     pub fn define_label(&mut self, label: &str) {
-        // CRITICAL FIX: Use offset-based address calculation to avoid ORG wrapping issues
-        // With ORG 0xFFF0, current_address wraps around, but labels should use absolute addresses
-        // Example: offset 0x0071 should have address 0x0071, not 0x0061 (0xFFF0 + 0x0071 wrapped)
-        let org = self.current_address.wrapping_sub(self.code.len() as u16);
-        let label_address = if org == 0 {
-            // Normal case: ORG 0x0000, address = current_address
-            self.current_address
-        } else {
-            // Cartridge case: ORG 0xFFF0, address = offset (ignore ORG for label addresses)
-            self.code.len() as u16
-        };
+        // Use current_address for the label, which already accounts for ORG
+        // This works correctly for all ORG values including $4000 for Bank 31
+        let label_address = self.current_address;
         
         // DEBUG: Log all important labels including ARRAY labels
         let should_log = label == "START" || label == "MAIN" || label == "LOOP_BODY" 
             || label.starts_with("PRINT_TEXT_STR_") || label.starts_with("VECTREX_")
-            || label.starts_with("ARRAY_");  // ← Log array labels for debugging
+            || label.starts_with("ARRAY_") || label.contains("DSWM");  // ← Log DSWM labels for debugging
         if should_log {
-            eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X}, org=0x{:04X})", 
-                label, label_address, self.code.len(), self.current_address, org);
+            eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X})", 
+                label, label_address, self.code.len(), self.current_address);
         }
         self.symbols.insert(label.to_string(), label_address);
     }
@@ -1351,10 +1343,28 @@ impl BinaryEmitter {
                     eprintln!("   effective_target: 0x{:04X}", effective_target);
                 }
                 
-                // Detectar si es long branch (opcode 2 bytes) or short branch (opcode 1 byte)
-                // Long branches: LBEQ, LBNE, LBCC, LBCS, etc. (opcode = 0x10 0x2x)
-                // Short branches: BEQ, BNE, BCC, BCS, etc. (opcode = 0x2x)
-                let opcode_size = if sym_ref.ref_size == 2 { 2 } else { 1 };
+                // Detectar si es long branch (opcode 1 or 2 bytes) or short branch (opcode 1 byte)
+                // LBRA: opcode 0x16 (1 byte!) + 2 bytes offset = 3 bytes total
+                // LBEQ, LBNE, LBCC, etc.: opcode 0x10 0x2x (2 bytes) + 2 bytes offset = 4 bytes total
+                // Short branches: BEQ, BNE, etc.: opcode 0x2x (1 byte) + 1 byte offset = 2 bytes total
+                let opcode_size = if sym_ref.ref_size == 2 {
+                    // Check if this is LBRA (opcode 0x16) or standard long branch (opcode 0x10 0x2x)
+                    // sym_ref.offset points to the offset field, so we check the byte before it
+                    let prev_byte = if sym_ref.offset > 0 { self.code[sym_ref.offset - 1] } else { 0 };
+                    let is_lbra = prev_byte == 0x16;
+                    // 🔍 DEBUG: Log LBRA detection for DSWM_LOOP
+                    if sym_ref.symbol.contains("DSWM_LOOP") {
+                        eprintln!("🔍 [LBRA DEBUG] symbol={}, offset={}, prev_byte=0x{:02X}, is_lbra={}", 
+                            sym_ref.symbol, sym_ref.offset, prev_byte, is_lbra);
+                    }
+                    if is_lbra {
+                        1 // LBRA has 1-byte opcode (0x16)
+                    } else {
+                        2 // Other long branches have 2-byte opcode (0x10 0x2x)
+                    }
+                } else { 
+                    1 // Short branches have 1-byte opcode
+                };
                 
                 // CRÍTICO: sym_ref.offset apunta al OFFSET FIELD, no al inicio del opcode
                 // Por eso necesitamos restar opcode_size para obtener el inicio real del branch
@@ -1363,9 +1373,9 @@ impl BinaryEmitter {
                 let offset_i32 = effective_target as i32 - next_addr as i32;
                 
                 // 🔍 TRACE: Resolución de branches importantes (expandido para debug)
-                if sym_ref.symbol.contains("ULR") || sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
-                    eprintln!("🔗 Resolving {} at offset {}: branch_addr=${:04X}, opcode_size={}, ref_size={}, next=${:04X}, target=${:04X}, offset={}", 
-                        sym_ref.symbol, sym_ref.offset, branch_instruction_addr, opcode_size, sym_ref.ref_size, next_addr, target_addr, offset_i32);
+                if sym_ref.symbol.contains("ULR") || sym_ref.symbol.contains("DSWM_LOOP") || sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
+                    eprintln!("🔗 Resolving {} at bin_offset={}: org=${:04X}, branch_addr=${:04X}, opcode_size={}, ref_size={}, next=${:04X}, target=${:04X}, offset={} (0x{:04X})", 
+                        sym_ref.symbol, sym_ref.offset, org, branch_instruction_addr, opcode_size, sym_ref.ref_size, next_addr, target_addr, offset_i32, offset_i32 as u16);
                 }
                 
                 if sym_ref.ref_size == 1 {

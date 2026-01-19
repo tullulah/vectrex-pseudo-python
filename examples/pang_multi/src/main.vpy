@@ -98,7 +98,7 @@ def main():
 
 def loop():
 
-    #read_joystick1_state()
+    read_joystick1_state()
 
     if screen == STATE_TITLE: # Music already started in main()
         if (current_music == -1):
