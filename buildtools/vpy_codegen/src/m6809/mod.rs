@@ -343,6 +343,11 @@ pub fn generate_m6809_asm(
         asm.push_str("    CLR >SFX_ACTIVE         ; Mark SFX as inactive (0=off)\n");
         asm.push_str("    LDD #$0000\n");
         asm.push_str("    STD >SFX_PTR            ; Clear SFX pointer\n");
+        
+        // CRITICAL (2026-01-20): Initialize PSG_MUSIC_BANK for multibank
+        if is_multibank {
+            asm.push_str("    CLR >PSG_MUSIC_BANK     ; Initialize to 0 (prevents garbage bank switches)\n");
+        }
     }
     
     // For multibank: Fixed bank is ALWAYS visible at $4000-$7FFF
