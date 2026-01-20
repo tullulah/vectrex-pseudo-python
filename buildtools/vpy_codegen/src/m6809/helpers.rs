@@ -119,6 +119,7 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
         ram.allocate("PSG_MUSIC_ACTIVE", 1, "PSG music active flag");
         ram.allocate("PSG_IS_PLAYING", 1, "PSG playing flag");
         ram.allocate("PSG_DELAY_FRAMES", 1, "PSG frame delay counter");
+        ram.allocate("PSG_MUSIC_BANK", 1, "PSG music bank ID (for multibank)");
         ram.allocate("SFX_PTR", 2, "SFX data pointer");
         ram.allocate("SFX_ACTIVE", 1, "SFX active flag");
     }
@@ -645,12 +646,23 @@ fn emit_audio_update_helper(asm: &mut String) {
         ; Uses Sound_Byte (BIOS) for PSG writes - compatible with both systems\n\
         ; Sets DP=$D0 once at entry, restores at exit\n\
         ; RAM variables: PSG_MUSIC_PTR, PSG_IS_PLAYING, PSG_DELAY_FRAMES\n\
+        ;                PSG_MUSIC_BANK (for multibank: bank ID where music data lives)\n\
         ;                SFX_PTR, SFX_ACTIVE (defined in SYSTEM RAM VARIABLES)\n\
         \n\
         AUDIO_UPDATE:\n\
         PSHS DP                 ; Save current DP\n\
         LDA #$D0                ; Set DP=$D0 (Sound_Byte requirement)\n\
         TFR A,DP\n\
+        \n\
+        ; MULTIBANK: Switch to music's bank before accessing data\n\
+        LDA >CURRENT_ROM_BANK   ; Get current bank\n\
+        PSHS A                  ; Save on stack\n\
+        LDA >PSG_MUSIC_BANK     ; Get music's bank\n\
+        CMPA ,S                 ; Compare with current bank\n\
+        BEQ AU_BANK_OK          ; Skip switch if same\n\
+        STA >CURRENT_ROM_BANK   ; Update RAM tracker\n\
+        STA $DF00               ; Switch bank hardware register\n\
+        AU_BANK_OK:\n\
         \n\
         ; UPDATE MUSIC (channel B: registers 9, 11-14)\n\
         LDA >PSG_IS_PLAYING     ; Check if music is playing\n\
@@ -740,6 +752,10 @@ fn emit_audio_update_helper(asm: &mut String) {
         JSR sfx_doframe         ; Process one SFX frame (uses Sound_Byte internally)\n\
         \n\
         AU_DONE:\n\
+        ; MULTIBANK: Restore original bank\n\
+        PULS A                  ; Get saved bank from stack\n\
+        STA >CURRENT_ROM_BANK   ; Update RAM tracker\n\
+        STA $DF00               ; Restore bank hardware register\n\
         PULS DP                 ; Restore original DP\n\
         RTS\n\
         \n"

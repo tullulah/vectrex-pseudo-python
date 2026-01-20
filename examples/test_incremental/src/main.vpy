@@ -4,14 +4,18 @@ META ROM_BANK_SIZE = 16384    # 16 KB per bank (32 banks)
 META MUSIC = music1
 
 title_intensity = 127
+playing = 0
+
 
 def main():
     SET_INTENSITY(127)
-    PLAY_MUSIC("music1")
+    
 
 def loop():
     SET_INTENSITY(title_intensity)
-    DRAW_VECTOR("logo", 0, 0)
-    PRINT_TEXT(0,-40,"HOLA")
     
-    
+    #PRINT_TEXT(0,-40,"HOLA")
+    #DRAW_VECTOR("logo", 0, 0)
+    if(playing == 0):
+        playing = 1
+        PLAY_MUSIC("music1")
